@@ -1,4 +1,4 @@
-<img src="assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
+<img src="https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
 
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
@@ -19,7 +19,7 @@
 
 | Light | Dark |
 |---|---|
-| ![Light (screenshot)](assets/screenshots/light.png) | ![Dark (screenshot)](assets/screenshots/dark.png) |
+| ![Light (screenshot)](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/screenshots/light.png) | ![Dark (screenshot)](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/screenshots/dark.png) |
 
 ---
 ## ✨ 주요 특징
@@ -67,14 +67,16 @@ Application.Run(window);
 ---
 ## 🎯 컨셉
 
-### MewUI는 아래 3가지를 최우선으로 둔 code-first UI 라이브러리
+### MewUI는 아래 4가지를 최우선으로 둔 code-first UI 라이브러리
 - **NativeAOT + Trim 친화**(interop는 `LibraryImport`)
+- 작은 크기, 빠른 시작시간, 적은 메모리 사용
 - **XAML 없이 Fluent한 C# 마크업**으로 UI 트리 구성
-- **AOT 친화적 바인딩** (`ObservableValue<T>`, 델리게이트 기반, 리플렉션 지양)
+- **AOT 친화적 바인딩**
 
 ### 지향하지 않는 것
 - WPF처럼 **애니메이션**, **화려한 이펙트**, 무거운 컴포지션 파이프라인
 - “다 들어있는” 리치 컨트롤 카탈로그
+- 복잡한 경로 기반 데이터 바인딩
 - XAML/WPF 완전 호환이나 디자이너 중심 워크플로우
 
 ---

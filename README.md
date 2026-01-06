@@ -1,4 +1,4 @@
-<img src="assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
+<img src="https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo-256.png" alt="Aprillz.MewUI" width="256" height="256" />
 
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
@@ -19,7 +19,7 @@
 
 | Light | Dark |
 |---|---|
-| ![Light (screenshot)](assets/screenshots/light.png) | ![Dark (screenshot)](assets/screenshots/dark.png) |
+| ![Light (screenshot)](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/screenshots/light.png) | ![Dark (screenshot)](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/screenshots/dark.png) |
 
 ---
 ## ✨ Highlights
@@ -69,12 +69,14 @@ Application.Run(window);
 
 ### MewUI is a code-first UI library with three priorities:
 - **NativeAOT + trimming friendliness** (interop via `LibraryImport`)
+- **Small footprint, fast startup, low memory usage**
 - **Fluent C# markup** for building UI trees (no XAML)
-- **AOT-friendly binding** (`ObservableValue<T>`, delegate-based, avoid reflection)
+- **AOT-friendly binding**
 
 ### Non-goals (by design):
 - WPF-style **animations**, **visual effects**, or heavy composition pipelines
 - A large, “kitchen-sink” control catalog (keep the surface area small and predictable)
+- Complex path-based data binding
 - Full XAML/WPF compatibility or designer-first workflows
 
 ---

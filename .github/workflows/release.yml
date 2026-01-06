@@ -16,11 +16,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET (preview)
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-          include-prerelease: true
 
       - name: Compute version
         id: version
@@ -55,4 +54,3 @@ jobs:
           files: .artifacts/nuget/*.nupkg
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-
