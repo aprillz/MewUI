@@ -3,6 +3,7 @@
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-X11-FCC624?logo=linux&logoColor=black)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
 [![NuGet](https://img.shields.io/nuget/v/Aprillz.MewUI.svg?label=NuGet)](https://www.nuget.org/packages/Aprillz.MewUI/)
@@ -20,7 +21,11 @@
 ## NuGet
 
 - https://www.nuget.org/packages/Aprillz.MewUI/
-- 설치: `dotnet add package Aprillz.MewUI --prerelease`
+- 설치: `dotnet add package Aprillz.MewUI`
+
+---
+## Video
+https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
 ## 스크린샷
 
@@ -76,7 +81,7 @@ Application.Run(window);
 ## 🎯 컨셉
 
 ### MewUI는 아래 4가지를 최우선으로 둔 code-first UI 라이브러리
-- **NativeAOT + Trim 친화**(interop는 `LibraryImport`)
+- **NativeAOT + Trim 친화**
 - 작은 크기, 빠른 시작시간, 적은 메모리 사용
 - **XAML 없이 Fluent한 C# 마크업**으로 UI 트리 구성
 - **AOT 친화적 바인딩**
@@ -115,7 +120,9 @@ var slider = new Slider()
                 .BindValue(percent);
 
 var label  = new Label()
-                .BindText(percent, v => $"Percent ({v:P0})"); // Converter
+                .BindText(
+                    percent, 
+                    convert: v => $"Percent ({v:P0})"); 
 ```
 
 ---
@@ -153,15 +160,24 @@ Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
 렌더링은 아래 추상화로 분리됩니다:
 - `IGraphicsFactory` / `IGraphicsContext`
 
-샘플은 기본적으로 `Direct2D`를 사용하며, `GDI` 백엔드도 제공됩니다.
+백엔드
+- `Direct2D` (Windows)
+- `GDI` (Windows)
+- `OpenGL` (Windows / Linux)
+
+샘플은 Windows에서는 `Direct2D`, Linux에서는 `OpenGL`을 기본으로 사용합니다.
 - `Direct2D`: 초기엔 느리고 상주 메모리가 크지만, 복잡한 레이아웃/효과에 더 적합
 - `GDI`: 가볍고 빠르게 시작되지만, CPU 사용이 커서 고해상도/큰 창/복잡한 UI에는 부적합
+- `OpenGL`: Linux/X11 플랫폼 호스트에서 동작하며, 크로스플랫폼을 목표로 하지만 아직은 실험 단계입니다
 
 ---
 ## 🪟 플랫폼 추상화
 
-윈도우/메시지 루프는 플랫폼 계층으로 추상화되어 있으며, 현재는 Windows 구현(`Win32PlatformHost`)을 제공합니다.
-추후 Linux/macOS 포팅 시 이 계층
+윈도우/메시지 루프는 플랫폼 계층으로 추상화되어 있습니다.
+
+현재 구현
+- Windows (`Win32PlatformHost`)
+- Linux/X11 (experimental)
 
 ---
 ## 🧭 로드맵 (TODO)
@@ -173,10 +189,11 @@ Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
 - [ ] `ScrollViewer`
 
 **렌더링**
-- [ ] OpenGL 백엔드
+- [ ] 폰트 셰이핑(HarfBuzz)
+- [ ] 글리프 아틀라스/캐시 개선
 
 **플랫폼**
-- [ ] Linux
+- [ ] Wayland
 - [ ] macOS
 
 **툴링**

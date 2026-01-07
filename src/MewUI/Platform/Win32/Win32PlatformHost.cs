@@ -59,8 +59,21 @@ public sealed class Win32PlatformHost : IPlatformHost
             MSG msg;
             while (_running && User32.GetMessage(out msg, 0, 0, 0) > 0)
             {
-                User32.TranslateMessage(ref msg);
-                User32.DispatchMessage(ref msg);
+                try
+                {
+                    User32.TranslateMessage(ref msg);
+                    User32.DispatchMessage(ref msg);
+                }
+                catch (Exception ex)
+                {
+                    if (Application.TryHandleUiException(ex))
+                        continue;
+
+                    Application.NotifyFatalUiException(ex);
+                    _running = false;
+                    User32.PostQuitMessage(0);
+                    break;
+                }
             }
         }
         finally
@@ -80,8 +93,21 @@ public sealed class Win32PlatformHost : IPlatformHost
         MSG msg;
         while (User32.PeekMessage(out msg, 0, 0, 0, 1)) // PM_REMOVE = 1
         {
-            User32.TranslateMessage(ref msg);
-            User32.DispatchMessage(ref msg);
+            try
+            {
+                User32.TranslateMessage(ref msg);
+                User32.DispatchMessage(ref msg);
+            }
+            catch (Exception ex)
+            {
+                if (Application.TryHandleUiException(ex))
+                    continue;
+
+                Application.NotifyFatalUiException(ex);
+                _running = false;
+                User32.PostQuitMessage(0);
+                break;
+            }
         }
     }
 
@@ -94,7 +120,8 @@ public sealed class Win32PlatformHost : IPlatformHost
         _classNamePtr = Marshal.StringToHGlobalUni(WindowClassName);
 
         var wndClass = WNDCLASSEX.Create();
-        wndClass.style = ClassStyles.CS_HREDRAW | ClassStyles.CS_VREDRAW | ClassStyles.CS_DBLCLKS;
+        // CS_OWNDC is important for stable OpenGL (WGL) contexts; it is harmless for other backends.
+        wndClass.style = ClassStyles.CS_HREDRAW | ClassStyles.CS_VREDRAW | ClassStyles.CS_DBLCLKS | ClassStyles.CS_OWNDC;
         wndClass.lpfnWndProc = wndProcPtr;
         wndClass.cbClsExtra = 0;
         wndClass.cbWndExtra = 0;
@@ -118,7 +145,22 @@ public sealed class Win32PlatformHost : IPlatformHost
     private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
         if (_windows.TryGetValue(hWnd, out var backend))
-            return backend.ProcessMessage(msg, wParam, lParam);
+        {
+            try
+            {
+                return backend.ProcessMessage(msg, wParam, lParam);
+            }
+            catch (Exception ex)
+            {
+                if (Application.TryHandleUiException(ex))
+                    return 0;
+
+                Application.NotifyFatalUiException(ex);
+                _running = false;
+                User32.PostQuitMessage(0);
+                return 0;
+            }
+        }
 
         return User32.DefWindowProc(hWnd, msg, wParam, lParam);
     }

@@ -9,14 +9,43 @@ using Aprillz.MewUI.Panels;
 using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
+static void Log(string message)
+{
+    try
+    {
+        Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+    }
+    catch
+    {
+        // ignore (no console attached)
+    }
+}
+
 var stopwatch = Stopwatch.StartNew();
 
 var vm = new DemoViewModel();
 
 var isBench = Environment.GetCommandLineArgs().Any(a => a.Equals("--bench", StringComparison.OrdinalIgnoreCase));
 var useGdi = Environment.GetCommandLineArgs().Any(a => a.Equals("--gdi", StringComparison.OrdinalIgnoreCase));
-Application.DefaultGraphicsBackend = useGdi ? GraphicsBackend.Gdi : GraphicsBackend.Direct2D;
+var useOpenGl = Environment.GetCommandLineArgs().Any(a => a.Equals("--gl", StringComparison.OrdinalIgnoreCase));
+var isSmoke = Environment.GetCommandLineArgs().Any(a => a.Equals("--smoke", StringComparison.OrdinalIgnoreCase));
 
+Application.DefaultGraphicsBackend =
+    useGdi ? GraphicsBackend.Gdi :
+    useOpenGl ? GraphicsBackend.OpenGL :
+    OperatingSystem.IsWindows() ? GraphicsBackend.Direct2D : GraphicsBackend.OpenGL;
+//Application.DefaultGraphicsBackend = GraphicsBackend.OpenGL;
+
+Application.UiUnhandledException += (_, e) =>
+{
+    Log($"UI exception: {e.Exception.GetType().Name}: {e.Exception.Message}");
+    Log(e.Exception.ToString());
+    e.Handled = true;
+};
+
+Log($"Args: {string.Join(' ', Environment.GetCommandLineArgs())}");
+Log($"Backend: {Application.DefaultGraphicsBackend}");
+Log($"Bench: {isBench}, Smoke: {isSmoke}");
 double loadedMs = -1;
 var metricsText = new ObservableValue<string>("Metrics:");
 
@@ -53,7 +82,32 @@ var root = new Window()
             )
     );
 
-window.FirstFrameRendered = WriteMetric;
+window.FirstFrameRendered = () =>
+{
+    WriteMetric();
+
+    if (!isSmoke)
+        return;
+
+    try
+    {
+        var outDir = Path.Combine(AppContext.BaseDirectory, "smoke_out");
+        Directory.CreateDirectory(outDir);
+
+        Log($"Smoke output: {outDir}");
+        File.AppendAllText(Path.Combine(outDir, "smoke_report.txt"),
+            $"Backend={Application.DefaultGraphicsBackend}{Environment.NewLine}" +
+            $"LoadedMs={loadedMs:F3}{Environment.NewLine}" +
+            $"FirstFrameMs={stopwatch.Elapsed.TotalMilliseconds:F3}{Environment.NewLine}");
+
+        if (Application.DefaultGraphicsBackend == GraphicsBackend.OpenGL)
+            SmokeCapture.Request(Path.Combine(outDir, "frame.ppm"));
+    }
+    finally
+    {
+        Application.Quit();
+    }
+};
 
 Application.Run(root);
 
@@ -372,12 +426,11 @@ void WriteMetric()
     using var p = Process.GetCurrentProcess();
     p.Refresh();
 
-    string backend = useGdi ? "GDI" : "Direct2D";
     double wsMb = p.WorkingSet64 / (1024.0 * 1024.0);
     double pmMb = p.PrivateMemorySize64 / (1024.0 * 1024.0);
 
     var loadedText = loadedMs >= 0 ? $"{loadedMs:0} ms" : "n/a";
-    metricsText.Value = $"Metrics ({backend}): Loaded {loadedText}, FirstFrame {firstFrameMs:0} ms, WS {wsMb:0.0} MB, Private {pmMb:0.0} MB";
+    metricsText.Value = $"Metrics ({Application.DefaultGraphicsBackend}): Loaded {loadedText}, FirstFrame {firstFrameMs:0} ms, WS {wsMb:0.0} MB, Private {pmMb:0.0} MB";
     var path = Path.Combine(AppContext.BaseDirectory, "metrics.log");
     File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {metricsText.Value}{Environment.NewLine}");
     if (isBench)

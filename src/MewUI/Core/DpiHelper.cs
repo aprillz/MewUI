@@ -18,13 +18,17 @@ public static class DpiHelper
     /// Enables Per-Monitor DPI V2 awareness for the current process.
     /// Call this at the start of the application.
     /// </summary>
-    public static bool EnablePerMonitorDpiAwareness() => User32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    public static bool EnablePerMonitorDpiAwareness()
+        => OperatingSystem.IsWindows() && User32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     /// <summary>
     /// Gets the DPI for a specific window.
     /// </summary>
     public static uint GetDpiForWindow(nint hwnd)
     {
+        if (!OperatingSystem.IsWindows())
+            return GetSystemDpi();
+
         if (hwnd == 0)
             return GetSystemDpi();
 
@@ -34,7 +38,7 @@ public static class DpiHelper
     /// <summary>
     /// Gets the system DPI.
     /// </summary>
-    public static uint GetSystemDpi() => User32.GetDpiForSystem();
+    public static uint GetSystemDpi() => OperatingSystem.IsWindows() ? User32.GetDpiForSystem() : 96u;
 
     /// <summary>
     /// Gets the scale factor for a specific window (DPI / 96).
@@ -79,5 +83,6 @@ public static class DpiHelper
     /// <summary>
     /// Gets a system metric scaled for the given DPI.
     /// </summary>
-    public static int GetSystemMetricsForDpi(int nIndex, uint dpi) => User32.GetSystemMetricsForDpi(nIndex, dpi);
+    public static int GetSystemMetricsForDpi(int nIndex, uint dpi)
+        => OperatingSystem.IsWindows() ? User32.GetSystemMetricsForDpi(nIndex, dpi) : 0;
 }

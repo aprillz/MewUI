@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.1.0-preview.3
+#:package Aprillz.MewUI@0.2.0
 
 using System.Globalization;
 using System.Text;

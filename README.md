@@ -3,6 +3,7 @@
 
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-X11-FCC624?logo=linux&logoColor=black)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-Ready-2E7D32)
 ![License: MIT](https://img.shields.io/badge/License-MIT-000000)
 [![NuGet](https://img.shields.io/nuget/v/Aprillz.MewUI.svg?label=NuGet)](https://www.nuget.org/packages/Aprillz.MewUI/)
@@ -20,7 +21,11 @@
 ## NuGet
 
 - https://www.nuget.org/packages/Aprillz.MewUI/
-- Install: `dotnet add package Aprillz.MewUI --prerelease`
+- Install: `dotnet add package Aprillz.MewUI`
+
+---
+## Video
+https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
 ## Screenshots
 
@@ -77,7 +82,7 @@ Application.Run(window);
 ## 🎯 Concept
 
 ### MewUI is a code-first UI library with three priorities:
-- **NativeAOT + trimming friendliness** (interop via `LibraryImport`)
+- **NativeAOT + trimming friendliness**
 - **Small footprint, fast startup, low memory usage**
 - **Fluent C# markup** for building UI trees (no XAML)
 - **AOT-friendly binding**
@@ -154,14 +159,24 @@ Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
 Rendering is abstracted through:
 - `IGraphicsFactory` / `IGraphicsContext`
 
-The sample defaults to `Direct2D`, with a `GDI` backend also available.
+Backends:
+- `Direct2D` (Windows)
+- `GDI` (Windows)
+- `OpenGL` (Windows / Linux)
+
+The sample defaults to `Direct2D` on Windows, and `OpenGL` on Linux.
 - `Direct2D`: slower startup and larger resident memory, but better suited for complex layouts/effects
 - `GDI`: lightweight and fast startup, but CPU-heavy and not ideal for high-DPI, large windows, or complex UIs
+- `OpenGL`: cross-platform and works with the Linux/X11 host, but currently more limited and still experimental
 
 ---
 ## 🪟 Platform Abstraction
 
-Windowing and the message loop are abstracted behind a platform layer. The current implementation is Windows-only (`Win32PlatformHost`), with the intent to add Linux/macOS backends later.
+Windowing and the message loop are abstracted behind a platform layer.
+
+Currently implemented:
+- Windows (`Win32PlatformHost`)
+- Linux/X11 (experimental)
 
 ---
 ## 🧭 Roadmap (TODO)
@@ -173,10 +188,11 @@ Windowing and the message loop are abstracted behind a platform layer. The curre
 - [ ] `ScrollViewer`
 
 **Rendering**
-- [ ] OpenGL backend
+- [ ] Better text shaping (HarfBuzz)
+- [ ] Glyph atlas + caching improvements
 
 **Platforms**
-- [ ] Linux
+- [ ] Wayland
 - [ ] macOS
 
 **Tooling**

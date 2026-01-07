@@ -1,9 +1,11 @@
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Platform;
+using Aprillz.MewUI.Platform.Linux.X11;
 using Aprillz.MewUI.Platform.Win32;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Direct2D;
 using Aprillz.MewUI.Rendering.Gdi;
+using Aprillz.MewUI.Rendering.OpenGL;
 
 namespace Aprillz.MewUI.Core;
 
@@ -14,9 +16,18 @@ public sealed class Application
 {
     private static Application? _current;
     private static readonly object _syncLock = new();
-    private static GraphicsBackend _defaultGraphicsBackend = GraphicsBackend.Direct2D;
+    private static GraphicsBackend _defaultGraphicsBackend = OperatingSystem.IsWindows()
+        ? GraphicsBackend.Direct2D
+        : GraphicsBackend.OpenGL;
     private static IGraphicsFactory? _defaultGraphicsFactoryOverride;
-    private static IPlatformHost _defaultPlatformHost = new Win32PlatformHost();
+    private static IPlatformHost _defaultPlatformHost = CreateDefaultPlatformHost();
+    private static Exception? _pendingFatalException;
+
+    /// <summary>
+    /// Raised when an exception escapes from the platform message loop or window procedure.
+    /// Set <see cref="UiUnhandledExceptionEventArgs.Handled"/> to true to continue.
+    /// </summary>
+    public static event EventHandler<UiUnhandledExceptionEventArgs>? UiUnhandledException;
 
     /// <summary>
     /// Gets the current application instance.
@@ -105,6 +116,7 @@ public sealed class Application
 
             var app = new Application(DefaultPlatformHost);
             _current = app;
+            _pendingFatalException = null;
             app.RunCore(mainWindow);
         }
     }
@@ -115,6 +127,10 @@ public sealed class Application
     {
         PlatformHost.Run(this, mainWindow);
         _current = null;
+
+        var fatal = Interlocked.Exchange(ref _pendingFatalException, null);
+        if (fatal != null)
+            throw new InvalidOperationException("Unhandled exception in UI loop.", fatal);
     }
 
     /// <summary>
@@ -139,8 +155,41 @@ public sealed class Application
 
     private static IGraphicsFactory GetFactoryForBackend(GraphicsBackend backend) => backend switch
     {
-        GraphicsBackend.Direct2D => Direct2DGraphicsFactory.Instance,
-        GraphicsBackend.Gdi => GdiGraphicsFactory.Instance,
-        _ => Direct2DGraphicsFactory.Instance,
+        GraphicsBackend.OpenGL => OpenGLGraphicsFactory.Instance,
+        GraphicsBackend.Direct2D => OperatingSystem.IsWindows()
+            ? Direct2DGraphicsFactory.Instance
+            : throw new PlatformNotSupportedException("Direct2D backend is Windows-only. Use OpenGL on Linux."),
+        GraphicsBackend.Gdi => OperatingSystem.IsWindows()
+            ? GdiGraphicsFactory.Instance
+            : throw new PlatformNotSupportedException("GDI backend is Windows-only. Use OpenGL on Linux."),
+        _ => OperatingSystem.IsWindows() ? Direct2DGraphicsFactory.Instance : OpenGLGraphicsFactory.Instance,
     };
+
+    internal static bool TryHandleUiException(Exception ex)
+    {
+        try
+        {
+            var args = new UiUnhandledExceptionEventArgs(ex);
+            UiUnhandledException?.Invoke(null, args);
+            return args.Handled;
+        }
+        catch
+        {
+            // If the handler itself throws, treat as unhandled.
+            return false;
+        }
+    }
+
+    internal static void NotifyFatalUiException(Exception ex)
+        => Interlocked.CompareExchange(ref _pendingFatalException, ex, null);
+
+    private static IPlatformHost CreateDefaultPlatformHost()
+    {
+        if (OperatingSystem.IsWindows())
+            return new Win32PlatformHost();
+        if (OperatingSystem.IsLinux())
+            return new X11PlatformHost();
+
+        throw new PlatformNotSupportedException("MewUI currently supports Windows and (experimental) Linux hosts only.");
+    }
 }
