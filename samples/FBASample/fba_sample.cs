@@ -1,3 +1,17 @@
+#:sdk Microsoft.NET.Sdk
+#:property OutputType=WinExe
+#:property TargetFramework=net10.0
+#:property PublishAot=true
+#:property TrimMode=full
+#:property IlcOptimizationPreference=Size
+
+#:property InvariantGlobalization=true
+
+#:property DebugType=none
+#:property StripSymbols=true
+
+#:package Aprillz.MewUI@0.2.0
+
 using System.Diagnostics;
 
 using Aprillz.MewUI.Binding;
@@ -11,7 +25,10 @@ using Aprillz.MewUI.Rendering;
 
 var stopwatch = Stopwatch.StartNew();
 
-Startup(Environment.GetCommandLineArgs(), out var isBench, out var isSmoke);
+var vm = new DemoViewModel();
+
+Application.DefaultGraphicsBackend =
+    OperatingSystem.IsWindows() ? GraphicsBackend.Direct2D : GraphicsBackend.OpenGL;
 
 double loadedMs = -1;
 var metricsText = new ObservableValue<string>("Metrics:");
@@ -20,8 +37,6 @@ Window window;
 Button enabledButton = null!;
 var accentSwatches = new List<(Color color, Button button)>();
 var currentAccent = Theme.Current.Accent;
-
-var vm = new DemoViewModel();
 
 var root = new Window()
     .Ref(out window)
@@ -38,17 +53,23 @@ var root = new Window()
             .LastChildFill()
             .Margin(20)
             .Children(
-                HeaderSection().DockTop(),
+                HeaderSection()
+                    .DockTop(),
 
-                Buttons().DockBottom(),
+                Buttons()
+                    .DockBottom(),
 
-                BindSamples().DockRight(),
+                BindSamples()
+                    .DockRight(),
 
                 NormalControls()
             )
     );
 
-window.FirstFrameRendered = ProcessMetric;
+window.FirstFrameRendered = () =>
+{
+    WriteMetric();
+};
 
 Application.Run(root);
 
@@ -120,6 +141,7 @@ Element Buttons() => new StackPanel()
 
 Element NormalControls() => new StackPanel()
     .Children(
+
         new StackPanel()
             .Horizontal()
             .Spacing(8)
@@ -225,6 +247,7 @@ Element NormalControls() => new StackPanel()
 
             new DockPanel()
                 .Children(
+
                     new Label()
                         .CenterVertical()
                         .Text("ComboBox"),
@@ -340,7 +363,6 @@ Element BindSamples() => new StackPanel()
                             .BindText(vm.SelectedIndex, i => $@"SelectedIndex = {i}{Environment.NewLine}Item = {selectionListBox.SelectedItem ?? string.Empty}")
                     )
             )
-
     );
 
 void UpdateAccentSwatches()
@@ -370,72 +392,6 @@ void WriteMetric()
 
     var loadedText = loadedMs >= 0 ? $"{loadedMs:0} ms" : "n/a";
     metricsText.Value = $"Metrics ({Application.DefaultGraphicsBackend}): Loaded {loadedText}, FirstFrame {firstFrameMs:0} ms, WS {wsMb:0.0} MB, Private {pmMb:0.0} MB";
-    var path = Path.Combine(AppContext.BaseDirectory, "metrics.log");
-    File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {metricsText.Value}{Environment.NewLine}");
-    if (isBench)
-        Application.Quit();
-}
-
-void ProcessMetric()
-{
-    WriteMetric();
-
-    if (!isSmoke)
-        return;
-
-    try
-    {
-        var outDir = Path.Combine(AppContext.BaseDirectory, "smoke_out");
-        Directory.CreateDirectory(outDir);
-
-        Log($"Smoke output: {outDir}");
-        File.AppendAllText(Path.Combine(outDir, "smoke_report.txt"),
-            $"Backend={Application.DefaultGraphicsBackend}{Environment.NewLine}" +
-            $"LoadedMs={loadedMs:F3}{Environment.NewLine}" +
-            $"FirstFrameMs={stopwatch.Elapsed.TotalMilliseconds:F3}{Environment.NewLine}");
-
-        if (Application.DefaultGraphicsBackend == GraphicsBackend.OpenGL)
-            SmokeCapture.Request(Path.Combine(outDir, "frame.ppm"));
-    }
-    finally
-    {
-        Application.Quit();
-    }
-}
-
-static void Log(string message)
-{
-    try
-    {
-        Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
-    }
-    catch
-    {
-        // ignore (no console attached)
-    }
-}
-
-static void Startup(string[] args, out bool isBench, out bool isSmoke)
-{
-    isBench = args.Any(a => a.Equals("--bench", StringComparison.OrdinalIgnoreCase));
-    var useGdi = args.Any(a => a.Equals("--gdi", StringComparison.OrdinalIgnoreCase));
-    var useOpenGl = args.Any(a => a.Equals("--gl", StringComparison.OrdinalIgnoreCase));
-    isSmoke = args.Any(a => a.Equals("--smoke", StringComparison.OrdinalIgnoreCase));
-    Application.DefaultGraphicsBackend =
-        useGdi ? GraphicsBackend.Gdi :
-        useOpenGl ? GraphicsBackend.OpenGL :
-        OperatingSystem.IsWindows() ? GraphicsBackend.Direct2D : GraphicsBackend.OpenGL;
-
-    Application.UiUnhandledException += (_, e) =>
-    {
-        Log($"UI exception: {e.Exception.GetType().Name}: {e.Exception.Message}");
-        Log(e.Exception.ToString());
-        e.Handled = true;
-    };
-
-    Log($"Args: {string.Join(' ', Environment.GetCommandLineArgs())}");
-    Log($"Backend: {Application.DefaultGraphicsBackend}");
-    Log($"Bench: {isBench}, Smoke: {isSmoke}");
 }
 
 class DemoViewModel
