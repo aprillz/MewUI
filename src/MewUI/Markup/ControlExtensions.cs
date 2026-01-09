@@ -266,6 +266,12 @@ public static class ControlExtensions
         return textBox;
     }
 
+    public static TextBox AcceptTab(this TextBox textBox, bool acceptTab = true)
+    {
+        textBox.AcceptTab = acceptTab;
+        return textBox;
+    }
+
     public static TextBox OnTextChanged(this TextBox textBox, Action<string> handler)
     {
         textBox.TextChanged = handler;
@@ -432,9 +438,9 @@ public static class ControlExtensions
         return textBox;
     }
 
-    public static MultiLineTextBox AcceptsReturn(this MultiLineTextBox textBox, bool acceptsReturn = true)
+    public static MultiLineTextBox AcceptTab(this MultiLineTextBox textBox, bool acceptTab = true)
     {
-        textBox.AcceptsReturn = acceptsReturn;
+        textBox.AcceptTab = acceptTab;
         return textBox;
     }
 

@@ -21,6 +21,7 @@ public sealed class MultiLineTextBox : Control
     private double _lineHeight;
     private readonly List<int> _lineStarts = new() { 0 };
     private bool _suppressTextInputNewline;
+    private bool _suppressTextInputTab;
     private ValueBinding<string>? _textBinding;
     private bool _suppressBindingSet;
 
@@ -52,7 +53,7 @@ public sealed class MultiLineTextBox : Control
             if (field == value)
                 return;
 
-            field = NormalizeText(value ?? string.Empty, AcceptsReturn);
+            field = NormalizeText(value ?? string.Empty);
             CaretPosition = Math.Min(CaretPosition, field.Length);
             _selectionStart = 0;
             _selectionLength = 0;
@@ -75,7 +76,7 @@ public sealed class MultiLineTextBox : Control
         set { field = value; InvalidateVisual(); }
     }
 
-    public bool AcceptsReturn { get; set; } = true;
+    public bool AcceptTab { get; set; }
 
     public int CaretPosition
     {
@@ -353,6 +354,15 @@ public sealed class MultiLineTextBox : Control
 
         switch (e.Key)
         {
+            case Key.Tab:
+                if (!IsReadOnly && AcceptTab)
+                {
+                    InsertText("\t");
+                    _suppressTextInputTab = true;
+                    e.Handled = true;
+                }
+                break;
+
             case Key.Left:
                 MoveCaretHorizontal(-1, shift);
                 e.Handled = true;
@@ -386,7 +396,7 @@ public sealed class MultiLineTextBox : Control
                 e.Handled = true;
                 break;
             case Key.Enter:
-                if (!IsReadOnly && AcceptsReturn)
+                if (!IsReadOnly)
                 {
                     InsertText("\n");
                     _suppressTextInputNewline = true;
@@ -429,7 +439,20 @@ public sealed class MultiLineTextBox : Control
             }
         }
 
-        text = NormalizeText(text, AcceptsReturn);
+        if (_suppressTextInputTab)
+        {
+            _suppressTextInputTab = false;
+            if (text.Contains('\t'))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (!AcceptTab && text.Contains('\t'))
+            text = text.Replace("\t", string.Empty);
+
+        text = NormalizeText(text);
         if (text.Length == 0)
             return;
 
@@ -628,7 +651,7 @@ public sealed class MultiLineTextBox : Control
     {
         DeleteSelectionIfAny();
 
-        var normalized = NormalizeText(text, AcceptsReturn);
+        var normalized = NormalizeText(text);
         if (normalized.Length == 0)
             return;
 
@@ -664,7 +687,7 @@ public sealed class MultiLineTextBox : Control
         if (!TryClipboardGetText(out var s) || string.IsNullOrEmpty(s))
             return;
 
-        s = NormalizeText(s, AcceptsReturn);
+        s = NormalizeText(s);
         if (s.Length == 0)
             return;
 
@@ -832,18 +855,14 @@ public sealed class MultiLineTextBox : Control
         return context.MeasureText(Text.Substring(start, end - start), font).Width;
     }
 
-    private static string NormalizeText(string text, bool acceptsReturn)
+    private static string NormalizeText(string text)
     {
         if (text.Length == 0)
             return string.Empty;
 
         // Normalize Windows line endings and stray CR into '\n' to keep layout/caret math consistent.
         text = text.Replace("\r\n", "\n").Replace('\r', '\n');
-
-        if (acceptsReturn)
-            return text;
-
-        return text.Replace("\n", string.Empty);
+        return text;
     }
 
     protected override void OnDispose()
@@ -871,7 +890,7 @@ public sealed class MultiLineTextBox : Control
                 if (IsFocused)
                     return;
 
-                var value = NormalizeText(get() ?? string.Empty, AcceptsReturn);
+                var value = NormalizeText(get() ?? string.Empty);
                 if (Text == value)
                     return;
 
@@ -892,7 +911,7 @@ public sealed class MultiLineTextBox : Control
         };
 
         _suppressBindingSet = true;
-        try { Text = NormalizeText(get() ?? string.Empty, AcceptsReturn); }
+        try { Text = NormalizeText(get() ?? string.Empty); }
         finally { _suppressBindingSet = false; }
     }
 }

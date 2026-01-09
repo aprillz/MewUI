@@ -16,6 +16,7 @@ public class TextBox : Control
     private double _scrollOffset;
     private ValueBinding<string>? _textBinding;
     private bool _suppressBindingSet;
+    private bool _suppressTextInputTab;
 
     protected override Color DefaultBackground => Theme.Current.ControlBackground;
     protected override Color DefaultBorderBrush => Theme.Current.ControlBorder;
@@ -63,6 +64,8 @@ public class TextBox : Control
         get;
         set { field = value; InvalidateVisual(); }
     }
+
+    public bool AcceptTab { get; set; }
 
     /// <summary>
     /// Gets or sets the caret position.
@@ -252,6 +255,19 @@ public class TextBox : Control
 
         switch (e.Key)
         {
+            case Input.Key.Tab:
+                if (!IsReadOnly && AcceptTab)
+                {
+                    DeleteSelection();
+                    Text = Text.Insert(CaretPosition, "\t");
+                    CaretPosition += 1;
+                    TextChanged?.Invoke(Text);
+                    _suppressTextInputTab = true;
+                    EnsureCaretVisible();
+                    e.Handled = true;
+                }
+                break;
+
             case Input.Key.Left:
                 MoveCaret(-1, shift, ctrl);
                 e.Handled = true;
@@ -311,12 +327,33 @@ public class TextBox : Control
         base.OnTextInput(e);
         if (IsReadOnly) return;
 
+        var text = e.Text ?? string.Empty;
+
+        if (_suppressTextInputTab)
+        {
+            _suppressTextInputTab = false;
+            if (text.Contains('\t'))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (text.Contains('\r') || text.Contains('\n'))
+            text = text.Replace("\r\n", string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
+
+        if (!AcceptTab && text.Contains('\t'))
+            text = text.Replace("\t", string.Empty);
+
+        if (text.Length == 0)
+            return;
+
         // Delete selection if any
         DeleteSelection();
 
         // Insert text
-        Text = Text.Insert(CaretPosition, e.Text);
-        CaretPosition += e.Text.Length;
+        Text = Text.Insert(CaretPosition, text);
+        CaretPosition += text.Length;
         TextChanged?.Invoke(Text);
 
         EnsureCaretVisible();
@@ -487,6 +524,8 @@ public class TextBox : Control
 
         // Remove newlines for single-line textbox
         text = text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+        if (!AcceptTab)
+            text = text.Replace("\t", " ");
 
         DeleteSelection();
         Text = Text.Insert(CaretPosition, text);
