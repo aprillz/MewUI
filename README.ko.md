@@ -22,7 +22,20 @@
   > 본 프로젝트는 **AI 프롬프팅 중심의 개발 방식**으로 구현되었습니다.  
   > 직접적인 코드 수정 없이 **프롬프트 이터레이션을 통해 설계와 구현을 반복**하였으며,  
   > 각 단계는 개발자가 검토하고 조정하는 방식으로 진행되었습니다.
- 
+
+
+---
+
+## 🚀 빠르게 실행해 보기
+
+다음 명령어를 Windows 명령 프롬프트 또는 Linux 터미널에서 입력하면 즉시 실행할 수 있습니다.
+(.NET 10 SDK가 필요합니다.)
+> ⚠️ 이 명령은 GitHub에서 코드를 직접 다운로드하여 실행합니다.
+```bahs
+curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_sample.cs -o - | dotnet run -
+```
+
+
 ### 비디오
 https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
@@ -152,11 +165,10 @@ var label  = new Label()
 ## 🧱 컨트롤 / 패널
 
 컨트롤:
-- `Label`, `Button`, `TextBox`, `MultiLineTextBox`
+- `Label`, `Button`, `TextBox`
 - `CheckBox`, `RadioButton`
 - `ListBox`, `ComboBox`
 - `Slider`, `ProgressBar`
-- `ScrollBar`, `ScrollViewer`
 - `Window`
 
 패널:
@@ -210,6 +222,7 @@ Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
 - [ ] `Image`
 - [ ] `GroupBox`
 - [ ] `TabControl`
+- [ ] `ScrollViewer`
 
 **렌더링**
 - [ ] 폰트 셰이핑(HarfBuzz)

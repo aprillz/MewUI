@@ -23,6 +23,16 @@
   > Design and implementation were performed through **iterative prompting without direct manual code edits**,  
   > with each step reviewed and refined by the developer.
 
+---
+
+## 🚀 Try It Out
+
+You can run it immediately by entering the following command in the Windows command line or a Linux terminal. (.NET 10 SDK required)
+> ⚠️ This command downloads and executes code directly from GitHub.
+```bahs
+curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_sample.cs -o - | dotnet run -
+```
+
 ### Video
 https://github.com/user-attachments/assets/876c1450-de36-4ccf-9cf8-b47f035a300f
 
@@ -150,11 +160,10 @@ var label  = new Label().BindText(percent, v => $"Percent ({v:P0})");
 ## 🧱 Controls / Panels
 
 Controls:
-- `Label`, `Button`, `TextBox`, `MultiLineTextBox`
+- `Label`, `Button`, `TextBox`
 - `CheckBox`, `RadioButton`
 - `ListBox`, `ComboBox`
 - `Slider`, `ProgressBar`
-- `ScrollBar`, `ScrollViewer`
 - `Window`
 
 Panels:
@@ -208,6 +217,7 @@ Currently implemented:
 - [ ] `Image`
 - [ ] `GroupBox`
 - [ ] `TabControl`
+- [ ] `ScrollViewer`
 
 **Rendering**
 - [ ] Better text shaping (HarfBuzz)
