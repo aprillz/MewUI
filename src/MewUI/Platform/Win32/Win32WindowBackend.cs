@@ -164,10 +164,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             case WindowMessages.WM_KEYDOWN:
             case WindowMessages.WM_SYSKEYDOWN:
-                return HandleKeyDown(wParam, lParam);
+                return HandleKeyDown(msg, wParam, lParam);
             case WindowMessages.WM_KEYUP:
             case WindowMessages.WM_SYSKEYUP:
-                return HandleKeyUp(wParam, lParam);
+                return HandleKeyUp(msg, wParam, lParam);
 
             case WindowMessages.WM_CHAR:
                 return HandleChar(wParam);
@@ -427,11 +427,19 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return modifiers;
     }
 
-    private nint HandleKeyDown(nint wParam, nint lParam)
+    private nint HandleKeyDown(uint msg, nint wParam, nint lParam)
     {
         int platformKey = (int)wParam.ToInt64();
         bool isRepeat = ((lParam.ToInt64() >> 30) & 1) != 0;
         var modifiers = GetModifierKeys();
+
+        // Let the OS handle Alt+F4 so it translates to WM_SYSCOMMAND/SC_CLOSE and our WM_CLOSE path runs.
+        if (msg == WindowMessages.WM_SYSKEYDOWN &&
+            modifiers.HasFlag(ModifierKeys.Alt) &&
+            platformKey == VirtualKeys.VK_F4)
+        {
+            return User32.DefWindowProc(Handle, msg, wParam, lParam);
+        }
 
         var args = new KeyEventArgs(MapKey(platformKey), platformKey, modifiers, isRepeat);
         Window.RaisePreviewKeyDown(args);
@@ -449,10 +457,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         Window.FocusManager.FocusedElement?.RaiseKeyDown(args);
 
-        return args.Handled ? 0 : User32.DefWindowProc(Handle, WindowMessages.WM_KEYDOWN, wParam, lParam);
+        return args.Handled ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
     }
 
-    private nint HandleKeyUp(nint wParam, nint lParam)
+    private nint HandleKeyUp(uint msg, nint wParam, nint lParam)
     {
         int platformKey = (int)wParam.ToInt64();
         var modifiers = GetModifierKeys();
@@ -462,7 +470,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (!args.Handled)
         Window.FocusManager.FocusedElement?.RaiseKeyUp(args);
 
-        return args.Handled ? 0 : User32.DefWindowProc(Handle, WindowMessages.WM_KEYUP, wParam, lParam);
+        return args.Handled ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
     }
 
     private nint HandleChar(nint wParam)
