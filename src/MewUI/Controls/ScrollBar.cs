@@ -65,7 +65,7 @@ public sealed class ScrollBar : Control
 
     protected override Size MeasureContent(Size availableSize)
     {
-        var thickness = GetTheme().ScrollBarThickness;
+        var thickness = GetTheme().ScrollBarHitThickness;
         return Orientation == Orientation.Vertical
             ? new Size(thickness, availableSize.Height)
             : new Size(availableSize.Width, thickness);
@@ -79,7 +79,7 @@ public sealed class ScrollBar : Control
         var theme = GetTheme();
         var bounds = Bounds;
 
-        var track = bounds;
+        var track = GetTrackRect(bounds, theme);
         var thumb = GetThumbRect(track, theme);
 
         var thumbColor = theme.ScrollBarThumb;
@@ -101,12 +101,13 @@ public sealed class ScrollBar : Control
             return;
 
         var theme = GetTheme();
-        var track = Bounds;
+        var track = GetTrackRect(Bounds, theme);
         var thumb = GetThumbRect(track, theme);
+        var thumbHit = GetThumbHitRect(thumb, Bounds);
 
         double pos = Orientation == Orientation.Vertical ? e.Position.Y : e.Position.X;
 
-        if (thumb.Contains(e.Position))
+        if (thumbHit.Contains(e.Position))
         {
             _dragging = true;
             _dragStartPos = pos;
@@ -138,7 +139,7 @@ public sealed class ScrollBar : Control
             return;
 
         var theme = GetTheme();
-        var track = Bounds;
+        var track = GetTrackRect(Bounds, theme);
         var thumb = GetThumbRect(track, theme);
 
         double pos = Orientation == Orientation.Vertical ? e.Position.Y : e.Position.X;
@@ -230,6 +231,43 @@ public sealed class ScrollBar : Control
         return new Rect(track.X + offset, track.Y, thumbLength, thickness);
     }
 
+    private Rect GetTrackRect(Rect bounds, Theme theme)
+    {
+        // The control Bounds represent the hit test region ("A").
+        // The actual visible track/thumb ("ScrollBarThickness") is centered inside it.
+        double hit = Orientation == Orientation.Vertical ? bounds.Width : bounds.Height;
+        double visual = Math.Max(0, theme.ScrollBarThickness);
+        if (visual <= 0 || hit <= 0)
+            return bounds;
+
+        var dpiScale = GetDpi() / 96.0;
+        visual = LayoutRounding.RoundToPixel(Math.Min(visual, hit), dpiScale);
+        double pad = Math.Max(0, (hit - visual) / 2);
+
+        if (Orientation == Orientation.Vertical)
+        {
+            double x = bounds.X + pad;
+            double y = bounds.Y + pad;
+            double h = Math.Max(0, bounds.Height - pad * 2);
+            return LayoutRounding.SnapRectEdgesToPixels(new Rect(x, y, visual, h), dpiScale);
+        }
+
+        double hy = bounds.Y + pad;
+        double hx = bounds.X + pad;
+        double w = Math.Max(0, bounds.Width - pad * 2);
+        return LayoutRounding.SnapRectEdgesToPixels(new Rect(hx, hy, w, visual), dpiScale);
+    }
+
+    private Rect GetThumbHitRect(Rect thumbVisual, Rect hitBounds)
+    {
+        // Use the full hit-test thickness ("A") for grabbing the thumb,
+        // while keeping the visible thumb thickness thin.
+        if (Orientation == Orientation.Vertical)
+            return new Rect(hitBounds.X, thumbVisual.Y, hitBounds.Width, thumbVisual.Height);
+
+        return new Rect(thumbVisual.X, hitBounds.Y, thumbVisual.Width, hitBounds.Height);
+    }
+
     private double ValueFromPosition(Rect track, Theme theme, double pos)
     {
         var thumb = GetThumbRect(track, theme);
@@ -245,4 +283,3 @@ public sealed class ScrollBar : Control
         return min + (max - min) * t;
     }
 }
-

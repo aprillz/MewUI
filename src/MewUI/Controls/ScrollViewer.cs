@@ -265,8 +265,8 @@ public sealed class ScrollViewer : Control
     private void ArrangeBars(Rect viewport)
     {
         var theme = GetTheme();
-        double t = theme.ScrollBarThickness;
-        const double inset = 1;
+        double t = theme.ScrollBarHitThickness;
+        const double inset = 0;
 
         if (_vBar.IsVisible)
         {

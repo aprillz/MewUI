@@ -57,6 +57,7 @@ public sealed class Theme
 
     // Scroll (thin style defaults)
     public double ScrollBarThickness { get; }
+    public double ScrollBarHitThickness { get; }
     public double ScrollBarMinThumbLength { get; }
     public double ScrollWheelStep { get; }
     public double ScrollBarSmallChange { get; }
@@ -78,6 +79,7 @@ public sealed class Theme
         double fontSize,
         FontWeight fontWeight,
         double scrollBarThickness,
+        double scrollBarHitThickness,
         double scrollBarMinThumbLength,
         double scrollWheelStep,
         double scrollBarSmallChange,
@@ -94,6 +96,7 @@ public sealed class Theme
         FontWeight = fontWeight;
 
         ScrollBarThickness = scrollBarThickness;
+        ScrollBarHitThickness = scrollBarHitThickness;
         ScrollBarMinThumbLength = scrollBarMinThumbLength;
         ScrollWheelStep = scrollWheelStep;
         ScrollBarSmallChange = scrollBarSmallChange;
@@ -114,6 +117,7 @@ public sealed class Theme
             fontSize: FontSize,
             fontWeight: FontWeight,
             scrollBarThickness: ScrollBarThickness,
+            scrollBarHitThickness: ScrollBarHitThickness,
             scrollBarMinThumbLength: ScrollBarMinThumbLength,
             scrollWheelStep: ScrollWheelStep,
             scrollBarSmallChange: ScrollBarSmallChange,
@@ -137,18 +141,19 @@ public sealed class Theme
         return new Theme(
             name: "Light",
             palette: palette,
-            controlCornerRadius: 3,
+            controlCornerRadius: 4,
             fontFamily: "Segoe UI",
             fontSize: 12,
             fontWeight: FontWeight.Normal,
-            scrollBarThickness: 3,
+            scrollBarThickness: 4,
+            scrollBarHitThickness: 10,
             scrollBarMinThumbLength: 14,
             scrollWheelStep: 32,
             scrollBarSmallChange: 24,
             scrollBarLargeChange: 120,
-            scrollBarThumb: Color.FromArgb(0x66, 0, 0, 0),
-            scrollBarThumbHover: Color.FromArgb(0x88, 0, 0, 0),
-            scrollBarThumbActive: Color.FromArgb(0xAA, 0, 0, 0));
+            scrollBarThumb: Color.FromArgb(0x44, 0, 0, 0),
+            scrollBarThumbHover: Color.FromArgb(0x66, 0, 0, 0),
+            scrollBarThumbActive: Color.FromArgb(0x88, 0, 0, 0));
     }
 
     private static Theme CreateDark()
@@ -165,17 +170,18 @@ public sealed class Theme
         return new Theme(
             name: "Dark",
             palette: palette,
-            controlCornerRadius: 3,
+            controlCornerRadius: 4,
             fontFamily: "Segoe UI",
             fontSize: 12,
             fontWeight: FontWeight.Normal,
-            scrollBarThickness: 3,
+            scrollBarThickness: 4,
+            scrollBarHitThickness: 10,
             scrollBarMinThumbLength: 14,
             scrollWheelStep: 32,
             scrollBarSmallChange: 24,
             scrollBarLargeChange: 120,
-            scrollBarThumb: Color.FromArgb(0x66, 255, 255, 255),
-            scrollBarThumbHover: Color.FromArgb(0x88, 255, 255, 255),
-            scrollBarThumbActive: Color.FromArgb(0xAA, 255, 255, 255));
+            scrollBarThumb: Color.FromArgb(0x44, 255, 255, 255),
+            scrollBarThumbHover: Color.FromArgb(0x66, 255, 255, 255),
+            scrollBarThumbActive: Color.FromArgb(0x88, 255, 255, 255));
     }
 }
