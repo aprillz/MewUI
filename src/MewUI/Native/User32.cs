@@ -74,11 +74,23 @@ internal static partial class User32
     [LibraryImport(LibraryName, EntryPoint = "GetWindowTextLengthW")]
     public static partial int GetWindowTextLength(nint hWnd);
 
-    [LibraryImport(LibraryName)]
-    public static partial nint GetWindowLongPtr(nint hWnd, int nIndex);
+    [LibraryImport(LibraryName, EntryPoint = "GetWindowLongPtrW")]
+    private static partial nint GetWindowLongPtrW(nint hWnd, int nIndex);
 
-    [LibraryImport(LibraryName)]
-    public static partial nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
+    [LibraryImport(LibraryName, EntryPoint = "SetWindowLongPtrW")]
+    private static partial nint SetWindowLongPtrW(nint hWnd, int nIndex, nint dwNewLong);
+
+    [LibraryImport(LibraryName, EntryPoint = "GetWindowLongW")]
+    private static partial int GetWindowLongW(nint hWnd, int nIndex);
+
+    [LibraryImport(LibraryName, EntryPoint = "SetWindowLongW")]
+    private static partial int SetWindowLongW(nint hWnd, int nIndex, int dwNewLong);
+
+    public static nint GetWindowLongPtr(nint hWnd, int nIndex)
+        => nint.Size == 8 ? GetWindowLongPtrW(hWnd, nIndex) : (nint)GetWindowLongW(hWnd, nIndex);
+
+    public static nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong)
+        => nint.Size == 8 ? SetWindowLongPtrW(hWnd, nIndex, dwNewLong) : (nint)SetWindowLongW(hWnd, nIndex, (int)dwNewLong);
 
     #endregion
 

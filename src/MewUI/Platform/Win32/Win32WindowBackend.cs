@@ -27,6 +27,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
         Window = window;
     }
 
+    public void SetResizable(bool resizable)
+    {
+        if (Handle == 0)
+            return;
+
+        ApplyResizeMode();
+    }
+
     public void Show()
     {
         if (Handle != 0)
@@ -73,7 +81,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         double dpiScale = dpi / 96.0;
 
         var rect = new RECT(0, 0, (int)Math.Round(widthDip * dpiScale), (int)Math.Round(heightDip * dpiScale));
-        User32.AdjustWindowRectEx(ref rect, WindowStyles.WS_OVERLAPPEDWINDOW, false, 0);
+        User32.AdjustWindowRectEx(ref rect, GetWindowStyle(), false, 0);
         User32.SetWindowPos(Handle, 0, 0, 0, rect.Width, rect.Height, 0x0002 | 0x0004); // SWP_NOMOVE | SWP_NOZORDER
     }
 
@@ -188,13 +196,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
         double dpiScale = Window.DpiScale;
 
         var rect = new RECT(0, 0, (int)(Window.Width * dpiScale), (int)(Window.Height * dpiScale));
-        User32.AdjustWindowRectEx(ref rect, WindowStyles.WS_OVERLAPPEDWINDOW, false, 0);
+        uint style = GetWindowStyle();
+        User32.AdjustWindowRectEx(ref rect, style, false, 0);
 
         Handle = User32.CreateWindowEx(
             0,
             Win32PlatformHost.WindowClassName,
             Window.Title,
-            WindowStyles.WS_OVERLAPPEDWINDOW,
+            style,
             100,
             100,
             rect.Width,
@@ -209,6 +218,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         _host.RegisterWindow(Handle, this);
         Window.AttachBackend(this);
+        ApplyResizeMode();
 
         uint actualDpi = User32.GetDpiForWindow(Handle);
         if (actualDpi != initialDpi)
@@ -226,6 +236,27 @@ internal sealed class Win32WindowBackend : IWindowBackend
             Window.Background = Window.Theme.WindowBackground;
 
         Window.RaiseLoaded();
+    }
+
+    private uint GetWindowStyle()
+    {
+        uint style = WindowStyles.WS_OVERLAPPEDWINDOW;
+        if (!Window.WindowSize.IsResizable)
+            style &= ~(WindowStyles.WS_THICKFRAME | WindowStyles.WS_MAXIMIZEBOX);
+        return style;
+    }
+
+    private void ApplyResizeMode()
+    {
+        const int GWL_STYLE = -16;
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_FRAMECHANGED = 0x0020;
+
+        uint style = GetWindowStyle();
+        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
     }
 
     private void HandleDestroy()

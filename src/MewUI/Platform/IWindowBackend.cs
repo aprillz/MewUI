@@ -6,6 +6,8 @@ public interface IWindowBackend : IDisposable
 {
     nint Handle { get; }
 
+    void SetResizable(bool resizable);
+
     void Show();
 
     void Hide();

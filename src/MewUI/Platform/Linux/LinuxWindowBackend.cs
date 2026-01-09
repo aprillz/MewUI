@@ -11,6 +11,8 @@ internal sealed class LinuxWindowBackend : IWindowBackend
 
     public nint Handle => 0;
 
+    public void SetResizable(bool resizable) { }
+
     public void Show()
         => throw new PlatformNotSupportedException("Linux window backend is not implemented yet.");
 

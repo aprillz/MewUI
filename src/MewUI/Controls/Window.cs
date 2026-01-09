@@ -16,6 +16,7 @@ public class Window : ContentControl
     private Theme _theme = Theme.Current;
     private IWindowBackend? _backend;
     private Size _clientSizeDip = Size.Empty;
+    private Size _lastLayoutClientSizeDip = Size.Empty;
     private readonly List<PopupEntry> _popups = new();
     private bool _firstFrameRenderedRaised;
 
@@ -27,6 +28,20 @@ public class Window : ContentControl
     }
 
     public nint Handle => _backend?.Handle ?? 0;
+
+    public WindowSize WindowSize
+    {
+        get;
+        set
+        {
+            field = value;
+            if (!double.IsNaN(field.Width))
+                Width = field.Width;
+            if (!double.IsNaN(field.Height))
+                Height = field.Height;
+            _backend?.SetResizable(field.IsResizable);
+        }
+    } = WindowSize.Resizable(800, 600);
 
     public string Title
     {
@@ -41,22 +56,22 @@ public class Window : ContentControl
     public new double Width
     {
         get;
-        set
+        private set
         {
             field = value;
             _backend?.SetClientSize(Width, Height);
         }
-    } = 800;
+    } = WindowSize.Resizable(800, 600).Width;
 
     public new double Height
     {
         get;
-        set
+        private set
         {
             field = value;
             _backend?.SetClientSize(Width, Height);
         }
-    } = 600;
+    } = WindowSize.Resizable(800, 600).Height;
 
     public bool IsActive { get; private set; }
 
@@ -151,6 +166,7 @@ public class Window : ContentControl
             throw new InvalidOperationException("Application is not running. Call Application.Run() first.");
 
         _backend = Application.Current.PlatformHost.CreateWindowBackend(this);
+        _backend.SetResizable(WindowSize.IsResizable);
     }
 
     public void PerformLayout()
@@ -159,6 +175,11 @@ public class Window : ContentControl
             return;
 
         var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+
+        // Layout can be expensive (e.g., large item collections). If nothing is dirty and the
+        // client size hasn't changed, avoid re-running Measure/Arrange on every paint.
+        if (clientSize == _lastLayoutClientSizeDip && !IsLayoutDirty(Content))
+            return;
 
         const int maxPasses = 8;
         for (int pass = 0; pass < maxPasses; pass++)
@@ -169,6 +190,8 @@ public class Window : ContentControl
             if (!IsLayoutDirty(Content))
                 break;
         }
+
+        _lastLayoutClientSizeDip = clientSize;
     }
 
     private static bool IsLayoutDirty(Element root)
@@ -220,11 +243,24 @@ public class Window : ContentControl
     {
         using var context = GraphicsFactory.CreateContext(Handle, hdc, DpiScale);
         context.Clear(Background.A > 0 ? Background : Theme.WindowBackground);
-        Content?.Render(context);
 
-        // Popups render last (on top).
-        for (int i = 0; i < _popups.Count; i++)
-            _popups[i].Element.Render(context);
+        // Ensure nothing paints outside the client area.
+        var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+        context.Save();
+        context.SetClip(new Rect(0, 0, clientSize.Width, clientSize.Height));
+
+        try
+        {
+            Content?.Render(context);
+
+            // Popups render last (on top).
+            for (int i = 0; i < _popups.Count; i++)
+                _popups[i].Element.Render(context);
+        }
+        finally
+        {
+            context.Restore();
+        }
 
         if (!_firstFrameRenderedRaised)
         {

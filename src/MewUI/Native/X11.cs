@@ -78,6 +78,12 @@ internal static partial class X11
 
     [LibraryImport(LibraryName)]
     public static partial int XLookupString(ref XKeyEvent event_struct, byte[] buffer_return, int bytes_buffer, out nint keysym_return, out nint status_in_out);
+
+    [LibraryImport(LibraryName)]
+    public static unsafe partial int XLookupString(ref XKeyEvent event_struct, byte* buffer_return, int bytes_buffer, out nint keysym_return, out nint status_in_out);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XSetWMNormalHints(nint display, nint window, ref XSizeHints hints);
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -239,6 +245,29 @@ internal struct XConfigureEvent
     public nint above;
     [MarshalAs(UnmanagedType.Bool)]
     public bool override_redirect;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XSizeHints
+{
+    public XSizeHintsFlags flags;
+    public int x, y;
+    public int width, height;
+    public int min_width, min_height;
+    public int max_width, max_height;
+    public int width_inc, height_inc;
+    public int min_aspect_x, min_aspect_y;
+    public int max_aspect_x, max_aspect_y;
+    public int base_width, base_height;
+    public int win_gravity;
+}
+
+[Flags]
+internal enum XSizeHintsFlags : long
+{
+    None = 0L,
+    PMinSize = 1L << 4,
+    PMaxSize = 1L << 5,
 }
 
 [StructLayout(LayoutKind.Sequential)]

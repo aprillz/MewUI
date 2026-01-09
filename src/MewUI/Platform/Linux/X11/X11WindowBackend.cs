@@ -32,6 +32,14 @@ internal sealed class X11WindowBackend : IWindowBackend
         Window = window;
     }
 
+    public void SetResizable(bool resizable)
+    {
+        if (Display == 0 || Handle == 0)
+            return;
+
+        ApplyResizeMode();
+    }
+
     public void Show()
     {
         if (_shown)
@@ -210,8 +218,33 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (_wmDeleteWindowAtom != 0)
             NativeX11.XSetWMProtocols(Display, Handle, ref _wmDeleteWindowAtom, 1);
 
+        ApplyResizeMode();
+
         Window.RaiseLoaded();
         _needsRender = true;
+    }
+
+    private void ApplyResizeMode()
+    {
+        if (Display == 0 || Handle == 0)
+            return;
+
+        var hints = new XSizeHints();
+        if (!Window.WindowSize.IsResizable)
+        {
+            hints.flags = XSizeHintsFlags.PMinSize | XSizeHintsFlags.PMaxSize;
+            hints.min_width = (int)Math.Max(1, Math.Round(Window.Width));
+            hints.min_height = (int)Math.Max(1, Math.Round(Window.Height));
+            hints.max_width = hints.min_width;
+            hints.max_height = hints.min_height;
+        }
+        else
+        {
+            hints.flags = 0;
+        }
+
+        NativeX11.XSetWMNormalHints(Display, Handle, ref hints);
+        NativeX11.XFlush(Display);
     }
 
     internal void PumpEventsOnce()
