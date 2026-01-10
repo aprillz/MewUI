@@ -283,7 +283,7 @@ Element BindSamples()
             new Grid()
                 .Rows("Auto,Auto,Auto,*")
                 .Columns("100,*")
-                .ChildMargin(8)
+                .Spacing(8)
                 .Children(
                 new Label()
                     .Row(0).Column(0)
