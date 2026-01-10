@@ -14,55 +14,55 @@ public static class ElementExtensions
 
     public static Window Width(this Window window, double width)
     {
-        window.WindowSize = Controls.WindowSize.Resizable(width, window.Height);
+        window.WindowSize = WindowSize.Resizable(width, window.Height);
         return window;
     }
 
     public static Window Height(this Window window, double height)
     {
-        window.WindowSize = Controls.WindowSize.Resizable(window.Width, height);
+        window.WindowSize = WindowSize.Resizable(window.Width, height);
         return window;
     }
 
     public static Window Size(this Window window, double width, double height)
     {
-        window.WindowSize = Controls.WindowSize.Resizable(width, height);
+        window.WindowSize = WindowSize.Resizable(width, height);
         return window;
     }
 
     public static Window Size(this Window window, double size)
     {
-        window.WindowSize = Controls.WindowSize.Resizable(size, size);
+        window.WindowSize = WindowSize.Resizable(size, size);
         return window;
     }
 
     public static Window Resizable(this Window window, double width, double height)
     {
-        window.WindowSize = Controls.WindowSize.Resizable(width, height);
+        window.WindowSize = WindowSize.Resizable(width, height);
         return window;
     }
 
     public static Window Fixed(this Window window, double width, double height)
     {
-        window.WindowSize = Controls.WindowSize.Fixed(width, height);
+        window.WindowSize = WindowSize.Fixed(width, height);
         return window;
     }
 
     public static Window FitContentWidth(this Window window, double maxWidth, double fixedHeight)
     {
-        window.WindowSize = Controls.WindowSize.FitContentWidth(maxWidth, fixedHeight);
+        window.WindowSize = WindowSize.FitContentWidth(maxWidth, fixedHeight);
         return window;
     }
 
     public static Window FitContentHeight(this Window window, double fixedWidth, double maxHeight)
     {
-        window.WindowSize = Controls.WindowSize.FitContentHeight(fixedWidth, maxHeight);
+        window.WindowSize = WindowSize.FitContentHeight(fixedWidth, maxHeight);
         return window;
     }
 
     public static Window FitContentSize(this Window window, double maxWidth, double maxHeight)
     {
-        window.WindowSize = Controls.WindowSize.FitContentSize(maxWidth, maxHeight);
+        window.WindowSize = WindowSize.FitContentSize(maxWidth, maxHeight);
         return window;
     }
 

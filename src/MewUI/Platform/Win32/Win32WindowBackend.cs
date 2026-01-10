@@ -446,7 +446,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (args.Handled)
             return 0;
 
-        if (args.Key == Input.Key.Tab)
+        if (args.Key == Key.Tab)
         {
             if (modifiers.HasFlag(ModifierKeys.Shift))
                 Window.FocusManager.MoveFocusPrevious();
@@ -494,43 +494,43 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         // Digits (top row)
         if (vk is >= 0x30 and <= 0x39)
-            return (Input.Key)((int)Input.Key.D0 + (vk - 0x30));
+            return (Input.Key)((int)Key.D0 + (vk - 0x30));
 
         // Letters
         if (vk is >= 0x41 and <= 0x5A)
-            return (Input.Key)((int)Input.Key.A + (vk - 0x41));
+            return (Input.Key)((int)Key.A + (vk - 0x41));
 
         // Numpad digits
         if (vk is >= 0x60 and <= 0x69)
-            return (Input.Key)((int)Input.Key.NumPad0 + (vk - 0x60));
+            return (Input.Key)((int)Key.NumPad0 + (vk - 0x60));
 
         return vk switch
         {
-            VirtualKeys.VK_BACK => Input.Key.Backspace,
-            VirtualKeys.VK_TAB => Input.Key.Tab,
-            VirtualKeys.VK_RETURN => Input.Key.Enter,
-            VirtualKeys.VK_ESCAPE => Input.Key.Escape,
-            VirtualKeys.VK_SPACE => Input.Key.Space,
+            VirtualKeys.VK_BACK => Key.Backspace,
+            VirtualKeys.VK_TAB => Key.Tab,
+            VirtualKeys.VK_RETURN => Key.Enter,
+            VirtualKeys.VK_ESCAPE => Key.Escape,
+            VirtualKeys.VK_SPACE => Key.Space,
 
-            VirtualKeys.VK_LEFT => Input.Key.Left,
-            VirtualKeys.VK_UP => Input.Key.Up,
-            VirtualKeys.VK_RIGHT => Input.Key.Right,
-            VirtualKeys.VK_DOWN => Input.Key.Down,
+            VirtualKeys.VK_LEFT => Key.Left,
+            VirtualKeys.VK_UP => Key.Up,
+            VirtualKeys.VK_RIGHT => Key.Right,
+            VirtualKeys.VK_DOWN => Key.Down,
 
-            VirtualKeys.VK_INSERT => Input.Key.Insert,
-            VirtualKeys.VK_DELETE => Input.Key.Delete,
-            VirtualKeys.VK_HOME => Input.Key.Home,
-            VirtualKeys.VK_END => Input.Key.End,
-            VirtualKeys.VK_PRIOR => Input.Key.PageUp,
-            VirtualKeys.VK_NEXT => Input.Key.PageDown,
+            VirtualKeys.VK_INSERT => Key.Insert,
+            VirtualKeys.VK_DELETE => Key.Delete,
+            VirtualKeys.VK_HOME => Key.Home,
+            VirtualKeys.VK_END => Key.End,
+            VirtualKeys.VK_PRIOR => Key.PageUp,
+            VirtualKeys.VK_NEXT => Key.PageDown,
 
-            VirtualKeys.VK_ADD => Input.Key.Add,
-            VirtualKeys.VK_SUBTRACT => Input.Key.Subtract,
-            VirtualKeys.VK_MULTIPLY => Input.Key.Multiply,
-            VirtualKeys.VK_DIVIDE => Input.Key.Divide,
-            VirtualKeys.VK_DECIMAL => Input.Key.Decimal,
+            VirtualKeys.VK_ADD => Key.Add,
+            VirtualKeys.VK_SUBTRACT => Key.Subtract,
+            VirtualKeys.VK_MULTIPLY => Key.Multiply,
+            VirtualKeys.VK_DIVIDE => Key.Divide,
+            VirtualKeys.VK_DECIMAL => Key.Decimal,
 
-            _ => Input.Key.None
+            _ => Key.None
         };
     }
 
