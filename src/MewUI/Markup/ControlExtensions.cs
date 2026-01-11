@@ -452,6 +452,12 @@ public static class ControlExtensions
         return textBox;
     }
 
+    public static MultiLineTextBox Wrap(this MultiLineTextBox textBox, bool wrap = true)
+    {
+        textBox.Wrap = wrap;
+        return textBox;
+    }
+
     public static MultiLineTextBox OnTextChanged(this MultiLineTextBox textBox, Action<string> handler)
     {
         textBox.TextChanged = handler;

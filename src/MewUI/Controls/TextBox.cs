@@ -204,8 +204,9 @@ public class TextBox : TextBase
                 if (!IsReadOnly && AcceptTab)
                 {
                     DeleteSelection();
-                    Text = Text.Insert(CaretPosition, "\t");
+                    InsertIntoDocument(CaretPosition, "\t".AsSpan());
                     CaretPosition += 1;
+                    NotifyTextChanged();
                     _suppressTextInputTab = true;
                     EnsureCaretVisible();
                     e.Handled = true;
@@ -239,26 +240,6 @@ public class TextBox : TextBase
 
             case Key.Delete:
                 if (!IsReadOnly) HandleDelete(ctrl);
-                e.Handled = true;
-                break;
-
-            case Key.A when ctrl:
-                SelectAll();
-                e.Handled = true;
-                break;
-
-            case Key.C when ctrl:
-                CopyToClipboard();
-                e.Handled = true;
-                break;
-
-            case Key.X when ctrl:
-                if (!IsReadOnly) CutToClipboard();
-                e.Handled = true;
-                break;
-
-            case Key.V when ctrl:
-                if (!IsReadOnly) PasteFromClipboard();
                 e.Handled = true;
                 break;
         }
@@ -296,8 +277,9 @@ public class TextBox : TextBase
         DeleteSelection();
 
         // Insert text
-        Text = Text.Insert(CaretPosition, text);
+        InsertIntoDocument(CaretPosition, text.AsSpan());
         CaretPosition += text.Length;
+        NotifyTextChanged();
 
         EnsureCaretVisible();
         InvalidateVisual();
@@ -402,8 +384,9 @@ public class TextBox : TextBase
         else if (CaretPosition > 0)
         {
             int deleteFrom = word ? FindPreviousWordBoundary(CaretPosition) : CaretPosition - 1;
-            Text = Text.Remove(deleteFrom, CaretPosition - deleteFrom);
+            RemoveFromDocument(deleteFrom, CaretPosition - deleteFrom);
             CaretPosition = deleteFrom;
+            NotifyTextChanged();
         }
     }
 
@@ -416,7 +399,8 @@ public class TextBox : TextBase
         else if (CaretPosition < Text.Length)
         {
             int deleteTo = word ? FindNextWordBoundary(CaretPosition) : CaretPosition + 1;
-            Text = Text.Remove(CaretPosition, deleteTo - CaretPosition);
+            RemoveFromDocument(CaretPosition, deleteTo - CaretPosition);
+            NotifyTextChanged();
         }
     }
 
@@ -427,49 +411,24 @@ public class TextBox : TextBase
         int start = Math.Min(_selectionStart, _selectionStart + _selectionLength);
         int length = Math.Abs(_selectionLength);
 
-        Text = Text.Remove(start, length);
+        RemoveFromDocument(start, length);
         CaretPosition = start;
         _selectionStart = start;
         _selectionLength = 0;
+        NotifyTextChanged();
     }
 
-    private void SelectAll()
+    protected override void PasteFromClipboardCore()
     {
-        _selectionStart = 0;
-        _selectionLength = Text.Length;
-        CaretPosition = Text.Length;
-    }
+        if (!TryClipboardGetText(out var text) || string.IsNullOrEmpty(text))
+            return;
 
-    private void CopyToClipboard()
-    {
-        if (_selectionLength == 0) return;
-
-        int start = Math.Min(_selectionStart, _selectionStart + _selectionLength);
-        int length = Math.Abs(_selectionLength);
-        var selectedText = Text.Substring(start, length);
-
-        SetClipboardText(selectedText);
-    }
-
-    private void CutToClipboard()
-    {
-        CopyToClipboard();
-        DeleteSelection();
-    }
-
-    private void PasteFromClipboard()
-    {
-        var text = GetClipboardText();
-        if (string.IsNullOrEmpty(text)) return;
-
-        // Remove newlines for single-line textbox
+        // Single-line: preserve separation by converting newlines/tabs to spaces.
         text = text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
         if (!AcceptTab)
             text = text.Replace("\t", " ");
 
-        DeleteSelection();
-        Text = Text.Insert(CaretPosition, text);
-        CaretPosition += text.Length;
+        InsertTextAtCaretForEdit(text);
     }
 
     private void EnsureCaretVisible()
@@ -524,18 +483,4 @@ public class TextBox : TextBase
                Key.Right or
                Key.Home or
                Key.End;
-
-    private static void SetClipboardText(string text)
-    {
-        if (!Application.IsRunning)
-            return;
-        Application.Current.PlatformHost.Clipboard.TrySetText(text ?? string.Empty);
-    }
-
-    private static string GetClipboardText()
-    {
-        if (!Application.IsRunning)
-            return string.Empty;
-        return Application.Current.PlatformHost.Clipboard.TryGetText(out var text) ? text : string.Empty;
-    }
 }

@@ -53,7 +53,7 @@ Application.Run(root);
 
 Element HeaderSection() => new StackPanel()
     .Vertical()
-    .Spacing(6)
+    .Spacing(8)
     .Margin(0, 0, 0, 12)
     .Children(
         new Label()
@@ -68,7 +68,7 @@ Element HeaderSection() => new StackPanel()
 
 FrameworkElement AccentPicker() => new StackPanel()
     .Vertical()
-    .Spacing(6)
+    .Spacing(8)
     .Children(
         new Label()
             .Text("Accent")
@@ -76,7 +76,7 @@ FrameworkElement AccentPicker() => new StackPanel()
 
         new WrapPanel()
             .Orientation(Orientation.Horizontal)
-            .Spacing(6)
+            .Spacing(8)
             .ItemWidth(28)
             .ItemHeight(28)
             .Children(
@@ -94,16 +94,15 @@ FrameworkElement AccentPicker() => new StackPanel()
             )
     );
 
-Button AccentSwatch(string name, Color color) =>
-    new Button()
-        .Content(string.Empty)
-        .Background(color)
-        .OnClick(() => ApplyAccent(color))
-        .Apply(b => accentSwatches.Add((color, b)));
+Button AccentSwatch(string name, Color color) => new Button()
+    .Content(string.Empty)
+    .Background(color)
+    .OnClick(() => ApplyAccent(color))
+    .Apply(b => accentSwatches.Add((color, b)));
 
 Element Buttons() => new StackPanel()
     .Horizontal()
-    .Spacing(10)
+    .Spacing(8)
     .Right()
     .Children(
         new Button()
@@ -117,179 +116,193 @@ Element Buttons() => new StackPanel()
             .OnClick(() => Application.Quit())
     );
 
-Element NormalControls() => new StackPanel()
-    .Children(
-        new StackPanel()
-            .Horizontal()
-            .Spacing(8)
-            .Margin(0, 16, 0, 12)
-            .Children(
-                new Button()
-                    .Content("Toggle Theme")
-                    .OnClick(() =>
-                    {
-                        var nextBase = window.Theme.Name == Theme.Dark.Name ? Theme.Light : Theme.Dark;
-                        Theme.Current = window.Theme = nextBase.WithAccent(currentAccent);
-                        UpdateAccentSwatches();
-                    }),
+Element NormalControls()
+{
+    var notesTextBox = new MultiLineTextBox()
+        .Wrap(true)
+        .FontFamily("Consolas")
+        .Height(120)
+        .Placeholder("Type multi-line text (wheel scroll + thin scrollbar)")
+        .Text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7");
 
-                new Label()
-                    .Text("Theme: Light")
-                    .Apply(l => window.ThemeChanged += (_, newTheme) =>
-                    {
-                        l.Text($"Theme: {newTheme.Name}");
-                        UpdateAccentSwatches();
-                    })
-                    .CenterVertical()
-            ),
-
-        AccentPicker()
-            .Margin(0, 0, 0, 12),
-
-        new Grid()
-            .Columns("Auto, *")
-            .Margin(0, 0, 0, 10)
-            .Children(
-                new Label()
-                    .Text("Your name:")
-                    .Column(0)
-                    .Margin(0, 0, 10, 0)
-                    .CenterVertical(),
-
-                new TextBox()
-                    .Placeholder("Type your name")
-                    .Column(1)
-            ),
-
-        new Grid()
-            .Columns("Auto, *")
-            .Margin(0, 0, 0, 10)
-            .Children(
-                new Label()
-                    .Text("Notes:")
-                    .Column(0)
-                    .Margin(0, 0, 10, 0)
-                    .CenterVertical(),
-
-                new MultiLineTextBox()
-                    .Column(1)
-                    .Height(80)
-                    .Placeholder("Type multi-line text (wheel scroll + thin scrollbar)")
-                    .Text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7")
-            ),
-
-        new StackPanel()
-            .Vertical()
-            .Spacing(10)
-            .Margin(0, 10, 0, 10)
-            .Children(
-                new Label()
-                    .Text("Buttons")
-                    .Bold(),
-
-                new StackPanel()
-                    .Horizontal()
-                    .Spacing(10)
-                    .Children(
-                        new Button()
-                            .Content("Click!")
-                            .OnClick(() => new Window()
-                                .Fixed(400, 600)
-                                .Title("New Window")
-                                .Content(
-                                    BindSamples()
-                                        .Margin(12)
-                                )
-                                .Show()),
-
-                        new Button()
-                            .Content("Disabled")
-                            .Apply(b => b.IsEnabled = false),
-
-                    new Button()
-                        .Content("Async/Await")
-                        .OnClick(async () =>
-                        {
-                            vm.AsyncStatus.Value = "Async: running...";
-                            await Task.Delay(750);
-                            vm.AsyncStatus.Value = $"Async: done @ {DateTime.Now:HH:mm:ss}";
-                        })
-                    ),
-
-                new Label()
-                    .BindText(vm.AsyncStatus)
-                    .Margin(0, 0, 0, 6),
-
-                new Label()
-                    .Text("Options")
-                    .Bold(),
-
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(6)
-                    .Children(
-                        new CheckBox()
-                            .Text("Enable feature"),
-
-                        new StackPanel()
-                            .Horizontal()
-                            .Spacing(12)
-                            .Children(
-                                new Label().Text("GroupName: group1").CenterVertical(),
-                                new RadioButton()
-                                    .Text("A")
-                                    .GroupName("group1")
-                                    .IsChecked(true),
-                                new RadioButton()
-                                    .Text("B")
-                                    .GroupName("group1")
-                            ),
-
-                        new StackPanel()
-                            .Horizontal()
-                            .Spacing(12)
-                            .Children(
-                                new Label().Text("GroupName: group2").CenterVertical(),
-                                new RadioButton()
-                                    .Text("C")
-                                    .GroupName("group2")
-                                    .IsChecked(true),
-                                new RadioButton()
-                                    .Text("D")
-                                    .GroupName("group2")
-                            ),
-
-                        new StackPanel()
-                            .Horizontal()
-                            .Spacing(12)
-                            .Children(
-                                new Label().Text("GroupName: (parent-scope)").CenterVertical(),
-                                new RadioButton()
-                                    .Text("X")
-                                    .IsChecked(true),
-                                new RadioButton()
-                                    .Text("Y")
-                            )
-                    ),
-
-            new ListBox()
-                .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
-                .SelectedIndex(1)
-                .Height(76),
-
-            new DockPanel()
+    return new StackPanel()
+        .Children(
+            new StackPanel()
+                .Horizontal()
+                .Spacing(8)
+                .Margin(0, 16, 0, 12)
                 .Children(
+                    new Button()
+                        .Content("Toggle Theme")
+                        .OnClick(() =>
+                        {
+                            var nextBase = window.Theme.Name == Theme.Dark.Name ? Theme.Light : Theme.Dark;
+                            Theme.Current = window.Theme = nextBase.WithAccent(currentAccent);
+                            UpdateAccentSwatches();
+                        }),
+
+                    new Label()
+                        .Text("Theme: Light")
+                        .CenterVertical()
+                        .Apply(l => window.ThemeChanged += (_, newTheme) =>
+                        {
+                            l.Text($"Theme: {newTheme.Name}");
+                            UpdateAccentSwatches();
+                        })
+                ),
+
+            AccentPicker()
+                .Margin(0, 0, 0, 12),
+
+            new Grid()
+                .AutoIndexing()
+                .Columns("Auto, *")
+                .Rows("Auto,Auto,Auto,Auto")
+                .Spacing(8)
+                .Margin(0, 0, 0, 10)
+                .Children(
+                    new Label()
+                        .Text("Your name:")
+                        .Column(0)
+                        .Margin(0, 0, 10, 0)
+                        .CenterVertical(),
+
+                    new TextBox()
+                        .Placeholder("Type your name")
+                        .Column(1),
+
+                    new Label()
+                        .Text("Notes:")
+                        .Column(0)
+                        .Margin(0, 0, 10, 0)
+                        .CenterVertical(),
+
+                        new StackPanel()
+                            .Column(1)
+                            .Vertical()
+                            .Spacing(8)
+                            .Children(
+                                notesTextBox,
+
+                                new CheckBox()
+                                    .Text("Wrap")
+                                    .IsChecked(notesTextBox.Wrap)
+                                    .OnCheckedChanged(v => notesTextBox.Wrap = v)
+                            ),
+
                     new Label()
                         .CenterVertical()
                         .Text("ComboBox"),
 
                     new ComboBox()
-                        .Margin(16, 0, 0, 0)
                         .Items("Alpha", "Beta", "Gamma", "Delta")
                         .SelectedIndex(1)
                         .Placeholder("Select...")
+                ),
+
+            new StackPanel()
+                .Spacing(8)
+                .Children(
+                    new Label()
+                        .Text("Buttons")
+                        .Bold(),
+
+                    new StackPanel()
+                        .Horizontal()
+                        .Spacing(8)
+                        .Children(
+                            new Button()
+                                .Content("Click!")
+                                .OnClick(() => new Window()
+                                    .Fixed(400, 600)
+                                    .Title("New Window")
+                                    .Content(
+                                        BindSamples()
+                                            .Margin(12)
+                                    )
+                                    .Show()),
+
+                            new Button()
+                                .Content("Disabled")
+                                .Apply(b => b.IsEnabled = false),
+
+                        new Button()
+                            .Content("Async/Await")
+                            .OnClick(async () =>
+                            {
+                                vm.AsyncStatus.Value = "Async: running...";
+                                await Task.Delay(750);
+                                vm.AsyncStatus.Value = $"Async: done @ {DateTime.Now:HH:mm:ss}";
+                            })
+                        ),
+
+                    new Label()
+                        .BindText(vm.AsyncStatus)
+                        .Margin(0, 0, 0, 6),
+
+                    new Label()
+                        .Text("Options")
+                        .Bold(),
+
+                    new DockPanel()
+                        .Children(
+                            new StackPanel()
+                                .Vertical()
+                                .Spacing(8)
+                                .Children(
+                                    new CheckBox()
+                                        .Text("Enable feature"),
+
+                                    new StackPanel()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Label().Text("GroupName: group1").CenterVertical(),
+                                            new RadioButton()
+                                                .Text("A")
+                                                .GroupName("group1")
+                                                .IsChecked(true),
+                                            new RadioButton()
+                                                .Text("B")
+                                                .GroupName("group1")
+                                        ),
+
+                                    new StackPanel()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Label().Text("GroupName: group2").CenterVertical(),
+                                            new RadioButton()
+                                                .Text("C")
+                                                .GroupName("group2")
+                                                .IsChecked(true),
+                                            new RadioButton()
+                                                .Text("D")
+                                                .GroupName("group2")
+                                        ),
+
+                                        new StackPanel()
+                                            .Horizontal()
+                                            .Spacing(8)
+                                            .Children(
+                                                new Label().Text("GroupName: (parent-scope)").CenterVertical(),
+                                                new RadioButton()
+                                                    .Text("X")
+                                                    .IsChecked(true),
+                                                new RadioButton()
+                                                    .Text("Y")
+                                            )
+                                ),
+
+                            new ListBox()
+                                .Margin(16,0,0,0)
+                                .Height(106)
+                                .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
+                                .SelectedIndex(1)
+                        )
                 )
-        ));
+        );
+}
 
 FrameworkElement BindSamples()
 {
@@ -315,7 +328,7 @@ FrameworkElement BindSamples()
 
                 new StackPanel()
                     .Vertical()
-                    .Spacing(6)
+                    .Spacing(8)
                     .Children(
                         new Slider()
                             .Minimum(0)
@@ -351,7 +364,7 @@ FrameworkElement BindSamples()
 
                 new StackPanel()
                     .Horizontal()
-                    .Spacing(10)
+                    .Spacing(8)
                     .Children(
                         new CheckBox()
                             .Text("Enabled")
@@ -378,7 +391,7 @@ FrameworkElement BindSamples()
 
                 new StackPanel()
                     .Vertical()
-                    .Spacing(10)
+                    .Spacing(8)
                     .Children(
                         new ListBox()
                             .Ref(out var selectionListBox)
@@ -388,7 +401,7 @@ FrameworkElement BindSamples()
 
                         new StackPanel()
                             .Vertical()
-                            .Spacing(6)
+                            .Spacing(8)
                             .Children(
                                 new Label()
                                     .BindText(vm.SelectedIndex, i => $@"SelectedIndex = {i}{Environment.NewLine}Item = {selectionListBox.SelectedItem ?? string.Empty}"),
@@ -425,7 +438,7 @@ FrameworkElement BindSamples()
                         .Bold()
                         ,
 
-                    
+
                     new Image()
                         .SourceFile("logo-256.png")
                         .Size(192, 192)
