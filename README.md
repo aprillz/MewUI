@@ -162,10 +162,11 @@ var label  = new Label().BindText(percent, v => $"Percent ({v:P0})");
 ## 🧱 Controls / Panels
 
 Controls:
-- `Label`, `Button`, `TextBox`
+- `Label`, `Button`, `TextBox`, `MultiLineTextBox`
 - `CheckBox`, `RadioButton`
 - `ListBox`, `ComboBox`
 - `Slider`, `ProgressBar`
+- `Image`, `DispatcherTimer`
 - `Window`
 
 Panels:
@@ -216,10 +217,8 @@ Currently implemented:
 ## 🧭 Roadmap (TODO)
 
 **Controls**
-- [ ] `Image`
 - [ ] `GroupBox`
 - [ ] `TabControl`
-- [ ] `ScrollViewer`
 
 **Rendering**
 - [ ] Better text shaping (HarfBuzz)
