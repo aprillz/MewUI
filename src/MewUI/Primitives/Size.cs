@@ -9,6 +9,7 @@ public readonly struct Size : IEquatable<Size>
     public static readonly Size Infinity = new(double.PositiveInfinity, double.PositiveInfinity);
 
     public double Width { get; }
+
     public double Height { get; }
 
     public Size(double width, double height)
@@ -20,6 +21,7 @@ public readonly struct Size : IEquatable<Size>
     public bool IsEmpty => Width == 0 && Height == 0;
 
     public Size WithWidth(double width) => new(width, Height);
+
     public Size WithHeight(double height) => new(Width, height);
 
     public Size Constrain(Size constraint) => new(
@@ -50,6 +52,7 @@ public readonly struct Size : IEquatable<Size>
         new(size.Width / scalar, size.Height / scalar);
 
     public static bool operator ==(Size left, Size right) => left.Equals(right);
+
     public static bool operator !=(Size left, Size right) => !left.Equals(right);
 
     public bool Equals(Size other) =>

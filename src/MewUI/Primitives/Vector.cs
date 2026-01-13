@@ -9,6 +9,7 @@ public readonly struct Vector : IEquatable<Vector>
     public static readonly Vector One = new(1, 1);
 
     public double X { get; }
+
     public double Y { get; }
 
     public Vector(double x, double y)
@@ -18,6 +19,7 @@ public readonly struct Vector : IEquatable<Vector>
     }
 
     public double Length => Math.Sqrt(X * X + Y * Y);
+
     public double LengthSquared => X * X + Y * Y;
 
     public Vector Normalize()
@@ -50,6 +52,7 @@ public readonly struct Vector : IEquatable<Vector>
         left.X * right.Y - left.Y * right.X;
 
     public static bool operator ==(Vector left, Vector right) => left.Equals(right);
+
     public static bool operator !=(Vector left, Vector right) => !left.Equals(right);
 
     public bool Equals(Vector other) =>

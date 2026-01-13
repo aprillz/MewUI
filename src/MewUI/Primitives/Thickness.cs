@@ -8,8 +8,11 @@ public readonly struct Thickness : IEquatable<Thickness>
     public static readonly Thickness Zero = new(0);
 
     public double Left { get; }
+
     public double Top { get; }
+
     public double Right { get; }
+
     public double Bottom { get; }
 
     public Thickness(double uniform)
@@ -31,6 +34,7 @@ public readonly struct Thickness : IEquatable<Thickness>
     }
 
     public double HorizontalThickness => Left + Right;
+
     public double VerticalThickness => Top + Bottom;
 
     public bool IsUniform => Left == Top && Top == Right && Right == Bottom;
@@ -46,6 +50,7 @@ public readonly struct Thickness : IEquatable<Thickness>
             thickness.Right * scalar, thickness.Bottom * scalar);
 
     public static bool operator ==(Thickness left, Thickness right) => left.Equals(right);
+
     public static bool operator !=(Thickness left, Thickness right) => !left.Equals(right);
 
     public bool Equals(Thickness other) =>

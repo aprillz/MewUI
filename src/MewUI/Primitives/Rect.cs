@@ -8,8 +8,11 @@ public readonly struct Rect : IEquatable<Rect>
     public static readonly Rect Empty = new(0, 0, 0, 0);
 
     public double X { get; }
+
     public double Y { get; }
+
     public double Width { get; }
+
     public double Height { get; }
 
     public Rect(double x, double y, double width, double height)
@@ -31,17 +34,25 @@ public readonly struct Rect : IEquatable<Rect>
     }
 
     public double Left => X;
+
     public double Top => Y;
+
     public double Right => X + Width;
+
     public double Bottom => Y + Height;
 
     public Point TopLeft => new(X, Y);
+
     public Point TopRight => new(Right, Y);
+
     public Point BottomLeft => new(X, Bottom);
+
     public Point BottomRight => new(Right, Bottom);
+
     public Point Center => new(X + Width / 2, Y + Height / 2);
 
     public Size Size => new(Width, Height);
+
     public Point Position => new(X, Y);
 
     public bool IsEmpty => Width == 0 || Height == 0;
@@ -113,13 +124,19 @@ public readonly struct Rect : IEquatable<Rect>
             Height - thickness.Top - thickness.Bottom);
 
     public Rect WithX(double x) => new(x, Y, Width, Height);
+
     public Rect WithY(double y) => new(X, y, Width, Height);
+
     public Rect WithWidth(double width) => new(X, Y, width, Height);
+
     public Rect WithHeight(double height) => new(X, Y, Width, height);
+
     public Rect WithPosition(Point position) => new(position.X, position.Y, Width, Height);
+
     public Rect WithSize(Size size) => new(X, Y, size.Width, size.Height);
 
     public static bool operator ==(Rect left, Rect right) => left.Equals(right);
+
     public static bool operator !=(Rect left, Rect right) => !left.Equals(right);
 
     public bool Equals(Rect other) =>

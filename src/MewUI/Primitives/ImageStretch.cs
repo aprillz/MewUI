@@ -7,4 +7,3 @@ public enum ImageStretch
     Uniform,
     UniformToFill
 }
-

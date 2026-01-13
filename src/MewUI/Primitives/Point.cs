@@ -8,6 +8,7 @@ public readonly struct Point : IEquatable<Point>
     public static readonly Point Zero = new(0, 0);
 
     public double X { get; }
+
     public double Y { get; }
 
     public Point(double x, double y)
@@ -17,9 +18,11 @@ public readonly struct Point : IEquatable<Point>
     }
 
     public Point WithX(double x) => new(x, Y);
+
     public Point WithY(double y) => new(X, y);
 
     public Point Offset(double dx, double dy) => new(X + dx, Y + dy);
+
     public Point Offset(Vector offset) => new(X + offset.X, Y + offset.Y);
 
     public double DistanceTo(Point other)
@@ -42,6 +45,7 @@ public readonly struct Point : IEquatable<Point>
         new(point.X * scalar, point.Y * scalar);
 
     public static bool operator ==(Point left, Point right) => left.Equals(right);
+
     public static bool operator !=(Point left, Point right) => !left.Equals(right);
 
     public bool Equals(Point other) =>
