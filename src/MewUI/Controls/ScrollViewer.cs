@@ -1,3 +1,5 @@
+using System;
+
 using Aprillz.MewUI.Core;
 using Aprillz.MewUI.Elements;
 using Aprillz.MewUI.Input;
@@ -7,15 +9,15 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public enum ScrollBarVisibility
+public enum ScrollMode
 {
     Disabled,
-    Hidden,
     Auto,
     Visible
 }
 
-public sealed class ScrollViewer : Control
+public sealed class ScrollViewer : ContentControl
+    , IVisualTreeHost
 {
     private readonly ScrollBar _vBar;
     private readonly ScrollBar _hBar;
@@ -23,44 +25,17 @@ public sealed class ScrollViewer : Control
     private Size _extent = Size.Empty;
     private Size _viewport = Size.Empty;
 
-    public Element? Content
-    {
-        get;
-        set
-        {
-            if (field == value)
-            {
-                return;
-            }
-
-            if (field != null)
-            {
-                field.Parent = null;
-            }
-
-            field = value;
-
-            if (field != null)
-            {
-                field.Parent = this;
-            }
-
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    }
-
-    public ScrollBarVisibility VerticalScrollBarVisibility
+    public ScrollMode VerticalScroll
     {
         get;
         set { field = value; InvalidateMeasure(); InvalidateVisual(); }
-    } = ScrollBarVisibility.Auto;
+    } = ScrollMode.Auto;
 
-    public ScrollBarVisibility HorizontalScrollBarVisibility
+    public ScrollMode HorizontalScroll
     {
         get;
         set { field = value; InvalidateMeasure(); InvalidateVisual(); }
-    } = ScrollBarVisibility.Disabled;
+    } = ScrollMode.Disabled;
 
     public double VerticalOffset
     {
@@ -74,7 +49,7 @@ public sealed class ScrollViewer : Control
             }
 
             field = clamped;
-            InvalidateVisual();
+            InvalidateArrange();
         }
     }
 
@@ -90,13 +65,22 @@ public sealed class ScrollViewer : Control
             }
 
             field = clamped;
-            InvalidateVisual();
+            InvalidateArrange();
         }
+    }
+
+    public void SetScrollOffsets(double horizontalOffset, double verticalOffset)
+    {
+        HorizontalOffset = horizontalOffset;
+        VerticalOffset = verticalOffset;
+        InvalidateVisual();
     }
 
     public ScrollViewer()
     {
         BorderThickness = 0;
+
+        Padding = new Thickness(16);
 
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _hBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
@@ -121,41 +105,65 @@ public sealed class ScrollViewer : Control
     {
         // We don't draw our own border by default; rely on content.
         var borderInset = GetBorderVisualInset();
-        var contentSlot = new Rect(0, 0, availableSize.Width, availableSize.Height)
-            .Deflate(Padding)
+        var chromeSlot = new Rect(0, 0, availableSize.Width, availableSize.Height)
             .Deflate(new Thickness(borderInset));
 
-        double slotW = Math.Max(0, contentSlot.Width);
-        double slotH = Math.Max(0, contentSlot.Height);
-
-        _viewport = new Size(slotW, slotH);
+        var theme = GetTheme();
+        double barThickness = theme.ScrollBarHitThickness + 1;
 
         if (Content is not UIElement content)
         {
             _extent = Size.Empty;
             _vBar.IsVisible = false;
             _hBar.IsVisible = false;
+            _viewport = Size.Empty;
             return new Size(0, 0).Inflate(Padding);
         }
 
-        var measureSize = new Size(
-            HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled ? slotW : double.PositiveInfinity,
-            VerticalScrollBarVisibility == ScrollBarVisibility.Disabled ? slotH : double.PositiveInfinity);
+        double slotW = Math.Max(0, chromeSlot.Width);
+        double slotH = Math.Max(0, chromeSlot.Height);
 
-        content.Measure(measureSize);
-        _extent = content.DesiredSize;
+        bool needV = false;
+        bool needH = false;
 
-        bool needV = _extent.Height > _viewport.Height + 0.5;
-        bool needH = _extent.Width > _viewport.Width + 0.5;
+        // Iterate once to account for scrollbar reservation affecting viewport.
+        for (int pass = 0; pass < 2; pass++)
+        {
+            double viewportW = Math.Max(0, slotW - (_vBar.IsVisible ? barThickness : 0));
+            double viewportH = Math.Max(0, slotH - (_hBar.IsVisible ? barThickness : 0));
+            viewportW = Math.Max(0, viewportW - Padding.HorizontalThickness);
+            viewportH = Math.Max(0, viewportH - Padding.VerticalThickness);
+            _viewport = new Size(viewportW, viewportH);
 
-        _vBar.IsVisible = IsBarVisible(VerticalScrollBarVisibility, needV);
-        _hBar.IsVisible = IsBarVisible(HorizontalScrollBarVisibility, needH);
+            var measureSize = new Size(
+                HorizontalScroll == ScrollMode.Disabled ? viewportW : double.PositiveInfinity,
+                VerticalScroll == ScrollMode.Disabled ? viewportH : double.PositiveInfinity);
+
+            content.Measure(measureSize);
+            _extent = content.DesiredSize;
+
+            needV = _extent.Height > _viewport.Height + 0.5;
+            needH = _extent.Width > _viewport.Width + 0.5;
+
+            bool vVisible = IsBarVisible(VerticalScroll, needV);
+            bool hVisible = IsBarVisible(HorizontalScroll, needH);
+
+            if (_vBar.IsVisible == vVisible && _hBar.IsVisible == hVisible)
+            {
+                break;
+            }
+
+            _vBar.IsVisible = vVisible;
+            _hBar.IsVisible = hVisible;
+        }
 
         SyncBars();
 
-        // Desired size: like ContentControl but capped by available size.
-        double desiredW = double.IsPositiveInfinity(availableSize.Width) ? _extent.Width : Math.Min(_extent.Width, slotW);
-        double desiredH = double.IsPositiveInfinity(availableSize.Height) ? _extent.Height : Math.Min(_extent.Height, slotH);
+        // Desired size: cap by available chrome slot (exclude padding here because we inflate it below).
+        double capW = Math.Max(0, slotW - Padding.HorizontalThickness);
+        double capH = Math.Max(0, slotH - Padding.VerticalThickness);
+        double desiredW = double.IsPositiveInfinity(availableSize.Width) ? _extent.Width : Math.Min(_extent.Width, capW);
+        double desiredH = double.IsPositiveInfinity(availableSize.Height) ? _extent.Height : Math.Min(_extent.Height, capH);
 
         return new Size(desiredW, desiredH).Inflate(Padding).Inflate(new Thickness(borderInset));
     }
@@ -163,7 +171,7 @@ public sealed class ScrollViewer : Control
     protected override void ArrangeContent(Rect bounds)
     {
         var borderInset = GetBorderVisualInset();
-        var viewport = GetViewportBounds(bounds, borderInset);
+        var viewport = GetContentViewportBounds(bounds, borderInset);
 
         if (Content is UIElement content)
         {
@@ -174,7 +182,7 @@ public sealed class ScrollViewer : Control
                 Math.Max(_extent.Height, viewport.Height)));
         }
 
-        ArrangeBars(viewport);
+        ArrangeBars(GetChromeBounds(bounds, borderInset));
     }
 
     public override void Render(IGraphicsContext context)
@@ -192,7 +200,7 @@ public sealed class ScrollViewer : Control
         }
 
         var borderInset = GetBorderVisualInset();
-        var viewport = GetViewportBounds(Bounds, borderInset);
+        var viewport = GetContentViewportBounds(Bounds, borderInset);
 
         // Render content clipped to viewport.
         context.Save();
@@ -230,7 +238,7 @@ public sealed class ScrollViewer : Control
         }
 
         var borderInset = GetBorderVisualInset();
-        var viewport = GetViewportBounds(Bounds, borderInset);
+        var viewport = GetContentViewportBounds(Bounds, borderInset);
         if (!viewport.Contains(point))
         {
             return Bounds.Contains(point) ? this : null;
@@ -275,6 +283,17 @@ public sealed class ScrollViewer : Control
             ScrollByHorizontal(delta: -e.Delta);
             e.Handled = true;
         }
+    }
+
+    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    {
+        if (Content != null)
+        {
+            visitor(Content);
+        }
+
+        visitor(_vBar);
+        visitor(_hBar);
     }
 
     public void ScrollBy(double delta)
@@ -332,13 +351,33 @@ public sealed class ScrollViewer : Control
     private Rect GetViewportBounds(Rect bounds, double borderInset)
         => GetSnappedBorderBounds(bounds).Deflate(Padding).Deflate(new Thickness(borderInset));
 
-    private static bool IsBarVisible(ScrollBarVisibility visibility, bool needed)
+    private Rect GetChromeBounds(Rect bounds, double borderInset)
+        => GetSnappedBorderBounds(bounds).Deflate(new Thickness(borderInset));
+
+    private Rect GetContentViewportBounds(Rect bounds, double borderInset)
+    {
+        var theme = GetTheme();
+        double t = theme.ScrollBarHitThickness + 1;
+        var viewport = GetChromeBounds(bounds, borderInset);
+        if (_vBar.IsVisible)
+        {
+            viewport = viewport.Deflate(new Thickness(0, 0, t, 0));
+        }
+
+        if (_hBar.IsVisible)
+        {
+            viewport = viewport.Deflate(new Thickness(0, 0, 0, t));
+        }
+
+        return viewport.Deflate(Padding);
+    }
+
+    private static bool IsBarVisible(ScrollMode visibility, bool needed)
         => visibility switch
         {
-            ScrollBarVisibility.Disabled => false,
-            ScrollBarVisibility.Hidden => false,
-            ScrollBarVisibility.Visible => true,
-            ScrollBarVisibility.Auto => needed,
+            ScrollMode.Disabled => false,
+            ScrollMode.Visible => true,
+            ScrollMode.Auto => needed,
             _ => false
         };
 

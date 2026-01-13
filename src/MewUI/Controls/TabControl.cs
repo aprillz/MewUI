@@ -1,3 +1,5 @@
+using System;
+
 using Aprillz.MewUI.Core;
 using Aprillz.MewUI.Elements;
 using Aprillz.MewUI.Input;
@@ -10,12 +12,17 @@ namespace Aprillz.MewUI.Controls;
 public sealed class TabControl : Control
     , IVisualTreeHost
 {
+    private readonly record struct TabScrollOffsets(double Horizontal, double Vertical);
+
     private readonly List<TabItem> _tabs = new();
     private readonly StackPanel _headerStrip;
-    private readonly ContentControl _contentHost;
+    private readonly ScrollViewer _contentHost;
+    private readonly Dictionary<TabItem, TabScrollOffsets> _tabOffsets = new();
+    private TabItem? _lastTab;
+    private bool _pendingOffsetRestore;
+    private TabScrollOffsets _pendingOffsets;
     private int _cachedFocusedHeaderIndex = -1;
-
-    
+    private Thickness _chromePadding = new(1);
 
     internal override UIElement GetDefaultFocusTarget()
     {
@@ -46,7 +53,56 @@ public sealed class TabControl : Control
 
     public Action<int>? SelectionChanged { get; set; }
 
+    public ScrollMode VerticalScroll
+    {
+        get => _contentHost.VerticalScroll;
+        set
+        {
+            if (_contentHost.VerticalScroll == value)
+            {
+                return;
+            }
+
+            _contentHost.VerticalScroll = value;
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
+
+    public ScrollMode HorizontalScroll
+    {
+        get => _contentHost.HorizontalScroll;
+        set
+        {
+            if (_contentHost.HorizontalScroll == value)
+            {
+                return;
+            }
+
+            _contentHost.HorizontalScroll = value;
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
+
+    public new Thickness Padding
+    {
+        get => _contentHost.Padding;
+        set
+        {
+            if (_contentHost.Padding == value)
+            {
+                return;
+            }
+
+            _contentHost.Padding = value;
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
+
     protected override Color DefaultBackground => Theme.Current.ControlBackground;
+
     protected override Color DefaultBorderBrush => Theme.Current.ControlBorder;
 
     public override bool Focusable => true;
@@ -54,7 +110,7 @@ public sealed class TabControl : Control
     public TabControl()
     {
         BorderThickness = 1;
-        Padding = new Thickness(1);
+        base.Padding = Thickness.Zero;
 
         _headerStrip = new StackPanel
         {
@@ -64,9 +120,10 @@ public sealed class TabControl : Control
         };
         _headerStrip.Parent = this;
 
-        _contentHost = new ContentControl
+        _contentHost = new ScrollViewer
         {
-            Padding = new Thickness(8),
+            VerticalScroll = ScrollMode.Disabled,
+            HorizontalScroll = ScrollMode.Disabled,
         };
         _contentHost.Parent = this;
     }
@@ -153,6 +210,9 @@ public sealed class TabControl : Control
         _tabs.Clear();
         _headerStrip.Clear();
         _contentHost.Content = null;
+        _tabOffsets.Clear();
+        _lastTab = null;
+        _pendingOffsetRestore = false;
         SelectedIndex = -1;
         InvalidateMeasure();
         InvalidateVisual();
@@ -165,7 +225,13 @@ public sealed class TabControl : Control
             return;
         }
 
+        var removedTab = _tabs[index];
         _tabs.RemoveAt(index);
+        _tabOffsets.Remove(removedTab);
+        if (_lastTab == removedTab)
+        {
+            _lastTab = null;
+        }
         RebuildHeaders();
         EnsureValidSelection();
         InvalidateMeasure();
@@ -174,7 +240,7 @@ public sealed class TabControl : Control
 
     protected override Size MeasureContent(Size availableSize)
     {
-        var inner = availableSize.Deflate(Padding);
+        var inner = availableSize.Deflate(_chromePadding);
 
         _headerStrip.Measure(new Size(inner.Width, double.PositiveInfinity));
         double headerH = _headerStrip.DesiredSize.Height;
@@ -187,18 +253,24 @@ public sealed class TabControl : Control
         double desiredW = Math.Max(_headerStrip.DesiredSize.Width, _contentHost.DesiredSize.Width);
         double desiredH = headerH + _contentHost.DesiredSize.Height;
 
-        return new Size(desiredW, desiredH).Inflate(Padding);
+        return new Size(desiredW, desiredH).Inflate(_chromePadding);
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
-        var inner = bounds.Deflate(Padding);
+        var inner = bounds.Deflate(_chromePadding);
 
         double headerH = _headerStrip.DesiredSize.Height;
         _headerStrip.Arrange(new Rect(inner.X, inner.Y, inner.Width, headerH));
 
         var contentBounds = new Rect(inner.X, inner.Y + headerH, inner.Width, Math.Max(0, inner.Height - headerH));
         _contentHost.Arrange(contentBounds);
+
+        if (_pendingOffsetRestore)
+        {
+            _pendingOffsetRestore = false;
+            _contentHost.SetScrollOffsets(_pendingOffsets.Horizontal, _pendingOffsets.Vertical);
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -319,7 +391,29 @@ public sealed class TabControl : Control
             }
         }
 
+        if (_lastTab != null)
+        {
+            _tabOffsets[_lastTab] = new TabScrollOffsets(_contentHost.HorizontalOffset, _contentHost.VerticalOffset);
+        }
+
+        // The ScrollViewer persists offsets across content swaps; clear immediately so the previous tab's
+        // offsets don't "bleed" into the newly selected tab before we restore the saved offsets.
+        _contentHost.SetScrollOffsets(0, 0);
+
+        var selected = SelectedTab;
         _contentHost.Content = SelectedTab?.Content;
+
+        _lastTab = selected;
+        if (selected != null && _tabOffsets.TryGetValue(selected, out var offsets))
+        {
+            _pendingOffsets = offsets;
+        }
+        else
+        {
+            _pendingOffsets = default;
+        }
+
+        _pendingOffsetRestore = true;
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -377,11 +471,11 @@ public sealed class TabControl : Control
 
     private bool HasFocusWithin() => IsFocusWithin;
 
-    internal Color GetOutlineColor(Theme theme) => HasFocusWithin() ? theme.Accent : theme.ControlBorder;
+    internal Color GetOutlineColor(Theme theme) => HasFocusWithin() ? theme.Palette.Accent : theme.Palette.ControlBorder;
 
-    internal Color GetTabStripBackground(Theme theme) => theme.ButtonFace;
+    internal Color GetTabStripBackground(Theme theme) => theme.Palette.ButtonFace;
 
-    internal Color GetTabBackground(Theme theme, bool isSelected) => isSelected ? theme.ControlBackground : GetTabStripBackground(theme);
+    internal Color GetTabBackground(Theme theme, bool isSelected) => isSelected ? theme.ControlBackground: GetTabStripBackground(theme);
 
     private void DrawContentOutline(IGraphicsContext context, Rect contentRect, Color color, double thickness)
     {

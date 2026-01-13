@@ -165,6 +165,34 @@ public static class ControlExtensions
 
     #endregion
 
+    #region HeaderedContentControl
+
+    public static T Header<T>(this T control, string header) where T : HeaderedContentControl
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.Header = new Label()
+            .Text(header ?? string.Empty)
+            .Bold();
+        return control;
+    }
+
+    public static T Header<T>(this T control, Element header) where T : HeaderedContentControl
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(header);
+        control.Header = header;
+        return control;
+    }
+
+    public static T HeaderSpacing<T>(this T control, double spacing) where T : HeaderedContentControl
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.HeaderSpacing = spacing;
+        return control;
+    }
+
+    #endregion
+
     #region Label
 
     public static Label Text(this Label label, string text)
@@ -459,6 +487,17 @@ public static class ControlExtensions
     public static MultiLineTextBox Wrap(this MultiLineTextBox textBox, bool wrap = true)
     {
         textBox.Wrap = wrap;
+        return textBox;
+    }
+
+    public static MultiLineTextBox OnWrapChanged(this MultiLineTextBox textBox, Action<bool> handler)
+    {
+        var existing = textBox.WrapChanged;
+        textBox.WrapChanged = v =>
+        {
+            existing?.Invoke(v);
+            handler(v);
+        };
         return textBox;
     }
 
@@ -760,6 +799,41 @@ public static class ControlExtensions
 
     #endregion
 
+    #region ScrollViewer
+
+    public static ScrollViewer VerticalScroll(this ScrollViewer scrollViewer, ScrollMode mode)
+    {
+        scrollViewer.VerticalScroll = mode;
+        return scrollViewer;
+    }
+
+    public static ScrollViewer HorizontalScroll(this ScrollViewer scrollViewer, ScrollMode mode)
+    {
+        scrollViewer.HorizontalScroll = mode;
+        return scrollViewer;
+    }
+
+    public static ScrollViewer NoVerticalScroll(this ScrollViewer scrollViewer) => scrollViewer.VerticalScroll(ScrollMode.Disabled);
+
+    public static ScrollViewer AutoVerticalScroll(this ScrollViewer scrollViewer) => scrollViewer.VerticalScroll(ScrollMode.Auto);
+
+    public static ScrollViewer ShowVerticalScroll(this ScrollViewer scrollViewer) => scrollViewer.VerticalScroll(ScrollMode.Visible);
+
+    public static ScrollViewer NoHorizontalScroll(this ScrollViewer scrollViewer) => scrollViewer.HorizontalScroll(ScrollMode.Disabled);
+
+    public static ScrollViewer AutoHorizontalScroll(this ScrollViewer scrollViewer) => scrollViewer.HorizontalScroll(ScrollMode.Auto);
+
+    public static ScrollViewer ShowHorizontalScroll(this ScrollViewer scrollViewer) => scrollViewer.HorizontalScroll(ScrollMode.Visible);
+
+    public static ScrollViewer Scroll(this ScrollViewer scrollViewer, ScrollMode vertical, ScrollMode horizontal)
+    {
+        scrollViewer.VerticalScroll = vertical;
+        scrollViewer.HorizontalScroll = horizontal;
+        return scrollViewer;
+    }
+
+    #endregion
+
     #region ContentControl
 
     public static T Content<T>(this T control, Elements.Element content) where T : ContentControl
@@ -767,6 +841,34 @@ public static class ControlExtensions
         control.Content = content;
         return control;
     }
+
+    #endregion
+
+    #region TabControl
+
+    public static TabControl VerticalScroll(this TabControl tabControl, ScrollMode mode)
+    {
+        tabControl.VerticalScroll = mode;
+        return tabControl;
+    }
+
+    public static TabControl HorizontalScroll(this TabControl tabControl, ScrollMode mode)
+    {
+        tabControl.HorizontalScroll = mode;
+        return tabControl;
+    }
+
+    public static TabControl NoVerticalScroll(this TabControl tabControl) => tabControl.VerticalScroll(ScrollMode.Disabled);
+
+    public static TabControl AutoVerticalScroll(this TabControl tabControl) => tabControl.VerticalScroll(ScrollMode.Auto);
+
+    public static TabControl ShowVerticalScroll(this TabControl tabControl) => tabControl.VerticalScroll(ScrollMode.Visible);
+
+    public static TabControl NoHorizontalScroll(this TabControl tabControl) => tabControl.HorizontalScroll(ScrollMode.Disabled);
+
+    public static TabControl AutoHorizontalScroll(this TabControl tabControl) => tabControl.HorizontalScroll(ScrollMode.Auto);
+
+    public static TabControl ShowHorizontalScroll(this TabControl tabControl) => tabControl.HorizontalScroll(ScrollMode.Visible);
 
     #endregion
 }
