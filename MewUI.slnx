@@ -7,6 +7,7 @@
     <File Path="samples/FBASample/fba_sample.cs" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="MewUI.Test/MewUI.Test.csproj" Id="6a5f4fc5-e7a0-44f1-9fa2-439ae1123358" />
     <Project Path="src/MewUI/MewUI.csproj" />
   </Folder>
 </Solution>
