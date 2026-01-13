@@ -7,6 +7,8 @@ public interface IPlatformHost : IDisposable
 {
     IMessageBoxService MessageBox { get; }
 
+    IFileDialogService FileDialog { get; }
+
     IClipboardService Clipboard { get; }
 
     IWindowBackend CreateWindowBackend(Window window);

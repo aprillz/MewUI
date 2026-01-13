@@ -11,9 +11,12 @@ namespace Aprillz.MewUI.Platform.Linux;
 public sealed class LinuxPlatformHost : IPlatformHost
 {
     private readonly IMessageBoxService _messageBox = new LinuxMessageBoxService();
+    private readonly IFileDialogService _fileDialog = new LinuxFileDialogService();
     private readonly IClipboardService _clipboard = new NoClipboardService();
 
     public IMessageBoxService MessageBox => _messageBox;
+
+    public IFileDialogService FileDialog => _fileDialog;
 
     public IClipboardService Clipboard => _clipboard;
 

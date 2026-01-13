@@ -1,7 +1,9 @@
+using Aprillz.MewUI.Core;
+
 namespace Aprillz.MewUI.Platform.Linux;
 
 internal sealed class LinuxMessageBoxService : IMessageBoxService
 {
-    public Core.MessageBoxResult Show(nint owner, string text, string caption, Core.MessageBoxButtons buttons, Core.MessageBoxIcon icon)
-        => throw new PlatformNotSupportedException("MessageBox is not implemented on Linux yet.");
+    public MessageBoxResult Show(nint owner, string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
+        => LinuxExternalDialogs.ShowMessageBox(owner, text ?? string.Empty, caption ?? string.Empty, buttons, icon);
 }

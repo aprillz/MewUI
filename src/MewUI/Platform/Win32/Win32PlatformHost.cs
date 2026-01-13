@@ -15,6 +15,7 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     private readonly Dictionary<nint, Win32WindowBackend> _windows = new();
     private readonly IMessageBoxService _messageBox = new Win32MessageBoxService();
+    private readonly IFileDialogService _fileDialog = new Win32FileDialogService();
     private readonly IClipboardService _clipboard = new Win32ClipboardService();
     private WndProc? _wndProcDelegate;
     private bool _running;
@@ -26,6 +27,8 @@ public sealed class Win32PlatformHost : IPlatformHost
     private Win32UiDispatcher? _dispatcher;
 
     public IMessageBoxService MessageBox => _messageBox;
+
+    public IFileDialogService FileDialog => _fileDialog;
 
     public IClipboardService Clipboard => _clipboard;
 
