@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Text;

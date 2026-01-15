@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Native.Constants;
 
 namespace Aprillz.MewUI.Rendering.Gdi.Core;
 

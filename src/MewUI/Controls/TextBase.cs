@@ -1,10 +1,3 @@
-using Aprillz.MewUI.Binding;
-using System.Collections.Generic;
-
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Text;
 

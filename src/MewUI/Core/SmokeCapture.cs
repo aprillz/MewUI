@@ -1,6 +1,4 @@
-using System.Threading;
-
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 public static class SmokeCapture
 {

@@ -1,11 +1,7 @@
-using System.Diagnostics;
-
-using Aprillz.MewUI.Binding;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
+using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Elements;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Base class for elements that support input handling and visibility.
@@ -17,6 +13,7 @@ public abstract class UIElement : Element
     private ValueBinding<bool>? _isEnabledBinding;
     private bool _suggestedIsEnabled = true;
     private bool _suggestedIsEnabledInitialized;
+
     /// <summary>
     /// Gets or sets whether the element is visible.
     /// </summary>
@@ -87,15 +84,25 @@ public abstract class UIElement : Element
     #region Events (using Action delegates for AOT compatibility)
 
     public event Action? GotFocus;
+
     public event Action? LostFocus;
+
     public event Action? MouseEnter;
+
     public event Action? MouseLeave;
+
     public event Action<MouseEventArgs>? MouseDown;
+
     public event Action<MouseEventArgs>? MouseUp;
+
     public event Action<MouseEventArgs>? MouseMove;
+
     public event Action<MouseWheelEventArgs>? MouseWheel;
+
     public event Action<KeyEventArgs>? KeyDown;
+
     public event Action<KeyEventArgs>? KeyUp;
+
     public event Action<TextInputEventArgs>? TextInput;
 
     #endregion
@@ -165,7 +172,7 @@ public abstract class UIElement : Element
         }
 
         var root = FindVisualRoot();
-        if (root is Controls.Window window)
+        if (root is Window window)
         {
             return window.SetFocusedElement(this);
         }
@@ -291,10 +298,17 @@ public abstract class UIElement : Element
 
     #region Input Handlers
 
-    protected virtual void OnGotFocus() { }
-    protected virtual void OnLostFocus() { }
-    protected virtual void OnMouseEnter() { }
-    protected virtual void OnMouseLeave() { }
+    protected virtual void OnGotFocus()
+    { }
+
+    protected virtual void OnLostFocus()
+    { }
+
+    protected virtual void OnMouseEnter()
+    { }
+
+    protected virtual void OnMouseLeave()
+    { }
 
     internal void RaiseMouseDown(MouseEventArgs e) => OnMouseDown(e);
 
@@ -327,8 +341,11 @@ public abstract class UIElement : Element
 
     #endregion
 
-    protected virtual void OnVisibilityChanged() { }
-    protected virtual void OnEnabledChanged() { }
+    protected virtual void OnVisibilityChanged()
+    { }
+
+    protected virtual void OnEnabledChanged()
+    { }
 
     #region Binding Helpers
 

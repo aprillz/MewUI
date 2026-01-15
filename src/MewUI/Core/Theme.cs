@@ -1,7 +1,6 @@
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 public record class Theme
 {

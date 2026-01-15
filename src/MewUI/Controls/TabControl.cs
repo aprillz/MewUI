@@ -1,10 +1,4 @@
-using System;
-
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
 using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;

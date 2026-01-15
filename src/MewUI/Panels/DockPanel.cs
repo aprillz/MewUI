@@ -1,9 +1,6 @@
 using System.Runtime.CompilerServices;
 
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Panels;
+namespace Aprillz.MewUI.Controls;
 
 public enum Dock
 {

@@ -1,6 +1,4 @@
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Primitives;
-using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 

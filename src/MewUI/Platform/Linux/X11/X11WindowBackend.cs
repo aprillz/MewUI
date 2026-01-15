@@ -1,12 +1,9 @@
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Elements;
 using System.Runtime.InteropServices;
 using Aprillz.MewUI.Native;
 using NativeX11 = Aprillz.MewUI.Native.X11;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering.OpenGL;
-using Aprillz.MewUI.Core;
+using Aprillz.MewUI;
 
 namespace Aprillz.MewUI.Platform.Linux.X11;
 

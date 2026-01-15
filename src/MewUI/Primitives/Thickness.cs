@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Primitives;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents the thickness of a border or margin (left, top, right, bottom).

@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Rendering;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Built-in graphics backends.

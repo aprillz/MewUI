@@ -1,10 +1,3 @@
-using System;
-
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -130,8 +123,8 @@ public sealed class ScrollViewer : ContentControl
         double viewportW = Math.Max(0, slotW - Padding.HorizontalThickness);
         double viewportH = Math.Max(0, slotH - Padding.VerticalThickness);
 
-        viewportW = Core.LayoutRounding.RoundToPixel(viewportW, dpiScale);
-        viewportH = Core.LayoutRounding.RoundToPixel(viewportH, dpiScale);
+        viewportW = LayoutRounding.RoundToPixel(viewportW, dpiScale);
+        viewportH = LayoutRounding.RoundToPixel(viewportH, dpiScale);
         _viewport = new Size(viewportW, viewportH);
 
         var measureSize = new Size(

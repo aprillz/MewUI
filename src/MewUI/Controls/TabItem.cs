@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Elements;
-
 namespace Aprillz.MewUI.Controls;
 
 public sealed class TabItem

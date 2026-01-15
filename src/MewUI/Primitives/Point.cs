@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Primitives;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents a point with X and Y coordinates.

@@ -1,14 +1,11 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
+using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Controls;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents a top-level window.

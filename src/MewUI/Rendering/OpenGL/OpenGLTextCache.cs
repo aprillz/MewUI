@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 using Aprillz.MewUI.Native;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;

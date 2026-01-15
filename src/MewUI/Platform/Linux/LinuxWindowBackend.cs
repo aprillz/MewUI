@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Elements;
 
 namespace Aprillz.MewUI.Platform.Linux;
 

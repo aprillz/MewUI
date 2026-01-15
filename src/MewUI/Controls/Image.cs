@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Resources;
 

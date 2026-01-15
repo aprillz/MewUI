@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Core;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 

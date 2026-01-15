@@ -1,7 +1,4 @@
-using Aprillz.MewUI.Primitives;
-using Aprillz.MewUI.Elements;
-
-namespace Aprillz.MewUI.Panels;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A panel that arranges children in a grid with equal-sized cells.

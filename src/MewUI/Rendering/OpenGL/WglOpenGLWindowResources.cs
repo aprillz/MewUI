@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
@@ -161,11 +160,6 @@ internal sealed class WglOpenGLWindowResources : IOpenGLWindowResources
 
     private static unsafe delegate* unmanaged<nint, int*, float*, uint, int*, uint*, int> GetWglChoosePixelFormatArb()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return null;
-        }
-
         nint hwnd = 0;
         nint hdc = 0;
         nint hglrc = 0;

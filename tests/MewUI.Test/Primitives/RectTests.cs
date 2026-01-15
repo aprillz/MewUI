@@ -1,4 +1,4 @@
-using Aprillz.MewUI.Primitives;
+using Aprillz.MewUI;
 
 namespace MewUI.Test.Primitives;
 

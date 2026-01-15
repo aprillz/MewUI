@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Core;
-
 namespace Aprillz.MewUI.Platform;
 
 public interface IMessageBoxService

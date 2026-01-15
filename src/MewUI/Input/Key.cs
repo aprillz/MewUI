@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Input;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Cross-platform key identifiers (independent from Win32 virtual-key codes).

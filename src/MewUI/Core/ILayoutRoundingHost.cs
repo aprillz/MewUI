@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 internal interface ILayoutRoundingHost
 {

@@ -1,9 +1,6 @@
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
 
-namespace Aprillz.MewUI.Markup;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Fluent API extension methods for FrameworkElement.
@@ -193,56 +190,56 @@ public static class ElementExtensions
 
     public static T Center<T>(this T element) where T : FrameworkElement
     {
-        element.HorizontalAlignment = Elements.HorizontalAlignment.Center;
-        element.VerticalAlignment = Elements.VerticalAlignment.Center;
+        element.HorizontalAlignment = MewUI.HorizontalAlignment.Center;
+        element.VerticalAlignment = MewUI.VerticalAlignment.Center;
         return element;
     }
 
     public static T CenterHorizontal<T>(this T element) where T : FrameworkElement
     {
-        element.HorizontalAlignment = Elements.HorizontalAlignment.Center;
+        element.HorizontalAlignment = MewUI.HorizontalAlignment.Center;
         return element;
     }
 
     public static T CenterVertical<T>(this T element) where T : FrameworkElement
     {
-        element.VerticalAlignment = Elements.VerticalAlignment.Center;
+        element.VerticalAlignment = MewUI.VerticalAlignment.Center;
         return element;
     }
 
     public static T Left<T>(this T element) where T : FrameworkElement
     {
-        element.HorizontalAlignment = Elements.HorizontalAlignment.Left;
+        element.HorizontalAlignment = MewUI.HorizontalAlignment.Left;
         return element;
     }
 
     public static T Right<T>(this T element) where T : FrameworkElement
     {
-        element.HorizontalAlignment = Elements.HorizontalAlignment.Right;
+        element.HorizontalAlignment = MewUI.HorizontalAlignment.Right;
         return element;
     }
 
     public static T Top<T>(this T element) where T : FrameworkElement
     {
-        element.VerticalAlignment = Elements.VerticalAlignment.Top;
+        element.VerticalAlignment = MewUI.VerticalAlignment.Top;
         return element;
     }
 
     public static T Bottom<T>(this T element) where T : FrameworkElement
     {
-        element.VerticalAlignment = Elements.VerticalAlignment.Bottom;
+        element.VerticalAlignment = MewUI.VerticalAlignment.Bottom;
         return element;
     }
 
     public static T StretchHorizontal<T>(this T element) where T : FrameworkElement
     {
-        element.HorizontalAlignment = Elements.HorizontalAlignment.Stretch;
+        element.HorizontalAlignment = MewUI.HorizontalAlignment.Stretch;
         return element;
     }
 
     public static T StretchVertical<T>(this T element) where T : FrameworkElement
     {
-        element.VerticalAlignment = Elements.VerticalAlignment.Stretch;
+        element.VerticalAlignment = MewUI.VerticalAlignment.Stretch;
         return element;
     }
 

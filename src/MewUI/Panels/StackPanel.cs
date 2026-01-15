@@ -1,16 +1,4 @@
-using Aprillz.MewUI.Primitives;
-using Aprillz.MewUI.Elements;
-
-namespace Aprillz.MewUI.Panels;
-
-/// <summary>
-/// Orientation for layout panels.
-/// </summary>
-public enum Orientation
-{
-    Horizontal,
-    Vertical
-}
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A panel that arranges children in a stack.

@@ -5,12 +5,6 @@ public static class ImageDecoders
     private static readonly object _lock = new();
     private static readonly Dictionary<ImageFormat, IImageDecoder> _decoders = new();
 
-    /// <summary>
-    /// Optional debug logger for decode failures and format detection.
-    /// Keep null in production for zero overhead.
-    /// </summary>
-    public static Action<string>? DebugLog { get; set; }
-
     static ImageDecoders()
     {
         Register(new BmpDecoder());
@@ -37,7 +31,7 @@ public static class ImageDecoders
         var format = DetectFormat(encoded);
         if (format == ImageFormat.Unknown)
         {
-            DebugLog?.Invoke("ImageDecoders: Unknown format.");
+            DiagLog.Write("ImageDecoders: Unknown format.");
             bitmap = default;
             return false;
         }
@@ -50,7 +44,7 @@ public static class ImageDecoders
 
         if (decoder == null)
         {
-            DebugLog?.Invoke($"ImageDecoders: No decoder registered for {format}.");
+            DiagLog.Write($"ImageDecoders: No decoder registered for {format}.");
             bitmap = default;
             return false;
         }
@@ -58,7 +52,7 @@ public static class ImageDecoders
         var ok = decoder.TryDecode(encoded, out bitmap);
         if (!ok)
         {
-            DebugLog?.Invoke($"ImageDecoders: Decode failed for {format} (length={encoded.Length}).");
+            DiagLog.Write($"ImageDecoders: Decode failed for {format} (length={encoded.Length}).");
         }
 
         return ok;
@@ -71,7 +65,7 @@ public static class ImageDecoders
         var format = DetectFormat(encoded);
         if (format == ImageFormat.Unknown)
         {
-            DebugLog?.Invoke("ImageDecoders: Unknown format.");
+            DiagLog.Write("ImageDecoders: Unknown format.");
             bitmap = default;
             return false;
         }
@@ -84,7 +78,7 @@ public static class ImageDecoders
 
         if (decoder == null)
         {
-            DebugLog?.Invoke($"ImageDecoders: No decoder registered for {format}.");
+            DiagLog.Write($"ImageDecoders: No decoder registered for {format}.");
             bitmap = default;
             return false;
         }
@@ -101,7 +95,7 @@ public static class ImageDecoders
 
         if (!ok)
         {
-            DebugLog?.Invoke($"ImageDecoders: Decode failed for {format} (length={encoded.Length}).");
+            DiagLog.Write($"ImageDecoders: Decode failed for {format} (length={encoded.Length}).");
         }
 
         return ok;

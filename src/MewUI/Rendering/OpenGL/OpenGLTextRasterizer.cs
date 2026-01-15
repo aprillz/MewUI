@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering.Gdi;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;

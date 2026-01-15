@@ -1,4 +1,4 @@
-using Aprillz.MewUI.Binding;
+using Aprillz.MewUI;
 
 namespace MewUI.Test.Binding;
 

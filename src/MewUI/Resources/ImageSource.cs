@@ -1,6 +1,8 @@
 using System.Reflection;
 
-namespace Aprillz.MewUI.Resources;
+using Aprillz.MewUI.Resources;
+
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Backend-agnostic encoded image source (PNG/JPG/BMP/SVG).

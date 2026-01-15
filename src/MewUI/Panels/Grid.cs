@@ -1,10 +1,7 @@
-using Aprillz.MewUI.Elements;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Panels;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Grid unit type for row/column sizing.
@@ -457,14 +454,14 @@ public class Grid : Panel
         for (int r = 0; r < rows; r++)
         {
             for (int c = 0; c < cols; c++)
-        {
-            if (CanPlace(occupied, r, c, rowSpan, colSpan))
             {
-                row = r;
-                col = c;
-                return true;
+                if (CanPlace(occupied, r, c, rowSpan, colSpan))
+                {
+                    row = r;
+                    col = c;
+                    return true;
+                }
             }
-        }
         }
 
         return false;

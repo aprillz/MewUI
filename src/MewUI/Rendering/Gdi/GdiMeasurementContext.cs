@@ -1,8 +1,6 @@
-using Aprillz.MewUI.Core;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
-using Aprillz.MewUI.Primitives;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
@@ -57,7 +55,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
             }
             return new Size(rect.Width / _dpiScale, rect.Height / _dpiScale);
         }
-        finally     
+        finally
         {
             Gdi32.SelectObject(_hdc, oldFont);
         }

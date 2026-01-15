@@ -1,9 +1,6 @@
-using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Panels;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Base class for layout panels that contain multiple children.

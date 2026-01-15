@@ -1,8 +1,6 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Text;
+namespace Aprillz.MewUI.Text.Text;
 
 internal sealed class TextBoxView
 {

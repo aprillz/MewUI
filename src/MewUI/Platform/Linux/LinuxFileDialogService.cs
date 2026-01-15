@@ -1,6 +1,3 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Platform;
-
 namespace Aprillz.MewUI.Platform.Linux;
 
 internal sealed class LinuxFileDialogService : IFileDialogService

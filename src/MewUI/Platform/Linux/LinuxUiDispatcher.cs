@@ -1,6 +1,5 @@
-using System.Diagnostics;
 using System.Collections.Concurrent;
-using System.Threading;
+using System.Diagnostics;
 
 namespace Aprillz.MewUI.Platform.Linux;
 

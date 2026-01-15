@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Primitives;
-
 namespace Aprillz.MewUI.Controls;
 
 public abstract class RangeBase : Control

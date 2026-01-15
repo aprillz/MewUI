@@ -1,9 +1,7 @@
 using System.Collections.Concurrent;
 
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Native.Structs;
-using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.FreeType;
+using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;

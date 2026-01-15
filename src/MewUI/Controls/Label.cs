@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Binding;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;

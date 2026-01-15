@@ -1,6 +1,4 @@
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Elements;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Base class for elements with size, margin, alignment, and data binding support.
@@ -216,26 +214,4 @@ public abstract class FrameworkElement : UIElement
     /// Arranges the content. Override in derived classes.
     /// </summary>
     protected virtual void ArrangeContent(Rect bounds) { }
-}
-
-/// <summary>
-/// Horizontal alignment options.
-/// </summary>
-public enum HorizontalAlignment
-{
-    Left,
-    Center,
-    Right,
-    Stretch
-}
-
-/// <summary>
-/// Vertical alignment options.
-/// </summary>
-public enum VerticalAlignment
-{
-    Top,
-    Center,
-    Bottom,
-    Stretch
 }

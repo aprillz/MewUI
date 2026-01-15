@@ -1,9 +1,9 @@
 using System.Reflection;
+
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Resources;
 
-namespace Aprillz.MewUI.Markup;
+namespace Aprillz.MewUI;
 
 public static class ImageExtensions
 {

@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Linux.X11;
 using Aprillz.MewUI.Platform.Win32;
@@ -7,7 +6,7 @@ using Aprillz.MewUI.Rendering.Direct2D;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.OpenGL;
 
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents the main application entry point and message loop.
@@ -16,14 +15,16 @@ public sealed class Application
 {
     private static Application? _current;
     private static readonly object _syncLock = new();
+
     private static GraphicsBackend _defaultGraphicsBackend = OperatingSystem.IsWindows()
         ? GraphicsBackend.Direct2D
         : GraphicsBackend.OpenGL;
+
     private static IGraphicsFactory? _defaultGraphicsFactoryOverride;
     private static IPlatformHost _defaultPlatformHost = CreateDefaultPlatformHost();
     private static Exception? _pendingFatalException;
-   private IUiDispatcher? _dispatcher;
-   
+    private IUiDispatcher? _dispatcher;
+
     /// <summary>
     /// Raised when an exception escapes from the platform message loop or window procedure.
     /// Set <see cref="UiUnhandledExceptionEventArgs.Handled"/> to true to continue.
@@ -125,7 +126,7 @@ public sealed class Application
     public static void Run(Window mainWindow)
     {
         if (_current != null)
-        {   
+        {
             throw new InvalidOperationException("Application is already running.");
         }
 

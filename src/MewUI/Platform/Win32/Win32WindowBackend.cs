@@ -1,13 +1,9 @@
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
-using Aprillz.MewUI.Primitives;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
@@ -562,24 +558,24 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return 0;
     }
 
-    private static Input.Key MapKey(int vk)
+    private static Key MapKey(int vk)
     {
         // Digits (top row)
         if (vk is >= 0x30 and <= 0x39)
         {
-            return (Input.Key)((int)Key.D0 + (vk - 0x30));
+            return (Key)((int)Key.D0 + (vk - 0x30));
         }
 
         // Letters
         if (vk is >= 0x41 and <= 0x5A)
         {
-            return (Input.Key)((int)Key.A + (vk - 0x41));
+            return (Key)((int)Key.A + (vk - 0x41));
         }
 
         // Numpad digits
         if (vk is >= 0x60 and <= 0x69)
         {
-            return (Input.Key)((int)Key.NumPad0 + (vk - 0x60));
+            return (Key)((int)Key.NumPad0 + (vk - 0x60));
         }
 
         return vk switch

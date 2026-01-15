@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 

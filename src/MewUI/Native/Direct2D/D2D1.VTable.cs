@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+
 using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Native.Direct2D;

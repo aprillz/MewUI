@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Input;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Modifier keys enumeration.

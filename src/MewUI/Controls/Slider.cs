@@ -1,7 +1,3 @@
-using Aprillz.MewUI.Binding;
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -97,13 +93,13 @@ public sealed class Slider : RangeBase
         var thumbRect = new Rect(thumbX, thumbY, thumbSize, thumbSize);
 
         var thumbFill = IsEnabled ? theme.Palette.ControlBackground : theme.Palette.DisabledControlBackground;
-      
+
         context.FillEllipse(thumbRect, thumbFill);
 
-        var state = GetVisualState(IsFocused,IsFocused);
+        var state = GetVisualState(IsFocused, IsFocused);
         Color thumbBorder = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
 
-        
+
         context.DrawEllipse(thumbRect, thumbBorder, 1);
     }
 

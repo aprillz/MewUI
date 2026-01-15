@@ -1,10 +1,7 @@
-using Aprillz.MewUI.Elements;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Panels;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A panel that positions children using absolute coordinates.

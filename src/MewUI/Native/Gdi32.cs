@@ -178,7 +178,7 @@ internal static partial class Gdi32
 
     [LibraryImport("user32.dll", EntryPoint = "DrawTextW")]
     public static unsafe partial int DrawText(nint hdc, char* lpchText, int cchText, ref RECT lprc, uint format);
-    
+
     [LibraryImport(LibraryName)]
     public static partial uint SetTextColor(nint hdc, uint color);
 

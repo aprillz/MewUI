@@ -1,7 +1,3 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Binding;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -114,7 +110,7 @@ public class Button : Control
         {
             var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(GetBorderVisualInset()));
             var font = GetFont();
-        var textColor = state.IsEnabled ? Foreground : theme.Palette.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : theme.Palette.DisabledText;
 
             context.DrawText(Content, contentBounds, font, textColor,
                 TextAlignment.Center, TextAlignment.Center, TextWrapping.NoWrap);

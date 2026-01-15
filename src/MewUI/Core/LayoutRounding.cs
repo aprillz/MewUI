@@ -1,8 +1,6 @@
-using Aprillz.MewUI.Primitives;
+namespace Aprillz.MewUI;
 
-namespace Aprillz.MewUI.Core;
-
-internal static class LayoutRounding
+public static class LayoutRounding
 {
     public static double SnapThicknessToPixels(double thicknessDip, double dpiScale, int minPixels)
     {

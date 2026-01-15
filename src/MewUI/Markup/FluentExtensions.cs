@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Markup;
+namespace Aprillz.MewUI;
 
 public static class FluentExtensions
 {

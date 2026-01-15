@@ -1,8 +1,4 @@
-using System;
-
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 public sealed class Palette
 {

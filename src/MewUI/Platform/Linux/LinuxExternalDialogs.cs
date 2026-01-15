@@ -2,8 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-using Aprillz.MewUI.Core;
-
 namespace Aprillz.MewUI.Platform.Linux;
 
 internal static class LinuxExternalDialogs

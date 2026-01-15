@@ -1,14 +1,7 @@
 using System.Diagnostics;
 
-using Aprillz.MewUI.Binding;
+using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Markup;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
-using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Resources;
 
 var stopwatch = Stopwatch.StartNew();
 

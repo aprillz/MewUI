@@ -1,10 +1,8 @@
-using System.Collections.Generic;
 using System.Diagnostics;
 
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.DirectWrite;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
@@ -52,7 +50,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
 
         string msg = $"Direct2D: {op} failed: 0x{hr:X8}";
         Debug.Fail(msg);
-        ImageDecoders.DebugLog?.Invoke(msg);
+        DiagLog.Write(msg);
     }
 
     public void Dispose()

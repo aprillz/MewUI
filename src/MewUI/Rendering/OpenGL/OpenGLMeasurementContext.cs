@@ -1,7 +1,4 @@
-using Aprillz.MewUI.Primitives;
-
 namespace Aprillz.MewUI.Rendering.OpenGL;
- 
 
 using Aprillz.MewUI.Rendering.FreeType;
 
@@ -15,7 +12,8 @@ internal sealed class OpenGLMeasurementContext : IGraphicsContext
 
     public OpenGLMeasurementContext(uint dpi) => DpiScale = dpi <= 0 ? 1.0 : dpi / 96.0;
 
-    public void Dispose() { }
+    public void Dispose()
+    { }
 
     public Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
@@ -109,21 +107,54 @@ internal sealed class OpenGLMeasurementContext : IGraphicsContext
         return new Size(maxWidth, height);
     }
 
-    public void Save() { }
-    public void Restore() { }
-    public void SetClip(Rect rect) { }
-    public void Translate(double dx, double dy) { }
-    public void Clear(Color color) { }
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1) { }
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1) { }
-    public void FillRectangle(Rect rect, Color color) { }
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1) { }
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) { }
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1) { }
-    public void FillEllipse(Rect bounds, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap) { }
-    public void DrawImage(IImage image, Point location) { }
-    public void DrawImage(IImage image, Rect destRect) { }
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect) { }
-} 
+    public void Save()
+    { }
+
+    public void Restore()
+    { }
+
+    public void SetClip(Rect rect)
+    { }
+
+    public void Translate(double dx, double dy)
+    { }
+
+    public void Clear(Color color)
+    { }
+
+    public void DrawLine(Point start, Point end, Color color, double thickness = 1)
+    { }
+
+    public void DrawRectangle(Rect rect, Color color, double thickness = 1)
+    { }
+
+    public void FillRectangle(Rect rect, Color color)
+    { }
+
+    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
+    { }
+
+    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
+    { }
+
+    public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
+    { }
+
+    public void FillEllipse(Rect bounds, Color color)
+    { }
+
+    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
+    { }
+
+    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap)
+    { }
+
+    public void DrawImage(IImage image, Point location)
+    { }
+
+    public void DrawImage(IImage image, Rect destRect)
+    { }
+
+    public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
+    { }
+}

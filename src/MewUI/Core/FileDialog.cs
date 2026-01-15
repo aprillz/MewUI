@@ -1,6 +1,4 @@
-using Aprillz.MewUI.Platform;
-
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 public sealed class OpenFileDialogOptions
 {

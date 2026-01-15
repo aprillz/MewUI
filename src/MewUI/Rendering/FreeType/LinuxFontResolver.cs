@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace Aprillz.MewUI.Rendering.FreeType;
 
 internal static class LinuxFontResolver

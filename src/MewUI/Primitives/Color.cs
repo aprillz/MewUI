@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Primitives;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents a 32-bit ARGB color.

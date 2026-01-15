@@ -1,14 +1,7 @@
-using System;
-
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Binding;
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Markup;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Fluent API extension methods for controls.
@@ -61,13 +54,11 @@ public static class ControlExtensions
 
     public static T Bold<T>(this T control) where T : Control
     {
-        control.FontWeight = Rendering.FontWeight.Bold;
+        control.FontWeight = MewUI.FontWeight.Bold;
         return control;
     }
 
     #endregion
-
-    // Binding intentionally stays explicit (BindText/BindContent/...) instead of a generic Bind API.
 
     #region UIElement Events (Generic)
 
@@ -845,7 +836,7 @@ public static class ControlExtensions
 
     #region ContentControl
 
-    public static T Content<T>(this T control, Elements.Element content) where T : ContentControl
+    public static T Content<T>(this T control, Element content) where T : ContentControl
     {
         control.Content = content;
         return control;

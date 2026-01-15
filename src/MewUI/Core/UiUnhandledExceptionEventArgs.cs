@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 public sealed class UiUnhandledExceptionEventArgs : EventArgs
 {

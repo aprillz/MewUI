@@ -1,6 +1,5 @@
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.DirectWrite;
-using Aprillz.MewUI.Primitives;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 

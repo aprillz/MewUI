@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Binding;
+namespace Aprillz.MewUI;
 
 public sealed class ValueBinding<T> : IDisposable
 {

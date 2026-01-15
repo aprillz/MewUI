@@ -1,6 +1,3 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -10,7 +7,7 @@ public class RadioButton : ToggleBase
     private bool _isPressed;
     private Window? _registeredWindow;
     private string? _registeredGroupName;
-    private Elements.Element? _registeredParentScope;
+    private Element? _registeredParentScope;
 
     internal void EnsureGroupRegistered()
     {

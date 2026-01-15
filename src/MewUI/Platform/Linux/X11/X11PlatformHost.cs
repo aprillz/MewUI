@@ -2,11 +2,8 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Core;
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Platform;
-using Aprillz.MewUI.Platform.Linux;
+
 using NativeX11 = Aprillz.MewUI.Native.X11;
 
 namespace Aprillz.MewUI.Platform.Linux.X11;

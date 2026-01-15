@@ -1,6 +1,3 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -48,7 +45,7 @@ public class CheckBox : ToggleBase
         var boxRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
         var fill = state.IsEnabled ? theme.Palette.ControlBackground : theme.Palette.DisabledControlBackground;
-        var radius = Math.Max(0, theme.ControlCornerRadius * 0.5); 
+        var radius = Math.Max(0, theme.ControlCornerRadius * 0.5);
 
         var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
         var stroke = Math.Max(1, BorderThickness);

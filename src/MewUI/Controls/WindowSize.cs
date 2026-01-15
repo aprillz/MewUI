@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Controls;
+namespace Aprillz.MewUI;
 
 public readonly struct WindowSize
 {

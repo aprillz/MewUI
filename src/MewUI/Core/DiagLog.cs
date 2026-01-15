@@ -1,6 +1,7 @@
+using System.Diagnostics;
 using System.Text;
 
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 internal static class DiagLog
 {
@@ -10,6 +11,7 @@ internal static class DiagLog
         string.Equals(Environment.GetEnvironmentVariable("MEWUI_DIAG"), "1", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(Environment.GetEnvironmentVariable("MEWUI_DIAG"), "true", StringComparison.OrdinalIgnoreCase);
 
+    [Conditional("DEBUG")]
     public static void Write(string message)
     {
         if (!Enabled)

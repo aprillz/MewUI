@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Resources;
+namespace Aprillz.MewUI;
 
 public enum ImageFormat
 {

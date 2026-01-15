@@ -1,4 +1,5 @@
-using Aprillz.MewUI.Elements;
+using Aprillz.MewUI;
+using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Input;
 
@@ -7,9 +8,9 @@ namespace Aprillz.MewUI.Input;
 /// </summary>
 public sealed class FocusManager
 {
-    private readonly Controls.Window _window;
+    private readonly Window _window;
 
-    internal FocusManager(Controls.Window window)
+    internal FocusManager(Window window)
     {
         _window = window;
     }

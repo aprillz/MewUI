@@ -1,4 +1,6 @@
-namespace Aprillz.MewUI.Elements;
+using Aprillz.MewUI.Controls;
+
+namespace Aprillz.MewUI;
 
 internal static class VisualTree
 {

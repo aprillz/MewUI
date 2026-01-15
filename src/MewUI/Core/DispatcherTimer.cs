@@ -1,6 +1,6 @@
 using Aprillz.MewUI.Platform;
 
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// UI-thread timer that raises <see cref="Tick"/> on the application's dispatcher.

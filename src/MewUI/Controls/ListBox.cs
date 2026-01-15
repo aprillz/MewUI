@@ -1,8 +1,3 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Binding;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -73,7 +68,7 @@ public class ListBox : Control
         BorderThickness = 1;
         Padding = new Thickness(1);
 
-        _vBar = new ScrollBar { Orientation = Panels.Orientation.Vertical, IsVisible = false };
+        _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _vBar.Parent = this;
         _vBar.ValueChanged += v =>
         {

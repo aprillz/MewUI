@@ -1,4 +1,5 @@
-using Aprillz.MewUI.Elements;
+using Aprillz.MewUI;
+using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Platform;
 

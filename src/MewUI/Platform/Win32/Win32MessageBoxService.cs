@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Core;
 using Aprillz.MewUI.Native;
 
 namespace Aprillz.MewUI.Platform.Win32;

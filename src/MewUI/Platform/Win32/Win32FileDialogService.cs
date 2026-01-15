@@ -1,8 +1,6 @@
 using System.Runtime.InteropServices;
 
-using Aprillz.MewUI.Core;
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Platform;
 
 namespace Aprillz.MewUI.Platform.Win32;
 

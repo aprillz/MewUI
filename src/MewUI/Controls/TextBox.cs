@@ -1,8 +1,5 @@
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Primitives;
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Text;
+using Aprillz.MewUI.Text.Text;
 
 namespace Aprillz.MewUI.Controls;
 

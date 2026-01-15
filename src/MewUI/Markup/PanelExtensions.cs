@@ -1,8 +1,6 @@
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
+using Aprillz.MewUI.Controls;
 
-namespace Aprillz.MewUI.Markup;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Fluent API extension methods for panels.
@@ -32,13 +30,13 @@ public static class PanelExtensions
 
     public static StackPanel Horizontal(this StackPanel panel)
     {
-        panel.Orientation = Panels.Orientation.Horizontal;
+        panel.Orientation = MewUI.Orientation.Horizontal;
         return panel;
     }
 
     public static StackPanel Vertical(this StackPanel panel)
     {
-        panel.Orientation = Panels.Orientation.Vertical;
+        panel.Orientation = MewUI.Orientation.Vertical;
         return panel;
     }
 
@@ -122,7 +120,7 @@ public static class PanelExtensions
 
     private static IEnumerable<GridLength> ParseGridLengths(string definition)
     {
-        var parts = definition.Split(',', StringSplitOptions.RemoveEmptyEntries| StringSplitOptions.TrimEntries);
+        var parts = definition.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         foreach (var part in parts)
         {
             var trimmed = part.Trim();
@@ -210,15 +208,4 @@ public static class PanelExtensions
     }
 
     #endregion
-}
-
-/// <summary>
-/// Helper class for GridLength creation.
-/// </summary>
-public static class GridLengths
-{
-    public static GridLength Auto => GridLength.Auto;
-    public static GridLength Star => GridLength.Star;
-    public static GridLength Stars(double value) => GridLength.Stars(value);
-    public static GridLength Pixels(double value) => GridLength.Pixels(value);
 }

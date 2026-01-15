@@ -1,7 +1,4 @@
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Panels;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A panel that arranges children in a flowing layout, wrapping to the next line when needed.

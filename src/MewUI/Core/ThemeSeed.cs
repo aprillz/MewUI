@@ -1,6 +1,4 @@
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Core;
+namespace Aprillz.MewUI;
 
 public readonly record struct ThemeSeed(
     Color WindowBackground,

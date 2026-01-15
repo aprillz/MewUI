@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Aprillz.MewUI.Text;
 
 internal sealed class TextEditorCore

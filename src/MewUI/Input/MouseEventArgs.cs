@@ -1,6 +1,4 @@
-using Aprillz.MewUI.Primitives;
-
-namespace Aprillz.MewUI.Input;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Mouse button enumeration.
