@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Controls;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -124,8 +122,11 @@ public static class ElementExtensions
     }
 
     public static T DockLeft<T>(this T element) where T : Element => element.DockTo(Dock.Left);
+
     public static T DockTop<T>(this T element) where T : Element => element.DockTo(Dock.Top);
+
     public static T DockRight<T>(this T element) where T : Element => element.DockTo(Dock.Right);
+
     public static T DockBottom<T>(this T element) where T : Element => element.DockTo(Dock.Bottom);
 
     #endregion
@@ -323,4 +324,10 @@ public static class ElementExtensions
     }
 
     #endregion
+
+    public static T Apply<T>(this T obj, Action<T> action)
+    {
+        action(obj);
+        return obj;
+    }
 }

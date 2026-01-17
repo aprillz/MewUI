@@ -1,13 +1,12 @@
 using System.Reflection;
 
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI;
 
 public static class ImageExtensions
 {
-    public static Image Source(this Image image, ImageSource? source)
+    public static Image Source(this Image image, IImageSource? source)
     {
         image.Source = source;
         return image;
