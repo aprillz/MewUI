@@ -91,6 +91,32 @@ public static class LayoutRounding
         return new Rect(x, y, w, h);
     }
 
+    public static Rect ExpandClipByDevicePixels(Rect rect, double dpiScale, int rightPx = 1, int bottomPx = 1)
+    {
+        if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
+        {
+            return rect;
+        }
+
+        if (rect.IsEmpty)
+        {
+            return rect;
+        }
+
+        rightPx = Math.Max(0, rightPx);
+        bottomPx = Math.Max(0, bottomPx);
+
+        if (rightPx == 0 && bottomPx == 0)
+        {
+            return SnapRectEdgesToPixelsOutward(rect, dpiScale);
+        }
+
+        double expandW = rightPx / dpiScale;
+        double expandH = bottomPx / dpiScale;
+        var expanded = new Rect(rect.X, rect.Y, rect.Width + expandW, rect.Height + expandH);
+        return SnapRectEdgesToPixelsOutward(expanded, dpiScale);
+    }
+
     public static Rect RoundRectToPixels(Rect rect, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))

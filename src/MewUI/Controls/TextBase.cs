@@ -249,14 +249,8 @@ public abstract class TextBase : Control
         var contentBounds = GetViewportContentBounds();
 
         context.Save();
-        // Expand the clip by 1 device pixel on right/bottom so 1px strokes/glyph overhang at the edge
-        // don't get clipped under an ancestor clip.
         var dpiScale = GetDpi() / 96.0;
-        double onePx = 1.0 / dpiScale;
-        var clip = LayoutRounding.SnapRectEdgesToPixelsOutward(
-            new Rect(contentBounds.X, contentBounds.Y, contentBounds.Width + onePx, contentBounds.Height + onePx),
-            dpiScale);
-        context.SetClip(clip);
+        context.SetClip(LayoutRounding.ExpandClipByDevicePixels(contentBounds, dpiScale));
 
         var font = GetFont();
 

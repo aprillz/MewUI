@@ -341,13 +341,7 @@ public abstract class Control : FrameworkElement, IDisposable
 
     protected uint GetDpi()
     {
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            return window.Dpi;
-        }
-
-        return DpiHelper.GetSystemDpi();
+        return GetDpiCached();
     }
 
     protected double GetBorderVisualInset()

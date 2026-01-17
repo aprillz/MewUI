@@ -422,10 +422,7 @@ public sealed class ScrollViewer : ContentControl
     {
         // Expand the clip by 1 device pixel on the right/bottom so 1px strokes at the edge
         // (which can render half-outside the logical bounds) don't get clipped.
-        var dpiScale = DpiScale;
-        double onePx = 1.0 / dpiScale;
-        var expanded = new Rect(viewport.X, viewport.Y, viewport.Width + onePx, viewport.Height + onePx);
-        return LayoutRounding.SnapRectEdgesToPixelsOutward(expanded, dpiScale);
+        return LayoutRounding.ExpandClipByDevicePixels(viewport, DpiScale);
     }
 
     private static bool IsBarVisible(ScrollMode visibility, bool needed)

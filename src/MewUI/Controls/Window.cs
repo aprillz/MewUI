@@ -594,6 +594,10 @@ public class Window : ContentControl
 
         if (Content != null)
         {
+            // Clear cached DPI values so subsequent GetDpi() calls don't traverse parents.
+            // This also ensures subtrees moved between windows/tabs don't retain stale DPI.
+            VisitVisualTree(Content, e => e.ClearDpiCache());
+
             VisitVisualTree(Content, e =>
             {
                 if (e is Control c)
@@ -609,6 +613,8 @@ public class Window : ContentControl
             {
                 c.NotifyDpiChanged(oldDpi, newDpi);
             }
+
+            _popups[i].Element.ClearDpiCacheDeep();
         }
     }
 

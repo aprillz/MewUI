@@ -9,6 +9,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 public abstract class Element
 {
+    private bool _dpiCacheValid;
+    private uint _cachedDpi;
+
     /// <summary>
     /// Gets the desired size calculated during the Measure pass.
     /// </summary>
@@ -29,6 +32,7 @@ public abstract class Element
             if (field != value)
             {
                 field = value;
+                ClearDpiCacheDeep();
                 OnParentChanged();
             }
         }
@@ -140,6 +144,39 @@ public abstract class Element
         }
         return current;
     }
+
+    internal uint GetDpiCached()
+    {
+        if (_dpiCacheValid)
+        {
+            return _cachedDpi;
+        }
+
+        uint dpi = 0;
+        for (Element? current = this; current != null; current = current.Parent)
+        {
+            if (current is Window window)
+            {
+                dpi = window.Dpi;
+                break;
+            }
+        }
+
+        if (dpi == 0)
+        {
+            dpi = DpiHelper.GetSystemDpi();
+        }
+
+        _cachedDpi = dpi;
+        _dpiCacheValid = true;
+        return dpi;
+    }
+
+    internal double GetDpiScaleCached() => GetDpiCached() / 96.0;
+
+    internal void ClearDpiCache() => _dpiCacheValid = false;
+
+    internal void ClearDpiCacheDeep() => VisualTree.Visit(this, e => e.ClearDpiCache());
 
     public bool IsAncestorOf(Element descendant)
     {
