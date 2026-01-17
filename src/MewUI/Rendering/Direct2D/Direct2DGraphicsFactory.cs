@@ -1,3 +1,4 @@
+using Aprillz.MewUI;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
@@ -77,7 +78,9 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
         ImageDecoders.TryDecode(data, out var bmp)
             ? new Direct2DImage(bmp)
             : throw new NotSupportedException(
-                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormat(data)}.");
+                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
+
+    public IImage CreateImageFromPixelSource(IPixelBufferSource source) => new Direct2DImage(source);
 
     public IGraphicsContext CreateContext(nint hwnd, nint hdc, double dpiScale)
     {

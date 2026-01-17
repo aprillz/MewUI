@@ -1,6 +1,7 @@
 using System.Reflection;
 
 using Aprillz.MewUI.Resources;
+using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
 
@@ -8,16 +9,19 @@ namespace Aprillz.MewUI;
 /// Backend-agnostic encoded image source (PNG/JPG/BMP/SVG).
 /// Decode/upload is performed by the active graphics backend.
 /// </summary>
-public sealed class ImageSource
+public sealed class ImageSource : IImageSource
 {
     public byte[] Data { get; }
-    public ImageFormat Format { get; }
+
+    /// <summary>
+    /// Best-effort detected format id from registered decoders (diagnostics only).
+    /// </summary>
+    public string? FormatId => ImageDecoders.DetectFormatId(Data);
 
     private ImageSource(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
         Data = data;
-        Format = ImageDecoders.DetectFormat(Data);
     }
 
     public static ImageSource FromBytes(byte[] data) => new(data);
@@ -93,5 +97,11 @@ public sealed class ImageSource
         using var ms = new MemoryStream();
         stream.CopyTo(ms);
         return new ImageSource(ms.ToArray());
+    }
+
+    public IImage CreateImage(IGraphicsFactory factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        return factory.CreateImageFromBytes(Data);
     }
 }

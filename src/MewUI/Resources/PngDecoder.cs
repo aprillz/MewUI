@@ -5,12 +5,10 @@ namespace Aprillz.MewUI.Resources;
 
 internal sealed class PngDecoder : IImageDecoder
 {
-    public ImageFormat Format => ImageFormat.Png;
+    public string Id => "png";
 
-    public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    public bool CanDecode(ReadOnlySpan<byte> encoded)
     {
-        bitmap = default;
-
         // PNG signature
         if (encoded.Length < 8)
         {
@@ -18,7 +16,14 @@ internal sealed class PngDecoder : IImageDecoder
         }
 
         ReadOnlySpan<byte> sig = stackalloc byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A };
-        if (!encoded.Slice(0, 8).SequenceEqual(sig))
+        return encoded.Slice(0, 8).SequenceEqual(sig);
+    }
+
+    public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    {
+        bitmap = default;
+
+        if (!CanDecode(encoded))
         {
             return false;
         }

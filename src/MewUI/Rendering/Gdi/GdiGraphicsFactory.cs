@@ -1,3 +1,4 @@
+using Aprillz.MewUI;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -42,7 +43,9 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         ImageDecoders.TryDecode(data, out var bmp)
             ? CreateImage(bmp.WidthPx, bmp.HeightPx, bmp.Data)
             : throw new NotSupportedException(
-                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormat(data)}.");
+                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
+
+    public IImage CreateImageFromPixelSource(IPixelBufferSource source) => new GdiImage(source);
 
     /// <summary>
     /// Creates an empty 32-bit ARGB image.

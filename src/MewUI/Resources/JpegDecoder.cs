@@ -7,13 +7,16 @@ namespace Aprillz.MewUI.Resources;
 
 internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
 {
-    public ImageFormat Format => ImageFormat.Jpeg;
+    public string Id => "jpeg";
+
+    public bool CanDecode(ReadOnlySpan<byte> encoded) =>
+        encoded.Length >= 3 && encoded[0] == 0xFF && encoded[1] == 0xD8 && encoded[2] == 0xFF;
 
     public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
     {
         bitmap = default;
 
-        if (encoded.Length < 3 || encoded[0] != 0xFF || encoded[1] != 0xD8 || encoded[2] != 0xFF)
+        if (!CanDecode(encoded))
         {
             return false;
         }
@@ -26,7 +29,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
     {
         bitmap = default;
 
-        if (encoded.Length < 3 || encoded[0] != 0xFF || encoded[1] != 0xD8 || encoded[2] != 0xFF)
+        if (!CanDecode(encoded))
         {
             return false;
         }

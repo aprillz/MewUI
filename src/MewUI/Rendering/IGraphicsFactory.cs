@@ -1,3 +1,6 @@
+using Aprillz.MewUI;
+using Aprillz.MewUI.Resources;
+
 namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
@@ -34,6 +37,12 @@ public interface IGraphicsFactory
     /// Creates an image from a byte array.
     /// </summary>
     IImage CreateImageFromBytes(byte[] data);
+
+    /// <summary>
+    /// Creates an image backed by a versioned pixel source (e.g. <see cref="WritableBitmap"/>).
+    /// Backends should reflect updates when the source's <see cref="IPixelBufferSource.Version"/> changes.
+    /// </summary>
+    IImage CreateImageFromPixelSource(IPixelBufferSource source);
 
     /// <summary>
     /// Creates a graphics context for the specified window handle.

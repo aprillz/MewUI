@@ -450,6 +450,8 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     private void DrawImageCore(GdiImage gdiImage, Rect destRect, Rect sourceRect)
     {
+        gdiImage.EnsureUpToDate();
+
         var destPx = _stateManager.ToDeviceRect(destRect);
         if (destPx.Width <= 0 || destPx.Height <= 0)
         {

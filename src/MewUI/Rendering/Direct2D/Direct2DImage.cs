@@ -8,7 +8,8 @@ internal sealed class Direct2DImage : IImage
 {
     private const uint DXGI_FORMAT_B8G8R8A8_UNORM = 87;
 
-    private readonly byte[] _bgra;
+    private readonly IPixelBufferSource _pixels;
+    private int _pixelsVersion = -1;
     private byte[]? _premultiplied;
     private nint _renderTarget;
     private int _renderTargetGeneration;
@@ -27,7 +28,22 @@ internal sealed class Direct2DImage : IImage
 
         PixelWidth = bmp.WidthPx;
         PixelHeight = bmp.HeightPx;
-        _bgra = bmp.Data;
+        _pixels = new StaticPixelBufferSource(bmp.WidthPx, bmp.HeightPx, bmp.Data);
+        _pixelsVersion = _pixels.Version;
+    }
+
+    public Direct2DImage(IPixelBufferSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.PixelFormat != BitmapPixelFormat.Bgra32)
+        {
+            throw new NotSupportedException($"Unsupported pixel format: {source.PixelFormat}");
+        }
+
+        PixelWidth = source.PixelWidth;
+        PixelHeight = source.PixelHeight;
+        _pixels = source;
+        _pixelsVersion = source.Version;
     }
 
     public nint GetOrCreateBitmap(nint renderTarget, int renderTargetGeneration)
@@ -35,6 +51,21 @@ internal sealed class Direct2DImage : IImage
         if (_disposed || renderTarget == 0)
         {
             return 0;
+        }
+
+        int v = _pixels.Version;
+        if (_pixelsVersion != v)
+        {
+            _pixelsVersion = v;
+            _premultiplied = null;
+
+            if (_bitmap != 0)
+            {
+                ComHelpers.Release(_bitmap);
+                _bitmap = 0;
+                _renderTarget = 0;
+                _renderTargetGeneration = 0;
+            }
         }
 
         if (_bitmap != 0 && _renderTarget == renderTarget && _renderTargetGeneration == renderTargetGeneration)
@@ -53,8 +84,16 @@ internal sealed class Direct2DImage : IImage
         }
 
         // Direct2D expects premultiplied alpha for typical UI bitmaps.
-        // BMP alpha is usually unused, but we premultiply anyway for correctness.
-        byte[] premul = _premultiplied ??= PremultiplyIfNeeded(_bgra);
+        byte[] premul;
+        using (var l = _pixels.Lock())
+        {
+            if (l.Buffer.Length == 0)
+            {
+                return 0;
+            }
+
+            premul = _premultiplied ??= PremultiplyIfNeeded(l.Buffer);
+        }
 
         var props = new D2D1_BITMAP_PROPERTIES(
             pixelFormat: new D2D1_PIXEL_FORMAT(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE.PREMULTIPLIED),
@@ -100,7 +139,7 @@ internal sealed class Direct2DImage : IImage
         return bgra;
     }
 
-    private static byte[] Premultiply(byte[] bgra)
+    private static byte[] Premultiply(ReadOnlySpan<byte> bgra)
     {
         var dst = new byte[bgra.Length];
         for (int i = 0; i < bgra.Length; i += 4)

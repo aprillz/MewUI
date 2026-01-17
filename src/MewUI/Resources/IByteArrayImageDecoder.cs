@@ -4,7 +4,5 @@ namespace Aprillz.MewUI.Resources;
 // (ReadOnlySpan<byte> does not guarantee access to the underlying array.)
 internal interface IByteArrayImageDecoder
 {
-    ImageFormat Format { get; }
     bool TryDecode(byte[] encoded, out DecodedBitmap bitmap);
 }
-

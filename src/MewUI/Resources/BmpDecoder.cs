@@ -4,7 +4,10 @@ namespace Aprillz.MewUI.Resources;
 
 internal sealed class BmpDecoder : IImageDecoder
 {
-    public ImageFormat Format => ImageFormat.Bmp;
+    public string Id => "bmp";
+
+    public bool CanDecode(ReadOnlySpan<byte> encoded) =>
+        encoded.Length >= 2 && encoded[0] == (byte)'B' && encoded[1] == (byte)'M';
 
     public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
     {
@@ -21,7 +24,7 @@ internal sealed class BmpDecoder : IImageDecoder
             return false;
         }
 
-        if (encoded[0] != (byte)'B' || encoded[1] != (byte)'M')
+        if (!CanDecode(encoded))
         {
             return false;
         }
@@ -114,4 +117,3 @@ internal sealed class BmpDecoder : IImageDecoder
     private static ushort ReadUInt16LE(ReadOnlySpan<byte> data, int offset)
         => BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
 }
-

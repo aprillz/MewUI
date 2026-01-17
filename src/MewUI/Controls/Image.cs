@@ -1,11 +1,11 @@
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Controls;
 
 public sealed class Image : Control
 {
     private readonly Dictionary<GraphicsBackend, IImage> _cache = new();
+    private INotifyImageChanged? _notifySource;
 
     public ImageStretch StretchMode
     {
@@ -13,7 +13,7 @@ public sealed class Image : Control
         set { field = value; InvalidateMeasure(); InvalidateVisual(); }
     } = ImageStretch.None;
 
-    public ImageSource? Source
+    public IImageSource? Source
     {
         get;
         set
@@ -23,7 +23,20 @@ public sealed class Image : Control
                 return;
             }
 
+            if (_notifySource != null)
+            {
+                _notifySource.Changed -= OnSourceChanged;
+                _notifySource = null;
+            }
+
             field = value;
+
+            _notifySource = value as INotifyImageChanged;
+            if (_notifySource != null)
+            {
+                _notifySource.Changed += OnSourceChanged;
+            }
+
             ClearCache();
             InvalidateMeasure();
             InvalidateVisual();
@@ -151,7 +164,7 @@ public sealed class Image : Control
             return cached;
         }
 
-        var created = factory.CreateImageFromBytes(Source.Data);
+        var created = Source.CreateImage(factory);
         _cache[backend] = created;
         return created;
     }
@@ -168,7 +181,19 @@ public sealed class Image : Control
 
     protected override void OnDispose()
     {
+        if (_notifySource != null)
+        {
+            _notifySource.Changed -= OnSourceChanged;
+            _notifySource = null;
+        }
+
         ClearCache();
         base.OnDispose();
+    }
+
+    private void OnSourceChanged()
+    {
+        // Keep cached IImage instances; backend images are expected to refresh from the source (e.g. WritableBitmap.Version).
+        InvalidateVisual();
     }
 }

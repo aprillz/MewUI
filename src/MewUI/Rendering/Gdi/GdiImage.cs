@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
@@ -11,6 +12,8 @@ internal sealed class GdiImage : IImage
     private nint _bits;
     private bool _disposed;
     private readonly Dictionary<ScaledKey, nint> _scaled = new();
+    private readonly IPixelBufferSource? _source;
+    private int _sourceVersion = -1;
 
     public int PixelWidth { get; }
     public int PixelHeight { get; }
@@ -43,6 +46,20 @@ internal sealed class GdiImage : IImage
         }
     }
 
+    public GdiImage(IPixelBufferSource source) : this(
+        source?.PixelWidth ?? throw new ArgumentNullException(nameof(source)),
+        source.PixelHeight)
+    {
+        if (source.PixelFormat != BitmapPixelFormat.Bgra32)
+        {
+            throw new NotSupportedException($"Unsupported pixel format: {source.PixelFormat}");
+        }
+
+        _source = source;
+        _sourceVersion = -1;
+        EnsureUpToDate();
+    }
+
     /// <summary>
     /// Creates an image from raw pixel data (BGRA format).
     /// </summary>
@@ -58,45 +75,44 @@ internal sealed class GdiImage : IImage
             return;
         }
 
-        // GDI AlphaBlend expects the source to be premultiplied alpha (AC_SRC_ALPHA).
-        // Most decoded pixel data is straight alpha, so we premultiply here.
-        bool needsPremultiply = false;
-        for (int i = 3; i < pixelData.Length; i += 4)
+        CopyToDibPremultiplied(pixelData);
+    }
+
+    internal void EnsureUpToDate()
+    {
+        if (_disposed || Handle == 0 || _bits == 0 || _source == null)
         {
-            if (pixelData[i] != 0xFF)
-            {
-                needsPremultiply = true;
-                break;
-            }
+            return;
         }
 
-        unsafe
+        int v = _source.Version;
+        if (_sourceVersion == v)
         {
-            fixed (byte* src = pixelData)
+            return;
+        }
+
+        using (var l = _source.Lock())
+        {
+            v = l.Version;
+            if (_sourceVersion == v)
             {
-                if (!needsPremultiply)
-                {
-                    Buffer.MemoryCopy(src, (void*)_bits, pixelData.Length, pixelData.Length);
-                    return;
-                }
-
-                byte* dst = (byte*)_bits;
-                int count = pixelData.Length;
-
-                for (int i = 0; i < count; i += 4)
-                {
-                    byte b = src[i + 0];
-                    byte g = src[i + 1];
-                    byte r = src[i + 2];
-                    byte a = src[i + 3];
-
-                    uint alpha = a;
-                    dst[i + 3] = a;
-                    dst[i + 0] = (byte)((b * alpha + 127) / 255);
-                    dst[i + 1] = (byte)((g * alpha + 127) / 255);
-                    dst[i + 2] = (byte)((r * alpha + 127) / 255);
-                }
+                return;
             }
+
+            if (l.Buffer.Length == 0)
+            {
+                return;
+            }
+
+            CopyToDibPremultiplied(l.Buffer);
+            _sourceVersion = v;
+
+            foreach (var kvp in _scaled)
+            {
+                Gdi32.DeleteObject(kvp.Value);
+            }
+
+            _scaled.Clear();
         }
     }
 
@@ -127,6 +143,8 @@ internal sealed class GdiImage : IImage
         {
             return false;
         }
+
+        EnsureUpToDate();
 
         if (srcW <= 0 || srcH <= 0 || destW <= 0 || destH <= 0)
         {
@@ -285,6 +303,59 @@ internal sealed class GdiImage : IImage
             }
 
             User32.ReleaseDC(0, screenDc);
+        }
+    }
+
+    private void CopyToDibPremultiplied(ReadOnlySpan<byte> pixelData)
+    {
+        if (_bits == 0 || pixelData.IsEmpty)
+        {
+            return;
+        }
+
+        if (pixelData.Length != PixelWidth * PixelHeight * 4)
+        {
+            throw new ArgumentException("Invalid pixel data size", nameof(pixelData));
+        }
+
+        // GDI AlphaBlend expects the source to be premultiplied alpha (AC_SRC_ALPHA).
+        bool needsPremultiply = false;
+        for (int i = 3; i < pixelData.Length; i += 4)
+        {
+            if (pixelData[i] != 0xFF)
+            {
+                needsPremultiply = true;
+                break;
+            }
+        }
+
+        unsafe
+        {
+            fixed (byte* src = pixelData)
+            {
+                if (!needsPremultiply)
+                {
+                    Buffer.MemoryCopy(src, (void*)_bits, pixelData.Length, pixelData.Length);
+                    return;
+                }
+
+                byte* dst = (byte*)_bits;
+                int count = pixelData.Length;
+
+                for (int i = 0; i < count; i += 4)
+                {
+                    byte b = src[i + 0];
+                    byte g = src[i + 1];
+                    byte r = src[i + 2];
+                    byte a = src[i + 3];
+
+                    uint alpha = a;
+                    dst[i + 3] = a;
+                    dst[i + 0] = (byte)((b * alpha + 127) / 255);
+                    dst[i + 1] = (byte)((g * alpha + 127) / 255);
+                    dst[i + 2] = (byte)((r * alpha + 127) / 255);
+                }
+            }
         }
     }
 }
