@@ -211,6 +211,9 @@ internal static partial class Gdi32
     public static partial nint CreateCompatibleBitmap(nint hdc, int cx, int cy);
 
     [LibraryImport(LibraryName)]
+    public static partial nint CreateBitmap(int nWidth, int nHeight, uint nPlanes, uint nBitCount, nint lpBits);
+
+    [LibraryImport(LibraryName)]
     public static partial nint CreateDIBSection(nint hdc, ref BITMAPINFO pbmi, uint usage, out nint ppvBits, nint hSection, uint offset);
 
     [LibraryImport(LibraryName)]

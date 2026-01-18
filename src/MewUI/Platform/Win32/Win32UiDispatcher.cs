@@ -7,27 +7,13 @@ namespace Aprillz.MewUI.Platform.Win32;
 
 public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
 {
-    private readonly ConcurrentQueue<WorkItem> _workItems = new();
+    private readonly UiDispatcherQueue _queue = new();
     private readonly Dictionary<nuint, Action> _timerCallbacks = new();
     private readonly nint _hwnd;
     private readonly int _mainThreadId;
     private int _nextTimerId;
 
     internal const uint WM_INVOKE = WindowMessages.WM_USER + 1;
-
-    private readonly struct WorkItem
-    {
-        public readonly SendOrPostCallback Callback;
-        public readonly object? State;
-        public readonly ManualResetEventSlim? Signal;
-
-        public WorkItem(SendOrPostCallback callback, object? state, ManualResetEventSlim? signal = null)
-        {
-            Callback = callback;
-            State = state;
-            Signal = signal;
-        }
-    }
 
     internal Win32UiDispatcher(nint hwnd)
     {
@@ -40,7 +26,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
     public override void Post(SendOrPostCallback d, object? state)
     {
         ArgumentNullException.ThrowIfNull(d);
-        _workItems.Enqueue(new WorkItem(d, state));
+        _queue.Enqueue(UiDispatcherPriority.Background, () => d(state));
         User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
     }
 
@@ -55,7 +41,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
         }
 
         using var signal = new ManualResetEventSlim(false);
-        _workItems.Enqueue(new WorkItem(d, state, signal));
+        _queue.EnqueueWithSignal(UiDispatcherPriority.Input, () => d(state), signal);
         User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
         signal.Wait();
     }
@@ -63,7 +49,25 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
     public void Post(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        Post(_ => action(), null);
+        Post(action, UiDispatcherPriority.Background);
+    }
+
+    public void Post(Action action, UiDispatcherPriority priority)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        _queue.Enqueue(priority, action);
+        User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+    }
+
+    public bool PostMerged(DispatcherMergeKey mergeKey, Action action, UiDispatcherPriority priority)
+    {
+        if (!_queue.EnqueueMerged(priority, mergeKey, action))
+        {
+            return false;
+        }
+
+        User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+        return true;
     }
 
     public void Send(Action action)
@@ -145,17 +149,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
 
     public void ProcessWorkItems()
     {
-        while (_workItems.TryDequeue(out var item))
-        {
-            try
-            {
-                item.Callback(item.State);
-            }
-            finally
-            {
-                item.Signal?.Set();
-            }
-        }
+        _queue.Process();
     }
 
     private sealed class TimerHandle : IDisposable

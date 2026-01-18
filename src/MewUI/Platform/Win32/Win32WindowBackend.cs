@@ -4,6 +4,7 @@ using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
@@ -14,6 +15,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private UIElement? _mouseOverElement;
     private UIElement? _capturedElement;
+    private nint _hIconSmall;
+    private nint _hIconBig;
 
     public nint Handle { get; private set; }
 
@@ -76,6 +79,39 @@ internal sealed class Win32WindowBackend : IWindowBackend
         {
             User32.SetWindowText(Handle, title);
         }
+    }
+
+    public void SetIcon(IconSource? icon)
+    {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        DestroyIcons();
+
+        if (icon == null)
+        {
+            ApplyIcons();
+            return;
+        }
+
+        var dpiScale = Window.DpiScale <= 0 ? 1.0 : Window.DpiScale;
+        int smallPx = Math.Max(16, (int)Math.Round(16 * dpiScale));
+        int bigPx = Math.Max(32, (int)Math.Round(32 * dpiScale));
+
+        _hIconSmall = TryCreateIcon(icon, smallPx);
+        _hIconBig = TryCreateIcon(icon, bigPx);
+        if (_hIconBig == 0 && _hIconSmall != 0)
+        {
+            _hIconBig = _hIconSmall;
+        }
+        else if (_hIconSmall == 0 && _hIconBig != 0)
+        {
+            _hIconSmall = _hIconBig;
+        }
+
+        ApplyIcons();
     }
 
     public void SetClientSize(double widthDip, double heightDip)
@@ -266,6 +302,93 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
     }
 
+    private void ApplyIcons()
+    {
+        // WM_SETICON: wParam=ICON_SMALL(0)/ICON_BIG(1), lParam=HICON
+        const int ICON_SMALL = 0;
+        const int ICON_BIG = 1;
+
+        User32.SendMessage(Handle, WindowMessages.WM_SETICON, (nint)ICON_SMALL, _hIconSmall);
+        User32.SendMessage(Handle, WindowMessages.WM_SETICON, (nint)ICON_BIG, _hIconBig);
+    }
+
+    private static nint TryCreateIcon(IconSource icon, int desiredSizePx)
+    {
+        var src = icon.Pick(desiredSizePx);
+        if (src == null)
+        {
+            return 0;
+        }
+
+        if (!ImageDecoders.TryDecode(src.Data, out var bmp))
+        {
+            return 0;
+        }
+
+        return CreateHIconFromDecodedBitmap(bmp);
+    }
+
+    private static nint CreateHIconFromDecodedBitmap(DecodedBitmap bmp)
+    {
+        int w = Math.Max(1, bmp.WidthPx);
+        int h = Math.Max(1, bmp.HeightPx);
+
+        var bmi = BITMAPINFO.Create32bpp(w, h);
+        nint bits;
+        nint hbmColor = Gdi32.CreateDIBSection(0, ref bmi, usage: 0, out bits, 0, 0);
+        if (hbmColor == 0 || bits == 0)
+        {
+            if (hbmColor != 0)
+            {
+                Gdi32.DeleteObject(hbmColor);
+            }
+
+            return 0;
+        }
+
+        Marshal.Copy(bmp.Data, 0, bits, bmp.Data.Length);
+
+        // For 32-bpp icons, Windows primarily uses the alpha channel; provide a 1-bpp mask for compatibility.
+        nint hbmMask = Gdi32.CreateBitmap(w, h, nPlanes: 1, nBitCount: 1, lpBits: 0);
+        if (hbmMask == 0)
+        {
+            Gdi32.DeleteObject(hbmColor);
+            return 0;
+        }
+
+        var info = new ICONINFO
+        {
+            fIcon = true,
+            xHotspot = 0,
+            yHotspot = 0,
+            hbmMask = hbmMask,
+            hbmColor = hbmColor,
+        };
+
+        nint hIcon = User32.CreateIconIndirect(ref info);
+        Gdi32.DeleteObject(hbmColor);
+        Gdi32.DeleteObject(hbmMask);
+        return hIcon;
+    }
+
+    private void DestroyIcons()
+    {
+        var oldSmall = _hIconSmall;
+        var oldBig = _hIconBig;
+        _hIconSmall = 0;
+        _hIconBig = 0;
+
+        if (oldSmall != 0)
+        {
+            User32.DestroyIcon(oldSmall);
+        }
+
+        if (oldBig != 0 && oldBig != oldSmall)
+        {
+            User32.DestroyIcon(oldBig);
+        }
+    }
+
     private uint GetWindowStyle()
     {
         uint style = WindowStyles.WS_OVERLAPPEDWINDOW;
@@ -292,6 +415,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private void HandleDestroy()
     {
+        DestroyIcons();
         if (Window.GraphicsFactory is Aprillz.MewUI.Rendering.IWindowResourceReleaser releaser)
         {
             releaser.ReleaseWindowResources(Handle);
@@ -304,8 +428,6 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandlePaint()
     {
-        Window.PerformLayout();
-
         var ps = new PAINTSTRUCT();
         nint hdc = User32.BeginPaint(Handle, out ps);
 
@@ -640,6 +762,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public void Dispose()
     {
+        DestroyIcons();
         if (Handle != 0)
         {
             Close();

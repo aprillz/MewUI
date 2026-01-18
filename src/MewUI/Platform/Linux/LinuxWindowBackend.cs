@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Resources;
 using Aprillz.MewUI;
 
 namespace Aprillz.MewUI.Platform.Linux;
@@ -23,6 +24,8 @@ internal sealed class LinuxWindowBackend : IWindowBackend
     public void Invalidate(bool erase) { }
 
     public void SetTitle(string title) { }
+
+    public void SetIcon(IconSource? icon) { }
 
     public void SetClientSize(double widthDip, double heightDip) { }
 

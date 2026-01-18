@@ -228,6 +228,17 @@ internal static partial class User32
 
     #endregion
 
+    #region Icons
+
+    [LibraryImport(LibraryName)]
+    public static partial nint CreateIconIndirect(ref ICONINFO piconinfo);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DestroyIcon(nint hIcon);
+
+    #endregion
+
     #region DPI
 
     [LibraryImport(LibraryName)]

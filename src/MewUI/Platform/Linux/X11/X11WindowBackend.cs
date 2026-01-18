@@ -4,6 +4,7 @@ using Aprillz.MewUI.Native;
 using NativeX11 = Aprillz.MewUI.Native.X11;
 using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewUI;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Platform.Linux.X11;
 
@@ -21,6 +22,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private long _lastRenderTick;
     private UIElement? _mouseOverElement;
     private UIElement? _capturedElement;
+    private IconSource? _icon;
 
     public nint Handle { get; private set; }
     public nint Display { get; private set; }
@@ -87,6 +89,17 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         NativeX11.XStoreName(Display, Handle, title ?? string.Empty);
         NativeX11.XFlush(Display);
+    }
+
+    public void SetIcon(IconSource? icon)
+    {
+        _icon = icon;
+        if (Display == 0 || Handle == 0)
+        {
+            return;
+        }
+
+        ApplyIcon();
     }
 
     public void SetClientSize(double widthDip, double heightDip)
@@ -269,6 +282,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         Window.SetClientSizeDip(width / dpiScale, height / dpiScale);
 
         SetTitle(Window.Title);
+        ApplyIcon();
 
         // WM_DELETE_WINDOW
         _wmProtocolsAtom = NativeX11.XInternAtom(Display, "WM_PROTOCOLS", false);
@@ -281,6 +295,98 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyResizeMode();
 
         _needsRender = true;
+    }
+
+    private unsafe void ApplyIcon()
+    {
+        if (Display == 0 || Handle == 0)
+        {
+            return;
+        }
+
+        var iconAtom = NativeX11.XInternAtom(Display, "_NET_WM_ICON", false);
+        if (iconAtom == 0)
+        {
+            return;
+        }
+
+        if (_icon == null)
+        {
+            NativeX11.XDeleteProperty(Display, Handle, iconAtom);
+            NativeX11.XFlush(Display);
+            return;
+        }
+
+        var cardinalAtom = NativeX11.XInternAtom(Display, "CARDINAL", false);
+        if (cardinalAtom == 0)
+        {
+            return;
+        }
+
+        var dpiScale = Window.DpiScale <= 0 ? 1.0 : Window.DpiScale;
+        int smallPx = Math.Max(16, (int)Math.Round(16 * dpiScale));
+        int bigPx = Math.Max(32, (int)Math.Round(32 * dpiScale));
+
+        var payload = new List<uint>(capacity: 16);
+        AppendNetWmIconPayload(payload, _icon, smallPx);
+        if (bigPx != smallPx)
+        {
+            AppendNetWmIconPayload(payload, _icon, bigPx);
+        }
+
+        if (payload.Count == 0)
+        {
+            NativeX11.XDeleteProperty(Display, Handle, iconAtom);
+            NativeX11.XFlush(Display);
+            return;
+        }
+
+        var data = payload.ToArray();
+        fixed (uint* p = data)
+        {
+            NativeX11.XChangeProperty(
+                display: Display,
+                window: Handle,
+                property: iconAtom,
+                type: cardinalAtom,
+                format: 32,
+                mode: 0, // PropModeReplace
+                data: (nint)p,
+                nelements: data.Length);
+        }
+
+        NativeX11.XFlush(Display);
+    }
+
+    private static void AppendNetWmIconPayload(List<uint> dst, IconSource icon, int desiredSizePx)
+    {
+        var src = icon.Pick(desiredSizePx);
+        if (src == null)
+        {
+            return;
+        }
+
+        if (!ImageDecoders.TryDecode(src.Data, out var bmp))
+        {
+            return;
+        }
+
+        int w = Math.Max(1, bmp.WidthPx);
+        int h = Math.Max(1, bmp.HeightPx);
+        dst.Add((uint)w);
+        dst.Add((uint)h);
+
+        var pixels = bmp.Data;
+        int idx = 0;
+        int pixelCount = checked(w * h);
+        for (int i = 0; i < pixelCount; i++)
+        {
+            byte b = pixels[idx++];
+            byte g = pixels[idx++];
+            byte r = pixels[idx++];
+            byte a = pixels[idx++];
+            dst.Add(((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b);
+        }
     }
 
     private void ApplyResizeMode()

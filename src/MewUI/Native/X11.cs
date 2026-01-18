@@ -119,6 +119,20 @@ internal static partial class X11
     public static partial int XSetWMNormalHints(nint display, nint window, ref XSizeHints hints);
 
     [LibraryImport(LibraryName)]
+    public static partial int XChangeProperty(
+        nint display,
+        nint window,
+        nint property,
+        nint type,
+        int format,
+        int mode,
+        nint data,
+        int nelements);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XDeleteProperty(nint display, nint window, nint property);
+
+    [LibraryImport(LibraryName)]
     public static partial int XTranslateCoordinates(
         nint display,
         nint src_w,

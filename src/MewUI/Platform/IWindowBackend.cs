@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Platform;
 
@@ -18,6 +19,8 @@ public interface IWindowBackend : IDisposable
     void Invalidate(bool erase);
 
     void SetTitle(string title);
+
+    void SetIcon(IconSource? icon);
 
     void SetClientSize(double widthDip, double heightDip);
 
