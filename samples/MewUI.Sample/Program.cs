@@ -423,7 +423,7 @@ Element NormalControls()
                         .Text("ComboBox:"),
 
                     new ComboBox()
-                        .Items("Alpha", "Beta", "Gamma", "Delta")
+                        .Items("Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa")
                         .SelectedIndex(1)
                         .Placeholder("Select...")
                 ),
