@@ -33,7 +33,7 @@ public sealed class Slider : RangeBase
             set,
             subscribe,
             unsubscribe,
-            onSourceChanged: () =>
+            () =>
             {
                 if (_isDragging)
                 {
@@ -97,7 +97,7 @@ public sealed class Slider : RangeBase
         context.FillEllipse(thumbRect, thumbFill);
 
         var state = GetVisualState(IsFocused, IsFocused);
-        Color thumbBorder = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
+        Color thumbBorder = PickAccentBorder(theme, BorderBrush, state, 0.6);
 
 
         context.DrawEllipse(thumbRect, thumbBorder, 1);
@@ -172,32 +172,32 @@ public sealed class Slider : RangeBase
 
         if (e.Key is Key.Left or Key.Down)
         {
-            SetValueInternal(Value - step, fromUser: true);
+            SetValueInternal(Value - step, true);
             e.Handled = true;
         }
         else if (e.Key is Key.Right or Key.Up)
         {
-            SetValueInternal(Value + step, fromUser: true);
+            SetValueInternal(Value + step, true);
             e.Handled = true;
         }
         else if (e.Key == Key.PageDown)
         {
-            SetValueInternal(Value - largeStep, fromUser: true);
+            SetValueInternal(Value - largeStep, true);
             e.Handled = true;
         }
         else if (e.Key == Key.PageUp)
         {
-            SetValueInternal(Value + largeStep, fromUser: true);
+            SetValueInternal(Value + largeStep, true);
             e.Handled = true;
         }
         else if (e.Key == Key.Home)
         {
-            SetValueInternal(Minimum, fromUser: true);
+            SetValueInternal(Minimum, true);
             e.Handled = true;
         }
         else if (e.Key == Key.End)
         {
-            SetValueInternal(Maximum, fromUser: true);
+            SetValueInternal(Maximum, true);
             e.Handled = true;
         }
     }
@@ -237,10 +237,10 @@ public sealed class Slider : RangeBase
         double t = Math.Clamp((x - left) / width, 0, 1);
         double range = Maximum - Minimum;
         double value = range <= 0 ? Minimum : Minimum + t * range;
-        SetValueInternal(value, fromUser: true);
+        SetValueInternal(value, true);
     }
 
-    private void SetValueInternal(double value, bool fromUser)
+    private void SetValueInternal(double value, bool fromInput)
     {
         double clamped = ClampToRange(value);
         if (Value.Equals(clamped))
@@ -250,7 +250,7 @@ public sealed class Slider : RangeBase
 
         Value = clamped;
 
-        if (fromUser && _valueBinding != null)
+        if (fromInput && _valueBinding != null)
         {
             _valueBinding.Set(clamped);
         }

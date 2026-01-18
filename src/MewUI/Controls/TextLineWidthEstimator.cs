@@ -121,7 +121,7 @@ internal sealed class TextLineWidthEstimator
         }
 
         Cache(documentVersion, fontKey, 0);
-        return ComputeObservedMax(context, font, documentVersion, fontKey, firstLine: 0, lastExclusive: lineCount);
+        return ComputeObservedMax(context, font, documentVersion, fontKey, 0, lineCount);
     }
 
     private void Cache(int documentVersion, FontKey fontKey, double width)

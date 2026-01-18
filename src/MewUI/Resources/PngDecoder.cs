@@ -181,7 +181,7 @@ internal sealed class PngDecoder : IImageDecoder
     private static byte[] InflateZlib(byte[] zlibData, int expectedSize)
     {
         using var ms = new MemoryStream(zlibData);
-        using var z = new ZLibStream(ms, CompressionMode.Decompress, leaveOpen: false);
+        using var z = new ZLibStream(ms, CompressionMode.Decompress, false);
         using var outMs = expectedSize > 0 ? new MemoryStream(expectedSize) : new MemoryStream();
         z.CopyTo(outMs);
         return outMs.ToArray();

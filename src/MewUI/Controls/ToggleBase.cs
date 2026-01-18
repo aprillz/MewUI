@@ -27,7 +27,7 @@ public abstract class ToggleBase : Control
                 return;
             }
 
-            SetIsCheckedCore(value, fromUser: true);
+            SetIsCheckedCore(value, true);
         }
     }
 
@@ -43,17 +43,17 @@ public abstract class ToggleBase : Control
         BorderThickness = 1;
     }
 
-    protected void SetIsCheckedFromSource(bool value) => SetIsCheckedCore(value, fromUser: false);
+    protected void SetIsCheckedFromSource(bool value) => SetIsCheckedCore(value, false);
 
     protected virtual void OnIsCheckedChanged(bool value) { }
 
-    private void SetIsCheckedCore(bool value, bool fromUser)
+    private void SetIsCheckedCore(bool value, bool fromInput)
     {
         _isChecked = value;
         OnIsCheckedChanged(value);
         CheckedChanged?.Invoke(value);
 
-        if (fromUser && !_updatingFromSource)
+        if (fromInput && !_updatingFromSource)
         {
             _checkedBinding?.Set(value);
         }
@@ -76,7 +76,7 @@ public abstract class ToggleBase : Control
             set,
             subscribe,
             unsubscribe,
-            onSourceChanged: () =>
+            () =>
             {
                 _updatingFromSource = true;
                 try { SetIsCheckedFromSource(get()); }

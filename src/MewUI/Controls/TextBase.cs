@@ -24,12 +24,12 @@ public abstract class TextBase : Control
     protected TextBase()
     {
         _editor = new TextEditorCore(
-            getLength: GetTextLengthCore,
-            getChar: GetTextCharCore,
-            getSubstring: GetTextSubstringCore,
-            applyInsert: ApplyInsertForEdit,
-            applyRemove: ApplyRemoveForEdit,
-            onEditCommitted: OnEditCommitted);
+            GetTextLengthCore,
+            GetTextCharCore,
+            GetTextSubstringCore,
+            ApplyInsertForEdit,
+            ApplyRemoveForEdit,
+            OnEditCommitted);
     }
 
     public string Text
@@ -237,7 +237,7 @@ public abstract class TextBase : Control
         double radius = theme.ControlCornerRadius;
 
         var state = GetVisualState();
-        var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
 
         DrawBackgroundAndBorder(
             context,
@@ -328,14 +328,14 @@ public abstract class TextBase : Control
             switch (e.Key)
             {
                 case Key.Home:
-                    MoveCaretToDocumentEdge(start: true, extendSelection: e.ShiftKey);
+                    MoveCaretToDocumentEdge(true, e.ShiftKey);
                     e.Handled = true;
                     EnsureCaretVisibleCore(GetInteractionContentBounds());
                     InvalidateVisual();
                     return;
 
                 case Key.End:
-                    MoveCaretToDocumentEdge(start: false, extendSelection: e.ShiftKey);
+                    MoveCaretToDocumentEdge(false, e.ShiftKey);
                     e.Handled = true;
                     EnsureCaretVisibleCore(GetInteractionContentBounds());
                     InvalidateVisual();
@@ -408,32 +408,32 @@ public abstract class TextBase : Control
         switch (e.Key)
         {
             case Key.Home:
-                MoveCaretToLineEdge(start: true, extendSelection: e.ShiftKey);
+                MoveCaretToLineEdge(true, e.ShiftKey);
                 e.Handled = true;
                 break;
 
             case Key.End:
-                MoveCaretToLineEdge(start: false, extendSelection: e.ShiftKey);
+                MoveCaretToLineEdge(false, e.ShiftKey);
                 e.Handled = true;
                 break;
 
             case Key.Left:
-                MoveCaretHorizontalKey(-1, extendSelection: e.ShiftKey, word: e.ControlKey);
+                MoveCaretHorizontalKey(-1, e.ShiftKey, e.ControlKey);
                 e.Handled = true;
                 break;
 
             case Key.Right:
-                MoveCaretHorizontalKey(1, extendSelection: e.ShiftKey, word: e.ControlKey);
+                MoveCaretHorizontalKey(1, e.ShiftKey, e.ControlKey);
                 e.Handled = true;
                 break;
 
             case Key.Up:
-                MoveCaretVerticalKey(-1, extendSelection: e.ShiftKey);
+                MoveCaretVerticalKey(-1, e.ShiftKey);
                 e.Handled = true;
                 break;
 
             case Key.Down:
-                MoveCaretVerticalKey(1, extendSelection: e.ShiftKey);
+                MoveCaretVerticalKey(1, e.ShiftKey);
                 e.Handled = true;
                 break;
 
@@ -601,7 +601,7 @@ public abstract class TextBase : Control
             set,
             subscribe,
             unsubscribe,
-            onSourceChanged: () =>
+            () =>
             {
                 if (IsFocused)
                 {

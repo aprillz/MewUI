@@ -131,10 +131,10 @@ public class Label : Control
         _textBinding?.Dispose();
         _textBinding = new ValueBinding<string>(
             get,
-            set: null,
+            null,
             subscribe,
             unsubscribe,
-            onSourceChanged: () => SetTextFromBinding(get()));
+            () => SetTextFromBinding(get()));
 
         SetTextFromBinding(get());
     }

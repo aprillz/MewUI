@@ -25,10 +25,10 @@ public sealed class ProgressBar : RangeBase
         _valueBinding?.Dispose();
         _valueBinding = new ValueBinding<double>(
             get,
-            set: null,
+            null,
             subscribe,
             unsubscribe,
-            onSourceChanged: () => Value = get());
+            () => Value = get());
 
         Value = get();
     }

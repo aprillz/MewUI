@@ -90,7 +90,7 @@ public sealed class WritableBitmap : IImageSource, INotifyImageChanged, IPixelBu
             throw new ObjectDisposedException(nameof(WritableBitmap));
         }
 
-        return new WritableBitmapLock(this, markDirtyOnDispose: true);
+        return new WritableBitmapLock(this, true);
     }
 
     public void WritePixels(int x, int y, int width, int height, ReadOnlySpan<byte> srcBgra, int srcStrideBytes)
@@ -178,7 +178,7 @@ public sealed class WritableBitmap : IImageSource, INotifyImageChanged, IPixelBu
         }
 
         int v = _version;
-        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, v, release: () => Monitor.Exit(_lock));
+        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, v, () => Monitor.Exit(_lock));
     }
 
     internal Span<byte> GetPixelsMutableNoLock() => _bgra;

@@ -40,7 +40,7 @@ internal sealed class TabHeaderButton : ContentControl
         var theme = GetTheme();
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = Math.Max(0, theme.ControlCornerRadius);
-        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
+        var state = GetVisualState(_isPressed, _isPressed);
 
         var host = Parent?.Parent as TabControl;
         var tabBg = host?.GetTabBackground(theme, IsSelected) ?? (IsSelected ? theme.Palette.ControlBackground : theme.Palette.ButtonFace);

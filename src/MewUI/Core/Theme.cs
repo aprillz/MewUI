@@ -90,19 +90,19 @@ public record class Theme
         ArgumentNullException.ThrowIfNull(palette);
 
         return new Theme(
-            name: Name,
-            palette: palette,
-            baseControlHeight: BaseControlHeight,
-            controlCornerRadius: ControlCornerRadius,
-            fontFamily: FontFamily,
-            fontSize: FontSize,
-            fontWeight: FontWeight,
-            scrollBarThickness: ScrollBarThickness,
-            scrollBarHitThickness: ScrollBarHitThickness,
-            scrollBarMinThumbLength: ScrollBarMinThumbLength,
-            scrollWheelStep: ScrollWheelStep,
-            scrollBarSmallChange: ScrollBarSmallChange,
-            scrollBarLargeChange: ScrollBarLargeChange);
+            Name,
+            palette,
+            BaseControlHeight,
+            ControlCornerRadius,
+            FontFamily,
+            FontSize,
+            FontWeight,
+            ScrollBarThickness,
+            ScrollBarHitThickness,
+            ScrollBarMinThumbLength,
+            ScrollWheelStep,
+            ScrollBarSmallChange,
+            ScrollBarLargeChange);
     }
 
     private static Theme CreateLight()

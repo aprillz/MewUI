@@ -308,7 +308,7 @@ public abstract class UIElement : Element
             return;
         }
 
-        _bindings ??= new List<IDisposable>(capacity: 2);
+        _bindings ??= new List<IDisposable>(2);
         _bindings.Add(binding);
     }
 
@@ -394,10 +394,10 @@ public abstract class UIElement : Element
         _isVisibleBinding?.Dispose();
         _isVisibleBinding = new ValueBinding<bool>(
             get,
-            set: null,
+            null,
             subscribe,
             unsubscribe,
-            onSourceChanged: () => IsVisible = get());
+            () => IsVisible = get());
 
         IsVisible = get();
     }
@@ -409,10 +409,10 @@ public abstract class UIElement : Element
         _isEnabledBinding?.Dispose();
         _isEnabledBinding = new ValueBinding<bool>(
             get,
-            set: null,
+            null,
             subscribe,
             unsubscribe,
-            onSourceChanged: () => IsEnabled = get());
+            () => IsEnabled = get());
 
         IsEnabled = get();
     }

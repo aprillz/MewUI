@@ -80,11 +80,11 @@ public class Button : Control
         var theme = GetTheme();
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = theme.ControlCornerRadius;
-        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
+        var state = GetVisualState(_isPressed, _isPressed);
 
         // Determine visual state
         Color bgColor;
-        Color borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
+        Color borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
 
         if (!state.IsEnabled)
         {
@@ -213,10 +213,10 @@ public class Button : Control
         _contentBinding?.Dispose();
         _contentBinding = new ValueBinding<string>(
             get,
-            set: null,
+            null,
             subscribe,
             unsubscribe,
-            onSourceChanged: () => Content = get() ?? string.Empty);
+            () => Content = get() ?? string.Empty);
 
         Content = get() ?? string.Empty;
     }

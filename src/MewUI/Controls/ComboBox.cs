@@ -88,6 +88,7 @@ public sealed class ComboBox : Control, IPopupOwner
     public override bool Focusable => true;
 
     protected override Color DefaultBackground => Theme.Current.Palette.ControlBackground;
+
     protected override Color DefaultBorderBrush => Theme.Current.Palette.ControlBorder;
 
     public ComboBox()
@@ -192,7 +193,7 @@ public sealed class ComboBox : Control, IPopupOwner
         }
 
         // Arrow
-        DrawArrow(context, headerRect, IsEnabled ? textColor : theme.Palette.DisabledText, isUp: IsDropDownOpen);
+        DrawArrow(context, headerRect, IsEnabled ? textColor : theme.Palette.DisabledText, IsDropDownOpen);
 
         if (IsDropDownOpen)
         {
@@ -340,7 +341,7 @@ public sealed class ComboBox : Control, IPopupOwner
             set,
             subscribe,
             unsubscribe,
-            onSourceChanged: () =>
+            () =>
             {
                 _updatingFromSource = true;
                 try { SelectedIndex = get(); }
@@ -386,9 +387,6 @@ public sealed class ComboBox : Control, IPopupOwner
         var min = MinHeight > 0 ? MinHeight : 0;
         return Math.Max(Math.Max(24, FontSize + Padding.VerticalThickness + 8), min);
     }
-
-    private void DrawArrow(IGraphicsContext context, Rect headerRect, Color color)
-        => DrawArrow(context, headerRect, color, isUp: false);
 
     private void DrawArrow(IGraphicsContext context, Rect headerRect, Color color, bool isUp)
     {

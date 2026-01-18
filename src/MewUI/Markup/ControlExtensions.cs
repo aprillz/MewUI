@@ -70,9 +70,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         element.SetIsVisibleBinding(
-            get: () => source.Value,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return element;
     }
 
@@ -82,9 +82,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         element.SetIsEnabledBinding(
-            get: () => source.Value,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return element;
     }
 
@@ -218,9 +218,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         label.SetTextBinding(
-            get: () => source.Value,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return label;
     }
 
@@ -231,9 +231,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(convert);
 
         label.SetTextBinding(
-            get: () => convert(source.Value) ?? string.Empty,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => convert(source.Value) ?? string.Empty,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return label;
     }
 
@@ -268,9 +268,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         button.SetContentBinding(
-            get: () => source.Value,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return button;
     }
 
@@ -280,9 +280,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         button.SetContentBinding(
-            get: () => convert(source.Value) ?? string.Empty,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => convert(source.Value) ?? string.Empty,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return button;
     }
 
@@ -326,10 +326,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         textBox.SetTextBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return textBox;
     }
 
@@ -361,10 +361,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         checkBox.SetIsCheckedBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return checkBox;
     }
 
@@ -402,10 +402,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         radioButton.SetIsCheckedBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return radioButton;
     }
 
@@ -454,10 +454,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         listBox.SetSelectedIndexBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return listBox;
     }
 
@@ -513,10 +513,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         textBox.SetTextBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return textBox;
     }
 
@@ -559,10 +559,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         comboBox.SetSelectedIndexBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return comboBox;
     }
 
@@ -668,9 +668,9 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         progressBar.SetValueBinding(
-            get: () => source.Value,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return progressBar;
     }
 
@@ -714,10 +714,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         slider.SetValueBinding(
-            get: () => source.Value,
-            set: v => source.Value = v,
-            subscribe: h => source.Changed += h,
-            unsubscribe: h => source.Changed -= h);
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
         return slider;
     }
 

@@ -28,7 +28,7 @@ public enum MessageBoxResult
 public static class MessageBox
 {
     public static MessageBoxResult Show(string text, string caption = "Aprillz.MewUI", MessageBoxButtons buttons = MessageBoxButtons.Ok, MessageBoxIcon icon = MessageBoxIcon.None)
-        => Show(owner: 0, text, caption, buttons, icon);
+        => Show(0, text, caption, buttons, icon);
 
     public static MessageBoxResult Show(nint owner, string text, string caption = "Aprillz.MewUI", MessageBoxButtons buttons = MessageBoxButtons.Ok, MessageBoxIcon icon = MessageBoxIcon.None)
     {

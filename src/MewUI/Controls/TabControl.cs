@@ -297,7 +297,7 @@ public sealed class TabControl : Control
 
         // Outline: focus color should wrap selected header + content.
         var outline = GetOutlineColor(theme);
-        DrawContentOutline(context, contentRect, outline, thickness: Math.Max(1, borderInset));
+        DrawContentOutline(context, contentRect, outline, Math.Max(1, borderInset));
         //context.DrawRectangle(contentRect, outline, borderInset);
     }
 

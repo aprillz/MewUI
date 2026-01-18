@@ -97,22 +97,22 @@ public class TextBox : TextBase
             contentBounds,
             font,
             theme,
-            isEnabled: state.IsEnabled,
-            isFocused: state.IsFocused,
-            isReadOnly: IsReadOnly,
-            foreground: Foreground,
-            horizontalOffset: HorizontalOffset,
-            fontFamily: FontFamily,
-            fontSize: FontSize,
-            fontWeight: FontWeight,
-            dpi: GetDpi(),
-            documentVersion: DocumentVersion,
-            caretPosition: CaretPosition,
-            hasSelection: HasSelection,
-            selectionStart: selStart,
-            selectionEnd: selEnd,
-            textLength: Document.Length,
-            copyTextTo: (buffer, start, length) => Document.CopyTo(buffer, start, length));
+            state.IsEnabled,
+            state.IsFocused,
+            IsReadOnly,
+            Foreground,
+            HorizontalOffset,
+            FontFamily,
+            FontSize,
+            FontWeight,
+            GetDpi(),
+            DocumentVersion,
+            CaretPosition,
+            HasSelection,
+            selStart,
+            selEnd,
+            Document.Length,
+            (buffer, start, length) => Document.CopyTo(buffer, start, length));
     }
 
     protected override void SetCaretFromPoint(Point point, Rect contentBounds)
@@ -128,11 +128,11 @@ public class TextBox : TextBase
         const double edgeDip = 8;
         if (point.X < contentBounds.X + edgeDip)
         {
-            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.X + edgeDip), invalidateVisual: false);
+            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.X + edgeDip), false);
         }
         else if (point.X > contentBounds.Right - edgeDip)
         {
-            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.Right - edgeDip), invalidateVisual: false);
+            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.Right - edgeDip), false);
         }
 
         ClampScrollOffset();
@@ -147,13 +147,13 @@ public class TextBox : TextBase
             x,
             measure.Context,
             measure.Font,
-            fontFamily: FontFamily,
-            fontSize: FontSize,
-            fontWeight: FontWeight,
-            dpi: GetDpi(),
-            documentVersion: DocumentVersion,
-            textLength: Document.Length,
-            copyTextTo: (buffer, start, length) => Document.CopyTo(buffer, start, length));
+            FontFamily,
+            FontSize,
+            FontWeight,
+            GetDpi(),
+            DocumentVersion,
+            Document.Length,
+            (buffer, start, length) => Document.CopyTo(buffer, start, length));
     }
 
     private void EnsureCaretVisible(Rect contentBounds)
@@ -162,18 +162,18 @@ public class TextBox : TextBase
         double newOffset = _view.EnsureCaretVisible(
             measure.Context,
             measure.Font,
-            fontFamily: FontFamily,
-            fontSize: FontSize,
-            fontWeight: FontWeight,
-            dpi: GetDpi(),
-            documentVersion: DocumentVersion,
-            textLength: Document.Length,
-            caretPosition: CaretPosition,
-            horizontalOffset: HorizontalOffset,
-            viewportWidthDip: contentBounds.Width,
-            endGutterDip: Padding.Right,
-            copyTextTo: (buffer, start, length) => Document.CopyTo(buffer, start, length));
-        SetHorizontalOffset(newOffset, invalidateVisual: false);
+            FontFamily,
+            FontSize,
+            FontWeight,
+            GetDpi(),
+            DocumentVersion,
+            Document.Length,
+            CaretPosition,
+            HorizontalOffset,
+            contentBounds.Width,
+            Padding.Right,
+            (buffer, start, length) => Document.CopyTo(buffer, start, length));
+        SetHorizontalOffset(newOffset, false);
     }
 
     private void ClampScrollOffset(IGraphicsContext context, IFont font, double viewportWidthDip)
@@ -181,17 +181,17 @@ public class TextBox : TextBase
         double newOffset = _view.ClampScrollOffset(
             context,
             font,
-            fontFamily: FontFamily,
-            fontSize: FontSize,
-            fontWeight: FontWeight,
-            dpi: GetDpi(),
-            documentVersion: DocumentVersion,
-            textLength: Document.Length,
-            horizontalOffset: HorizontalOffset,
-            viewportWidthDip: viewportWidthDip,
-            endGutterDip: Padding.Right,
-            copyTextTo: (buffer, start, length) => Document.CopyTo(buffer, start, length));
-        SetHorizontalOffset(newOffset, invalidateVisual: false);
+            FontFamily,
+            FontSize,
+            FontWeight,
+            GetDpi(),
+            DocumentVersion,
+            Document.Length,
+            HorizontalOffset,
+            viewportWidthDip,
+            Padding.Right,
+            (buffer, start, length) => Document.CopyTo(buffer, start, length));
+        SetHorizontalOffset(newOffset, false);
     }
 
     private void ClampScrollOffset()

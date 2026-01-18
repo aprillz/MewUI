@@ -40,13 +40,13 @@ public sealed class MultiLineTextBox : TextBase
         AcceptReturn = true;
 
         _textView = new MultiLineTextView(
-            getDocumentVersion: () => DocumentVersion,
-            getLineCount: () => _lineStarts.Count,
-            getSubstring: GetTextSubstringCore,
-            getFontFamily: () => FontFamily,
-            getFontSize: () => FontSize,
-            getFontWeight: () => FontWeight,
-            getDpi: GetDpi);
+            () => DocumentVersion,
+            () => _lineStarts.Count,
+            GetTextSubstringCore,
+            () => FontFamily,
+            () => FontSize,
+            () => FontWeight,
+            GetDpi);
 
         _wrapVirtualizer = new TextWrapVirtualizer(
             GetLineSpan,
@@ -87,20 +87,20 @@ public sealed class MultiLineTextBox : TextBase
         const double edgeDip = 10;
         if (point.Y < contentBounds.Y + edgeDip)
         {
-            SetVerticalOffset(VerticalOffset + point.Y - (contentBounds.Y + edgeDip), invalidateVisual: false);
+            SetVerticalOffset(VerticalOffset + point.Y - (contentBounds.Y + edgeDip), false);
         }
         else if (point.Y > contentBounds.Bottom - edgeDip)
         {
-            SetVerticalOffset(VerticalOffset + point.Y - (contentBounds.Bottom - edgeDip), invalidateVisual: false);
+            SetVerticalOffset(VerticalOffset + point.Y - (contentBounds.Bottom - edgeDip), false);
         }
 
         if (point.X < contentBounds.X + edgeDip)
         {
-            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.X + edgeDip), invalidateVisual: false);
+            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.X + edgeDip), false);
         }
         else if (point.X > contentBounds.Right - edgeDip)
         {
-            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.Right - edgeDip), invalidateVisual: false);
+            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.Right - edgeDip), false);
         }
 
         ClampOffsets(contentBounds);
@@ -252,8 +252,8 @@ public sealed class MultiLineTextBox : TextBase
         _vBar.IsVisible = needV;
         _hBar.IsVisible = needH;
 
-        SetVerticalOffset(ClampOffset(VerticalOffset, finalExtentH, finalViewportH, dpiScale), invalidateVisual: false);
-        SetHorizontalOffset(needH ? ClampOffset(HorizontalOffset, finalExtentW, finalViewportW, dpiScale) : 0, invalidateVisual: false);
+        SetVerticalOffset(ClampOffset(VerticalOffset, finalExtentH, finalViewportH, dpiScale), false);
+        SetHorizontalOffset(needH ? ClampOffset(HorizontalOffset, finalExtentW, finalViewportW, dpiScale) : 0, false);
 
         if (needV)
         {
@@ -364,7 +364,7 @@ public sealed class MultiLineTextBox : TextBase
         double viewportH = viewportBounds.Height;
         double viewportW = viewportBounds.Width;
         var dpiScale = GetDpi() / 96.0;
-        SetVerticalOffset(ClampOffset(VerticalOffset - notches * GetTheme().ScrollWheelStep, GetExtentHeight(viewportW), viewportH, dpiScale), invalidateVisual: false);
+        SetVerticalOffset(ClampOffset(VerticalOffset - notches * GetTheme().ScrollWheelStep, GetExtentHeight(viewportW), viewportH, dpiScale), false);
         _vBar.Value = VerticalOffset;
         InvalidateVisual();
         e.Handled = true;
@@ -625,28 +625,28 @@ public sealed class MultiLineTextBox : TextBase
 
         if (caretY < VerticalOffset)
         {
-            SetVerticalOffset(caretY, invalidateVisual: false);
+            SetVerticalOffset(caretY, false);
         }
         else if (caretY + lineHeight > VerticalOffset + viewportH)
         {
-            SetVerticalOffset(caretY + lineHeight - viewportH, invalidateVisual: false);
+            SetVerticalOffset(caretY + lineHeight - viewportH, false);
         }
 
         if (!WrapEnabled)
         {
             if (caretX < HorizontalOffset)
             {
-                SetHorizontalOffset(caretX, invalidateVisual: false);
+                SetHorizontalOffset(caretX, false);
             }
             else if (caretX > HorizontalOffset + viewportW)
             {
-                SetHorizontalOffset(caretX - viewportW, invalidateVisual: false);
+                SetHorizontalOffset(caretX - viewportW, false);
             }
         }
 
         var dpiScale = GetDpi() / 96.0;
-        SetVerticalOffset(ClampOffset(VerticalOffset, extentH, viewportH, dpiScale), invalidateVisual: false);
-        SetHorizontalOffset((_hBar.IsVisible && !WrapEnabled) ? ClampOffset(HorizontalOffset, extentW, viewportW, dpiScale) : 0, invalidateVisual: false);
+        SetVerticalOffset(ClampOffset(VerticalOffset, extentH, viewportH, dpiScale), false);
+        SetHorizontalOffset((_hBar.IsVisible && !WrapEnabled) ? ClampOffset(HorizontalOffset, extentW, viewportW, dpiScale) : 0, false);
 
         if (_vBar.IsVisible)
         {
@@ -663,16 +663,16 @@ public sealed class MultiLineTextBox : TextBase
     {
         var dpiScale = GetDpi() / 96.0;
         double wrapWidth = Math.Max(1, contentBounds.Width);
-        SetVerticalOffset(ClampOffset(VerticalOffset, GetExtentHeight(wrapWidth), Math.Max(1, contentBounds.Height), dpiScale), invalidateVisual: false);
+        SetVerticalOffset(ClampOffset(VerticalOffset, GetExtentHeight(wrapWidth), Math.Max(1, contentBounds.Height), dpiScale), false);
         if (!_hBar.IsVisible || WrapEnabled)
         {
-            SetHorizontalOffset(0, invalidateVisual: false);
+            SetHorizontalOffset(0, false);
         }
         else
         {
             using var measure = BeginTextMeasurement();
             double extentW = GetExtentWidthForViewport(measure.Context, measure.Font, Math.Max(1, contentBounds.Height));
-            SetHorizontalOffset(ClampOffset(HorizontalOffset, extentW, Math.Max(1, contentBounds.Width), dpiScale), invalidateVisual: false);
+            SetHorizontalOffset(ClampOffset(HorizontalOffset, extentW, Math.Max(1, contentBounds.Width), dpiScale), false);
         }
         if (_vBar.IsVisible)
         {
@@ -1117,17 +1117,17 @@ public sealed class MultiLineTextBox : TextBase
             var layout = _wrapVirtualizer.GetWrapLayout(line, fullLine, wrapWidth, measure.Context, measure.Font);
             int rowInLine = TextWrapVirtualizer.GetWrapRowFromColumn(layout, col);
             int rowStart = _wrapVirtualizer.GetVisualRowStartForLine(line, wrapWidth, measure.Context, measure.Font);
-            SetVerticalOffset((rowStart + rowInLine) * lineHeight + _pendingViewAnchorYOffset, invalidateVisual: false);
-            SetHorizontalOffset(0, invalidateVisual: false);
+            SetVerticalOffset((rowStart + rowInLine) * lineHeight + _pendingViewAnchorYOffset, false);
+            SetHorizontalOffset(0, false);
         }
         else
         {
-            SetVerticalOffset(line * lineHeight + _pendingViewAnchorYOffset, invalidateVisual: false);
+            SetVerticalOffset(line * lineHeight + _pendingViewAnchorYOffset, false);
 
             var lineMeasure = _textView.EnsureLineMeasureCache(line, lineStart, lineEnd, measure.Context, measure.Font);
             col = Math.Clamp(col, 0, lineMeasure.Text.Length);
             double colWidth = col <= 0 ? 0 : MultiLineTextView.GetPrefixWidthCached(lineMeasure, col, measure.Context, measure.Font);
-            SetHorizontalOffset(Math.Max(0, colWidth + _pendingViewAnchorXOffset), invalidateVisual: false);
+            SetHorizontalOffset(Math.Max(0, colWidth + _pendingViewAnchorXOffset), false);
         }
 
         _pendingViewAnchorIndex = -1;
@@ -1136,10 +1136,10 @@ public sealed class MultiLineTextBox : TextBase
 
         var dpiScale = GetDpi() / 96.0;
         double extentH = GetExtentHeight(wrapWidth);
-        SetVerticalOffset(ClampOffset(VerticalOffset, extentH, viewportH, dpiScale), invalidateVisual: false);
+        SetVerticalOffset(ClampOffset(VerticalOffset, extentH, viewportH, dpiScale), false);
 
         double extentW = (!_hBar.IsVisible || WrapEnabled) ? 0 : GetExtentWidthForViewport(measure.Context, measure.Font, viewportH);
-        SetHorizontalOffset((_hBar.IsVisible && !WrapEnabled) ? ClampOffset(HorizontalOffset, extentW, viewportW, dpiScale) : 0, invalidateVisual: false);
+        SetHorizontalOffset((_hBar.IsVisible && !WrapEnabled) ? ClampOffset(HorizontalOffset, extentW, viewportW, dpiScale) : 0, false);
 
         if (_vBar.IsVisible)
         {

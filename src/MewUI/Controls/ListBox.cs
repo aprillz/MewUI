@@ -73,8 +73,8 @@ public class ListBox : Control
         _vBar.ValueChanged += v =>
         {
             _scroll.DpiScale = GetDpi() / 96.0;
-            _scroll.SetMetricsDip(axis: 1, extentDip: _extentHeight, viewportDip: GetViewportHeightDip());
-            _scroll.SetOffsetDip(axis: 1, v);
+            _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
+            _scroll.SetOffsetDip(1, v);
             InvalidateVisual();
         };
     }
@@ -174,7 +174,7 @@ public class ListBox : Control
                 dpiScale);
 
         _scroll.DpiScale = dpiScale;
-        _scroll.SetMetricsDip(axis: 1, extentDip: _extentHeight, viewportDip: _viewportHeight);
+        _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
 
         // Vertical scrollbar is overlay in ListBox (it does not consume horizontal space).
         bool needV = _extentHeight > _viewportHeight + 0.5;
@@ -200,8 +200,8 @@ public class ListBox : Control
         var dpiScale = GetDpi() / 96.0;
         _viewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Height - Padding.VerticalThickness), dpiScale);
         _scroll.DpiScale = dpiScale;
-        _scroll.SetMetricsDip(axis: 1, extentDip: _extentHeight, viewportDip: _viewportHeight);
-        _scroll.SetOffsetPx(axis: 1, _scroll.GetOffsetPx(axis: 1));
+        _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
+        _scroll.SetOffsetPx(1, _scroll.GetOffsetPx(1));
 
         bool needV = _extentHeight > _viewportHeight + 0.5;
         _vBar.IsVisible = needV;
@@ -216,7 +216,7 @@ public class ListBox : Control
             _vBar.ViewportSize = _viewportHeight;
             _vBar.SmallChange = theme.ScrollBarSmallChange;
             _vBar.LargeChange = theme.ScrollBarLargeChange;
-            _vBar.Value = _scroll.GetOffsetDip(axis: 1);
+            _vBar.Value = _scroll.GetOffsetDip(1);
 
             _vBar.Arrange(new Rect(
                 innerBounds.Right - t - inset,
@@ -271,7 +271,7 @@ public class ListBox : Control
 
         var font = GetFont();
         double itemHeight = ResolveItemHeight();
-        double verticalOffset = _scroll.GetOffsetDip(axis: 1);
+        double verticalOffset = _scroll.GetOffsetDip(1);
 
         // Even when "virtualization" is disabled, only paint the visible range.
         // (Clipping makes off-screen work pure overhead for large item counts.)
@@ -347,7 +347,7 @@ public class ListBox : Control
 
         var contentBounds = LayoutRounding.SnapRectEdgesToPixels(viewportBounds.Deflate(Padding), dpiScale);
 
-        int index = (int)((e.Position.Y - contentBounds.Y + _scroll.GetOffsetDip(axis: 1)) / ResolveItemHeight());
+        int index = (int)((e.Position.Y - contentBounds.Y + _scroll.GetOffsetDip(1)) / ResolveItemHeight());
         if (index >= 0 && index < _items.Count)
         {
             SelectedIndex = index;
@@ -371,9 +371,9 @@ public class ListBox : Control
         }
 
         _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(axis: 1, extentDip: _extentHeight, viewportDip: GetViewportHeightDip());
-        _scroll.ScrollByNotches(axis: 1, notches: -notches, stepDip: GetTheme().ScrollWheelStep);
-        _vBar.Value = _scroll.GetOffsetDip(axis: 1);
+        _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
+        _scroll.ScrollByNotches(1, -notches, GetTheme().ScrollWheelStep);
+        _vBar.Value = _scroll.GetOffsetDip(1);
         InvalidateVisual();
         e.Handled = true;
     }
@@ -432,7 +432,7 @@ public class ListBox : Control
         double itemTop = index * itemHeight;
         double itemBottom = itemTop + itemHeight;
 
-        double oldOffset = _scroll.GetOffsetDip(axis: 1);
+        double oldOffset = _scroll.GetOffsetDip(1);
         double newOffset = oldOffset;
         if (itemTop < newOffset)
         {
@@ -444,9 +444,9 @@ public class ListBox : Control
         }
 
         _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(axis: 1, extentDip: _extentHeight, viewportDip: viewport);
-        _scroll.SetOffsetDip(axis: 1, newOffset);
-        double applied = _scroll.GetOffsetDip(axis: 1);
+        _scroll.SetMetricsDip(1, _extentHeight, viewport);
+        _scroll.SetOffsetDip(1, newOffset);
+        double applied = _scroll.GetOffsetDip(1);
         if (applied.Equals(oldOffset))
         {
             return;
@@ -514,7 +514,7 @@ public class ListBox : Control
             set,
             subscribe,
             unsubscribe,
-            onSourceChanged: () =>
+            () =>
             {
                 _updatingFromSource = true;
                 try { SelectedIndex = get(); }

@@ -202,7 +202,7 @@ internal sealed class TextEditorCore
         string deleted = _getSubstring(deleteFrom, deleteLen);
         _applyRemove(deleteFrom, deleteLen);
         RecordEdit(new Edit(EditKind.Delete, deleteFrom, deleted));
-        SetCaretAndSelection(deleteFrom, extendSelection: false);
+        SetCaretAndSelection(deleteFrom, false);
         _onEditCommitted();
     }
 
@@ -231,7 +231,7 @@ internal sealed class TextEditorCore
         string deleted = _getSubstring(CaretPosition, deleteLen);
         _applyRemove(CaretPosition, deleteLen);
         RecordEdit(new Edit(EditKind.Delete, CaretPosition, deleted));
-        SetCaretAndSelection(CaretPosition, extendSelection: false);
+        SetCaretAndSelection(CaretPosition, false);
         _onEditCommitted();
     }
 
@@ -329,12 +329,12 @@ internal sealed class TextEditorCore
         if (edit.Kind == EditKind.Insert)
         {
             _applyRemove(edit.Index, edit.Text.Length);
-            SetCaretAndSelection(edit.Index, extendSelection: false);
+            SetCaretAndSelection(edit.Index, false);
         }
         else
         {
             _applyInsert(edit.Index, edit.Text);
-            SetCaretAndSelection(edit.Index + edit.Text.Length, extendSelection: false);
+            SetCaretAndSelection(edit.Index + edit.Text.Length, false);
         }
 
         _selectionStart = CaretPosition;
@@ -347,12 +347,12 @@ internal sealed class TextEditorCore
         if (edit.Kind == EditKind.Insert)
         {
             _applyInsert(edit.Index, edit.Text);
-            SetCaretAndSelection(edit.Index + edit.Text.Length, extendSelection: false);
+            SetCaretAndSelection(edit.Index + edit.Text.Length, false);
         }
         else
         {
             _applyRemove(edit.Index, edit.Text.Length);
-            SetCaretAndSelection(edit.Index, extendSelection: false);
+            SetCaretAndSelection(edit.Index, false);
         }
 
         _selectionStart = CaretPosition;

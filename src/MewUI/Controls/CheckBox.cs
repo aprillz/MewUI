@@ -36,7 +36,7 @@ public class CheckBox : ToggleBase
         var theme = GetTheme();
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
-        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
+        var state = GetVisualState(_isPressed, _isPressed);
 
         const double boxSize = 14;
         const double spacing = 6;
@@ -47,7 +47,7 @@ public class CheckBox : ToggleBase
         var fill = state.IsEnabled ? theme.Palette.ControlBackground : theme.Palette.DisabledControlBackground;
         var radius = Math.Max(0, theme.ControlCornerRadius * 0.5);
 
-        var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
         var stroke = Math.Max(1, BorderThickness);
         DrawBackgroundAndBorder(context, boxRect, fill, borderColor, radius);
 

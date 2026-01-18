@@ -308,7 +308,7 @@ public abstract class Control : FrameworkElement, IDisposable
         var outer = bounds.Inflate(expandDip, expandDip);
         var dpiScale = GetDpi() / 96.0;
         var radius = radiusDip <= 0 ? 0 : LayoutRounding.RoundToPixel(radiusDip + expandDip, dpiScale);
-        var stroke = thicknessDip <= 0 ? 1 : LayoutRounding.SnapThicknessToPixels(thicknessDip, dpiScale, minPixels: 1) + 2;
+        var stroke = thicknessDip <= 0 ? 1 : LayoutRounding.SnapThicknessToPixels(thicknessDip, dpiScale, 1) + 2;
         outer = GetSnappedBorderBounds(outer);
         if (radius > 0)
         {
@@ -353,7 +353,7 @@ public abstract class Control : FrameworkElement, IDisposable
 
         var dpiScale = GetDpi() / 96.0;
         // Treat borders as an "inside" inset and snap thickness to whole device pixels.
-        return LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, minPixels: 1);
+        return LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale,  1);
     }
 
     protected Rect GetSnappedBorderBounds(Rect bounds)
@@ -370,7 +370,7 @@ public abstract class Control : FrameworkElement, IDisposable
         double cornerRadiusDip)
     {
         var dpiScale = GetDpi() / 96.0;
-        var borderThickness = BorderThickness <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, minPixels: 1);
+        var borderThickness = BorderThickness <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, 1);
         var radius = cornerRadiusDip <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadiusDip, dpiScale);
 
         bounds = GetSnappedBorderBounds(bounds);
@@ -440,7 +440,7 @@ public abstract class Control : FrameworkElement, IDisposable
             Bounds,
             Background,
             BorderBrush,
-            cornerRadiusDip: 0);
+            0);
     }
 
     protected virtual void OnDispose() { }

@@ -31,12 +31,12 @@ public abstract class RangeBase : Control
     public double Value
     {
         get => _value;
-        set => SetValueCore(value, fromUser: true);
+        set => SetValueCore(value, true);
     }
 
     public event Action<double>? ValueChanged;
 
-    protected void SetValueFromSource(double value) => SetValueCore(value, fromUser: false);
+    protected void SetValueFromSource(double value) => SetValueCore(value, false);
 
     protected virtual void OnValueChanged(double value, bool fromUser) { }
 
@@ -84,7 +84,7 @@ public abstract class RangeBase : Control
         }
 
         _value = clamped;
-        OnValueChanged(_value, fromUser: false);
+        OnValueChanged(_value, false);
         ValueChanged?.Invoke(_value);
     }
 

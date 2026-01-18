@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform;
+using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
@@ -13,6 +14,10 @@ namespace Aprillz.MewUI;
 public class Window : ContentControl
     , ILayoutRoundingHost
 {
+    private readonly DispatcherMergeKey _layoutMergeKey = new(UiDispatcherPriority.Layout);
+    private readonly DispatcherMergeKey _renderMergeKey = new(UiDispatcherPriority.Render);
+    private bool _paintPending;
+
     private Theme _theme = Theme.Current;
     private IWindowBackend? _backend;
     private Size _clientSizeDip = Size.Empty;
@@ -171,6 +176,16 @@ public class Window : ContentControl
             _backend?.SetTitle(field);
         }
     } = "Window";
+
+    public IconSource? Icon
+    {
+        get;
+        set
+        {
+            field = value;
+            _backend?.SetIcon(field);
+        }
+    }
 
     public new double Width
     {
@@ -378,9 +393,61 @@ public class Window : ContentControl
         return dirty;
     }
 
-    public void Invalidate() => _backend?.Invalidate(erase: true);
+    public void Invalidate() => RequestRender();
 
-    public override void InvalidateVisual() => Invalidate();
+    public override void InvalidateVisual() => RequestRender();
+
+    private void InvalidateBackend()
+    {
+        if (_backend == null || _paintPending)
+        {
+            return;
+        }
+
+        _paintPending = true;
+        _backend.Invalidate(true);
+    }
+
+    public override void InvalidateMeasure()
+    {
+        base.InvalidateMeasure();
+        RequestLayout();
+    }
+
+    public override void InvalidateArrange()
+    {
+        base.InvalidateArrange();
+        RequestLayout();
+    }
+
+    private void RequestLayout()
+    {
+        var dispatcher = ApplicationDispatcher;
+        if (dispatcher == null)
+        {
+            // Fallback: we have no UI dispatcher yet; rely on immediate invalidation.
+            InvalidateBackend();
+            return;
+        }
+
+        dispatcher.PostMerged(_layoutMergeKey, () =>
+        {
+            PerformLayout();
+            RequestRender();
+        }, UiDispatcherPriority.Layout);
+    }
+
+    private void RequestRender()
+    {
+        var dispatcher = ApplicationDispatcher;
+        if (dispatcher == null)
+        {
+            InvalidateBackend();
+            return;
+        }
+
+        dispatcher.PostMerged(_renderMergeKey, InvalidateBackend, UiDispatcherPriority.Render);
+    }
 
     internal bool SetFocusedElement(UIElement element) => FocusManager.SetFocus(element);
 
@@ -408,7 +475,13 @@ public class Window : ContentControl
 
     public void ReleaseMouseCapture() => _backend?.ReleaseMouseCapture();
 
-    internal void AttachBackend(IWindowBackend backend) => _backend = backend;
+    internal void AttachBackend(IWindowBackend backend)
+    {
+        _backend = backend;
+        _backend.SetTitle(Title);
+        _backend.SetResizable(WindowSize.IsResizable);
+        _backend.SetIcon(Icon);
+    }
 
     internal void SetDpi(uint dpi) => Dpi = dpi;
 
@@ -446,6 +519,8 @@ public class Window : ContentControl
 
     internal void RenderFrame(nint hdc)
     {
+        _paintPending = false;
+
         // Some platforms can render before Loaded is raised due to Run/Show/Dispatcher ordering.
         // Ensure Loaded is raised as soon as the dispatcher is available, and always before FirstFrameRendered.
         if (!_loadedRaised && Application.IsRunning && Application.Current.Dispatcher != null)

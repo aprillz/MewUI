@@ -151,7 +151,7 @@ public class RadioButton : ToggleBase
         var theme = GetTheme();
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
-        var state = GetVisualState(isPressed: _isPressed, isActive: _isPressed);
+        var state = GetVisualState(_isPressed, _isPressed);
 
         const double boxSize = 14;
         const double spacing = 6;
@@ -162,7 +162,7 @@ public class RadioButton : ToggleBase
         var fill = state.IsEnabled ? theme.Palette.ControlBackground : theme.Palette.DisabledControlBackground;
         context.FillEllipse(circleRect, fill);
 
-        var borderColor = PickAccentBorder(theme, BorderBrush, state, hoverMix: 0.6);
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
         context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness));
 
         if (IsChecked)
