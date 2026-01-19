@@ -37,6 +37,8 @@ public record class Theme
 
     public double ControlCornerRadius { get; init; }
 
+    public Thickness ListItemPadding { get; init; }
+
     public string FontFamily { get; init; }
     public double FontSize { get; init; }
     public FontWeight FontWeight { get; init; }
@@ -59,6 +61,7 @@ public record class Theme
         Palette palette,
         double baseControlHeight,
         double controlCornerRadius,
+        Thickness listItemPadding,
         string fontFamily,
         double fontSize,
         FontWeight fontWeight,
@@ -73,6 +76,7 @@ public record class Theme
         Palette = palette;
         BaseControlHeight = baseControlHeight;
         ControlCornerRadius = controlCornerRadius;
+        ListItemPadding = listItemPadding;
         FontFamily = fontFamily;
         FontSize = fontSize;
         FontWeight = fontWeight;
@@ -94,6 +98,7 @@ public record class Theme
             palette,
             BaseControlHeight,
             ControlCornerRadius,
+            ListItemPadding,
             FontFamily,
             FontSize,
             FontWeight,
@@ -122,6 +127,7 @@ public record class Theme
             palette: palette,
             baseControlHeight: 28,
             controlCornerRadius: 4,
+            listItemPadding: new Thickness(8, 2, 8, 2),
             fontFamily: "Segoe UI",
             fontSize: 12,
             fontWeight: FontWeight.Normal,
@@ -150,6 +156,7 @@ public record class Theme
             palette: palette,
             baseControlHeight: 28,
             controlCornerRadius: 4,
+            listItemPadding: new Thickness(8, 2, 8, 2),
             fontFamily: "Segoe UI",
             fontSize: 12,
             fontWeight: FontWeight.Normal,

@@ -375,7 +375,8 @@ public sealed class ComboBox : Control, IPopupOwner
             return ItemHeight;
         }
 
-        return Math.Max(18, FontSize + 6);
+        var theme = GetTheme();
+        return Math.Max(18, theme.BaseControlHeight - 2);
     }
 
     private double ResolveHeaderHeight()

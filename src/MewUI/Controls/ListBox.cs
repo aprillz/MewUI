@@ -54,7 +54,7 @@ public class ListBox : Control
     {
         get;
         set { field = value; InvalidateMeasure(); InvalidateVisual(); }
-    } = new Thickness(8, 2, 8, 2);
+    } = Theme.Current.ListItemPadding;
 
     public event Action<int>? SelectionChanged;
 
@@ -108,6 +108,16 @@ public class ListBox : Control
             _scroll.SetOffsetDip(1, v);
             InvalidateVisual();
         };
+    }
+
+    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+    {
+        base.OnThemeChanged(oldTheme, newTheme);
+
+        if (ItemPadding == oldTheme.ListItemPadding)
+        {
+            ItemPadding = newTheme.ListItemPadding;
+        }
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -532,7 +542,8 @@ public class ListBox : Control
             return ItemHeight;
         }
 
-        return Math.Max(18, FontSize * 2);
+        var theme = GetTheme();
+        return Math.Max(18, theme.BaseControlHeight - 2);
     }
 
     private double GetViewportHeightDip()

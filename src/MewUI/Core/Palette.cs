@@ -14,7 +14,7 @@ public sealed class Palette
 
     public Color ControlBorder { get; }
 
-    public Color ContainerBackground => WindowBackground.Lerp(ControlBackground, 0.5);
+    public Color ContainerBackground { get; }
 
     public Color ButtonFace { get; }
 
@@ -69,6 +69,8 @@ public sealed class Palette
         ButtonFace = buttonFace;
         ButtonDisabledBackground = buttonDisabledBackground;
 
+        ContainerBackground = ComputeContainerBackground(windowBackground, buttonFace);
+
         Accent = accent;
         AccentText = accentText ?? GetDefaultAccentText(accent);
 
@@ -100,14 +102,20 @@ public sealed class Palette
     private static Color ComputeControlBorder(Color windowBackground, Color windowText, Color accent)
     {
         var isDark = IsDarkBackground(windowBackground);
-        var baseBorder = windowBackground.Lerp(windowText, isDark ? 0.22 : 0.25);
-        return baseBorder.Lerp(accent, isDark ? 0.10 : 0.08);
+        var baseBorder = windowBackground.Lerp(windowText, isDark ? 0.18 : 0.21);
+        return baseBorder.Lerp(accent, isDark ? 0.04 : 0.05);
+    }
+
+    private static Color ComputeContainerBackground(Color windowBackground, Color buttonFace)
+    {
+        var isDark = IsDarkBackground(windowBackground);
+        return windowBackground.Lerp(buttonFace, isDark ? 0.5 : 0.25);
     }
 
     private static Color ComputeDisabledText(Color windowBackground, Color windowText)
     {
         var isDark = IsDarkBackground(windowBackground);
-        return windowText.Lerp(windowBackground, isDark ? 0.32 : 0.58);
+        return windowText.Lerp(windowBackground, isDark ? 0.72 : 0.58);
     }
 
     private static Color ComputeDisabledControlBackground(Color windowBackground, Color controlBackground)
@@ -126,7 +134,7 @@ public sealed class Palette
     private static Color ComputeSelectionBackground(Color controlBackground, Color accent)
     {
         var isDark = IsDarkBackground(controlBackground);
-        var t = isDark ? 0.55 : 0.35;
+        var t = isDark ? 0.45 : 0.35;
         return controlBackground.Lerp(accent, t);
     }
 
