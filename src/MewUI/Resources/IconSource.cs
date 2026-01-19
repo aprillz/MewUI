@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Resources;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Represents a multi-size icon. Picks the nearest bitmap for the requested size.

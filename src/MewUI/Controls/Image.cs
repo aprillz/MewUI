@@ -13,6 +13,30 @@ public sealed class Image : Control
         set { field = value; InvalidateMeasure(); InvalidateVisual(); }
     } = ImageStretch.None;
 
+    public Rect? ViewBox
+    {
+        get;
+        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+    }
+
+    public ImageViewBoxUnits ViewBoxUnits
+    {
+        get;
+        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+    } = ImageViewBoxUnits.Pixels;
+
+    public ImageAlignmentX AlignmentX
+    {
+        get;
+        set { field = value; InvalidateVisual(); }
+    } = ImageAlignmentX.Center;
+
+    public ImageAlignmentY AlignmentY
+    {
+        get;
+        set { field = value; InvalidateVisual(); }
+    } = ImageAlignmentY.Center;
+
     public IImageSource? Source
     {
         get;
@@ -51,8 +75,10 @@ public sealed class Image : Control
             return Size.Empty;
         }
 
+        var src = GetViewBoxPixels(img);
+
         // Pixels are treated as DIPs for now (1px == 1dip at 96dpi).
-        return new Size(img.PixelWidth, img.PixelHeight);
+        return new Size(src.Width, src.Height);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -70,14 +96,18 @@ public sealed class Image : Control
 
         try
         {
-            var srcSize = new Size(img.PixelWidth, img.PixelHeight);
+            var srcRect = GetViewBoxPixels(img);
+            var srcSize = srcRect.Size;
             if (srcSize.IsEmpty)
             {
                 return;
             }
 
-            ComputeRects(srcSize, Bounds, StretchMode, out var dest, out var src);
-            context.DrawImage(img, dest, src);
+            ComputeRects(srcRect, Bounds, StretchMode, AlignmentX, AlignmentY, out var dest, out var src);
+            if (dest.Width > 0 && dest.Height > 0 && src.Width > 0 && src.Height > 0)
+            {
+                context.DrawImage(img, dest, src);
+            }
         }
         finally
         {
@@ -85,12 +115,75 @@ public sealed class Image : Control
         }
     }
 
-    private static void ComputeRects(Size sourceSize, Rect bounds, ImageStretch stretch, out Rect dest, out Rect src)
+    private Rect GetViewBoxPixels(IImage img)
     {
-        src = new Rect(0, 0, sourceSize.Width, sourceSize.Height);
+        double iw = Math.Max(0, img.PixelWidth);
+        double ih = Math.Max(0, img.PixelHeight);
+        var full = new Rect(0, 0, iw, ih);
+        if (ViewBox is not Rect vb)
+        {
+            return full;
+        }
 
-        double sw = Math.Max(0, sourceSize.Width);
-        double sh = Math.Max(0, sourceSize.Height);
+        double x = vb.X;
+        double y = vb.Y;
+        double w = vb.Width;
+        double h = vb.Height;
+
+        if (double.IsNaN(x) || double.IsInfinity(x) ||
+            double.IsNaN(y) || double.IsInfinity(y) ||
+            double.IsNaN(w) || double.IsInfinity(w) ||
+            double.IsNaN(h) || double.IsInfinity(h))
+        {
+            return full;
+        }
+
+        if (ViewBoxUnits == ImageViewBoxUnits.RelativeToBoundingBox)
+        {
+            x *= iw;
+            y *= ih;
+            w *= iw;
+            h *= ih;
+        }
+
+        if (w <= 0 || h <= 0)
+        {
+            return full;
+        }
+
+        // Clamp into image bounds.
+        if (x < 0) { w += x; x = 0; }
+        if (y < 0) { h += y; y = 0; }
+
+        if (x > iw || y > ih)
+        {
+            return new Rect(0, 0, 0, 0);
+        }
+
+        if (x + w > iw) { w = iw - x; }
+        if (y + h > ih) { h = ih - y; }
+
+        if (w <= 0 || h <= 0)
+        {
+            return new Rect(0, 0, 0, 0);
+        }
+
+        return new Rect(x, y, w, h);
+    }
+
+    private static void ComputeRects(
+        Rect sourceRect,
+        Rect bounds,
+        ImageStretch stretch,
+        ImageAlignmentX alignX,
+        ImageAlignmentY alignY,
+        out Rect dest,
+        out Rect src)
+    {
+        src = sourceRect;
+
+        double sw = Math.Max(0, sourceRect.Width);
+        double sh = Math.Max(0, sourceRect.Height);
         if (sw <= 0 || sh <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
         {
             dest = new Rect(bounds.X, bounds.Y, 0, 0);
@@ -108,8 +201,10 @@ public sealed class Image : Control
                 double scale = Math.Min(bounds.Width / sw, bounds.Height / sh);
                 double dw = sw * scale;
                 double dh = sh * scale;
-                double dx = bounds.X + (bounds.Width - dw) / 2;
-                double dy = bounds.Y + (bounds.Height - dh) / 2;
+                double ax = alignX == ImageAlignmentX.Left ? 0 : alignX == ImageAlignmentX.Right ? 1 : 0.5;
+                double ay = alignY == ImageAlignmentY.Top ? 0 : alignY == ImageAlignmentY.Bottom ? 1 : 0.5;
+                double dx = bounds.X + (bounds.Width - dw) * ax;
+                double dy = bounds.Y + (bounds.Height - dh) * ay;
                 dest = new Rect(dx, dy, dw, dh);
                 return;
             }
@@ -124,13 +219,13 @@ public sealed class Image : Control
                 {
                     double cropH = sw / boundsAspect;
                     double cropY = (sh - cropH) / 2;
-                    src = new Rect(0, cropY, sw, cropH);
+                    src = new Rect(sourceRect.X, sourceRect.Y + cropY, sw, cropH);
                 }
                 else if (boundsAspect < srcAspect)
                 {
                     double cropW = sh * boundsAspect;
                     double cropX = (sw - cropW) / 2;
-                    src = new Rect(cropX, 0, cropW, sh);
+                    src = new Rect(sourceRect.X + cropX, sourceRect.Y, cropW, sh);
                 }
 
                 dest = bounds;
@@ -141,8 +236,10 @@ public sealed class Image : Control
             default:
             {
                 // Keep pixel size; center within bounds (and clip).
-                double dx = bounds.X + (bounds.Width - sw) / 2;
-                double dy = bounds.Y + (bounds.Height - sh) / 2;
+                double ax = alignX == ImageAlignmentX.Left ? 0 : alignX == ImageAlignmentX.Right ? 1 : 0.5;
+                double ay = alignY == ImageAlignmentY.Top ? 0 : alignY == ImageAlignmentY.Bottom ? 1 : 0.5;
+                double dx = bounds.X + (bounds.Width - sw) * ax;
+                double dy = bounds.Y + (bounds.Height - sh) * ay;
                 dest = new Rect(dx, dy, sw, sh);
                 return;
             }

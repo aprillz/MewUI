@@ -60,7 +60,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
             // With JCS_RGB, output should be 3 (R,G,B). Some JPEGs may still yield 1 (grayscale).
             if (components != 3 && components != 1)
             {
-                ImageDecoders.DebugLog?.Invoke($"JpegDecoder: Unexpected output components={components}.");
+                DiagLog.Write($"JpegDecoder: Unexpected output components={components}.");
                 return false;
             }
 
@@ -108,7 +108,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
         }
         catch (Exception ex)
         {
-            ImageDecoders.DebugLog?.Invoke($"JpegDecoder: decode failed: {ex.GetType().Name}: {ex.Message}");
+            DiagLog.Write($"JpegDecoder: decode failed: {ex.GetType().Name}: {ex.Message}");
             return false;
         }
         finally

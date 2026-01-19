@@ -8,6 +8,26 @@ public enum ImageStretch
     UniformToFill
 }
 
+public enum ImageViewBoxUnits
+{
+    Pixels,
+    RelativeToBoundingBox
+}
+
+public enum ImageAlignmentX
+{
+    Left,
+    Center,
+    Right
+}
+
+public enum ImageAlignmentY
+{
+    Top,
+    Center,
+    Bottom
+}
+
 /// <summary>
 /// Horizontal alignment options.
 /// </summary>

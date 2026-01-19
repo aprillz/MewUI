@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Aprillz.MewUI;
 
-internal static class DiagLog
+public static class DiagLog
 {
     private static readonly object _sync = new();
 

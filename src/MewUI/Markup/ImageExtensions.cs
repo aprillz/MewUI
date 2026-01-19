@@ -35,4 +35,37 @@ public static class ImageExtensions
         image.StretchMode = stretch;
         return image;
     }
+
+    public static Image ViewBox(this Image image, Rect? viewBox, ImageViewBoxUnits units = ImageViewBoxUnits.Pixels)
+    {
+        image.ViewBox = viewBox;
+        image.ViewBoxUnits = units;
+        return image;
+    }
+
+    public static Image ViewBoxPixels(this Image image, Rect? viewBox)
+    {
+        image.ViewBox = viewBox;
+        image.ViewBoxUnits = ImageViewBoxUnits.Pixels;
+        return image;
+    }
+
+    public static Image ViewBoxRelative(this Image image, Rect? viewBox)
+    {
+        image.ViewBox = viewBox;
+        image.ViewBoxUnits = ImageViewBoxUnits.RelativeToBoundingBox;
+        return image;
+    }
+
+    public static Image AlignmentX(this Image image, ImageAlignmentX alignment)
+    {
+        image.AlignmentX = alignment;
+        return image;
+    }
+
+    public static Image AlignmentY(this Image image, ImageAlignmentY alignment)
+    {
+        image.AlignmentY = alignment;
+        return image;
+    }
 }
