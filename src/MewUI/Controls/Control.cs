@@ -19,28 +19,29 @@ public abstract class Control : FrameworkElement, IDisposable
     private Point _lastMousePositionInWindow;
 
     protected virtual Color DefaultBackground => Color.Transparent;
+
     protected virtual Color DefaultForeground => Theme.Current.Palette.WindowText;
+
     protected virtual Color DefaultBorderBrush => Color.Transparent;
+
     protected virtual string DefaultFontFamily => Theme.Current.FontFamily;
+
     protected virtual double DefaultFontSize => Theme.Current.FontSize;
+
     protected virtual FontWeight DefaultFontWeight => Theme.Current.FontWeight;
 
-    public string? ToolTipText
-    {
-        get;
-        set;
-    }
+    internal static bool PreferFillStrokeTrick { get; } = false;
 
-    public ContextMenu? ContextMenu
-    {
-        get;
-        set;
-    }
+    public string? ToolTipText { get; set; }
+
+    public ContextMenu? ContextMenu { get; set; }
 
     protected readonly struct TextMeasurementScope : IDisposable
     {
         public IGraphicsFactory Factory { get; }
+
         public IGraphicsContext Context { get; }
+
         public IFont Font { get; }
 
         public TextMeasurementScope(IGraphicsFactory factory, IGraphicsContext context, IFont font)
@@ -271,9 +272,13 @@ public abstract class Control : FrameworkElement, IDisposable
     protected readonly struct VisualState
     {
         public bool IsEnabled { get; }
+
         public bool IsHot { get; }
+
         public bool IsFocused { get; }
+
         public bool IsPressed { get; }
+
         public bool IsActive { get; }
 
         public VisualState(bool isEnabled, bool isHot, bool isFocused, bool isPressed, bool isActive)
@@ -367,7 +372,7 @@ public abstract class Control : FrameworkElement, IDisposable
 
         var dpiScale = GetDpi() / 96.0;
         // Treat borders as an "inside" inset and snap thickness to whole device pixels.
-        return LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale,  1);
+        return LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, 1);
     }
 
     protected Rect GetSnappedBorderBounds(Rect bounds)
@@ -389,7 +394,12 @@ public abstract class Control : FrameworkElement, IDisposable
 
         bounds = GetSnappedBorderBounds(bounds);
 
-        if (borderThickness > 0 && borderBrush.A > 0 && background.A > 0)
+        bool canUseFillStrokeTrick = PreferFillStrokeTrick &&
+                                     borderThickness > 0 &&
+                                     borderBrush.A > 0 &&
+                                     background.A > 0;
+
+        if (canUseFillStrokeTrick)
         {
             // Fill "stroke" using outer + inner shapes (avoids half-pixel pen alignment issues).
             if (radius > 0)

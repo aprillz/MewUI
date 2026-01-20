@@ -92,6 +92,8 @@ public sealed class Palette
         (ScrollBarThumb, ScrollBarThumbHover, ScrollBarThumbActive) = ComputeScrollBarThumbs(windowBackground);
     }
 
+    internal static bool UseAlphaPalette { get; set; } = true;
+
     public Palette WithAccent(Color accent, Color? accentText = null)
     {
         return new Palette(Name, _seed, accent, accentText);
@@ -109,7 +111,14 @@ public sealed class Palette
     private static Color ComputeContainerBackground(Color windowBackground, Color buttonFace, Color accent)
     {
         var isDark = IsDarkBackground(windowBackground);
-        return windowBackground.Lerp(buttonFace, isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
+        if (UseAlphaPalette)
+        {
+            return buttonFace.WithAlpha(isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
+        }
+        else
+        {
+            return windowBackground.Lerp(buttonFace, isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
+        }
     }
 
     private static Color ComputeDisabledText(Color windowBackground, Color windowText)
