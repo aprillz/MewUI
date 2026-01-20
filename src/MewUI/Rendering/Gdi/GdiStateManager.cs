@@ -9,13 +9,20 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 internal sealed class GdiStateManager
 {
     private readonly nint _hdc;
-    private readonly Stack<int> _savedStates = new();
+    private readonly Stack<SavedState> _savedStates = new();
     private double _translateX;
     private double _translateY;
 
     public double TranslateX => _translateX;
     public double TranslateY => _translateY;
     public double DpiScale { get; }
+
+    private readonly struct SavedState
+    {
+        public required int DcState { get; init; }
+        public required double TranslateX { get; init; }
+        public required double TranslateY { get; init; }
+    }
 
     public GdiStateManager(nint hdc, double dpiScale)
     {
@@ -29,7 +36,12 @@ internal sealed class GdiStateManager
     public void Save()
     {
         int state = Gdi32.SaveDC(_hdc);
-        _savedStates.Push(state);
+        _savedStates.Push(new SavedState
+        {
+            DcState = state,
+            TranslateX = _translateX,
+            TranslateY = _translateY,
+        });
     }
 
     /// <summary>
@@ -39,8 +51,10 @@ internal sealed class GdiStateManager
     {
         if (_savedStates.Count > 0)
         {
-            int state = _savedStates.Pop();
-            Gdi32.RestoreDC(_hdc, state);
+            var saved = _savedStates.Pop();
+            Gdi32.RestoreDC(_hdc, saved.DcState);
+            _translateX = saved.TranslateX;
+            _translateY = saved.TranslateY;
         }
     }
 

@@ -50,6 +50,29 @@ internal sealed class SupersampleEdgeSampler : EdgeSamplerBase
         return CoverageToAlpha(covered, _totalSamples, _sourceAlpha);
     }
 
+    public byte SampleEdgeCentered(int px, int py, ISdfCalculator sdf, float halfSurfaceW, float halfSurfaceH)
+    {
+        int covered = 0;
+
+        for (int sy = 0; sy < _factor; sy++)
+        {
+            float y = py + (sy + 0.5f) / _factor - halfSurfaceH;
+
+            for (int sx = 0; sx < _factor; sx++)
+            {
+                float x = px + (sx + 0.5f) / _factor - halfSurfaceW;
+
+                float dist = sdf.GetSignedDistance(x, y);
+                if (dist <= 0)
+                {
+                    covered++;
+                }
+            }
+        }
+
+        return CoverageToAlpha(covered, _totalSamples, _sourceAlpha);
+    }
+
     /// <summary>
     /// Samples edge for a line segment with thickness.
     /// Uses squared distance for efficiency.
@@ -168,6 +191,46 @@ internal sealed class SupersampleEdgeSampler : EdgeSamplerBase
         return CoverageToAlpha(covered, _totalSamples, _sourceAlpha);
     }
 
+    public byte SampleStrokeEdgeCentered(
+        int px,
+        int py,
+        ISdfCalculator outerSdf,
+        ISdfCalculator? innerSdf,
+        float halfSurfaceW,
+        float halfSurfaceH)
+    {
+        int covered = 0;
+
+        for (int sy = 0; sy < _factor; sy++)
+        {
+            float y = py + (sy + 0.5f) / _factor - halfSurfaceH;
+
+            for (int sx = 0; sx < _factor; sx++)
+            {
+                float x = px + (sx + 0.5f) / _factor - halfSurfaceW;
+
+                float outerDist = outerSdf.GetSignedDistance(x, y);
+                if (outerDist > 0)
+                {
+                    continue;
+                }
+
+                if (innerSdf != null)
+                {
+                    float innerDist = innerSdf.GetSignedDistance(x, y);
+                    if (innerDist <= 0)
+                    {
+                        continue;
+                    }
+                }
+
+                covered++;
+            }
+        }
+
+        return CoverageToAlpha(covered, _totalSamples, _sourceAlpha);
+    }
+
     /// <summary>
     /// Samples edge for a rounded rectangle stroke using SDF-based alpha calculation.
     /// Provides smooth anti-aliasing at shape boundaries.
@@ -185,53 +248,36 @@ internal sealed class SupersampleEdgeSampler : EdgeSamplerBase
         float halfSurfaceW,
         float halfSurfaceH)
     {
-        // Sample at pixel center
-        float x = px + 0.5f - halfSurfaceW;
-        float y = py + 0.5f - halfSurfaceH;
+        int covered = 0;
 
-        // Get signed distances (negative = inside, positive = outside)
-        float outerDist = outerSdf.GetSignedDistance(x, y);
-
-        // Outside outer shape - fully transparent
-        if (outerDist >= 1.0f)
+        for (int sy = 0; sy < _factor; sy++)
         {
-            return 0;
-        }
+            float y = py + (sy + 0.5f) / _factor - halfSurfaceH;
 
-        // Check inner shape if present
-        if (innerSdf != null)
-        {
-            float innerDist = innerSdf.GetSignedDistance(x, y);
-
-            // Inside inner shape - fully transparent (hollow)
-            if (innerDist <= -1.0f)
+            for (int sx = 0; sx < _factor; sx++)
             {
-                return 0;
-            }
+                float x = px + (sx + 0.5f) / _factor - halfSurfaceW;
 
-            // In inner edge region - calculate coverage
-            if (innerDist < 1.0f)
-            {
-                // Blend based on inner edge distance
-                float innerCoverage = MathF.Max(0, (innerDist + 1.0f) / 2.0f);
+                // Must be inside outer and outside inner
+                float outerDist = outerSdf.GetSignedDistance(x, y);
+                if (outerDist > 0)
+                {
+                    continue; // Outside outer shape
+                }
 
-                // Also consider outer edge
-                float outerCoverage = MathF.Min(1, (1.0f - outerDist) / 2.0f);
+                if (innerSdf != null)
+                {
+                    float innerDist = innerSdf.GetSignedDistance(x, y);
+                    if (innerDist <= 0)
+                    {
+                        continue; // Inside inner shape (hollow part)
+                    }
+                }
 
-                // Final coverage is intersection: inside outer AND outside inner
-                float coverage = outerCoverage * innerCoverage;
-                return (byte)(coverage * _sourceAlpha);
+                covered++;
             }
         }
 
-        // In outer edge region - smooth transition
-        if (outerDist > -1.0f)
-        {
-            float coverage = (1.0f - outerDist) / 2.0f;
-            return (byte)(MathF.Min(1, MathF.Max(0, coverage)) * _sourceAlpha);
-        }
-
-        // Fully inside stroke
-        return _sourceAlpha;
+        return CoverageToAlpha(covered, _totalSamples, _sourceAlpha);
     }
 }

@@ -211,18 +211,6 @@ internal sealed class HybridShapeRenderer
             float halfSurfaceW = surfaceW / 2f;
             float halfSurfaceH = surfaceH / 2f;
 
-            // Shape half dimensions
-            float shapeHalfW = wOut / 2f;
-            float shapeHalfH = hOut / 2f;
-
-            // Corner region bounds (where we need AA) - based on outer shape
-            float cornerYBottom = shapeHalfH - ryOut;
-            float cornerXRight = shapeHalfW - rxOut;
-
-            // Inner corner bounds
-            float innerCornerYBottom = innerSdf != null ? hIn / 2f - ryIn : float.MinValue;
-            float innerCornerXRight = innerSdf != null ? wIn / 2f - rxIn : float.MinValue;
-
             byte[]? rented = null;
             Span<byte> alphaRow = surfaceW <= GdiRenderingConstants.StackAllocAlphaRowThreshold
                 ? stackalloc byte[surfaceW]
@@ -230,123 +218,49 @@ internal sealed class HybridShapeRenderer
 
             try
             {
+                const float aaWidth = 1.0f;
+
                 for (int py = 0; py < surfaceH; py++)
                 {
-                    alphaRow.Clear();
-
-                    float y = py + 0.5f - halfSurfaceH;
-                    float absY = MathF.Abs(y);
-
-                    // Check if we're in the corner region vertically
-                    bool inOuterCornerY = absY > cornerYBottom;
-                    bool inInnerCornerY = innerSdf != null && absY < innerCornerYBottom;
-
-                    // Outer bounds at this Y (accounting for AA padding)
-                    int outerLeft = aaPad;
-                    int outerRight = surfaceW - aaPad - 1;
-
-                    // Inner bounds at this Y (where to stop filling)
-                    int innerLeft = aaPad + strokePx;
-                    int innerRight = surfaceW - aaPad - strokePx - 1;
-
-                    // Adjust for corner regions
-                    if (inOuterCornerY)
+                    for (int px = 0; px < surfaceW; px++)
                     {
-                        // Calculate outer span from corner circle
-                        float dy = absY - cornerYBottom;
-                        float t = 1f - (dy * dy) / (ryOut * ryOut);
-                        if (t > 0)
+                        float x = px + 0.5f - halfSurfaceW;
+                        float y = py + 0.5f - halfSurfaceH;
+
+                        float outerDist = outerSdf.GetSignedDistance(x, y);
+                        if (outerDist >= aaWidth)
                         {
-                            float xOff = rxOut * MathF.Sqrt(t);
-                            float xBase = shapeHalfW - rxOut;
-                            outerLeft = aaPad + (int)MathF.Floor(shapeHalfW - xBase - xOff);
-                            outerRight = aaPad + (int)MathF.Ceiling(shapeHalfW + xBase + xOff) - 1;
-                        }
-                        else if (absY <= shapeHalfH + 1)
-                        {
-                            // In AA padding zone - use full width and sample for edge AA
-                            outerLeft = 0;
-                            outerRight = surfaceW - 1;
-                        }
-                        else
-                        {
-                            // Completely outside - skip row
-                            byte* rowPtr0 = basePtr + py * stride;
-                            GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr0, alphaRow, srcB, srcG, srcR);
+                            alphaRow[px] = 0;
                             continue;
                         }
-                    }
 
-                    if (innerSdf != null && !inInnerCornerY)
-                    {
-                        // In straight section - inner bounds are constant
-                        innerLeft = aaPad + strokePx;
-                        innerRight = surfaceW - aaPad - strokePx - 1;
-                    }
-                    else if (innerSdf != null)
-                    {
-                        // In inner corner region
-                        float dy = absY - innerCornerYBottom;
-                        if (dy > 0 && ryIn > 0)
+                        if (innerSdf != null)
                         {
-                            float t = 1f - (dy * dy) / (ryIn * ryIn);
-                            if (t > 0)
+                            float innerDist = innerSdf.GetSignedDistance(x, y);
+
+                            if (innerDist <= -aaWidth)
                             {
-                                float xOff = rxIn * MathF.Sqrt(t);
-                                float xBase = wIn / 2f - rxIn;
-                                innerLeft = aaPad + (int)MathF.Floor(shapeHalfW - xBase - xOff);
-                                innerRight = aaPad + (int)MathF.Ceiling(shapeHalfW + xBase + xOff) - 1;
+                                alphaRow[px] = 0;
+                                continue;
                             }
-                            else
+
+                            if (outerDist <= -aaWidth && innerDist >= aaWidth)
                             {
-                                // Fill entire row (inner hole is above/below)
-                                innerLeft = surfaceW;
-                                innerRight = -1;
+                                alphaRow[px] = srcA;
+                                continue;
                             }
+
+                            alphaRow[px] = sampler.SampleStrokeEdgeCentered(px, py, outerSdf, innerSdf, halfSurfaceW, halfSurfaceH);
+                            continue;
                         }
-                    }
 
-                    // Clamp bounds
-                    outerLeft = Math.Max(0, outerLeft);
-                    outerRight = Math.Min(surfaceW - 1, outerRight);
-                    innerLeft = Math.Max(0, innerLeft);
-                    innerRight = Math.Min(surfaceW - 1, innerRight);
-
-                    // Fill left stroke (outer to inner)
-                    for (int px = outerLeft; px < innerLeft && px <= outerRight; px++)
-                    {
-                        // Check if in corner region
-                        float x = px + 0.5f - halfSurfaceW;
-                        bool inOuterCorner = inOuterCornerY || MathF.Abs(x) > cornerXRight;
-                        bool inInnerCorner = inInnerCornerY || (innerSdf != null && MathF.Abs(x) < innerCornerXRight);
-
-                        if (inOuterCorner || inInnerCorner)
-                        {
-                            // Use AA sampling for corners
-                            alphaRow[px] = sampler.SampleRoundedRectStrokeEdge(px, py, outerSdf, innerSdf, halfSurfaceW, halfSurfaceH);
-                        }
-                        else
-                        {
-                            // Solid fill for straight edges
-                            alphaRow[px] = srcA;
-                        }
-                    }
-
-                    // Fill right stroke (inner to outer)
-                    for (int px = Math.Max(innerRight + 1, innerLeft); px <= outerRight; px++)
-                    {
-                        float x = px + 0.5f - halfSurfaceW;
-                        bool inOuterCorner = inOuterCornerY || MathF.Abs(x) > cornerXRight;
-                        bool inInnerCorner = inInnerCornerY || (innerSdf != null && MathF.Abs(x) < innerCornerXRight);
-
-                        if (inOuterCorner || inInnerCorner)
-                        {
-                            alphaRow[px] = sampler.SampleRoundedRectStrokeEdge(px, py, outerSdf, innerSdf, halfSurfaceW, halfSurfaceH);
-                        }
-                        else
+                        if (outerDist <= -aaWidth)
                         {
                             alphaRow[px] = srcA;
+                            continue;
                         }
+
+                        alphaRow[px] = sampler.SampleEdgeCentered(px, py, outerSdf, halfSurfaceW, halfSurfaceH);
                     }
 
                     byte* rowPtr = basePtr + py * stride;
@@ -361,8 +275,8 @@ internal sealed class HybridShapeRenderer
                 }
             }
 
-            // Offset by AA padding only (stroke is inside bounds)
-            surface.AlphaBlendTo(targetDc, destX - aaPad, destY - aaPad);
+            // Stroke is inside bounds. AA padding is used only for sampling; do not blend outside the requested rect.
+            surface.AlphaBlendTo(targetDc, destX, destY, width, height, aaPad, aaPad);
         }
         finally
         {
@@ -599,8 +513,8 @@ internal sealed class HybridShapeRenderer
                 }
             }
 
-            // Offset by AA padding only (stroke is inside bounds)
-            surface.AlphaBlendTo(targetDc, destX - aaPad, destY - aaPad);
+            // Stroke is inside bounds. AA padding is used only for sampling; do not blend outside the requested rect.
+            surface.AlphaBlendTo(targetDc, destX, destY, width, height, aaPad, aaPad);
         }
         finally
         {

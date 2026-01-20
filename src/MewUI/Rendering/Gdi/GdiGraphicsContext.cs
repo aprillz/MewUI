@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
@@ -12,6 +14,8 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// </summary>
 internal sealed class GdiGraphicsContext : IGraphicsContext
 {
+    private static readonly bool _logShapes = true;
+
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
     private readonly GdiCurveQuality _curveQuality;
@@ -20,7 +24,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     private readonly GdiStateManager _stateManager;
     private readonly GdiPrimitiveRenderer _primitiveRenderer;
-    private readonly HybridShapeRenderer? _shapeRenderer;
+    private HybridShapeRenderer? _shapeRenderer;
     private readonly AaSurfacePool _surfacePool;
 
     private bool _disposed;
@@ -55,6 +59,14 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
         // Set default modes
         Gdi32.SetBkMode(Hdc, GdiConstants.TRANSPARENT);
+    }
+
+    private HybridShapeRenderer GetShapeRendererForAlpha()
+    {
+        // GDI primitives don't support per-pixel alpha. For A<255 we render into a 32bpp surface and composite.
+        // If the user selected Fast, use a 1x supersample factor (still supports alpha, just without extra SSAA).
+        _shapeRenderer ??= new HybridShapeRenderer(_surfacePool, 1);
+        return _shapeRenderer;
     }
 
     public void Dispose()
@@ -96,35 +108,70 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        // Check if line is axis-aligned (no AA needed)
-        var (ax, ay) = _stateManager.ToDeviceCoords(start.X, start.Y);
-        var (bx, by) = _stateManager.ToDeviceCoords(end.X, end.Y);
-
-        double dx = bx - ax;
-        double dy = by - ay;
-
-        bool isAxisAligned = Math.Abs(dx) < GdiRenderingConstants.Epsilon || Math.Abs(dy) < GdiRenderingConstants.Epsilon;
-
-        if (isAxisAligned || _shapeRenderer == null)
+        if (color.A < 255)
         {
-            _primitiveRenderer.DrawLine(start, end, color, thickness);
+            var (ax, ay) = _stateManager.ToDeviceCoords(start.X, start.Y);
+            var (bx, by) = _stateManager.ToDeviceCoords(end.X, end.Y);
+
+            float strokePx = (float)_stateManager.ToDevicePx(thickness);
+            GetShapeRendererForAlpha().DrawLine(
+                Hdc,
+                (float)ax, (float)ay,
+                (float)bx, (float)by,
+                strokePx,
+                color.B, color.G, color.R, color.A);
             return;
         }
+        else
+        {
+            // Check if line is axis-aligned (no AA needed)
+            var (ax, ay) = _stateManager.ToDeviceCoords(start.X, start.Y);
+            var (bx, by) = _stateManager.ToDeviceCoords(end.X, end.Y);
 
-        // Use AA renderer for non-axis-aligned lines
-        float strokePx = (float)_stateManager.ToDevicePx(thickness);
-        _shapeRenderer.DrawLine(
-            Hdc,
-            (float)ax, (float)ay,
-            (float)bx, (float)by,
-            strokePx,
-            color.B, color.G, color.R, color.A);
+            double dx = bx - ax;
+            double dy = by - ay;
+
+            bool isAxisAligned = Math.Abs(dx) < GdiRenderingConstants.Epsilon || Math.Abs(dy) < GdiRenderingConstants.Epsilon;
+
+            if (isAxisAligned || _shapeRenderer == null)
+            {
+                _primitiveRenderer.DrawLine(start, end, color, thickness);
+                return;
+            }
+
+            // Use AA renderer for non-axis-aligned lines
+            float strokePx = (float)_stateManager.ToDevicePx(thickness);
+            _shapeRenderer.DrawLine(
+                Hdc,
+                (float)ax, (float)ay,
+                (float)bx, (float)by,
+                strokePx,
+                color.B, color.G, color.R, color.A);
+        }
     }
 
     public void DrawRectangle(Rect rect, Color color, double thickness = 1)
     {
         if (color.A == 0 || thickness <= 0)
         {
+            return;
+        }
+
+        if (color.A < 255)
+        {
+            var dst = _stateManager.ToDeviceRect(rect);
+            if (dst.Width <= 0 || dst.Height <= 0)
+            {
+                return;
+            }
+
+            float strokePx = (float)_stateManager.ToDevicePx(thickness);
+            GetShapeRendererForAlpha().DrawRoundedRectangle(
+                Hdc,
+                dst.left, dst.top,
+                dst.Width, dst.Height,
+                0, 0, strokePx,
+                color.B, color.G, color.R, color.A);
             return;
         }
 
@@ -138,6 +185,23 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
+        if (color.A < 255)
+        {
+            var dst = _stateManager.ToDeviceRect(rect);
+            if (dst.Width <= 0 || dst.Height <= 0)
+            {
+                return;
+            }
+
+            GetShapeRendererForAlpha().FillRoundedRectangle(
+                Hdc,
+                dst.left, dst.top,
+                dst.Width, dst.Height,
+                0, 0,
+                color.B, color.G, color.R, color.A);
+            return;
+        }
+
         _primitiveRenderer.FillRectangle(rect, color);
     }
 
@@ -148,11 +212,13 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        if (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast)
+        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
         {
             _primitiveRenderer.DrawRoundedRectangle(rect, radiusX, radiusY, color, thickness);
             return;
         }
+
+        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
 
         var dst = _stateManager.ToDeviceRect(rect);
         if (dst.Width <= 0 || dst.Height <= 0)
@@ -164,7 +230,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
         float ry = (float)_stateManager.ToDevicePx(radiusY);
         float strokePx = (float)_stateManager.ToDevicePx(thickness);
 
-        _shapeRenderer.DrawRoundedRectangle(
+        renderer.DrawRoundedRectangle(
             Hdc,
             dst.left, dst.top,
             dst.Width, dst.Height,
@@ -179,11 +245,13 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        if (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast)
+        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
         {
             _primitiveRenderer.FillRoundedRectangle(rect, radiusX, radiusY, color);
             return;
         }
+
+        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
 
         var dst = _stateManager.ToDeviceRect(rect);
         if (dst.Width <= 0 || dst.Height <= 0)
@@ -194,7 +262,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
         float rx = (float)_stateManager.ToDevicePx(radiusX);
         float ry = (float)_stateManager.ToDevicePx(radiusY);
 
-        _shapeRenderer.FillRoundedRectangle(
+        renderer.FillRoundedRectangle(
             Hdc,
             dst.left, dst.top,
             dst.Width, dst.Height,
@@ -209,11 +277,13 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        if (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast)
+        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
         {
             _primitiveRenderer.DrawEllipse(bounds, color, thickness);
             return;
         }
+
+        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
 
         var dst = _stateManager.ToDeviceRect(bounds);
         if (dst.Width <= 0 || dst.Height <= 0)
@@ -223,7 +293,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
         float strokePx = (float)_stateManager.ToDevicePx(thickness);
 
-        _shapeRenderer.DrawEllipse(
+        renderer.DrawEllipse(
             Hdc,
             dst.left, dst.top,
             dst.Width, dst.Height,
@@ -238,11 +308,13 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        if (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast)
+        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
         {
             _primitiveRenderer.FillEllipse(bounds, color);
             return;
         }
+
+        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
 
         var dst = _stateManager.ToDeviceRect(bounds);
         if (dst.Width <= 0 || dst.Height <= 0)
@@ -250,7 +322,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        _shapeRenderer.FillEllipse(
+        renderer.FillEllipse(
             Hdc,
             dst.left, dst.top,
             dst.Width, dst.Height,

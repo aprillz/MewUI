@@ -81,45 +81,22 @@ internal sealed class RoundedRectSdf : SdfCalculatorBase
     /// </summary>
     private float GetUniformRoundedRectSdf(float px, float py)
     {
+        // Canonical rounded-rectangle SDF (Inigo Quilez style):
+        // p = abs(pos) - (halfSize - r)
+        // return length(max(p,0)) + min(max(p.x,p.y),0) - r
         float r = _rx;
+        float bx = _halfWidth - r;
+        float by = _halfHeight - r;
 
-        // Inner rectangle bounds (without corner radius)
-        float innerWidth = _halfWidth - r;
-        float innerHeight = _halfHeight - r;
+        float qx = px - bx;
+        float qy = py - by;
 
-        // Distance to inner rectangle
-        float dx = MathF.Max(0, px - innerWidth);
-        float dy = MathF.Max(0, py - innerHeight);
+        float ox = MathF.Max(qx, 0);
+        float oy = MathF.Max(qy, 0);
+        float outside = MathF.Sqrt(ox * ox + oy * oy);
+        float inside = MathF.Min(MathF.Max(qx, qy), 0);
 
-        // If inside the inner rectangle bounds, distance is to the edge
-        if (px <= innerWidth && py <= innerHeight)
-        {
-            // Fully inside - return negative distance to nearest edge
-            return -MathF.Min(
-                MathF.Min(innerWidth - px + r, innerHeight - py + r),
-                MathF.Min(px + innerWidth + r, py + innerHeight + r));
-        }
-
-        // In the corner region
-        if (px > innerWidth && py > innerHeight)
-        {
-            // Distance to corner circle
-            return MathF.Sqrt(dx * dx + dy * dy) - r;
-        }
-
-        // On the straight edges
-        if (px > innerWidth)
-        {
-            return px - _halfWidth;
-        }
-
-        if (py > innerHeight)
-        {
-            return py - _halfHeight;
-        }
-
-        // Should not reach here
-        return MathF.Max(px - _halfWidth, py - _halfHeight);
+        return outside + inside - r;
     }
 
     /// <summary>
@@ -137,20 +114,7 @@ internal sealed class RoundedRectSdf : SdfCalculatorBase
             float dx = px - innerWidth;
             float dy = py - innerHeight;
 
-            // Normalize to unit circle
-            float nx = dx / _rx;
-            float ny = dy / _ry;
-            float normalizedDist = MathF.Sqrt(nx * nx + ny * ny);
-
-            if (normalizedDist < 0.001f)
-            {
-                return -MathF.Min(_rx, _ry);
-            }
-
-            // Approximate SDF: distance to ellipse boundary
-            // For better accuracy, use Newton iteration (see EllipseSdf)
-            float scale = MathF.Min(_rx, _ry);
-            return (normalizedDist - 1f) * scale;
+            return GetEllipseCornerDistance(dx, dy, _rx, _ry);
         }
 
         // On the straight edges or inside
@@ -176,6 +140,65 @@ internal sealed class RoundedRectSdf : SdfCalculatorBase
         }
 
         return MathF.Max(distX, distY);
+    }
+
+    private static float GetEllipseCornerDistance(float dx, float dy, float rx, float ry)
+    {
+        // Match EllipseSdf's Newton iteration approach (first quadrant).
+        rx = MathF.Max(0.001f, rx);
+        ry = MathF.Max(0.001f, ry);
+        float rx2 = rx * rx;
+        float ry2 = ry * ry;
+
+        float px = MathF.Abs(dx);
+        float py = MathF.Abs(dy);
+
+        if (rx < 0.001f)
+        {
+            float d = MathF.Sqrt(px * px + MathF.Max(0, py - ry) * MathF.Max(0, py - ry));
+            return d * MathF.Sign(py - ry);
+        }
+
+        if (ry < 0.001f)
+        {
+            float d = MathF.Sqrt(py * py + MathF.Max(0, px - rx) * MathF.Max(0, px - rx));
+            return d * MathF.Sign(px - rx);
+        }
+
+        float t = MathF.Atan2(ry * py, rx * px);
+
+        for (int i = 0; i < 3; i++)
+        {
+            float cos = MathF.Cos(t);
+            float sin = MathF.Sin(t);
+
+            float ex = rx * cos;
+            float ey = ry * sin;
+
+            float ddx = px - ex;
+            float ddy = py - ey;
+
+            float dex = -rx * sin;
+            float dey = ry * cos;
+
+            float num = ddx * dex + ddy * dey;
+            float den = ddx * (-rx * cos) + ddy * (-ry * sin) + dex * dex + dey * dey;
+
+            if (MathF.Abs(den) > 0.0001f)
+            {
+                t -= num / den;
+            }
+        }
+
+        float closestX = rx * MathF.Cos(t);
+        float closestY = ry * MathF.Sin(t);
+
+        float distX = px - closestX;
+        float distY = py - closestY;
+        float dist = MathF.Sqrt(distX * distX + distY * distY);
+
+        float normalizedDist = (px * px) / rx2 + (py * py) / ry2;
+        return normalizedDist < 1f ? -dist : dist;
     }
 
     /// <summary>
