@@ -1,15 +1,9 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Rendering.FreeType;
+using Aprillz.MewUI.Rendering.Gdi;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
-
-#if MEWUI_OPENGL_WIN32
-using Aprillz.MewUI.Rendering.Gdi;
-#endif
-
-#if MEWUI_OPENGL_X11
-using Aprillz.MewUI.Rendering.FreeType;
-#endif
 
 internal sealed class OpenGLGraphicsContext : IGraphicsContext
 {
@@ -52,26 +46,26 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
 
         int w;
         int h;
-#if MEWUI_OPENGL_WIN32
-        User32.GetClientRect(_hwnd, out var client);
-        w = Math.Max(1, client.Width);
-        h = Math.Max(1, client.Height);
-#elif MEWUI_OPENGL_X11
-        // Linux/X11: _hdc is Display*, _hwnd is Window.
-        if (X11.XGetWindowAttributes(_hdc, _hwnd, out var attrs) != 0)
+        if (OperatingSystem.IsWindows())
         {
-            w = Math.Max(1, attrs.width);
-            h = Math.Max(1, attrs.height);
+            User32.GetClientRect(_hwnd, out var client);
+            w = Math.Max(1, client.Width);
+            h = Math.Max(1, client.Height);
         }
         else
         {
-            w = 1;
-            h = 1;
+            // Linux/X11: _hdc is Display*, _hwnd is Window.
+            if (X11.XGetWindowAttributes(_hdc, _hwnd, out var attrs) != 0)
+            {
+                w = Math.Max(1, attrs.width);
+                h = Math.Max(1, attrs.height);
+            }
+            else
+            {
+                w = 1;
+                h = 1;
+            }
         }
-#else
-        w = 1;
-        h = 1;
-#endif
 
         _viewportWidthPx = w;
         _viewportHeightPx = h;
@@ -482,15 +476,13 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
         // Point-based draw uses measured size.
         if (widthPx <= 0 || heightPx <= 0)
         {
-#if MEWUI_OPENGL_X11
-            if (font is FreeTypeFont ftForMeasure)
+            if (OperatingSystem.IsLinux() && font is FreeTypeFont ftForMeasure)
             {
                 var px = FreeTypeText.Measure(text, ftForMeasure);
                 widthPx = Math.Max(1, (int)Math.Ceiling(px.Width));
                 heightPx = Math.Max(1, (int)Math.Ceiling(px.Height));
             }
             else
-#endif
             {
                 var measured = MeasureText(text, font);
                 widthPx = Math.Max(1, LayoutRounding.RoundToPixelInt(measured.Width, DpiScale));
@@ -505,8 +497,7 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
         heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
         boundsPx = new RECT(boundsPx.left, boundsPx.top, boundsPx.left + widthPx, boundsPx.top + heightPx);
 
-#if MEWUI_OPENGL_WIN32
-        if (font is GdiFont gdiFont)
+        if (OperatingSystem.IsWindows() && font is GdiFont gdiFont)
         {
             var key = new OpenGLTextCacheKey(string.GetHashCode(text), gdiFont.Handle, FontId: string.Empty, FontSizePx: 0, color.ToArgb(), widthPx, heightPx,
                 (int)horizontalAlignment, (int)verticalAlignment, (int)wrapping);
@@ -520,8 +511,8 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
             DrawTexturedQuad(boundsPx, ref texture);
             return;
         }
-#elif MEWUI_OPENGL_X11
-        if (font is FreeTypeFont ftFont)
+
+        if (OperatingSystem.IsLinux() && font is FreeTypeFont ftFont)
         {
             var key = new OpenGLTextCacheKey(string.GetHashCode(text), 0, ftFont.FontPath, ftFont.PixelHeight, color.ToArgb(), widthPx, heightPx,
                 (int)horizontalAlignment, (int)verticalAlignment, (int)wrapping);
@@ -534,7 +525,6 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
 
             DrawTexturedQuad(boundsPx, ref texture);
         }
-#endif
     }
 
     private int ClampTextRasterExtent(int extentPx, RECT boundsPx, int axis)
@@ -566,11 +556,13 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
 
     public Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
-#if MEWUI_OPENGL_WIN32
-        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
-        return measure.MeasureText(text, font);
-#elif MEWUI_OPENGL_X11
-        if (font is FreeTypeFont ftFont)
+        if (OperatingSystem.IsWindows())
+        {
+            using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
+            return measure.MeasureText(text, font);
+        }
+
+        if (OperatingSystem.IsLinux() && font is FreeTypeFont ftFont)
         {
             var px = FreeTypeText.Measure(text, ftFont);
             return new Size(px.Width / DpiScale, px.Height / DpiScale);
@@ -578,18 +570,17 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
 
         using var measureFallback = new OpenGLMeasurementContext((uint)Math.Round(DpiScale * 96));
         return measureFallback.MeasureText(text, font);
-#else
-        return Size.Empty;
-#endif
     }
 
     public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
-#if MEWUI_OPENGL_WIN32
-        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
-        return measure.MeasureText(text, font, maxWidth);
-#elif MEWUI_OPENGL_X11
-        if (font is FreeTypeFont ftFont)
+        if (OperatingSystem.IsWindows())
+        {
+            using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
+            return measure.MeasureText(text, font, maxWidth);
+        }
+
+        if (OperatingSystem.IsLinux() && font is FreeTypeFont ftFont)
         {
             // TODO: wrapping-aware measurement; for now ignore maxWidth.
             var px = FreeTypeText.Measure(text, ftFont);
@@ -598,9 +589,6 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
 
         using var measureFallback = new OpenGLMeasurementContext((uint)Math.Round(DpiScale * 96));
         return measureFallback.MeasureText(text, font, maxWidth);
-#else
-        return Size.Empty;
-#endif
     }
 
     private static void DrawTexturedQuad(RECT boundsPx, ref OpenGLTextureEntry texture)
