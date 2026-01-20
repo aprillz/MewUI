@@ -14,10 +14,10 @@ var metricsTimer = new DispatcherTimer(TimeSpan.FromSeconds(2));
 metricsTimer.Tick += (_, _) => UpdateMetrics(appendLog: false);
 
 Window window;
-var accentSwatches = new List<(Color color, Button button)>();
-var currentAccent = Theme.Current.Palette.Accent;
+var accentSwatches = new List<(Accent accent, Button button)>();
+var currentAccent = Theme.DefaultAccent;
 Theme.Current = Theme.Light;
-
+Label title = null!;
 var vm = new DemoViewModel();
 
 var logo = ImageSource.FromFile("logo-256.png");
@@ -27,7 +27,7 @@ var root = new Window()
     .Ref(out window)
     .Padding(0)
     .Title("Aprillz.MewUI Demo")
-    .Resizable(744, 720)
+    .Resizable(744, 700)
     .OnLoaded(() =>
     {
         loadedMs = stopwatch.Elapsed.TotalMilliseconds;
@@ -38,16 +38,18 @@ var root = new Window()
         new DockPanel()
             .LastChildFill()
             .Children(
-                MenuDemo().DockTop(),
+                MenuDemo()
+                .DockTop(),
 
                 new DockPanel()
-                    .LastChildFill()
                     .Padding(16)
                     .Spacing(16)
                     .Children(
-                        TopSection().DockTop(),
+                        TopSection()
+                            .DockTop(),
 
-                        Buttons().DockBottom(),
+                        Buttons()
+                            .DockBottom(),
 
                         new TabControl()
                             .VerticalScroll(ScrollMode.Auto)
@@ -90,7 +92,9 @@ Element HeaderSection() => new StackPanel()
     .Spacing(8)
     .Children(
         new Label()
+            .Ref(out title)
             .Text("Aprillz.MewUI Demo")
+            .Foreground(Theme.Current.Palette.Accent)
             .FontSize(20)
             .Bold(),
 
@@ -99,13 +103,19 @@ Element HeaderSection() => new StackPanel()
             .FontSize(11)
     );
 
-Element TopSection() => new StackPanel()
-    .Vertical()
-    .Spacing(8)
+Element TopSection() => new DockPanel()
     .Children(
-        HeaderSection(),
-        ThemeControls(),
-        AccentPicker()
+        ImageDemo()
+            .DockRight(),
+
+        new StackPanel()
+            .Vertical()
+            .Spacing(8)
+            .Children(
+                HeaderSection(),
+                ThemeControls(),
+                AccentPicker()
+            )
     );
 
 Element MenuDemo()
@@ -121,8 +131,14 @@ Element MenuDemo()
         .Item("Deep B", () => MessageBox.Show(window.Handle, "Deep B", "Menu"));
 
     var recentMenu = new Menu()
-        .Item("a.txt", () => MessageBox.Show(window.Handle, "a.txt", "Recent"))
-        .Item("b.txt", () => MessageBox.Show(window.Handle, "b.txt", "Recent"))
+        .Apply(x =>
+        {
+            for (char letter = 'a'; letter <= 'z'; letter++)
+            {
+                var text = letter + ".txt";
+                x.Item(text, () => MessageBox.Show(window.Handle, text, "Recent"));
+            }
+        })
         .Separator()
         .SubMenu("More...", deepMenu);
 
@@ -160,7 +176,7 @@ Element ThemeControls() => new StackPanel()
             .Content("Toggle Theme")
             .OnClick(() =>
             {
-                var nextBase = window.Theme.Name == Theme.Dark.Name ? Theme.Light : Theme.Dark;
+                var nextBase = Palette.IsDarkBackground(Theme.Current.Palette.WindowBackground) ? Theme.Light : Theme.Dark;
                 Theme.Current = window.Theme = nextBase.WithAccent(currentAccent);
                 UpdateAccentSwatches();
             }),
@@ -188,27 +204,16 @@ FrameworkElement AccentPicker() => new StackPanel()
             .Spacing(8)
             .ItemWidth(28)
             .ItemHeight(28)
-            .Children(
-                AccentSwatch("Gold", Color.FromRgb(214, 176, 82)),
-                AccentSwatch("Red", Color.FromRgb(244, 67, 54)),
-                AccentSwatch("Pink", Color.FromRgb(233, 30, 99)),
-                AccentSwatch("Purple", Color.FromRgb(156, 39, 176)),
-                AccentSwatch("Deep Purple", Color.FromRgb(103, 58, 183)),
-                AccentSwatch("Indigo", Color.FromRgb(63, 81, 181)),
-                AccentSwatch("Blue", Color.FromRgb(33, 150, 243)),
-                AccentSwatch("Light Blue", Color.FromRgb(3, 169, 244)),
-                AccentSwatch("Teal", Color.FromRgb(0, 150, 136)),
-                AccentSwatch("Green", Color.FromRgb(76, 175, 80)),
-                AccentSwatch("Light Green", Color.FromRgb(139, 195, 74))
-            )
+            .Children(Theme.BuiltInAccents.Select(AccentSwatch).ToArray())
     );
 
-Button AccentSwatch(string name, Color color) =>
+Button AccentSwatch(Accent accent) =>
     new Button()
         .Content(string.Empty)
-        .Background(color)
-        .OnClick(() => ApplyAccent(color))
-        .Apply(b => accentSwatches.Add((color, b)));
+        .Background(window.Theme.GetAccentColor(accent))
+        .ToolTip(accent.ToString())
+        .OnClick(() => ApplyAccent(accent))
+        .Apply(b => accentSwatches.Add((accent, b)));
 
 Element Buttons() => new StackPanel()
     .Horizontal()
@@ -420,23 +425,34 @@ Element NormalControls()
                                 .Padding(4))
                 ),
 
-            new StackPanel()
-                .Vertical()
+            new Grid()
+                .Columns("Auto,*")
                 .Spacing(8)
                 .Children(
-                    new UniformGrid()
-                        .Columns(2)
-                        .Spacing(8)
-                        .Children(
-                            new GroupBox()
-                                .Header("Options")
-                                .Content(
-                                    new StackPanel()
-                                        .Vertical()
-                                        .Spacing(8)
-                                        .Children(
-                                            new CheckBox()
-                                                .Text("Enable feature"),
+                    new Label()
+                        .CenterVertical()
+                        .Text("ComboBox:"),
+
+                    new ComboBox()
+                        .Items("Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa")
+                        .SelectedIndex(1)
+                        .Placeholder("Select...")
+                ),
+
+            new Grid()
+                .Rows("*,*")
+                .Columns("*,*")
+                .Spacing(16)
+                .Children(
+                    new GroupBox()
+                        .Header("Options")
+                        .Content(
+                            new StackPanel()
+                                .Vertical()
+                                .Spacing(8)
+                                .Children(
+                                    new CheckBox()
+                                        .Text("Enable feature"),
 
                                             new StackPanel()
                                                 .Horizontal()
@@ -490,96 +506,61 @@ Element NormalControls()
                                         )
                                 ),
 
-                                new DockPanel()
-                                    .Spacing(8)
-                                    .Children(
-                                        new Label()
-                                            .Text("ListBox")
-                                            .DockTop()
-                                            .CenterVertical(),
-
-                                        new ListBox()
-                                            .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
-                                            .SelectedIndex(1)
-                                            .Height(76)
-                                    )
-                        )
-                ),
-
-            new Grid()
-                .Columns("Auto,*")
-                .Spacing(8)
-                .Children(
-                    new Label()
-                        .CenterVertical()
-                        .Text("ComboBox:"),
-
-                    new ComboBox()
-                        .Items("Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa")
-                        .SelectedIndex(1)
-                        .Placeholder("Select...")
-                ),
-
-            new UniformGrid()
-                .Columns(2)
-                .Spacing(16)
-                .Children(
-                    ImageDemo(),
-
                     new GroupBox()
                         .Header("MultiLineTextBox")
+                        .RowSpan(2)
                         .Content(
-                            new StackPanel()
-                                .Vertical()
+                            new DockPanel()
                                 .Spacing(8)
                                 .Children(
+                                    new CheckBox()
+                                        .DockBottom()
+                                        .Ref(out wrapCheck)
+                                        .IsChecked(true)
+                                        .Text("Wrap")
+                                        .OnCheckedChanged(x => notesTextBox.Wrap = x),
+
                                     new MultiLineTextBox()
                                         .Ref(out notesTextBox)
                                         .OnWrapChanged(x => wrapCheck?.IsChecked = x)
                                         .Wrap(true)
                                         .FontFamily("Consolas")
-                                        .Height(120)
+                                        .Height(240)
                                         .Placeholder("Type multi-line text (wheel scroll + thin scrollbar).")
-                                        .Text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7"),
-
-                                    new CheckBox()
-                                        .Ref(out wrapCheck)
-                                        .IsChecked(true)
-                                        .Text("Wrap")
-                                        .OnCheckedChanged(x => notesTextBox.Wrap = x)
+                                        .Text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7")
                                 )
+                    ),
+
+                    new DockPanel()
+                        .Spacing(8)
+                        .Children(
+                            new Label()
+                                .Text("ListBox")
+                                .DockTop()
+                                .CenterVertical(),
+
+                            new ListBox()
+                                .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
+                                .SelectedIndex(1)
+                                .Height(76)
                         )
                 )
         );
 }
 
-FrameworkElement ImageDemo() => new GroupBox()
-    .Header("Image")
-    .Content(
-        new UniformGrid()
-            .Columns(2)
-            .Spacing(8)
-            .Children(
-                new Image()
-                    .Source(logo)
-                    .Size(96, 96)
-                    .StretchMode(ImageStretch.Uniform),
+FrameworkElement ImageDemo() => new UniformGrid()
+    .Columns(2)
+    .Spacing(8)
+    .Children(
+        new Image()
+            .Source(april)
+            .Size(96, 96)
+            .StretchMode(ImageStretch.Uniform),
 
-                new Image()
-                    .Source(april)
-                    .Size(96, 96)
-                    .StretchMode(ImageStretch.Uniform),
-
-                new Image()
-                    .SourceFile("logo-256.png")
-                    .Size(96, 96)
-                    .StretchMode(ImageStretch.Uniform),
-
-                new Image()
-                    .SourceFile("april.jpg")
-                    .Size(96, 96)
-                    .StretchMode(ImageStretch.Uniform)
-            )
+        new Image()
+            .SourceFile("logo-256.png")
+            .Size(96, 96)
+            .StretchMode(ImageStretch.Uniform)
     );
 
 FrameworkElement CommandingSamples()
@@ -845,20 +826,20 @@ FrameworkElement BindSamples()
 
 void UpdateAccentSwatches()
 {
-    foreach (var (color, button) in accentSwatches)
+    foreach (var (accent, button) in accentSwatches)
     {
-        bool selected = Theme.Current.Palette.Accent == color;
+        button.Background = window.Theme.GetAccentColor(accent);
+        bool selected = currentAccent == accent;
         button.BorderThickness = selected ? 2 : 1;
     }
+    title.Foreground = Theme.Current.Palette.Accent;
 }
 
-void ApplyAccent(Color accent)
+void ApplyAccent(Accent accent)
 {
     currentAccent = accent;
-    Theme.Current = window.Theme = Palette.IsDarkBackground(Theme.Current.Palette.WindowBackground) ?
-        Theme.Dark.WithAccent(accent) :
-        Theme.Light.WithAccent(accent);
-
+    var nextBase = Palette.IsDarkBackground(window.Theme.Palette.WindowBackground) ? Theme.Dark : Theme.Light;
+    Theme.Current = window.Theme = nextBase.WithAccent(accent);
     UpdateAccentSwatches();
 }
 
