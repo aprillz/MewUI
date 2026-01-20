@@ -9,6 +9,23 @@ public class Label : Control
 {
     private ValueBinding<string>? _textBinding;
     protected override bool InvalidateOnMouseOverChanged => false;
+    private TextMeasureKey _lastMeasureKey;
+    private Size _lastMeasuredTextSize;
+    private bool _hasMeasuredText;
+
+    private readonly record struct TextMeasureKey(
+        string Text,
+        IFont Font,
+        TextWrapping Wrapping,
+        double MaxWidthDip,
+        uint Dpi);
+
+    private void InvalidateTextMeasure()
+    {
+        _lastMeasureKey = default;
+        _lastMeasuredTextSize = default;
+        _hasMeasuredText = false;
+    }
 
     /// <summary>
     /// Gets or sets the text content.
@@ -25,6 +42,7 @@ public class Label : Control
             }
 
             field = value;
+            InvalidateTextMeasure();
             InvalidateMeasure();
         }
     } = string.Empty;
@@ -53,7 +71,12 @@ public class Label : Control
     public TextWrapping TextWrapping
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            field = value;
+            InvalidateTextMeasure();
+            InvalidateMeasure();
+        }
     } = TextWrapping.NoWrap;
 
     private bool HasExplicitLineBreaks => Text.AsSpan().IndexOfAny('\r', '\n') >= 0;
@@ -67,22 +90,34 @@ public class Label : Control
                 : Size.Empty;
         }
 
-        using var measure = BeginTextMeasurement();
-
-        Size textSize;
         var wrapping = TextWrapping;
         if (wrapping == TextWrapping.NoWrap && HasExplicitLineBreaks)
         {
             wrapping = TextWrapping.Wrap;
         }
 
+        var factory = GetGraphicsFactory();
+        var font = GetFont(factory);
+        var dpi = GetDpi();
+
+        double maxWidth = 0;
         if (wrapping == TextWrapping.NoWrap)
         {
-            textSize = measure.Context.MeasureText(Text, measure.Font);
+            var key = new TextMeasureKey(Text, font, wrapping, 0, dpi);
+            if (_hasMeasuredText && key == _lastMeasureKey)
+            {
+                return _lastMeasuredTextSize.Inflate(Padding);
+            }
+
+            using var ctx = factory.CreateMeasurementContext(dpi);
+            _lastMeasuredTextSize = ctx.MeasureText(Text, font);
+            _lastMeasureKey = key;
+            _hasMeasuredText = true;
+            return _lastMeasuredTextSize.Inflate(Padding);
         }
         else
         {
-            double maxWidth = availableSize.Width - Padding.HorizontalThickness;
+            maxWidth = availableSize.Width - Padding.HorizontalThickness;
             if (double.IsNaN(maxWidth) || maxWidth <= 0)
             {
                 maxWidth = 0;
@@ -94,10 +129,20 @@ public class Label : Control
                 maxWidth = 1_000_000;
             }
 
-            textSize = measure.Context.MeasureText(Text, measure.Font, maxWidth > 0 ? maxWidth : 1_000_000);
-        }
+            maxWidth = maxWidth > 0 ? maxWidth : 1_000_000;
 
-        return textSize.Inflate(Padding);
+            var key = new TextMeasureKey(Text, font, wrapping, maxWidth, dpi);
+            if (_hasMeasuredText && key == _lastMeasureKey)
+            {
+                return _lastMeasuredTextSize.Inflate(Padding);
+            }
+
+            using var ctx = factory.CreateMeasurementContext(dpi);
+            _lastMeasuredTextSize = ctx.MeasureText(Text, font, maxWidth);
+            _lastMeasureKey = key;
+            _hasMeasuredText = true;
+            return _lastMeasuredTextSize.Inflate(Padding);
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -155,5 +200,17 @@ public class Label : Control
     {
         _textBinding?.Dispose();
         _textBinding = null;
+    }
+
+    protected override void OnDpiChanged(uint oldDpi, uint newDpi)
+    {
+        InvalidateTextMeasure();
+        base.OnDpiChanged(oldDpi, newDpi);
+    }
+
+    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+    {
+        InvalidateTextMeasure();
+        base.OnThemeChanged(oldTheme, newTheme);
     }
 }
