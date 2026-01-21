@@ -73,20 +73,19 @@ public class Button : Control
 
     protected override Size MeasureContent(Size availableSize)
     {
+        var borderInset = GetBorderVisualInset();
+        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
+
         // Keep the previous fallback sizing behavior for empty content.
         if (string.IsNullOrEmpty(Content))
         {
-            var borderInset = GetBorderVisualInset();
-            var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
             return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10).Inflate(border);
         }
 
         var factory = GetGraphicsFactory();
         var font = GetFont(factory);
         var size = _textMeasureCache.Measure(factory, GetDpi(), font, Content, TextWrapping.NoWrap, 0);
-        var borderInset2 = GetBorderVisualInset();
-        var border2 = borderInset2 > 0 ? new Thickness(borderInset2) : Thickness.Zero;
-        return size.Inflate(Padding).Inflate(border2);
+        return size.Inflate(Padding).Inflate(border);
     }
 
     protected override void OnRender(IGraphicsContext context)

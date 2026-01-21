@@ -17,7 +17,7 @@ internal sealed class TabHeaderButton : ContentControl
     public TabHeaderButton()
     {
         BorderThickness = 1;
-        Padding = new Thickness(10, 5, 10, 5);
+        Padding = new Thickness(8, 4, 8, 4);
         MinHeight = Theme.Current.BaseControlHeight;
     }
 
@@ -69,14 +69,10 @@ internal sealed class TabHeaderButton : ContentControl
         // Top-only rounding via clipping:
         // Draw a taller rounded-rect, then clip to the real bounds so the bottom corners are clipped away.
         // This keeps the header looking like VS-style "document tabs" without requiring path geometry support.
-        var rounded = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height + radius);
+        var rounded = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height + radius + 2);
 
-        context.Save();
-        context.SetClip(bounds);
         // Use fill-based border (outer + inner) to avoid stroke centering being clipped by the tight clip.
         DrawBackgroundAndBorder(context, rounded, bg, border, radiusDip);
-
-        context.Restore();
     }
 
     protected override void ArrangeContent(Rect bounds)

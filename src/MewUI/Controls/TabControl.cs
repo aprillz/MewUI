@@ -16,7 +16,6 @@ public sealed class TabControl : Control
     private bool _pendingOffsetRestore;
     private TabScrollOffsets _pendingOffsets;
     private int _cachedFocusedHeaderIndex = -1;
-    private Thickness _chromePadding = new(1);
 
     internal override UIElement GetDefaultFocusTarget()
     {
@@ -110,7 +109,6 @@ public sealed class TabControl : Control
         {
             Orientation = Orientation.Horizontal,
             Spacing = 2,
-            Padding = new Thickness(2),
         };
         _headerStrip.Parent = this;
 
@@ -265,9 +263,12 @@ public sealed class TabControl : Control
 
     protected override Size MeasureContent(Size availableSize)
     {
-        var inner = availableSize.Deflate(_chromePadding);
+        var borderInset = GetBorderVisualInset();
+        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
-        _headerStrip.Measure(new Size(inner.Width, double.PositiveInfinity));
+        var inner = availableSize.Deflate(border);
+
+        _headerStrip.Measure(new Size(availableSize.Width, double.PositiveInfinity));
         double headerH = _headerStrip.DesiredSize.Height;
 
         double contentW = inner.Width;
@@ -278,12 +279,15 @@ public sealed class TabControl : Control
         double desiredW = Math.Max(_headerStrip.DesiredSize.Width, _contentHost.DesiredSize.Width);
         double desiredH = headerH + _contentHost.DesiredSize.Height;
 
-        return new Size(desiredW, desiredH).Inflate(_chromePadding);
+        return new Size(desiredW, desiredH).Inflate(border);
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
-        var inner = bounds.Deflate(_chromePadding);
+        var borderInset = GetBorderVisualInset();
+        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
+
+        var inner = bounds.Deflate(border);
 
         double headerH = _headerStrip.DesiredSize.Height;
         _headerStrip.Arrange(new Rect(inner.X, inner.Y, inner.Width, headerH));
@@ -317,7 +321,7 @@ public sealed class TabControl : Control
         var headerRect = new Rect(inner.X, inner.Y, inner.Width, Math.Max(0, headerH));
         var contentRect = new Rect(
             inner.X,
-            inner.Y + headerRect.Height - theme.ControlCornerRadius + borderInset,
+            inner.Y + headerRect.Height + borderInset,
             inner.Width,
             Math.Max(0, inner.Height - headerRect.Height + theme.ControlCornerRadius - borderInset));
 
@@ -326,10 +330,13 @@ public sealed class TabControl : Control
             context.FillRectangle(contentRect, contentBg);
         }
 
-        // Outline: focus color should wrap selected header + content.
-        var outline = GetOutlineColor(theme);
-        DrawContentOutline(context, contentRect, outline, Math.Max(1, borderInset));
-        //context.DrawRectangle(contentRect, outline, borderInset);
+        if (borderInset > 0)
+        {
+            // Outline: focus color should wrap selected header + content.
+            var outline = GetOutlineColor(theme);
+            DrawContentOutline(context, contentRect, outline, borderInset);
+            //context.DrawRectangle(contentRect, outline, borderInset);
+        }
     }
 
     public override void Render(IGraphicsContext context)
