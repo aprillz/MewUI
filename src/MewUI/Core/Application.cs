@@ -24,6 +24,7 @@ public sealed class Application
     private static IPlatformHost _defaultPlatformHost = CreateDefaultPlatformHost();
     private static Exception? _pendingFatalException;
     private IUiDispatcher? _dispatcher;
+    private readonly List<Window> _windows = new();
 
     /// <summary>
     /// Raised when an exception escapes from the platform message loop or window procedure.
@@ -61,8 +62,12 @@ public sealed class Application
     }
 
     /// <summary>
-    /// Gets or sets the default graphics backend used by windows/controls.
-    /// Can be configured before <see cref="Run(Window)"/>.
+    /// Gets currently tracked windows for this application instance.
+    /// </summary>
+    public IReadOnlyList<Window> AllWindows => _windows;
+
+    /// <summary>
+    /// Gets the selected graphics backend used by windows/controls.
     /// </summary>
     public static GraphicsBackend DefaultGraphicsBackend
     {
@@ -140,11 +145,27 @@ public sealed class Application
             var app = new Application(DefaultPlatformHost);
             _current = app;
             _pendingFatalException = null;
+            app.RegisterWindow(mainWindow);
             app.RunCore(mainWindow);
         }
     }
 
     private Application(IPlatformHost platformHost) => PlatformHost = platformHost;
+
+    internal void RegisterWindow(Window window)
+    {
+        if (_windows.Contains(window))
+        {
+            return;
+        }
+
+        _windows.Add(window);
+    }
+
+    internal void UnregisterWindow(Window window)
+    {
+        _windows.Remove(window);
+    }
 
     private void RunCore(Window mainWindow)
     {

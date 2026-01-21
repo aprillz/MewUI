@@ -11,6 +11,8 @@ public abstract class Element
 {
     private bool _dpiCacheValid;
     private uint _cachedDpi;
+    private Size _lastMeasureConstraint;
+    private bool _hasMeasureConstraint;
 
     /// <summary>
     /// Gets the desired size calculated during the Measure pass.
@@ -53,15 +55,16 @@ public abstract class Element
     /// </summary>
     public void Measure(Size availableSize)
     {
-        if (!IsMeasureDirty && !double.IsPositiveInfinity(availableSize.Width) && !double.IsPositiveInfinity(availableSize.Height))
+        if (!IsMeasureDirty && _hasMeasureConstraint && _lastMeasureConstraint == availableSize)
         {
-            // If not dirty and we have a valid constraint, skip
-            // But we should still re-measure if the constraint changed significantly
+            return;
         }
 
         var measured = MeasureCore(availableSize);
         DesiredSize = ApplyLayoutRounding(measured);
         IsMeasureDirty = false;
+        _lastMeasureConstraint = availableSize;
+        _hasMeasureConstraint = true;
     }
 
     /// <summary>

@@ -3,9 +3,7 @@ using System.Runtime.CompilerServices;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform;
-using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Rendering;
-using System.Diagnostics;
 
 namespace Aprillz.MewUI;
 
@@ -23,6 +21,7 @@ public class Window : ContentControl
     private Size _clientSizeDip = Size.Empty;
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
+    private Element? _lastLayoutContent;
     private readonly List<PopupEntry> _popups = new();
     private readonly RadioGroupManager _radioGroups = new();
     private bool _loadedRaised;
@@ -34,7 +33,7 @@ public class Window : ContentControl
     {
         Padding = new Thickness(16);
     }
-
+     
     private sealed class PopupEntry
     {
         public required UIElement Element { get; init; }
@@ -353,7 +352,10 @@ public class Window : ContentControl
 
         // Layout can be expensive (e.g., large item collections). If nothing is dirty and the
         // client size hasn't changed, avoid re-running Measure/Arrange on every paint.
-        if (clientSize == _lastLayoutClientSizeDip && padding == _lastLayoutPadding && !IsLayoutDirty(Content))
+        if (clientSize == _lastLayoutClientSizeDip &&
+            padding == _lastLayoutPadding &&
+            ReferenceEquals(Content, _lastLayoutContent) &&
+            !IsLayoutDirty(Content))
         {
             return;
         }
@@ -364,19 +366,51 @@ public class Window : ContentControl
 
         const int maxPasses = 8;
         var contentSize = clientSize.Deflate(padding);
+
+        bool needMeasure = HasMeasureDirty(Content);
         for (int pass = 0; pass < maxPasses; pass++)
         {
-            Content.Measure(contentSize);
+            if (needMeasure)
+            {
+                Content.Measure(contentSize);
+            }
+
             Content.Arrange(new Rect(padding.Left, padding.Top, contentSize.Width, contentSize.Height));
 
             if (!IsLayoutDirty(Content))
             {
                 break;
             }
+
+            // If only Arrange dirtiness remains after the first pass, avoid re-running Measure.
+            if (needMeasure && !HasMeasureDirty(Content))
+            {
+                needMeasure = false;
+            }
         }
 
         _lastLayoutClientSizeDip = clientSize;
         _lastLayoutPadding = padding;
+        _lastLayoutContent = Content;
+    }
+
+    private static bool HasMeasureDirty(Element root)
+    {
+        bool dirty = false;
+        VisitVisualTree(root, e =>
+        {
+            if (dirty)
+            {
+                return;
+            }
+
+            if (e.IsMeasureDirty)
+            {
+                dirty = true;
+            }
+        });
+
+        return dirty;
     }
 
     private static bool IsLayoutDirty(Element root)
@@ -515,6 +549,12 @@ public class Window : ContentControl
     internal void RaiseClosed()
     {
         UnsubscribeFromDispatcherChanged();
+
+        if (Application.IsRunning)
+        {
+            Application.Current.UnregisterWindow(this);
+        }
+
         Closed?.Invoke();
     }
 
