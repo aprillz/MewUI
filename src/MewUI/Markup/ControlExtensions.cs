@@ -687,6 +687,30 @@ public static class ControlExtensions
     #endregion
 
     #region TabControl
+	
+    public static TabControl Padding(this TabControl tabControl, Thickness padding)
+    {
+        tabControl.Padding = padding;
+        return tabControl;
+    }
+
+    public static TabControl Padding(this TabControl tabControl, double uniform)
+    {
+        tabControl.Padding = new Thickness(uniform);
+        return tabControl;
+    }
+
+    public static TabControl Padding(this TabControl tabControl, double horizontal, double vertical)
+    {
+        tabControl.Padding = new Thickness(horizontal, vertical, horizontal, vertical);
+        return tabControl;
+    }
+
+    public static TabControl Padding(this TabControl tabControl, double left, double top, double right, double bottom)
+    {
+        tabControl.Padding = new Thickness(left, top, right, bottom);
+        return tabControl;
+    }
 
     public static TabControl TabItems(this TabControl tabControl, params TabItem[] tabs)
     {
