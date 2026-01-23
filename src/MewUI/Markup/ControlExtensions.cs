@@ -396,15 +396,39 @@ public static class ControlExtensions
         return checkBox;
     }
 
-    public static CheckBox IsChecked(this CheckBox checkBox, bool isChecked = true)
+    public static CheckBox IsChecked(this CheckBox checkBox, bool? isChecked = true)
     {
         checkBox.IsChecked = isChecked;
         return checkBox;
     }
 
+    public static CheckBox Check(this CheckBox checkBox)
+    {
+        checkBox.IsChecked = true;
+        return checkBox;
+    }
+
+    public static CheckBox Uncheck(this CheckBox checkBox)
+    {
+        checkBox.IsChecked = false;
+        return checkBox;
+    }
+
+    public static CheckBox Indeterminate(this CheckBox checkBox, bool isIndeterminate = true)
+    {
+        checkBox.IsChecked = null;
+        return checkBox;
+    }
+
     public static CheckBox OnCheckedChanged(this CheckBox checkBox, Action<bool> handler)
     {
-        checkBox.CheckedChanged += handler;
+        checkBox.CheckedChanged += v => handler(v ?? false);
+        return checkBox;
+    }
+
+    public static CheckBox ThreeState(this CheckBox checkBox)
+    {
+        checkBox.IsThreeState = true;
         return checkBox;
     }
 
@@ -415,9 +439,34 @@ public static class ControlExtensions
 
         checkBox.SetIsCheckedBinding(
             () => source.Value,
+            v => source.Value = v ?? false,
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return checkBox;
+    }
+
+    public static CheckBox BindIsChecked(this CheckBox checkBox, ObservableValue<bool?> source)
+    {
+        ArgumentNullException.ThrowIfNull(checkBox);
+        ArgumentNullException.ThrowIfNull(source);
+
+        checkBox.SetIsCheckedBinding(
+            () => source.Value,
             v => source.Value = v,
             h => source.Changed += h,
             h => source.Changed -= h);
+        return checkBox;
+    }
+
+    public static CheckBox OnCheckStateChanged(this CheckBox checkBox, Action<bool?> handler)
+    {
+        checkBox.CheckedChanged += handler;
+        return checkBox;
+    }
+
+    public static CheckBox IsThreeState(this CheckBox checkBox, bool isThreeState = true)
+    {
+        checkBox.IsThreeState = isThreeState;
         return checkBox;
     }
 

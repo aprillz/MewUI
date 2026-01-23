@@ -2,15 +2,83 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public class CheckBox : ToggleBase
+public class CheckBox : Control
 {
     private bool _isPressed;
     private TextMeasureCache _textMeasureCache;
+    private bool? _isChecked = false;
+    private ValueBinding<bool?>? _checkedBinding;
+    private bool _updatingFromSource;
 
     public CheckBox()
     {
+        Background = Color.Transparent;
         BorderThickness = 1;
         Padding = new Thickness(2);
+    }
+
+    public override bool Focusable => true;
+
+    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+
+    public string Text
+    {
+        get;
+        set
+        {
+            field = value ?? string.Empty;
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    } = string.Empty;
+
+    public bool IsThreeState
+    {
+        get;
+        set;
+    }
+
+    public bool? IsChecked
+    {
+        get => _isChecked;
+        set
+        {
+            if (_isChecked == value)
+            {
+                return;
+            }
+
+            SetIsCheckedCore(value, fromInput: false);
+        }
+    }
+ 
+    public event Action<bool?>? CheckedChanged;
+
+    public void SetIsCheckedBinding(
+        Func<bool?> get,
+        Action<bool?> set,
+        Action<Action>? subscribe = null,
+        Action<Action>? unsubscribe = null)
+    {
+        ArgumentNullException.ThrowIfNull(get);
+        ArgumentNullException.ThrowIfNull(set);
+
+        _checkedBinding?.Dispose();
+        _checkedBinding = new ValueBinding<bool?>(
+            get,
+            set,
+            subscribe,
+            unsubscribe,
+            () =>
+            {
+                _updatingFromSource = true;
+                try { SetIsCheckedFromSource(get()); }
+                finally { _updatingFromSource = false; }
+            });
+
+        _updatingFromSource = true;
+        try { SetIsCheckedFromSource(get()); }
+        finally { _updatingFromSource = false; }
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -50,17 +118,26 @@ public class CheckBox : ToggleBase
         var radius = Math.Max(0, theme.ControlCornerRadius * 0.5);
 
         var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
-        var stroke = Math.Max(1, BorderThickness);
         DrawBackgroundAndBorder(context, boxRect, fill, borderColor, radius);
 
-        if (IsChecked)
+        var markColor = state.IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
+
+        if (_isChecked == true)
         {
             // Check mark
             var p1 = new Point(boxRect.X + 3, boxRect.Y + boxRect.Height * 0.55);
             var p2 = new Point(boxRect.X + boxRect.Width * 0.45, boxRect.Bottom - 3);
             var p3 = new Point(boxRect.Right - 3, boxRect.Y + 3);
-            context.DrawLine(p1, p2, theme.Palette.Accent, 2);
-            context.DrawLine(p2, p3, theme.Palette.Accent, 2);
+            context.DrawLine(p1, p2, markColor, 2);
+            context.DrawLine(p2, p3, markColor, 2);
+        }
+        else if (_isChecked == null)
+        {
+            // Indeterminate mark (horizontal bar)
+            var y = boxRect.Y + boxRect.Height / 2;
+            var p1 = new Point(boxRect.X + 3, y);
+            var p2 = new Point(boxRect.Right - 3, y);
+            context.DrawLine(p1, p2, markColor, 2);
         }
 
         if (!string.IsNullOrEmpty(Text))
@@ -113,7 +190,7 @@ public class CheckBox : ToggleBase
 
         if (IsEnabled && Bounds.Contains(e.Position))
         {
-            IsChecked = !IsChecked;
+            ToggleFromInput();
         }
 
         InvalidateVisual();
@@ -124,11 +201,57 @@ public class CheckBox : ToggleBase
     {
         base.OnKeyUp(e);
 
-        // Space handled by ToggleBase
+        if (!IsEnabled)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Space)
+        {
+            ToggleFromInput();
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleFromInput()
+    {
+        if (IsThreeState)
+        {
+            var next = _isChecked switch
+            {
+                false => (bool?)true,
+                true => (bool?)null,
+                _ => (bool?)false
+            };
+
+            SetIsCheckedCore(next, fromInput: true);
+            return;
+        }
+
+        // If currently indeterminate, a user toggle treats it like unchecked and toggles to checked.
+        bool nextBool = _isChecked != true;
+        SetIsCheckedCore(nextBool, fromInput: true);
+    }
+
+    private void SetIsCheckedFromSource(bool? value) => SetIsCheckedCore(value, fromInput: false);
+
+    private void SetIsCheckedCore(bool? value, bool fromInput)
+    {
+        _isChecked = value;
+        CheckedChanged?.Invoke(value);
+
+        if (fromInput && !_updatingFromSource)
+        {
+            _checkedBinding?.Set(value);
+        }
+
+        InvalidateVisual();
     }
 
     protected override void OnDispose()
     {
+        _checkedBinding?.Dispose();
+        _checkedBinding = null;
         base.OnDispose();
     }
 

@@ -53,7 +53,7 @@ var root = new Window()
 
                         new TabControl()
                             .VerticalScroll(ScrollMode.Auto)
-                            .Padding(50)
+                            .Padding(16)
                             .TabItems(
                                 new TabItem()
                                     .Header("Controls")
