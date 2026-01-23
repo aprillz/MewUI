@@ -34,7 +34,20 @@ internal sealed class TabHeaderButton : ContentControl
             return null;
         }
 
-        return Bounds.Contains(point) ? this : null;
+        // Prefer inner button hit targets (e.g. close button), but keep the rest of the header
+        // clickable as a tab-select surface.
+        var hit = base.OnHitTest(point);
+        if (hit == null)
+        {
+            return null;
+        }
+
+        if (hit != this)
+        {
+            return hit is Button ? hit : this;
+        }
+
+        return this;
     }
 
     protected override void OnRender(IGraphicsContext context)
