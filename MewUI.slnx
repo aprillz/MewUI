@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
+    <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
   </Folder>
   <Folder Name="/samples/FBA/">
     <File Path="samples/FBASample/fba_calculator.cs" />

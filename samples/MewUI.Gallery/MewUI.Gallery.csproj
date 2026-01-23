@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Aprillz.MewUI.Gallery</RootNamespace>
+    <AssemblyName>Aprillz.MewUI.Gallery</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\logo\logo_h-1280.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\images\april.jpg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\icon\appicon.ico" LogicalName="Aprillz.MewUI.Gallery.appicon.ico" />
+  </ItemGroup>
+
+</Project>
+
