@@ -9,6 +9,25 @@ public sealed class Border : Control, IVisualTreeHost
 {
     private UIElement? _child;
 
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        {
+            return null;
+        }
+
+        if (_child != null)
+        {
+            var hit = _child.HitTest(point);
+            if (hit != null)
+            {
+                return hit;
+            }
+        }
+
+        return base.OnHitTest(point);
+    }
+
     public double CornerRadius
     {
         get;

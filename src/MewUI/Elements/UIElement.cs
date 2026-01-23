@@ -44,6 +44,7 @@ public abstract class UIElement : Element
                 field = value;
                 InvalidateVisual();
                 OnEnabledChanged();
+                NotifyDescendantEnabledSuggestionChanged();
             }
         }
     } = true;
@@ -309,8 +310,37 @@ public abstract class UIElement : Element
 
     private bool ComputeIsEnabledSuggestionSafe()
     {
-        try { return ComputeIsEnabledSuggestion(); }
+        bool local;
+        try { local = ComputeIsEnabledSuggestion(); }
         catch { return true; }
+
+        if (!local)
+        {
+            return false;
+        }
+
+        if (Parent is UIElement parent)
+        {
+            return parent.IsEffectivelyEnabled;
+        }
+
+        return true;
+    }
+
+    private void NotifyDescendantEnabledSuggestionChanged()
+    {
+        VisualTree.Visit(this, e =>
+        {
+            if (ReferenceEquals(e, this))
+            {
+                return;
+            }
+
+            if (e is UIElement u)
+            {
+                u.ReevaluateSuggestedIsEnabled();
+            }
+        });
     }
 
     internal void RegisterBinding(IDisposable binding)

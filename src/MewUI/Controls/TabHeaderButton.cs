@@ -63,8 +63,10 @@ internal sealed class TabHeaderButton : ContentControl
         var tabBg = host?.GetTabBackground(theme, IsSelected) ?? (IsSelected ? theme.Palette.ControlBackground : theme.Palette.ButtonFace);
         var outline = host?.GetOutlineColor(theme) ?? theme.Palette.ControlBorder;
 
+        var isEffectivelyEnabled = IsEffectivelyEnabled && IsTabEnabled;
+
         Color bg = tabBg;
-        if (!IsEnabled || !IsTabEnabled)
+        if (!isEffectivelyEnabled&& !IsSelected)
         {
             bg = theme.Palette.ButtonDisabledBackground;
         }
@@ -77,7 +79,7 @@ internal sealed class TabHeaderButton : ContentControl
             bg = theme.Palette.ButtonHoverBackground;
         }
 
-        var border = IsSelected ? outline : theme.Palette.ControlBorder;
+        var border = IsSelected && isEffectivelyEnabled ? outline : theme.Palette.ControlBorder;
 
         // Top-only rounding via clipping:
         // Draw a taller rounded-rect, then clip to the real bounds so the bottom corners are clipped away.

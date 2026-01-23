@@ -26,6 +26,8 @@ public sealed class Palette
 
     public Color AccentText { get; }
 
+    public Color DisabledAccent { get; }
+
     public Color SelectionBackground { get; }
 
     public Color SelectionText { get; }
@@ -79,8 +81,9 @@ public sealed class Palette
 
         ControlBorder = ComputeControlBorder(windowBackground, windowText, accent);
         DisabledText = ComputeDisabledText(windowBackground, windowText);
-        PlaceholderText = DisabledText.WithAlpha(127);
-        DisabledControlBackground = ComputeDisabledControlBackground(windowBackground, controlBackground);
+        DisabledAccent = ComputeDisabledAccent(windowBackground, accent, DisabledText);
+        PlaceholderText = ComputePlaceholderText(windowBackground, DisabledText);
+        DisabledControlBackground = ComputeDisabledControlBackground(windowBackground, controlBackground, windowText);
         ButtonHoverBackground = buttonFace.Lerp(accent, hoverT);
         ButtonPressedBackground = buttonFace.Lerp(accent, pressedT);
         Focus = accent;
@@ -97,36 +100,50 @@ public sealed class Palette
 
     public static bool IsDarkBackground(Color color) => (color.R + color.G + color.B) < 128 * 3;
 
-    private static Color ComputeControlBorder(Color windowBackground, Color windowText, Color accent)
+    private static Color ComputeControlBorder(Color baseColor, Color windowText, Color accent)
     {
-        var isDark = IsDarkBackground(windowBackground);
-        var baseBorder = windowBackground.Lerp(windowText, isDark ? 0.23 : 0.21);
+        var isDark = IsDarkBackground(baseColor);
+        var baseBorder = baseColor.Lerp(windowText, isDark ? 0.23 : 0.21);
         return baseBorder.Lerp(accent, isDark ? 0.04 : 0.05);
     }
 
-    private static Color ComputeContainerBackground(Color windowBackground, Color buttonFace, Color accent)
+    private static Color ComputeContainerBackground(Color baseColor, Color buttonFace, Color accent)
     {
-        var isDark = IsDarkBackground(windowBackground);
+        var isDark = IsDarkBackground(baseColor);
         if (UseAlphaPalette)
         {
-            return buttonFace.WithAlpha(isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
+            return buttonFace.WithAlpha((byte)((isDark ? 0.25 : 0.15) * 255)).Lerp(accent, isDark ? 0.01 : 0.014);
         }
         else
         {
-            return windowBackground.Lerp(buttonFace, isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
+            return baseColor.Lerp(buttonFace, isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
         }
     }
 
-    private static Color ComputeDisabledText(Color windowBackground, Color windowText)
+    private static Color ComputeDisabledText(Color baseColor, Color windowText)
     {
-        var isDark = IsDarkBackground(windowBackground);
-        return windowText.Lerp(windowBackground, isDark ? 0.72 : 0.58);
+        var isDark = IsDarkBackground(baseColor);
+        return windowText.Lerp(baseColor, isDark ? 0.52 : 0.58);
     }
 
-    private static Color ComputeDisabledControlBackground(Color windowBackground, Color controlBackground)
+    private static Color ComputeDisabledAccent(Color baseColor, Color accent, Color disabledText)
     {
-        var isDark = IsDarkBackground(windowBackground);
-        return controlBackground.Lerp(windowBackground, isDark ? 0.45 : 0.55);
+        var isDark = IsDarkBackground(baseColor);
+        // Keep some hue from the accent, but move it toward the disabled text tone so "checked"
+        // states remain recognizable while clearly disabled.
+        return accent.Lerp(disabledText, isDark ? 0.95 : 0.9);
+    }
+
+    private Color ComputePlaceholderText(Color baseColor, Color textColor)
+    {
+        var isDark = IsDarkBackground(baseColor);
+        return textColor.WithAlpha(isDark ? (byte)192 : (byte)160);
+    }
+
+    private static Color ComputeDisabledControlBackground(Color baseColor, Color controlBackground, Color foreground)
+    {
+        var isDark = IsDarkBackground(baseColor);
+        return controlBackground.Lerp(foreground, isDark ? 0.05 : 0.055);
     }
 
     private static Color ComputeBackground(Color background, Color accent)
@@ -149,9 +166,9 @@ public sealed class Palette
         return luma >= 0.6 ? Color.FromRgb(28, 28, 32) : Color.FromRgb(248, 246, 255);
     }
 
-    private static (Color thumb, Color hover, Color active) ComputeScrollBarThumbs(Color windowBackground)
+    private static (Color thumb, Color hover, Color active) ComputeScrollBarThumbs(Color baseColor)
     {
-        var isDark = IsDarkBackground(windowBackground);
+        var isDark = IsDarkBackground(baseColor);
         byte c = isDark ? (byte)255 : (byte)0;
         return (
             Color.FromArgb(0x44, c, c, c),

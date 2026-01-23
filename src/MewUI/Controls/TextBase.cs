@@ -599,6 +599,7 @@ public abstract class TextBase : Control
         Focus();
 
         var contentBounds = GetInteractionContentBounds();
+
         SetCaretFromPoint(e.Position, contentBounds);
         _editor.BeginSelectionAtCaret();
 

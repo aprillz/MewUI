@@ -139,7 +139,9 @@ public class Label : Control
 
         var bounds = Bounds.Deflate(Padding);
         var font = GetFont();
-        context.DrawText(Text, bounds, font, Foreground, TextAlignment, VerticalTextAlignment, wrapping);
+        var theme = GetTheme();
+        var color = IsEffectivelyEnabled ? Foreground : theme.Palette.DisabledText;
+        context.DrawText(Text, bounds, font, color, TextAlignment, VerticalTextAlignment, wrapping);
     }
 
     public void SetTextBinding(Func<string> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)

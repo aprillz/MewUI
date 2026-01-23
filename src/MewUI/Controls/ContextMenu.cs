@@ -732,7 +732,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             if (entry is MenuItem item)
             {
                 bool isHot = i == _hotIndex || i == _openSubMenuIndex;
-                var bg = isHot ? theme.Palette.SelectionBackground.WithAlpha(0.6) : Color.Transparent;
+                var bg = isHot ? theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255)) : Color.Transparent;
                 if (bg.A > 0)
                 {
                     if (itemRadius > 0)

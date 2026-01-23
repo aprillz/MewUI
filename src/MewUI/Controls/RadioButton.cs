@@ -170,7 +170,8 @@ public class RadioButton : ToggleBase
         if (IsChecked)
         {
             var inner = circleRect.Inflate(-4, -4);
-            context.FillEllipse(inner, theme.Palette.Accent);
+            var dot = state.IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
+            context.FillEllipse(inner, dot);
         }
 
         if (!string.IsNullOrEmpty(Text))

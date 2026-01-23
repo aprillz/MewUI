@@ -58,14 +58,15 @@ public sealed class ProgressBar : RangeBase
         var fillRect = new Rect(contentBounds.X, contentBounds.Y, contentBounds.Width * t, contentBounds.Height);
         if (fillRect.Width > 0)
         {
+            var fillColor = IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
             if (radius - 1 > 0)
             {
                 double rx = Math.Min(radius - 1, fillRect.Width / 2.0);
-                context.FillRoundedRectangle(fillRect, rx, rx, theme.Palette.Accent);
+                context.FillRoundedRectangle(fillRect, rx, rx, fillColor);
             }
             else
             {
-                context.FillRectangle(fillRect, theme.Palette.Accent);
+                context.FillRectangle(fillRect, fillColor);
             }
         }
     }

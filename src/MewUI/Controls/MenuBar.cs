@@ -267,7 +267,7 @@ public sealed class MenuBar : Control, IPopupOwner
             }
             else if (_hotIndex == i)
             {
-                bg = theme.Palette.SelectionBackground.WithAlpha(0.6);
+                bg = theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255));
             }
 
             if (bg.A > 0)

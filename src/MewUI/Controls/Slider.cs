@@ -81,7 +81,8 @@ public sealed class Slider : RangeBase
         var fillRect = new Rect(trackRect.X, trackRect.Y, trackRect.Width * t, trackRect.Height);
         if (fillRect.Width > 0)
         {
-            context.FillRoundedRectangle(fillRect, 2, 2, theme.Palette.Accent);
+            var fillColor = IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
+            context.FillRoundedRectangle(fillRect, 2, 2, fillColor);
         }
 
         // Thumb

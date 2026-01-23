@@ -76,6 +76,34 @@ public static class ControlExtensions
 
     #region UIElement Properties
 
+    public static T IsVisible<T>(this T element, bool isVisible = true) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.IsVisible = isVisible;
+        return element;
+    }
+
+    public static T IsEnabled<T>(this T element, bool isEnabled = true) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.IsEnabled = isEnabled;
+        return element;
+    }
+
+    public static T Enable<T>(this T element) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.IsEnabled = true;
+        return element;
+    }
+
+    public static T Disable<T>(this T element) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.IsEnabled = false;
+        return element;
+    }
+
     public static T WithTheme<T>(this T element, Action<Theme, T> apply, bool invokeImmediately = true) where T : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(element);
