@@ -8,6 +8,7 @@ using Aprillz.MewUI.Rendering;
 public abstract class FrameworkElement : UIElement
 {
     private Theme _theme = Application.IsRunning ? Application.Current.Theme : Theme.Light;
+    private List<Action<Theme, FrameworkElement>>? _themeCallbacks;
 
     /// <summary>
     /// Gets the graphics factory from the owning window, or the default factory.
@@ -135,11 +136,40 @@ public abstract class FrameworkElement : UIElement
         _theme = newTheme;
 
         OnThemeChanged(oldTheme, newTheme);
+        InvokeThemeCallbacks(newTheme);
     }
 
     protected virtual void OnThemeChanged(Theme oldTheme, Theme newTheme) { }
 
     protected Theme GetTheme() => _theme;
+
+    internal Theme ThemeSnapshot => _theme;
+
+    internal void RegisterThemeCallback(Action<Theme, FrameworkElement> callback, bool invokeImmediately = true)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        _themeCallbacks ??= new List<Action<Theme, FrameworkElement>>(capacity: 1);
+        _themeCallbacks.Add(callback);
+
+        if (invokeImmediately)
+        {
+            callback(_theme, this);
+        }
+    }
+
+    private void InvokeThemeCallbacks(Theme theme)
+    {
+        if (_themeCallbacks == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _themeCallbacks.Count; i++)
+        {
+            _themeCallbacks[i](theme, this);
+        }
+    }
 
     protected override Rect GetArrangedBounds(Rect finalRect)
     {

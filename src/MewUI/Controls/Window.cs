@@ -824,8 +824,12 @@ public class Window : ContentControl
         // If a popup is moved between windows (or the window DPI differs), ensure the popup updates its DPI-sensitive
         // caches (fonts, layout) before measuring/arranging.
         uint oldDpi = popup.GetDpiCached();
+        var oldTheme = popup is FrameworkElement popupElement
+            ? popupElement.ThemeSnapshot
+            : GetTheme();
         popup.Parent = this;
         ApplyPopupDpiChange(popup, oldDpi, Dpi);
+        ApplyPopupThemeChange(popup, oldTheme, GetTheme());
         var entry = new PopupEntry { Owner = owner, Element = popup, Bounds = bounds };
         _popups.Add(entry);
         LayoutPopup(entry);
@@ -896,6 +900,22 @@ public class Window : ContentControl
             if (e is Control c)
             {
                 c.NotifyDpiChanged(oldDpi, newDpi);
+            }
+        });
+    }
+
+    private static void ApplyPopupThemeChange(UIElement popup, Theme oldTheme, Theme newTheme)
+    {
+        if (oldTheme == newTheme)
+        {
+            return;
+        }
+
+        VisitVisualTree(popup, e =>
+        {
+            if (e is FrameworkElement element)
+            {
+                element.NotifyThemeChanged(oldTheme, newTheme);
             }
         });
     }

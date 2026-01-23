@@ -74,6 +74,19 @@ public static class ControlExtensions
 
     #region UIElement Events (Generic)
 
+    #region UIElement Properties
+
+    public static T WithTheme<T>(this T element, Action<Theme, T> apply, bool invokeImmediately = true) where T : FrameworkElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(apply);
+
+        element.RegisterThemeCallback((theme, _) => apply(theme, element), invokeImmediately);
+        return element;
+    }
+
+    #endregion
+
     #region UIElement Binding (Explicit)
 
     public static T BindIsVisible<T>(this T element, ObservableValue<bool> source) where T : UIElement
