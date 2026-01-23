@@ -64,8 +64,6 @@ public readonly struct Color : IEquatable<Color>
 
     public Color WithAlpha(byte alpha) => new(alpha, R, G, B);
 	
-    public Color WithAlpha(double alpha) => new((byte)(alpha * 255), R, G, B);
-
     public Color Lerp(Color other, double t)
     {
         t = Math.Clamp(t, 0, 1);
@@ -109,24 +107,7 @@ public readonly struct Color : IEquatable<Color>
     public static Color Pink => new(255, 192, 203);
 
     public static Color Brown => new(139, 69, 19);
-
-    // Windows system-like colors
-    public static Color WindowBackground => new(240, 240, 240);
-
-    public static Color WindowText => new(0, 0, 0);
-
-    public static Color ControlBackground => new(255, 255, 255);
-
-    public static Color ControlBorder => new(173, 173, 173);
-
-    public static Color ButtonFace => new(225, 225, 225);
-
-    public static Color ButtonText => new(0, 0, 0);
-
-    public static Color Highlight => new(0, 120, 215);
-
-    public static Color HighlightText => new(255, 255, 255);
-
+     
     public static bool operator ==(Color left, Color right) => left.Equals(right);
 
     public static bool operator !=(Color left, Color right) => !left.Equals(right);
