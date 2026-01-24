@@ -1,5 +1,8 @@
+using System.Runtime.Versioning;
+
 namespace Aprillz.MewUI.Platform.Win32;
 
+[SupportedOSPlatform("windows")]
 internal static class StaHelper
 {
     public static T Run<T>(Func<T> func, Action? pump = null)

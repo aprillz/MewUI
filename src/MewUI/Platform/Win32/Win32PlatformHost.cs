@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
@@ -6,6 +7,7 @@ using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
+[SupportedOSPlatform("windows")]
 public sealed class Win32PlatformHost : IPlatformHost
 {
     internal const string WindowClassName = "AprillzMewUIWindow";

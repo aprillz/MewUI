@@ -1,7 +1,6 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
-using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
@@ -9,6 +8,7 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
+[SupportedOSPlatform("windows")]
 internal sealed class Win32WindowBackend : IWindowBackend
 {
     private readonly Win32PlatformHost _host;
