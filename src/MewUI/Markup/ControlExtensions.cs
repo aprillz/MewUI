@@ -104,12 +104,12 @@ public static class ControlExtensions
         return element;
     }
 
-    public static T WithTheme<T>(this T element, Action<Theme, T> apply, bool invokeImmediately = true) where T : FrameworkElement
+    public static T WithTheme<T>(this T element, Action<Theme, T> apply) where T : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(apply);
 
-        element.RegisterThemeCallback((theme, _) => apply(theme, element), invokeImmediately);
+        element.RegisterThemeCallback((theme, e) => apply(theme, element), true);
         return element;
     }
 
@@ -529,6 +529,7 @@ public static class ControlExtensions
             h => source.Changed -= h);
         return radioButton;
     }
+
     public static RadioButton BindIsChecked<T>(this RadioButton radioButton, ObservableValue<T> source, Func<T, bool> convert, Func<bool, (bool success, T value)>? convertBack)
     {
         ArgumentNullException.ThrowIfNull(radioButton);
@@ -551,6 +552,41 @@ public static class ControlExtensions
             h => source.Changed += h,
             h => source.Changed -= h);
         return radioButton;
+    }
+
+    #endregion
+
+    #region ToggleSwitch
+
+    public static ToggleSwitch Text(this ToggleSwitch toggleSwitch, string text)
+    {
+        toggleSwitch.Text = text;
+        return toggleSwitch;
+    }
+
+    public static ToggleSwitch IsChecked(this ToggleSwitch toggleSwitch, bool isChecked = true)
+    {
+        toggleSwitch.IsChecked = isChecked;
+        return toggleSwitch;
+    }
+
+    public static ToggleSwitch OnCheckedChanged(this ToggleSwitch toggleSwitch, Action<bool> handler)
+    {
+        toggleSwitch.CheckedChanged += handler;
+        return toggleSwitch;
+    }
+
+    public static ToggleSwitch BindIsChecked(this ToggleSwitch toggleSwitch, ObservableValue<bool> source)
+    {
+        ArgumentNullException.ThrowIfNull(toggleSwitch);
+        ArgumentNullException.ThrowIfNull(source);
+
+        toggleSwitch.SetIsCheckedBinding(
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return toggleSwitch;
     }
 
     #endregion
