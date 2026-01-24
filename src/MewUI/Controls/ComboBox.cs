@@ -164,7 +164,8 @@ public sealed class ComboBox : Control, IPopupOwner
         var borderColor = BorderBrush;
         if (IsEnabled)
         {
-            if (IsFocused)
+            // Keep focus highlight while the drop-down popup is open/focused.
+            if (IsFocused || IsFocusWithin || IsDropDownOpen)
             {
                 borderColor = theme.Palette.Accent;
             }

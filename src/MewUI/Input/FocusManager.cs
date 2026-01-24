@@ -161,7 +161,7 @@ public sealed class FocusManager
         return result;
     }
 
-    private static void UpdateFocusWithin(UIElement? oldElement, UIElement? newElement)
+    private void UpdateFocusWithin(UIElement? oldElement, UIElement? newElement)
     {
         if (oldElement == newElement)
         {
@@ -187,17 +187,34 @@ public sealed class FocusManager
         }
     }
 
-    private static List<UIElement> CollectFocusWithinChain(UIElement? element)
+    private List<UIElement> CollectFocusWithinChain(UIElement? element)
     {
         var chain = new List<UIElement>();
+        var visited = new HashSet<UIElement>();
+
         Element? current = element;
         while (current != null)
         {
-            if (current is UIElement ui)
+            if (current is UIElement ui && visited.Add(ui))
             {
                 chain.Add(ui);
             }
-            current = current.Parent;
+
+            if (current is UIElement currentUi && _window.TryGetPopupOwner(currentUi, out var popupOwner))
+            {
+                if (popupOwner == currentUi)
+                {
+                    current = current.Parent;
+                }
+                else
+                {
+                    current = popupOwner;
+                }
+            }
+            else
+            {
+                current = current.Parent;
+            }
         }
         return chain;
     }

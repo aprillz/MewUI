@@ -301,7 +301,7 @@ public abstract class Control : FrameworkElement, IDisposable
     {
         var enabled = IsEffectivelyEnabled;
         var hot = enabled && (IsMouseOver || IsMouseCaptured);
-        var focused = enabled && IsFocused;
+        var focused = enabled && (IsFocused || IsFocusWithin);
         var pressed = enabled && isPressed;
         var active = enabled && isActive;
         return new VisualState(enabled, hot, focused, pressed, active);

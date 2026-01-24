@@ -846,6 +846,8 @@ public class Window : ContentControl
             {
                 owner.OnPopupClosed(entry.Element);
             }
+
+            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
         }
         _popups.Clear();
         Invalidate();
@@ -883,6 +885,21 @@ public class Window : ContentControl
         Invalidate();
     }
 
+    internal bool TryGetPopupOwner(UIElement popup, out UIElement owner)
+    {
+        for (int i = 0; i < _popups.Count; i++)
+        {
+            if (_popups[i].Element == popup)
+            {
+                owner = _popups[i].Owner;
+                return true;
+            }
+        }
+
+        owner = popup;
+        return false;
+    }
+
     internal void UpdatePopup(UIElement popup, Rect bounds)
     {
         for (int i = 0; i < _popups.Count; i++)
@@ -916,9 +933,48 @@ public class Window : ContentControl
                 owner.OnPopupClosed(entry.Element);
             }
 
+            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
+
             Invalidate();
             return;
         }
+    }
+
+    private void EnsureFocusNotInClosedPopup(UIElement popup, UIElement owner)
+    {
+        var focused = FocusManager.FocusedElement;
+        if (focused == null)
+        {
+            return;
+        }
+
+        if (focused != popup && !IsInSubtreeOf(focused, popup))
+        {
+            return;
+        }
+
+        // Prefer restoring focus to the owner, otherwise clear focus to avoid leaving focus on a detached popup.
+        if (owner.Focusable && owner.IsEffectivelyEnabled && owner.IsVisible)
+        {
+            FocusManager.SetFocus(owner);
+        }
+        else
+        {
+            FocusManager.ClearFocus();
+        }
+    }
+
+    private static bool IsInSubtreeOf(UIElement element, UIElement root)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void LayoutPopup(PopupEntry entry)
