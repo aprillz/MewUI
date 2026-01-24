@@ -3,6 +3,7 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI.Controls;
 
 public class ListBox : Control
+    , IVisualTreeHost
 {
     private readonly List<string> _items = new();
     private readonly TextWidthCache _textWidthCache = new(512);
@@ -122,6 +123,11 @@ public class ListBox : Control
         {
             ItemPadding = newTheme.ListItemPadding;
         }
+    }
+
+    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    {
+        visitor(_vBar);
     }
 
     protected override Size MeasureContent(Size availableSize)
