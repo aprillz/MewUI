@@ -511,6 +511,48 @@ public static class ControlExtensions
         return radioButton;
     }
 
+    public static RadioButton BindIsChecked<T>(this RadioButton radioButton, ObservableValue<T> source, Func<T, bool> convert, Func<bool, T>? convertBack = null)
+    {
+        ArgumentNullException.ThrowIfNull(radioButton);
+        ArgumentNullException.ThrowIfNull(source);
+
+        radioButton.SetIsCheckedBinding(
+            () => convert(source.Value),
+            v =>
+            {
+                if (convertBack is not null)
+                {
+                    source.Value = convertBack.Invoke(v);
+                }
+            },
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return radioButton;
+    }
+    public static RadioButton BindIsChecked<T>(this RadioButton radioButton, ObservableValue<T> source, Func<T, bool> convert, Func<bool, (bool success, T value)>? convertBack)
+    {
+        ArgumentNullException.ThrowIfNull(radioButton);
+        ArgumentNullException.ThrowIfNull(source);
+
+        radioButton.SetIsCheckedBinding(
+            () => convert(source.Value),
+            v =>
+            {
+                if (convertBack is not null)
+                {
+                    var result = convertBack.Invoke(v);
+
+                    if (result.success)
+                    {
+                        source.Value = result.value;
+                    }
+                }
+            },
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return radioButton;
+    }
+
     #endregion
 
     #region ListBox
