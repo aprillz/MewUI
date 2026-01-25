@@ -453,36 +453,19 @@ FrameworkElement MediaPage()
                     new WrapPanel()
                         .Orientation(Orientation.Horizontal)
                         .Spacing(8)
+                        .ItemWidth(140)
+                        .ItemHeight(90)
                         .Children(
-                            new Border()
-                                .Width(140)
-                                .Height(90)
-                                .BorderThickness(1)
-                                .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
-                                .Apply(b =>
-                                {
-                                    b.CornerRadius = 8;
-                                    b.Child = new Image()
-                                        .Source(april)
-                                        .StretchMode(ImageStretch.Uniform)
-                                        .ImageScaleQuality(ImageScaleQuality.HighQuality);
-                                }),
+                            new Image()
+                                .Source(april)
+                                .StretchMode(ImageStretch.Uniform)
+                                .ImageScaleQuality(ImageScaleQuality.HighQuality),
 
-                            new Border()
-                                .Width(140)
-                                .Height(90)
-                                .BorderThickness(1)
-                                .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
-                                .Apply(b =>
-                                {
-                                    b.CornerRadius = 8;
-                                    b.Child = new Image()
-                                        .Source(april)
-                                        // Center crop: take the middle 50% of the source.
-                                        .ViewBoxRelative(new Rect(0.25, 0.25, 0.5, 0.5))
-                                        .StretchMode(ImageStretch.UniformToFill)
-                                        .ImageScaleQuality(ImageScaleQuality.HighQuality);
-                                })
+                            new Image()
+                                .Source(april)
+                                .ViewBoxRelative(new Rect(0.25, 0.25, 0.5, 0.5))
+                                .StretchMode(ImageStretch.UniformToFill)
+                                .ImageScaleQuality(ImageScaleQuality.HighQuality)
                         ),
 
                     new Label()

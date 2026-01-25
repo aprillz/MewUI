@@ -5,26 +5,11 @@ using Aprillz.MewUI.Rendering;
 /// <summary>
 /// Base class for elements with size, margin, alignment, and data binding support.
 /// </summary>
-public abstract class FrameworkElement : UIElement
+public abstract class FrameworkElement : UIElement, IDisposable
 {
     private Theme _theme = Application.IsRunning ? Application.Current.Theme : Theme.Light;
     private List<Action<Theme, FrameworkElement>>? _themeCallbacks;
-
-    /// <summary>
-    /// Gets the graphics factory from the owning window, or the default factory.
-    /// </summary>
-    protected IGraphicsFactory GetGraphicsFactory()
-    {
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            return window.GraphicsFactory;
-        }
-
-        return Application.DefaultGraphicsFactory;
-    }
-
-    protected uint GetDpi() => GetDpiCached();
+    private bool _disposed;
 
     /// <summary>
     /// Gets or sets the explicit width. Use double.NaN for automatic sizing.
@@ -126,10 +111,35 @@ public abstract class FrameworkElement : UIElement
     /// </summary>
     public double ActualHeight => Bounds.Height;
 
+    internal Theme InternalTheme => _theme;
+
     /// <summary>
     /// Gets the content bounds (bounds minus padding).
     /// </summary>
     protected Rect ContentBounds => Bounds.Deflate(Padding);
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // Release extension-managed bindings (and any other UIElement-registered disposables).
+        DisposeBindings();
+
+        OnDispose();
+    }
+
+    internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
+    {
+        OnDpiChanged(oldDpi, newDpi);
+
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
 
     internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme)
     {
@@ -138,12 +148,6 @@ public abstract class FrameworkElement : UIElement
         OnThemeChanged(oldTheme, newTheme);
         InvokeThemeCallbacks(newTheme);
     }
-
-    protected virtual void OnThemeChanged(Theme oldTheme, Theme newTheme) { }
-
-    protected Theme GetTheme() => _theme;
-
-    internal Theme ThemeSnapshot => _theme;
 
     internal void RegisterThemeCallback(Action<Theme, FrameworkElement> callback, bool invokeImmediately = true)
     {
@@ -158,18 +162,39 @@ public abstract class FrameworkElement : UIElement
         }
     }
 
-    private void InvokeThemeCallbacks(Theme theme)
+    protected virtual void OnDispose()
+    { }
+
+    protected Rect GetSnappedBorderBounds(Rect bounds)
     {
-        if (_themeCallbacks == null)
+        var dpiScale = GetDpi() / 96.0;
+        return LayoutRounding.SnapBoundsRectToPixels(bounds, dpiScale);
+    }
+
+    protected virtual void OnDpiChanged(uint oldDpi, uint newDpi)
+    {
+    }
+
+    /// <summary>
+    /// Gets the graphics factory from the owning window, or the default factory.
+    /// </summary>
+    protected IGraphicsFactory GetGraphicsFactory()
+    {
+        var root = FindVisualRoot();
+        if (root is Window window)
         {
-            return;
+            return window.GraphicsFactory;
         }
 
-        for (int i = 0; i < _themeCallbacks.Count; i++)
-        {
-            _themeCallbacks[i](theme, this);
-        }
+        return Application.DefaultGraphicsFactory;
     }
+
+    protected uint GetDpi() => GetDpiCached();
+
+    protected virtual void OnThemeChanged(Theme oldTheme, Theme newTheme)
+    { }
+
+    protected Theme GetTheme() => _theme;
 
     protected override Rect GetArrangedBounds(Rect finalRect)
     {
@@ -276,5 +301,19 @@ public abstract class FrameworkElement : UIElement
     /// <summary>
     /// Arranges the content. Override in derived classes.
     /// </summary>
-    protected virtual void ArrangeContent(Rect bounds) { }
+    protected virtual void ArrangeContent(Rect bounds)
+    { }
+
+    private void InvokeThemeCallbacks(Theme theme)
+    {
+        if (_themeCallbacks == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _themeCallbacks.Count; i++)
+        {
+            _themeCallbacks[i](theme, this);
+        }
+    }
 }

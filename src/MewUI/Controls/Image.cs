@@ -2,7 +2,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class Image : Control
+public sealed class Image : FrameworkElement
 {
     private readonly Dictionary<GraphicsBackend, IImage> _cache = new();
     private INotifyImageChanged? _notifySource;
@@ -289,6 +289,8 @@ public sealed class Image : Control
 
     protected override void OnDispose()
     {
+        base.OnDispose();
+
         if (_notifySource != null)
         {
             _notifySource.Changed -= OnSourceChanged;
@@ -296,7 +298,6 @@ public sealed class Image : Control
         }
 
         ClearCache();
-        base.OnDispose();
     }
 
     private void OnSourceChanged()

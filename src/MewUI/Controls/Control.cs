@@ -5,10 +5,9 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for all controls.
 /// </summary>
-public abstract class Control : FrameworkElement, IDisposable
+public abstract class Control : FrameworkElement
 {
     private IFont? _font;
-    private bool _disposed;
     private Color? _background;
     private Color? _foreground;
     private Color? _borderBrush;
@@ -18,49 +17,9 @@ public abstract class Control : FrameworkElement, IDisposable
     private ToolTip? _toolTipPopup;
     private Point _lastMousePositionInWindow;
 
-    protected virtual Color DefaultBackground => Color.Transparent;
-
-    protected virtual Color DefaultForeground => GetTheme().Palette.WindowText;
-
-    protected virtual Color DefaultBorderBrush => Color.Transparent;
-
-    protected virtual string DefaultFontFamily => GetTheme().FontFamily;
-
-    protected virtual double DefaultFontSize => GetTheme().FontSize;
-
-    protected virtual FontWeight DefaultFontWeight => GetTheme().FontWeight;
-
-    internal static bool PreferFillStrokeTrick { get; } = false;
-
     public string? ToolTipText { get; set; }
 
     public ContextMenu? ContextMenu { get; set; }
-
-    protected readonly struct TextMeasurementScope : IDisposable
-    {
-        public IGraphicsFactory Factory { get; }
-
-        public IGraphicsContext Context { get; }
-
-        public IFont Font { get; }
-
-        public TextMeasurementScope(IGraphicsFactory factory, IGraphicsContext context, IFont font)
-        {
-            Factory = factory;
-            Context = context;
-            Font = font;
-        }
-
-        public void Dispose() => Context.Dispose();
-    }
-
-    protected TextMeasurementScope BeginTextMeasurement()
-    {
-        var factory = GetGraphicsFactory();
-        var context = factory.CreateMeasurementContext(GetDpi());
-        var font = GetFont(factory);
-        return new TextMeasurementScope(factory, context, font);
-    }
 
     /// <summary>
     /// Gets or sets the background color.
@@ -78,17 +37,6 @@ public abstract class Control : FrameworkElement, IDisposable
             _background = value;
             InvalidateVisual();
         }
-    }
-
-    public void ClearBackground()
-    {
-        if (_background == null)
-        {
-            return;
-        }
-
-        _background = null;
-        InvalidateVisual();
     }
 
     /// <summary>
@@ -109,17 +57,6 @@ public abstract class Control : FrameworkElement, IDisposable
         }
     }
 
-    public void ClearForeground()
-    {
-        if (_foreground == null)
-        {
-            return;
-        }
-
-        _foreground = null;
-        InvalidateVisual();
-    }
-
     /// <summary>
     /// Gets or sets the border color.
     /// </summary>
@@ -136,17 +73,6 @@ public abstract class Control : FrameworkElement, IDisposable
             _borderBrush = value;
             InvalidateVisual();
         }
-    }
-
-    public void ClearBorderBrush()
-    {
-        if (_borderBrush == null)
-        {
-            return;
-        }
-
-        _borderBrush = null;
-        InvalidateVisual();
     }
 
     /// <summary>
@@ -177,19 +103,6 @@ public abstract class Control : FrameworkElement, IDisposable
         }
     }
 
-    public void ClearFontFamily()
-    {
-        if (_fontFamily == null)
-        {
-            return;
-        }
-
-        _fontFamily = null;
-        _font?.Dispose();
-        _font = null;
-        InvalidateMeasure();
-    }
-
     /// <summary>
     /// Gets or sets the font size.
     /// </summary>
@@ -203,19 +116,6 @@ public abstract class Control : FrameworkElement, IDisposable
             _font = null;
             InvalidateMeasure();
         }
-    }
-
-    public void ClearFontSize()
-    {
-        if (_fontSize == null)
-        {
-            return;
-        }
-
-        _fontSize = null;
-        _font?.Dispose();
-        _font = null;
-        InvalidateMeasure();
     }
 
     /// <summary>
@@ -233,6 +133,79 @@ public abstract class Control : FrameworkElement, IDisposable
         }
     }
 
+    internal static bool PreferFillStrokeTrick { get; } = false;
+
+    protected virtual Color DefaultBackground => Color.Transparent;
+
+    protected virtual Color DefaultForeground => GetTheme().Palette.WindowText;
+
+    protected virtual Color DefaultBorderBrush => Color.Transparent;
+
+    protected virtual string DefaultFontFamily => GetTheme().FontFamily;
+
+    protected virtual double DefaultFontSize => GetTheme().FontSize;
+
+    protected virtual FontWeight DefaultFontWeight => GetTheme().FontWeight;
+
+    public void ClearBackground()
+    {
+        if (_background == null)
+        {
+            return;
+        }
+
+        _background = null;
+        InvalidateVisual();
+    }
+
+    public void ClearForeground()
+    {
+        if (_foreground == null)
+        {
+            return;
+        }
+
+        _foreground = null;
+        InvalidateVisual();
+    }
+
+    public void ClearBorderBrush()
+    {
+        if (_borderBrush == null)
+        {
+            return;
+        }
+
+        _borderBrush = null;
+        InvalidateVisual();
+    }
+
+    public void ClearFontFamily()
+    {
+        if (_fontFamily == null)
+        {
+            return;
+        }
+
+        _fontFamily = null;
+        _font?.Dispose();
+        _font = null;
+        InvalidateMeasure();
+    }
+
+    public void ClearFontSize()
+    {
+        if (_fontSize == null)
+        {
+            return;
+        }
+
+        _fontSize = null;
+        _font?.Dispose();
+        _font = null;
+        InvalidateMeasure();
+    }
+
     public void ClearFontWeight()
     {
         if (_fontWeight == null)
@@ -246,6 +219,14 @@ public abstract class Control : FrameworkElement, IDisposable
         InvalidateMeasure();
     }
 
+    protected TextMeasurementScope BeginTextMeasurement()
+    {
+        var factory = GetGraphicsFactory();
+        var context = factory.CreateMeasurementContext(GetDpi());
+        var font = GetFont(factory);
+        return new TextMeasurementScope(factory, context, font);
+    }
+
     /// <summary>
     /// Gets or creates the font for this control.
     /// </summary>
@@ -256,15 +237,12 @@ public abstract class Control : FrameworkElement, IDisposable
         return _font;
     }
 
-    internal void NotifyDpiChanged(uint oldDpi, uint newDpi) => OnDpiChanged(oldDpi, newDpi);
-
-    protected virtual void OnDpiChanged(uint oldDpi, uint newDpi)
+    protected override void OnDpiChanged(uint oldDpi, uint newDpi)
     {
+        base.OnDpiChanged(oldDpi, newDpi);
+
         _font?.Dispose();
         _font = null;
-
-        InvalidateMeasure();
-        InvalidateVisual();
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -273,28 +251,6 @@ public abstract class Control : FrameworkElement, IDisposable
         _font = null;
 
         base.OnThemeChanged(oldTheme, newTheme);
-    }
-
-    protected readonly struct VisualState
-    {
-        public bool IsEnabled { get; }
-
-        public bool IsHot { get; }
-
-        public bool IsFocused { get; }
-
-        public bool IsPressed { get; }
-
-        public bool IsActive { get; }
-
-        public VisualState(bool isEnabled, bool isHot, bool isFocused, bool isPressed, bool isActive)
-        {
-            IsEnabled = isEnabled;
-            IsHot = isHot;
-            IsFocused = isFocused;
-            IsPressed = isPressed;
-            IsActive = isActive;
-        }
     }
 
     protected VisualState GetVisualState(bool isPressed = false, bool isActive = false)
@@ -344,31 +300,6 @@ public abstract class Control : FrameworkElement, IDisposable
         return LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, 1);
     }
 
-    protected Rect GetSnappedBorderBounds(Rect bounds)
-    {
-        var dpiScale = GetDpi() / 96.0;
-        return LayoutRounding.SnapBoundsRectToPixels(bounds, dpiScale);
-    }
-
-    protected readonly struct BorderRenderMetrics
-    {
-        public Rect Bounds { get; }
-
-        public double DpiScale { get; }
-
-        public double BorderThickness { get; }
-
-        public double CornerRadius { get; }
-
-        public BorderRenderMetrics(Rect bounds, double dpiScale, double borderThickness, double cornerRadius)
-        {
-            Bounds = bounds;
-            DpiScale = dpiScale;
-            BorderThickness = borderThickness;
-            CornerRadius = cornerRadius;
-        }
-    }
-
     protected BorderRenderMetrics GetBorderRenderMetrics(Rect bounds, double cornerRadiusDip, bool snapBounds = true)
     {
         var dpiScale = GetDpi() / 96.0;
@@ -405,7 +336,7 @@ public abstract class Control : FrameworkElement, IDisposable
                                      borderBrush.A > 0 &&
                                      background.A > 0;
 
-        if (canUseFillStrokeTrick)
+        if (canUseFillStrokeTrick || background.A == 255)
         {
             // Fill "stroke" using outer + inner shapes (avoids half-pixel pen alignment issues).
             if (radius > 0)
@@ -527,6 +458,22 @@ public abstract class Control : FrameworkElement, IDisposable
         HideToolTip();
     }
 
+    protected override void OnDispose()
+    {
+        base.OnDispose();
+
+        // Release cached font resources.
+        _font?.Dispose();
+        _font = null;
+
+        if (_toolTipPopup != null)
+        {
+            HideToolTip();
+            _toolTipPopup.Dispose();
+            _toolTipPopup = null;
+        }
+    }
+
     private void ShowToolTip()
     {
         if (!IsMouseOver)
@@ -598,32 +545,62 @@ public abstract class Control : FrameworkElement, IDisposable
         window.ClosePopup(_toolTipPopup);
     }
 
-    protected virtual void OnDispose()
-    { }
-
-    public void Dispose()
+    protected readonly struct TextMeasurementScope : IDisposable
     {
-        if (_disposed)
+        public TextMeasurementScope(IGraphicsFactory factory, IGraphicsContext context, IFont font)
         {
-            return;
+            Factory = factory;
+            Context = context;
+            Font = font;
         }
 
-        _disposed = true;
+        public IGraphicsFactory Factory { get; }
 
-        // Release extension-managed bindings (and any other UIElement-registered disposables).
-        DisposeBindings();
+        public IGraphicsContext Context { get; }
 
-        // Release cached font resources.
-        _font?.Dispose();
-        _font = null;
+        public IFont Font { get; }
 
-        if (_toolTipPopup != null)
+        public void Dispose() => Context.Dispose();
+    }
+
+    protected readonly struct VisualState
+    {
+        public VisualState(bool isEnabled, bool isHot, bool isFocused, bool isPressed, bool isActive)
         {
-            HideToolTip();
-            _toolTipPopup.Dispose();
-            _toolTipPopup = null;
+            IsEnabled = isEnabled;
+            IsHot = isHot;
+            IsFocused = isFocused;
+            IsPressed = isPressed;
+            IsActive = isActive;
         }
 
-        OnDispose();
+        public bool IsEnabled { get; }
+
+        public bool IsHot { get; }
+
+        public bool IsFocused { get; }
+
+        public bool IsPressed { get; }
+
+        public bool IsActive { get; }
+    }
+
+    protected readonly struct BorderRenderMetrics
+    {
+        public BorderRenderMetrics(Rect bounds, double dpiScale, double borderThickness, double cornerRadius)
+        {
+            Bounds = bounds;
+            DpiScale = dpiScale;
+            BorderThickness = borderThickness;
+            CornerRadius = cornerRadius;
+        }
+
+        public Rect Bounds { get; }
+
+        public double DpiScale { get; }
+
+        public double BorderThickness { get; }
+
+        public double CornerRadius { get; }
     }
 }

@@ -200,7 +200,7 @@ public sealed class MenuBar : Control, IPopupOwner
         _openPopup = popup;
 
         var b = _itemBounds.Count > index ? _itemBounds[index] : Rect.Empty;
-        popup.ShowAt(this, new Point(b.X, b.Bottom));
+        popup.ShowAt(this, new Point(b.X, b.Bottom + 1));
     }
 
     private void CloseOpenMenu()

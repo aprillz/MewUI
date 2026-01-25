@@ -874,7 +874,7 @@ public class Window : ContentControl
         // caches (fonts, layout) before measuring/arranging.
         uint oldDpi = popup.GetDpiCached();
         var oldTheme = popup is FrameworkElement popupElement
-            ? popupElement.ThemeSnapshot
+            ? popupElement.InternalTheme
             : GetTheme();
         popup.Parent = this;
         ApplyPopupDpiChange(popup, oldDpi, Dpi);
