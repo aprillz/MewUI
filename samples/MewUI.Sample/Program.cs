@@ -188,7 +188,7 @@ Element ThemeControls() => new StackPanel()
             {
                 l.Text($"Theme: {t.Name}");
                 UpdateAccentSwatches();
-            })
+            }, false)
             .CenterVertical()
     );
 

@@ -104,12 +104,12 @@ public static class ControlExtensions
         return element;
     }
 
-    public static T WithTheme<T>(this T element, Action<Theme, T> apply) where T : FrameworkElement
+    public static T WithTheme<T>(this T element, Action<Theme, T> apply, bool invokeImmediately = true) where T : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(apply);
 
-        element.RegisterThemeCallback((theme, e) => apply(theme, element), true);
+        element.RegisterThemeCallback((theme, e) => apply(theme, element), invokeImmediately);
         return element;
     }
 
