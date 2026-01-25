@@ -211,6 +211,24 @@ public static class ControlExtensions
 
     #endregion
 
+    #region Border
+
+    public static Border CornerRadius(this Border border, double radius)
+    {
+        ArgumentNullException.ThrowIfNull(border);
+        border.CornerRadius = radius;
+        return border;
+    }
+
+    public static Border Child(this Border border, UIElement? child)
+    {
+        ArgumentNullException.ThrowIfNull(border);
+        border.Child = child;
+        return border;
+    }
+
+    #endregion
+
     #region HeaderedContentControl
 
     public static T Header<T>(this T control, string header) where T : HeaderedContentControl

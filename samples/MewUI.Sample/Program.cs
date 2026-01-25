@@ -184,9 +184,9 @@ Element ThemeControls() => new StackPanel()
 
         new Label()
             .Text("Theme: Light")
-            .Apply(l => window.ThemeChanged += (_, newTheme) =>
+            .WithTheme((t, l) =>
             {
-                l.Text($"Theme: {newTheme.Name}");
+                l.Text($"Theme: {t.Name}");
                 UpdateAccentSwatches();
             })
             .CenterVertical()
@@ -309,7 +309,7 @@ Element NormalControls()
 
                             new Button()
                                 .Content("Disabled")
-                                .Apply(b => b.IsEnabled = false),
+                                .Disable(),
 
                             new Button()
                                 .Content("Async")
@@ -968,13 +968,4 @@ class DemoViewModel
 
     public ObservableValue<int> SelectionItemCount { get; } = new ObservableValue<int>(4);
 
-}
-
-public static class Extensions
-{
-    public static T Apply<T>(this T obj, Action<T> action)
-    {
-        action(obj);
-        return obj;
-    }
 }

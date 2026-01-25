@@ -54,7 +54,7 @@ FrameworkElement TopBar()
     return new Border()
         .Padding(12, 10)
         .BorderThickness(1)
-        .Apply(b => b.Child =
+        .Child(
             new DockPanel()
                 .Spacing(12)
                 .Children(
@@ -156,14 +156,11 @@ FrameworkElement Card(string title, FrameworkElement content, double minWidth = 
         .MinWidth(minWidth)
         .Padding(14)
         .BorderThickness(1)
-        .Apply(b =>
-        {
-            b.CornerRadius = 10;
-            b.Child = new StackPanel()
+        .CornerRadius(10)
+        .Child(new StackPanel()
                 .Vertical()
                 .Spacing(8)
-                .Children(header, content);
-        });
+                .Children(header, content));
 }
 
 FrameworkElement CardGrid(params FrameworkElement[] cards) =>
@@ -285,9 +282,87 @@ FrameworkElement InputsPage()
                                 .Item("Copy", "Ctrl+C")
                                 .Item("Paste", "Ctrl+V")
                                 .Separator()
+                                .SubMenu("Transform", new ContextMenu()
+                                    .Item("Uppercase")
+                                    .Item("Lowercase")
+                                    .Separator()
+                                    .SubMenu("More", new ContextMenu()
+                                        .Item("Trim")
+                                        .Item("Normalize")
+                                        .Item("Sort"))
+                                )
+                                .SubMenu("View", new ContextMenu()
+                                    .Item("Zoom In", "Ctrl++")
+                                    .Item("Zoom Out", "Ctrl+-")
+                                    .Item("Reset Zoom", "Ctrl+0")
+                                )
+                                .Separator()
                                 .Item("Disabled", isEnabled: false)
                         )
                 )
+        )
+    );
+}
+
+FrameworkElement MenusPage()
+{
+    var fileMenu = new Menu()
+        .Item("New", shortcutText: "Ctrl+N")
+        .Item("Open...", shortcutText: "Ctrl+O")
+        .Item("Save", shortcutText: "Ctrl+S")
+        .Item("Save As...")
+        .Separator()
+        .SubMenu("Export", new Menu()
+            .Item("PNG")
+            .Item("JPEG")
+            .SubMenu("Advanced", new Menu()
+                .Item("With metadata")
+                .Item("Optimized")
+            )
+        )
+        .Separator()
+        .Item("Exit");
+
+    var editMenu = new Menu()
+        .Item("Undo", shortcutText: "Ctrl+Z")
+        .Item("Redo", shortcutText: "Ctrl+Y")
+        .Separator()
+        .Item("Cut", shortcutText: "Ctrl+X")
+        .Item("Copy", shortcutText: "Ctrl+C")
+        .Item("Paste", shortcutText: "Ctrl+V")
+        .Separator()
+        .SubMenu("Find", new Menu()
+            .Item("Find...", shortcutText: "Ctrl+F")
+            .Item("Find Next", shortcutText: "F3")
+            .Item("Replace...", shortcutText: "Ctrl+H")
+        );
+
+    var viewMenu = new Menu()
+        .Item("Toggle Sidebar")
+        .SubMenu("Zoom", new Menu()
+            .Item("Zoom In", shortcutText: "Ctrl++")
+            .Item("Zoom Out", shortcutText: "Ctrl+-")
+            .Item("Reset", shortcutText: "Ctrl+0")
+        );
+
+    return CardGrid(
+        Card("MenuBar (Multi-depth)",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new MenuBar()
+                        .Height(28)
+                        .Items(
+                            new MenuItem("File").Menu(fileMenu),
+                            new MenuItem("Edit").Menu(editMenu),
+                            new MenuItem("View").Menu(viewMenu)
+                        ),
+                    new Label()
+                        .FontSize(11)
+                        .Text("Hover to switch menus while a popup is open. Submenus supported.")
+                ),
+            minWidth: 520
         )
     );
 }
@@ -406,14 +481,11 @@ FrameworkElement LayoutPage()
                 .Height(120)
                 .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
                 .BorderThickness(1)
-                .Apply(b =>
-                {
-                    b.CornerRadius = 12;
-                    b.Child = new Label()
+                .CornerRadius(12)
+                .Child(new Label()
                         .Text("Centered Text")
                         .Center()
-                        .Bold();
-                })
+                        .Bold())
         ),
 
         Card("ScrollViewer",
@@ -440,8 +512,15 @@ FrameworkElement MediaPage()
                 .Vertical()
                 .Spacing(8)
                 .Children(
-                    new Image().Source(april).Width(220).Height(120).StretchMode(ImageStretch.Uniform),
-                    new Label().Text("april.jpg").FontSize(11).Center()
+                    new Image()
+                        .Source(april)
+                        .Width(220)
+                        .Height(120)
+                        .StretchMode(ImageStretch.Uniform)
+                        .Center(),
+                    new Label().Text("april.jpg")
+                        .FontSize(11)
+                        .Center()
                 )
         ),
 
