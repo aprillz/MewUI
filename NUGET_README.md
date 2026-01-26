@@ -1,6 +1,6 @@
 # Aprillz.MewUI
 
-A cross-platform and lightweight, code-first .NET GUI library aimed at NativeAOT.
+A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT.
 
 - GitHub: https://github.com/aprillz/MewUI
 - License: MIT
