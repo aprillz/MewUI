@@ -2,12 +2,73 @@ namespace Aprillz.MewUI;
 
 public record class Theme
 {
-    public static Accent DefaultAccent { get; } = Accent.Blue;
+    private static Accent _defaultAccent = Accent.Blue;
+    private static ThemeVariant _default = ThemeVariant.System;
+    private static Theme? _light;
+    private static Theme? _dark;
 
-    public static Theme Light => field ??= CreateLight();
+    public static Accent DefaultAccent
+    {
+        get => _defaultAccent;
+        set
+        {
+            if (Application.IsRunning)
+            {
+                throw new InvalidOperationException("Theme.DefaultAccent cannot be changed after Application is running.");
+            }
 
-    public static Theme Dark => field ??= CreateDark();
+            if (_defaultAccent == value)
+            {
+                return;
+            }
 
+            _defaultAccent = value;
+            _light = null;
+            _dark = null;
+        }
+    }
+
+    public static ThemeVariant Default
+    {
+        get => _default;
+        set
+        {
+            if (Application.IsRunning)
+            {
+                throw new InvalidOperationException("Theme.Default cannot be changed after Application is running.");
+            }
+
+            _default = value;
+        }
+    }
+
+    public static Theme Light => _light ??= CreateLight();
+
+    public static Theme Dark => _dark ??= CreateDark();
+
+    internal static ThemeVariant ResolveVariant(ThemeVariant variant)
+    {
+        if (variant != ThemeVariant.System)
+        {
+            return variant;
+        }
+
+        if (Application.IsRunning)
+        {
+            return Application.Current.PlatformHost.GetSystemThemeVariant();
+        }
+
+        // Application is not initialized yet, but we still want System to reflect the OS theme
+        // so windows can be created with the correct initial colors.
+        try
+        {
+            return Application.DefaultPlatformHost.GetSystemThemeVariant();
+        }
+        catch
+        {
+            return ThemeVariant.Light;
+        }
+    }
 
     internal static Theme DefaultMericTheme { get; } = new Theme
     {
@@ -73,6 +134,8 @@ public record class Theme
 
     public required double ScrollBarLargeChange { get; init; }
 
+    public bool IsDark => Palette.IsDarkBackground(Palette.WindowBackground);
+
     public Theme WithPalette(Palette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
@@ -104,4 +167,11 @@ public record class Theme
             Palette = palette,
         };
     }
+}
+
+public enum ThemeVariant
+{
+    System,
+    Light,
+    Dark
 }

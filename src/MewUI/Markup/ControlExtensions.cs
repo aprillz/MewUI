@@ -516,6 +516,23 @@ public static class ControlExtensions
         return radioButton;
     }
 
+    public static RadioButton OnChecked(this RadioButton radioButton, Action handler)
+    {
+        radioButton.CheckedChanged += isChecked =>
+        {
+            if (isChecked) handler.Invoke();
+        };
+        return radioButton;
+    }
+
+    public static RadioButton OnUnchecked(this RadioButton radioButton, Action handler)
+    {
+        radioButton.CheckedChanged += isChecked =>
+        {
+            if (!isChecked) handler.Invoke();
+        };
+        return radioButton;
+    }
     public static RadioButton BindIsChecked(this RadioButton radioButton, ObservableValue<bool> source)
     {
         ArgumentNullException.ThrowIfNull(radioButton);

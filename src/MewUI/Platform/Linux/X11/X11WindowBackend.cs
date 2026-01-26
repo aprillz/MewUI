@@ -900,4 +900,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         _closedRaised = true;
         try { Window.RaiseClosed(); } catch { }
     }
+
+    public void EnsureTheme(bool isDark)
+    {
+    }
 }

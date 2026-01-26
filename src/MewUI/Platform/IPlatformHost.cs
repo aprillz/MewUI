@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Controls;
-
 namespace Aprillz.MewUI.Platform;
 
 public interface IPlatformHost : IDisposable
@@ -15,6 +13,8 @@ public interface IPlatformHost : IDisposable
     IUiDispatcher CreateDispatcher(nint windowHandle);
 
     uint GetSystemDpi();
+
+    ThemeVariant GetSystemThemeVariant();
 
     uint GetDpiForWindow(nint hwnd);
 

@@ -338,6 +338,7 @@ public class Window : ContentControl
             return;
         }
 
+        _backend!.EnsureTheme(GetTheme().IsDark);
         _backend!.Show();
         _lifetimeState = WindowLifetimeState.Shown;
 
@@ -761,6 +762,8 @@ public class Window : ContentControl
     {
         OnThemeChanged(oldTheme, newTheme);
 
+        _backend?.EnsureTheme(newTheme.IsDark);
+
         NotifyThemeChanged(oldTheme, newTheme);
 
         if (Content != null)
@@ -1040,5 +1043,10 @@ public class Window : ContentControl
         }
 
         return (Content as UIElement)?.HitTest(point);
+    }
+
+    internal void EnsureTheme(Theme theme)
+    {
+        _backend?.EnsureTheme(theme.IsDark);
     }
 }

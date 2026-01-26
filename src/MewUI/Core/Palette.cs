@@ -61,11 +61,12 @@ public sealed class Palette
         var buttonFace = baseColors.ButtonFace;
         var buttonDisabledBackground = baseColors.ButtonDisabledBackground;
 
-        WindowBackground = ComputeBackground(windowBackground, accent);
         WindowText = windowText;
-        ControlBackground = ComputeBackground(controlBackground, accent);
         ButtonFace = buttonFace;
         ButtonDisabledBackground = buttonDisabledBackground;
+
+        WindowBackground = ComputeBackground(windowBackground, accent);
+        ControlBackground = ComputeBackground(controlBackground, accent);
 
         ContainerBackground = ComputeContainerBackground(windowBackground, buttonFace, accent);
 

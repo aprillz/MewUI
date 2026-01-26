@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
+using Microsoft.Win32;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
@@ -24,6 +26,8 @@ public sealed class Win32PlatformHost : IPlatformHost
     private SynchronizationContext? _previousSynchronizationContext;
     private nint _dispatcherHwnd;
     private Win32UiDispatcher? _dispatcher;
+    private Application? _app;
+    private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
 
     public IMessageBoxService MessageBox => _messageBox;
 
@@ -37,6 +41,8 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     public uint GetSystemDpi() => User32.GetDpiForSystem();
 
+    public ThemeVariant GetSystemThemeVariant() => GetSystemThemeVariantFromRegistry();
+
     public uint GetDpiForWindow(nint hwnd) => hwnd != 0 ? User32.GetDpiForWindow(hwnd) : User32.GetDpiForSystem();
 
     public bool EnablePerMonitorDpiAwareness()
@@ -46,6 +52,36 @@ public sealed class Win32PlatformHost : IPlatformHost
     }
 
     public int GetSystemMetricsForDpi(int nIndex, uint dpi) => User32.GetSystemMetricsForDpi(nIndex, dpi);
+
+    private static ThemeVariant GetSystemThemeVariantFromRegistry()
+    {
+        try
+        {
+            // Windows app theme (Light/Dark) is commonly exposed via registry.
+            // 1 = light, 0 = dark
+            // HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme (DWORD)
+            object? v = Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "AppsUseLightTheme",
+                null);
+
+            if (v is int i)
+            {
+                return i == 0 ? ThemeVariant.Dark : ThemeVariant.Light;
+            }
+
+            if (v is uint u)
+            {
+                return u == 0 ? ThemeVariant.Dark : ThemeVariant.Light;
+            }
+        }
+        catch
+        {
+            // Best-effort. If registry access fails, fallback to Light.
+        }
+
+        return ThemeVariant.Light;
+    }
 
     internal void RegisterWindow(nint hwnd, Win32WindowBackend backend) => _windows[hwnd] = backend;
 
@@ -70,6 +106,14 @@ public sealed class Win32PlatformHost : IPlatformHost
 
             _previousSynchronizationContext = SynchronizationContext.Current;
             EnsureDispatcher(app);
+            _app = app;
+
+            // Initialize and apply System theme at startup (best-effort).
+            _lastSystemTheme = GetSystemThemeVariant();
+            if (Theme.Default == ThemeVariant.System)
+            {
+                app.NotifySystemThemeChanged();
+            }
 
             // Show after dispatcher is ready so timers/postbacks work immediately (WPF-style dispatcher lifetime).
             mainWindow.Show();
@@ -161,6 +205,13 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
+        if (msg == WindowMessages.WM_SETTINGCHANGE ||
+            msg == WindowMessages.WM_THEMECHANGED ||
+            msg == WindowMessages.WM_SYSCOLORCHANGE)
+        {
+            TryUpdateSystemTheme();
+        }
+
         if (hWnd == _dispatcherHwnd)
         {
             switch (msg)
@@ -194,6 +245,29 @@ public sealed class Win32PlatformHost : IPlatformHost
         }
 
         return User32.DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+
+    private void TryUpdateSystemTheme()
+    {
+        var app = _app;
+        if (app == null)
+        {
+            return;
+        }
+
+        if (Theme.Default != ThemeVariant.System)
+        {
+            return;
+        }
+
+        var current = GetSystemThemeVariant();
+        if (current == _lastSystemTheme)
+        {
+            return;
+        }
+
+        _lastSystemTheme = current;
+        app.NotifySystemThemeChanged();
     }
 
     private void EnsureDispatcher(Application app)
@@ -234,6 +308,7 @@ public sealed class Win32PlatformHost : IPlatformHost
     {
         SynchronizationContext.SetSynchronizationContext(_previousSynchronizationContext);
         app.Dispatcher = null;
+        _app = null;
 
         foreach (var backend in _windows.Values.ToArray())
         {

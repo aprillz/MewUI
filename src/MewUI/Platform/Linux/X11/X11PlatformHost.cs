@@ -50,6 +50,8 @@ public sealed class X11PlatformHost : IPlatformHost
         return _systemDpi;
     }
 
+    public ThemeVariant GetSystemThemeVariant() => ThemeVariant.Light;
+
     public uint GetDpiForWindow(nint hwnd) => GetSystemDpi();
 
     public bool EnablePerMonitorDpiAwareness() => false;

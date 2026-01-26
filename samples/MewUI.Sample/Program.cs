@@ -76,6 +76,7 @@ var root = new Window()
                     )
             )
     )
+    .OnThemeChanged((_, _) => UpdateAccentSwatches())
     .OnFirstFrameRendered(() =>
     {
         ProcessMetric();
@@ -169,28 +170,36 @@ Element MenuDemo()
         );
 }
 
-Element ThemeControls() => new StackPanel()
-    .Horizontal()
-    .Spacing(8)
-    .Children(
-        new Button()
-            .Content("Toggle Theme")
-            .OnClick(() =>
-            {
-                var nextBase = Palette.IsDarkBackground(Application.Current.Theme.Palette.WindowBackground) ? Theme.Light : Theme.Dark;
-                Application.Current.Theme = nextBase.WithAccent(currentAccent);
-                UpdateAccentSwatches();
-            }),
+Element ThemeControls()
+{
+    const string group = "ThemeMode";
+
+    return new StackPanel()
+        .Horizontal()
+        .Spacing(12)
+        .Children(
+            new RadioButton()
+                .Text("System")
+                .GroupName(group)
+                .IsChecked()
+                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.System)),
+
+            new RadioButton()
+                .Text("Light")
+                .GroupName(group)
+                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Light)),
+
+            new RadioButton()
+                .Text("Dark")
+                .GroupName(group)
+                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Dark)),
 
         new Label()
             .Text("Theme: Light")
-            .WithTheme((t, l) =>
-            {
-                l.Text($"Theme: {t.Name}");
-                UpdateAccentSwatches();
-            }, false)
+            .WithTheme((t, l) => l.Text($"Theme: {t.Name}"), false)
             .CenterVertical()
     );
+}
 
 FrameworkElement AccentPicker() => new StackPanel()
     .Vertical()
@@ -845,8 +854,8 @@ void UpdateAccentSwatches()
 void ApplyAccent(Accent accent)
 {
     currentAccent = accent;
-    var nextBase = Palette.IsDarkBackground(Application.Current.Theme.Palette.WindowBackground) ? Theme.Dark : Theme.Light;
-    Application.Current.Theme = nextBase.WithAccent(accent);
+    Application.Current.SetAccent(accent);
+
     UpdateAccentSwatches();
 }
 
@@ -966,5 +975,4 @@ class DemoViewModel
     public ObservableValue<bool> IsFeatureEnabled { get; } = new ObservableValue<bool>(false);
 
     public ObservableValue<int> SelectionItemCount { get; } = new ObservableValue<int>(4);
-
 }

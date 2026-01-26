@@ -25,6 +25,11 @@ public sealed class Application
     private static Exception? _pendingFatalException;
     private IUiDispatcher? _dispatcher;
     private readonly List<Window> _windows = new();
+    private Theme? _theme;
+    private bool _themeExplicitlySet;
+    private ThemeVariant _themeMode = Theme.Default;
+    private Color? _accentOverride;
+    private Color? _accentTextOverride;
 
     /// <summary>
     /// Raised when an exception escapes from the UI dispatcher work queue.
@@ -39,18 +44,31 @@ public sealed class Application
 
     public Theme Theme
     {
-        get => field ?? Theme.Light;
+        get
+        {
+            if (IsRunning)
+            {
+                _theme ??= ResolveThemeFromMode();
+                return _theme;
+            }
+            else
+            {
+                return ResolveThemeFromMode();
+            }
+        }
         set
         {
             ArgumentNullException.ThrowIfNull(value);
 
-            if (field == value)
+            if (_theme == value)
             {
                 return;
             }
 
             var old = Theme;
-            field = value;
+            _theme = value;
+            _themeExplicitlySet = true;
+            _themeMode = Palette.IsDarkBackground(value.Palette.WindowBackground) ? ThemeVariant.Dark : ThemeVariant.Light;
             foreach (var window in AllWindows)
             {
                 window.BroadcastThemeChanged(old, value);
@@ -60,6 +78,37 @@ public sealed class Application
     }
 
     public event Action<Theme, Theme>? ThemeChanged;
+
+    public ThemeVariant ThemeMode => _themeMode;
+
+    public void SetThemeMode(ThemeVariant mode)
+    {
+        if (_themeMode == mode && !_themeExplicitlySet)
+        {
+            return;
+        }
+
+        _themeMode = mode;
+        _themeExplicitlySet = false;
+        ApplyResolvedTheme();
+    }
+
+    public void SetAccent(Accent accent, Color? accentText = null)
+    {
+        var baseTheme = ResolveBaseThemeForMode(_themeMode);
+        _accentOverride = baseTheme.GetAccentColor(accent);
+        _accentTextOverride = accentText;
+        _themeExplicitlySet = false;
+        ApplyResolvedTheme();
+    }
+
+    public void SetAccent(Color accent, Color? accentText = null)
+    {
+        _accentOverride = accent;
+        _accentTextOverride = accentText;
+        _themeExplicitlySet = false;
+        ApplyResolvedTheme();
+    }
 
     /// <summary>
     /// Gets whether an application instance is running.
@@ -175,6 +224,70 @@ public sealed class Application
     }
 
     private Application(IPlatformHost platformHost) => PlatformHost = platformHost;
+
+    private Theme ResolveThemeFromMode()
+    {
+        var baseTheme = ResolveBaseThemeForMode(_themeMode);
+        if (_accentOverride != null)
+        {
+            return baseTheme.WithAccent(_accentOverride.Value, _accentTextOverride);
+        }
+
+        return baseTheme;
+    }
+
+    internal void NotifySystemThemeChanged()
+    {
+        if (_themeMode != ThemeVariant.System)
+        {
+            return;
+        }
+
+        if (_themeExplicitlySet)
+        {
+            return;
+        }
+
+        var resolved = ResolveThemeFromMode();
+        if (ReferenceEquals(_theme, resolved))
+        {
+            return;
+        }
+
+        var old = Theme;
+        _theme = resolved;
+        foreach (var window in AllWindows)
+        {
+            window.BroadcastThemeChanged(old, resolved);
+        }
+        ThemeChanged?.Invoke(old, resolved);
+    }
+
+    private Theme ResolveBaseThemeForMode(ThemeVariant mode)
+    {
+        var resolvedVariant = mode == ThemeVariant.System
+            ? PlatformHost.GetSystemThemeVariant()
+            : mode;
+
+        return resolvedVariant == ThemeVariant.Light ? Theme.Light : Theme.Dark;
+    }
+
+    private void ApplyResolvedTheme()
+    {
+        var resolved = ResolveThemeFromMode();
+        if (ReferenceEquals(_theme, resolved))
+        {
+            return;
+        }
+
+        var old = Theme;
+        _theme = resolved;
+        foreach (var window in AllWindows)
+        {
+            window.BroadcastThemeChanged(old, resolved);
+        }
+        ThemeChanged?.Invoke(old, resolved);
+    }
 
     internal void RegisterWindow(Window window)
     {

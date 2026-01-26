@@ -18,6 +18,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private UIElement? _capturedElement;
     private nint _hIconSmall;
     private nint _hIconBig;
+    private bool _initialEraseDone;
 
     public nint Handle { get; private set; }
 
@@ -177,7 +178,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return HandlePaint();
 
             case WindowMessages.WM_ERASEBKGND:
-                return 1;
+                return HandleEraseBackground(wParam);
 
             case WindowMessages.WM_SIZE:
                 return HandleSize(lParam);
@@ -281,10 +282,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             throw new InvalidOperationException($"Failed to create window. Error: {Marshal.GetLastWin32Error()}");
         }
 
+        _titleBarThemeSync.Initialize(Handle);
         _host.RegisterWindow(Handle, this);
         Window.AttachBackend(this);
+
         ApplyResizeMode();
-        _titleBarThemeSync.Initialize(Handle);
 
         uint actualDpi = User32.GetDpiForWindow(Handle);
         if (actualDpi != initialDpi)
@@ -299,6 +301,43 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         User32.GetClientRect(Handle, out var clientRect);
         Window.SetClientSizeDip(clientRect.Width / Window.DpiScale, clientRect.Height / Window.DpiScale);
+    }
+
+    private nint HandleEraseBackground(nint hdc)
+    {
+        if (_initialEraseDone)
+        {
+            return 1;
+        }
+
+        if (hdc == 0 || Handle == 0)
+        {
+            return 1;
+        }
+
+        if (!User32.GetClientRect(Handle, out var rc))
+        {
+            return 1;
+        }
+
+        var theme = Window.InternalTheme;
+        var bg = Window.Background.A > 0 ? Window.Background : theme.Palette.WindowBackground;
+
+        nint brush = Gdi32.CreateSolidBrush(bg.ToCOLORREF());
+        try
+        {
+            Gdi32.FillRect(hdc, ref rc, brush);
+        }
+        finally
+        {
+            if (brush != 0)
+            {
+                Gdi32.DeleteObject(brush);
+            }
+        }
+
+        _initialEraseDone = true;
+        return 1;
     }
 
     private void ApplyIcons()
@@ -773,5 +812,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
         {
             Close();
         }
+    }
+
+    public void EnsureTheme(bool isDark)
+    {
+        _titleBarThemeSync.ApplyTheme(isDark);
     }
 }

@@ -33,4 +33,6 @@ public interface IWindowBackend : IDisposable
     /// Converts a point from screen coordinates (device pixels) to window client coordinates (DIPs).
     /// </summary>
     Point ScreenToClient(Point screenPointPx);
+
+    void EnsureTheme(bool isDark);
 }

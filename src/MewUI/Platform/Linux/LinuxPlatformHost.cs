@@ -22,6 +22,8 @@ public sealed class LinuxPlatformHost : IPlatformHost
 
     public uint GetSystemDpi() => 96u;
 
+    public ThemeVariant GetSystemThemeVariant() => ThemeVariant.Light;
+
     public uint GetDpiForWindow(nint hwnd) => 96u;
 
     public bool EnablePerMonitorDpiAwareness() => false;

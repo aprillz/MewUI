@@ -7,8 +7,12 @@ using Aprillz.MewUI.Rendering;
 /// </summary>
 public abstract class FrameworkElement : UIElement, IDisposable
 {
-    private Theme _theme = Application.IsRunning ? Application.Current.Theme : Theme.Light;
+    private Theme _theme = Application.IsRunning
+        ? Application.Current.Theme
+        : Theme.ResolveVariant(Theme.Default) == ThemeVariant.Light ? Theme.Light : Theme.Dark;
+
     private List<Action<Theme, FrameworkElement>>? _themeCallbacks;
+
     private bool _disposed;
 
     /// <summary>

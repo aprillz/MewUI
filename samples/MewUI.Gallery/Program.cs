@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
+
 var stopwatch = Stopwatch.StartNew();
 Startup();
 
@@ -15,12 +16,10 @@ var currentAccent = Theme.DefaultAccent;
 var logo = ImageSource.FromFile("logo_h-1280.png");
 var april = ImageSource.FromFile("april.jpg");
 
-var theme = Theme.Light;
-
 var root = new Window()
     .Resizable(1080, 840)
     .Ref(out window)
-    .Title("Aprillz.MewUI Gallery")
+    .Title("Aprillz.MewUI Controls Gallery")
     .Padding(0)
     .Content(
         new DockPanel()
@@ -37,10 +36,7 @@ var root = new Window()
                     )
             )
     )
-    .OnLoaded(() =>
-    {
-        UpdateTopBar();
-    });
+    .OnLoaded(() => UpdateTopBar());
 
 using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewUI.Gallery.appicon.ico")!)
 {
@@ -88,17 +84,9 @@ FrameworkElement TopBar()
                     new StackPanel()
                         .Horizontal()
                         .CenterVertical()
-                        .Spacing(8)
+                        .Spacing(12)
                         .Children(
-                            new Button()
-                                .Content("Toggle Theme")
-                                .CenterVertical()
-                                .OnClick(() =>
-                                {
-                                    var nextBase = Palette.IsDarkBackground(theme.Palette.WindowBackground) ? Theme.Light : Theme.Dark;
-                                    Application.Current.Theme = theme = nextBase.WithAccent(currentAccent);
-                                    UpdateTopBar();
-                                }),
+                            ThemeModePicker(),
 
                             new Label()
                                 .Ref(out themeText)
@@ -109,6 +97,36 @@ FrameworkElement TopBar()
                         )
                         .DockRight()
                 ));
+}
+
+FrameworkElement ThemeModePicker()
+{
+    const string group = "ThemeMode";
+
+    return new StackPanel()
+        .Horizontal()
+        .CenterVertical()
+        .Spacing(8)
+        .Children(
+            new RadioButton()
+                .Text("System")
+                .GroupName(group)
+                .CenterVertical()
+                .IsChecked()
+                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.System)),
+
+            new RadioButton()
+                .Text("Light")
+                .GroupName(group)
+                .CenterVertical()
+                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Light)),
+
+            new RadioButton()
+                .Text("Dark")
+                .GroupName(group)
+                .CenterVertical()
+                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Dark))
+        );
 }
 
 FrameworkElement AccentPicker()
@@ -126,12 +144,12 @@ Button AccentSwatch(Accent accent)
 {
     return new Button()
         .Content(string.Empty)
-        .Background(theme.GetAccentColor(accent))
+        .WithTheme((t, c) => c.Background(t.GetAccentColor(accent)))
         .ToolTip(accent.ToString())
         .OnClick(() =>
         {
             currentAccent = accent;
-            Application.Current.Theme = theme = theme.WithAccent(accent);
+            Application.Current.SetAccent(accent);
             UpdateTopBar();
         });
 }
@@ -189,6 +207,7 @@ FrameworkElement BuildGalleryContent()
         .Children(
             Section("Buttons", ButtonsPage()),
             Section("Inputs", InputsPage()),
+            Section("Menus", MenusPage()),
             Section("Selection", SelectionPage()),
             Section("Lists", ListsPage()),
             Section("Layout", LayoutPage()),
@@ -558,7 +577,7 @@ FrameworkElement MediaPage()
 void UpdateTopBar()
 {
     backendText.Text($"Backend: {Application.Current.GraphicsFactory.Backend}");
-    themeText.Text($"Theme: {theme.Name}");
+    themeText.WithTheme((t, c) => c.Text($"Theme: {t.Name}"));
 }
 
 static void Startup()
@@ -589,7 +608,7 @@ static void Startup()
     {
         try
         {
-            MessageBox.Show(0, e.Exception.ToString(), "Unhandled UI exception");
+            MessageBox.Show(e.Exception.ToString(), "Unhandled UI exception");
         }
         catch
         {
