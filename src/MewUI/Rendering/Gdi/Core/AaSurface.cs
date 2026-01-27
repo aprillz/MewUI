@@ -9,18 +9,15 @@ namespace Aprillz.MewUI.Rendering.Gdi.Core;
 /// </summary>
 internal sealed class AaSurface : IDisposable
 {
-    private nint _memDc;
     private nint _bitmap;
     private nint _oldBitmap;
     private nint _bits;
-    private int _width;
-    private int _height;
     private bool _disposed;
 
     /// <summary>
     /// Gets the memory device context handle.
     /// </summary>
-    public nint MemDc => _memDc;
+    public nint MemDc { get; private set; }
 
     /// <summary>
     /// Gets the pointer to the raw pixel data (32-bit BGRA, top-down).
@@ -30,22 +27,22 @@ internal sealed class AaSurface : IDisposable
     /// <summary>
     /// Gets the width of the surface in pixels.
     /// </summary>
-    public int Width => _width;
+    public int Width { get; private set; }
 
     /// <summary>
     /// Gets the height of the surface in pixels.
     /// </summary>
-    public int Height => _height;
+    public int Height { get; private set; }
 
     /// <summary>
     /// Gets the stride (bytes per row) of the surface.
     /// </summary>
-    public int Stride => _width * 4;
+    public int Stride => Width * 4;
 
     /// <summary>
     /// Gets a value indicating whether this surface is valid and usable.
     /// </summary>
-    public bool IsValid => _memDc != 0 && _bitmap != 0 && _bits != 0;
+    public bool IsValid => MemDc != 0 && _bitmap != 0 && _bits != 0;
 
     /// <summary>
     /// Creates a new AaSurface with the specified dimensions.
@@ -67,26 +64,26 @@ internal sealed class AaSurface : IDisposable
 
     private void Create(nint sourceDc, int width, int height)
     {
-        _width = Math.Max(1, Math.Min(width, GdiRenderingConstants.MaxAaSurfaceSize));
-        _height = Math.Max(1, Math.Min(height, GdiRenderingConstants.MaxAaSurfaceSize));
+        Width = Math.Max(1, Math.Min(width, GdiRenderingConstants.MaxAaSurfaceSize));
+        Height = Math.Max(1, Math.Min(height, GdiRenderingConstants.MaxAaSurfaceSize));
 
-        _memDc = Gdi32.CreateCompatibleDC(sourceDc);
-        if (_memDc == 0)
+        MemDc = Gdi32.CreateCompatibleDC(sourceDc);
+        if (MemDc == 0)
         {
             return;
         }
 
-        var bmi = BITMAPINFO.Create32bpp(_width, _height);
+        var bmi = BITMAPINFO.Create32bpp(Width, Height);
         _bitmap = Gdi32.CreateDIBSection(sourceDc, ref bmi, 0, out _bits, 0, 0);
 
         if (_bitmap == 0 || _bits == 0)
         {
-            Gdi32.DeleteDC(_memDc);
-            _memDc = 0;
+            Gdi32.DeleteDC(MemDc);
+            MemDc = 0;
             return;
         }
 
-        _oldBitmap = Gdi32.SelectObject(_memDc, _bitmap);
+        _oldBitmap = Gdi32.SelectObject(MemDc, _bitmap);
     }
 
     /// <summary>
@@ -101,7 +98,7 @@ internal sealed class AaSurface : IDisposable
         width = Math.Max(1, Math.Min(width, GdiRenderingConstants.MaxAaSurfaceSize));
         height = Math.Max(1, Math.Min(height, GdiRenderingConstants.MaxAaSurfaceSize));
 
-        if (_width == width && _height == height && IsValid)
+        if (Width == width && Height == height && IsValid)
         {
             return true;
         }
@@ -116,12 +113,12 @@ internal sealed class AaSurface : IDisposable
     /// </summary>
     public unsafe void Clear()
     {
-        if (_bits == 0 || _width <= 0 || _height <= 0)
+        if (_bits == 0 || Width <= 0 || Height <= 0)
         {
             return;
         }
 
-        var count = _width * _height * 4;
+        var count = Width * Height * 4;
         new Span<byte>((void*)_bits, count).Clear();
     }
 
@@ -138,8 +135,8 @@ internal sealed class AaSurface : IDisposable
         // Clamp to surface bounds
         if (x < 0) { width += x; x = 0; }
         if (y < 0) { height += y; y = 0; }
-        if (x + width > _width) width = _width - x;
-        if (y + height > _height) height = _height - y;
+        if (x + width > Width) width = Width - x;
+        if (y + height > Height) height = Height - y;
 
         if (width <= 0 || height <= 0)
         {
@@ -161,7 +158,7 @@ internal sealed class AaSurface : IDisposable
     /// </summary>
     public void AlphaBlendTo(nint targetDc, int destX, int destY)
     {
-        AlphaBlendTo(targetDc, destX, destY, _width, _height, 0, 0);
+        AlphaBlendTo(targetDc, destX, destY, Width, Height, 0, 0);
     }
 
     /// <summary>
@@ -175,7 +172,7 @@ internal sealed class AaSurface : IDisposable
         }
 
         var blend = BLENDFUNCTION.SourceOver(255);
-        Gdi32.AlphaBlend(targetDc, destX, destY, width, height, _memDc, srcX, srcY, width, height, blend);
+        Gdi32.AlphaBlend(targetDc, destX, destY, width, height, MemDc, srcX, srcY, width, height, blend);
     }
 
     /// <summary>
@@ -183,7 +180,7 @@ internal sealed class AaSurface : IDisposable
     /// </summary>
     public void AlphaBlendToStretch(nint targetDc, int destX, int destY, int destWidth, int destHeight)
     {
-        AlphaBlendToStretch(targetDc, destX, destY, destWidth, destHeight, 0, 0, _width, _height);
+        AlphaBlendToStretch(targetDc, destX, destY, destWidth, destHeight, 0, 0, Width, Height);
     }
 
     /// <summary>
@@ -211,7 +208,7 @@ internal sealed class AaSurface : IDisposable
         }
 
         var blend = BLENDFUNCTION.SourceOver(255);
-        Gdi32.AlphaBlend(targetDc, destX, destY, destWidth, destHeight, _memDc, srcX, srcY, srcWidth, srcHeight, blend);
+        Gdi32.AlphaBlend(targetDc, destX, destY, destWidth, destHeight, MemDc, srcX, srcY, srcWidth, srcHeight, blend);
     }
 
     /// <summary>
@@ -224,7 +221,7 @@ internal sealed class AaSurface : IDisposable
             return Span<byte>.Empty;
         }
 
-        return new Span<byte>((void*)_bits, _width * _height * 4);
+        return new Span<byte>((void*)_bits, Width * Height * 4);
     }
 
     /// <summary>
@@ -232,13 +229,13 @@ internal sealed class AaSurface : IDisposable
     /// </summary>
     public unsafe Span<byte> GetRowSpan(int y)
     {
-        if (_bits == 0 || y < 0 || y >= _height)
+        if (_bits == 0 || y < 0 || y >= Height)
         {
             return Span<byte>.Empty;
         }
 
         byte* rowPtr = (byte*)_bits + y * Stride;
-        return new Span<byte>(rowPtr, _width * 4);
+        return new Span<byte>(rowPtr, Width * 4);
     }
 
     /// <summary>
@@ -246,7 +243,7 @@ internal sealed class AaSurface : IDisposable
     /// </summary>
     public unsafe byte* GetRowPointer(int y)
     {
-        if (_bits == 0 || y < 0 || y >= _height)
+        if (_bits == 0 || y < 0 || y >= Height)
         {
             return null;
         }
@@ -256,11 +253,11 @@ internal sealed class AaSurface : IDisposable
 
     private void Release()
     {
-        if (_memDc != 0)
+        if (MemDc != 0)
         {
             if (_oldBitmap != 0)
             {
-                Gdi32.SelectObject(_memDc, _oldBitmap);
+                Gdi32.SelectObject(MemDc, _oldBitmap);
                 _oldBitmap = 0;
             }
 
@@ -270,13 +267,13 @@ internal sealed class AaSurface : IDisposable
                 _bitmap = 0;
             }
 
-            Gdi32.DeleteDC(_memDc);
-            _memDc = 0;
+            Gdi32.DeleteDC(MemDc);
+            MemDc = 0;
         }
 
         _bits = 0;
-        _width = 0;
-        _height = 0;
+        Width = 0;
+        Height = 0;
     }
 
     public void Dispose()

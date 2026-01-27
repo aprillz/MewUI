@@ -39,7 +39,7 @@ public interface IGraphicsFactory
     IImage CreateImageFromBytes(byte[] data);
 
     /// <summary>
-    /// Creates an image backed by a versioned pixel source (e.g. <see cref="WritableBitmap"/>).
+    /// Creates an image backed by a versioned pixel source (e.g. <see cref="WriteableBitmap"/>).
     /// Backends should reflect updates when the source's <see cref="IPixelBufferSource.Version"/> changes.
     /// </summary>
     IImage CreateImageFromPixelSource(IPixelBufferSource source);

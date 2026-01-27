@@ -1,7 +1,3 @@
-using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Resources;
-using Aprillz.MewUI;
-
 namespace Aprillz.MewUI.Platform.Linux;
 
 internal sealed class LinuxWindowBackend : IWindowBackend

@@ -302,7 +302,7 @@ public sealed class Image : FrameworkElement
 
     private void OnSourceChanged()
     {
-        // Keep cached IImage instances; backend images are expected to refresh from the source (e.g. WritableBitmap.Version).
+        // Keep cached IImage instances; backend images are expected to refresh from the source (e.g. WriteableBitmap.Version).
         InvalidateVisual();
     }
 }

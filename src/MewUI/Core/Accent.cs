@@ -1,4 +1,4 @@
-﻿namespace Aprillz.MewUI;
+namespace Aprillz.MewUI;
 
 public static class BuiltInAccent
 {

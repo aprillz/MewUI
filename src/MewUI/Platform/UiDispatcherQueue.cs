@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 
-using Aprillz.MewUI;
-
 namespace Aprillz.MewUI.Platform;
 
 internal sealed class UiDispatcherQueue

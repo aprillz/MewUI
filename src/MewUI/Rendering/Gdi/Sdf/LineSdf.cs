@@ -10,9 +10,6 @@ internal sealed class LineSdf : SdfCalculatorBase
     private readonly float _halfThickness;
     private readonly float _vx, _vy;
     private readonly float _lenSq;
-    private readonly bool _isAxisAligned;
-    private readonly bool _isHorizontal;
-    private readonly bool _isVertical;
 
     /// <summary>
     /// Creates an SDF calculator for a line segment.
@@ -35,26 +32,26 @@ internal sealed class LineSdf : SdfCalculatorBase
         _lenSq = _vx * _vx + _vy * _vy;
 
         // Check for axis alignment
-        _isHorizontal = MathF.Abs(_vy) < 0.0001f;
-        _isVertical = MathF.Abs(_vx) < 0.0001f;
-        _isAxisAligned = _isHorizontal || _isVertical;
+        IsHorizontal = MathF.Abs(_vy) < 0.0001f;
+        IsVertical = MathF.Abs(_vx) < 0.0001f;
+        IsAxisAligned = IsHorizontal || IsVertical;
     }
 
     /// <summary>
     /// Gets whether this line is axis-aligned (horizontal or vertical).
     /// Axis-aligned lines can use faster rendering paths.
     /// </summary>
-    public bool IsAxisAligned => _isAxisAligned;
+    public bool IsAxisAligned { get; }
 
     /// <summary>
     /// Gets whether this line is horizontal.
     /// </summary>
-    public bool IsHorizontal => _isHorizontal;
+    public bool IsHorizontal { get; }
 
     /// <summary>
     /// Gets whether this line is vertical.
     /// </summary>
-    public bool IsVertical => _isVertical;
+    public bool IsVertical { get; }
 
     public override float GetSignedDistance(float x, float y)
     {

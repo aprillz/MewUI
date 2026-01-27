@@ -9,11 +9,8 @@ internal sealed class TextDocument : IDisposable
     private string _original = string.Empty;
     private readonly StringBuilder _added = new();
     private readonly List<Piece> _pieces = new();
-    private int _length;
-
     private int[]? _lineStarts;
     private int _lineStartsVersion = -1;
-    private int _version;
 
     private readonly struct Piece
     {
@@ -34,17 +31,17 @@ internal sealed class TextDocument : IDisposable
         // initialCapacity hint ignored for piece table
     }
 
-    public int Length => _length;
+    public int Length { get; private set; }
 
-    public bool IsEmpty => _length == 0;
+    public bool IsEmpty => Length == 0;
 
-    public int Version => _version;
+    public int Version { get; private set; }
 
     public char this[int index]
     {
         get
         {
-            if ((uint)index >= (uint)_length)
+            if ((uint)index >= (uint)Length)
             {
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
@@ -76,8 +73,8 @@ internal sealed class TextDocument : IDisposable
             _pieces.Add(new Piece(true, 0, _original.Length));
         }
 
-        _length = _original.Length;
-        _version++;
+        Length = _original.Length;
+        Version++;
     }
 
     public void Clear()
@@ -85,13 +82,13 @@ internal sealed class TextDocument : IDisposable
         _original = string.Empty;
         _added.Clear();
         _pieces.Clear();
-        _length = 0;
-        _version++;
+        Length = 0;
+        Version++;
     }
 
     public void Insert(int index, ReadOnlySpan<char> text)
     {
-        if ((uint)index > (uint)_length)
+        if ((uint)index > (uint)Length)
         {
             throw new ArgumentOutOfRangeException(nameof(index));
         }
@@ -108,8 +105,8 @@ internal sealed class TextDocument : IDisposable
         if (_pieces.Count == 0)
         {
             _pieces.Add(newPiece);
-            _length += text.Length;
-            _version++;
+            Length += text.Length;
+            Version++;
             return;
         }
 
@@ -137,8 +134,8 @@ internal sealed class TextDocument : IDisposable
             }
         }
 
-        _length += text.Length;
-        _version++;
+        Length += text.Length;
+        Version++;
     }
 
     public void Remove(int index, int length)
@@ -148,14 +145,14 @@ internal sealed class TextDocument : IDisposable
             return;
         }
 
-        if ((uint)index > (uint)_length)
+        if ((uint)index > (uint)Length)
         {
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        if (index + length > _length)
+        if (index + length > Length)
         {
-            length = _length - index;
+            length = Length - index;
         }
 
         if (length <= 0)
@@ -235,8 +232,8 @@ internal sealed class TextDocument : IDisposable
             }
         }
 
-        _length -= length;
-        _version++;
+        Length -= length;
+        Version++;
     }
 
     public void CopyTo(Span<char> destination, int start, int length)
@@ -246,7 +243,7 @@ internal sealed class TextDocument : IDisposable
             return;
         }
 
-        if ((uint)start > (uint)_length || start + length > _length)
+        if ((uint)start > (uint)Length || start + length > Length)
         {
             throw new ArgumentOutOfRangeException(nameof(start));
         }
@@ -294,12 +291,12 @@ internal sealed class TextDocument : IDisposable
 
     public string GetText()
     {
-        if (_length == 0)
+        if (Length == 0)
         {
             return string.Empty;
         }
 
-        return string.Create(_length, this, static (span, doc) => doc.CopyTo(span, 0, span.Length));
+        return string.Create(Length, this, static (span, doc) => doc.CopyTo(span, 0, span.Length));
     }
 
     public string GetText(int start, int length)
@@ -309,7 +306,7 @@ internal sealed class TextDocument : IDisposable
             return string.Empty;
         }
 
-        if ((uint)start > (uint)_length || start + length > _length)
+        if ((uint)start > (uint)Length || start + length > Length)
         {
             throw new ArgumentOutOfRangeException(nameof(start));
         }
@@ -336,7 +333,7 @@ internal sealed class TextDocument : IDisposable
             return 0;
         }
 
-        if (charIndex >= _length)
+        if (charIndex >= Length)
         {
             return Math.Max(0, LineCount - 1);
         }
@@ -365,7 +362,7 @@ internal sealed class TextDocument : IDisposable
         }
 
         int start = _lineStarts[lineNumber];
-        int end = lineNumber + 1 < _lineStarts.Length ? _lineStarts[lineNumber + 1] : _length;
+        int end = lineNumber + 1 < _lineStarts.Length ? _lineStarts[lineNumber + 1] : Length;
 
         int len = end - start;
         if (len > 0 && this[end - 1] == '\n')
@@ -397,7 +394,7 @@ internal sealed class TextDocument : IDisposable
 
     private void EnsureLineStarts()
     {
-        if (_lineStarts != null && _lineStartsVersion == _version)
+        if (_lineStarts != null && _lineStartsVersion == Version)
         {
             return;
         }
@@ -424,7 +421,7 @@ internal sealed class TextDocument : IDisposable
         }
 
         _lineStarts = starts.ToArray();
-        _lineStartsVersion = _version;
+        _lineStartsVersion = Version;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -474,7 +471,7 @@ internal sealed class TextDocument : IDisposable
         _added.Clear();
         _pieces.Clear();
         _lineStarts = null;
-        _length = 0;
+        Length = 0;
     }
 
     private int FindPieceIndex(int index, out int localOffset)

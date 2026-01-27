@@ -255,7 +255,7 @@ internal static partial class Gdi32
 
     [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool SetBrushOrgEx(nint hdc, int x, int y, out Structs.POINT lppt);
+    public static partial bool SetBrushOrgEx(nint hdc, int x, int y, out POINT lppt);
 
     #endregion
 
