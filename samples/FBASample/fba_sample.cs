@@ -10,18 +10,12 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.3.3
+#:package Aprillz.MewUI@0.8.5
 
 using System.Diagnostics;
 
-using Aprillz.MewUI.Binding;
+using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Elements;
-using Aprillz.MewUI.Markup;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
-using Aprillz.MewUI.Rendering;
 
 var stopwatch = Stopwatch.StartNew();
 
@@ -35,8 +29,8 @@ var metricsText = new ObservableValue<string>("Metrics:");
 
 Window window;
 Button enabledButton = null!;
-var accentSwatches = new List<(Color color, Button button)>();
-var currentAccent = Theme.Current.Accent;
+Accent currentAccent = Theme.DefaultAccent;
+Theme theme = Theme.Light;
 
 var root = new Window()
     .Ref(out window)
@@ -46,7 +40,6 @@ var root = new Window()
     .OnLoaded(() =>
     {
         loadedMs = stopwatch.Elapsed.TotalMilliseconds;
-        UpdateAccentSwatches();
     })
     .Content(
         new DockPanel()
@@ -94,27 +87,14 @@ FrameworkElement AccentPicker() => new StackPanel()
             .Spacing(6)
             .ItemWidth(28)
             .ItemHeight(28)
-            .Children(
-                AccentSwatch("Gold", Color.FromRgb(214, 176, 82)),
-                AccentSwatch("Red", Color.FromRgb(244, 67, 54)),
-                AccentSwatch("Pink", Color.FromRgb(233, 30, 99)),
-                AccentSwatch("Purple", Color.FromRgb(156, 39, 176)),
-                AccentSwatch("Deep Purple", Color.FromRgb(103, 58, 183)),
-                AccentSwatch("Indigo", Color.FromRgb(63, 81, 181)),
-                AccentSwatch("Blue", Color.FromRgb(33, 150, 243)),
-                AccentSwatch("Light Blue", Color.FromRgb(3, 169, 244)),
-                AccentSwatch("Teal", Color.FromRgb(0, 150, 136)),
-                AccentSwatch("Green", Color.FromRgb(76, 175, 80)),
-                AccentSwatch("Light Green", Color.FromRgb(139, 195, 74))
-            )
+            .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray())
     );
 
-Button AccentSwatch(string name, Color color) =>
+Button AccentSwatch(Accent accent) =>
     new Button()
         .Content(string.Empty)
-        .Background(color)
-        .OnClick(() => ApplyAccent(color))
-        .Apply(b => accentSwatches.Add((color, b)));
+        .Background(theme.GetAccentColor(accent))
+        .OnClick(() => ApplyAccent(accent));
 
 Element Buttons() => new StackPanel()
     .Horizontal()
@@ -143,9 +123,8 @@ Element NormalControls() => new StackPanel()
                     .Content("Toggle Theme")
                     .OnClick(() =>
                     {
-                        var nextBase = window.Theme.Name == Theme.Dark.Name ? Theme.Light : Theme.Dark;
-                        Theme.Current = window.Theme = nextBase.WithAccent(currentAccent);
-                        UpdateAccentSwatches();
+                        var nextBase = theme.Name == Theme.Dark.Name ? Theme.Light : Theme.Dark;
+                        Application.Current.Theme = theme = nextBase.WithAccent(currentAccent);
                     }),
 
                 new Label()
@@ -153,7 +132,6 @@ Element NormalControls() => new StackPanel()
                     .Apply(l => window.ThemeChanged += (_, newTheme) =>
                     {
                         l.Text($"Theme: {newTheme.Name}");
-                        UpdateAccentSwatches();
                     })
                     .CenterVertical()
             ),
@@ -372,10 +350,10 @@ FrameworkElement BindSamples()
                             .Text("Enabled")
                             .Apply(cb =>
                             {
-                                cb.CheckedChanged = v =>
+                                cb.CheckedChanged += v =>
                                 {
-                                    vm.EnabledButtonText.Value = v ? "Enabled action" : "Disabled action";
-                                    enabledButton?.IsEnabled = v;
+                                    vm.EnabledButtonText.Value = (v ?? false) ? "Enabled action" : "Disabled action";
+                                    enabledButton?.IsEnabled = (v ?? false);
                                 };
                             })
                             .BindIsChecked(vm.IsEnabled),
@@ -438,20 +416,10 @@ FrameworkElement BindSamples()
     );
 }
 
-void UpdateAccentSwatches()
-{
-    foreach (var (color, button) in accentSwatches)
-    {
-        bool selected = Theme.Current.Accent == color;
-        button.BorderThickness = selected ? 2 : 1;
-    }
-}
-
-void ApplyAccent(Color accent)
+void ApplyAccent(Accent accent)
 {
     currentAccent = accent;
-    Theme.Current = window.Theme = window.Theme.WithAccent(accent);
-    UpdateAccentSwatches();
+    Application.Current.Theme = theme = theme.WithAccent(accent);
 }
 
 void WriteMetric()
