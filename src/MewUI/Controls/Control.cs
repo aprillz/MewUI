@@ -137,15 +137,16 @@ public abstract class Control : FrameworkElement
 
     protected virtual Color DefaultBackground => Color.Transparent;
 
-    protected virtual Color DefaultForeground => GetTheme().Palette.WindowText;
+    protected virtual Color DefaultForeground => Theme.Palette.WindowText;
 
     protected virtual Color DefaultBorderBrush => Color.Transparent;
 
-    protected virtual string DefaultFontFamily => GetTheme().FontFamily;
 
-    protected virtual double DefaultFontSize => GetTheme().FontSize;
+    protected virtual string DefaultFontFamily => Theme.Metrics.FontFamily;
 
-    protected virtual FontWeight DefaultFontWeight => GetTheme().FontWeight;
+    protected virtual double DefaultFontSize => Theme.Metrics.FontSize;
+
+    protected virtual FontWeight DefaultFontWeight => Theme.Metrics.FontWeight;
 
     public void ClearBackground()
     {

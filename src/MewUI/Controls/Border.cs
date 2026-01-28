@@ -7,8 +7,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class Border : Control, IVisualTreeHost
 {
-    private UIElement? _child;
-
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
@@ -16,9 +14,9 @@ public sealed class Border : Control, IVisualTreeHost
             return null;
         }
 
-        if (_child != null)
+        if (Child != null)
         {
-            var hit = _child.HitTest(point);
+            var hit = Child.HitTest(point);
             if (hit != null)
             {
                 return hit;
@@ -45,23 +43,23 @@ public sealed class Border : Control, IVisualTreeHost
 
     public UIElement? Child
     {
-        get => _child;
+        get;
         set
         {
-            if (_child == value)
+            if (field == value)
             {
                 return;
             }
 
-            if (_child != null)
+            if (field != null)
             {
-                _child.Parent = null;
+                field.Parent = null;
             }
 
-            _child = value;
-            if (_child != null)
+            field = value;
+            if (field != null)
             {
-                _child.Parent = this;
+                field.Parent = this;
             }
 
             InvalidateMeasure();
@@ -74,39 +72,39 @@ public sealed class Border : Control, IVisualTreeHost
         var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
         var slot = availableSize.Deflate(border).Deflate(Padding);
 
-        if (_child == null)
+        if (Child == null)
         {
             return new Size(0, 0).Inflate(Padding).Inflate(border);
         }
 
-        _child.Measure(slot);
-        return _child.DesiredSize.Inflate(Padding).Inflate(border);
+        Child.Measure(slot);
+        return Child.DesiredSize.Inflate(Padding).Inflate(border);
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
         var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
         var inner = bounds.Deflate(border).Deflate(Padding);
-        _child?.Arrange(inner);
+        Child?.Arrange(inner);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
+        
         var radius = Math.Max(0, CornerRadius);
         DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, radius);
 
-        if (_child != null)
+        if (Child != null)
         {
-            _child.Render(context);
+            Child.Render(context);
         }
     }
 
     void IVisualTreeHost.VisitChildren(Action<Element> visitor)
     {
-        if (_child != null)
+        if (Child != null)
         {
-            visitor(_child);
+            visitor(Child);
         }
     }
 }

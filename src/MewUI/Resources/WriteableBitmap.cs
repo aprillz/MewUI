@@ -12,10 +12,11 @@ namespace Aprillz.MewUI;
 /// </summary>
 public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSource, IDisposable
 {
-    private readonly object _gate = new();
+    private readonly object _lock = new();
     private byte[] _bgra;
     private int _version;
     private bool _disposed;
+    private PixelRegion? _dirtyRegion;
 
     public int PixelWidth { get; }
     public int PixelHeight { get; }
@@ -74,7 +75,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
 
     public void Dispose()
     {
-        lock (_gate)
+        lock (_lock)
         {
             _disposed = true;
             _bgra = Array.Empty<byte>();
@@ -88,10 +89,10 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// </summary>
     public WriteContext LockForWrite(bool markDirtyOnDispose = true)
     {
-        Monitor.Enter(_gate);
+        Monitor.Enter(_lock);
         if (_disposed)
         {
-            Monitor.Exit(_gate);
+            Monitor.Exit(_lock);
             throw new ObjectDisposedException(nameof(WriteableBitmap));
         }
 
@@ -127,7 +128,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         }
 
         Action? changed;
-        lock (_gate)
+        lock (_lock)
         {
             ThrowIfDisposed();
 
@@ -135,14 +136,14 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             int dstRow0 = checked((y * PixelWidth + x) * 4);
             int srcRow = 0;
 
-            for (int r = 0; r < height; r++)
+            for (int row = 0; row < height; row++)
             {
                 srcBgra.Slice(srcRow, rowBytes).CopyTo(dst.Slice(dstRow0, rowBytes));
                 srcRow += srcStrideBytes;
                 dstRow0 += dstStride;
             }
 
-            changed = MarkDirty_NoLock();
+            changed = MarkDirty_NoLock(new PixelRegion(x, y, width, height));
         }
 
         changed?.Invoke();
@@ -151,20 +152,16 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     public void Clear(byte b, byte g, byte r, byte a = 255)
     {
         Action? changed;
-        lock (_gate)
+        lock (_lock)
         {
             ThrowIfDisposed();
 
-            Span<byte> dst = _bgra.AsSpan();
-            for (int i = 0; i < dst.Length; i += 4)
-            {
-                dst[i + 0] = b;
-                dst[i + 1] = g;
-                dst[i + 2] = r;
-                dst[i + 3] = a;
-            }
+            uint bgra = (uint)(b | ((uint)g << 8) | ((uint)r << 16) | ((uint)a << 24));
+            // Use Span.Fill on a uint view of the pixel buffer. The runtime provides a highly optimized
+            // (often SIMD-accelerated) memset-like implementation for this pattern.
+            MemoryMarshal.Cast<byte, uint>(_bgra.AsSpan()).Fill(bgra);
 
-            changed = MarkDirty_NoLock();
+            changed = MarkDirty_NoLock(new PixelRegion(0, 0, PixelWidth, PixelHeight));
         }
 
         changed?.Invoke();
@@ -184,28 +181,44 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
 
     PixelBufferLock IPixelBufferSource.Lock()
     {
-        Monitor.Enter(_gate);
+        Monitor.Enter(_lock);
         if (_disposed)
         {
-            Monitor.Exit(_gate);
+            Monitor.Exit(_lock);
             throw new ObjectDisposedException(nameof(WriteableBitmap));
         }
 
         int v = _version;
-        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, v, () => Monitor.Exit(_gate));
+
+        // Get dirty region and clear after reading
+        PixelRegion? dirtyRegion = _dirtyRegion;
+        _dirtyRegion = null;
+
+        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, v, dirtyRegion, () => Monitor.Exit(_lock));
     }
 
     internal Span<byte> GetPixelsMutableNoLock() => _bgra;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Action? MarkDirty_NoLock()
+    internal Action? MarkDirty_NoLock(PixelRegion? additionalDirtyRegion = null)
     {
         unchecked
         {
             _version++;
         }
 
+        if (additionalDirtyRegion.HasValue)
+        {
+            AccumulateDirtyRegion_NoLock(additionalDirtyRegion.Value);
+        }
+
         return Changed;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void AccumulateDirtyRegion_NoLock(PixelRegion region)
+    {
+        _dirtyRegion = _dirtyRegion.HasValue ? PixelRegion.Union(_dirtyRegion.Value, region) : region;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -271,173 +284,6 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             AddDirtyRect(0, 0, PixelWidth, PixelHeight);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetPixel(int x, int y, Color color)
-        {
-            if ((uint)x >= (uint)PixelWidth || (uint)y >= (uint)PixelHeight)
-            {
-                return;
-            }
-
-            int offset = y * StrideBytes + x * 4;
-            var pixels = PixelsBgra32;
-            pixels[offset + 0] = color.B;
-            pixels[offset + 1] = color.G;
-            pixels[offset + 2] = color.R;
-            pixels[offset + 3] = color.A;
-
-            AddDirtyRect(x, y, 1, 1);
-        }
-
-        public void FillRect(int x, int y, int width, int height, Color color)
-        {
-            int x1 = Math.Max(0, x);
-            int y1 = Math.Max(0, y);
-            int x2 = Math.Min(PixelWidth, x + width);
-            int y2 = Math.Min(PixelHeight, y + height);
-
-            if (x1 >= x2 || y1 >= y2)
-            {
-                return;
-            }
-
-            uint bgra = (uint)(color.B | (color.G << 8) | (color.R << 16) | (color.A << 24));
-            var pixels32 = PixelsUInt32;
-
-            for (int py = y1; py < y2; py++)
-            {
-                int rowStart = py * PixelWidth + x1;
-                pixels32.Slice(rowStart, x2 - x1).Fill(bgra);
-            }
-
-            AddDirtyRect(x1, y1, x2 - x1, y2 - y1);
-        }
-
-        public void DrawHLine(int x1, int x2, int y, Color color)
-        {
-            if ((uint)y >= (uint)PixelHeight)
-            {
-                return;
-            }
-
-            if (x1 > x2)
-            {
-                (x1, x2) = (x2, x1);
-            }
-
-            x1 = Math.Max(0, x1);
-            x2 = Math.Min(PixelWidth - 1, x2);
-            if (x1 > x2)
-            {
-                return;
-            }
-
-            uint bgra = (uint)(color.B | (color.G << 8) | (color.R << 16) | (color.A << 24));
-            int rowStart = y * PixelWidth + x1;
-            PixelsUInt32.Slice(rowStart, x2 - x1 + 1).Fill(bgra);
-            AddDirtyRect(x1, y, x2 - x1 + 1, 1);
-        }
-
-        public void DrawVLine(int x, int y1, int y2, Color color)
-        {
-            if ((uint)x >= (uint)PixelWidth)
-            {
-                return;
-            }
-
-            if (y1 > y2)
-            {
-                (y1, y2) = (y2, y1);
-            }
-
-            y1 = Math.Max(0, y1);
-            y2 = Math.Min(PixelHeight - 1, y2);
-            if (y1 > y2)
-            {
-                return;
-            }
-
-            uint bgra = (uint)(color.B | (color.G << 8) | (color.R << 16) | (color.A << 24));
-            var pixels = PixelsUInt32;
-            for (int y = y1; y <= y2; y++)
-            {
-                pixels[y * PixelWidth + x] = bgra;
-            }
-
-            AddDirtyRect(x, y1, 1, y2 - y1 + 1);
-        }
-
-        public void DrawLine(int x0, int y0, int x1, int y1, Color color)
-        {
-            // Bresenham
-            int dx = Math.Abs(x1 - x0);
-            int sx = x0 < x1 ? 1 : -1;
-            int dy = -Math.Abs(y1 - y0);
-            int sy = y0 < y1 ? 1 : -1;
-            int err = dx + dy;
-
-            while (true)
-            {
-                SetPixel(x0, y0, color);
-                if (x0 == x1 && y0 == y1)
-                {
-                    break;
-                }
-
-                int e2 = err << 1;
-                if (e2 >= dy)
-                {
-                    err += dy;
-                    x0 += sx;
-                }
-
-                if (e2 <= dx)
-                {
-                    err += dx;
-                    y0 += sy;
-                }
-            }
-        }
-
-        public void FillEllipse(int cx, int cy, int rx, int ry, Color color)
-        {
-            if (rx < 0) rx = -rx;
-            if (ry < 0) ry = -ry;
-            if (rx == 0 && ry == 0)
-            {
-                SetPixel(cx, cy, color);
-                return;
-            }
-
-            // Simple scanline fill using ellipse equation
-            int x1 = Math.Max(0, cx - rx);
-            int x2 = Math.Min(PixelWidth - 1, cx + rx);
-            int y1 = Math.Max(0, cy - ry);
-            int y2 = Math.Min(PixelHeight - 1, cy + ry);
-
-            double rxsq = rx * (double)rx;
-            double rysq = ry * (double)ry;
-            if (rxsq <= 0 || rysq <= 0)
-            {
-                return;
-            }
-
-            for (int y = y1; y <= y2; y++)
-            {
-                double dy = y - cy;
-                double t = 1.0 - (dy * dy) / rysq;
-                if (t <= 0)
-                {
-                    continue;
-                }
-
-                int span = (int)Math.Floor(Math.Sqrt(t * rxsq));
-                int sx1 = Math.Max(0, cx - span);
-                int sx2 = Math.Min(PixelWidth - 1, cx + span);
-                DrawHLine(sx1, sx2, y, color);
-            }
-        }
-
         public void Dispose()
         {
             if (_disposed)
@@ -452,12 +298,16 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             {
                 if (_markDirtyOnDispose || _hasDirtyRect)
                 {
-                    changed = _owner.MarkDirty_NoLock();
+                    // Convert internal PixelRect to PixelRegion and pass to owner
+                    PixelRegion? region = _hasDirtyRect
+                        ? new PixelRegion(_dirtyRect.X, _dirtyRect.Y, _dirtyRect.Width, _dirtyRect.Height)
+                        : null;
+                    changed = _owner.MarkDirty_NoLock(region);
                 }
             }
             finally
             {
-                Monitor.Exit(_owner._gate);
+                Monitor.Exit(_owner._lock);
             }
 
             changed?.Invoke();

@@ -19,7 +19,7 @@ public class CheckBox : Control
 
     public override bool Focusable => true;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     public string Text
     {
@@ -103,7 +103,7 @@ public class CheckBox : Control
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
+        
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
         var state = GetVisualState(_isPressed, _isPressed);
@@ -114,13 +114,13 @@ public class CheckBox : Control
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var boxRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = state.IsEnabled ? theme.Palette.ControlBackground : theme.Palette.DisabledControlBackground;
-        var radius = Math.Max(0, theme.ControlCornerRadius * 0.5);
+        var fill = state.IsEnabled ? Theme.Palette.ControlBackground : Theme.Palette.DisabledControlBackground;
+        var radius = Math.Max(0, Theme.Metrics.ControlCornerRadius * 0.5);
 
-        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
+        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
         DrawBackgroundAndBorder(context, boxRect, fill, borderColor, radius);
 
-        var markColor = state.IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
+        var markColor = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
 
         if (_isChecked == true)
         {
@@ -142,7 +142,7 @@ public class CheckBox : Control
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var textColor = state.IsEnabled ? Foreground : theme.Palette.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
             var font = GetFont();
             context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);

@@ -27,9 +27,9 @@ public sealed class ToolTip : Control
         BorderThickness = 1;
     }
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -49,10 +49,10 @@ public sealed class ToolTip : Control
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
+        
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
-        double radius = LayoutRounding.RoundToPixel(theme.ControlCornerRadius, dpiScale);
+        double radius = LayoutRounding.RoundToPixel(Theme.Metrics.ControlCornerRadius, dpiScale);
 
         DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, radius);
 

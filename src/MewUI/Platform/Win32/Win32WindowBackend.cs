@@ -20,6 +20,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private nint _hIconBig;
     private bool _initialEraseDone;
 
+    internal bool NeedsRender { get; private set; }
+
     public nint Handle { get; private set; }
 
     private readonly Win32TitleBarThemeSynchronizer _titleBarThemeSync = new();
@@ -71,10 +73,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public void Invalidate(bool erase)
     {
-        if (Handle != 0)
+        if (Handle == 0)
         {
-            User32.InvalidateRect(Handle, 0, erase);
+            return;
         }
+
+        // Request-driven rendering: coalesce multiple invalidations and let the platform host render pass present.
+        NeedsRender = true;
+        _host.RequestRender();
     }
 
     public void SetTitle(string title)
@@ -320,7 +326,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return 1;
         }
 
-        var theme = Window.InternalTheme;
+        var theme = Window.ThemeInternal;
         var bg = Window.Background.A > 0 ? Window.Background : theme.Palette.WindowBackground;
 
         nint brush = Gdi32.CreateSolidBrush(bg.ToCOLORREF());
@@ -455,7 +461,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         _titleBarThemeSync.Dispose();
         DestroyIcons();
-        if (Window.GraphicsFactory is Aprillz.MewUI.Rendering.IWindowResourceReleaser releaser)
+        if (Window.GraphicsFactory is Rendering.IWindowResourceReleaser releaser)
         {
             releaser.ReleaseWindowResources(Handle);
         }
@@ -475,6 +481,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         try
         {
+            NeedsRender = false;
             Window.RenderFrame(hdc);
         }
         finally
@@ -483,6 +490,49 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         return 0;
+    }
+
+    internal void RenderIfNeeded()
+    {
+        if (!NeedsRender || Handle == 0)
+        {
+            return;
+        }
+
+        NeedsRender = false;
+        RenderNowCore();
+    }
+
+    internal void RenderNow()
+    {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        NeedsRender = false;
+        RenderNowCore();
+    }
+
+    private void RenderNowCore()
+    {
+        // Render without relying on WM_PAINT. This matches the request-driven model (WPF-style coalescing).
+        // If the window is in an invalid paint state (e.g., uncovered), ValidateRect prevents redundant WM_PAINT storms.
+        nint hdc = User32.GetDC(Handle);
+        if (hdc == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Window.RenderFrame(hdc);
+            _ = User32.ValidateRect(Handle, 0);
+        }
+        finally
+        {
+            _ = User32.ReleaseDC(Handle, hdc);
+        }
     }
 
     private nint HandleSize(nint lParam)
@@ -494,7 +544,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         Window.PerformLayout();
         Window.Invalidate();
 
-        Window.RaiseSizeChanged(widthPx / Window.DpiScale, heightPx / Window.DpiScale);
+        Window.RaiseClientSizeChanged(widthPx / Window.DpiScale, heightPx / Window.DpiScale);
         return 0;
     }
 

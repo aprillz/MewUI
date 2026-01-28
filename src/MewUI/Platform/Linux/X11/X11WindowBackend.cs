@@ -20,14 +20,13 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _closedRaised;
     private nint _wmDeleteWindowAtom;
     private nint _wmProtocolsAtom;
-    private bool _needsRender;
     private long _lastRenderTick;
 
     private UIElement? _mouseOverElement;
     private UIElement? _capturedElement;
     private IconSource? _icon;
 
-    internal bool NeedsRender => _needsRender;
+    internal bool NeedsRender { get; private set; }
 
     public nint Handle { get; private set; }
 
@@ -89,7 +88,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         // Coalesce invalidations; render will be performed by the platform host loop.
-        _needsRender = true;
+        NeedsRender = true;
+        _host.RequestWake();
     }
 
     public void SetTitle(string title)
@@ -306,7 +306,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         ApplyResizeMode();
 
-        _needsRender = true;
+        NeedsRender = true;
     }
 
     private unsafe void ApplyIcon()
@@ -458,7 +458,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                 // X11 can deliver multiple expose events; render once for the last in the batch.
                 if (ev.xexpose.count == 0)
                 {
-                    _needsRender = true;
+                    NeedsRender = true;
                 }
 
                 break;
@@ -466,7 +466,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             case ConfigureNotify:
                 var cfg = ev.xconfigure;
                 Window.SetClientSizeDip(cfg.width / Window.DpiScale, cfg.height / Window.DpiScale);
-                _needsRender = true;
+                NeedsRender = true;
                 break;
 
             case ClientMessage:
@@ -510,7 +510,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     internal void RenderIfNeeded()
     {
-        if (!_needsRender || Handle == 0 || Display == 0)
+        if (!NeedsRender || Handle == 0 || Display == 0)
         {
             return;
         }
@@ -524,7 +524,23 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         _lastRenderTick = now;
 
-        _needsRender = false;
+        NeedsRender = false;
+        RenderNowCore();
+    }
+
+    internal void RenderNow()
+    {
+        if (Handle == 0 || Display == 0)
+        {
+            return;
+        }
+
+        NeedsRender = false;
+        RenderNowCore();
+    }
+
+    private void RenderNowCore()
+    {
         Render();
     }
 
@@ -747,7 +763,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         // Force layout recalculation with the correct DPI
         Window.PerformLayout();
-        _needsRender = true;
+        NeedsRender = true;
     }
 
     private static Key MapKeysymToKey(long keysym)

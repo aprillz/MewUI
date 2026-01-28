@@ -10,6 +10,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
     private readonly nint _hwnd;
     private readonly int _mainThreadId;
     private int _nextTimerId;
+    private int _invokeRequested;
 
     internal const uint WM_INVOKE = WindowMessages.WM_USER + 1;
 
@@ -25,7 +26,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
     {
         ArgumentNullException.ThrowIfNull(d);
         _queue.Enqueue(UiDispatcherPriority.Background, () => d(state));
-        User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+        RequestInvoke();
     }
 
     public override void Send(SendOrPostCallback d, object? state)
@@ -40,7 +41,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
 
         using var signal = new ManualResetEventSlim(false);
         _queue.EnqueueWithSignal(UiDispatcherPriority.Input, () => d(state), signal);
-        User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+        RequestInvoke();
         signal.Wait();
     }
 
@@ -54,7 +55,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
     {
         ArgumentNullException.ThrowIfNull(action);
         _queue.Enqueue(priority, action);
-        User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+        RequestInvoke();
     }
 
     public bool PostMerged(DispatcherMergeKey mergeKey, Action action, UiDispatcherPriority priority)
@@ -64,7 +65,7 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
             return false;
         }
 
-        User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+        RequestInvoke();
         return true;
     }
 
@@ -148,6 +149,24 @@ public sealed class Win32UiDispatcher : SynchronizationContext, IUiDispatcher
     public void ProcessWorkItems()
     {
         _queue.Process();
+    }
+
+    internal bool HasPendingWork => _queue.HasWork;
+
+    internal void ClearInvokeRequest()
+        => Interlocked.Exchange(ref _invokeRequested, 0);
+
+    private void RequestInvoke()
+    {
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _invokeRequested, 1) == 0)
+        {
+            User32.PostMessage(_hwnd, WM_INVOKE, 0, 0);
+        }
     }
 
     private sealed class TimerHandle : IDisposable

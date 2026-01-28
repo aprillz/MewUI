@@ -10,29 +10,21 @@ public class TextBox : TextBase
 {
     private readonly TextBoxView _view = new();
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
+
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public TextBox()
     {
         BorderThickness = 1;
         Padding = new Thickness(4);
-        MinHeight = GetTheme().BaseControlHeight;
     }
 
     protected override Rect GetInteractionContentBounds()
         // Keep interaction bounds consistent with rendering bounds (border inset + padding).
         => GetViewportContentBounds();
-
-    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        base.OnThemeChanged(oldTheme, newTheme);
-
-        if (MinHeight == oldTheme.BaseControlHeight)
-        {
-            MinHeight = newTheme.BaseControlHeight;
-        }
-    }
 
     protected override string NormalizePastedText(string text)
     {

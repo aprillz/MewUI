@@ -150,7 +150,7 @@ public class RadioButton : ToggleBase
     {
         EnsureGroupRegistered();
 
-        var theme = GetTheme();
+        
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
         var state = GetVisualState(_isPressed, _isPressed);
@@ -161,22 +161,22 @@ public class RadioButton : ToggleBase
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var circleRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = state.IsEnabled ? theme.Palette.ControlBackground : theme.Palette.DisabledControlBackground;
+        var fill = state.IsEnabled ? Theme.Palette.ControlBackground : Theme.Palette.DisabledControlBackground;
         context.FillEllipse(circleRect, fill);
 
-        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
+        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
         context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness));
 
         if (IsChecked)
         {
             var inner = circleRect.Inflate(-4, -4);
-            var dot = state.IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
+            var dot = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
             context.FillEllipse(inner, dot);
         }
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var textColor = state.IsEnabled ? Foreground : theme.Palette.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
             var font = GetFont();
             context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);

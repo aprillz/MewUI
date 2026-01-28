@@ -1,4 +1,3 @@
-using Aprillz.MewUI;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering;
@@ -45,14 +44,25 @@ public interface IGraphicsFactory
     IImage CreateImageFromPixelSource(IPixelBufferSource source);
 
     /// <summary>
-    /// Creates a graphics context for the specified window handle.
+    /// Creates a graphics context for the specified render target.
     /// </summary>
-    IGraphicsContext CreateContext(nint hwnd, nint hdc, double dpiScale);
+    /// <param name="target">The render target to draw to.</param>
+    /// <returns>A graphics context for drawing operations.</returns>
+    IGraphicsContext CreateContext(IRenderTarget target);
 
     /// <summary>
     /// Creates a measurement-only graphics context for text measurement.
     /// </summary>
     IGraphicsContext CreateMeasurementContext(uint dpi);
+
+    /// <summary>
+    /// Creates a bitmap render target for offscreen rendering.
+    /// </summary>
+    /// <param name="pixelWidth">Width in pixels.</param>
+    /// <param name="pixelHeight">Height in pixels.</param>
+    /// <param name="dpiScale">DPI scale factor (default 1.0 for 96 DPI).</param>
+    /// <returns>A bitmap render target with platform-appropriate resources.</returns>
+    IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0);
 }
 
 /// <summary>

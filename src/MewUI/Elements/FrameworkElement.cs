@@ -7,13 +7,15 @@ using Aprillz.MewUI.Rendering;
 /// </summary>
 public abstract class FrameworkElement : UIElement, IDisposable
 {
-    private Theme _theme = Application.IsRunning
-        ? Application.Current.Theme
-        : Theme.ResolveVariant(Theme.Default) == ThemeVariant.Light ? Theme.Light : Theme.Dark;
-
     private List<Action<Theme, FrameworkElement>>? _themeCallbacks;
+    private Size _lastArrangedSize;
+    private bool _hasArrangedSize;
 
     private bool _disposed;
+    private double _minHeight = double.NaN;
+
+    public event Action<SizeChangedEventArgs>? SizeChanged;
+    protected virtual double DefaultMinHeight => 0;
 
     /// <summary>
     /// Gets or sets the explicit width. Use double.NaN for automatic sizing.
@@ -47,8 +49,17 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// </summary>
     public double MinHeight
     {
-        get;
-        set { field = value; InvalidateMeasure(); }
+        get => _minHeight >= 0 ? _minHeight : DefaultMinHeight;
+        set
+        {
+            if (MinHeight == value) return;
+
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), "MinHeight must be 0 or greater.");
+            }
+            _minHeight = value; InvalidateMeasure();
+        }
     }
 
     /// <summary>
@@ -115,7 +126,15 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// </summary>
     public double ActualHeight => Bounds.Height;
 
-    internal Theme InternalTheme => _theme;
+    protected Theme Theme => ThemeInternal;
+
+    internal Theme ThemeInternal
+    {
+        get => field ??= Application.IsRunning
+            ? Application.Current.Theme
+            : ThemeManager.GetDefaultTheme(ThemeManager.ResolveVariantForStartup(ThemeManager.Default));
+        set;
+    }
 
     /// <summary>
     /// Gets the content bounds (bounds minus padding).
@@ -147,7 +166,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme)
     {
-        _theme = newTheme;
+        ThemeInternal = newTheme;
 
         OnThemeChanged(oldTheme, newTheme);
         InvokeThemeCallbacks(newTheme);
@@ -162,7 +181,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
         if (invokeImmediately)
         {
-            callback(_theme, this);
+            callback(ThemeInternal, this);
         }
     }
 
@@ -198,7 +217,33 @@ public abstract class FrameworkElement : UIElement, IDisposable
     protected virtual void OnThemeChanged(Theme oldTheme, Theme newTheme)
     { }
 
-    protected Theme GetTheme() => _theme;
+    protected virtual void OnSizeChanged(SizeChangedEventArgs e)
+    { }
+
+    protected override void ArrangeCore(Rect finalRect)
+    {
+        var oldSize = _lastArrangedSize;
+        var hadOldSize = _hasArrangedSize;
+
+        base.ArrangeCore(finalRect);
+
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        var newSize = new Size(Bounds.Width, Bounds.Height);
+        if (!hadOldSize || oldSize != newSize)
+        {
+            _lastArrangedSize = newSize;
+            _hasArrangedSize = true;
+
+            var args = new SizeChangedEventArgs(hadOldSize ? oldSize : Size.Empty, newSize);
+            OnSizeChanged(args);
+            SizeChanged?.Invoke(args);
+        }
+    }
+
 
     protected override Rect GetArrangedBounds(Rect finalRect)
     {

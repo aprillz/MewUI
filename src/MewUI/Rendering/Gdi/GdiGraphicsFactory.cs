@@ -1,4 +1,3 @@
-using Aprillz.MewUI;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Resources;
 
@@ -79,7 +78,41 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
     /// </summary>
     public IImage CreateImage(int width, int height, byte[] pixelData) => new GdiImage(width, height, pixelData);
 
-    public IGraphicsContext CreateContext(nint hwnd, nint hdc, double dpiScale)
+    public IGraphicsContext CreateContext(IRenderTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (target is WindowRenderTarget windowTarget)
+        {
+            return CreateContextCore(windowTarget.Hwnd, windowTarget.DeviceContext, windowTarget.DpiScale);
+        }
+
+        if (target is GdiBitmapRenderTarget bitmapTarget)
+        {
+            // Use target's Hdc directly - no wrapper needed
+            return new GdiGraphicsContext(
+                hwnd: 0,
+                hdc: bitmapTarget.Hdc,
+                pixelWidth: bitmapTarget.PixelWidth,
+                pixelHeight: bitmapTarget.PixelHeight,
+                dpiScale: bitmapTarget.DpiScale,
+                curveQuality: CurveQuality,
+                imageScaleQuality: ImageScaleQuality,
+                ownsDc: false);
+        }
+
+        if (target is IBitmapRenderTarget)
+        {
+            throw new ArgumentException(
+                $"BitmapRenderTarget was created by a different backend. " +
+                $"Use {nameof(CreateBitmapRenderTarget)} from the same factory.",
+                nameof(target));
+        }
+
+        throw new NotSupportedException($"Unsupported render target type: {target.GetType().Name}");
+    }
+
+    private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale)
         => IsDoubleBuffered
         ? new GdiDoubleBufferedContext(hwnd, hdc, dpiScale, CurveQuality, ImageScaleQuality)
         : new GdiGraphicsContext(hwnd, hdc, dpiScale, CurveQuality, ImageScaleQuality);
@@ -90,6 +123,9 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         var hdc = Native.User32.GetDC(0);
         return new GdiMeasurementContext(hdc, dpi);
     }
+
+    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0)
+        => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
 
     public void ReleaseWindowResources(nint hwnd)
     {

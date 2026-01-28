@@ -10,11 +10,9 @@ internal sealed class GdiStateManager
 {
     private readonly nint _hdc;
     private readonly Stack<SavedState> _savedStates = new();
-    private double _translateX;
-    private double _translateY;
 
-    public double TranslateX => _translateX;
-    public double TranslateY => _translateY;
+    public double TranslateX { get; private set; }
+    public double TranslateY { get; private set; }
     public double DpiScale { get; }
 
     private readonly struct SavedState
@@ -39,8 +37,8 @@ internal sealed class GdiStateManager
         _savedStates.Push(new SavedState
         {
             DcState = state,
-            TranslateX = _translateX,
-            TranslateY = _translateY,
+            TranslateX = TranslateX,
+            TranslateY = TranslateY,
         });
     }
 
@@ -53,8 +51,8 @@ internal sealed class GdiStateManager
         {
             var saved = _savedStates.Pop();
             Gdi32.RestoreDC(_hdc, saved.DcState);
-            _translateX = saved.TranslateX;
-            _translateY = saved.TranslateY;
+            TranslateX = saved.TranslateX;
+            TranslateY = saved.TranslateY;
         }
     }
 
@@ -72,8 +70,8 @@ internal sealed class GdiStateManager
     /// </summary>
     public void Translate(double dx, double dy)
     {
-        _translateX += dx;
-        _translateY += dy;
+        TranslateX += dx;
+        TranslateY += dy;
     }
 
     /// <summary>
@@ -81,26 +79,26 @@ internal sealed class GdiStateManager
     /// </summary>
     public void ResetTranslation()
     {
-        _translateX = 0;
-        _translateY = 0;
+        TranslateX = 0;
+        TranslateY = 0;
     }
 
     /// <summary>
     /// Converts a logical point to device coordinates.
     /// </summary>
     public POINT ToDevicePoint(Point pt) => new POINT(
-        LayoutRounding.RoundToPixelInt(pt.X + _translateX, DpiScale),
-        LayoutRounding.RoundToPixelInt(pt.Y + _translateY, DpiScale)
+        LayoutRounding.RoundToPixelInt(pt.X + TranslateX, DpiScale),
+        LayoutRounding.RoundToPixelInt(pt.Y + TranslateY, DpiScale)
     );
 
     /// <summary>
     /// Converts a logical rectangle to device coordinates.
     /// </summary>
     public RECT ToDeviceRect(Rect rect) => RECT.FromLTRB(
-        LayoutRounding.RoundToPixelInt(rect.X + _translateX, DpiScale),
-        LayoutRounding.RoundToPixelInt(rect.Y + _translateY, DpiScale),
-        LayoutRounding.RoundToPixelInt(rect.Right + _translateX, DpiScale),
-        LayoutRounding.RoundToPixelInt(rect.Bottom + _translateY, DpiScale)
+        LayoutRounding.RoundToPixelInt(rect.X + TranslateX, DpiScale),
+        LayoutRounding.RoundToPixelInt(rect.Y + TranslateY, DpiScale),
+        LayoutRounding.RoundToPixelInt(rect.Right + TranslateX, DpiScale),
+        LayoutRounding.RoundToPixelInt(rect.Bottom + TranslateY, DpiScale)
     );
 
     /// <summary>
@@ -136,7 +134,7 @@ internal sealed class GdiStateManager
     /// </summary>
     public (double x, double y) ToDeviceCoords(double x, double y)
     {
-        return ((x + _translateX) * DpiScale, (y + _translateY) * DpiScale);
+        return ((x + TranslateX) * DpiScale, (y + TranslateY) * DpiScale);
     }
 
     /// <summary>

@@ -6,8 +6,6 @@ public sealed class ContextMenu : Control, IPopupOwner
 {
     private const double SubMenuGlyphAreaWidth = 14;
     private const double ShortcutColumnGap = 12;
-
-    private readonly Menu _menu;
     private readonly ScrollBar _vBar;
     private readonly ScrollController _scroll = new();
     private double _extentHeight;
@@ -21,9 +19,9 @@ public sealed class ContextMenu : Control, IPopupOwner
     private double _maxShortcutWidth;
     private bool _hasAnyShortcut;
 
-    public Menu Menu => _menu;
+    public Menu Menu { get; }
 
-    public IList<MenuEntry> Items => _menu.Items;
+    public IList<MenuEntry> Items => Menu.Items;
 
     public double ItemHeight
     {
@@ -53,7 +51,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     public ContextMenu(Menu menu)
     {
         ArgumentNullException.ThrowIfNull(menu);
-        _menu = menu;
+        Menu = menu;
         if (!double.IsNaN(menu.ItemHeight) && menu.ItemHeight > 0)
         {
             ItemHeight = menu.ItemHeight;
@@ -64,7 +62,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         }
         else
         {
-            ItemPadding = GetTheme().ListItemPadding;
+            ItemPadding = Theme.Metrics.ItemPadding;
         }
         BorderThickness = 1;
         Padding = new Thickness(1);
@@ -76,13 +74,13 @@ public sealed class ContextMenu : Control, IPopupOwner
         };
     }
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     public void AddItem(string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
     {
-        _menu.Item(text, onClick, isEnabled, shortcutText);
+        Menu.Item(text, onClick, isEnabled, shortcutText);
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -90,7 +88,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     public void AddSubMenu(string text, Menu subMenu, bool isEnabled = true, string? shortcutText = null)
     {
         ArgumentNullException.ThrowIfNull(subMenu);
-        _menu.SubMenu(text, subMenu, isEnabled, shortcutText);
+        Menu.SubMenu(text, subMenu, isEnabled, shortcutText);
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -98,7 +96,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     public void AddEntry(MenuEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        _menu.Add(entry);
+        Menu.Add(entry);
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -115,7 +113,7 @@ public sealed class ContextMenu : Control, IPopupOwner
 
     public void AddSeparator()
     {
-        _menu.Separator();
+        Menu.Separator();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -171,17 +169,17 @@ public sealed class ContextMenu : Control, IPopupOwner
             return ItemHeight;
         }
 
-        var theme = GetTheme();
-        return Math.Max(18, theme.BaseControlHeight - 2);
+        
+        return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
 
-        if (ItemPadding == oldTheme.ListItemPadding)
+        if (ItemPadding == oldTheme.Metrics.ItemPadding)
         {
-            ItemPadding = newTheme.ListItemPadding;
+            ItemPadding = newTheme.Metrics.ItemPadding;
         }
     }
 
@@ -232,7 +230,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         }
 
         var dpiScale = GetDpi() / 96.0;
-        double t = GetTheme().ScrollBarHitThickness;
+        double t = Theme.Metrics.ScrollBarHitThickness;
         return LayoutRounding.SnapViewportRectToPixels(new Rect(
             contentBounds.X,
             contentBounds.Y,
@@ -246,7 +244,7 @@ public sealed class ContextMenu : Control, IPopupOwner
 
         double height = 0;
         double itemHeight = ResolveItemHeight();
-        var theme = GetTheme();
+        
 
         using var measure = BeginTextMeasurement();
 
@@ -316,7 +314,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         base.ArrangeContent(bounds);
 
-        var theme = GetTheme();
+        
         var snapped = GetSnappedBorderBounds(bounds);
         var borderInset = GetBorderVisualInset();
         var dpiScale = GetDpi() / 96.0;
@@ -336,7 +334,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             return;
         }
 
-        double t = theme.ScrollBarHitThickness;
+        double t = Theme.Metrics.ScrollBarHitThickness;
         var itemBounds = new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width - t), contentBounds.Height);
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
@@ -346,8 +344,8 @@ public sealed class ContextMenu : Control, IPopupOwner
         _vBar.Minimum = 0;
         _vBar.Maximum = _scroll.GetMaxDip(1);
         _vBar.ViewportSize = _viewportHeight;
-        _vBar.SmallChange = theme.ScrollBarSmallChange;
-        _vBar.LargeChange = theme.ScrollBarLargeChange;
+        _vBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
+        _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
         _vBar.Value = _verticalOffset;
 
         _vBar.Arrange(new Rect(
@@ -384,7 +382,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         var dpiScale = GetDpi() / 96.0;
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
-        if (_scroll.ScrollByNotches(1, -notches, GetTheme().ScrollWheelStep))
+        if (_scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep))
         {
             _verticalOffset = _scroll.GetOffsetDip(1);
             _vBar.Value = _verticalOffset;
@@ -680,10 +678,10 @@ public sealed class ContextMenu : Control, IPopupOwner
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
+        
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
-        double radius = theme.ControlCornerRadius;
+        double radius = Theme.Metrics.ControlCornerRadius;
         var borderInset = GetBorderVisualInset();
         double itemRadius = Math.Max(0, radius - borderInset);
 
@@ -702,7 +700,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         context.Save();
         context.SetClip(LayoutRounding.MakeClipRect(contentBounds, dpiScale));
 
-        double barOverlayWidth = _vBar.IsVisible ? theme.ScrollBarHitThickness : 0;
+        double barOverlayWidth = _vBar.IsVisible ? Theme.Metrics.ScrollBarHitThickness : 0;
         double y = contentBounds.Y - _verticalOffset;
         for (int i = 0; i < Items.Count; i++)
         {
@@ -724,7 +722,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             if (entry is MenuSeparator)
             {
                 var sepY = row.Y + (row.Height - 1) / 2;
-                context.DrawLine(new Point(layoutRow.X + 4, sepY), new Point(layoutRow.Right - 4, sepY), theme.Palette.ControlBorder, 1);
+                context.DrawLine(new Point(layoutRow.X + 4, sepY), new Point(layoutRow.Right - 4, sepY), Theme.Palette.ControlBorder, 1);
                 y += h;
                 continue;
             }
@@ -732,7 +730,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             if (entry is MenuItem item)
             {
                 bool isHot = i == _hotIndex || i == _openSubMenuIndex;
-                var bg = isHot ? theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255)) : Color.Transparent;
+                var bg = isHot ? Theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255)) : Color.Transparent;
                 if (bg.A > 0)
                 {
                     if (itemRadius > 0)
@@ -745,7 +743,7 @@ public sealed class ContextMenu : Control, IPopupOwner
                     }
                 }
 
-                var fg = item.IsEnabled ? Foreground : theme.Palette.DisabledText;
+                var fg = item.IsEnabled ? Foreground : Theme.Palette.DisabledText;
                 var chevronReserved = item.SubMenu != null ? SubMenuGlyphAreaWidth : 0;
 
                 var paddedRow = layoutRow.Deflate(ItemPadding);

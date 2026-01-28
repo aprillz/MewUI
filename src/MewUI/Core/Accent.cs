@@ -41,14 +41,8 @@ public static class BuiltInAccent
         return isDark ? pair.Dark : pair.Light;
     }
 
-    public static Color GetAccentColor(this Theme theme, Accent accent)
-        => GetColor(accent, Palette.IsDarkBackground(theme.Palette.WindowBackground));
-
-    public static Theme WithAccent(this Theme theme, Color accent, Color? accentText = null)
-        => theme.WithPalette(theme.Palette.WithAccent(accent, accentText));
-
-    public static Theme WithAccent(this Theme theme, Accent accent, Color? accentText = null)
-        => WithAccent(theme, GetAccentColor(theme, accent), accentText);
+    public static Color GetAccentColor(this Accent accent, bool isDark)
+        => GetColor(accent, isDark);
 }
 
 public enum Accent

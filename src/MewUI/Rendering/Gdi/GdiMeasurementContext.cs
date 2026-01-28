@@ -10,17 +10,16 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 internal sealed class GdiMeasurementContext : IGraphicsContext
 {
     private readonly nint _hdc;
-    private readonly double _dpiScale;
     private bool _disposed;
 
-    public double DpiScale => _dpiScale;
+    public double DpiScale { get; }
 
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
 
     public GdiMeasurementContext(nint hdc, uint dpi)
     {
         _hdc = hdc;
-        _dpiScale = dpi <= 0 ? 1.0 : dpi / 96.0;
+        DpiScale = dpi <= 0 ? 1.0 : dpi / 96.0;
     }
 
     public void Dispose()
@@ -44,7 +43,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
         {
             var hasLineBreaks = text.IndexOfAny('\r', '\n') >= 0;
             var rect = hasLineBreaks
-                ? new RECT(0, 0, LayoutRounding.RoundToPixelInt(1_000_000, _dpiScale), 0)
+                ? new RECT(0, 0, LayoutRounding.RoundToPixelInt(1_000_000, DpiScale), 0)
                 : new RECT(0, 0, 0, 0);
 
             uint format = hasLineBreaks
@@ -55,7 +54,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
             {
                 Gdi32.DrawText(_hdc, pText, text.Length, ref rect, format);
             }
-            return new Size(rect.Width / _dpiScale, rect.Height / _dpiScale);
+            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
         }
         finally
         {
@@ -75,10 +74,10 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
             maxWidth = 1_000_000;
         }
 
-        var maxWidthPx = LayoutRounding.RoundToPixelInt(maxWidth, _dpiScale);
+        var maxWidthPx = LayoutRounding.RoundToPixelInt(maxWidth, DpiScale);
         if (maxWidthPx <= 0)
         {
-            maxWidthPx = LayoutRounding.RoundToPixelInt(1_000_000, _dpiScale);
+            maxWidthPx = LayoutRounding.RoundToPixelInt(1_000_000, DpiScale);
         }
 
         var oldFont = Gdi32.SelectObject(_hdc, gdiFont.Handle);
@@ -90,7 +89,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
                 Gdi32.DrawText(_hdc, pText, text.Length, ref rect,
                     GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX);
             }
-            return new Size(rect.Width / _dpiScale, rect.Height / _dpiScale);
+            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
         }
         finally
         {

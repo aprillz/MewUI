@@ -34,6 +34,6 @@ internal sealed class StaticPixelBufferSource : IPixelBufferSource
     }
 
     public PixelBufferLock Lock() =>
-        new(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, 0, null);
+        new(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, 0, dirtyRegion: null, release: null);
 }
 

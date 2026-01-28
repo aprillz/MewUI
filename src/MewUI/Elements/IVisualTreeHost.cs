@@ -4,3 +4,4 @@ internal interface IVisualTreeHost
 {
     void VisitChildren(Action<Element> visitor);
 }
+

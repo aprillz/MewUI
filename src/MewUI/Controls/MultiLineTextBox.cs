@@ -29,14 +29,16 @@ public sealed class MultiLineTextBox : TextBase
     private readonly ScrollBar _vBar;
     private readonly ScrollBar _hBar;
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
+
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public MultiLineTextBox()
     {
         BorderThickness = 1;
         Padding = new Thickness(4);
-        MinHeight = GetTheme().BaseControlHeight;
         AcceptReturn = true;
 
         _textView = new MultiLineTextView(
@@ -107,16 +109,6 @@ public sealed class MultiLineTextBox : TextBase
     }
 
     protected override void EnsureCaretVisibleCore(Rect contentBounds) => EnsureCaretVisible(contentBounds);
-
-    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        base.OnThemeChanged(oldTheme, newTheme);
-
-        if (MinHeight == oldTheme.BaseControlHeight)
-        {
-            MinHeight = newTheme.BaseControlHeight;
-        }
-    }
 
     /// <summary>
     /// Enables hard-wrapping at the available width. When enabled, horizontal scrolling is disabled.
@@ -227,14 +219,13 @@ public sealed class MultiLineTextBox : TextBase
     {
         base.ArrangeContent(bounds);
 
-        var theme = GetTheme();
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
         var dpiScale = GetDpi() / 96.0;
 
         const double inset = 0;
-        double t = theme.ScrollBarHitThickness;
+        double t = Theme.Metrics.ScrollBarHitThickness;
 
         using var measure = BeginTextMeasurement();
 
@@ -261,8 +252,8 @@ public sealed class MultiLineTextBox : TextBase
             _vBar.Minimum = 0;
             _vBar.Maximum = Math.Max(0, finalExtentH - finalViewportH);
             _vBar.ViewportSize = finalViewportH;
-            _vBar.SmallChange = theme.ScrollBarSmallChange;
-            _vBar.LargeChange = theme.ScrollBarLargeChange;
+            _vBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
+            _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
             _vBar.Value = VerticalOffset;
             _vBar.Arrange(new Rect(
                 innerBounds.Right - t - inset,
@@ -282,8 +273,8 @@ public sealed class MultiLineTextBox : TextBase
             _hBar.Minimum = 0;
             _hBar.Maximum = Math.Max(0, finalExtentW - finalViewportW);
             _hBar.ViewportSize = finalViewportW;
-            _hBar.SmallChange = theme.ScrollBarSmallChange;
-            _hBar.LargeChange = theme.ScrollBarLargeChange;
+            _hBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
+            _hBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
             _hBar.Value = HorizontalOffset;
             _hBar.Arrange(new Rect(
                 innerBounds.X + inset,
@@ -344,8 +335,6 @@ public sealed class MultiLineTextBox : TextBase
         return null;
     }
 
-
-
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
@@ -365,7 +354,7 @@ public sealed class MultiLineTextBox : TextBase
         double viewportH = viewportBounds.Height;
         double viewportW = viewportBounds.Width;
         var dpiScale = GetDpi() / 96.0;
-        SetVerticalOffset(ClampOffset(VerticalOffset - notches * GetTheme().ScrollWheelStep, GetExtentHeight(viewportW), viewportH, dpiScale), false);
+        SetVerticalOffset(ClampOffset(VerticalOffset - notches * Theme.Metrics.ScrollWheelStep, GetExtentHeight(viewportW), viewportH, dpiScale), false);
         _vBar.Value = VerticalOffset;
         InvalidateVisual();
         e.Handled = true;
@@ -575,8 +564,6 @@ public sealed class MultiLineTextBox : TextBase
         int newPos = start ? lineStart : lineEnd;
         SetCaretAndSelection(newPos, extendSelection);
     }
-
-
 
     private void EnsureCaretVisible(Rect contentBounds)
     {

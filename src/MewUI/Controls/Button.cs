@@ -9,27 +9,18 @@ public class Button : Control
 {
     private bool _isPressed;
     private ValueBinding<string>? _contentBinding;
-    private Func<bool>? _canClick;
     private TextMeasureCache _textMeasureCache;
 
-    protected override Color DefaultBackground => GetTheme().Palette.ButtonFace;
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
+
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public Button()
     {
         BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
-        MinHeight = GetTheme().BaseControlHeight;
-    }
-
-    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        base.OnThemeChanged(oldTheme, newTheme);
-
-        if (MinHeight == oldTheme.BaseControlHeight)
-        {
-            MinHeight = newTheme.BaseControlHeight;
-        }
     }
 
     /// <summary>
@@ -59,10 +50,10 @@ public class Button : Control
 
     public Func<bool>? CanClick
     {
-        get => _canClick;
+        get;
         set
         {
-            _canClick = value;
+            field = value;
             ReevaluateSuggestedIsEnabled();
         }
     }
@@ -90,24 +81,23 @@ public class Button : Control
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
         var state = GetVisualState(_isPressed, _isPressed);
 
         // Determine visual state
         Color bgColor;
-        Color borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
+        Color borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
 
         if (!state.IsEnabled)
         {
-            bgColor = theme.Palette.ButtonDisabledBackground;
+            bgColor = Theme.Palette.ButtonDisabledBackground;
         }
         else if (state.IsPressed)
         {
-            bgColor = theme.Palette.ButtonPressedBackground;
+            bgColor = Theme.Palette.ButtonPressedBackground;
         }
         else if (state.IsHot)
         {
-            bgColor = theme.Palette.ButtonHoverBackground;
+            bgColor = Theme.Palette.ButtonHoverBackground;
         }
         else
         {
@@ -115,7 +105,7 @@ public class Button : Control
         }
 
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = theme.ControlCornerRadius;
+        double radius = Theme.Metrics.ControlCornerRadius;
         DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
 
         // Draw text
@@ -123,7 +113,7 @@ public class Button : Control
         {
             var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(GetBorderVisualInset()));
             var font = GetFont();
-            var textColor = state.IsEnabled ? Foreground : theme.Palette.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             context.DrawText(Content, contentBounds, font, textColor, TextAlignment.Center, TextAlignment.Center, TextWrapping.NoWrap);
         }
     }

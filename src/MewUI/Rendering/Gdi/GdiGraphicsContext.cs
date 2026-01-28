@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
@@ -19,6 +17,10 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     private readonly GdiCurveQuality _curveQuality;
     private readonly ImageScaleQuality _imageScaleQuality;
     private readonly int _supersampleFactor;
+
+    // For bitmap rendering without hwnd
+    private readonly int _pixelWidth;
+    private readonly int _pixelHeight;
 
     private readonly GdiStateManager _stateManager;
     private readonly GdiPrimitiveRenderer _primitiveRenderer;
@@ -42,9 +44,24 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
         GdiCurveQuality curveQuality,
         ImageScaleQuality imageScaleQuality,
         bool ownsDc = false)
+        : this(hwnd, hdc, 0, 0, dpiScale, curveQuality, imageScaleQuality, ownsDc)
+    {
+    }
+
+    internal GdiGraphicsContext(
+        nint hwnd,
+        nint hdc,
+        int pixelWidth,
+        int pixelHeight,
+        double dpiScale,
+        GdiCurveQuality curveQuality,
+        ImageScaleQuality imageScaleQuality,
+        bool ownsDc = false)
     {
         _hwnd = hwnd;
         Hdc = hdc;
+        _pixelWidth = pixelWidth;
+        _pixelHeight = pixelHeight;
         _ownsDc = ownsDc;
         _curveQuality = curveQuality;
         _imageScaleQuality = imageScaleQuality;
@@ -285,7 +302,14 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     public void Clear(Color color)
     {
-        _primitiveRenderer.Clear(_hwnd, color);
+        if (_hwnd != 0)
+        {
+            _primitiveRenderer.Clear(_hwnd, color);
+        }
+        else if (_pixelWidth > 0 && _pixelHeight > 0)
+        {
+            _primitiveRenderer.Clear(_pixelWidth, _pixelHeight, color);
+        }
     }
 
     public void DrawLine(Point start, Point end, Color color, double thickness = 1)

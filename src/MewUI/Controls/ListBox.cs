@@ -94,15 +94,15 @@ public class ListBox : Control
 
     public override bool Focusable => true;
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     public ListBox()
     {
         BorderThickness = 1;
         Padding = new Thickness(1);
-        ItemPadding = GetTheme().ListItemPadding;
+        ItemPadding = Theme.Metrics.ItemPadding;
 
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _vBar.Parent = this;
@@ -119,9 +119,9 @@ public class ListBox : Control
     {
         base.OnThemeChanged(oldTheme, newTheme);
 
-        if (ItemPadding == oldTheme.ListItemPadding)
+        if (ItemPadding == oldTheme.Metrics.ItemPadding)
         {
-            ItemPadding = newTheme.ListItemPadding;
+            ItemPadding = newTheme.Metrics.ItemPadding;
         }
     }
 
@@ -132,7 +132,6 @@ public class ListBox : Control
 
     protected override Size MeasureContent(Size availableSize)
     {
-        var theme = GetTheme();
         var borderInset = GetBorderVisualInset();
         var dpi = GetDpi();
         double widthLimit = double.IsPositiveInfinity(availableSize.Width)
@@ -222,10 +221,10 @@ public class ListBox : Control
         _extentHeight = height;
         var dpiScale = GetDpi() / 96.0;
         _viewportHeight = double.IsPositiveInfinity(availableSize.Height)
-            ? height
-            : LayoutRounding.RoundToPixel(
-                Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2),
-                dpiScale);
+                ? height
+                : LayoutRounding.RoundToPixel(
+                    Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2),
+                    dpiScale);
 
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
@@ -246,7 +245,6 @@ public class ListBox : Control
     {
         base.ArrangeContent(bounds);
 
-        var theme = GetTheme();
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
@@ -262,14 +260,14 @@ public class ListBox : Control
 
         if (_vBar.IsVisible)
         {
-            double t = theme.ScrollBarHitThickness;
+            double t = Theme.Metrics.ScrollBarHitThickness;
             const double inset = 0;
 
             _vBar.Minimum = 0;
             _vBar.Maximum = Math.Max(0, _extentHeight - _viewportHeight);
             _vBar.ViewportSize = _viewportHeight;
-            _vBar.SmallChange = theme.ScrollBarSmallChange;
-            _vBar.LargeChange = theme.ScrollBarLargeChange;
+            _vBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
+            _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
             _vBar.Value = _scroll.GetOffsetDip(1);
 
             _vBar.Arrange(new Rect(
@@ -288,24 +286,23 @@ public class ListBox : Control
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
-        double radius = theme.ControlCornerRadius;
+        double radius = Theme.Metrics.ControlCornerRadius;
         var borderInset = GetBorderVisualInset();
         double itemRadius = Math.Max(0, radius - borderInset);
 
-        var bg = IsEnabled ? Background : theme.Palette.DisabledControlBackground;
+        var bg = IsEnabled ? Background : Theme.Palette.DisabledControlBackground;
         var borderColor = BorderBrush;
         if (IsEnabled)
         {
             if (IsFocused)
             {
-                borderColor = theme.Palette.Accent;
+                borderColor = Theme.Palette.Accent;
             }
             else if (IsMouseOver)
             {
-                borderColor = BorderBrush.Lerp(theme.Palette.Accent, 0.6);
+                borderColor = BorderBrush.Lerp(Theme.Palette.Accent, 0.6);
             }
         }
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
@@ -344,7 +341,7 @@ public class ListBox : Control
             bool selected = i == SelectedIndex;
             if (selected)
             {
-                var selectionBg = theme.Palette.SelectionBackground;
+                var selectionBg = Theme.Palette.SelectionBackground;
                 if (itemRadius > 0)
                 {
                     context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, selectionBg);
@@ -355,7 +352,7 @@ public class ListBox : Control
                 }
             }
 
-            var textColor = selected ? theme.Palette.SelectionText : (IsEnabled ? Foreground : theme.Palette.DisabledText);
+            var textColor = selected ? Theme.Palette.SelectionText : (IsEnabled ? Foreground : Theme.Palette.DisabledText);
             var textBounds = itemRect.Deflate(ItemPadding);
             context.DrawText(_items[i] ?? string.Empty, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
@@ -438,7 +435,7 @@ public class ListBox : Control
 
         _scroll.DpiScale = GetDpi() / 96.0;
         _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
-        _scroll.ScrollByNotches(1, -notches, GetTheme().ScrollWheelStep);
+        _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
         _vBar.Value = _scroll.GetOffsetDip(1);
         InvalidateVisual();
         e.Handled = true;
@@ -556,8 +553,7 @@ public class ListBox : Control
             return ItemHeight;
         }
 
-        var theme = GetTheme();
-        return Math.Max(18, theme.BaseControlHeight - 2);
+        return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
     private double GetViewportHeightDip()

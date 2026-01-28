@@ -99,4 +99,7 @@ internal static partial class LibGL
 
     [LibraryImport(LibraryName)]
     public static partial uint glGetError();
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial nint glXGetProcAddress(string procName);
 }

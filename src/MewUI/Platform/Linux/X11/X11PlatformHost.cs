@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -15,11 +16,7 @@ public sealed class X11PlatformHost : IPlatformHost
 {
     private readonly Dictionary<nint, X11WindowBackend> _windows = new();
     private readonly List<X11WindowBackend> _renderBackends = new(capacity: 8);
-    private readonly IMessageBoxService _messageBox = new X11MessageBoxService();
-    private readonly IFileDialogService _fileDialog = new X11FileDialogService();
-    private readonly IClipboardService _clipboard = new LinuxClipboardService();
     private bool _running;
-    private nint _display;
     private uint _systemDpi = 96u;
     private LinuxUiDispatcher? _dispatcher;
     private long _lastDpiPollTick;
@@ -34,11 +31,11 @@ public sealed class X11PlatformHost : IPlatformHost
     private int _wakeWriteFd = -1;
     private bool _usePollWait;
 
-    public IMessageBoxService MessageBox => _messageBox;
+    public IMessageBoxService MessageBox { get; } = new X11MessageBoxService();
 
-    public IFileDialogService FileDialog => _fileDialog;
+    public IFileDialogService FileDialog { get; } = new X11FileDialogService();
 
-    public IClipboardService Clipboard => _clipboard;
+    public IClipboardService Clipboard { get; } = new LinuxClipboardService();
 
     public IWindowBackend CreateWindowBackend(Window window) => new X11WindowBackend(this, window);
 
@@ -91,7 +88,11 @@ public sealed class X11PlatformHost : IPlatformHost
             throw new InvalidOperationException("X11 main window backend not registered.");
         }
 
-        nint display = _display;
+        nint display = Display;
+        var scheduler = app.RenderLoopSettings;
+        long ticksPerSecond = Stopwatch.Frequency;
+        long lastFrameTicks = Stopwatch.GetTimestamp();
+
         while (_running)
         {
             try
@@ -116,8 +117,36 @@ public sealed class X11PlatformHost : IPlatformHost
 
                 _dispatcher?.ProcessWorkItems();
 
-                // Coalesced rendering for all windows.
-                RenderInvalidatedWindows();
+                if (scheduler.Mode == RenderLoopMode.Continuous)
+                {
+                    RenderAllWindows();
+
+                    int fps = scheduler.TargetFps;
+                    if (fps > 0)
+                    {
+                        long frameTicks = ticksPerSecond / fps;
+                        long now = Stopwatch.GetTimestamp();
+                        long elapsed = now - lastFrameTicks;
+                        if (elapsed < frameTicks)
+                        {
+                            int waitMs = (int)((frameTicks - elapsed) * 1000 / ticksPerSecond);
+                            if (waitMs > 0)
+                            {
+                                WaitForWorkOrEvents(timeoutOverrideMs: waitMs, ignoreRenderRequests: true);
+                            }
+                        }
+                        lastFrameTicks = Stopwatch.GetTimestamp();
+                    }
+                    else
+                    {
+                        WaitForWorkOrEvents(timeoutOverrideMs: 0, ignoreRenderRequests: true);
+                    }
+                }
+                else
+                {
+                    // Coalesced rendering for all windows.
+                    RenderInvalidatedWindows();
+                }
             }
             catch (Exception ex)
             {
@@ -127,13 +156,18 @@ public sealed class X11PlatformHost : IPlatformHost
                 break;
             }
 
+            if (scheduler.Mode == RenderLoopMode.Continuous)
+            {
+                continue;
+            }
+
             WaitForWorkOrEvents();
         }
 
-        if (_display != 0)
+        if (Display != 0)
         {
-            try { NativeX11.XCloseDisplay(_display); } catch { }
-            _display = 0;
+            try { NativeX11.XCloseDisplay(Display); } catch { }
+            Display = 0;
         }
 
         CloseWakePipe();
@@ -141,6 +175,9 @@ public sealed class X11PlatformHost : IPlatformHost
         app.Dispatcher = null;
         SynchronizationContext.SetSynchronizationContext(previousContext);
     }
+
+    internal void RequestWake()
+        => SignalWake();
 
     private static nint GetEventWindow(in XEvent ev)
     {
@@ -174,14 +211,14 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public void DoEvents()
     {
-        if (_display == 0)
+        if (Display == 0)
         {
             return;
         }
 
-        while (NativeX11.XPending(_display) != 0)
+        while (NativeX11.XPending(Display) != 0)
         {
-            NativeX11.XNextEvent(_display, out var ev);
+            NativeX11.XNextEvent(Display, out var ev);
             if (ev.type == 28) // PropertyNotify
             {
                 HandlePropertyNotify(ev.xproperty);
@@ -210,46 +247,46 @@ public sealed class X11PlatformHost : IPlatformHost
 
         _windows.Clear();
 
-        if (_display != 0)
+        if (Display != 0)
         {
-            try { NativeX11.XCloseDisplay(_display); } catch { }
-            _display = 0;
+            try { NativeX11.XCloseDisplay(Display); } catch { }
+            Display = 0;
         }
 
         CloseWakePipe();
     }
 
-    internal nint Display => _display;
+    internal nint Display { get; private set; }
 
     internal void EnsureDisplay()
     {
-        if (_display != 0)
+        if (Display != 0)
         {
             return;
         }
 
-        _display = NativeX11.XOpenDisplay(0);
-        if (_display == 0)
+        Display = NativeX11.XOpenDisplay(0);
+        if (Display == 0)
         {
             throw new InvalidOperationException("XOpenDisplay failed.");
         }
 
-        int screen = NativeX11.XDefaultScreen(_display);
-        _rootWindow = NativeX11.XRootWindow(_display, screen);
+        int screen = NativeX11.XDefaultScreen(Display);
+        _rootWindow = NativeX11.XRootWindow(Display, screen);
 
-        _resourceManagerAtom = NativeX11.XInternAtom(_display, "RESOURCE_MANAGER", false);
-        _xsettingsAtom = NativeX11.XInternAtom(_display, "_XSETTINGS_SETTINGS", false);
-        _xsettingsSelectionAtom = NativeX11.XInternAtom(_display, "_XSETTINGS_S0", false);
+        _resourceManagerAtom = NativeX11.XInternAtom(Display, "RESOURCE_MANAGER", false);
+        _xsettingsAtom = NativeX11.XInternAtom(Display, "_XSETTINGS_SETTINGS", false);
+        _xsettingsSelectionAtom = NativeX11.XInternAtom(Display, "_XSETTINGS_S0", false);
         UpdateXsettingsOwner();
 
         // Listen for root property changes (RESOURCE_MANAGER / XSETTINGS) to refresh DPI.
         if (_rootWindow != 0)
         {
-            NativeX11.XSelectInput(_display, _rootWindow, (nint)X11EventMask.PropertyChangeMask);
+            NativeX11.XSelectInput(Display, _rootWindow, (nint)X11EventMask.PropertyChangeMask);
         }
 
-        _systemDpi = TryGetXSettingsDpi(_display, _xsettingsOwnerWindow, _xsettingsAtom)
-            ?? TryGetXftDpi(_display)
+        _systemDpi = TryGetXSettingsDpi(Display, _xsettingsOwnerWindow, _xsettingsAtom)
+            ?? TryGetXftDpi(Display)
             ?? 96u;
         _lastDpiPollTick = Environment.TickCount64;
 
@@ -260,7 +297,7 @@ public sealed class X11PlatformHost : IPlatformHost
     {
         CloseWakePipe();
 
-        if (_display == 0)
+        if (Display == 0)
         {
             return;
         }
@@ -268,7 +305,7 @@ public sealed class X11PlatformHost : IPlatformHost
         int xfd;
         try
         {
-            xfd = NativeX11.XConnectionNumber(_display);
+            xfd = NativeX11.XConnectionNumber(Display);
         }
         catch
         {
@@ -370,11 +407,6 @@ public sealed class X11PlatformHost : IPlatformHost
             return;
         }
 
-        if (!AnyWindowNeedsRender())
-        {
-            return;
-        }
-
         _renderBackends.Clear();
         foreach (var backend in _windows.Values)
         {
@@ -384,26 +416,50 @@ public sealed class X11PlatformHost : IPlatformHost
             }
         }
 
+        if (_renderBackends.Count == 0)
+        {
+            return;
+        }
+
         for (int i = 0; i < _renderBackends.Count; i++)
         {
             _renderBackends[i].RenderIfNeeded();
         }
     }
 
-    private void WaitForWorkOrEvents()
+    private void RenderAllWindows()
     {
-        if (_display == 0)
+        if (_windows.Count == 0)
+        {
+            return;
+        }
+
+        _renderBackends.Clear();
+        foreach (var backend in _windows.Values)
+        {
+            _renderBackends.Add(backend);
+        }
+
+        for (int i = 0; i < _renderBackends.Count; i++)
+        {
+            _renderBackends[i].RenderNow();
+        }
+    }
+
+    private void WaitForWorkOrEvents(int? timeoutOverrideMs = null, bool ignoreRenderRequests = false)
+    {
+        if (Display == 0)
         {
             Thread.Sleep(1);
             return;
         }
 
-        if (NativeX11.XPending(_display) != 0)
+        if (NativeX11.XPending(Display) != 0)
         {
             return;
         }
 
-        if (AnyWindowNeedsRender())
+        if (!ignoreRenderRequests && AnyWindowNeedsRender())
         {
             return;
         }
@@ -423,7 +479,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
         // Keep a finite timeout so DPI polling can still occur even if the DE doesn't notify (best-effort).
         const int MaxWaitMs = 500;
-        int timeoutMs = dispatcher?.GetPollTimeoutMs(MaxWaitMs) ?? MaxWaitMs;
+        int timeoutMs = timeoutOverrideMs ?? (dispatcher?.GetPollTimeoutMs(MaxWaitMs) ?? MaxWaitMs);
 
         bool wakeSignaled = false;
         unsafe
@@ -515,8 +571,8 @@ public sealed class X11PlatformHost : IPlatformHost
 
         _lastDpiPollTick = now;
 
-        uint? dpi = TryGetXSettingsDpi(_display, _xsettingsOwnerWindow, _xsettingsAtom);
-        dpi ??= TryGetXftDpi(_display);
+        uint? dpi = TryGetXSettingsDpi(Display, _xsettingsOwnerWindow, _xsettingsAtom);
+        dpi ??= TryGetXftDpi(Display);
         if (dpi == null || dpi.Value == _systemDpi)
         {
             return;
@@ -560,12 +616,12 @@ public sealed class X11PlatformHost : IPlatformHost
 
     private void UpdateXsettingsOwner()
     {
-        if (_display == 0 || _xsettingsSelectionAtom == 0)
+        if (Display == 0 || _xsettingsSelectionAtom == 0)
         {
             return;
         }
 
-        var owner = NativeX11.XGetSelectionOwner(_display, _xsettingsSelectionAtom);
+        var owner = NativeX11.XGetSelectionOwner(Display, _xsettingsSelectionAtom);
         if (owner == _xsettingsOwnerWindow)
         {
             return;
@@ -575,7 +631,7 @@ public sealed class X11PlatformHost : IPlatformHost
         if (_xsettingsOwnerWindow != 0)
         {
             // Subscribe to owner property changes for _XSETTINGS_SETTINGS.
-            NativeX11.XSelectInput(_display, _xsettingsOwnerWindow, (nint)X11EventMask.PropertyChangeMask);
+            NativeX11.XSelectInput(Display, _xsettingsOwnerWindow, (nint)X11EventMask.PropertyChangeMask);
         }
     }
 

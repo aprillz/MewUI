@@ -89,7 +89,7 @@ public class Window : ContentControl
         Padding = new Thickness(16);
     }
 
-    protected override Color DefaultBackground => GetTheme().Palette.WindowBackground;
+    protected override Color DefaultBackground => Theme.Palette.WindowBackground;
 
     private sealed class PopupEntry
     {
@@ -289,13 +289,15 @@ public class Window : ContentControl
 
     public event Action? Deactivated;
 
-    public event Action<Size>? SizeChanged;
+    public event Action<Size>? ClientSizeChanged;
 
     public event Action<uint, uint>? DpiChanged;
 
     public event Action<Theme, Theme>? ThemeChanged;
 
     public event Action? FirstFrameRendered;
+
+    public event Action? FrameRendered;
 
     /// <summary>
     /// Preview (tunneling) keyboard events for the whole window.
@@ -338,7 +340,7 @@ public class Window : ContentControl
             return;
         }
 
-        _backend!.EnsureTheme(GetTheme().IsDark);
+        _backend!.EnsureTheme(Theme.IsDark);
         _backend!.Show();
         _lifetimeState = WindowLifetimeState.Shown;
 
@@ -639,7 +641,7 @@ public class Window : ContentControl
         Closed?.Invoke();
     }
 
-    internal void RaiseSizeChanged(double widthDip, double heightDip) => SizeChanged?.Invoke(new Size(widthDip, heightDip));
+    internal void RaiseClientSizeChanged(double widthDip, double heightDip) => ClientSizeChanged?.Invoke(new Size(widthDip, heightDip));
 
     internal void RenderFrame(nint hdc)
     {
@@ -650,11 +652,15 @@ public class Window : ContentControl
             RaiseLoaded();
         }
 
-        using var context = GraphicsFactory.CreateContext(Handle, hdc, DpiScale);
-        context.Clear(Background.A > 0 ? Background : GetTheme().Palette.WindowBackground);
+        var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+        int pixelWidth = (int)Math.Ceiling(clientSize.Width * DpiScale);
+        int pixelHeight = (int)Math.Ceiling(clientSize.Height * DpiScale);
+        var target = new WindowRenderTarget(Handle, hdc, pixelWidth, pixelHeight, DpiScale);
+
+        using var context = GraphicsFactory.CreateContext(target);
+        context.Clear(Background.A > 0 ? Background : Theme.Palette.WindowBackground);
 
         // Ensure nothing paints outside the client area.
-        var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
         context.Save();
         // Clip should not shrink due to edge rounding; snap outward to avoid 1px clipping at non-100% DPI.
         context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
@@ -686,6 +692,8 @@ public class Window : ContentControl
                 _firstFrameRenderedPending = true;
             }
         }
+
+        FrameRendered?.Invoke();
     }
 
     private void SubscribeToDispatcherChanged()
@@ -877,11 +885,11 @@ public class Window : ContentControl
         // caches (fonts, layout) before measuring/arranging.
         uint oldDpi = popup.GetDpiCached();
         var oldTheme = popup is FrameworkElement popupElement
-            ? popupElement.InternalTheme
-            : GetTheme();
+            ? popupElement.ThemeInternal
+            : Theme;
         popup.Parent = this;
         ApplyPopupDpiChange(popup, oldDpi, Dpi);
-        ApplyPopupThemeChange(popup, oldTheme, GetTheme());
+        ApplyPopupThemeChange(popup, oldTheme, Theme);
         var entry = new PopupEntry { Owner = owner, Element = popup, Bounds = bounds };
         _popups.Add(entry);
         LayoutPopup(entry);

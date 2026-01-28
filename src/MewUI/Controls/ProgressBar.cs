@@ -6,8 +6,9 @@ public sealed class ProgressBar : RangeBase
 {
     private ValueBinding<double>? _valueBinding;
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
+
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     public ProgressBar()
     {
@@ -37,8 +38,7 @@ public sealed class ProgressBar : RangeBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
-        double radius = theme.ControlCornerRadius;
+        double radius = Theme.Metrics.ControlCornerRadius;
 
         if (_valueBinding != null)
         {
@@ -50,7 +50,7 @@ public sealed class ProgressBar : RangeBase
         var borderInset = GetBorderVisualInset();
         var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(borderInset));
 
-        var bg = IsEnabled ? Background : theme.Palette.DisabledControlBackground;
+        var bg = IsEnabled ? Background : Theme.Palette.DisabledControlBackground;
         DrawBackgroundAndBorder(context, bounds, bg, BorderBrush, radius);
 
         double t = GetNormalizedValue();
@@ -58,7 +58,7 @@ public sealed class ProgressBar : RangeBase
         var fillRect = new Rect(contentBounds.X, contentBounds.Y, contentBounds.Width * t, contentBounds.Height);
         if (fillRect.Width > 0)
         {
-            var fillColor = IsEnabled ? theme.Palette.Accent : theme.Palette.DisabledAccent;
+            var fillColor = IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
             if (radius - 1 > 0)
             {
                 double rx = Math.Min(radius - 1, fillRect.Width / 2.0);

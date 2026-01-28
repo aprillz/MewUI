@@ -2,22 +2,20 @@ namespace Aprillz.MewUI.Controls;
 
 public abstract class RangeBase : Control
 {
-    private double _minimum;
-    private double _maximum;
     private double _value;
 
     public double Minimum
     {
-        get => _minimum;
+        get;
         set
         {
             var sanitized = Sanitize(value);
-            if (_minimum.Equals(sanitized))
+            if (field.Equals(sanitized))
             {
                 return;
             }
 
-            _minimum = sanitized;
+            field = sanitized;
             CoerceValueAfterRangeChange();
             InvalidateVisual();
         }
@@ -25,16 +23,16 @@ public abstract class RangeBase : Control
 
     public double Maximum
     {
-        get => _maximum;
+        get;
         set
         {
             var sanitized = Sanitize(value);
-            if (_maximum.Equals(sanitized))
+            if (field.Equals(sanitized))
             {
                 return;
             }
 
-            _maximum = sanitized;
+            field = sanitized;
             CoerceValueAfterRangeChange();
             InvalidateVisual();
         }

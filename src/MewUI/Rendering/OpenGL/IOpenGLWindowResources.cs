@@ -15,4 +15,6 @@ internal interface IOpenGLWindowResources : IDisposable
     void ReleaseCurrent();
 
     void SwapBuffers(nint deviceOrDisplay, nint nativeWindow);
+
+    void SetSwapInterval(int interval);
 }

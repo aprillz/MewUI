@@ -6,13 +6,11 @@ internal sealed class ScrollController
     private readonly int[] _viewportPx = new int[2];
     private readonly int[] _offsetPx = new int[2];
 
-    private double _dpiScale = 1;
-
     public double DpiScale
     {
-        get => _dpiScale;
-        set => _dpiScale = value > 0 && !double.IsNaN(value) && !double.IsInfinity(value) ? value : 1;
-    }
+        get;
+        set => field = value > 0 && !double.IsNaN(value) && !double.IsInfinity(value) ? value : 1;
+    } = 1;
 
     public int GetExtentPx(int axis) => axis == 0 ? _extentPx[0] : _extentPx[1];
     public int GetViewportPx(int axis) => axis == 0 ? _viewportPx[0] : _viewportPx[1];
@@ -101,8 +99,8 @@ internal sealed class ScrollController
         return valuePx;
     }
 
-    private int DipToPx(double dip) => LayoutRounding.RoundToPixelInt(dip, _dpiScale);
+    private int DipToPx(double dip) => LayoutRounding.RoundToPixelInt(dip, DpiScale);
 
-    private double PxToDip(int px) => px / _dpiScale;
+    private double PxToDip(int px) => px / DpiScale;
 }
 

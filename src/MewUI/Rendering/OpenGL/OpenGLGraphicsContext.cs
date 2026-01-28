@@ -104,8 +104,19 @@ internal sealed class OpenGLGraphicsContext : IGraphicsContext
             TryCaptureBackbuffer(capturePath);
         }
 
+        _resources.SetSwapInterval(GetSwapInterval());
         _resources.SwapBuffers(_hdc, _hwnd);
         _resources.ReleaseCurrent();
+    }
+
+    private static int GetSwapInterval()
+    {
+        if (!Application.IsRunning)
+        {
+            return 1;
+        }
+
+        return Application.Current.RenderLoopSettings.VSyncEnabled ? 1 : 0;
     }
 
     private void TryCaptureBackbuffer(string path)

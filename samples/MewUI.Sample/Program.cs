@@ -10,13 +10,16 @@ Startup(Environment.GetCommandLineArgs(), out var isBench, out var isSmoke);
 double loadedMs = -1;
 double firstFrameMs = -1;
 var metricsText = new ObservableValue<string>("Metrics:");
+var fpsText = new ObservableValue<string>("FPS: -");
 var metricsTimer = new DispatcherTimer(TimeSpan.FromSeconds(2));
 metricsTimer.Tick += () => UpdateMetrics(appendLog: false);
+var maxFpsEnabled = new ObservableValue<bool>(false);
+var fpsStopwatch = new Stopwatch();
+var fpsFrames = 0;
 
 Window window;
 var accentSwatches = new List<(Accent accent, Button button)>();
-var currentAccent = Theme.DefaultAccent;
-var theme = Theme.Light;
+var currentAccent = ThemeManager.DefaultAccent;
 Label title = null!;
 var vm = new DemoViewModel();
 
@@ -33,7 +36,11 @@ var root = new Window()
         loadedMs = stopwatch.Elapsed.TotalMilliseconds;
         UpdateAccentSwatches();
     })
-    .OnClosed(() => metricsTimer?.Dispose())
+    .OnClosed(() =>
+    {
+        maxFpsEnabled.Value = false;
+        metricsTimer?.Dispose();
+    })
     .Content(
         new DockPanel()
             .LastChildFill()
@@ -53,7 +60,6 @@ var root = new Window()
 
                         new TabControl()
                             .VerticalScroll(ScrollMode.Auto)
-                            .Padding(16)
                             .TabItems(
                                 new TabItem()
                                     .Header("Controls")
@@ -81,6 +87,24 @@ var root = new Window()
     {
         ProcessMetric();
         metricsTimer.Start();
+    })
+    .OnFrameRendered(() =>
+    {
+        if (!fpsStopwatch.IsRunning)
+        {
+            fpsStopwatch.Restart();
+            fpsFrames = 0;
+            return;
+        }
+
+        fpsFrames++;
+        double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
+        if (elapsed >= 1.0)
+        {
+            fpsText.Value = $"FPS: {fpsFrames / elapsed:0.0}";
+            fpsFrames = 0;
+            fpsStopwatch.Restart();
+        }
     });
 
 using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewUI.Sample.appicon.ico")!)
@@ -89,6 +113,19 @@ using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewU
 }
 Application.Run(root);
 
+void EnsureMaxFpsLoop()
+{
+    if (!Application.IsRunning)
+    {
+        return;
+    }
+
+    var scheduler = Application.Current.RenderLoopSettings;
+    scheduler.TargetFps = 0;
+    scheduler.SetContinuous(maxFpsEnabled.Value);
+    scheduler.VSyncEnabled = !maxFpsEnabled.Value;
+}
+
 Element HeaderSection() => new StackPanel()
     .Vertical()
     .Spacing(8)
@@ -96,13 +133,15 @@ Element HeaderSection() => new StackPanel()
         new Label()
             .Ref(out title)
             .Text("Aprillz.MewUI Demo")
-            .Foreground(theme.Palette.Accent)
+            .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
             .FontSize(20)
             .Bold(),
 
         new Label()
-            .BindText(metricsText)
-            .FontSize(11)
+            .BindText(metricsText),
+
+        new Label()
+            .BindText(fpsText)
     );
 
 Element TopSection() => new DockPanel()
@@ -194,10 +233,19 @@ Element ThemeControls()
                 .GroupName(group)
                 .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Dark)),
 
-        new Label()
-            .Text("Theme: Light")
-            .WithTheme((t, l) => l.Text($"Theme: {t.Name}"), false)
-            .CenterVertical()
+            new CheckBox()
+                .Text("Max FPS")
+                .BindIsChecked(maxFpsEnabled)
+                .OnCheckedChanged(_ => EnsureMaxFpsLoop())
+                .CenterVertical(),
+	        new Label()
+	            .Text("Theme: Light")
+                .WithTheme((t, c) =>
+                {
+                    c.Text($"Theme: {t.Name}");
+                    UpdateAccentSwatches();
+                }, false)
+                .CenterVertical()
     );
 }
 
@@ -220,7 +268,7 @@ FrameworkElement AccentPicker() => new StackPanel()
 Button AccentSwatch(Accent accent) =>
     new Button()
         .Content(string.Empty)
-        .Background(theme.GetAccentColor(accent))
+        .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
         .ToolTip(accent.ToString())
         .OnClick(() => ApplyAccent(accent))
         .Apply(b => accentSwatches.Add((accent, b)));
@@ -842,9 +890,10 @@ FrameworkElement BindSamples()
 
 void UpdateAccentSwatches()
 {
+    var theme = Application.Current.Theme;
     foreach (var (accent, button) in accentSwatches)
     {
-        button.Background = Application.Current.Theme.GetAccentColor(accent);
+        button.Background = accent.GetAccentColor(theme.IsDark);
         bool selected = currentAccent == accent;
         button.BorderThickness = selected ? 2 : 1;
     }

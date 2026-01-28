@@ -94,9 +94,9 @@ public sealed class TabControl : Control
         }
     }
 
-    protected override Color DefaultBackground => GetTheme().Palette.ContainerBackground;
+    protected override Color DefaultBackground => Theme.Palette.ContainerBackground;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     public override bool Focusable => true;
 
@@ -331,7 +331,7 @@ public sealed class TabControl : Control
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
+        
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
 
@@ -341,8 +341,8 @@ public sealed class TabControl : Control
             headerH = _headerStrip.DesiredSize.Height;
         }
 
-        var stripBg = GetTabStripBackground(theme);
-        var contentBg = theme.Palette.ContainerBackground;
+        var stripBg = GetTabStripBackground(Theme);
+        var contentBg = Theme.Palette.ContainerBackground;
 
         var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, Math.Max(0, headerH));
 
@@ -350,10 +350,10 @@ public sealed class TabControl : Control
             bounds.X,
             bounds.Y + headerRect.Height + borderInset,
             bounds.Width,
-            Math.Max(0, bounds.Height - headerRect.Height + theme.ControlCornerRadius - borderInset));
+            Math.Max(0, bounds.Height - headerRect.Height + Theme.Metrics.ControlCornerRadius - borderInset));
 
 
-        var outline = GetOutlineColor(theme);
+        var outline = GetOutlineColor(Theme);
 
 
         if (contentRect.Height <= 0)

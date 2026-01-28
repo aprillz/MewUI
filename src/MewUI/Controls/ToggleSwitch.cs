@@ -14,22 +14,18 @@ public sealed class ToggleSwitch : ToggleBase
     {
         BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
-        MinHeight = GetTheme().BaseControlHeight;
 
         // ToggleBase sets Background=Transparent. For ToggleSwitch we want a normal control background by default.
-        Background = GetTheme().Palette.ButtonFace;
+        Background = Theme.Palette.ButtonFace;
     }
 
     private const double spacing = 8;
 
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
+
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-
-        if (MinHeight == oldTheme.BaseControlHeight)
-        {
-            MinHeight = newTheme.BaseControlHeight;
-        }
 
         if (Background == oldTheme.Palette.ButtonFace)
         {
@@ -41,11 +37,9 @@ public sealed class ToggleSwitch : ToggleBase
 
     private (double trackWidth, double trackHeight) GetTrackSize()
     {
-        var theme = GetTheme();
-
         // Match the overall control sizing style (Button/ComboBox) while keeping the switch itself compact.
         // BaseControlHeight is 28 in the default theme -> trackHeight 20.
-        double trackHeight = Math.Max(16, theme.BaseControlHeight - 8);
+        double trackHeight = Math.Max(16, Theme.Metrics.BaseControlHeight - 8);
         double trackWidth = Math.Max(trackHeight * 2, trackHeight + 18);
         return (trackWidth, trackHeight);
     }
@@ -71,7 +65,6 @@ public sealed class ToggleSwitch : ToggleBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
         var bounds = GetSnappedBorderBounds(Bounds);
         var contentBounds = bounds.Deflate(Padding);
 
@@ -97,27 +90,26 @@ public sealed class ToggleSwitch : ToggleBase
         if (state.IsEnabled)
         {
             trackOff = Background;
-            trackOn = theme.Palette.Accent;
+            trackOn = Theme.Palette.Accent;
 
             if (isHot)
             {
-                trackOff = trackOff.Lerp(theme.Palette.Accent, 0.08);
-                trackOn = trackOn.Lerp(theme.Palette.ControlBackground, 0.10);
+                trackOff = trackOff.Lerp(Theme.Palette.Accent, 0.08);
+                trackOn = trackOn.Lerp(Theme.Palette.ControlBackground, 0.10);
             }
             if (isActive)
             {
-                trackOff = trackOff.Lerp(theme.Palette.Accent, 0.12);
-                trackOn = trackOn.Lerp(theme.Palette.ControlBackground, 0.06);
+                trackOff = trackOff.Lerp(Theme.Palette.Accent, 0.12);
+                trackOn = trackOn.Lerp(Theme.Palette.ControlBackground, 0.06);
             }
         }
         else
         {
-            trackOff = theme.Palette.ButtonDisabledBackground;
-            trackOn = theme.Palette.DisabledAccent;
+            trackOff = Theme.Palette.ButtonDisabledBackground;
+            trackOn = Theme.Palette.DisabledAccent;
         }
 
         var trackFill = trackOff.Lerp(trackOn, t);
-
 
         if (IsChecked)
         {
@@ -125,11 +117,10 @@ public sealed class ToggleSwitch : ToggleBase
         }
         else
         {
-            var borderColor = PickAccentBorder(theme, theme.Palette.ControlBorder, state);
+            var borderColor = PickAccentBorder(Theme, Theme.Palette.ControlBorder, state);
 
             DrawBackgroundAndBorder(context, trackRect, trackFill, borderColor, radius);
         }
-
 
         double thumbInset = Math.Max(2, trackRect.Height * 0.20) + borderInset;
         double thumbSize = Math.Max(0, trackRect.Height - thumbInset * 2);
@@ -144,28 +135,23 @@ public sealed class ToggleSwitch : ToggleBase
         {
             if (isFocus)
             {
-                thumbFill = (IsChecked ? theme.Palette.AccentText : theme.Palette.WindowText).Lerp(theme.Palette.Focus, 0.3);
+                thumbFill = (IsChecked ? Theme.Palette.AccentText : Theme.Palette.WindowText).Lerp(Theme.Palette.Focus, 0.3);
             }
             else
             {
-                thumbFill = IsChecked ? theme.Palette.AccentText : theme.Palette.WindowText;
+                thumbFill = IsChecked ? Theme.Palette.AccentText : Theme.Palette.WindowText;
             }
         }
         else
         {
-            thumbFill = IsChecked ? theme.Palette.DisabledControlBackground : theme.Palette.DisabledText;
+            thumbFill = IsChecked ? Theme.Palette.DisabledControlBackground : Theme.Palette.DisabledText;
         }
         context.FillEllipse(thumbRect, thumbFill);
-
-        //var thumbBorder = state.IsEnabled
-        //    ? theme.Palette.ControlBorder.Lerp(borderColor, isActive ? 0.55 : (isHot ? 0.40 : 0.25))
-        //    : theme.Palette.ControlBorder.Lerp(theme.Palette.DisabledText, 0.25);
-        //context.DrawEllipse(thumbRect, thumbBorder, 1);
 
         if (!string.IsNullOrEmpty(Text))
         {
             var font = GetFont();
-            var textColor = state.IsEnabled ? Foreground : theme.Palette.DisabledText;
+            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textBounds = new Rect(trackRect.Right + spacing, contentBounds.Y, contentBounds.Width - trackRect.Width - spacing, contentBounds.Height);
             context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }

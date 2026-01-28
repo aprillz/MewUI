@@ -131,6 +131,9 @@ internal static partial class User32
     [LibraryImport(LibraryName, EntryPoint = "GetMessageW")]
     public static partial int GetMessage(out MSG lpMsg, nint hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
 
+    [LibraryImport(LibraryName, EntryPoint = "MsgWaitForMultipleObjectsEx")]
+    public static unsafe partial uint MsgWaitForMultipleObjectsEx(uint nCount, nint* pHandles, uint dwMilliseconds, uint dwWakeMask, uint dwFlags);
+
     [LibraryImport(LibraryName, EntryPoint = "PeekMessageW")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool PeekMessage(out MSG lpMsg, nint hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);

@@ -21,9 +21,16 @@ internal unsafe struct ID2D1Bitmap
     public void** lpVtbl;
 }
 
+internal unsafe struct ID2D1DCRenderTarget
+{
+    public void** lpVtbl;
+}
+
 internal static unsafe class D2D1VTable
 {
     private const int CreateHwndRenderTargetIndex = 14;
+    private const int CreateDcRenderTargetIndex = 16;
+    private const int BindDCIndex = 57; // First method after ID2D1RenderTarget
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int CreateHwndRenderTarget(
@@ -40,6 +47,32 @@ internal static unsafe class D2D1VTable
             int hr = fn(factory, pRt, pHwnd, &rt);
             renderTarget = rt;
             return hr;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateDcRenderTarget(
+        ID2D1Factory* factory,
+        ref D2D1_RENDER_TARGET_PROPERTIES rtProps,
+        out nint dcRenderTarget)
+    {
+        nint rt = 0;
+        fixed (D2D1_RENDER_TARGET_PROPERTIES* pRt = &rtProps)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1Factory*, D2D1_RENDER_TARGET_PROPERTIES*, nint*, int>)factory->lpVtbl[CreateDcRenderTargetIndex];
+            int hr = fn(factory, pRt, &rt);
+            dcRenderTarget = rt;
+            return hr;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int BindDC(ID2D1DCRenderTarget* dcRt, nint hdc, ref RECT rect)
+    {
+        fixed (RECT* pRect = &rect)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1DCRenderTarget*, nint, RECT*, int>)dcRt->lpVtbl[BindDCIndex];
+            return fn(dcRt, hdc, pRect);
         }
     }
 

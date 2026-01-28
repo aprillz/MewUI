@@ -4,10 +4,14 @@ using Aprillz.MewUI.Native;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
-internal sealed class GlxOpenGLWindowResources : IOpenGLWindowResources
+internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
 {
     private readonly nint _display;
     private readonly nint _window;
+    private readonly delegate* unmanaged<nint, nint, int, void> _swapIntervalExt;
+    private readonly delegate* unmanaged<int, int> _swapIntervalMesa;
+    private readonly delegate* unmanaged<int, int> _swapIntervalSgi;
+    private int _currentSwapInterval = int.MinValue;
     private readonly HashSet<uint> _textures = new();
     private bool _disposed;
 
@@ -16,13 +20,24 @@ internal sealed class GlxOpenGLWindowResources : IOpenGLWindowResources
     public bool SupportsNpotTextures { get; }
     public OpenGLTextCache TextCache { get; } = new();
 
-    private GlxOpenGLWindowResources(nint display, nint window, nint ctx, bool supportsBgra, bool supportsNpotTextures)
+    private GlxOpenGLWindowResources(
+        nint display,
+        nint window,
+        nint ctx,
+        bool supportsBgra,
+        bool supportsNpotTextures,
+        delegate* unmanaged<nint, nint, int, void> swapIntervalExt,
+        delegate* unmanaged<int, int> swapIntervalMesa,
+        delegate* unmanaged<int, int> swapIntervalSgi)
     {
         _display = display;
         _window = window;
         GlxContext = ctx;
         SupportsBgra = supportsBgra;
         SupportsNpotTextures = supportsNpotTextures;
+        _swapIntervalExt = swapIntervalExt;
+        _swapIntervalMesa = swapIntervalMesa;
+        _swapIntervalSgi = swapIntervalSgi;
     }
 
     public static GlxOpenGLWindowResources Create(nint display, nint window)
@@ -85,6 +100,31 @@ internal sealed class GlxOpenGLWindowResources : IOpenGLWindowResources
 
             bool supportsBgra = DetectBgraSupport();
             bool supportsNpot = DetectNpotSupport();
+            delegate* unmanaged<nint, nint, int, void> swapIntervalExt = null;
+            delegate* unmanaged<int, int> swapIntervalMesa = null;
+            delegate* unmanaged<int, int> swapIntervalSgi = null;
+
+            nint swapPtr = LibGL.glXGetProcAddress("glXSwapIntervalEXT");
+            if (swapPtr != 0)
+            {
+                swapIntervalExt = (delegate* unmanaged<nint, nint, int, void>)swapPtr;
+            }
+            else
+            {
+                swapPtr = LibGL.glXGetProcAddress("glXSwapIntervalMESA");
+                if (swapPtr != 0)
+                {
+                    swapIntervalMesa = (delegate* unmanaged<int, int>)swapPtr;
+                }
+                else
+                {
+                    swapPtr = LibGL.glXGetProcAddress("glXSwapIntervalSGI");
+                    if (swapPtr != 0)
+                    {
+                        swapIntervalSgi = (delegate* unmanaged<int, int>)swapPtr;
+                    }
+                }
+            }
             DiagLog.Write($"GLX context ok: ctx=0x{ctx.ToInt64():X} BGRA={supportsBgra}");
 
             GL.Disable(0x0B71 /* GL_DEPTH_TEST */);
@@ -98,7 +138,7 @@ internal sealed class GlxOpenGLWindowResources : IOpenGLWindowResources
 
             LibGL.glXMakeCurrent(display, 0, 0);
 
-            return new GlxOpenGLWindowResources(display, window, ctx, supportsBgra, supportsNpot);
+            return new GlxOpenGLWindowResources(display, window, ctx, supportsBgra, supportsNpot, swapIntervalExt, swapIntervalMesa, swapIntervalSgi);
         }
         finally
         {
@@ -182,6 +222,39 @@ internal sealed class GlxOpenGLWindowResources : IOpenGLWindowResources
 
     public void SwapBuffers(nint deviceOrDisplay, nint nativeWindow)
         => LibGL.glXSwapBuffers(deviceOrDisplay, nativeWindow);
+
+    public void SetSwapInterval(int interval)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (_currentSwapInterval == interval)
+        {
+            return;
+        }
+
+        if (_swapIntervalExt != null)
+        {
+            _swapIntervalExt(_display, _window, interval);
+            _currentSwapInterval = interval;
+            return;
+        }
+
+        if (_swapIntervalMesa != null)
+        {
+            _swapIntervalMesa(interval);
+            _currentSwapInterval = interval;
+            return;
+        }
+
+        if (_swapIntervalSgi != null)
+        {
+            _swapIntervalSgi(interval);
+            _currentSwapInterval = interval;
+        }
+    }
 
     public void TrackTexture(uint textureId)
     {

@@ -26,14 +26,13 @@ internal sealed class OpenGLTextCache : IDisposable
     private readonly Dictionary<OpenGLTextCacheKey, LinkedListNode<CacheEntry>> _map = new();
     private readonly LinkedList<CacheEntry> _lru = new();
     private long _currentBytes;
-    private long _maxBytes = DefaultMaxBytes;
     private bool _disposed;
 
     public long MaxBytes
     {
-        get => _maxBytes;
-        set => _maxBytes = Math.Max(0, value);
-    }
+        get;
+        set => field = Math.Max(0, value);
+    } = DefaultMaxBytes;
 
     public bool TryGet(
         bool supportsBgra,
@@ -121,13 +120,13 @@ internal sealed class OpenGLTextCache : IDisposable
 
     private void EvictIfNeeded()
     {
-        if (_maxBytes <= 0)
+        if (MaxBytes <= 0)
         {
             Clear();
             return;
         }
 
-        while (_currentBytes > _maxBytes && _lru.Last is { } last)
+        while (_currentBytes > MaxBytes && _lru.Last is { } last)
         {
             _lru.RemoveLast();
             _map.Remove(last.Value.Key);

@@ -75,6 +75,25 @@ internal static partial class Kernel32
 
     #endregion
 
+    #region Synchronization
+
+    [LibraryImport(LibraryName, EntryPoint = "CreateEventW", SetLastError = true)]
+    public static partial nint CreateEvent(nint lpEventAttributes, [MarshalAs(UnmanagedType.Bool)] bool bManualReset, [MarshalAs(UnmanagedType.Bool)] bool bInitialState, nint lpName);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetEvent(nint hEvent);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ResetEvent(nint hEvent);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CloseHandle(nint hObject);
+
+    #endregion
+
     #region Console
 
     [LibraryImport(LibraryName)]

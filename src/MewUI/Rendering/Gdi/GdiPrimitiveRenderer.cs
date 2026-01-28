@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
+using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Rendering.Gdi.Core;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -31,6 +32,23 @@ internal sealed class GdiPrimitiveRenderer : IDisposable
         try
         {
             User32.GetClientRect(hwnd, out var rect);
+            Gdi32.FillRect(_hdc, ref rect, brush);
+        }
+        finally
+        {
+            Gdi32.DeleteObject(brush);
+        }
+    }
+
+    /// <summary>
+    /// Clears a specified pixel area with the specified color.
+    /// </summary>
+    public void Clear(int pixelWidth, int pixelHeight, Color color)
+    {
+        var brush = Gdi32.CreateSolidBrush(color.ToCOLORREF());
+        try
+        {
+            var rect = new RECT(0, 0, pixelWidth, pixelHeight);
             Gdi32.FillRect(_hdc, ref rect, brush);
         }
         finally

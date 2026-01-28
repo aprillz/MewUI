@@ -46,9 +46,9 @@ public sealed class MenuBar : Control, IPopupOwner
         }
     }
 
-    protected override Color DefaultBackground => GetTheme().Palette.ButtonFace;
+    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -248,7 +248,7 @@ public sealed class MenuBar : Control, IPopupOwner
     {
         base.OnRender(context);
 
-        var theme = GetTheme();
+        
         var bounds = GetSnappedBorderBounds(Bounds);
         context.FillRectangle(bounds, Background);
 
@@ -263,16 +263,16 @@ public sealed class MenuBar : Control, IPopupOwner
             var bg = Color.Transparent;
             if (_openIndex == i)
             {
-                bg = theme.Palette.SelectionBackground;
+                bg = Theme.Palette.SelectionBackground;
             }
             else if (_hotIndex == i)
             {
-                bg = theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255));
+                bg = Theme.Palette.SelectionBackground.WithAlpha((byte)(0.6 * 255));
             }
 
             if (bg.A > 0)
             {
-                if (theme.ControlCornerRadius - 1 is double r && r > 0)
+                if (Theme.Metrics.ControlCornerRadius - 1 is double r && r > 0)
                 {
                     context.FillRoundedRectangle(row, r, r, bg);
                 }
@@ -282,7 +282,7 @@ public sealed class MenuBar : Control, IPopupOwner
                 }
             }
 
-            var fg = item.IsEnabled ? Foreground : theme.Palette.DisabledText;
+            var fg = item.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textRect = row.Deflate(new Thickness(ItemHorizontalPadding, 0, ItemHorizontalPadding, 0));
             context.DrawText(item.Text ?? string.Empty, textRect, font, fg,
                 TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
@@ -294,6 +294,6 @@ public sealed class MenuBar : Control, IPopupOwner
         var rect = LayoutRounding.SnapBoundsRectToPixels(
             new Rect(bounds.X, bounds.Bottom - thickness, Math.Max(0, bounds.Width), thickness),
             dpiScale);
-        context.FillRectangle(rect, theme.Palette.ControlBorder);
+        context.FillRectangle(rect, Theme.Palette.ControlBorder);
     }
 }

@@ -54,16 +54,13 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
         }
 
         private readonly nint _hwnd;
-        private nint _memDc;
         private nint _bitmap;
         private nint _oldBitmap;
         private nint _bits;
-        private int _width;
-        private int _height;
 
-        public nint MemDc => _memDc;
-        public int Width => _width;
-        public int Height => _height;
+        public nint MemDc { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
 
         private BackBuffer(nint hwnd, nint screenDc, int width, int height)
         {
@@ -73,25 +70,25 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
 
         private void Create(nint screenDc, int width, int height)
         {
-            _width = Math.Max(1, width);
-            _height = Math.Max(1, height);
+            Width = Math.Max(1, width);
+            Height = Math.Max(1, height);
 
-            _memDc = Gdi32.CreateCompatibleDC(screenDc);
-            var bmi = BITMAPINFO.Create32bpp(_width, _height);
+            MemDc = Gdi32.CreateCompatibleDC(screenDc);
+            var bmi = BITMAPINFO.Create32bpp(Width, Height);
             _bitmap = Gdi32.CreateDIBSection(screenDc, ref bmi, usage: 0, out _bits, 0, 0);
-            _oldBitmap = Gdi32.SelectObject(_memDc, _bitmap);
+            _oldBitmap = Gdi32.SelectObject(MemDc, _bitmap);
         }
 
         private void Destroy()
         {
-            if (_memDc == 0)
+            if (MemDc == 0)
             {
                 return;
             }
 
             if (_oldBitmap != 0)
             {
-                Gdi32.SelectObject(_memDc, _oldBitmap);
+                Gdi32.SelectObject(MemDc, _oldBitmap);
             }
 
             if (_bitmap != 0)
@@ -99,14 +96,14 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
                 Gdi32.DeleteObject(_bitmap);
             }
 
-            Gdi32.DeleteDC(_memDc);
+            Gdi32.DeleteDC(MemDc);
 
-            _memDc = 0;
+            MemDc = 0;
             _bitmap = 0;
             _oldBitmap = 0;
             _bits = 0;
-            _width = 0;
-            _height = 0;
+            Width = 0;
+            Height = 0;
         }
 
         public void EnsureSize(nint screenDc, int width, int height)
@@ -114,7 +111,7 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
             width = Math.Max(1, width);
             height = Math.Max(1, height);
 
-            if (width == _width && height == _height && _memDc != 0 && _bitmap != 0)
+            if (width == Width && height == Height && MemDc != 0 && _bitmap != 0)
             {
                 return;
             }

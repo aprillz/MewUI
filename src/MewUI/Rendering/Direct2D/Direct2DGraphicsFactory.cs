@@ -1,4 +1,3 @@
-using Aprillz.MewUI;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
@@ -18,7 +17,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
     private bool _initialized;
 
     private readonly object _rtLock = new();
-    private readonly Dictionary<nint, WindowRenderTarget> _windowTargets = new();
+    private readonly Dictionary<nint, CachedWindowTarget> _windowTargets = new();
 
     private Direct2DGraphicsFactory() { }
 
@@ -111,12 +110,77 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
 
     public IImage CreateImageFromPixelSource(IPixelBufferSource source) => new Direct2DImage(source);
 
-    public IGraphicsContext CreateContext(nint hwnd, nint hdc, double dpiScale)
+    public IGraphicsContext CreateContext(IRenderTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (target is WindowRenderTarget windowTarget)
+        {
+            return CreateContextCore(windowTarget.Hwnd, windowTarget.DpiScale);
+        }
+
+        if (target is Direct2DBitmapRenderTarget bitmapTarget)
+        {
+            return CreateBitmapContext(bitmapTarget);
+        }
+
+        if (target is IBitmapRenderTarget)
+        {
+            throw new ArgumentException(
+                $"BitmapRenderTarget was created by a different backend. " +
+                $"Use {nameof(CreateBitmapRenderTarget)} from the same factory.",
+                nameof(target));
+        }
+
+        throw new NotSupportedException($"Unsupported render target type: {target.GetType().Name}");
+    }
+
+    private IGraphicsContext CreateContextCore(nint hwnd, double dpiScale)
     {
         EnsureInitialized();
 
-        var (rt, generation) = GetOrCreateWindowRenderTarget(hwnd, dpiScale);
-        return new Direct2DGraphicsContext(hwnd, dpiScale, rt, generation, _dwriteFactory, onRecreateTarget: () => InvalidateWindowRenderTarget(hwnd));
+        var (rt, generation) = GetOrCreateCachedWindowTarget(hwnd, dpiScale);
+        return new Direct2DGraphicsContext(hwnd, dpiScale, rt, generation, _dwriteFactory, onRecreateTarget: () => InvalidateCachedWindowTarget(hwnd));
+    }
+
+    private IGraphicsContext CreateBitmapContext(Direct2DBitmapRenderTarget target)
+    {
+        EnsureInitialized();
+
+        // Create DC render target and bind to target's Hdc
+        var (rt, generation) = CreateDcRenderTargetForBitmap(target);
+        return new Direct2DGraphicsContext(
+            hwnd: 0,
+            dpiScale: target.DpiScale,
+            renderTarget: rt,
+            renderTargetGeneration: generation,
+            dwriteFactory: _dwriteFactory,
+            onRecreateTarget: null);
+    }
+
+    private (nint renderTarget, int generation) CreateDcRenderTargetForBitmap(Direct2DBitmapRenderTarget target)
+    {
+        // DC render target with premultiplied alpha for offscreen rendering
+        var pixelFormat = new D2D1_PIXEL_FORMAT(87, D2D1_ALPHA_MODE.PREMULTIPLIED); // DXGI_FORMAT_B8G8R8A8_UNORM
+        float dpi = (float)(96.0 * target.DpiScale);
+        var rtProps = new D2D1_RENDER_TARGET_PROPERTIES(D2D1_RENDER_TARGET_TYPE.DEFAULT, pixelFormat, dpi, dpi, 0, 0);
+
+        int hr = D2D1VTable.CreateDcRenderTarget((ID2D1Factory*)_d2dFactory, ref rtProps, out var dcRenderTarget);
+        if (hr < 0 || dcRenderTarget == 0)
+        {
+            throw new InvalidOperationException($"CreateDcRenderTarget failed: 0x{hr:X8}");
+        }
+
+        // Bind to the target's memory DC
+        var rect = new Native.Structs.RECT(0, 0, target.PixelWidth, target.PixelHeight);
+        hr = D2D1VTable.BindDC((ID2D1DCRenderTarget*)dcRenderTarget, target.Hdc, ref rect);
+        if (hr < 0)
+        {
+            ComHelpers.Release(dcRenderTarget);
+            throw new InvalidOperationException($"ID2D1DCRenderTarget::BindDC failed: 0x{hr:X8}");
+        }
+
+        return (dcRenderTarget, 0);
     }
 
     public IGraphicsContext CreateMeasurementContext(uint dpi)
@@ -124,6 +188,9 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
         EnsureInitialized();
         return new Direct2DMeasurementContext(_dwriteFactory);
     }
+
+    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0)
+        => new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
 
     public void ReleaseWindowResources(nint hwnd)
     {
@@ -136,21 +203,22 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
         }
     }
 
-    private void InvalidateWindowRenderTarget(nint hwnd) => ReleaseWindowResources(hwnd);
+    private void InvalidateCachedWindowTarget(nint hwnd) => ReleaseWindowResources(hwnd);
 
-    private (nint renderTarget, int generation) GetOrCreateWindowRenderTarget(nint hwnd, double dpiScale)
+    private (nint renderTarget, int generation) GetOrCreateCachedWindowTarget(nint hwnd, double dpiScale)
     {
         var rc = D2D1VTable.GetClientRect(hwnd);
         uint w = (uint)Math.Max(1, rc.Width);
         uint h = (uint)Math.Max(1, rc.Height);
         float dpi = (float)(96.0 * dpiScale);
+        var presentOptions = GetPresentOptions();
 
         lock (_rtLock)
         {
             int generation = 0;
             if (_windowTargets.TryGetValue(hwnd, out var entry) && entry.RenderTarget != 0)
             {
-                if (entry.Width == w && entry.Height == h && entry.DpiX == dpi)
+                if (entry.Width == w && entry.Height == h && entry.DpiX == dpi && entry.PresentOptions == presentOptions)
                 {
                     return (entry.RenderTarget, entry.Generation);
                 }
@@ -166,7 +234,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             // HWND render target: use alpha IGNORE to keep ClearType enabled (PREMULTIPLIED will force grayscale).
             var pixelFormat = new D2D1_PIXEL_FORMAT(0, D2D1_ALPHA_MODE.IGNORE);
             var rtProps = new D2D1_RENDER_TARGET_PROPERTIES(D2D1_RENDER_TARGET_TYPE.DEFAULT, pixelFormat, 0, 0, 0, 0);
-            var hwndProps = new D2D1_HWND_RENDER_TARGET_PROPERTIES(hwnd, new D2D1_SIZE_U(w, h), D2D1_PRESENT_OPTIONS.NONE);
+            var hwndProps = new D2D1_HWND_RENDER_TARGET_PROPERTIES(hwnd, new D2D1_SIZE_U(w, h), presentOptions);
 
             int hr = D2D1VTable.CreateHwndRenderTarget((ID2D1Factory*)_d2dFactory, ref rtProps, ref hwndProps, out var renderTarget);
             if (hr < 0 || renderTarget == 0)
@@ -175,25 +243,37 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             }
 
             D2D1VTable.SetDpi((ID2D1RenderTarget*)renderTarget, dpi, dpi);
-            _windowTargets[hwnd] = new WindowRenderTarget(renderTarget, w, h, dpi, generation);
+            _windowTargets[hwnd] = new CachedWindowTarget(renderTarget, w, h, dpi, presentOptions, generation);
             return (renderTarget, generation);
         }
     }
 
-    private sealed class WindowRenderTarget
+    private static D2D1_PRESENT_OPTIONS GetPresentOptions()
+    {
+        if (global::Aprillz.MewUI.Application.IsRunning && !global::Aprillz.MewUI.Application.Current.RenderLoopSettings.VSyncEnabled)
+        {
+            return D2D1_PRESENT_OPTIONS.IMMEDIATELY;
+        }
+
+        return D2D1_PRESENT_OPTIONS.NONE;
+    }
+
+    private sealed class CachedWindowTarget
     {
         public nint RenderTarget;
         public uint Width;
         public uint Height;
         public float DpiX;
+        public D2D1_PRESENT_OPTIONS PresentOptions;
         public int Generation;
 
-        public WindowRenderTarget(nint renderTarget, uint width, uint height, float dpiX, int generation)
+        public CachedWindowTarget(nint renderTarget, uint width, uint height, float dpiX, D2D1_PRESENT_OPTIONS presentOptions, int generation)
         {
             RenderTarget = renderTarget;
             Width = width;
             Height = height;
             DpiX = dpiX;
+            PresentOptions = presentOptions;
             Generation = generation;
         }
     }

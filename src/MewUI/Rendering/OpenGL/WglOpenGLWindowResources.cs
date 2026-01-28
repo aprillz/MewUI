@@ -5,9 +5,11 @@ using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
-internal sealed class WglOpenGLWindowResources : IOpenGLWindowResources
+internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
 {
     private readonly nint _hwnd;
+    private readonly delegate* unmanaged<int, int> _swapIntervalExt;
+    private int _currentSwapInterval = int.MinValue;
     private readonly HashSet<uint> _textures = new();
     private bool _disposed;
 
@@ -16,12 +18,18 @@ internal sealed class WglOpenGLWindowResources : IOpenGLWindowResources
     public bool SupportsNpotTextures { get; }
     public OpenGLTextCache TextCache { get; } = new();
 
-    private WglOpenGLWindowResources(nint hwnd, nint hglrc, bool supportsBgra, bool supportsNpotTextures)
+    private WglOpenGLWindowResources(
+        nint hwnd,
+        nint hglrc,
+        bool supportsBgra,
+        bool supportsNpotTextures,
+        delegate* unmanaged<int, int> swapIntervalExt)
     {
         _hwnd = hwnd;
         Hglrc = hglrc;
         SupportsBgra = supportsBgra;
         SupportsNpotTextures = supportsNpotTextures;
+        _swapIntervalExt = swapIntervalExt;
     }
 
     private const int WGL_DRAW_TO_WINDOW_ARB = 0x2001;
@@ -68,6 +76,12 @@ internal sealed class WglOpenGLWindowResources : IOpenGLWindowResources
 
         bool supportsBgra = DetectBgraSupport();
         bool supportsNpot = DetectNpotSupport();
+        delegate* unmanaged<int, int> swapIntervalExt = null;
+        nint swapPtr = OpenGL32.wglGetProcAddress("wglSwapIntervalEXT");
+        if (swapPtr != 0)
+        {
+            swapIntervalExt = (delegate* unmanaged<int, int>)swapPtr;
+        }
 
         // Baseline state for 2D.
         GL.Disable(0x0B71 /* GL_DEPTH_TEST */);
@@ -81,7 +95,7 @@ internal sealed class WglOpenGLWindowResources : IOpenGLWindowResources
 
         OpenGL32.wglMakeCurrent(0, 0);
 
-        return new WglOpenGLWindowResources(hwnd, hglrc, supportsBgra, supportsNpot);
+        return new WglOpenGLWindowResources(hwnd, hglrc, supportsBgra, supportsNpot, swapIntervalExt);
     }
 
     private static unsafe bool TryChooseMultisamplePixelFormat(
@@ -332,6 +346,27 @@ internal sealed class WglOpenGLWindowResources : IOpenGLWindowResources
 
     public void SwapBuffers(nint deviceOrDisplay, nint nativeWindow)
         => Gdi32.SwapBuffers(deviceOrDisplay);
+
+    public void SetSwapInterval(int interval)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (_swapIntervalExt == null)
+        {
+            return;
+        }
+
+        if (_currentSwapInterval == interval)
+        {
+            return;
+        }
+
+        _swapIntervalExt(interval);
+        _currentSwapInterval = interval;
+    }
 
     public void TrackTexture(uint textureId)
     {

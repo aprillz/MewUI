@@ -139,8 +139,8 @@ public class Label : Control
 
         var bounds = Bounds.Deflate(Padding);
         var font = GetFont();
-        var theme = GetTheme();
-        var color = IsEffectivelyEnabled ? Foreground : theme.Palette.DisabledText;
+        
+        var color = IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText;
         context.DrawText(Text, bounds, font, color, TextAlignment, VerticalTextAlignment, wrapping);
     }
 

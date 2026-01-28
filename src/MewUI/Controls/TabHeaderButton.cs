@@ -1,4 +1,4 @@
-﻿using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -7,18 +7,23 @@ internal sealed class TabHeaderButton : ContentControl
     private bool _isPressed;
 
     public int Index { get; set; }
+
     public bool IsSelected { get; set; }
+
     public bool IsTabEnabled { get; set; } = true;
+
     public event Action<int>? Clicked;
 
-    protected override Color DefaultBackground => GetTheme().Palette.ButtonFace;
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
+
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public TabHeaderButton()
     {
         BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
-        MinHeight = GetTheme().BaseControlHeight;
     }
 
     // Keep header buttons out of the default Tab focus order.
@@ -52,34 +57,33 @@ internal sealed class TabHeaderButton : ContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
-        double radiusDip = Math.Max(0, theme.ControlCornerRadius);
+        double radiusDip = Math.Max(0, Theme.Metrics.ControlCornerRadius);
         var metrics = GetBorderRenderMetrics(Bounds, radiusDip);
         var bounds = metrics.Bounds;
         var radius = metrics.CornerRadius;
         var state = GetVisualState(_isPressed, _isPressed);
 
         var host = Parent?.Parent as TabControl;
-        var tabBg = host?.GetTabBackground(theme, IsSelected) ?? (IsSelected ? theme.Palette.ControlBackground : theme.Palette.ButtonFace);
-        var outline = host?.GetOutlineColor(theme) ?? theme.Palette.ControlBorder;
+        var tabBg = host?.GetTabBackground(Theme, IsSelected) ?? (IsSelected ? Theme.Palette.ControlBackground : Theme.Palette.ButtonFace);
+        var outline = host?.GetOutlineColor(Theme) ?? Theme.Palette.ControlBorder;
 
         var isEffectivelyEnabled = IsEffectivelyEnabled && IsTabEnabled;
 
         Color bg = tabBg;
-        if (!isEffectivelyEnabled&& !IsSelected)
+        if (!isEffectivelyEnabled && !IsSelected)
         {
-            bg = theme.Palette.ButtonDisabledBackground;
+            bg = Theme.Palette.ButtonDisabledBackground;
         }
         else if (state.IsPressed)
         {
-            bg = theme.Palette.ButtonPressedBackground;
+            bg = Theme.Palette.ButtonPressedBackground;
         }
         else if (state.IsHot && !IsSelected)
         {
-            bg = theme.Palette.ButtonHoverBackground;
+            bg = Theme.Palette.ButtonHoverBackground;
         }
 
-        var border = IsSelected && isEffectivelyEnabled ? outline : theme.Palette.ControlBorder;
+        var border = IsSelected && isEffectivelyEnabled ? outline : Theme.Palette.ControlBorder;
 
         // Top-only rounding via clipping:
         // Draw a taller rounded-rect, then clip to the real bounds so the bottom corners are clipped away.

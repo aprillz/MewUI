@@ -10,8 +10,12 @@ Startup();
 Window window = null!;
 Label backendText = null!;
 Label themeText = null!;
+var fpsText = new ObservableValue<string>("FPS: -");
+var fpsStopwatch = new Stopwatch();
+var fpsFrames = 0;
+var maxFpsEnabled = new ObservableValue<bool>(false);
 
-var currentAccent = Theme.DefaultAccent;
+var currentAccent = ThemeManager.DefaultAccent;
 
 var logo = ImageSource.FromFile("logo_h-1280.png");
 var april = ImageSource.FromFile("april.jpg");
@@ -36,7 +40,26 @@ var root = new Window()
                     )
             )
     )
-    .OnLoaded(() => UpdateTopBar());
+    .OnLoaded(() => UpdateTopBar())
+        .OnClosed(() => maxFpsEnabled.Value = false)
+        .OnFrameRendered(() =>
+        {
+            if (!fpsStopwatch.IsRunning)
+            {
+                fpsStopwatch.Restart();
+                fpsFrames = 0;
+                return;
+            }
+
+            fpsFrames++;
+            double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
+            if (elapsed >= 1.0)
+            {
+                fpsText.Value = $"FPS: {fpsFrames / elapsed:0.0}";
+                fpsFrames = 0;
+                fpsStopwatch.Restart();
+            }
+        });
 
 using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewUI.Gallery.appicon.ico")!)
 {
@@ -76,26 +99,44 @@ FrameworkElement TopBar()
 
                                     new Label()
                                         .Ref(out backendText)
-                                        .FontSize(11)
                                 )
                         )
                         .DockLeft(),
 
                     new StackPanel()
-                        .Horizontal()
-                        .CenterVertical()
-                        .Spacing(12)
-                        .Children(
-                            ThemeModePicker(),
-
-                            new Label()
-                                .Ref(out themeText)
-                                .FontSize(11)
-                                .CenterVertical(),
-
-                            AccentPicker()
-                        )
                         .DockRight()
+                        .Spacing(8)
+                        .Children(
+                            new StackPanel()
+                                .Horizontal()
+                                .CenterVertical()
+                                .Spacing(12)
+                                .Children(
+                                    ThemeModePicker(),
+
+                                    new TextBlock()
+                                        .Ref(out themeText)
+                                        .CenterVertical(),
+
+
+                                    AccentPicker()
+
+                                ),
+
+                            new StackPanel()
+                                .Horizontal()
+                                .Spacing(8)
+                                .Children(
+                                    new CheckBox()
+                                        .Text("Max FPS")
+                                        .BindIsChecked(maxFpsEnabled)
+                                        .OnCheckedChanged(_ => EnsureMaxFpsLoop())
+                                        .CenterVertical(),
+                                    new Label()
+                                        .BindText(fpsText)
+                                        .CenterVertical()
+                                )
+                        )
                 ));
 }
 
@@ -113,19 +154,19 @@ FrameworkElement ThemeModePicker()
                 .GroupName(group)
                 .CenterVertical()
                 .IsChecked()
-                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.System)),
+                .OnChecked(() => Application.Current.SetTheme(ThemeVariant.System)),
 
             new RadioButton()
                 .Text("Light")
                 .GroupName(group)
                 .CenterVertical()
-                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Light)),
+                .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Light)),
 
             new RadioButton()
                 .Text("Dark")
                 .GroupName(group)
                 .CenterVertical()
-                .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Dark))
+                .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark))
         );
 }
 
@@ -144,7 +185,7 @@ Button AccentSwatch(Accent accent)
 {
     return new Button()
         .Content(string.Empty)
-        .WithTheme((t, c) => c.Background(t.GetAccentColor(accent)))
+        .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
         .ToolTip(accent.ToString())
         .OnClick(() =>
         {
@@ -425,18 +466,18 @@ FrameworkElement SelectionPage()
                     new TabControl()
                         .Height(120)
                         .TabItems(
-                            new TabItem().Header("Home").Content(new Label().Text("Home tab content").Padding(12)),
-                            new TabItem().Header("Settings").Content(new Label().Text("Settings tab content").Padding(12)),
-                            new TabItem().Header("About").Content(new Label().Text("About tab content").Padding(12))
+                            new TabItem().Header("Home").Content(new Label().Text("Home tab content")),
+                            new TabItem().Header("Settings").Content(new Label().Text("Settings tab content")),
+                            new TabItem().Header("About").Content(new Label().Text("About tab content"))
                         ),
 
                     new TabControl()
                         .Height(120)
                         .Disable()
                         .TabItems(
-                            new TabItem().Header("Home").Content(new Label().Text("Home tab content").Padding(12)),
-                            new TabItem().Header("Settings").Content(new Label().Text("Settings tab content").Padding(12)),
-                            new TabItem().Header("About").Content(new Label().Text("About tab content").Padding(12))
+                            new TabItem().Header("Home").Content(new Label().Text("Home tab content")),
+                            new TabItem().Header("Settings").Content(new Label().Text("Settings tab content")),
+                            new TabItem().Header("About").Content(new Label().Text("About tab content"))
                         )
                 )
         )
@@ -578,6 +619,19 @@ void UpdateTopBar()
 {
     backendText.Text($"Backend: {Application.Current.GraphicsFactory.Backend}");
     themeText.WithTheme((t, c) => c.Text($"Theme: {t.Name}"));
+}
+
+void EnsureMaxFpsLoop()
+{
+    if (!Application.IsRunning)
+    {
+        return;
+    }
+
+    var scheduler = Application.Current.RenderLoopSettings;
+    scheduler.TargetFps = 0;
+    scheduler.SetContinuous(maxFpsEnabled.Value);
+    scheduler.VSyncEnabled = !maxFpsEnabled.Value;
 }
 
 static void Startup()

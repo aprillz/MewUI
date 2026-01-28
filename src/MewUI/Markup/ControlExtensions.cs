@@ -1068,7 +1068,7 @@ public static class ControlExtensions
 
     public static Window OnSizeChanged(this Window window, Action<Size> handler)
     {
-        window.SizeChanged += handler;
+        window.ClientSizeChanged += handler;
         return window;
     }
 
@@ -1087,6 +1087,12 @@ public static class ControlExtensions
     public static Window OnFirstFrameRendered(this Window window, Action handler)
     {
         window.FirstFrameRendered += handler;
+        return window;
+    }
+
+    public static Window OnFrameRendered(this Window window, Action handler)
+    {
+        window.FrameRendered += handler;
         return window;
     }
 

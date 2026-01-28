@@ -35,7 +35,7 @@ public abstract class ToggleBase : Control
 
     public override bool Focusable => true;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     protected ToggleBase()
     {

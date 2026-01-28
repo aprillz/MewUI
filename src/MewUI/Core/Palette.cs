@@ -2,8 +2,6 @@ namespace Aprillz.MewUI;
 
 public sealed class Palette
 {
-    private readonly ThemeSeed _seed;
-
     public Color WindowBackground { get; }
 
     public Color WindowText { get; }
@@ -46,14 +44,14 @@ public sealed class Palette
 
     public Color ScrollBarThumbActive { get; }
 
-    public ThemeSeed Seed => _seed;
+    public ThemeSeed Seed { get; }
 
     public Palette(
         ThemeSeed baseColors,
         Color accent,
         Color? accentText = null)
     {
-        _seed = baseColors;
+        Seed = baseColors;
 
         var windowBackground = baseColors.WindowBackground;
         var windowText = baseColors.WindowText;
@@ -96,7 +94,7 @@ public sealed class Palette
 
     public Palette WithAccent(Color accent, Color? accentText = null)
     {
-        return new Palette(_seed, accent, accentText);
+        return new Palette(Seed, accent, accentText);
     }
 
     public static bool IsDarkBackground(Color color) => (color.R + color.G + color.B) < 128 * 3;

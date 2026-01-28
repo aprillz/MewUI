@@ -89,9 +89,11 @@ public sealed class ComboBox : Control, IPopupOwner
 
     public override bool Focusable => true;
 
-    protected override Color DefaultBackground => GetTheme().Palette.ControlBackground;
+    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
-    protected override Color DefaultBorderBrush => GetTheme().Palette.ControlBorder;
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public ComboBox()
     {
@@ -100,17 +102,11 @@ public sealed class ComboBox : Control, IPopupOwner
         // Do not set explicit Height, otherwise FrameworkElement.MeasureOverride will clamp DesiredSize
         // and the drop-down cannot expand. Use MinHeight as the default header height.
         Height = double.NaN;
-        MinHeight = GetTheme().BaseControlHeight;
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-
-        if (MinHeight == oldTheme.BaseControlHeight)
-        {
-            MinHeight = newTheme.BaseControlHeight;
-        }
 
         // The popup ListBox can exist while the dropdown is closed, so it won't be in the Window visual tree
         // and would miss theme broadcasts. Keep it in sync here.
@@ -154,12 +150,11 @@ public sealed class ComboBox : Control, IPopupOwner
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
-        double radius = theme.ControlCornerRadius;
+        double radius = Theme.Metrics.ControlCornerRadius;
 
-        var bg = IsEnabled ? Background : theme.Palette.DisabledControlBackground;
+        var bg = IsEnabled ? Background : Theme.Palette.DisabledControlBackground;
 
         var borderColor = BorderBrush;
         if (IsEnabled)
@@ -167,11 +162,11 @@ public sealed class ComboBox : Control, IPopupOwner
             // Keep focus highlight while the drop-down popup is open/focused.
             if (IsFocused || IsFocusWithin || IsDropDownOpen)
             {
-                borderColor = theme.Palette.Accent;
+                borderColor = Theme.Palette.Accent;
             }
             else if (IsMouseOver)
             {
-                borderColor = BorderBrush.Lerp(theme.Palette.Accent, 0.6);
+                borderColor = BorderBrush.Lerp(Theme.Palette.Accent, 0.6);
             }
         }
 
@@ -186,11 +181,11 @@ public sealed class ComboBox : Control, IPopupOwner
             .Deflate(Padding);
 
         string text = SelectedItem ?? string.Empty;
-        var textColor = IsEnabled ? Foreground : theme.Palette.DisabledText;
+        var textColor = IsEnabled ? Foreground : Theme.Palette.DisabledText;
         if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !IsFocused)
         {
             text = Placeholder;
-            textColor = theme.Palette.PlaceholderText;
+            textColor = Theme.Palette.PlaceholderText;
         }
 
         if (!string.IsNullOrEmpty(text))
@@ -199,7 +194,7 @@ public sealed class ComboBox : Control, IPopupOwner
         }
 
         // Arrow
-        DrawArrow(context, headerRect, IsEnabled ? textColor : theme.Palette.DisabledText, IsDropDownOpen);
+        DrawArrow(context, headerRect, IsEnabled ? textColor : Theme.Palette.DisabledText, IsDropDownOpen);
 
         if (IsDropDownOpen)
         {
@@ -380,8 +375,7 @@ public sealed class ComboBox : Control, IPopupOwner
             return ItemHeight;
         }
 
-        var theme = GetTheme();
-        return Math.Max(18, theme.BaseControlHeight - 2);
+        return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
     private double ResolveHeaderHeight()
@@ -454,7 +448,7 @@ public sealed class ComboBox : Control, IPopupOwner
     private void OnPopupListSelectionChanged(int index)
     {
         SelectedIndex = index;
-     }
+    }
 
     private void OnPopupListItemActivated(int index)
     {

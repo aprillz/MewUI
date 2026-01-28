@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -15,9 +16,7 @@ public sealed class Win32PlatformHost : IPlatformHost
     internal const string WindowClassName = "AprillzMewUIWindow";
 
     private readonly Dictionary<nint, Win32WindowBackend> _windows = new();
-    private readonly IMessageBoxService _messageBox = new Win32MessageBoxService();
-    private readonly IFileDialogService _fileDialog = new Win32FileDialogService();
-    private readonly IClipboardService _clipboard = new Win32ClipboardService();
+    private readonly List<Win32WindowBackend> _renderBackends = new(capacity: 8);
     private WndProc? _wndProcDelegate;
     private bool _running;
     private ushort _classAtom;
@@ -28,12 +27,14 @@ public sealed class Win32PlatformHost : IPlatformHost
     private Win32UiDispatcher? _dispatcher;
     private Application? _app;
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
+    private int _renderRequested;
+    private nint _renderEvent;
 
-    public IMessageBoxService MessageBox => _messageBox;
+    public IMessageBoxService MessageBox { get; } = new Win32MessageBoxService();
 
-    public IFileDialogService FileDialog => _fileDialog;
+    public IFileDialogService FileDialog { get; } = new Win32FileDialogService();
 
-    public IClipboardService Clipboard => _clipboard;
+    public IClipboardService Clipboard { get; } = new Win32ClipboardService();
 
     public IWindowBackend CreateWindowBackend(Window window) => new Win32WindowBackend(this, window);
 
@@ -108,9 +109,11 @@ public sealed class Win32PlatformHost : IPlatformHost
             EnsureDispatcher(app);
             _app = app;
 
+            EnsureRenderEvent();
+
             // Initialize and apply System theme at startup (best-effort).
             _lastSystemTheme = GetSystemThemeVariant();
-            if (Theme.Default == ThemeVariant.System)
+            if (app.ThemeMode == ThemeVariant.System)
             {
                 app.NotifySystemThemeChanged();
             }
@@ -118,13 +121,55 @@ public sealed class Win32PlatformHost : IPlatformHost
             // Show after dispatcher is ready so timers/postbacks work immediately (WPF-style dispatcher lifetime).
             mainWindow.Show();
 
-            MSG msg;
-            while (_running && User32.GetMessage(out msg, 0, 0, 0) > 0)
+            var scheduler = app.RenderLoopSettings;
+            long ticksPerSecond = Stopwatch.Frequency;
+            long lastFrameTicks = Stopwatch.GetTimestamp();
+
+            while (_running)
             {
                 try
                 {
-                    User32.TranslateMessage(ref msg);
-                    User32.DispatchMessage(ref msg);
+                    if (scheduler.Mode == RenderLoopMode.Continuous)
+                    {
+                        ProcessMessages();
+                        if (!_running)
+                        {
+                            break;
+                        }
+
+                        RenderAllWindows();
+
+                        int fps = scheduler.TargetFps;
+                        if (fps > 0)
+                        {
+                            long frameTicks = ticksPerSecond / fps;
+                            long now = Stopwatch.GetTimestamp();
+                            long elapsed = now - lastFrameTicks;
+                            if (elapsed < frameTicks)
+                            {
+                                var waitMs = (frameTicks - elapsed) * 1000 / ticksPerSecond;
+                                if (waitMs > 0)
+                                {
+                                    WaitForMessagesOrRender((uint)waitMs, renderOnSignal: false);
+                                }
+                            }
+                            lastFrameTicks = Stopwatch.GetTimestamp();
+                        }
+                        else
+                        {
+                            WaitForMessagesOrRender(0, renderOnSignal: false);
+                        }
+                    }
+                    else
+                    {
+                        WaitForMessagesOrRender(0xFFFFFFFF, renderOnSignal: true);
+                        ProcessMessages();
+
+                        if (_running && AnyWindowNeedsRender())
+                        {
+                            RequestRender();
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -217,7 +262,12 @@ public sealed class Win32PlatformHost : IPlatformHost
             switch (msg)
             {
                 case Win32UiDispatcher.WM_INVOKE:
+                    _dispatcher?.ClearInvokeRequest();
                     _dispatcher?.ProcessWorkItems();
+                    if (_dispatcher?.HasPendingWork == true)
+                    {
+                        _dispatcher?.Post(() => { }, UiDispatcherPriority.Background);
+                    }
                     return 0;
 
                 case WindowMessages.WM_TIMER:
@@ -247,6 +297,147 @@ public sealed class Win32PlatformHost : IPlatformHost
         return User32.DefWindowProc(hWnd, msg, wParam, lParam);
     }
 
+    internal void RequestRender()
+    {
+        if (_renderEvent == 0)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _renderRequested, 1) == 0)
+        {
+            Kernel32.SetEvent(_renderEvent);
+        }
+    }
+
+    private bool AnyWindowNeedsRender()
+    {
+        foreach (var backend in _windows.Values)
+        {
+            if (backend.NeedsRender)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RenderInvalidatedWindows()
+    {
+        if (_windows.Count == 0)
+        {
+            return;
+        }
+
+        _renderBackends.Clear();
+        foreach (var backend in _windows.Values)
+        {
+            if (backend.NeedsRender)
+            {
+                _renderBackends.Add(backend);
+            }
+        }
+
+        if (_renderBackends.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _renderBackends.Count; i++)
+        {
+            _renderBackends[i].RenderIfNeeded();
+        }
+    }
+
+    private void RenderAllWindows()
+    {
+        if (_windows.Count == 0)
+        {
+            return;
+        }
+
+        _renderBackends.Clear();
+        foreach (var backend in _windows.Values)
+        {
+            _renderBackends.Add(backend);
+        }
+
+        for (int i = 0; i < _renderBackends.Count; i++)
+        {
+            _renderBackends[i].RenderNow();
+        }
+    }
+
+    private void WaitForMessagesOrRender(uint timeoutMs, bool renderOnSignal)
+    {
+        if (_renderEvent == 0)
+        {
+            if (timeoutMs == 0)
+            {
+                return;
+            }
+
+            Thread.Sleep(timeoutMs == 0xFFFFFFFF ? 1 : (int)timeoutMs);
+            return;
+        }
+
+        unsafe
+        {
+            nint* handles = stackalloc nint[1];
+            handles[0] = _renderEvent;
+            uint result = User32.MsgWaitForMultipleObjectsEx(
+                1,
+                handles,
+                timeoutMs,
+                WaitConstants.QS_ALLINPUT,
+                WaitConstants.MWMO_INPUTAVAILABLE);
+
+            if (result == WaitConstants.WAIT_OBJECT_0)
+            {
+                Interlocked.Exchange(ref _renderRequested, 0);
+                if (renderOnSignal)
+                {
+                    RenderInvalidatedWindows();
+                    if (AnyWindowNeedsRender())
+                    {
+                        RequestRender();
+                    }
+                }
+            }
+        }
+    }
+
+    private void ProcessMessages()
+    {
+        MSG msg;
+        while (User32.PeekMessage(out msg, 0, 0, 0, 1)) // PM_REMOVE
+        {
+            if (msg.message == WindowMessages.WM_QUIT)
+            {
+                _running = false;
+                break;
+            }
+
+            User32.TranslateMessage(ref msg);
+            User32.DispatchMessage(ref msg);
+        }
+    }
+
+    private void EnsureRenderEvent()
+    {
+        if (_renderEvent != 0)
+        {
+            return;
+        }
+
+        _renderEvent = Kernel32.CreateEvent(0, bManualReset: false, bInitialState: false, 0);
+        if (_renderEvent == 0)
+        {
+            throw new InvalidOperationException($"Failed to create render event. Error: {Marshal.GetLastWin32Error()}");
+        }
+    }
+
     private void TryUpdateSystemTheme()
     {
         var app = _app;
@@ -255,7 +446,7 @@ public sealed class Win32PlatformHost : IPlatformHost
             return;
         }
 
-        if (Theme.Default != ThemeVariant.System)
+        if (app.ThemeMode != ThemeVariant.System)
         {
             return;
         }
@@ -322,6 +513,12 @@ public sealed class Win32PlatformHost : IPlatformHost
             User32.DestroyWindow(_dispatcherHwnd);
         }
         _dispatcherHwnd = 0;
+
+        if (_renderEvent != 0)
+        {
+            Kernel32.CloseHandle(_renderEvent);
+            _renderEvent = 0;
+        }
 
         if (_classAtom != 0)
         {

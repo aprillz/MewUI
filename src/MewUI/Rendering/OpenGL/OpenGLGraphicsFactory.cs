@@ -77,7 +77,28 @@ public sealed class OpenGLGraphicsFactory : IGraphicsFactory, IWindowResourceRel
 
     public IImage CreateImageFromPixelSource(IPixelBufferSource source) => new OpenGLImage(source);
 
-    public IGraphicsContext CreateContext(nint hwnd, nint hdc, double dpiScale)
+    public IGraphicsContext CreateContext(IRenderTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (target is WindowRenderTarget windowTarget)
+        {
+            return CreateContextCore(windowTarget.Hwnd, windowTarget.DeviceContext, windowTarget.DpiScale);
+        }
+
+        if (target is OpenGLBitmapRenderTarget)
+        {
+            // Note: Full IGraphicsContext support for OpenGL FBO requires a valid GL context.
+            // For now, use direct pixel manipulation via LockForWrite() or GetPixelSpan().
+            throw new NotSupportedException(
+                "OpenGL backend does not yet support IGraphicsContext for OpenGLBitmapRenderTarget. " +
+                "Use direct pixel manipulation via GetPixelSpan() or LockForWrite(), or use Direct2D/GDI backend for full graphics context support.");
+        }
+
+        throw new NotSupportedException($"Unsupported render target type: {target.GetType().Name}");
+    }
+     
+    private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale)
     {
         if (hwnd == 0 || hdc == 0)
         {
@@ -112,6 +133,9 @@ public sealed class OpenGLGraphicsFactory : IGraphicsFactory, IWindowResourceRel
 
         return new OpenGLMeasurementContext(dpi);
     }
+
+    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0)
+        => new OpenGLBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
 
     public void ReleaseWindowResources(nint hwnd)
     {

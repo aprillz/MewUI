@@ -7,8 +7,6 @@ public abstract class TextBase : Control
 {
     private ValueBinding<string>? _textBinding;
     private bool _suppressBindingSet;
-    private readonly TextDocument _document = new();
-    private int _documentVersion;
     private string? _cachedText;
     private int _cachedTextVersion = -1;
     private readonly TextEditorCore _editor;
@@ -19,9 +17,9 @@ public abstract class TextBase : Control
 
     private ContextMenu? _defaultContextMenu;
 
-    private protected TextDocument Document => _document;
+    private protected TextDocument Document { get; } = new();
 
-    protected int DocumentVersion => _documentVersion;
+    protected int DocumentVersion { get; private set; }
 
     protected TextBase()
     {
@@ -249,9 +247,9 @@ public abstract class TextBase : Control
 
     protected Rect GetViewportInnerBounds()
     {
-        var theme = GetTheme();
+        
         var innerBounds = GetTextInnerBounds();
-        return AdjustViewportBoundsForScrollbars(innerBounds, theme);
+        return AdjustViewportBoundsForScrollbars(innerBounds, Theme);
     }
 
     protected Rect GetViewportContentBounds()
@@ -270,17 +268,17 @@ public abstract class TextBase : Control
 
     protected sealed override void OnRender(IGraphicsContext context)
     {
-        var theme = GetTheme();
+        
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = theme.ControlCornerRadius;
+        double radius = Theme.Metrics.ControlCornerRadius;
 
         var state = GetVisualState();
-        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
+        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
 
         DrawBackgroundAndBorder(
             context,
             bounds,
-            state.IsEnabled ? Background : theme.Palette.DisabledControlBackground,
+            state.IsEnabled ? Background : Theme.Palette.DisabledControlBackground,
             borderColor,
             radius);
 
@@ -294,17 +292,17 @@ public abstract class TextBase : Control
 
         if (Document.IsEmpty && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
         {
-            context.DrawText(Placeholder, contentBounds, font, theme.Palette.PlaceholderText,
+            context.DrawText(Placeholder, contentBounds, font, Theme.Palette.PlaceholderText,
                 TextAlignment.Left, PlaceholderVerticalAlignment, TextWrapping.NoWrap);
         }
         else
         {
-            RenderTextContent(context, contentBounds, font, theme, state);
+            RenderTextContent(context, contentBounds, font, Theme, state);
         }
 
         context.Restore();
 
-        RenderAfterContent(context, theme, state);
+        RenderAfterContent(context, Theme, state);
     }
 
     protected abstract void SetCaretFromPoint(Point point, Rect contentBounds);
@@ -326,27 +324,27 @@ public abstract class TextBase : Control
 
     protected virtual string GetTextCore()
     {
-        if (_cachedTextVersion == _documentVersion && _cachedText != null)
+        if (_cachedTextVersion == DocumentVersion && _cachedText != null)
         {
             return _cachedText;
         }
 
-        _cachedText = _document.GetText();
-        _cachedTextVersion = _documentVersion;
+        _cachedText = Document.GetText();
+        _cachedTextVersion = DocumentVersion;
         return _cachedText;
     }
 
     protected virtual void SetTextCore(string normalizedText)
     {
         BumpDocumentVersion();
-        _document.SetText(normalizedText ?? string.Empty);
+        Document.SetText(normalizedText ?? string.Empty);
     }
 
-    protected virtual int GetTextLengthCore() => _document.Length;
+    protected virtual int GetTextLengthCore() => Document.Length;
 
-    protected virtual char GetTextCharCore(int index) => _document[index];
+    protected virtual char GetTextCharCore(int index) => Document[index];
 
-    protected virtual string GetTextSubstringCore(int start, int length) => _document.GetText(start, length);
+    protected virtual string GetTextSubstringCore(int start, int length) => Document.GetText(start, length);
 
     protected virtual void OnTextChanged(string oldText, string newText)
     {
@@ -715,7 +713,7 @@ public abstract class TextBase : Control
 
     protected override void OnDispose()
     {
-        _document.Dispose();
+        Document.Dispose();
         TextChanged -= ForwardTextChangedToBinding;
         _textBinding?.Dispose();
         _textBinding = null;
@@ -763,7 +761,7 @@ public abstract class TextBase : Control
 
     protected void BumpDocumentVersion()
     {
-        _documentVersion++;
+        DocumentVersion++;
         _cachedTextVersion = -1;
         _cachedText = null;
     }
@@ -776,7 +774,7 @@ public abstract class TextBase : Control
         }
 
         BumpDocumentVersion();
-        _document.Insert(index, text);
+        Document.Insert(index, text);
     }
 
     protected void RemoveFromDocument(int index, int length)
@@ -787,7 +785,7 @@ public abstract class TextBase : Control
         }
 
         BumpDocumentVersion();
-        _document.Remove(index, length);
+        Document.Remove(index, length);
     }
 
     protected int ApplyInsertCore(int index, ReadOnlySpan<char> text)

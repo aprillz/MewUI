@@ -121,8 +121,8 @@ public sealed class ScrollViewer : ContentControl
         double slotW = Math.Max(0, chromeSlot.Width);
         double slotH = Math.Max(0, chromeSlot.Height);
 
-        var theme = GetTheme();
-        int barPx = Math.Max(0, LayoutRounding.RoundToPixelInt(theme.ScrollBarHitThickness, dpiScale));
+        
+        int barPx = Math.Max(0, LayoutRounding.RoundToPixelInt(Theme.Metrics.ScrollBarHitThickness, dpiScale));
 
         // Reserve space for scrollbars inside the viewport (WPF-like), but keep it stable by iterating
         // until visibility decisions stop changing.
@@ -224,8 +224,8 @@ public sealed class ScrollViewer : ContentControl
         // Optional background/border (thin style defaults to none).
         if (Background.A > 0 || BorderThickness > 0)
         {
-            var theme = GetTheme();
-            DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, theme.ControlCornerRadius);
+            
+            DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, Theme.Metrics.ControlCornerRadius);
         }
 
         var borderInset = GetBorderVisualInset();
@@ -341,7 +341,7 @@ public sealed class ScrollViewer : ContentControl
     public void ScrollBy(double delta)
     {
         // delta is in wheel units; map to DIPs using a simple step.
-        double step = GetTheme().ScrollWheelStep;
+        double step = Theme.Metrics.ScrollWheelStep;
         int notches = Math.Sign(delta);
         if (notches == 0)
         {
@@ -359,7 +359,7 @@ public sealed class ScrollViewer : ContentControl
 
     public void ScrollByHorizontal(double delta)
     {
-        double step = GetTheme().ScrollWheelStep;
+        double step = Theme.Metrics.ScrollWheelStep;
         int notches = Math.Sign(delta);
         if (notches == 0)
         {
@@ -377,8 +377,8 @@ public sealed class ScrollViewer : ContentControl
 
     private void ArrangeBars(Rect viewport)
     {
-        var theme = GetTheme();
-        double t = theme.ScrollBarHitThickness;
+        
+        double t = Theme.Metrics.ScrollBarHitThickness;
         const double inset = 0;
 
         if (_vBar.IsVisible)
@@ -448,8 +448,8 @@ public sealed class ScrollViewer : ContentControl
             _vBar.Minimum = 0;
             _vBar.Maximum = maxV;
             _vBar.ViewportSize = viewportH;
-            _vBar.SmallChange = GetTheme().ScrollBarSmallChange;
-            _vBar.LargeChange = GetTheme().ScrollBarLargeChange;
+            _vBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
+            _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
             _vBar.Value = _scroll.GetOffsetDip(1);
         }
 
@@ -458,8 +458,8 @@ public sealed class ScrollViewer : ContentControl
             _hBar.Minimum = 0;
             _hBar.Maximum = maxH;
             _hBar.ViewportSize = viewportW;
-            _hBar.SmallChange = GetTheme().ScrollBarSmallChange;
-            _hBar.LargeChange = GetTheme().ScrollBarLargeChange;
+            _hBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
+            _hBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
             _hBar.Value = _scroll.GetOffsetDip(0);
         }
     }

@@ -21,15 +21,11 @@ public sealed class Application
         : GraphicsBackend.OpenGL;
 
     private static IGraphicsFactory? _defaultGraphicsFactoryOverride;
-    private static IPlatformHost _defaultPlatformHost = CreateDefaultPlatformHost();
-    private static Exception? _pendingFatalException;
-    private IUiDispatcher? _dispatcher;
+    private Exception? _pendingFatalException;
+
     private readonly List<Window> _windows = new();
-    private Theme? _theme;
-    private bool _themeExplicitlySet;
-    private ThemeVariant _themeMode = Theme.Default;
-    private Color? _accentOverride;
-    private Color? _accentTextOverride;
+    private readonly ThemeManager _themeManager;
+    private readonly RenderLoopSettings _renderLoopSettings = new();
 
     /// <summary>
     /// Raised when an exception escapes from the UI dispatcher work queue.
@@ -42,72 +38,42 @@ public sealed class Application
     /// </summary>
     public static Application Current => _current ?? throw new InvalidOperationException("Application not initialized. Call Application.Run() first.");
 
-    public Theme Theme
-    {
-        get
-        {
-            if (IsRunning)
-            {
-                _theme ??= ResolveThemeFromMode();
-                return _theme;
-            }
-            else
-            {
-                return ResolveThemeFromMode();
-            }
-        }
-        set
-        {
-            ArgumentNullException.ThrowIfNull(value);
+    public Theme Theme => _themeManager.CurrentTheme;
 
-            if (_theme == value)
-            {
-                return;
-            }
-
-            var old = Theme;
-            _theme = value;
-            _themeExplicitlySet = true;
-            _themeMode = Palette.IsDarkBackground(value.Palette.WindowBackground) ? ThemeVariant.Dark : ThemeVariant.Light;
-            foreach (var window in AllWindows)
-            {
-                window.BroadcastThemeChanged(old, value);
-            }
-            ThemeChanged?.Invoke(old, value);
-        }
-    }
+    public RenderLoopSettings RenderLoopSettings => _renderLoopSettings;
 
     public event Action<Theme, Theme>? ThemeChanged;
 
-    public ThemeVariant ThemeMode => _themeMode;
+    internal ThemeVariant ThemeMode => _themeManager.Mode;
+
+    public void SetTheme(ThemeVariant mode)
+    {
+        var change = _themeManager.SetTheme(mode);
+        if (change.Changed)
+        {
+            ApplyThemeChange(change.OldTheme, change.NewTheme);
+        }
+    }
 
     public void SetThemeMode(ThemeVariant mode)
     {
-        if (_themeMode == mode && !_themeExplicitlySet)
-        {
-            return;
-        }
-
-        _themeMode = mode;
-        _themeExplicitlySet = false;
-        ApplyResolvedTheme();
+        var change = _themeManager.SetTheme(mode);
+        if (change.Changed)
+            ApplyThemeChange(change.OldTheme, change.NewTheme);
     }
 
     public void SetAccent(Accent accent, Color? accentText = null)
     {
-        var baseTheme = ResolveBaseThemeForMode(_themeMode);
-        _accentOverride = baseTheme.GetAccentColor(accent);
-        _accentTextOverride = accentText;
-        _themeExplicitlySet = false;
-        ApplyResolvedTheme();
+        var change = _themeManager.SetAccent(accent, accentText);
+        if (change.Changed)
+            ApplyThemeChange(change.OldTheme, change.NewTheme);
     }
 
     public void SetAccent(Color accent, Color? accentText = null)
     {
-        _accentOverride = accent;
-        _accentTextOverride = accentText;
-        _themeExplicitlySet = false;
-        ApplyResolvedTheme();
+        var change = _themeManager.SetAccent(accent, accentText);
+        if (change.Changed)
+            ApplyThemeChange(change.OldTheme, change.NewTheme);
     }
 
     /// <summary>
@@ -121,15 +87,14 @@ public sealed class Application
 
     public IUiDispatcher? Dispatcher
     {
-        get => _dispatcher;
-        internal set
+        get; internal set
         {
-            if (_dispatcher == value)
+            if (field == value)
             {
                 return;
             }
 
-            _dispatcher = value;
+            field = value;
             DispatcherChanged?.Invoke(value);
         }
     }
@@ -185,8 +150,12 @@ public sealed class Application
 
     public static IPlatformHost DefaultPlatformHost
     {
-        get => _defaultPlatformHost ??= CreateDefaultPlatformHost();
-        set => _defaultPlatformHost = value ?? throw new ArgumentNullException(nameof(value));
+        get => field ??= CreateDefaultPlatformHost();
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+        }
     }
 
     /// <summary>
@@ -217,76 +186,35 @@ public sealed class Application
 
             var app = new Application(DefaultPlatformHost);
             _current = app;
-            _pendingFatalException = null;
+            _ = app.Theme;
             app.RegisterWindow(mainWindow);
             app.RunCore(mainWindow);
         }
     }
 
-    private Application(IPlatformHost platformHost) => PlatformHost = platformHost;
+    public static ApplicationBuilder Create() => new ApplicationBuilder(new AppOptions());
 
-    private Theme ResolveThemeFromMode()
+    private Application(IPlatformHost platformHost)
     {
-        var baseTheme = ResolveBaseThemeForMode(_themeMode);
-        if (_accentOverride != null)
-        {
-            return baseTheme.WithAccent(_accentOverride.Value, _accentTextOverride);
-        }
-
-        return baseTheme;
+        PlatformHost = platformHost;
+        _themeManager = new ThemeManager(platformHost, ThemeManager.Default);
     }
 
     internal void NotifySystemThemeChanged()
     {
-        if (_themeMode != ThemeVariant.System)
-        {
-            return;
-        }
-
-        if (_themeExplicitlySet)
-        {
-            return;
-        }
-
-        var resolved = ResolveThemeFromMode();
-        if (ReferenceEquals(_theme, resolved))
-        {
-            return;
-        }
-
-        var old = Theme;
-        _theme = resolved;
-        foreach (var window in AllWindows)
-        {
-            window.BroadcastThemeChanged(old, resolved);
-        }
-        ThemeChanged?.Invoke(old, resolved);
+        var change = _themeManager.ApplySystemThemeChanged();
+        if (change.Changed)
+            ApplyThemeChange(change.OldTheme, change.NewTheme);
     }
 
-    private Theme ResolveBaseThemeForMode(ThemeVariant mode)
+    private void ApplyThemeChange(Theme oldTheme, Theme newTheme)
     {
-        var resolvedVariant = mode == ThemeVariant.System
-            ? PlatformHost.GetSystemThemeVariant()
-            : mode;
-
-        return resolvedVariant == ThemeVariant.Light ? Theme.Light : Theme.Dark;
-    }
-
-    private void ApplyResolvedTheme()
-    {
-        var resolved = ResolveThemeFromMode();
-        if (ReferenceEquals(_theme, resolved))
-        {
-            return;
-        }
-
-        var old = Theme;
-        _theme = resolved;
         foreach (var window in AllWindows)
         {
-            window.BroadcastThemeChanged(old, resolved);
+            window.BroadcastThemeChanged(oldTheme, newTheme);
         }
-        ThemeChanged?.Invoke(old, resolved);
+
+        ThemeChanged?.Invoke(oldTheme, newTheme);
     }
 
     internal void RegisterWindow(Window window)
