@@ -168,7 +168,7 @@ Controls (implemented):
 - `Button`
 - `Label`, `Image`
 - `TextBox`, `MultiLineTextBox`
-- `CheckBox`, `RadioButton`
+- `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`
 - `Slider`, `ProgressBar`
 - `TabControl`, `GroupBox`
@@ -192,7 +192,7 @@ Theme is split into two parts:
 Accent switching:
 
 ```csharp
-Theme.Current = Theme.Current.WithAccent(Color.FromRgb(214, 176, 82));
+Application.Current.Theme = Application.Current.Theme.WithAccent(Color.FromRgb(214, 176, 82));
 ```
 
 ---
@@ -237,7 +237,6 @@ If neither is available in `PATH`, MewUI throws:
 ## 🧭 Roadmap (TODO)
 
 **Controls**
-- [ ] `ToggleSwitch`
 - [ ] `GridView`
 
 **Features**
