@@ -10,27 +10,20 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.4.0
+#:package Aprillz.MewUI@0.8.5
 
 using System.Globalization;
 using System.Text;
 
-using Aprillz.MewUI.Binding;
+using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Core;
-using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Markup;
-using Aprillz.MewUI.Panels;
-using Aprillz.MewUI.Primitives;
-using Aprillz.MewUI.Rendering;
 
 // GDI is Windows-only; fall back to OpenGL on Linux.
 Application.DefaultGraphicsBackend = OperatingSystem.IsWindows()
     ? GraphicsBackend.Gdi
     : GraphicsBackend.OpenGL;
 
-var goldAccent = Color.FromRgb(214, 176, 82);
-Theme.Current = Theme.Dark.WithAccent(goldAccent);
+Button equalsButton = null!;
 
 var expression = new ObservableValue<string>(string.Empty);
 var result = new ObservableValue<string>("0");
@@ -63,7 +56,7 @@ UniformGrid Keypad() => new UniformGrid()
 
         KeyButton("0", () => Append("0")),
         KeyButton(".", () => Append(".")),
-        KeyButton("=", CommitEquals, isPrimary: true),
+        KeyButton("=", CommitEquals).Ref(out equalsButton),
         KeyButton("+", () => Append("+"))
     );
 
@@ -97,6 +90,12 @@ var window = new Window()
     })
     .Title("MewUI FBA Calculator")
     .Size(360, 520)
+    .OnLoaded(() =>
+    {
+        var goldAccent = Color.FromRgb(214, 176, 82);
+        Application.Current.Theme = Theme.Dark.WithAccent(goldAccent);
+        equalsButton.Focus();
+    })
     .Content(
         new DockPanel()
             .Margin(8)
@@ -118,7 +117,6 @@ var window = new Window()
 
                         new Label()
                             .BindText(error, s => string.IsNullOrEmpty(s) ? " " : s)
-                            .Foreground(Theme.Current.DisabledText)
                             .TextWrapping(TextWrapping.Wrap)
                     ),
 
@@ -206,7 +204,7 @@ bool TryAppendFromText(string text)
     return appended;
 }
 
-Button KeyButton(string text, Action onClick, bool isPrimary = false)
+Button KeyButton(string text, Action onClick)
 {
     var b = new Button()
         .Content(text)
@@ -215,9 +213,6 @@ Button KeyButton(string text, Action onClick, bool isPrimary = false)
         .OnClick(onClick)
         .MinWidth(56)
         .MinHeight(44);
-
-    if (isPrimary)
-        b.BorderBrush(Theme.Current.Accent);
 
     return b;
 }
