@@ -1,14 +1,16 @@
 <Project>
   <PropertyGroup>
     <MewUITitle>Aprillz.MewUI</MewUITitle>
-    <MewUIVersion>0.10.2</MewUIVersion>
+    <MewUIVersion>0.10.3</MewUIVersion>
     <MewUIAuthor>Aprillz</MewUIAuthor>
     <MewUIDescription>A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT</MewUIDescription>
 
     <MewUIRootNamespace>Aprillz.MewUI</MewUIRootNamespace>
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
-
+  </PropertyGroup>
+  
+  <PropertyGroup>
     <TargetFrameworks>$(MewUITargetFrameworks)</TargetFrameworks>
     <Version>$(MewUIVersion)</Version>
     <RootNamespace>$(MewUIRootNamespace)</RootNamespace>
@@ -24,5 +26,11 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <IncludeSource>true</IncludeSource>
     <DebugType>portable</DebugType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(OutputPath)$(AssemblyName).xml" Pack="true" PackagePath="lib/$(TargetFramework)/" />
+  </ItemGroup>
 </Project>
