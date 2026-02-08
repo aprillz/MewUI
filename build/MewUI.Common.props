@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <MewUITitle>Aprillz.MewUI</MewUITitle>
-    <MewUIVersion>0.10.1</MewUIVersion>
+    <MewUIVersion>0.10.2</MewUIVersion>
     <MewUIAuthor>Aprillz</MewUIAuthor>
     <MewUIDescription>A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT</MewUIDescription>
 
@@ -21,5 +21,8 @@
 
     <PublishRepositoryUrl>false</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <IncludeSource>true</IncludeSource>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
 </Project>
