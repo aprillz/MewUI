@@ -9,7 +9,7 @@
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
   </PropertyGroup>
-  
+
   <PropertyGroup>
     <TargetFrameworks>$(MewUITargetFrameworks)</TargetFrameworks>
     <Version>$(MewUIVersion)</Version>
@@ -31,6 +31,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="$(OutputPath)$(AssemblyName).xml" Pack="true" PackagePath="lib/$(TargetFramework)/" />
+    <None Include="$(TargetDir)$(AssemblyName).xml" Pack="true" PackagePath="lib/$(TargetFramework)/" Condition="'$(TargetDir)' != ''" />
   </ItemGroup>
 </Project>
