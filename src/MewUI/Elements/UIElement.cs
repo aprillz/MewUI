@@ -5,11 +5,10 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Base class for elements that support input handling and visibility.
 /// </summary>
-public abstract class UIElement : Element
+public abstract partial class UIElement : Element
 {
     private List<IDisposable>? _bindings;
-    private ValueBinding<bool>? _isVisibleBinding;
-    private ValueBinding<bool>? _isEnabledBinding;
+    private Dictionary<int, IDisposable>? _bindingSlots;
     private bool _suggestedIsEnabled = true;
     private bool _suggestedIsEnabledInitialized;
 
@@ -83,28 +82,64 @@ public abstract class UIElement : Element
 
     #region Events (using Action delegates for AOT compatibility)
 
+    /// <summary>
+    /// Occurs when the element receives keyboard focus.
+    /// </summary>
     public event Action? GotFocus;
 
+    /// <summary>
+    /// Occurs when the element loses keyboard focus.
+    /// </summary>
     public event Action? LostFocus;
 
+    /// <summary>
+    /// Occurs when the mouse enters the element.
+    /// </summary>
     public event Action? MouseEnter;
 
+    /// <summary>
+    /// Occurs when the mouse leaves the element.
+    /// </summary>
     public event Action? MouseLeave;
 
+    /// <summary>
+    /// Occurs when a mouse button is pressed over the element.
+    /// </summary>
     public event Action<MouseEventArgs>? MouseDown;
 
+    /// <summary>
+    /// Occurs when the user double-clicks a mouse button over the element.
+    /// </summary>
     public event Action<MouseEventArgs>? MouseDoubleClick;
 
+    /// <summary>
+    /// Occurs when a mouse button is released over the element.
+    /// </summary>
     public event Action<MouseEventArgs>? MouseUp;
 
+    /// <summary>
+    /// Occurs when the mouse moves over the element.
+    /// </summary>
     public event Action<MouseEventArgs>? MouseMove;
 
+    /// <summary>
+    /// Occurs when the mouse wheel is scrolled over the element.
+    /// </summary>
     public event Action<MouseWheelEventArgs>? MouseWheel;
 
+    /// <summary>
+    /// Occurs when a key is pressed while the element has focus.
+    /// </summary>
     public event Action<KeyEventArgs>? KeyDown;
 
+    /// <summary>
+    /// Occurs when a key is released while the element has focus.
+    /// </summary>
     public event Action<KeyEventArgs>? KeyUp;
 
+    /// <summary>
+    /// Occurs when text input is received while the element has focus.
+    /// </summary>
     public event Action<TextInputEventArgs>? TextInput;
 
     #endregion
@@ -143,11 +178,17 @@ public abstract class UIElement : Element
         OnRender(context);
     }
 
+    /// <summary>
+    /// Renders the element.
+    /// </summary>
+    /// <param name="context">The graphics context.</param>
     protected virtual void OnRender(IGraphicsContext context) { }
 
     /// <summary>
     /// Performs hit testing to find the element at the specified point.
     /// </summary>
+    /// <param name="point">The point in element coordinates.</param>
+    /// <returns>The element at the point, or null.</returns>
     public UIElement? HitTest(Point point) => OnHitTest(point);
 
     protected virtual UIElement? OnHitTest(Point point)
@@ -168,6 +209,7 @@ public abstract class UIElement : Element
     /// <summary>
     /// Attempts to focus this element.
     /// </summary>
+    /// <returns>True if focus was set; otherwise, false.</returns>
     public bool Focus()
     {
         if (!Focusable || !IsEffectivelyEnabled || !IsVisible)
@@ -247,6 +289,11 @@ public abstract class UIElement : Element
 
     internal void SetMouseCaptured(bool captured) => IsMouseCaptured = captured;
 
+    /// <summary>
+    /// Converts a point from element coordinates to screen coordinates.
+    /// </summary>
+    /// <param name="point">The point in element coordinates.</param>
+    /// <returns>The point in screen coordinates.</returns>
     public Point PointToScreen(Point point)
     {
         var root = FindVisualRoot();
@@ -259,6 +306,11 @@ public abstract class UIElement : Element
         return window.ClientToScreen(inWindow);
     }
 
+    /// <summary>
+    /// Converts a point from screen coordinates to element coordinates.
+    /// </summary>
+    /// <param name="point">The point in screen coordinates.</param>
+    /// <returns>The point in element coordinates.</returns>
     public Point PointFromScreen(Point point)
     {
         var root = FindVisualRoot();
@@ -271,6 +323,11 @@ public abstract class UIElement : Element
         return window.TranslatePoint(inWindow, this);
     }
 
+    /// <summary>
+    /// Converts a rectangle from element coordinates to screen coordinates.
+    /// </summary>
+    /// <param name="rect">The rectangle in element coordinates.</param>
+    /// <returns>The rectangle in screen coordinates.</returns>
     public Rect RectToScreen(Rect rect)
     {
         var tl = PointToScreen(rect.TopLeft);
@@ -278,6 +335,11 @@ public abstract class UIElement : Element
         return new Rect(tl.X, tl.Y, br.X - tl.X, br.Y - tl.Y);
     }
 
+    /// <summary>
+    /// Converts a rectangle from screen coordinates to element coordinates.
+    /// </summary>
+    /// <param name="rect">The rectangle in screen coordinates.</param>
+    /// <returns>The rectangle in element coordinates.</returns>
     public Rect RectFromScreen(Rect rect)
     {
         var tl = PointFromScreen(rect.TopLeft);
@@ -355,12 +417,59 @@ public abstract class UIElement : Element
         _bindings.Add(binding);
     }
 
+    internal void ReplaceBinding(BindingSlot slot, IDisposable? binding)
+    {
+        if (_bindingSlots != null && _bindingSlots.TryGetValue(slot.Id, out var old))
+        {
+            try { old.Dispose(); }
+            catch { /* best-effort */ }
+
+            _bindingSlots.Remove(slot.Id);
+        }
+
+        if (binding == null)
+        {
+            if (_bindingSlots != null && _bindingSlots.Count == 0)
+            {
+                _bindingSlots = null;
+            }
+            return;
+        }
+
+        _bindingSlots ??= new Dictionary<int, IDisposable>(capacity: 2);
+        _bindingSlots[slot.Id] = binding;
+    }
+
+    internal bool TryGetBinding<TBinding>(BindingSlot slot, out TBinding binding)
+        where TBinding : class
+    {
+        if (_bindingSlots != null && _bindingSlots.TryGetValue(slot.Id, out var obj))
+        {
+            var typed = obj as TBinding;
+            if (typed != null)
+            {
+                binding = typed;
+                return true;
+            }
+        }
+
+        binding = null!;
+        return false;
+    }
+
     internal void DisposeBindings()
     {
-        _isVisibleBinding?.Dispose();
-        _isVisibleBinding = null;
-        _isEnabledBinding?.Dispose();
-        _isEnabledBinding = null;
+        if (_bindingSlots != null)
+        {
+            foreach (var kvp in _bindingSlots)
+            {
+                try { kvp.Value.Dispose(); }
+                catch { /* best-effort */ }
+            }
+
+            _bindingSlots.Clear();
+            _bindingSlots = null;
+        }
 
         if (_bindings == null)
         {
@@ -379,15 +488,27 @@ public abstract class UIElement : Element
 
     #region Input Handlers
 
+    /// <summary>
+    /// Called when the element receives focus.
+    /// </summary>
     protected virtual void OnGotFocus()
     { }
 
+    /// <summary>
+    /// Called when the element loses focus.
+    /// </summary>
     protected virtual void OnLostFocus()
     { }
 
+    /// <summary>
+    /// Called when the mouse enters the element.
+    /// </summary>
     protected virtual void OnMouseEnter()
     { }
 
+    /// <summary>
+    /// Called when the mouse leaves the element.
+    /// </summary>
     protected virtual void OnMouseLeave()
     { }
 
@@ -408,60 +529,69 @@ public abstract class UIElement : Element
     internal void RaiseTextInput(TextInputEventArgs e) => OnTextInput(e);
 
     // Protected virtual hooks for derived controls (public API surface stays small).
+    /// <summary>
+    /// Called when a mouse button is pressed.
+    /// </summary>
+    /// <param name="e">Mouse event arguments.</param>
     protected virtual void OnMouseDown(MouseEventArgs e) => MouseDown?.Invoke(e);
 
+    /// <summary>
+    /// Called when a mouse button is double-clicked.
+    /// </summary>
+    /// <param name="e">Mouse event arguments.</param>
     protected virtual void OnMouseDoubleClick(MouseEventArgs e) => MouseDoubleClick?.Invoke(e);
+
+    /// <summary>
+    /// Called when a mouse button is released.
+    /// </summary>
+    /// <param name="e">Mouse event arguments.</param>
     protected virtual void OnMouseUp(MouseEventArgs e) => MouseUp?.Invoke(e);
 
+    /// <summary>
+    /// Called when the mouse moves.
+    /// </summary>
+    /// <param name="e">Mouse event arguments.</param>
     protected virtual void OnMouseMove(MouseEventArgs e) => MouseMove?.Invoke(e);
 
+    /// <summary>
+    /// Called when the mouse wheel is scrolled.
+    /// </summary>
+    /// <param name="e">Mouse wheel event arguments.</param>
     protected virtual void OnMouseWheel(MouseWheelEventArgs e) => MouseWheel?.Invoke(e);
 
+    /// <summary>
+    /// Called when a key is pressed.
+    /// </summary>
+    /// <param name="e">Key event arguments.</param>
     protected virtual void OnKeyDown(KeyEventArgs e) => KeyDown?.Invoke(e);
 
+    /// <summary>
+    /// Called when a key is released.
+    /// </summary>
+    /// <param name="e">Key event arguments.</param>
     protected virtual void OnKeyUp(KeyEventArgs e) => KeyUp?.Invoke(e);
 
+    /// <summary>
+    /// Called when text input is received.
+    /// </summary>
+    /// <param name="e">Text input event arguments.</param>
     protected virtual void OnTextInput(TextInputEventArgs e) => TextInput?.Invoke(e);
 
     #endregion
 
+    /// <summary>
+    /// Called when visibility changes.
+    /// </summary>
     protected virtual void OnVisibilityChanged()
     { }
 
+    /// <summary>
+    /// Called when enabled state changes.
+    /// </summary>
     protected virtual void OnEnabledChanged()
     { }
 
     #region Binding Helpers
-
-    internal void SetIsVisibleBinding(Func<bool> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
-    {
-        ArgumentNullException.ThrowIfNull(get);
-
-        _isVisibleBinding?.Dispose();
-        _isVisibleBinding = new ValueBinding<bool>(
-            get,
-            null,
-            subscribe,
-            unsubscribe,
-            () => IsVisible = get());
-
-        IsVisible = get();
-    }
-
-    internal void SetIsEnabledBinding(Func<bool> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
-    {
-        ArgumentNullException.ThrowIfNull(get);
-
-        _isEnabledBinding?.Dispose();
-        _isEnabledBinding = new ValueBinding<bool>(
-            get,
-            null,
-            subscribe,
-            unsubscribe,
-            () => IsEnabled = get());
-
-        IsEnabled = get();
-    }
 
     #endregion
 }

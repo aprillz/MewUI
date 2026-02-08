@@ -186,6 +186,21 @@ public static class LayoutRounding
         return (int)Math.Round(value * dpiScale, MidpointRounding.AwayFromZero);
     }
 
+    public static int CeilToPixelInt(double value, double dpiScale)
+    {
+        if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
+        {
+            return (int)Math.Ceiling(value);
+        }
+
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            return 0;
+        }
+
+        return (int)Math.Ceiling(value * dpiScale);
+    }
+
     public static double RoundToPixel(double value, double dpiScale)
     {
         if (double.IsNaN(value) || double.IsInfinity(value))

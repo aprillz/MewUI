@@ -11,7 +11,13 @@ public class StackPanel : Panel
     public Orientation Orientation
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = Orientation.Vertical;
 
     /// <summary>
@@ -20,7 +26,13 @@ public class StackPanel : Panel
     public double Spacing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     protected override Size MeasureContent(Size availableSize)

@@ -2,6 +2,9 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A radio button control with optional text label.
+/// </summary>
 public class RadioButton : ToggleBase
 {
     private bool _isPressed;
@@ -10,6 +13,9 @@ public class RadioButton : ToggleBase
     private Element? _registeredParentScope;
     private TextMeasureCache _textMeasureCache;
 
+    /// <summary>
+    /// Ensures the radio button is registered with its group if checked.
+    /// </summary>
     internal void EnsureGroupRegistered()
     {
         if (!IsChecked)
@@ -20,6 +26,9 @@ public class RadioButton : ToggleBase
         RegisterToGroup();
     }
 
+    /// <summary>
+    /// Gets or sets the group name for mutual exclusion.
+    /// </summary>
     public string? GroupName
     {
         get;

@@ -11,7 +11,13 @@ public class UniformGrid : Panel
     public double Spacing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     /// <summary>
@@ -20,7 +26,14 @@ public class UniformGrid : Panel
     public int Rows
     {
         get;
-        set { field = Math.Max(0, value); InvalidateMeasure(); }
+        set
+        {
+            var v = Math.Max(0, value);
+            if (Set(ref field, v))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     /// <summary>
@@ -29,7 +42,14 @@ public class UniformGrid : Panel
     public int Columns
     {
         get;
-        set { field = Math.Max(0, value); InvalidateMeasure(); }
+        set
+        {
+            var v = Math.Max(0, value);
+            if (Set(ref field, v))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     private (int rows, int columns) CalculateGridSize()

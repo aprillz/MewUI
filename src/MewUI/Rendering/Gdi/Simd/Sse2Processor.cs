@@ -11,6 +11,84 @@ namespace Aprillz.MewUI.Rendering.Gdi.Simd;
 internal static class Sse2Processor
 {
     /// <summary>
+    /// Premultiplies a BGRA buffer (per-pixel alpha) using SSSE3 shuffle.
+    /// Processes 4 pixels (16 bytes) per iteration.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe void PremultiplyBgra(byte* srcBgra, byte* dstBgra, int byteCount)
+    {
+        if (srcBgra == null || dstBgra == null || byteCount <= 0)
+        {
+            return;
+        }
+
+        int pixels = byteCount >> 2;
+        int i = 0;
+
+        var zero = Vector128<byte>.Zero;
+        var bias128 = Vector128.Create((ushort)128);
+
+        var alphaShuffle = Vector128.Create(
+            (byte)3, (byte)3, (byte)3, (byte)3,
+            (byte)7, (byte)7, (byte)7, (byte)7,
+            (byte)11, (byte)11, (byte)11, (byte)11,
+            (byte)15, (byte)15, (byte)15, (byte)15);
+
+        var alphaMask255 = Vector128.Create(
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF);
+
+        for (; i + 4 <= pixels; i += 4)
+        {
+            var v = Sse2.LoadVector128(srcBgra + i * 4);
+
+            var aRep = Ssse3.Shuffle(v, alphaShuffle);
+            aRep = Sse2.Or(aRep, alphaMask255);
+
+            var vLo = Sse2.UnpackLow(v, zero).AsUInt16();
+            var vHi = Sse2.UnpackHigh(v, zero).AsUInt16();
+            var aLo = Sse2.UnpackLow(aRep, zero).AsUInt16();
+            var aHi = Sse2.UnpackHigh(aRep, zero).AsUInt16();
+
+            var outLo = Premultiply16(vLo, aLo, bias128);
+            var outHi = Premultiply16(vHi, aHi, bias128);
+
+            var packed = Sse2.PackUnsignedSaturate(outLo.AsInt16(), outHi.AsInt16());
+            Sse2.Store(dstBgra + i * 4, packed);
+        }
+
+        // Tail
+        byte* dst = dstBgra + i * 4;
+        byte* src = srcBgra + i * 4;
+        for (int p = i; p < pixels; p++)
+        {
+            byte b = src[0];
+            byte g = src[1];
+            byte r = src[2];
+            byte a = src[3];
+
+            int t = b * a + 128;
+            t += t >> 8;
+            dst[0] = (byte)(t >> 8);
+
+            t = g * a + 128;
+            t += t >> 8;
+            dst[1] = (byte)(t >> 8);
+
+            t = r * a + 128;
+            t += t >> 8;
+            dst[2] = (byte)(t >> 8);
+
+            dst[3] = a;
+
+            src += 4;
+            dst += 4;
+        }
+    }
+
+    /// <summary>
     /// Writes a row of premultiplied BGRA pixels from alpha values.
     /// Processes 16 pixels per iteration.
     /// </summary>
@@ -93,6 +171,17 @@ internal static class Sse2Processor
 
         // Pack 16-bit lanes to bytes
         return Sse2.PackUnsignedSaturate(tLo.AsInt16(), tHi.AsInt16());
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<ushort> Premultiply16(
+        Vector128<ushort> v,
+        Vector128<ushort> a,
+        Vector128<ushort> bias128)
+    {
+        var t = Sse2.Add(Sse2.MultiplyLow(v, a), bias128);
+        t = Sse2.Add(t, Sse2.ShiftRightLogical(t, 8));
+        return Sse2.ShiftRightLogical(t, 8);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -11,6 +11,100 @@ namespace Aprillz.MewUI.Rendering.Gdi.Simd;
 internal static class Avx2Processor
 {
     /// <summary>
+    /// Premultiplies a BGRA buffer (per-pixel alpha) using AVX2 shuffle.
+    /// Processes 8 pixels (32 bytes) per iteration.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe void PremultiplyBgra(byte* srcBgra, byte* dstBgra, int byteCount)
+    {
+        if (srcBgra == null || dstBgra == null || byteCount <= 0)
+        {
+            return;
+        }
+
+        int pixels = byteCount >> 2;
+        int i = 0;
+
+        var zero = Vector256<byte>.Zero;
+        var bias128 = Vector256.Create((ushort)128);
+
+        var alphaShuffle = Vector256.Create(
+            (byte)3, (byte)3, (byte)3, (byte)3,
+            (byte)7, (byte)7, (byte)7, (byte)7,
+            (byte)11, (byte)11, (byte)11, (byte)11,
+            (byte)15, (byte)15, (byte)15, (byte)15,
+            (byte)3, (byte)3, (byte)3, (byte)3,
+            (byte)7, (byte)7, (byte)7, (byte)7,
+            (byte)11, (byte)11, (byte)11, (byte)11,
+            (byte)15, (byte)15, (byte)15, (byte)15);
+
+        var alphaMask255 = Vector256.Create(
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF,
+            (byte)0, (byte)0, (byte)0, (byte)0xFF);
+
+        for (; i + 8 <= pixels; i += 8)
+        {
+            var v = Avx.LoadVector256(srcBgra + i * 4);
+
+            var aRep = Avx2.Shuffle(v, alphaShuffle);
+            aRep = Avx2.Or(aRep, alphaMask255);
+
+            var vLo = Avx2.UnpackLow(v, zero).AsUInt16();
+            var vHi = Avx2.UnpackHigh(v, zero).AsUInt16();
+            var aLo = Avx2.UnpackLow(aRep, zero).AsUInt16();
+            var aHi = Avx2.UnpackHigh(aRep, zero).AsUInt16();
+
+            var outLo = Premultiply16(vLo, aLo, bias128);
+            var outHi = Premultiply16(vHi, aHi, bias128);
+
+            var packed = Avx2.PackUnsignedSaturate(outLo.AsInt16(), outHi.AsInt16());
+            packed = Avx2.Permute4x64(packed.AsInt64(), 0b11_01_10_00).AsByte();
+
+            Avx.Store(dstBgra + i * 4, packed);
+        }
+
+        // Tail with SSE2 if possible
+        if (i + 4 <= pixels && Sse2.IsSupported && Ssse3.IsSupported)
+        {
+            Sse2Processor.PremultiplyBgra(srcBgra + i * 4, dstBgra + i * 4, (pixels - i) * 4);
+            return;
+        }
+
+        // Scalar tail
+        byte* dst = dstBgra + i * 4;
+        byte* src = srcBgra + i * 4;
+        for (int p = i; p < pixels; p++)
+        {
+            byte b = src[0];
+            byte g = src[1];
+            byte r = src[2];
+            byte a = src[3];
+
+            int t = b * a + 128;
+            t += t >> 8;
+            dst[0] = (byte)(t >> 8);
+
+            t = g * a + 128;
+            t += t >> 8;
+            dst[1] = (byte)(t >> 8);
+
+            t = r * a + 128;
+            t += t >> 8;
+            dst[2] = (byte)(t >> 8);
+
+            dst[3] = a;
+
+            src += 4;
+            dst += 4;
+        }
+    }
+    /// <summary>
     /// Writes a row of premultiplied BGRA pixels from alpha values.
     /// Processes 32 pixels per iteration (2x faster than SSE2).
     /// </summary>
@@ -107,6 +201,17 @@ internal static class Avx2Processor
 
         // AVX2 pack interleaves lanes, need to permute
         return Avx2.Permute4x64(packed.AsInt64(), 0b11_01_10_00).AsByte();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<ushort> Premultiply16(
+        Vector256<ushort> v,
+        Vector256<ushort> a,
+        Vector256<ushort> bias128)
+    {
+        var t = Avx2.Add(Avx2.MultiplyLow(v, a), bias128);
+        t = Avx2.Add(t, Avx2.ShiftRightLogical(t, 8));
+        return Avx2.ShiftRightLogical(t, 8);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -35,7 +35,7 @@
 (.NET 10 SDK가 필요합니다.)
 > [!WARNING]
 > 이 명령은 GitHub에서 코드를 직접 다운로드하여 실행합니다.
-```bahs
+```bash
 curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_sample.cs -o - | dotnet run -
 ```
 

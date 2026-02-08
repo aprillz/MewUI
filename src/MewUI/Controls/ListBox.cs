@@ -2,69 +2,144 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public class ListBox : Control
+/// <summary>
+/// A scrollable list control with item selection.
+/// </summary>
+public partial class ListBox : Control
     , IVisualTreeHost
 {
-    private readonly List<string> _items = new();
     private readonly TextWidthCache _textWidthCache = new(512);
-    private ValueBinding<int>? _selectedIndexBinding;
+    private readonly TemplatedItemsHost _itemsHost;
+    private int _hoverIndex = -1;
+    private bool _hasLastMousePosition;
+    private Point _lastMousePosition;
+    private bool _rebindVisibleOnNextRender = true;
     private bool _updatingFromSource;
+    private bool _suppressItemsSelectionChanged;
+    private IItemsView _itemsSource = ItemsView.Empty;
     private readonly ScrollBar _vBar;
     private readonly ScrollController _scroll = new();
     private double _extentHeight;
     private double _viewportHeight;
     private int? _pendingScrollIntoViewIndex;
 
-    public IList<string> Items => _items;
-
-    public int SelectedIndex
+    /// <summary>
+    /// Gets or sets the items data source.
+    /// </summary>
+    public IItemsView ItemsSource
     {
-        get;
+        get => _itemsSource;
         set
         {
-            int clamped = value;
-            if (_items.Count == 0)
-            {
-                clamped = -1;
-            }
-            else
-            {
-                clamped = Math.Clamp(value, -1, _items.Count - 1);
-            }
-
-            if (field == clamped)
+            value ??= ItemsView.Empty;
+            if (ReferenceEquals(_itemsSource, value))
             {
                 return;
             }
 
-            field = clamped;
-            SelectionChanged?.Invoke(field);
-            ScrollIntoView(field);
+            int oldIndex = SelectedIndex;
+
+            _itemsSource.Changed -= OnItemsChanged;
+            _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+
+            _itemsSource = value;
+            _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+            _itemsSource.Changed += OnItemsChanged;
+
+            _suppressItemsSelectionChanged = true;
+            try
+            {
+                _itemsSource.SelectedIndex = oldIndex;
+            }
+            finally
+            {
+                _suppressItemsSelectionChanged = false;
+            }
+
+            int newIndex = _itemsSource.SelectedIndex;
+            if (newIndex != oldIndex)
+            {
+                OnItemsSelectionChanged(newIndex);
+            }
+
+            InvalidateMeasure();
             InvalidateVisual();
         }
-    } = -1;
+    }
 
-    public string? SelectedItem => SelectedIndex >= 0 && SelectedIndex < _items.Count ? _items[SelectedIndex] : null;
+    /// <summary>
+    /// Gets or sets the selected item index.
+    /// </summary>
+    public int SelectedIndex
+    {
+        get => ItemsSource.SelectedIndex;
+        set => ItemsSource.SelectedIndex = value;
+    }
 
+    /// <summary>
+    /// Gets the currently selected item object.
+    /// </summary>
+    public object? SelectedItem => ItemsSource.SelectedItem;
+
+    /// <summary>
+    /// Gets the currently selected item text.
+    /// </summary>
+    public string? SelectedText => SelectedIndex >= 0 && SelectedIndex < ItemsSource.Count ? ItemsSource.GetText(SelectedIndex) : null;
+
+    /// <summary>
+    /// Gets or sets the height of each list item.
+    /// </summary>
     public double ItemHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.NaN;
 
+    /// <summary>
+    /// Gets or sets the padding around each item's text.
+    /// </summary>
     public Thickness ItemPadding
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                _rebindVisibleOnNextRender = true;
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     }
 
-    public event Action<int>? SelectionChanged;
+    public IDataTemplate ItemTemplate
+    {
+        get => _itemsHost.ItemTemplate;
+        set { _itemsHost.ItemTemplate = value; _rebindVisibleOnNextRender = true; }
+    }
 
     /// <summary>
-    /// Fired when the user activates an item (e.g. click or Enter), even if the selection didn't change.
+    /// Occurs when the selected item changes.
+    /// </summary>
+    public event Action<object?>? SelectionChanged;
+
+    /// <summary>
+    /// Occurs when an item is activated by click or Enter key.
     /// </summary>
     public event Action<int>? ItemActivated;
 
+    /// <summary>
+    /// Attempts to find the item index at the specified position.
+    /// </summary>
+    /// <param name="position">The position to test.</param>
+    /// <param name="index">The item index if found.</param>
+    /// <returns>True if an item was found at the position.</returns>
     private bool TryGetItemIndexAt(Point position, out int index)
     {
         index = -1;
@@ -88,21 +163,53 @@ public class ListBox : Control
             return false;
         }
 
-        index = (int)((position.Y - contentBounds.Y + _scroll.GetOffsetDip(1)) / itemHeight);
-        return index >= 0 && index < _items.Count;
+        return ItemsViewportMath.TryGetItemIndexAtY(
+            position.Y,
+            contentBounds.Y,
+            _scroll.GetOffsetDip(1),
+            itemHeight,
+            ItemsSource.Count,
+            out index);
     }
 
+    /// <summary>
+    /// Gets whether the listbox can receive keyboard focus.
+    /// </summary>
     public override bool Focusable => true;
 
+    /// <summary>
+    /// Gets the default background color.
+    /// </summary>
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    /// <summary>
+    /// Initializes a new instance of the ListBox class.
+    /// </summary>
     public ListBox()
     {
         BorderThickness = 1;
         Padding = new Thickness(1);
         ItemPadding = Theme.Metrics.ItemPadding;
+
+        var template = CreateDefaultItemTemplate();
+        _itemsHost = new TemplatedItemsHost(
+            owner: this,
+            getItem: index => index >= 0 && index < ItemsSource.Count ? ItemsSource.GetItem(index) : null,
+            invalidateMeasureAndVisual: () => { InvalidateMeasure(); InvalidateVisual(); },
+            template: template);
+
+        _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
+        {
+            BeforeItemRender = OnBeforeItemRender
+        };
+
+        _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+        _itemsSource.Changed += OnItemsChanged;
 
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _vBar.Parent = this;
@@ -111,8 +218,124 @@ public class ListBox : Control
             _scroll.DpiScale = GetDpi() / 96.0;
             _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
             _scroll.SetOffsetDip(1, v);
+            _hoverIndex = -1;
+            _hasLastMousePosition = false;
             InvalidateVisual();
         };
+    }
+
+    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
+    {
+        double itemRadius = _itemsHost.Layout.ItemRadius;
+
+        if (i == SelectedIndex)
+        {
+            var selectionBg = Theme.Palette.SelectionBackground;
+            if (itemRadius > 0)
+            {
+                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, selectionBg);
+            }
+            else
+            {
+                context.FillRectangle(itemRect, selectionBg);
+            }
+        }
+        else if (i == _hoverIndex)
+        {
+            var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.15);
+            if (itemRadius > 0)
+            {
+                context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, hoverBg);
+            }
+            else
+            {
+                context.FillRectangle(itemRect, hoverBg);
+            }
+        }
+    }
+
+    private IDataTemplate CreateDefaultItemTemplate()
+        => new DelegateTemplate<object?>(
+            build: _ =>
+                new Label
+                {
+                    IsHitTestVisible = false,
+                    VerticalTextAlignment = TextAlignment.Center,
+                    TextWrapping = TextWrapping.NoWrap,
+                },
+            bind: (view, _, index, _) =>
+            {
+                var tb = (Label)view;
+
+                var text = ItemsSource.GetText(index);
+                if (tb.Text != text)
+                {
+                    tb.Text = text;
+                }
+
+                if (!tb.Padding.Equals(ItemPadding))
+                {
+                    tb.Padding = ItemPadding;
+                }
+
+                if (tb.FontFamily != FontFamily)
+                {
+                    tb.FontFamily = FontFamily;
+                }
+
+                if (!tb.FontSize.Equals(FontSize))
+                {
+                    tb.FontSize = FontSize;
+                }
+
+                if (tb.FontWeight != FontWeight)
+                {
+                    tb.FontWeight = FontWeight;
+                }
+
+                if (tb.IsEnabled != IsEnabled)
+                {
+                    tb.IsEnabled = IsEnabled;
+                }
+
+                var fg = index == SelectedIndex
+                    ? Theme.Palette.SelectionText
+                    : (IsEnabled ? Foreground : Theme.Palette.DisabledText);
+
+                if (tb.Foreground != fg)
+                {
+                    tb.Foreground = fg;
+                }
+            });
+
+    private void OnItemsChanged(ItemsChange change)
+    {
+        _itemsHost.RecycleAll();
+        _hoverIndex = -1;
+        _rebindVisibleOnNextRender = true;
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    private void OnItemsSelectionChanged(int index)
+    {
+        if (_suppressItemsSelectionChanged)
+        {
+            return;
+        }
+
+        _rebindVisibleOnNextRender = true;
+        if (!_updatingFromSource)
+        {
+            if (TryGetBinding(SelectedIndexBindingSlot, out ValueBinding<int> binding))
+            {
+                binding.Set(index);
+            }
+        }
+
+        SelectionChanged?.Invoke(SelectedItem);
+        ScrollIntoView(index);
+        InvalidateVisual();
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -128,6 +351,7 @@ public class ListBox : Control
     void IVisualTreeHost.VisitChildren(Action<Element> visitor)
     {
         visitor(_vBar);
+        _itemsHost.VisitRealized(visitor);
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -139,6 +363,7 @@ public class ListBox : Control
             : Math.Max(0, availableSize.Width - Padding.HorizontalThickness - borderInset * 2);
 
         double maxWidth;
+        int count = ItemsSource.Count;
 
         // Fast path: when stretching horizontally, the parent is going to size us by slot width anyway.
         // Avoid scanning huge item lists just to compute a content-based desired width.
@@ -154,22 +379,22 @@ public class ListBox : Control
 
             // If the list is huge, prefer a cheap width estimate.
             // This keeps layout responsive; users can still explicitly set Width for deterministic sizing.
-            if (_items.Count > 4096)
+            if (count > 4096)
             {
                 double itemHeightEstimate = ResolveItemHeight();
                 double viewportEstimate = double.IsPositiveInfinity(availableSize.Height)
-                    ? Math.Min(_items.Count * itemHeightEstimate, itemHeightEstimate * 12)
+                    ? Math.Min(count * itemHeightEstimate, itemHeightEstimate * 12)
                     : Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2);
 
-                int visibleEstimate = itemHeightEstimate <= 0 ? _items.Count : (int)Math.Ceiling(viewportEstimate / itemHeightEstimate) + 1;
+                int visibleEstimate = itemHeightEstimate <= 0 ? count : (int)Math.Ceiling(viewportEstimate / itemHeightEstimate) + 1;
                 int sampleCount = Math.Clamp(visibleEstimate, 32, 256);
-                sampleCount = Math.Min(sampleCount, _items.Count);
+                sampleCount = Math.Min(sampleCount, count);
                 _textWidthCache.SetCapacity(Math.Clamp(visibleEstimate * 4, 256, 4096));
                 double itemPadW = ItemPadding.HorizontalThickness;
 
                 for (int i = 0; i < sampleCount; i++)
                 {
-                    var item = _items[i];
+                    var item = ItemsSource.GetText(i);
                     if (string.IsNullOrEmpty(item))
                     {
                         continue;
@@ -184,9 +409,9 @@ public class ListBox : Control
                 }
 
                 // Ensure current selection isn't clipped when it lies outside the sample range.
-                if (SelectedIndex >= sampleCount && SelectedIndex < _items.Count && maxWidth < widthLimit)
+                if (SelectedIndex >= sampleCount && SelectedIndex < count && maxWidth < widthLimit)
                 {
-                    var item = _items[SelectedIndex];
+                    var item = ItemsSource.GetText(SelectedIndex);
                     if (!string.IsNullOrEmpty(item))
                     {
                         maxWidth = Math.Max(maxWidth, _textWidthCache.GetOrMeasure(measure.Context, measure.Font, dpi, item) + itemPadW);
@@ -195,10 +420,11 @@ public class ListBox : Control
             }
             else
             {
-                _textWidthCache.SetCapacity(Math.Clamp(_items.Count, 64, 4096));
+                _textWidthCache.SetCapacity(Math.Clamp(count, 64, 4096));
                 double itemPadW = ItemPadding.HorizontalThickness;
-                foreach (var item in _items)
+                for (int i = 0; i < count; i++)
                 {
+                    var item = ItemsSource.GetText(i);
                     if (string.IsNullOrEmpty(item))
                     {
                         continue;
@@ -215,16 +441,16 @@ public class ListBox : Control
         }
 
         double itemHeight = ResolveItemHeight();
-        double height = _items.Count * itemHeight;
+        double height = count * itemHeight;
 
         // Cache extent/viewport for scroll bar (viewport is approximated here; final value computed in Arrange).
         _extentHeight = height;
         var dpiScale = GetDpi() / 96.0;
         _viewportHeight = double.IsPositiveInfinity(availableSize.Height)
-                ? height
-                : LayoutRounding.RoundToPixel(
-                    Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2),
-                    dpiScale);
+            ? height
+            : LayoutRounding.RoundToPixel(
+                Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2),
+                dpiScale);
 
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
@@ -307,7 +533,7 @@ public class ListBox : Control
         }
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
-        if (_items.Count == 0)
+        if (ItemsSource.Count == 0)
         {
             return;
         }
@@ -321,41 +547,35 @@ public class ListBox : Control
         context.Save();
         context.SetClip(LayoutRounding.MakeClipRect(contentBounds, dpiScale));
 
-        var font = GetFont();
         double itemHeight = ResolveItemHeight();
         double verticalOffset = _scroll.GetOffsetDip(1);
 
-        // Even when "virtualization" is disabled, only paint the visible range.
-        // (Clipping makes off-screen work pure overhead for large item counts.)
-        int first = itemHeight <= 0 ? 0 : Math.Max(0, (int)Math.Floor(verticalOffset / itemHeight));
-        double offsetInItem = itemHeight <= 0 ? 0 : verticalOffset - first * itemHeight;
-        double yStart = contentBounds.Y - offsetInItem;
-        int visibleCount = itemHeight <= 0 ? _items.Count : (int)Math.Ceiling((contentBounds.Height + offsetInItem) / itemHeight) + 1;
-        int lastExclusive = Math.Min(_items.Count, first + Math.Max(0, visibleCount));
+        ItemsViewportMath.ComputeVisibleRange(
+            ItemsSource.Count,
+            itemHeight,
+            contentBounds.Height,
+            contentBounds.Y,
+            verticalOffset,
+            out int first,
+            out int lastExclusive,
+            out double yStart,
+            out _);
 
-        for (int i = first; i < lastExclusive; i++)
+        bool rebind = _rebindVisibleOnNextRender;
+        _rebindVisibleOnNextRender = false;
+
+        _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
         {
-            double y = yStart + (i - first) * itemHeight;
-            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeight);
+            ContentBounds = contentBounds,
+            First = first,
+            LastExclusive = lastExclusive,
+            ItemHeight = itemHeight,
+            YStart = yStart,
+            ItemRadius = itemRadius,
+            RebindExisting = rebind,
+        };
 
-            bool selected = i == SelectedIndex;
-            if (selected)
-            {
-                var selectionBg = Theme.Palette.SelectionBackground;
-                if (itemRadius > 0)
-                {
-                    context.FillRoundedRectangle(itemRect, itemRadius, itemRadius, selectionBg);
-                }
-                else
-                {
-                    context.FillRectangle(itemRect, selectionBg);
-                }
-            }
-
-            var textColor = selected ? Theme.Palette.SelectionText : (IsEnabled ? Foreground : Theme.Palette.DisabledText);
-            var textBounds = itemRect.Deflate(ItemPadding);
-            context.DrawText(_items[i] ?? string.Empty, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
-        }
+        _itemsHost.Render(context);
 
         context.Restore();
 
@@ -437,8 +657,56 @@ public class ListBox : Control
         _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
         _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
         _vBar.Value = _scroll.GetOffsetDip(1);
+
+        if (_hasLastMousePosition && TryGetItemIndexAt(_lastMousePosition, out int hover))
+        {
+            _hoverIndex = hover;
+        }
+        else
+        {
+            _hoverIndex = -1;
+        }
+
         InvalidateVisual();
         e.Handled = true;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+
+        if (!IsEnabled)
+        {
+            return;
+        }
+
+        _hasLastMousePosition = true;
+        _lastMousePosition = e.Position;
+
+        int newHover = -1;
+        if (TryGetItemIndexAt(e.Position, out int index))
+        {
+            newHover = index;
+        }
+
+        if (_hoverIndex != newHover)
+        {
+            _hoverIndex = newHover;
+            InvalidateVisual();
+        }
+    }
+
+    protected override void OnMouseLeave()
+    {
+        base.OnMouseLeave();
+
+        _hasLastMousePosition = false;
+
+        if (_hoverIndex != -1)
+        {
+            _hoverIndex = -1;
+            InvalidateVisual();
+        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -452,7 +720,8 @@ public class ListBox : Control
 
         if (e.Key == Key.Up)
         {
-            if (_items.Count > 0)
+            int count = ItemsSource.Count;
+            if (count > 0)
             {
                 SelectedIndex = Math.Max(0, SelectedIndex <= 0 ? 0 : SelectedIndex - 1);
             }
@@ -461,16 +730,18 @@ public class ListBox : Control
         }
         else if (e.Key == Key.Down)
         {
-            if (_items.Count > 0)
+            int count = ItemsSource.Count;
+            if (count > 0)
             {
-                SelectedIndex = Math.Min(_items.Count - 1, SelectedIndex < 0 ? 0 : SelectedIndex + 1);
+                SelectedIndex = Math.Min(count - 1, SelectedIndex < 0 ? 0 : SelectedIndex + 1);
             }
 
             e.Handled = true;
         }
         else if (e.Key == Key.Enter)
         {
-            if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
+            int count = ItemsSource.Count;
+            if (SelectedIndex >= 0 && SelectedIndex < count)
             {
                 ItemActivated?.Invoke(SelectedIndex);
                 e.Handled = true;
@@ -478,11 +749,19 @@ public class ListBox : Control
         }
     }
 
+    /// <summary>
+    /// Scrolls the selected item into view.
+    /// </summary>
     public void ScrollIntoViewSelected() => ScrollIntoView(SelectedIndex);
 
+    /// <summary>
+    /// Scrolls the specified item index into view.
+    /// </summary>
+    /// <param name="index">The item index to scroll into view.</param>
     public void ScrollIntoView(int index)
     {
-        if (index < 0 || index >= _items.Count)
+        int count = ItemsSource.Count;
+        if (index < 0 || index >= count)
         {
             return;
         }
@@ -531,21 +810,10 @@ public class ListBox : Control
         InvalidateVisual();
     }
 
-    public void AddItem(string item)
-    {
-        _items.Add(item ?? string.Empty);
-        InvalidateMeasure();
-        InvalidateVisual();
-    }
-
-    public void ClearItems()
-    {
-        _items.Clear();
-        SelectedIndex = -1;
-        InvalidateMeasure();
-        InvalidateVisual();
-    }
-
+    /// <summary>
+    /// Resolves the effective item height.
+    /// </summary>
+    /// <returns>The item height in DIPs.</returns>
     private double ResolveItemHeight()
     {
         if (!double.IsNaN(ItemHeight) && ItemHeight > 0)
@@ -570,51 +838,25 @@ public class ListBox : Control
         return _viewportHeight;
     }
 
+    /// <summary>
+    /// Sets a two-way binding for the SelectedIndex property.
+    /// </summary>
+    /// <param name="get">Function to get the current value.</param>
+    /// <param name="set">Action to set the value.</param>
+    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
+    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
     public void SetSelectedIndexBinding(
         Func<int> get,
         Action<int> set,
         Action<Action>? subscribe = null,
         Action<Action>? unsubscribe = null)
     {
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(set);
-
-        _selectedIndexBinding?.Dispose();
-        _selectedIndexBinding = new ValueBinding<int>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            () =>
-            {
-                _updatingFromSource = true;
-                try { SelectedIndex = get(); }
-                finally { _updatingFromSource = false; }
-            });
-
-        // Ensure the binding forwarder is registered once (no duplicates), without tracking extra state.
-        SelectionChanged -= ForwardSelectionChangedToBinding;
-        SelectionChanged += ForwardSelectionChangedToBinding;
-
-        _updatingFromSource = true;
-        try { SelectedIndex = get(); }
-        finally { _updatingFromSource = false; }
-    }
-
-    private void ForwardSelectionChangedToBinding(int index)
-    {
-        if (_updatingFromSource)
-        {
-            return;
-        }
-
-        _selectedIndexBinding?.Set(index);
+        SetSelectedIndexBindingCore(get, set, subscribe, unsubscribe);
     }
 
     protected override void OnDispose()
     {
-        SelectionChanged -= ForwardSelectionChangedToBinding;
-        _selectedIndexBinding?.Dispose();
-        _selectedIndexBinding = null;
+        _itemsSource.Changed -= OnItemsChanged;
+        _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
     }
 }

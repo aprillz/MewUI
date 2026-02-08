@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
@@ -10,8 +12,7 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Represents a top-level window.
 /// </summary>
-public class Window : ContentControl
-    , ILayoutRoundingHost
+public class Window : ContentControl, ILayoutRoundingHost
 {
     private readonly DispatcherMergeKey _layoutMergeKey = new(UiDispatcherPriority.Layout);
     private readonly DispatcherMergeKey _renderMergeKey = new(UiDispatcherPriority.Render);
@@ -40,6 +41,8 @@ public class Window : ContentControl
     private bool _firstFrameRenderedPending;
     private bool _subscribedToDispatcherChanged;
     private WindowLifetimeState _lifetimeState;
+    internal Action<Window>? BuildCallback { get; private set; }
+
     internal Point LastMousePositionDip => _lastMousePositionDip;
 
     internal Point LastMouseScreenPositionPx => _lastMouseScreenPositionPx;
@@ -192,8 +195,16 @@ public class Window : ContentControl
     internal void RadioGroupUnchecked(RadioButton source, string? groupName, Element? parentScope)
         => _radioGroups.Unchecked(source, groupName, parentScope);
 
+    /// <summary>
+    /// Gets the platform window handle.
+    /// </summary>
     public nint Handle => _backend?.Handle ?? 0;
 
+    /// <summary>
+    /// Converts a client-relative point to screen coordinates.
+    /// </summary>
+    /// <param name="clientPointDip">The client point in DIPs.</param>
+    /// <returns>The screen point.</returns>
     internal Point ClientToScreen(Point clientPointDip)
     {
         if (_backend == null || Handle == 0)
@@ -204,6 +215,11 @@ public class Window : ContentControl
         return _backend.ClientToScreen(clientPointDip);
     }
 
+    /// <summary>
+    /// Converts a screen point to client-relative coordinates.
+    /// </summary>
+    /// <param name="screenPointPx">The screen point in pixels.</param>
+    /// <returns>The client point in DIPs.</returns>
     internal Point ScreenToClient(Point screenPointPx)
     {
         if (_backend == null || Handle == 0)
@@ -214,6 +230,9 @@ public class Window : ContentControl
         return _backend.ScreenToClient(screenPointPx);
     }
 
+    /// <summary>
+    /// Gets or sets the window size configuration.
+    /// </summary>
     public WindowSize WindowSize
     {
         get;
@@ -234,6 +253,9 @@ public class Window : ContentControl
         }
     } = WindowSize.Resizable(800, 600);
 
+    /// <summary>
+    /// Gets or sets the window title.
+    /// </summary>
     public string Title
     {
         get;
@@ -244,6 +266,9 @@ public class Window : ContentControl
         }
     } = "Window";
 
+    /// <summary>
+    /// Gets or sets the window icon.
+    /// </summary>
     public IconSource? Icon
     {
         get;
@@ -254,6 +279,11 @@ public class Window : ContentControl
         }
     }
 
+    public WindowStartupLocation StartupLocation { get; set; } = WindowStartupLocation.CenterScreen;
+
+    /// <summary>
+    /// Gets the window client width in DIPs.
+    /// </summary>
     public new double Width
     {
         get;
@@ -264,6 +294,9 @@ public class Window : ContentControl
         }
     } = WindowSize.Resizable(800, 600).Width;
 
+    /// <summary>
+    /// Gets the window client height in DIPs.
+    /// </summary>
     public new double Height
     {
         get;
@@ -274,40 +307,88 @@ public class Window : ContentControl
         }
     } = WindowSize.Resizable(800, 600).Height;
 
+    /// <summary>
+    /// Gets whether the window is currently active.
+    /// </summary>
     public bool IsActive { get; private set; }
 
+    /// <summary>
+    /// Gets the current DPI value.
+    /// </summary>
     public uint Dpi { get; private set; } = 96;
 
+    /// <summary>
+    /// Gets the DPI scale factor relative to 96 DPI.
+    /// </summary>
     public double DpiScale => Dpi / 96.0;
 
+    /// <summary>
+    /// Gets the client size in DIPs.
+    /// </summary>
     internal Size ClientSizeDip => _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
 
+    /// <summary>
+    /// Gets or sets whether layout rounding is enabled.
+    /// </summary>
     public bool UseLayoutRounding { get; set; } = true;
 
+    /// <summary>
+    /// Gets the focus manager for this window.
+    /// </summary>
     public FocusManager FocusManager => field ??= new FocusManager(this);
 
+    /// <summary>
+    /// Gets the graphics factory for rendering.
+    /// </summary>
     public IGraphicsFactory GraphicsFactory => Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
 
     internal IUiDispatcher? ApplicationDispatcher => Application.IsRunning ? Application.Current.Dispatcher : null;
 
     #region Events
 
+    /// <summary>
+    /// Occurs when the window is loaded and ready.
+    /// </summary>
     public event Action? Loaded;
 
+    /// <summary>
+    /// Occurs when the window is closed.
+    /// </summary>
     public event Action? Closed;
 
+    /// <summary>
+    /// Occurs when the window is activated.
+    /// </summary>
     public event Action? Activated;
 
+    /// <summary>
+    /// Occurs when the window is deactivated.
+    /// </summary>
     public event Action? Deactivated;
 
+    /// <summary>
+    /// Occurs when the client size changes.
+    /// </summary>
     public event Action<Size>? ClientSizeChanged;
 
+    /// <summary>
+    /// Occurs when the DPI changes.
+    /// </summary>
     public event Action<uint, uint>? DpiChanged;
 
+    /// <summary>
+    /// Occurs when the theme changes.
+    /// </summary>
     public event Action<Theme, Theme>? ThemeChanged;
 
+    /// <summary>
+    /// Occurs when the first frame is rendered.
+    /// </summary>
     public event Action? FirstFrameRendered;
 
+    /// <summary>
+    /// Occurs after each frame is rendered.
+    /// </summary>
     public event Action? FrameRendered;
 
     /// <summary>
@@ -336,6 +417,9 @@ public class Window : ContentControl
 
     internal void RaiseDeactivated() => Deactivated?.Invoke();
 
+    /// <summary>
+    /// Shows the window.
+    /// </summary>
     public void Show()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
@@ -370,6 +454,9 @@ public class Window : ContentControl
         }
     }
 
+    /// <summary>
+    /// Hides the window.
+    /// </summary>
     public void Hide()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
@@ -391,6 +478,9 @@ public class Window : ContentControl
         _lifetimeState = WindowLifetimeState.Hidden;
     }
 
+    /// <summary>
+    /// Closes the window.
+    /// </summary>
     public void Close()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
@@ -428,6 +518,9 @@ public class Window : ContentControl
         _backend.SetResizable(WindowSize.IsResizable);
     }
 
+    /// <summary>
+    /// Performs layout measurement and arrangement for the window content.
+    /// </summary>
     public void PerformLayout()
     {
         if (Handle == 0 || Content == null)
@@ -705,6 +798,11 @@ public class Window : ContentControl
         }
 
         FrameRendered?.Invoke();
+    }
+
+    internal void SetBuildCallback(Action<Window> build)
+    {
+        BuildCallback = build;
     }
 
     private void SubscribeToDispatcherChanged()
@@ -1000,6 +1098,24 @@ public class Window : ContentControl
                 _toolTipOwner = null;
             }
             return;
+        }
+    }
+
+    internal void OnBeforeMouseDown(Point positionInWindow, MouseButton button)
+    {
+        // Centralized "mouse down" policy invoked by platform backends.
+        // Close any open popups when the click happens outside their bounds.
+        ClosePopupsIfClickOutside(positionInWindow);
+    }
+
+    internal void OnAfterMouseDownHitTest(Point positionInWindow, MouseButton button, UIElement? element)
+    {
+        // Centralized "mouse down" policy invoked by platform backends after hit testing.
+        // Clicking on window background should clear keyboard focus (e.g. TextBox loses focus),
+        // even when no element participates in hit testing for that point.
+        if (button == MouseButton.Left && element == null)
+        {
+            FocusManager.ClearFocus();
         }
     }
 

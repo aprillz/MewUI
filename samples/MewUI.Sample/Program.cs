@@ -16,7 +16,7 @@ metricsTimer.Tick += () => UpdateMetrics(appendLog: false);
 var maxFpsEnabled = new ObservableValue<bool>(false);
 var fpsStopwatch = new Stopwatch();
 var fpsFrames = 0;
-ThemeManager.DefaultMetrics = ThemeMetrics.Default with { FontFamily = "Noto Sans KR" };
+
 Window window;
 var accentSwatches = new List<(Accent accent, Button button)>();
 var currentAccent = ThemeManager.DefaultAccent;
@@ -627,150 +627,149 @@ FrameworkElement ImageDemo() => new UniformGrid()
             .StretchMode(ImageStretch.Uniform)
     );
 
-FrameworkElement CommandingSamples()
-{
-    return new StackPanel()
-        .Vertical()
-        .Spacing(16)
-        .Children(
-            new Label()
-                .Text("Commanding Demo")
-                .Bold()
-                .FontSize(14),
+FrameworkElement CommandingSamples() => new StackPanel()
+    .Vertical()
+    .Spacing(16)
+    .Children(
+        new Label()
+            .Text("Commanding Demo")
+            .Bold()
+            .FontSize(14),
 
-            new Label()
-                .Text("Delegate-based commanding (Action + Func<bool>) for Native AOT compatibility."),
+        new Label()
+            .Text("Delegate-based commanding (Action + Func<bool>) for Native AOT compatibility."),
 
-            // Example 1: Basic CanExecute based on text input
-            new GroupBox()
-                .Header("CanExecute with Input Validation")
-                .Content(
-                    new StackPanel()
-                        .Vertical()
-                        .Spacing(8)
-                        .Children(
-                            new Label()
-                                .Text("Enter text to enable the Submit button:"),
+        // Example 1: Basic CanExecute based on text input
+        new GroupBox()
+            .Header("CanExecute with Input Validation")
+            .Content(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Label()
+                            .Text("Enter text to enable the Submit button:"),
 
-                            new TextBox()
-                                .Placeholder("Type something...")
-                                .BindText(vm.InputText),
+                        new TextBox()
+                            .Placeholder("Type something...")
+                            .BindText(vm.InputText),
 
-                            new Button()
-                                .Content("Submit")
-                                .OnCanClick(() => !string.IsNullOrWhiteSpace(vm.InputText.Value))
-                                .OnClick(() => { vm.CommandLog.Value = $"Submitted: \"{vm.InputText.Value}\" at {DateTime.Now:HH:mm:ss}"; })
-                        )
-                ),
+                        new Button()
+                            .Content("Submit")
+                            .OnCanClick(() => !string.IsNullOrWhiteSpace(vm.InputText.Value))
+                            .OnClick(() => { vm.CommandLog.Value = $"Submitted: \"{vm.InputText.Value}\" at {DateTime.Now:HH:mm:ss}"; })
+                    )
+            ),
 
-            // Example 2: Counter with bounds
-            new GroupBox()
-                .Header("Counter with Min/Max Bounds")
-                .Content(
-                    new StackPanel()
-                        .Vertical()
-                        .Spacing(8)
-                        .Children(
-                            new Label()
-                                .BindText(vm.Counter, c => $"Count: {c} (range: 0-10)"),
+        // Example 2: Counter with bounds
+        new GroupBox()
+            .Header("Counter with Min/Max Bounds")
+            .Content(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Label()
+                            .BindText(vm.Counter, c => $"Count: {c} (range: 0-10)"),
 
-                            new StackPanel()
-                                .Horizontal()
-                                .Spacing(8)
-                                .Children(
-                                    new Button()
-                                        .Content("- Decrement")
-                                        .Width(100)
-                                        .OnCanClick(() => vm.Counter.Value > 0)
-                                        .OnClick(() => { vm.Counter.Value--; vm.CommandLog.Value = $"Decremented to {vm.Counter.Value}"; }),
+                        new StackPanel()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(
+                                new Button()
+                                    .Content("- Decrement")
+                                    .Width(100)
+                                    .OnCanClick(() => vm.Counter.Value > 0)
+                                    .OnClick(() => { vm.Counter.Value--; vm.CommandLog.Value = $"Decremented to {vm.Counter.Value}"; }),
 
-                                    new Button()
-                                        .Content("+ Increment")
-                                        .Width(100)
-                                        .OnCanClick(() => vm.Counter.Value < 10)
-                                        .OnClick(() => { vm.Counter.Value++; vm.CommandLog.Value = $"Incremented to {vm.Counter.Value}"; }),
+                                new Button()
+                                    .Content("+ Increment")
+                                    .Width(100)
+                                    .OnCanClick(() => vm.Counter.Value < 10)
+                                    .OnClick(() => { vm.Counter.Value++; vm.CommandLog.Value = $"Incremented to {vm.Counter.Value}"; }),
 
-                                    new Button()
-                                        .Content("Reset")
-                                        .Width(80)
-                                        .OnCanClick(() => vm.Counter.Value != 5)
-                                        .OnClick(() => { vm.Counter.Value = 5; vm.CommandLog.Value = "Reset to 5"; })
-                                )
-                        )
-                ),
+                                new Button()
+                                    .Content("Reset")
+                                    .Width(80)
+                                    .OnCanClick(() => vm.Counter.Value != 5)
+                                    .OnClick(() => { vm.Counter.Value = 5; vm.CommandLog.Value = "Reset to 5"; })
+                            )
+                    )
+            ),
 
-            // Example 3: Feature toggle affecting multiple commands
-            new GroupBox()
-                .Header("Feature Toggle (Multiple Commands)")
-                .Content(
-                    new StackPanel()
-                        .Vertical()
-                        .Spacing(8)
-                        .Children(
-                            new CheckBox()
-                                .Text("Enable Premium Features")
-                                .BindIsChecked(vm.IsFeatureEnabled),
+        // Example 3: Feature toggle affecting multiple commands
+        new GroupBox()
+            .Header("Feature Toggle (Multiple Commands)")
+            .Content(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new CheckBox()
+                            .Text("Enable Premium Features")
+                            .BindIsChecked(vm.IsFeatureEnabled),
 
-                            new StackPanel()
-                                .Horizontal()
-                                .Spacing(8)
-                                .Children(
-                                    new Button()
-                                        .Content("Export PDF")
-                                        .OnCanClick(() => vm.IsFeatureEnabled.Value)
-                                        .OnClick(() => { vm.CommandLog.Value = "Exporting PDF..."; }),
+                        new StackPanel()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(
+                                new Button()
+                                    .Content("Export PDF")
+                                    .OnCanClick(() => vm.IsFeatureEnabled.Value)
+                                    .OnClick(() => { vm.CommandLog.Value = "Exporting PDF..."; }),
 
-                                    new Button()
-                                        .Content("Cloud Sync")
-                                        .OnCanClick(() => vm.IsFeatureEnabled.Value)
-                                        .OnClick(() => { vm.CommandLog.Value = "Syncing to cloud..."; }),
+                                new Button()
+                                    .Content("Cloud Sync")
+                                    .OnCanClick(() => vm.IsFeatureEnabled.Value)
+                                    .OnClick(() => { vm.CommandLog.Value = "Syncing to cloud..."; }),
 
-                                    new Button()
-                                        .Content("Analytics")
-                                        .OnCanClick(() => vm.IsFeatureEnabled.Value)
-                                        .OnClick(() => { vm.CommandLog.Value = "Opening analytics..."; })
-                                ),
+                                new Button()
+                                    .Content("Analytics")
+                                    .OnCanClick(() => vm.IsFeatureEnabled.Value)
+                                    .OnClick(() => { vm.CommandLog.Value = "Opening analytics..."; })
+                            ),
 
-                            new Label()
-                                .Text("(Enable the checkbox above to unlock these features)")
-                                .FontSize(11)
-                        )
-                ),
+                        new Label()
+                            .Text("(Enable the checkbox above to unlock these features)")
+                            .FontSize(11)
+                    )
+            ),
 
-            // Example 4: Combined conditions
-            new GroupBox()
-                .Header("Combined Conditions")
-                .Content(
-                    new StackPanel()
-                        .Vertical()
-                        .Spacing(8)
-                        .Children(
-                            new Label()
-                                .Text("Button enabled when: text is entered AND feature is enabled AND counter > 0"),
+        // Example 4: Combined conditions
+        new GroupBox()
+            .Header("Combined Conditions")
+            .Content(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Label()
+                            .Text("Button enabled when: text is entered AND feature is enabled AND counter > 0"),
 
-                            new Button()
-                                .Content("Execute Complex Action")
-                                .OnCanClick(() =>
-                                    !string.IsNullOrWhiteSpace(vm.InputText.Value) &&
-                                    vm.IsFeatureEnabled.Value &&
-                                    vm.Counter.Value > 0)
-                                .OnClick(() => { vm.CommandLog.Value = $"Complex action: text=\"{vm.InputText.Value}\", count={vm.Counter.Value}"; })
-                        )
-                ),
+                        new Button()
+                            .Content("Execute Complex Action")
+                            .OnCanClick(() =>
+                                !string.IsNullOrWhiteSpace(vm.InputText.Value) &&
+                                vm.IsFeatureEnabled.Value &&
+                                vm.Counter.Value > 0)
+                            .OnClick(() => { vm.CommandLog.Value = $"Complex action: text=\"{vm.InputText.Value}\", count={vm.Counter.Value}"; })
+                    )
+            ),
 
-            // Command log output
-            new GroupBox()
-                .Header("Command Log")
-                .Content(
-                    new Label()
-                        .BindText(vm.CommandLog)
-                        .FontFamily("Consolas")
-                )
-        );
-}
+        // Command log output
+        new GroupBox()
+            .Header("Command Log")
+            .Content(
+                new Label()
+                    .BindText(vm.CommandLog)
+                    .FontFamily("Consolas")
+            )
+    );
 
 FrameworkElement BindSamples()
 {
+    var selectionItems = new List<string> { "Alpha", "Beta", "Gamma", "Delta" };
+
     return new StackPanel()
         .Vertical()
         .Children(
@@ -845,7 +844,7 @@ FrameworkElement BindSamples()
                         new ListBox()
                             .Ref(out var selectionListBox)
                             .Height(120)
-                            .Items("Alpha", "Beta", "Gamma", "Delta")
+                            .ItemsSource(ItemsSource.Create(selectionItems))
                             .BindSelectedIndex(vm.SelectedIndex),
 
                         new StackPanel()
@@ -860,23 +859,18 @@ FrameworkElement BindSamples()
                                     .OnClick(() =>
                                     {
                                         const int repeat = 10_000;
-                                        var items = selectionListBox.Items;
-
-                                        if (items is List<string> list)
-                                        {
-                                            list.EnsureCapacity(list.Count + repeat * 4);
-                                        }
+                                        selectionItems.EnsureCapacity(selectionItems.Count + repeat * 4);
 
                                         for (int i = 0; i < repeat; i++)
                                         {
-                                            items.Add("Alpha");
-                                            items.Add("Beta");
-                                            items.Add("Gamma");
-                                            items.Add("Delta");
+                                            selectionItems.Add("Alpha");
+                                            selectionItems.Add("Beta");
+                                            selectionItems.Add("Gamma");
+                                            selectionItems.Add("Delta");
                                         }
 
                                         selectionListBox.InvalidateMeasure();
-                                        vm.SelectionItemCount.Value = items.Count;
+                                        vm.SelectionItemCount.Value = selectionItems.Count;
                                     }),
 
                                 new Label()

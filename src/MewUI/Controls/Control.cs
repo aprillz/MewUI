@@ -14,11 +14,16 @@ public abstract class Control : FrameworkElement
     private string? _fontFamily;
     private double? _fontSize;
     private FontWeight? _fontWeight;
-    private ToolTip? _toolTipPopup;
     private Point _lastMousePositionInWindow;
 
+    /// <summary>
+    /// Gets or sets the tooltip text for this control.
+    /// </summary>
     public string? ToolTipText { get; set; }
 
+    /// <summary>
+    /// Gets or sets the context menu for this control.
+    /// </summary>
     public ContextMenu? ContextMenu { get; set; }
 
     /// <summary>
@@ -467,12 +472,7 @@ public abstract class Control : FrameworkElement
         _font?.Dispose();
         _font = null;
 
-        if (_toolTipPopup != null)
-        {
-            HideToolTip();
-            _toolTipPopup.Dispose();
-            _toolTipPopup = null;
-        }
+        HideToolTip();
     }
 
     private void ShowToolTip()
@@ -493,11 +493,14 @@ public abstract class Control : FrameworkElement
             return;
         }
 
-        _toolTipPopup ??= new ToolTip();
-        _toolTipPopup.Text = ToolTipText!;
+        var toolTipText = ToolTipText!;
 
         var client = window.ClientSizeDip;
-        var anchor = _lastMousePositionInWindow;
+        var anchor = window.LastMousePositionDip;
+        if (anchor.X == 0 && anchor.Y == 0)
+        {
+            anchor = _lastMousePositionInWindow;
+        }
         if (anchor.X == 0 && anchor.Y == 0 && Bounds.Width > 0 && Bounds.Height > 0)
         {
             anchor = new Point(Bounds.X + Bounds.Width / 2, Bounds.Bottom);
@@ -508,8 +511,10 @@ public abstract class Control : FrameworkElement
         double x = anchor.X + dx;
         double y = anchor.Y + dy;
 
-        _toolTipPopup.Measure(new Size(Math.Max(0, client.Width), Math.Max(0, client.Height)));
-        var desired = _toolTipPopup.DesiredSize;
+        // Measure using the window-owned tooltip instance so sizing matches what will be shown.
+        // This avoids creating a tooltip per control.
+        var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
+        var desired = window.MeasureToolTip(toolTipText, measureSize);
         double w = Math.Max(0, desired.Width);
         double h = Math.Max(0, desired.Height);
 
@@ -527,23 +532,18 @@ public abstract class Control : FrameworkElement
             }
         }
 
-        window.ShowPopup(this, _toolTipPopup, new Rect(x, y, w, h));
+        window.ShowToolTip(this, toolTipText, new Rect(x, y, w, h));
     }
 
     private void HideToolTip()
     {
-        if (_toolTipPopup == null)
-        {
-            return;
-        }
-
         var root = FindVisualRoot();
         if (root is not Window window)
         {
             return;
         }
 
-        window.ClosePopup(_toolTipPopup);
+        window.CloseToolTip(this);
     }
 
     protected readonly struct TextMeasurementScope : IDisposable

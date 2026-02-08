@@ -8,6 +8,9 @@ namespace Aprillz.MewUI.Controls;
 public class HeaderedContentControl : ContentControl
     , IVisualTreeHost
 {
+    /// <summary>
+    /// Gets or sets the header element.
+    /// </summary>
     public Element? Header
     {
         get;
@@ -34,10 +37,19 @@ public class HeaderedContentControl : ContentControl
         }
     }
 
+    /// <summary>
+    /// Gets or sets the spacing between header and content.
+    /// </summary>
     public double HeaderSpacing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     protected override Size MeasureContent(Size availableSize)

@@ -1,48 +1,112 @@
+using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// An image display control with scaling and alignment options.
+/// </summary>
 public sealed class Image : FrameworkElement
 {
     private readonly Dictionary<GraphicsBackend, IImage> _cache = new();
     private INotifyImageChanged? _notifySource;
 
+    /// <summary>
+    /// Gets or sets the image scaling quality.
+    /// </summary>
     public ImageScaleQuality ImageScaleQuality
     {
         get;
-        set { field = value; InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateVisual();
+            }
+        }
     } = ImageScaleQuality.Default;
 
+    /// <summary>
+    /// Gets or sets how the image is stretched to fill available space.
+    /// </summary>
     public ImageStretch StretchMode
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = ImageStretch.Uniform;
 
+    /// <summary>
+    /// Gets or sets the viewbox region of the source image.
+    /// </summary>
     public Rect? ViewBox
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     }
 
+    /// <summary>
+    /// Gets or sets the units for the viewbox coordinates.
+    /// </summary>
     public ImageViewBoxUnits ViewBoxUnits
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = ImageViewBoxUnits.Pixels;
 
+    /// <summary>
+    /// Gets or sets the horizontal alignment of the image.
+    /// </summary>
     public ImageAlignmentX AlignmentX
     {
         get;
-        set { field = value; InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateVisual();
+            }
+        }
     } = ImageAlignmentX.Center;
 
+    /// <summary>
+    /// Gets or sets the vertical alignment of the image.
+    /// </summary>
     public ImageAlignmentY AlignmentY
     {
         get;
-        set { field = value; InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateVisual();
+            }
+        }
     } = ImageAlignmentY.Center;
 
+    /// <summary>
+    /// Gets or sets the image source.
+    /// </summary>
     public IImageSource? Source
     {
         get;
@@ -73,6 +137,14 @@ public sealed class Image : FrameworkElement
         }
     }
 
+    /// <summary>
+    /// Tries to read the source pixel color at the given position (window-relative DIPs).
+    /// </summary>
+    /// <remarks>
+    /// This reads pixels from the decoded <see cref="ImageSource"/> data (BGRA32) and maps the position through
+    /// <see cref="ViewBox"/>, <see cref="StretchMode"/>, and alignment. Returns <see langword="false"/> if the source
+    /// is not an <see cref="ImageSource"/>, decoding fails, or the position maps outside the source.
+    /// </remarks>
     public bool TryPeekColor(Point positionDip, out Color color)
     {
         color = default;
@@ -135,6 +207,7 @@ public sealed class Image : FrameworkElement
         color = new Color(a, r, g, b);
         return true;
     }
+
     protected override Size MeasureContent(Size availableSize)
     {
         var img = GetImage();

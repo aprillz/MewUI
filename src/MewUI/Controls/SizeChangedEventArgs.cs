@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Controls;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Provides data for a <see cref="FrameworkElement.SizeChanged"/> event.

@@ -11,7 +11,13 @@ public class WrapPanel : Panel
     public Orientation Orientation
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = Orientation.Horizontal;
 
     /// <summary>
@@ -20,7 +26,13 @@ public class WrapPanel : Panel
     public double Spacing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     /// <summary>
@@ -29,7 +41,13 @@ public class WrapPanel : Panel
     public double ItemWidth
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.NaN;
 
     /// <summary>
@@ -38,7 +56,13 @@ public class WrapPanel : Panel
     public double ItemHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.NaN;
 
     protected override Size MeasureContent(Size availableSize)

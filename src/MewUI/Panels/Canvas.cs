@@ -20,20 +20,60 @@ public class Canvas : Panel
 
     #region Attached Properties
 
+    /// <summary>
+    /// Sets the left position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="value">Left position.</param>
     public static void SetLeft(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Left, value);
+    /// <summary>
+    /// Gets the left position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The left position.</returns>
     public static double GetLeft(Element element) => TryGet(element, out var props) ? props.Left : double.NaN;
 
+    /// <summary>
+    /// Sets the top position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="value">Top position.</param>
     public static void SetTop(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Top, value);
+    /// <summary>
+    /// Gets the top position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The top position.</returns>
     public static double GetTop(Element element) => TryGet(element, out var props) ? props.Top : double.NaN;
 
+    /// <summary>
+    /// Sets the right position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="value">Right position.</param>
     public static void SetRight(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Right, value);
+    /// <summary>
+    /// Gets the right position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The right position.</returns>
     public static double GetRight(Element element) => TryGet(element, out var props) ? props.Right : double.NaN;
 
+    /// <summary>
+    /// Sets the bottom position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="value">Bottom position.</param>
     public static void SetBottom(Element element, double value) =>
         SetAttachedValue(element, ref GetOrCreate(element).Bottom, value);
+    /// <summary>
+    /// Gets the bottom position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The bottom position.</returns>
     public static double GetBottom(Element element) => TryGet(element, out var props) ? props.Bottom : double.NaN;
 
     private static CanvasAttachedProperties GetOrCreate(Element element) =>

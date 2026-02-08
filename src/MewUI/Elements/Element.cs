@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI;
 
@@ -11,6 +12,31 @@ public abstract class Element
     private uint _cachedDpi;
     private Size _lastMeasureConstraint;
     private bool _hasMeasureConstraint;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected static bool Set<T>(ref T field, T value)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return false;
+        }
+
+        field = value;
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected static bool SetDouble(ref double field, double value)
+    {
+        // Needed for NaN == NaN semantics (double.Equals treats NaN as equal).
+        if (field.Equals(value))
+        {
+            return false;
+        }
+
+        field = value;
+        return true;
+    }
 
     /// <summary>
     /// Gets the desired size calculated during the Measure pass.
@@ -197,6 +223,11 @@ public abstract class Element
 
     internal void ClearDpiCacheDeep() => VisualTree.Visit(this, e => e.ClearDpiCache());
 
+    /// <summary>
+    /// Determines whether this element is an ancestor of the specified element.
+    /// </summary>
+    /// <param name="descendant">The potential descendant element.</param>
+    /// <returns>True if this element is an ancestor; otherwise, false.</returns>
     public bool IsAncestorOf(Element descendant)
     {
         ArgumentNullException.ThrowIfNull(descendant);
@@ -204,6 +235,11 @@ public abstract class Element
         return descendant.IsDescendantOf(this);
     }
 
+    /// <summary>
+    /// Determines whether this element is a descendant of the specified element.
+    /// </summary>
+    /// <param name="ancestor">The potential ancestor element.</param>
+    /// <returns>True if this element is a descendant; otherwise, false.</returns>
     public bool IsDescendantOf(Element ancestor)
     {
         ArgumentNullException.ThrowIfNull(ancestor);

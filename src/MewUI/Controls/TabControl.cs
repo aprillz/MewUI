@@ -3,6 +3,9 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A tabbed control with header buttons and content display.
+/// </summary>
 public sealed class TabControl : Control
     , IVisualTreeHost
 {
@@ -23,8 +26,14 @@ public sealed class TabControl : Control
         return target ?? this;
     }
 
+    /// <summary>
+    /// Gets the collection of tab items.
+    /// </summary>
     public IReadOnlyList<TabItem> Tabs => _tabs;
 
+    /// <summary>
+    /// Gets or sets the selected tab index.
+    /// </summary>
     public int SelectedIndex
     {
         get;
@@ -38,14 +47,28 @@ public sealed class TabControl : Control
 
             field = clamped;
             UpdateSelection();
-            SelectionChanged?.Invoke(field);
+            SelectionChanged?.Invoke(SelectedItem);
         }
     } = -1;
 
+    /// <summary>
+    /// Gets the currently selected tab item.
+    /// </summary>
     public TabItem? SelectedTab => SelectedIndex >= 0 && SelectedIndex < _tabs.Count ? _tabs[SelectedIndex] : null;
 
-    public event Action<int>? SelectionChanged;
+    /// <summary>
+    /// Gets the currently selected item object for selection consistency.
+    /// </summary>
+    public object? SelectedItem => SelectedTab;
 
+    /// <summary>
+    /// Occurs when the selected tab changes.
+    /// </summary>
+    public event Action<object?>? SelectionChanged;
+
+    /// <summary>
+    /// Gets or sets the vertical scroll mode for tab content.
+    /// </summary>
     public ScrollMode VerticalScroll
     {
         get => _contentHost.VerticalScroll;
@@ -62,6 +85,9 @@ public sealed class TabControl : Control
         }
     }
 
+    /// <summary>
+    /// Gets or sets the horizontal scroll mode for tab content.
+    /// </summary>
     public ScrollMode HorizontalScroll
     {
         get => _contentHost.HorizontalScroll;
@@ -78,6 +104,9 @@ public sealed class TabControl : Control
         }
     }
 
+    /// <summary>
+    /// Gets or sets the padding around tab content.
+    /// </summary>
     public new Thickness Padding
     {
         get => _contentHost.Padding;
@@ -94,8 +123,14 @@ public sealed class TabControl : Control
         }
     }
 
+    /// <summary>
+    /// Gets the default background color.
+    /// </summary>
     protected override Color DefaultBackground => Theme.Palette.ContainerBackground;
 
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     public override bool Focusable => true;

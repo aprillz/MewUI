@@ -9,14 +9,30 @@ public sealed class GroupBox : HeaderedContentControl
 {
     protected override Color DefaultBackground => Theme.Palette.ContainerBackground;
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+    /// <summary>
+    /// Gets whether to invalidate visual on mouse over changes.
+    /// </summary>
     protected override bool InvalidateOnMouseOverChanged => false;
 
+    /// <summary>
+    /// Gets or sets the horizontal inset for the header.
+    /// </summary>
     public double HeaderInset
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = 0;
 
+    /// <summary>
+    /// Initializes a new instance of the GroupBox class.
+    /// </summary>
     public GroupBox()
     {
         BorderThickness = 1;
@@ -24,8 +40,16 @@ public sealed class GroupBox : HeaderedContentControl
         HeaderSpacing = 4;
     }
 
+    /// <summary>
+    /// Gets whether the groupbox can receive keyboard focus.
+    /// </summary>
     public override bool Focusable => false;
 
+    /// <summary>
+    /// Measures the content size.
+    /// </summary>
+    /// <param name="availableSize">The available size.</param>
+    /// <returns>The desired size.</returns>
     protected override Size MeasureContent(Size availableSize)
     {
         var borderInset = GetBorderVisualInset();

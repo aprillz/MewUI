@@ -3,9 +3,11 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Controls;
 
-public abstract class TextBase : Control
+/// <summary>
+/// Base class for text input controls.
+/// </summary>
+public abstract partial class TextBase : Control
 {
-    private ValueBinding<string>? _textBinding;
     private bool _suppressBindingSet;
     private string? _cachedText;
     private int _cachedTextVersion = -1;
@@ -17,10 +19,19 @@ public abstract class TextBase : Control
 
     private ContextMenu? _defaultContextMenu;
 
+    /// <summary>
+    /// Gets the text document.
+    /// </summary>
     private protected TextDocument Document { get; } = new();
 
+    /// <summary>
+    /// Gets the document version number for change tracking.
+    /// </summary>
     protected int DocumentVersion { get; private set; }
 
+    /// <summary>
+    /// Initializes a new instance of the TextBase class.
+    /// </summary>
     protected TextBase()
     {
         _editor = new TextEditorCore(
@@ -32,11 +43,17 @@ public abstract class TextBase : Control
             OnEditCommitted);
     }
 
+    /// <summary>
+    /// Copies the selected text to the clipboard.
+    /// </summary>
     public void Copy()
     {
         CopyToClipboardCore();
     }
 
+    /// <summary>
+    /// Cuts the selected text to the clipboard.
+    /// </summary>
     public void Cut()
     {
         if (IsReadOnly)
@@ -49,6 +66,9 @@ public abstract class TextBase : Control
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Pastes text from the clipboard.
+    /// </summary>
     public void Paste()
     {
         if (IsReadOnly)
@@ -61,12 +81,18 @@ public abstract class TextBase : Control
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Selects all text in the control.
+    /// </summary>
     public void SelectAll()
     {
         SelectAllCore();
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Gets or sets the text content.
+    /// </summary>
     public string Text
     {
         get => GetTextCore();
@@ -89,16 +115,35 @@ public abstract class TextBase : Control
         }
     }
 
+    /// <summary>
+    /// Gets or sets the placeholder text shown when the control is empty.
+    /// </summary>
     public string Placeholder
     {
         get;
-        set { field = value ?? string.Empty; InvalidateVisual(); }
+        set
+        {
+            var v = value ?? string.Empty;
+            if (Set(ref field, v))
+            {
+                InvalidateVisual();
+            }
+        }
     } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets whether the text is read-only.
+    /// </summary>
     public bool IsReadOnly
     {
         get;
-        set { field = value; InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateVisual();
+            }
+        }
     }
 
     public bool AcceptTab { get; set; }
@@ -678,45 +723,13 @@ public abstract class TextBase : Control
         ArgumentNullException.ThrowIfNull(get);
         ArgumentNullException.ThrowIfNull(set);
 
-        _textBinding?.Dispose();
-        _textBinding = new ValueBinding<string>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            () =>
-            {
-                if (IsFocused)
-                {
-                    return;
-                }
-
-                var value = NormalizeText(get() ?? string.Empty);
-                if (GetTextCore() == value)
-                {
-                    return;
-                }
-
-                _suppressBindingSet = true;
-                try { Text = value; }
-                finally { _suppressBindingSet = false; }
-            });
-
-        // Ensure the binding forwarder is registered once (no duplicates), without tracking extra state.
-        TextChanged -= ForwardTextChangedToBinding;
-        TextChanged += ForwardTextChangedToBinding;
-
-        _suppressBindingSet = true;
-        try { Text = NormalizeText(get() ?? string.Empty); }
-        finally { _suppressBindingSet = false; }
+        SetTextBindingCore(get, set, subscribe, unsubscribe);
     }
 
     protected override void OnDispose()
     {
         Document.Dispose();
         TextChanged -= ForwardTextChangedToBinding;
-        _textBinding?.Dispose();
-        _textBinding = null;
     }
 
     protected void NotifyTextChanged()
@@ -736,7 +749,10 @@ public abstract class TextBase : Control
             return;
         }
 
-        _textBinding?.Set(text);
+        if (TryGetBinding(TextBindingSlot, out ValueBinding<string> textBinding))
+        {
+            textBinding.Set(text);
+        }
     }
 
     public void Undo()

@@ -184,7 +184,8 @@ public sealed class MultiLineTextBox : TextBase
         var borderInset = GetBorderVisualInset();
 
         using var measure = BeginTextMeasurement();
-        var metrics = measure.Context.MeasureText("Mg", measure.Font);
+        // Include descenders so line height is sufficient for characters like q/y/g.
+        var metrics = measure.Context.MeasureText("Mgqy", measure.Font);
         _lineHeight = Math.Max(Math.Max(16, FontSize * 1.4), metrics.Height);
 
         // Keep previous default width as the baseline; optionally expand a bit for small content.
@@ -421,7 +422,7 @@ public sealed class MultiLineTextBox : TextBase
                     if (caret >= startCol && caret <= endCol)
                     {
                         double caretX = contentBounds.X - HorizontalOffset + MultiLineTextView.GetPrefixWidthCached(cache, caret, context, font);
-                        context.FillRectangle(new Rect(caretX, y, 1, lineHeight), theme.Palette.WindowText);
+                        DrawCaret(context, caretX, y, lineHeight, theme);
                     }
                 }
 
@@ -903,10 +904,36 @@ public sealed class MultiLineTextBox : TextBase
                    (rel <= 0
                        ? 0
                        : MultiLineTextView.GetSpanWidthCached(lineMeasure, segStart, segStart + rel, context, font));
-        context.FillRectangle(new Rect(x, y, 1, GetLineHeight()), theme.Palette.WindowText);
+        DrawCaret(context, x, y, GetLineHeight(), theme);
     }
 
     // Note: text measurement caches live in MultiLineTextView.
+
+    private static void DrawCaret(IGraphicsContext context, double x, double y, double lineHeight, Theme theme)
+    {
+        if (lineHeight <= 0)
+        {
+            return;
+        }
+
+        // Keep caret slightly inset to match single-line TextBox behavior and avoid a "top aligned" look.
+        if (lineHeight <= 4)
+        {
+            context.FillRectangle(new Rect(x, y, 1, Math.Max(1, lineHeight)), theme.Palette.WindowText);
+            return;
+        }
+
+        const double pad = 2;
+        double top = y + pad;
+        double bottom = y + lineHeight - pad;
+        if (bottom <= top)
+        {
+            top = y;
+            bottom = y + lineHeight;
+        }
+
+        context.DrawLine(new Point(x, top), new Point(x, bottom), theme.Palette.WindowText, 1);
+    }
 
     private string GetLineText(int lineIndex, int start, int end)
     {

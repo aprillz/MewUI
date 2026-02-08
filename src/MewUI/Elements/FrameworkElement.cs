@@ -14,6 +14,9 @@ public abstract class FrameworkElement : UIElement, IDisposable
     private bool _disposed;
     private double _minHeight = double.NaN;
 
+    /// <summary>
+    /// Occurs when the element's size changes.
+    /// </summary>
     public event Action<SizeChangedEventArgs>? SizeChanged;
     protected virtual double DefaultMinHeight => 0;
 
@@ -23,7 +26,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double Width
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.NaN;
 
     /// <summary>
@@ -32,7 +41,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double Height
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.NaN;
 
     /// <summary>
@@ -41,7 +56,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double MinWidth
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     /// <summary>
@@ -68,7 +89,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double MaxWidth
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.PositiveInfinity;
 
     /// <summary>
@@ -77,7 +104,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double MaxHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.PositiveInfinity;
 
     /// <summary>
@@ -86,7 +119,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public Thickness Margin
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     /// <summary>
@@ -95,7 +134,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public Thickness Padding
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     /// <summary>
@@ -104,7 +149,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public HorizontalAlignment HorizontalAlignment
     {
         get;
-        set { field = value; InvalidateArrange(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateArrange();
+            }
+        }
     } = HorizontalAlignment.Stretch;
 
     /// <summary>
@@ -113,7 +164,13 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public VerticalAlignment VerticalAlignment
     {
         get;
-        set { field = value; InvalidateArrange(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateArrange();
+            }
+        }
     } = VerticalAlignment.Stretch;
 
     /// <summary>
@@ -178,6 +235,14 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
         OnThemeChanged(oldTheme, newTheme);
         InvokeThemeCallbacks(newTheme);
+
+        // Theme changes should cause a repaint even if no other input/layout happens.
+        // This is especially important on platforms where theme notifications are not tied to OS paint messages.
+        if (!ReferenceEquals(oldTheme, newTheme))
+        {
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
     }
 
     internal void RegisterThemeCallback(Action<Theme, FrameworkElement> callback, bool invokeImmediately = true)
@@ -193,15 +258,28 @@ public abstract class FrameworkElement : UIElement, IDisposable
         }
     }
 
+    /// <summary>
+    /// Called when the element is being disposed. Override to release resources.
+    /// </summary>
     protected virtual void OnDispose()
     { }
 
+    /// <summary>
+    /// Snaps the border bounds to device pixels for crisp rendering.
+    /// </summary>
+    /// <param name="bounds">The bounds to snap.</param>
+    /// <returns>Pixel-snapped bounds.</returns>
     protected Rect GetSnappedBorderBounds(Rect bounds)
     {
         var dpiScale = GetDpi() / 96.0;
         return LayoutRounding.SnapBoundsRectToPixels(bounds, dpiScale);
     }
 
+    /// <summary>
+    /// Called when the DPI changes.
+    /// </summary>
+    /// <param name="oldDpi">The old DPI value.</param>
+    /// <param name="newDpi">The new DPI value.</param>
     protected virtual void OnDpiChanged(uint oldDpi, uint newDpi)
     {
     }
@@ -209,6 +287,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// <summary>
     /// Gets the graphics factory from the owning window, or the default factory.
     /// </summary>
+    /// <returns>The graphics factory.</returns>
     protected IGraphicsFactory GetGraphicsFactory()
     {
         var root = FindVisualRoot();
@@ -220,11 +299,24 @@ public abstract class FrameworkElement : UIElement, IDisposable
         return Application.DefaultGraphicsFactory;
     }
 
+    /// <summary>
+    /// Gets the current DPI value.
+    /// </summary>
+    /// <returns>The DPI value.</returns>
     protected uint GetDpi() => GetDpiCached();
 
+    /// <summary>
+    /// Called when the theme changes.
+    /// </summary>
+    /// <param name="oldTheme">The old theme.</param>
+    /// <param name="newTheme">The new theme.</param>
     protected virtual void OnThemeChanged(Theme oldTheme, Theme newTheme)
     { }
 
+    /// <summary>
+    /// Called when the element's size changes.
+    /// </summary>
+    /// <param name="e">Size change event arguments.</param>
     protected virtual void OnSizeChanged(SizeChangedEventArgs e)
     { }
 

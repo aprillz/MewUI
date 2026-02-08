@@ -2,6 +2,9 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A horizontal menu bar control for application menus.
+/// </summary>
 public sealed class MenuBar : Control, IPopupOwner
 {
     private const double ItemHorizontalPadding = 10;
@@ -13,20 +16,40 @@ public sealed class MenuBar : Control, IPopupOwner
     private int _openIndex = -1;
     private ContextMenu? _openPopup;
 
+    /// <summary>
+    /// Gets the menu items collection.
+    /// </summary>
     public IList<MenuItem> Items => _items;
 
+    /// <summary>
+    /// Gets or sets the spacing between menu items.
+    /// </summary>
     public double Spacing
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = 2;
 
+    /// <summary>
+    /// Initializes a new instance of the MenuBar class.
+    /// </summary>
     public MenuBar()
     {
         Padding = new Thickness(4, 2, 4, 2);
         BorderThickness = 0;
     }
 
+    /// <summary>
+    /// Adds a menu item to the menu bar.
+    /// </summary>
+    /// <param name="item">The menu item to add.</param>
     public void Add(MenuItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -35,6 +58,10 @@ public sealed class MenuBar : Control, IPopupOwner
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Sets the menu items collection.
+    /// </summary>
+    /// <param name="items">The menu items to set.</param>
     public void SetItems(params MenuItem[] items)
     {
         ArgumentNullException.ThrowIfNull(items);

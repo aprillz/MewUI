@@ -2,17 +2,31 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class Slider : RangeBase
+/// <summary>
+/// A slider control for selecting a numeric value within a range.
+/// </summary>
+public sealed partial class Slider : RangeBase
 {
     private bool _isDragging;
-    private ValueBinding<double>? _valueBinding;
 
+    /// <summary>
+    /// Gets or sets the increment for small changes.
+    /// </summary>
     public double SmallChange { get; set; } = 1;
 
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    /// <summary>
+    /// Gets whether the slider can receive keyboard focus.
+    /// </summary>
     public override bool Focusable => true;
 
+    /// <summary>
+    /// Initializes a new instance of the Slider class.
+    /// </summary>
     public Slider()
     {
         Maximum = 100;
@@ -21,29 +35,20 @@ public sealed class Slider : RangeBase
         Height = 24;
     }
 
+    /// <summary>
+    /// Sets a two-way binding for the Value property.
+    /// </summary>
+    /// <param name="get">Function to get the current value.</param>
+    /// <param name="set">Action to set the value.</param>
+    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
+    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
     public void SetValueBinding(
         Func<double> get,
         Action<double> set,
         Action<Action>? subscribe = null,
         Action<Action>? unsubscribe = null)
     {
-        _valueBinding?.Dispose();
-        _valueBinding = new ValueBinding<double>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            () =>
-            {
-                if (_isDragging)
-                {
-                    return;
-                }
-
-                SetValueFromSource(get());
-            });
-
-        SetValueFromSource(get());
+        SetValueBindingCore(get, set, subscribe, unsubscribe);
     }
 
     protected override Size MeasureContent(Size availableSize) => new Size(160, Height);
@@ -52,9 +57,9 @@ public sealed class Slider : RangeBase
     {
         
 
-        if (_valueBinding != null && !_isDragging)
+        if (!_isDragging && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
         {
-            SetValueFromSource(_valueBinding.Get());
+            SetValueFromSource(valueBinding.Get());
         }
 
         var bounds = Bounds;
@@ -251,15 +256,14 @@ public sealed class Slider : RangeBase
 
         Value = clamped;
 
-        if (fromInput && _valueBinding != null)
+        if (fromInput && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
         {
-            _valueBinding.Set(clamped);
+            valueBinding.Set(clamped);
         }
     }
 
     protected override void OnDispose()
     {
-        _valueBinding?.Dispose();
-        _valueBinding = null;
+        base.OnDispose();
     }
 }

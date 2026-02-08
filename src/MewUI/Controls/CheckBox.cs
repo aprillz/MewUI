@@ -2,12 +2,14 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public class CheckBox : Control
+/// <summary>
+/// A checkbox control with optional text label.
+/// </summary>
+public partial class CheckBox : Control
 {
     private bool _isPressed;
     private TextMeasureCache _textMeasureCache;
     private bool? _isChecked = false;
-    private ValueBinding<bool?>? _checkedBinding;
     private bool _updatingFromSource;
 
     public CheckBox()
@@ -21,6 +23,9 @@ public class CheckBox : Control
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    /// <summary>
+    /// Gets or sets the checkbox label text.
+    /// </summary>
     public string Text
     {
         get;
@@ -32,12 +37,18 @@ public class CheckBox : Control
         }
     } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets whether the checkbox supports indeterminate state.
+    /// </summary>
     public bool IsThreeState
     {
         get;
         set;
     }
 
+    /// <summary>
+    /// Gets or sets the checked state.
+    /// </summary>
     public bool? IsChecked
     {
         get => _isChecked;
@@ -51,34 +62,26 @@ public class CheckBox : Control
             SetIsCheckedCore(value, fromInput: false);
         }
     }
- 
+
+    /// <summary>
+    /// Occurs when the checked state changes.
+    /// </summary>
     public event Action<bool?>? CheckedChanged;
 
+    /// <summary>
+    /// Sets a two-way binding for the IsChecked property.
+    /// </summary>
+    /// <param name="get">Function to get the current value.</param>
+    /// <param name="set">Action to set the value.</param>
+    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
+    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
     public void SetIsCheckedBinding(
         Func<bool?> get,
         Action<bool?> set,
         Action<Action>? subscribe = null,
         Action<Action>? unsubscribe = null)
     {
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(set);
-
-        _checkedBinding?.Dispose();
-        _checkedBinding = new ValueBinding<bool?>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            () =>
-            {
-                _updatingFromSource = true;
-                try { SetIsCheckedFromSource(get()); }
-                finally { _updatingFromSource = false; }
-            });
-
-        _updatingFromSource = true;
-        try { SetIsCheckedFromSource(get()); }
-        finally { _updatingFromSource = false; }
+        SetIsCheckedBindingCore(get, set, subscribe, unsubscribe);
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -242,7 +245,10 @@ public class CheckBox : Control
 
         if (fromInput && !_updatingFromSource)
         {
-            _checkedBinding?.Set(value);
+            if (TryGetBinding(CheckedBindingSlot, out ValueBinding<bool?> checkedBinding))
+            {
+                checkedBinding.Set(value);
+            }
         }
 
         InvalidateVisual();
@@ -250,8 +256,6 @@ public class CheckBox : Control
 
     protected override void OnDispose()
     {
-        _checkedBinding?.Dispose();
-        _checkedBinding = null;
         base.OnDispose();
     }
 

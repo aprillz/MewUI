@@ -10,6 +10,10 @@
     "GDI": {
       "commandName": "Project",
       "commandLineArgs": "--gdi"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
     }
   }
 }

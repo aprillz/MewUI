@@ -2,6 +2,9 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A context menu popup control for displaying menu items.
+/// </summary>
 public sealed class ContextMenu : Control, IPopupOwner
 {
     private const double SubMenuGlyphAreaWidth = 14;
@@ -19,35 +22,80 @@ public sealed class ContextMenu : Control, IPopupOwner
     private double _maxShortcutWidth;
     private bool _hasAnyShortcut;
 
+    /// <summary>
+    /// Gets the menu model.
+    /// </summary>
     public Menu Menu { get; }
 
+    /// <summary>
+    /// Gets the menu items collection.
+    /// </summary>
     public IList<MenuEntry> Items => Menu.Items;
 
+    /// <summary>
+    /// Gets or sets the height of menu items.
+    /// </summary>
     public double ItemHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = double.NaN;
 
+    /// <summary>
+    /// Gets or sets the padding around menu items.
+    /// </summary>
     public Thickness ItemPadding
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     }
 
+    /// <summary>
+    /// Gets or sets the maximum height of the menu.
+    /// </summary>
     public double MaxMenuHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = 320;
 
+    /// <summary>
+    /// Gets whether the context menu can receive keyboard focus.
+    /// </summary>
     public override bool Focusable => true;
 
+    /// <summary>
+    /// Initializes a new instance of the ContextMenu class.
+    /// </summary>
     public ContextMenu()
         : this(new Menu())
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the ContextMenu class with a menu model.
+    /// </summary>
+    /// <param name="menu">The menu model.</param>
     public ContextMenu(Menu menu)
     {
         ArgumentNullException.ThrowIfNull(menu);

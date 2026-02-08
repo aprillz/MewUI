@@ -11,7 +11,14 @@ public sealed class ScrollBar : RangeBase
     public Orientation Orientation
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = Orientation.Vertical;
 
     public double ViewportSize

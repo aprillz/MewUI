@@ -2,14 +2,25 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class ProgressBar : RangeBase
+/// <summary>
+/// A progress bar control for displaying completion percentage.
+/// </summary>
+public sealed partial class ProgressBar : RangeBase
 {
-    private ValueBinding<double>? _valueBinding;
 
+    /// <summary>
+    /// Gets the default background color.
+    /// </summary>
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    /// <summary>
+    /// Initializes a new instance of the ProgressBar class.
+    /// </summary>
     public ProgressBar()
     {
         Maximum = 100;
@@ -18,20 +29,18 @@ public sealed class ProgressBar : RangeBase
         Height = 10;
     }
 
+    /// <summary>
+    /// Sets a one-way binding for the Value property.
+    /// </summary>
+    /// <param name="get">Function to get the current value.</param>
+    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
+    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
     public void SetValueBinding(
         Func<double> get,
         Action<Action>? subscribe = null,
         Action<Action>? unsubscribe = null)
     {
-        _valueBinding?.Dispose();
-        _valueBinding = new ValueBinding<double>(
-            get,
-            null,
-            subscribe,
-            unsubscribe,
-            () => Value = get());
-
-        Value = get();
+        SetValueBindingCore(get, subscribe, unsubscribe);
     }
 
     protected override Size MeasureContent(Size availableSize) => new Size(120, Height);
@@ -40,10 +49,10 @@ public sealed class ProgressBar : RangeBase
     {
         double radius = Theme.Metrics.ControlCornerRadius;
 
-        if (_valueBinding != null)
+        if (TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
         {
             // Pull latest value at paint time (one-way).
-            SetValueFromSource(_valueBinding.Get());
+            SetValueFromSource(valueBinding.Get());
         }
 
         var bounds = GetSnappedBorderBounds(Bounds);
@@ -73,7 +82,6 @@ public sealed class ProgressBar : RangeBase
 
     protected override void OnDispose()
     {
-        _valueBinding?.Dispose();
-        _valueBinding = null;
+        base.OnDispose();
     }
 }

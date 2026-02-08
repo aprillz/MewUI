@@ -21,7 +21,13 @@ public enum GridUnitType
 /// </summary>
 public readonly struct GridLength
 {
+    /// <summary>
+    /// Numeric value.
+    /// </summary>
     public double Value { get; }
+    /// <summary>
+    /// Unit type.
+    /// </summary>
     public GridUnitType GridUnitType { get; }
 
     public GridLength(double value, GridUnitType type = GridUnitType.Pixel)
@@ -30,13 +36,38 @@ public readonly struct GridLength
         GridUnitType = type;
     }
 
+    /// <summary>
+    /// Gets whether this is Auto sizing.
+    /// </summary>
     public bool IsAuto => GridUnitType == GridUnitType.Auto;
+    /// <summary>
+    /// Gets whether this is Star sizing.
+    /// </summary>
     public bool IsStar => GridUnitType == GridUnitType.Star;
+    /// <summary>
+    /// Gets whether this is absolute pixel sizing.
+    /// </summary>
     public bool IsAbsolute => GridUnitType == GridUnitType.Pixel;
 
+    /// <summary>
+    /// Auto sizing (size to content).
+    /// </summary>
     public static GridLength Auto => new(1, GridUnitType.Auto);
+    /// <summary>
+    /// Star sizing (1*).
+    /// </summary>
     public static GridLength Star => new(1, GridUnitType.Star);
+    /// <summary>
+    /// Star sizing with specified value.
+    /// </summary>
+    /// <param name="value">Star value.</param>
+    /// <returns>GridLength with star sizing.</returns>
     public static GridLength Stars(double value) => new(value, GridUnitType.Star);
+    /// <summary>
+    /// Absolute pixel sizing.
+    /// </summary>
+    /// <param name="value">Pixel value.</param>
+    /// <returns>GridLength with pixel sizing.</returns>
     public static GridLength Pixels(double value) => new(value, GridUnitType.Pixel);
 
     public static implicit operator GridLength(double value) => new(value, GridUnitType.Pixel);
@@ -47,8 +78,17 @@ public readonly struct GridLength
 /// </summary>
 public class RowDefinition
 {
+    /// <summary>
+    /// Gets or sets the row height.
+    /// </summary>
     public GridLength Height { get; set; } = GridLength.Star;
+    /// <summary>
+    /// Gets or sets the minimum height.
+    /// </summary>
     public double MinHeight { get; set; }
+    /// <summary>
+    /// Gets or sets the maximum height.
+    /// </summary>
     public double MaxHeight { get; set; } = double.PositiveInfinity;
     internal double ActualHeight { get; set; }
     internal double Offset { get; set; }
@@ -59,8 +99,17 @@ public class RowDefinition
 /// </summary>
 public class ColumnDefinition
 {
+    /// <summary>
+    /// Gets or sets the column width.
+    /// </summary>
     public GridLength Width { get; set; } = GridLength.Star;
+    /// <summary>
+    /// Gets or sets the minimum width.
+    /// </summary>
     public double MinWidth { get; set; }
+    /// <summary>
+    /// Gets or sets the maximum width.
+    /// </summary>
     public double MaxWidth { get; set; } = double.PositiveInfinity;
     internal double ActualWidth { get; set; }
     internal double Offset { get; set; }
@@ -86,7 +135,13 @@ public class Grid : Panel
         public int ColumnSpan = 1;
     }
 
+    /// <summary>
+    /// Gets the row definitions collection.
+    /// </summary>
     public IList<RowDefinition> RowDefinitions => _rowDefinitions;
+    /// <summary>
+    /// Gets the column definitions collection.
+    /// </summary>
     public IList<ColumnDefinition> ColumnDefinitions => _columnDefinitions;
 
     /// <summary>
@@ -95,7 +150,13 @@ public class Grid : Panel
     public bool AutoIndexing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = true;
 
     /// <summary>
@@ -104,11 +165,22 @@ public class Grid : Panel
     public double Spacing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     #region Attached Properties
 
+    /// <summary>
+    /// Sets the row index for an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="row">Row index.</param>
     public static void SetRow(Element element, int row)
     {
         var props = GetOrCreate(element);
@@ -116,9 +188,19 @@ public class Grid : Panel
         props.HasRow = true;
     }
 
+    /// <summary>
+    /// Gets the row index of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The row index.</returns>
     public static int GetRow(Element element) => TryGet(element, out var props) ? props.Row : 0;
     internal static bool HasRow(Element element) => TryGet(element, out var props) && props.HasRow;
 
+    /// <summary>
+    /// Sets the column index for an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="column">Column index.</param>
     public static void SetColumn(Element element, int column)
     {
         var props = GetOrCreate(element);
@@ -126,13 +208,38 @@ public class Grid : Panel
         props.HasColumn = true;
     }
 
+    /// <summary>
+    /// Gets the column index of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The column index.</returns>
     public static int GetColumn(Element element) => TryGet(element, out var props) ? props.Column : 0;
     internal static bool HasColumn(Element element) => TryGet(element, out var props) && props.HasColumn;
 
+    /// <summary>
+    /// Sets the row span for an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="span">Number of rows to span.</param>
     public static void SetRowSpan(Element element, int span) => GetOrCreate(element).RowSpan = span;
+    /// <summary>
+    /// Gets the row span of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The row span.</returns>
     public static int GetRowSpan(Element element) => TryGet(element, out var props) ? props.RowSpan : 1;
 
+    /// <summary>
+    /// Sets the column span for an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="span">Number of columns to span.</param>
     public static void SetColumnSpan(Element element, int span) => GetOrCreate(element).ColumnSpan = span;
+    /// <summary>
+    /// Gets the column span of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The column span.</returns>
     public static int GetColumnSpan(Element element) => TryGet(element, out var props) ? props.ColumnSpan : 1;
 
     private static GridAttachedProperties GetOrCreate(Element element) => _attachedProperties.GetOrCreateValue(element);

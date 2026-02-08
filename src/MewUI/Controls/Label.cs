@@ -5,9 +5,8 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A control that displays text.
 /// </summary>
-public class Label : Control
+public partial class Label : Control
 {
-    private ValueBinding<string>? _textBinding;
     private TextMeasureCache _textMeasureCache;
     protected override bool InvalidateOnMouseOverChanged => false;
 
@@ -121,9 +120,9 @@ public class Label : Control
     {
         base.OnRender(context);
 
-        if (_textBinding != null)
+        if (TryGetBinding(TextBindingSlot, out ValueBinding<string> textBinding))
         {
-            SetTextFromBinding(_textBinding.Get());
+            SetTextFromBinding(textBinding.Get());
         }
 
         if (string.IsNullOrEmpty(Text))
@@ -146,15 +145,7 @@ public class Label : Control
 
     public void SetTextBinding(Func<string> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
     {
-        _textBinding?.Dispose();
-        _textBinding = new ValueBinding<string>(
-            get,
-            null,
-            subscribe,
-            unsubscribe,
-            () => SetTextFromBinding(get()));
-
-        SetTextFromBinding(get());
+        SetTextBindingCore(get, subscribe, unsubscribe);
     }
 
     private void SetTextFromBinding(string value)
@@ -170,8 +161,7 @@ public class Label : Control
 
     protected override void OnDispose()
     {
-        _textBinding?.Dispose();
-        _textBinding = null;
+        base.OnDispose();
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)

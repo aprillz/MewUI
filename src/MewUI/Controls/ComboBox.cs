@@ -2,65 +2,156 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class ComboBox : Control, IPopupOwner
+/// <summary>
+/// A drop-down selection control with text header and popup list.
+/// </summary>
+public sealed partial class ComboBox : Control, IPopupOwner
 {
-    private readonly List<string> _items = new();
     private readonly TextWidthCache _textWidthCache = new(512);
     private bool _isDropDownOpen;
     private ListBox? _popupList;
     private bool _restoreFocusAfterPopupClose;
-    private ValueBinding<int>? _selectedIndexBinding;
     private bool _updatingFromSource;
     private Rect? _lastPopupBounds;
+    private bool _suppressItemsSelectionChanged;
+    private IItemsView _itemsSource = ItemsView.Empty;
+    private IDataTemplate? _itemTemplate;
 
-    public IList<string> Items => _items;
-
-    public int SelectedIndex
+    /// <summary>
+    /// Gets or sets the items data source.
+    /// </summary>
+    public IItemsView ItemsSource
     {
-        get;
+        get => _itemsSource;
         set
         {
-            int clamped = value;
-            if (_items.Count == 0)
-            {
-                clamped = -1;
-            }
-            else
-            {
-                clamped = Math.Clamp(value, -1, _items.Count - 1);
-            }
-
-            if (field == clamped)
+            value ??= ItemsView.Empty;
+            if (ReferenceEquals(_itemsSource, value))
             {
                 return;
             }
 
-            field = clamped;
-            SelectionChanged?.Invoke(field);
+            int oldIndex = SelectedIndex;
+
+            _itemsSource.Changed -= OnItemsChanged;
+            _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+
+            _itemsSource = value;
+            _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+            _itemsSource.Changed += OnItemsChanged;
+
+            _suppressItemsSelectionChanged = true;
+            try
+            {
+                _itemsSource.SelectedIndex = oldIndex;
+            }
+            finally
+            {
+                _suppressItemsSelectionChanged = false;
+            }
+
+            if (_popupList != null)
+            {
+                SyncPopupList(_popupList);
+            }
+
+            int newIndex = _itemsSource.SelectedIndex;
+            if (newIndex != oldIndex)
+            {
+                OnItemsSelectionChanged(newIndex);
+            }
+
+            InvalidateMeasure();
             InvalidateVisual();
         }
-    } = -1;
+    }
 
-    public string? SelectedItem => SelectedIndex >= 0 && SelectedIndex < _items.Count ? _items[SelectedIndex] : null;
+    /// <summary>
+    /// Gets or sets the selected item index.
+    /// </summary>
+    public int SelectedIndex
+    {
+        get => ItemsSource.SelectedIndex;
+        set => ItemsSource.SelectedIndex = value;
+    }
 
+    /// <summary>
+    /// Gets the currently selected item object.
+    /// </summary>
+    public object? SelectedItem => ItemsSource.SelectedItem;
+
+    /// <summary>
+    /// Gets the currently selected item text.
+    /// </summary>
+    public string? SelectedText => SelectedIndex >= 0 && SelectedIndex < ItemsSource.Count ? ItemsSource.GetText(SelectedIndex) : null;
+
+    /// <summary>
+    /// Gets or sets the placeholder text shown when no item is selected.
+    /// </summary>
     public string Placeholder
     {
         get;
-        set { field = value ?? string.Empty; InvalidateVisual(); }
+        set
+        {
+            var v = value ?? string.Empty;
+            if (Set(ref field, v))
+            {
+                InvalidateVisual();
+            }
+        }
     } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the height of items in the dropdown list.
+    /// </summary>
     public double ItemHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = double.NaN;
 
+    /// <summary>
+    /// Gets or sets the maximum height of the dropdown list.
+    /// </summary>
     public double MaxDropDownHeight
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = 160;
 
+    public IDataTemplate? ItemTemplate
+    {
+        get => _itemTemplate;
+        set
+        {
+            if (ReferenceEquals(_itemTemplate, value))
+            {
+                return;
+            }
+
+            _itemTemplate = value;
+            if (_popupList != null)
+            {
+                SyncPopupList(_popupList);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets whether the dropdown list is open.
+    /// </summary>
     public bool IsDropDownOpen
     {
         get => _isDropDownOpen;
@@ -85,16 +176,34 @@ public sealed class ComboBox : Control, IPopupOwner
         }
     }
 
-    public event Action<int>? SelectionChanged;
+    /// <summary>
+    /// Occurs when the selected item changes.
+    /// </summary>
+    public event Action<object?>? SelectionChanged;
 
+    /// <summary>
+    /// Gets whether the combobox can receive keyboard focus.
+    /// </summary>
     public override bool Focusable => true;
 
+    /// <summary>
+    /// Gets the default background color.
+    /// </summary>
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    /// <summary>
+    /// Gets the default minimum height.
+    /// </summary>
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
+    /// <summary>
+    /// Initializes a new instance of the ComboBox class.
+    /// </summary>
     public ComboBox()
     {
         BorderThickness = 1;
@@ -102,6 +211,44 @@ public sealed class ComboBox : Control, IPopupOwner
         // Do not set explicit Height, otherwise FrameworkElement.MeasureOverride will clamp DesiredSize
         // and the drop-down cannot expand. Use MinHeight as the default header height.
         Height = double.NaN;
+
+        _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+        _itemsSource.Changed += OnItemsChanged;
+    }
+
+    private void OnItemsChanged(ItemsChange change)
+    {
+        if (_popupList != null)
+        {
+            SyncPopupList(_popupList);
+        }
+
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    private void OnItemsSelectionChanged(int index)
+    {
+        if (_suppressItemsSelectionChanged)
+        {
+            return;
+        }
+
+        if (!_updatingFromSource)
+        {
+            if (TryGetBinding(SelectedIndexBindingSlot, out ValueBinding<int> binding))
+            {
+                binding.Set(index);
+            }
+        }
+
+        SelectionChanged?.Invoke(SelectedItem);
+        InvalidateVisual();
+
+        if (_popupList != null)
+        {
+            _popupList.SelectedIndex = index;
+        }
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -109,7 +256,7 @@ public sealed class ComboBox : Control, IPopupOwner
         base.OnThemeChanged(oldTheme, newTheme);
 
         // The popup ListBox can exist while the dropdown is closed, so it won't be in the Window visual tree
-        // and would miss theme broadcasts. Keep it in sync here.
+        // and would miss InternalTheme broadcasts. Keep it in sync here.
         if (_popupList != null && _popupList.Parent == null)
         {
             _popupList.NotifyThemeChanged(oldTheme, newTheme);
@@ -125,10 +272,12 @@ public sealed class ComboBox : Control, IPopupOwner
         using (var measure = BeginTextMeasurement())
         {
             double maxWidth = 0;
-            _textWidthCache.SetCapacity(Math.Clamp(_items.Count + 8, 64, 4096));
+            int count = ItemsSource.Count;
+            _textWidthCache.SetCapacity(Math.Clamp(count + 8, 64, 4096));
 
-            foreach (var item in _items)
+            for (int i = 0; i < count; i++)
             {
+                var item = ItemsSource.GetText(i);
                 if (string.IsNullOrEmpty(item))
                 {
                     continue;
@@ -180,7 +329,7 @@ public sealed class ComboBox : Control, IPopupOwner
         var textRect = new Rect(innerHeaderRect.X, innerHeaderRect.Y, innerHeaderRect.Width - ArrowAreaWidth, innerHeaderRect.Height)
             .Deflate(Padding);
 
-        string text = SelectedItem ?? string.Empty;
+        string text = SelectedText ?? string.Empty;
         var textColor = IsEnabled ? Foreground : Theme.Palette.DisabledText;
         if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !IsFocused)
         {
@@ -278,9 +427,10 @@ public sealed class ComboBox : Control, IPopupOwner
                 IsDropDownOpen = true;
             }
 
-            if (_items.Count > 0)
+            int count = ItemsSource.Count;
+            if (count > 0)
             {
-                SelectedIndex = Math.Min(_items.Count - 1, SelectedIndex < 0 ? 0 : SelectedIndex + 1);
+                SelectedIndex = Math.Min(count - 1, SelectedIndex < 0 ? 0 : SelectedIndex + 1);
             }
 
             if (_popupList != null)
@@ -297,7 +447,8 @@ public sealed class ComboBox : Control, IPopupOwner
                 IsDropDownOpen = true;
             }
 
-            if (_items.Count > 0)
+            int count = ItemsSource.Count;
+            if (count > 0)
             {
                 SelectedIndex = Math.Max(0, SelectedIndex <= 0 ? 0 : SelectedIndex - 1);
             }
@@ -311,61 +462,20 @@ public sealed class ComboBox : Control, IPopupOwner
         }
     }
 
-    public void AddItem(string item)
-    {
-        _items.Add(item ?? string.Empty);
-        InvalidateMeasure();
-        InvalidateVisual();
-    }
-
-    public void ClearItems()
-    {
-        _items.Clear();
-        SelectedIndex = -1;
-        IsDropDownOpen = false;
-        InvalidateMeasure();
-        InvalidateVisual();
-    }
-
+    /// <summary>
+    /// Sets a two-way binding for the SelectedIndex property.
+    /// </summary>
+    /// <param name="get">Function to get the current value.</param>
+    /// <param name="set">Action to set the value.</param>
+    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
+    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
     public void SetSelectedIndexBinding(
         Func<int> get,
         Action<int> set,
         Action<Action>? subscribe = null,
         Action<Action>? unsubscribe = null)
     {
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(set);
-
-        _selectedIndexBinding?.Dispose();
-        _selectedIndexBinding = new ValueBinding<int>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            () =>
-            {
-                _updatingFromSource = true;
-                try { SelectedIndex = get(); }
-                finally { _updatingFromSource = false; }
-            });
-
-        // Ensure the binding forwarder is registered once (no duplicates), without tracking extra state.
-        SelectionChanged -= ForwardSelectionChangedToBinding;
-        SelectionChanged += ForwardSelectionChangedToBinding;
-
-        _updatingFromSource = true;
-        try { SelectedIndex = get(); }
-        finally { _updatingFromSource = false; }
-    }
-
-    private void ForwardSelectionChangedToBinding(int index)
-    {
-        if (_updatingFromSource)
-        {
-            return;
-        }
-
-        _selectedIndexBinding?.Set(index);
+        SetSelectedIndexBindingCore(get, set, subscribe, unsubscribe);
     }
 
     private double ResolveItemHeight()
@@ -418,14 +528,14 @@ public sealed class ComboBox : Control, IPopupOwner
 
     private void SyncPopupList(ListBox list)
     {
-        list.Items.Clear();
-        foreach (var item in _items)
-        {
-            list.AddItem(item);
-        }
-
+        list.ItemsSource = ItemsSource;
         list.SelectedIndex = SelectedIndex;
         list.ItemHeight = ResolveItemHeight();
+
+        if (ItemTemplate != null)
+        {
+            list.ItemTemplate = ItemTemplate;
+        }
     }
 
     private void ShowPopup()
@@ -445,10 +555,8 @@ public sealed class ComboBox : Control, IPopupOwner
         window.FocusManager.SetFocus(list);
     }
 
-    private void OnPopupListSelectionChanged(int index)
-    {
-        SelectedIndex = index;
-    }
+    private void OnPopupListSelectionChanged(object? _)
+        => SelectedIndex = _popupList?.SelectedIndex ?? -1;
 
     private void OnPopupListItemActivated(int index)
     {
@@ -522,7 +630,7 @@ public sealed class ComboBox : Control, IPopupOwner
         // Do not measure the popup ListBox with infinite height; it can reset its scroll state.
         double itemHeight = ResolveItemHeight();
         double chrome = _popupList!.Padding.VerticalThickness + (_popupList.BorderThickness * 2);
-        double desiredHeight = _items.Count * itemHeight + chrome;
+        double desiredHeight = ItemsSource.Count * itemHeight + chrome;
         double maxHeight = Math.Max(0, MaxDropDownHeight);
         double desiredClamped = Math.Min(desiredHeight, maxHeight);
 
@@ -575,10 +683,8 @@ public sealed class ComboBox : Control, IPopupOwner
             _popupList.Dispose();
             _popupList = null;
         }
-
-        SelectionChanged -= ForwardSelectionChangedToBinding;
-        _selectedIndexBinding?.Dispose();
-        _selectedIndexBinding = null;
+        _itemsSource.Changed -= OnItemsChanged;
+        _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
     }
 
     void IPopupOwner.OnPopupClosed(UIElement popup)

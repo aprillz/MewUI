@@ -1,7 +1,6 @@
-namespace Aprillz.MewUI;
-
 using Aprillz.MewUI.Platform;
-using Aprillz.MewUI.Rendering;
+
+namespace Aprillz.MewUI;
 
 public sealed class AppOptions
 {
@@ -19,4 +18,3 @@ public sealed class AppOptions
 
     public ThemeMetrics? Metrics { get; set; }
 }
-

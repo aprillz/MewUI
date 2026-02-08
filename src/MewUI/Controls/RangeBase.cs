@@ -1,9 +1,15 @@
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// Base class for controls that display a value within a range.
+/// </summary>
 public abstract class RangeBase : Control
 {
     private double _value;
 
+    /// <summary>
+    /// Gets or sets the minimum value.
+    /// </summary>
     public double Minimum
     {
         get;
@@ -21,6 +27,9 @@ public abstract class RangeBase : Control
         }
     }
 
+    /// <summary>
+    /// Gets or sets the maximum value.
+    /// </summary>
     public double Maximum
     {
         get;
@@ -38,18 +47,38 @@ public abstract class RangeBase : Control
         }
     }
 
+    /// <summary>
+    /// Gets or sets the current value.
+    /// </summary>
     public double Value
     {
         get => _value;
         set => SetValueCore(value, true);
     }
 
+    /// <summary>
+    /// Occurs when the value changes.
+    /// </summary>
     public event Action<double>? ValueChanged;
 
+    /// <summary>
+    /// Sets the value from a binding source.
+    /// </summary>
+    /// <param name="value">The new value.</param>
     protected void SetValueFromSource(double value) => SetValueCore(value, false);
 
+    /// <summary>
+    /// Called when the value changes.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    /// <param name="fromUser">Whether the change originated from user input.</param>
     protected virtual void OnValueChanged(double value, bool fromUser) { }
 
+    /// <summary>
+    /// Clamps a value to the valid range.
+    /// </summary>
+    /// <param name="value">The value to clamp.</param>
+    /// <returns>The clamped value.</returns>
     protected double ClampToRange(double value)
     {
         value = Sanitize(value);
@@ -58,6 +87,10 @@ public abstract class RangeBase : Control
         return Math.Clamp(value, min, max);
     }
 
+    /// <summary>
+    /// Gets the value normalized to 0-1 range.
+    /// </summary>
+    /// <returns>The normalized value between 0 and 1.</returns>
     protected double GetNormalizedValue()
     {
         double min = Math.Min(Minimum, Maximum);

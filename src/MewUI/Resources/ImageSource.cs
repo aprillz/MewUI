@@ -6,8 +6,14 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Backend-agnostic encoded image source (PNG/JPG/BMP/SVG).
-/// Decode/upload is performed by the active graphics backend.
+/// Backend-agnostic encoded image source (PNG/JPG/BMP).
+///
+/// For built-in backends, decoding is shared and cached so that:
+/// - rendering can create backend images from a single decoded pixel buffer, and
+/// - controls can sample pixels (e.g. <c>Image.TryPeekColor</c>) without re-decoding.
+///
+/// If the built-in decoder cannot decode the payload, creation falls back to
+/// <see cref="IGraphicsFactory.CreateImageFromBytes(byte[])"/> so custom factories can handle additional formats.
 /// </summary>
 public sealed class ImageSource : IImageSource
 {

@@ -2,13 +2,22 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// Scroll mode for scrollbars.
+/// </summary>
 public enum ScrollMode
 {
+    /// <summary>Scrolling is disabled.</summary>
     Disabled,
+    /// <summary>Scrollbars appear automatically when needed.</summary>
     Auto,
+    /// <summary>Scrollbars are always visible.</summary>
     Visible
 }
 
+/// <summary>
+/// A scrollable content container with horizontal and vertical scrollbars.
+/// </summary>
 public sealed class ScrollViewer : ContentControl
     , IVisualTreeHost
 {
@@ -19,18 +28,41 @@ public sealed class ScrollViewer : ContentControl
     private Size _extent = Size.Empty;
     private Size _viewport = Size.Empty;
 
+    /// <summary>
+    /// Gets or sets the vertical scrollbar mode.
+    /// </summary>
     public ScrollMode VerticalScroll
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = ScrollMode.Auto;
 
+    /// <summary>
+    /// Gets or sets the horizontal scrollbar mode.
+    /// </summary>
     public ScrollMode HorizontalScroll
     {
         get;
-        set { field = value; InvalidateMeasure(); InvalidateVisual(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
     } = ScrollMode.Disabled;
 
+    /// <summary>
+    /// Gets the vertical scroll offset.
+    /// </summary>
     public double VerticalOffset
     {
         get => _scroll.GetOffsetDip(1);
@@ -44,6 +76,9 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
+    /// <summary>
+    /// Gets the horizontal scroll offset.
+    /// </summary>
     public double HorizontalOffset
     {
         get => _scroll.GetOffsetDip(0);
@@ -57,6 +92,11 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
+    /// <summary>
+    /// Sets both scroll offsets simultaneously.
+    /// </summary>
+    /// <param name="horizontalOffset">The horizontal offset.</param>
+    /// <param name="verticalOffset">The vertical offset.</param>
     public void SetScrollOffsets(double horizontalOffset, double verticalOffset)
     {
         HorizontalOffset = horizontalOffset;
@@ -65,6 +105,9 @@ public sealed class ScrollViewer : ContentControl
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Initializes a new instance of the ScrollViewer class.
+    /// </summary>
     public ScrollViewer()
     {
         BorderThickness = 0;

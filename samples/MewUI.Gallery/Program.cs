@@ -18,8 +18,17 @@ var maxFpsEnabled = new ObservableValue<bool>(false);
 
 var currentAccent = ThemeManager.DefaultAccent;
 
+var app = Application
+    .Create();
+
 var logo = ImageSource.FromFile("logo_h-1280.png");
 var april = ImageSource.FromFile("april.jpg");
+var iconFolderOpen = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resources.folder-horizontal-open.png");
+var iconFolderClose = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resources.folder-horizontal.png");
+var iconFile = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resources.document.png");
+
+var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() => CheckFPS(ref fpsFrames));
+var name = new ObservableValue<string>("Type your name");
 
 var root = new Window()
     .Resizable(1080, 840)
@@ -28,11 +37,9 @@ var root = new Window()
     .Padding(0)
     .Content(
         new DockPanel()
-            .LastChildFill()
             .Children(
                 TopBar()
                     .DockTop(),
-
                 new DockPanel()
                     .Padding(8)
                     .Spacing(8)
@@ -41,167 +48,151 @@ var root = new Window()
                     )
             )
     )
-    .OnLoaded(() => UpdateTopBar())
-        .OnClosed(() => maxFpsEnabled.Value = false)
-        .OnFrameRendered(() =>
+    .OnLoaded(() => { UpdateTopBar(); timer.Start(); })
+    .OnClosed(() => maxFpsEnabled.Value = false)
+    .OnFrameRendered(() =>
+    {
+        if (!fpsStopwatch.IsRunning)
         {
-            if (!fpsStopwatch.IsRunning)
-            {
-                fpsStopwatch.Restart();
-                fpsFrames = 0;
-                return;
-            }
+            fpsStopwatch.Restart();
+            fpsFrames = 0;
+            return;
+        }
 
-            fpsFrames++;
-            double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
-            if (elapsed >= 1.0)
-            {
-                fpsText.Value = $"FPS: {fpsFrames / elapsed:0.0}";
-                fpsFrames = 0;
-                fpsStopwatch.Restart();
-            }
-        });
+        fpsFrames++;
+        CheckFPS(ref fpsFrames);
+    });
 
 using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewUI.Gallery.appicon.ico")!)
 {
     root.Icon = IconSource.FromStream(rs);
 }
 
-Application.Run(root);
+app.Run(root);
 
-FrameworkElement TopBar()
+void CheckFPS(ref int fpsFrames)
 {
-    return new Border()
-        .Padding(12, 10)
-        .BorderThickness(1)
-        .Child(
-            new DockPanel()
-                .Spacing(12)
-                .Children(
-                    new StackPanel()
-                        .Horizontal()
-                        .Spacing(8)
-                        .Children(
-                            new Image()
-                                .Source(logo)
-                                .ImageScaleQuality(ImageScaleQuality.HighQuality)
-                                .Width(300)
-                                .Height(80)
-                                .CenterVertical(),
-
-                            new StackPanel()
-                                .Vertical()
-                                .Spacing(2)
-                                .Children(
-                                    new Label()
-                                        .Text("Aprillz.MewUI Gallery")
-                                        .FontSize(18)
-                                        .Bold(),
-
-                                    new Label()
-                                        .Ref(out backendText)
-                                )
-                        )
-                        .DockLeft(),
-
-                    new StackPanel()
-                        .DockRight()
-                        .Spacing(8)
-                        .Children(
-                            new StackPanel()
-                                .Horizontal()
-                                .CenterVertical()
-                                .Spacing(12)
-                                .Children(
-                                    ThemeModePicker(),
-
-                                    new Label()
-                                        .Ref(out themeText)
-                                        .CenterVertical(),
-
-                                    AccentPicker()
-
-                                ),
-
-                            new StackPanel()
-                                .Horizontal()
-                                .Spacing(8)
-                                .Children(
-                                    new CheckBox()
-                                        .Text("Max FPS")
-                                        .BindIsChecked(maxFpsEnabled)
-                                        .OnCheckedChanged(_ => EnsureMaxFpsLoop())
-                                        .CenterVertical(),
-                                    new Label()
-                                        .BindText(fpsText)
-                                        .CenterVertical()
-                                )
-                        )
-                ));
+    double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
+    if (elapsed >= 1.0)
+    {
+        fpsText.Value = $"FPS: {Math.Max(fpsFrames - 1, 0) / elapsed:0.0}";
+        fpsFrames = 0;
+        fpsStopwatch.Restart();
+    }
 }
 
-FrameworkElement ThemeModePicker()
-{
-    const string group = "ThemeMode";
+FrameworkElement TopBar() => new Border()
+    .Padding(12, 10)
+    .BorderThickness(1)
+    .Child(
+        new DockPanel()
+            .Spacing(12)
+            .Children(
+                new StackPanel()
+                    .Horizontal()
+                    .Spacing(8)
+                    .Children(
+                        new Image()
+                            .Source(logo)
+                            .ImageScaleQuality(ImageScaleQuality.HighQuality)
+                            .Width(300)
+                            .Height(80)
+                            .CenterVertical(),
 
-    return new StackPanel()
-        .Horizontal()
-        .CenterVertical()
-        .Spacing(8)
-        .Children(
-            new RadioButton()
-                .Text("System")
-                .GroupName(group)
-                .CenterVertical()
-                .IsChecked()
-                .OnChecked(() => Application.Current.SetTheme(ThemeVariant.System)),
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(2)
+                            .Children(
+                                new Label()
+                                    .Text("Aprillz.MewUI Gallery")
+                                    .FontSize(18)
+                                    .Bold(),
 
-            new RadioButton()
-                .Text("Light")
-                .GroupName(group)
-                .CenterVertical()
-                .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Light)),
+                                new Label()
+                                    .Ref(out backendText)
+                            )
+                    )
+                    .DockLeft(),
+                new StackPanel()
+                    .DockRight()
+                    .Spacing(8)
+                    .Children(
+                        new StackPanel()
+                            .Horizontal()
+                            .CenterVertical()
+                            .Spacing(12)
+                            .Children(
+                                ThemeModePicker(),
 
-            new RadioButton()
-                .Text("Dark")
-                .GroupName(group)
-                .CenterVertical()
-                .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark))
-        );
-}
+                                new Label()
+                                    .Ref(out themeText)
+                                    .CenterVertical(),
 
-FrameworkElement AccentPicker()
-{
-    return new WrapPanel()
-        .Orientation(Orientation.Horizontal)
-        .Spacing(6)
-        .CenterVertical()
-        .ItemWidth(22)
-        .ItemHeight(22)
-        .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray());
-}
+                                AccentPicker()
+                            ),
 
-Button AccentSwatch(Accent accent)
-{
-    return new Button()
-        .Content(string.Empty)
-        .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
-        .ToolTip(accent.ToString())
-        .OnClick(() =>
-        {
-            currentAccent = accent;
-            Application.Current.SetAccent(accent);
-            UpdateTopBar();
-        });
-}
+                        new StackPanel()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(
+                                new CheckBox()
+                                    .Text("Max FPS")
+                                    .BindIsChecked(maxFpsEnabled)
+                                    .OnCheckedChanged(_ => EnsureMaxFpsLoop())
+                                    .CenterVertical(),
 
-FrameworkElement GalleryRoot()
-{
-    return new ScrollViewer()
-                .VerticalScroll(ScrollMode.Auto)
-                .Padding(8)
-                .Content(BuildGalleryContent());
-}
+                                new Label()
+                                    .BindText(fpsText)
+                                    .CenterVertical()
+                            )
+                    )
+            ));
+
+FrameworkElement ThemeModePicker() => new StackPanel()
+    .Horizontal()
+    .CenterVertical()
+    .Spacing(8)
+    .Children(
+        new RadioButton()
+            .Text("System")
+            .CenterVertical()
+            .IsChecked()
+            .OnChecked(() => Application.Current.SetTheme(ThemeVariant.System)),
+
+        new RadioButton()
+            .Text("Light")
+            .CenterVertical()
+            .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Light)),
+
+        new RadioButton()
+            .Text("Dark")
+            .CenterVertical()
+            .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark))
+    );
+
+FrameworkElement AccentPicker() => new WrapPanel()
+    .Orientation(Orientation.Horizontal)
+    .Spacing(6)
+    .CenterVertical()
+    .ItemWidth(22)
+    .ItemHeight(22)
+    .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray());
+
+Button AccentSwatch(Accent accent) => new Button()
+    .Content(string.Empty)
+    .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
+    .ToolTip(accent.ToString())
+    .OnClick(() =>
+    {
+        currentAccent = accent;
+        Application.Current.SetAccent(accent);
+        UpdateTopBar();
+    });
+
+FrameworkElement GalleryRoot() => new ScrollViewer()
+    .VerticalScroll(ScrollMode.Auto)
+    .Padding(8)
+    .Content(BuildGalleryContent());
 
 FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320) => new Border()
         .MinWidth(minWidth)
@@ -220,11 +211,10 @@ FrameworkElement Card(string title, FrameworkElement content, double minWidth = 
                     content
                 ));
 
-FrameworkElement CardGrid(params FrameworkElement[] cards) =>
-    new WrapPanel()
-        .Orientation(Orientation.Horizontal)
-        .Spacing(8)
-        .Children(cards);
+FrameworkElement CardGrid(params FrameworkElement[] cards) => new WrapPanel()
+    .Orientation(Orientation.Horizontal)
+    .Spacing(8)
+    .Children(cards);
 
 FrameworkElement BuildGalleryContent()
 {
@@ -302,12 +292,10 @@ FrameworkElement ButtonsPage() =>
         )
     );
 
-FrameworkElement InputsPage()
-{
-    var name = new ObservableValue<string>("Type your name");
-
-    return CardGrid(
-        Card("TextBox",
+FrameworkElement InputsPage() =>
+    CardGrid(
+        Card(
+            "TextBox",
             new StackPanel()
                 .Vertical()
                 .Spacing(8)
@@ -319,13 +307,15 @@ FrameworkElement InputsPage()
                 )
         ),
 
-        Card("MultiLineTextBox",
+        Card(
+            "MultiLineTextBox",
             new MultiLineTextBox()
                 .Height(120)
                 .Text("The quick brown fox jumps over the lazy dog.\n\n- Wrap supported\n- Selection supported\n- Scroll supported")
         ),
 
-        Card("ToolTip / ContextMenu",
+        Card(
+            "ToolTip / ContextMenu",
             new StackPanel()
                 .Vertical()
                 .Spacing(8)
@@ -362,7 +352,6 @@ FrameworkElement InputsPage()
                 )
         )
     );
-}
 
 FrameworkElement MenusPage()
 {
@@ -406,7 +395,8 @@ FrameworkElement MenusPage()
         );
 
     return CardGrid(
-        Card("MenuBar (Multi-depth)",
+        Card(
+            "MenuBar (Multi-depth)",
             new StackPanel()
                 .Vertical()
                 .Spacing(8)
@@ -427,10 +417,10 @@ FrameworkElement MenusPage()
     );
 }
 
-FrameworkElement SelectionPage()
-{
-    return CardGrid(
-        Card("CheckBox",
+FrameworkElement SelectionPage() =>
+    CardGrid(
+        Card(
+            "CheckBox",
             new Grid()
                 .Columns("Auto,Auto")
                 .Rows("Auto,Auto,Auto")
@@ -445,7 +435,8 @@ FrameworkElement SelectionPage()
                 )
         ),
 
-        Card("RadioButton",
+        Card(
+            "RadioButton",
             new Grid()
                 .Columns("Auto,Auto")
                 .Rows("Auto,Auto")
@@ -458,7 +449,8 @@ FrameworkElement SelectionPage()
                 )
         ),
 
-        Card("TabControl",
+        Card(
+            "TabControl",
             new UniformGrid()
                 .Columns(2)
                 .Spacing(8)
@@ -482,21 +474,89 @@ FrameworkElement SelectionPage()
                 )
         )
     );
-}
 
 FrameworkElement ListsPage()
 {
     var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").ToArray();
 
+    var gridItems = Enumerable.Range(1, 64)
+        .Select(i => new SimpleGridRow(i, $"Item {i}", (i % 6) switch { 1 => "Warning", 2 => "Error", _ => "Normal" }))
+        .ToArray();
+
+    var treeItems = new[]
+    {
+        new TreeViewNode("src",
+        [
+            new TreeViewNode("MewUI",
+            [
+                new TreeViewNode("Controls",
+                [
+                    new TreeViewNode("Button.cs"),
+                    new TreeViewNode("TextBox.cs"),
+                    new TreeViewNode("TreeView.cs")
+                ])
+            ]),
+            new TreeViewNode("Rendering",
+            [
+                new TreeViewNode("Gdi"),
+                new TreeViewNode("Direct2D"),
+                new TreeViewNode("OpenGL")
+            ])
+        ]),
+        new TreeViewNode("README.md"),
+        new TreeViewNode("assets",
+        [
+            new TreeViewNode("logo.png"),
+            new TreeViewNode("icon.ico")
+        ])
+    };
+
+    Label selectedNodeText = null!;
+
+    var treeView = new TreeView()
+        .Width(240)
+        .ItemsSource(treeItems)
+        .OnSelectionChanged(obj =>
+        {
+            var n = obj as TreeViewNode;
+            selectedNodeText.Text = n == null ? "Selected: (none)" : $"Selected: {n.Text}";
+        });
+
+    treeView.ItemTemplate<TreeViewNode>(
+        build: ctx => new StackPanel()
+            .Horizontal()
+            .Spacing(6)
+            .Padding(8, 0)
+            .Children(
+                new Image()
+                    .Register(ctx, "Icon")
+                    .Size(16, 16)
+                    .StretchMode(ImageStretch.None)
+                    .CenterVertical(),
+                new Label()
+                    .Register(ctx, "Text")
+                    .CenterVertical()
+            ),
+        bind: (view, item, _, ctx) =>
+        {
+            ctx.Get<Image>("Icon").Source(item.HasChildren ? (treeView.IsExpanded(item) ? iconFolderOpen : iconFolderClose) : iconFile);
+            ctx.Get<Label>("Text").Text(item.Text);
+        });
+
+    treeView.Expand(treeItems[0]);
+    treeView.Expand(treeItems[0].Children[0]);
+
     return CardGrid(
-        Card("ListBox",
+        Card(
+            "ListBox",
             new ListBox()
                 .Height(120)
                 .Width(200)
                 .Items(items)
         ),
 
-        Card("ComboBox",
+        Card(
+            "ComboBox",
             new StackPanel()
                 .Vertical()
                 .Spacing(8)
@@ -514,14 +574,66 @@ FrameworkElement ListsPage()
                         .SelectedIndex(1)
                         .Disable()
                 )
+        ),
+
+        Card(
+            "TreeView",
+            new DockPanel()
+                .Height(240)
+                .Spacing(6)
+                .Children(
+                    new Label()
+                        .DockBottom()
+                        .Ref(out selectedNodeText)
+                        .FontSize(11)
+                        .Text("Selected: (none)"),
+                    treeView
+                ),
+            minWidth: 280
+        ),
+
+        Card(
+            "GridView",
+            new GridView()
+                .Height(240)
+                .ItemsSource(gridItems)
+                .Columns(
+                    new GridViewColumn<SimpleGridRow>()
+                        .Header("#")
+                        .Width(50)
+                        .Text(row => row.Id.ToString()),
+
+                    new GridViewColumn<SimpleGridRow>()
+                        .Header("Name")
+                        .Width(70)
+                        .Text(row => row.Name),
+
+                    new GridViewColumn<SimpleGridRow>()
+                        .Header("Status")
+                        .Width(70)
+                        .Template(
+                            build: _ => new Label().Padding(8, 0).CenterVertical(),
+                            bind: (view, row) => view
+                                .Text(row.Status)
+                                .WithTheme((t, c) => c.Foreground(GetColor(t, row.Status)))
+                        )
+                )
         )
     );
+
+    Color GetColor(Theme t, string status) => status switch
+    {
+        "Warning" => Color.Orange,
+        "Error" => Color.Red,
+        _ => t.Palette.WindowText
+    };
 }
 
-FrameworkElement LayoutPage()
-{
-    return CardGrid(
-        Card("GroupBox",
+
+FrameworkElement LayoutPage() =>
+    CardGrid(
+        Card(
+            "GroupBox",
             new GroupBox()
                 .Header("Header")
                 .Content(
@@ -536,7 +648,8 @@ FrameworkElement LayoutPage()
                 )
         ),
 
-        Card("Border + Alignment",
+        Card(
+            "Border + Alignment",
             new Border()
                 .Height(120)
                 .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
@@ -548,7 +661,8 @@ FrameworkElement LayoutPage()
                         .Bold())
         ),
 
-        Card("ScrollViewer",
+        Card(
+            "ScrollViewer",
             new ScrollViewer()
                 .Height(120)
                 .Width(200)
@@ -562,7 +676,6 @@ FrameworkElement LayoutPage()
                 )
         )
     );
-}
 
 FrameworkElement PanelsPage()
 {
@@ -590,7 +703,8 @@ FrameworkElement PanelsPage()
                 .Child(content));
 
     return CardGrid(
-        PanelCard("StackPanel",
+        PanelCard(
+            "StackPanel",
             new StackPanel()
                 .Vertical()
                 .Spacing(6)
@@ -601,9 +715,10 @@ FrameworkElement PanelsPage()
                 )
         ),
 
-        PanelCard("DockPanel",
+        PanelCard(
+            "DockPanel",
             new DockPanel()
-                .LastChildFill()
+                .Spacing(6)
                 .Children(
                     new Button().Content("Left").DockLeft(),
                     new Button().Content("Top").DockTop(),
@@ -612,7 +727,8 @@ FrameworkElement PanelsPage()
                 )
         ),
 
-        PanelCard("WrapPanel",
+        PanelCard(
+            "WrapPanel",
             new WrapPanel()
                 .Orientation(Orientation.Horizontal)
                 .Spacing(6)
@@ -621,7 +737,8 @@ FrameworkElement PanelsPage()
                 .Children(Enumerable.Range(1, 8).Select(i => new Button().Content($"#{i}")).ToArray())
         ),
 
-        PanelCard("UniformGrid",
+        PanelCard(
+            "UniformGrid",
             new UniformGrid()
                 .Columns(3)
                 .Rows(2)
@@ -636,7 +753,8 @@ FrameworkElement PanelsPage()
                 )
         ),
 
-        PanelCard("Grid (Span)",
+        PanelCard(
+            "Grid (Span)",
             new Grid()
                 .Columns("Auto,*,*")
                 .Rows("Auto,Auto,Auto")
@@ -661,7 +779,8 @@ FrameworkElement PanelsPage()
                 )
         ),
 
-        Card("Canvas",
+        Card(
+            "Canvas",
             new StackPanel()
                 .Vertical()
                 .Spacing(6)
@@ -705,7 +824,8 @@ FrameworkElement MediaPage() =>
                         .Height(120)
                         .StretchMode(ImageStretch.Uniform)
                         .Center(),
-                    new Label().Text("april.jpg")
+                    new Label()
+                        .Text("april.jpg")
                         .FontSize(11)
                         .Center()
                 )
@@ -761,7 +881,7 @@ FrameworkElement MediaPage() =>
                         ),
 
                     new Label()
-                        .Text("Full image (Uniform) / ViewBox (center 50%) + UniformToFill")
+                        .Text("Left: full image (Uniform). Right: ViewBox (center 50%) + UniformToFill.")
                         .FontSize(11)
                 )
         )
@@ -823,3 +943,6 @@ static void Startup()
         e.Handled = true;
     };
 }
+
+sealed record IconTextItem(string Icon, string Text);
+sealed record SimpleGridRow(int Id, string Name, string Status);

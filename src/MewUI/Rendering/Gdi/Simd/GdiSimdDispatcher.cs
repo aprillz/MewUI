@@ -102,6 +102,49 @@ internal static class GdiSimdDispatcher
     }
 
     /// <summary>
+    /// Premultiplies a BGRA buffer (per-pixel alpha).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void PremultiplyBgra(ReadOnlySpan<byte> srcBgra, Span<byte> dstBgra)
+    {
+        if (srcBgra.Length == 0)
+        {
+            return;
+        }
+
+        if (srcBgra.Length != dstBgra.Length)
+        {
+            throw new ArgumentException("Source and destination buffers must have the same length.");
+        }
+
+        if ((srcBgra.Length & 3) != 0)
+        {
+            throw new ArgumentException("BGRA buffer length must be a multiple of 4.");
+        }
+
+        unsafe
+        {
+            fixed (byte* src = srcBgra)
+            fixed (byte* dst = dstBgra)
+            {
+                int bytes = srcBgra.Length;
+                if (SimdCapabilities.HasAvx2)
+                {
+                    Avx2Processor.PremultiplyBgra(src, dst, bytes);
+                }
+                else if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+                {
+                    Sse2Processor.PremultiplyBgra(src, dst, bytes);
+                }
+                else
+                {
+                    PremultiplyBgraScalar(src, dst, bytes);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Fills a row of BGRA pixels with a solid premultiplied color.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -245,6 +288,31 @@ internal static class GdiSimdDispatcher
                 p[3] = a;
             }
             p += 4;
+        }
+    }
+
+    private static unsafe void PremultiplyBgraScalar(byte* src, byte* dst, int byteCount)
+    {
+        for (int i = 0; i < byteCount; i += 4)
+        {
+            byte b = src[i + 0];
+            byte g = src[i + 1];
+            byte r = src[i + 2];
+            byte a = src[i + 3];
+
+            int t = b * a + 128;
+            t += t >> 8;
+            dst[i + 0] = (byte)(t >> 8);
+
+            t = g * a + 128;
+            t += t >> 8;
+            dst[i + 1] = (byte)(t >> 8);
+
+            t = r * a + 128;
+            t += t >> 8;
+            dst[i + 2] = (byte)(t >> 8);
+
+            dst[i + 3] = a;
         }
     }
 

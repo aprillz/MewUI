@@ -2,14 +2,24 @@ using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// Dock position for DockPanel children.
+/// </summary>
 public enum Dock
 {
+    /// <summary>Dock to the left edge.</summary>
     Left,
+    /// <summary>Dock to the top edge.</summary>
     Top,
+    /// <summary>Dock to the right edge.</summary>
     Right,
+    /// <summary>Dock to the bottom edge.</summary>
     Bottom
 }
 
+/// <summary>
+/// A panel that docks children to the edges.
+/// </summary>
 public sealed class DockPanel : Panel
 {
     private sealed class DockData
@@ -19,6 +29,11 @@ public sealed class DockPanel : Panel
 
     private static readonly ConditionalWeakTable<Element, DockData> DockMap = new();
 
+    /// <summary>
+    /// Sets the dock position for an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <param name="dock">Dock position.</param>
     public static void SetDock(Element element, Dock dock)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -27,6 +42,11 @@ public sealed class DockPanel : Panel
         element.InvalidateArrange();
     }
 
+    /// <summary>
+    /// Gets the dock position of an element.
+    /// </summary>
+    /// <param name="element">Target element.</param>
+    /// <returns>The dock position.</returns>
     public static Dock GetDock(Element element)
     {
         ArgumentNullException.ThrowIfNull(element);
@@ -34,16 +54,34 @@ public sealed class DockPanel : Panel
         return DockMap.TryGetValue(element, out var data) ? data.Dock : Dock.Left;
     }
 
+    /// <summary>
+    /// Gets or sets whether the last child fills remaining space.
+    /// </summary>
     public bool LastChildFill
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     } = true;
 
+    /// <summary>
+    /// Gets or sets the spacing between children.
+    /// </summary>
     public double Spacing
     {
         get;
-        set { field = value; InvalidateMeasure(); }
+        set
+        {
+            if (SetDouble(ref field, value))
+            {
+                InvalidateMeasure();
+            }
+        }
     }
 
     protected override Size MeasureContent(Size availableSize)

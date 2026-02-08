@@ -1,11 +1,16 @@
 namespace Aprillz.MewUI.Controls;
 
-public abstract class ToggleBase : Control
+/// <summary>
+/// Base class for toggle controls like checkboxes and radio buttons.
+/// </summary>
+public abstract partial class ToggleBase : Control
 {
     private bool _isChecked;
-    private ValueBinding<bool>? _checkedBinding;
     private bool _updatingFromSource;
 
+    /// <summary>
+    /// Gets or sets the text label.
+    /// </summary>
     public string Text
     {
         get;
@@ -17,6 +22,9 @@ public abstract class ToggleBase : Control
         }
     } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the checked state.
+    /// </summary>
     public bool IsChecked
     {
         get => _isChecked;
@@ -31,22 +39,47 @@ public abstract class ToggleBase : Control
         }
     }
 
+    /// <summary>
+    /// Occurs when the checked state changes.
+    /// </summary>
     public event Action<bool>? CheckedChanged;
 
+    /// <summary>
+    /// Gets whether the control can receive keyboard focus.
+    /// </summary>
     public override bool Focusable => true;
 
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    /// <summary>
+    /// Initializes a new instance of the ToggleBase class.
+    /// </summary>
     protected ToggleBase()
     {
         Background = Color.Transparent;
         BorderThickness = 1;
     }
 
+    /// <summary>
+    /// Sets the checked state from a binding source.
+    /// </summary>
+    /// <param name="value">The new checked state.</param>
     protected void SetIsCheckedFromSource(bool value) => SetIsCheckedCore(value, false);
 
+    /// <summary>
+    /// Called when the checked state changes.
+    /// </summary>
+    /// <param name="value">The new checked state.</param>
     protected virtual void OnIsCheckedChanged(bool value) { }
 
+    /// <summary>
+    /// Sets the checked state internally.
+    /// </summary>
+    /// <param name="value">The new checked state.</param>
+    /// <param name="fromInput">Whether the change originated from user input.</param>
     private void SetIsCheckedCore(bool value, bool fromInput)
     {
         _isChecked = value;
@@ -55,37 +88,29 @@ public abstract class ToggleBase : Control
 
         if (fromInput && !_updatingFromSource)
         {
-            _checkedBinding?.Set(value);
+            if (TryGetBinding(CheckedBindingSlot, out ValueBinding<bool> checkedBinding))
+            {
+                checkedBinding.Set(value);
+            }
         }
 
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Sets a two-way binding for the IsChecked property.
+    /// </summary>
+    /// <param name="get">Function to get the current value.</param>
+    /// <param name="set">Action to set the value.</param>
+    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
+    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
     public void SetIsCheckedBinding(
         Func<bool> get,
         Action<bool> set,
         Action<Action>? subscribe = null,
         Action<Action>? unsubscribe = null)
     {
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(set);
-
-        _checkedBinding?.Dispose();
-        _checkedBinding = new ValueBinding<bool>(
-            get,
-            set,
-            subscribe,
-            unsubscribe,
-            () =>
-            {
-                _updatingFromSource = true;
-                try { SetIsCheckedFromSource(get()); }
-                finally { _updatingFromSource = false; }
-            });
-
-        _updatingFromSource = true;
-        try { SetIsCheckedFromSource(get()); }
-        finally { _updatingFromSource = false; }
+        SetIsCheckedBindingCore(get, set, subscribe, unsubscribe);
     }
 
     protected override void OnKeyUp(KeyEventArgs e)
@@ -111,8 +136,6 @@ public abstract class ToggleBase : Control
 
     protected override void OnDispose()
     {
-        _checkedBinding?.Dispose();
-        _checkedBinding = null;
         base.OnDispose();
     }
 }

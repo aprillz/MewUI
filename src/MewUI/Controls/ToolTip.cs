@@ -2,8 +2,14 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A tooltip popup control for displaying help text.
+/// </summary>
 public sealed class ToolTip : Control
 {
+    /// <summary>
+    /// Gets or sets the tooltip text.
+    /// </summary>
     public string Text
     {
         get;
@@ -21,6 +27,9 @@ public sealed class ToolTip : Control
         }
     } = string.Empty;
 
+    /// <summary>
+    /// Initializes a new instance of the ToolTip class.
+    /// </summary>
     public ToolTip()
     {
         Padding = new Thickness(8, 4, 8, 4);

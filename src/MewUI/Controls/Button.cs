@@ -5,10 +5,9 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A button control that responds to clicks.
 /// </summary>
-public class Button : Control
+public partial class Button : Control
 {
     private bool _isPressed;
-    private ValueBinding<string>? _contentBinding;
     private TextMeasureCache _textMeasureCache;
 
     protected override Color DefaultBackground => Theme.Palette.ButtonFace;
@@ -206,25 +205,4 @@ public class Button : Control
     }
 
     protected virtual void OnClick() => Click?.Invoke();
-
-    public void SetContentBinding(Func<string> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
-    {
-        ArgumentNullException.ThrowIfNull(get);
-
-        _contentBinding?.Dispose();
-        _contentBinding = new ValueBinding<string>(
-            get,
-            null,
-            subscribe,
-            unsubscribe,
-            () => Content = get() ?? string.Empty);
-
-        Content = get() ?? string.Empty;
-    }
-
-    protected override void OnDispose()
-    {
-        _contentBinding?.Dispose();
-        _contentBinding = null;
-    }
 }

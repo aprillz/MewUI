@@ -2,6 +2,9 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A toggle switch control with optional text label.
+/// </summary>
 public sealed class ToggleSwitch : ToggleBase
 {
     private bool _isPressed;
@@ -38,7 +41,7 @@ public sealed class ToggleSwitch : ToggleBase
     private (double trackWidth, double trackHeight) GetTrackSize()
     {
         // Match the overall control sizing style (Button/ComboBox) while keeping the switch itself compact.
-        // BaseControlHeight is 28 in the default theme -> trackHeight 20.
+        // BaseControlHeight is 28 in the default InternalTheme -> trackHeight 20.
         double trackHeight = Math.Max(16, Theme.Metrics.BaseControlHeight - 8);
         double trackWidth = Math.Max(trackHeight * 2, trackHeight + 18);
         return (trackWidth, trackHeight);
