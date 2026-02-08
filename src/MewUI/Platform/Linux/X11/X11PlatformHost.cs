@@ -17,7 +17,12 @@ public sealed class X11PlatformHost : IPlatformHost
     private readonly Dictionary<nint, X11WindowBackend> _windows = new();
     private readonly List<X11WindowBackend> _renderBackends = new(capacity: 8);
     private bool _running;
+    private Application? _app;
     private uint _systemDpi = 96u;
+    private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
+    private long _lastThemePollTick;
+    private int _systemThemeDirty;
+    private Aprillz.MewUI.Platform.Linux.LinuxGSettingsMonitor? _gsettingsThemeMonitor;
     private LinuxUiDispatcher? _dispatcher;
     private long _lastDpiPollTick;
     private nint _resourceManagerAtom;
@@ -47,7 +52,11 @@ public sealed class X11PlatformHost : IPlatformHost
         return _systemDpi;
     }
 
-    public ThemeVariant GetSystemThemeVariant() => ThemeVariant.Light;
+    public ThemeVariant GetSystemThemeVariant()
+    {
+        EnsureDisplay();
+        return DetectSystemThemeVariant();
+    }
 
     public uint GetDpiForWindow(nint hwnd) => GetSystemDpi();
 
@@ -69,6 +78,7 @@ public sealed class X11PlatformHost : IPlatformHost
     public void Run(Application app, Window mainWindow)
     {
         _running = true;
+        _app = app;
 
         EnsureDisplay();
 
@@ -78,6 +88,18 @@ public sealed class X11PlatformHost : IPlatformHost
         app.Dispatcher = dispatcher;
         SynchronizationContext.SetSynchronizationContext(dispatcher as SynchronizationContext);
         _dispatcher?.SetWake(SignalWake);
+
+        // GNOME/Wayland doesn't provide X11 notifications for theme changes.
+        // Best-effort: listen to gsettings notifications and wake the loop.
+        if (_gsettingsThemeMonitor == null)
+        {
+            _gsettingsThemeMonitor = new Aprillz.MewUI.Platform.Linux.LinuxGSettingsMonitor("org.gnome.desktop.interface");
+            _gsettingsThemeMonitor.Start(() =>
+            {
+                Interlocked.Exchange(ref _systemThemeDirty, 1);
+                SignalWake();
+            });
+        }
 
         // Show after dispatcher is ready so timers/postbacks work immediately (WPF-style dispatcher lifetime).
         mainWindow.Show();
@@ -114,6 +136,14 @@ public sealed class X11PlatformHost : IPlatformHost
                 }
 
                 PollDpiChanges();
+                if (Interlocked.Exchange(ref _systemThemeDirty, 0) != 0)
+                {
+                    TryUpdateSystemTheme(force: true);
+                }
+                else
+                {
+                    TryUpdateSystemTheme();
+                }
 
                 _dispatcher?.ProcessWorkItems();
 
@@ -171,7 +201,10 @@ public sealed class X11PlatformHost : IPlatformHost
         }
 
         CloseWakePipe();
+        _gsettingsThemeMonitor?.Dispose();
+        _gsettingsThemeMonitor = null;
         _dispatcher = null;
+        _app = null;
         app.Dispatcher = null;
         SynchronizationContext.SetSynchronizationContext(previousContext);
     }
@@ -290,6 +323,9 @@ public sealed class X11PlatformHost : IPlatformHost
             ?? 96u;
         _lastDpiPollTick = Environment.TickCount64;
 
+        _lastSystemTheme = DetectSystemThemeVariant();
+        _lastThemePollTick = Environment.TickCount64;
+
         SetupWakePipe();
     }
 
@@ -391,7 +427,7 @@ public sealed class X11PlatformHost : IPlatformHost
     {
         foreach (var backend in _windows.Values)
         {
-            if (backend.NeedsRender)
+            if (backend.NeedsRender && backend.Display != 0 && backend.Handle != 0)
             {
                 return true;
             }
@@ -410,7 +446,7 @@ public sealed class X11PlatformHost : IPlatformHost
         _renderBackends.Clear();
         foreach (var backend in _windows.Values)
         {
-            if (backend.NeedsRender)
+            if (backend.NeedsRender && backend.Display != 0 && backend.Handle != 0)
             {
                 _renderBackends.Add(backend);
             }
@@ -437,7 +473,10 @@ public sealed class X11PlatformHost : IPlatformHost
         _renderBackends.Clear();
         foreach (var backend in _windows.Values)
         {
-            _renderBackends.Add(backend);
+            if (backend.Display != 0 && backend.Handle != 0)
+            {
+                _renderBackends.Add(backend);
+            }
         }
 
         for (int i = 0; i < _renderBackends.Count; i++)
@@ -461,13 +500,55 @@ public sealed class X11PlatformHost : IPlatformHost
 
         if (!ignoreRenderRequests && AnyWindowNeedsRender())
         {
-            return;
+            // Avoid a busy loop when a backend throttles rendering (e.g. software/VM).
+            // If the next render time is in the future, block in poll for that duration.
+            int minDelayMs = int.MaxValue;
+            foreach (var backend in _windows.Values)
+            {
+                if (!backend.NeedsRender)
+                {
+                    continue;
+                }
+
+                minDelayMs = Math.Min(minDelayMs, backend.GetRenderDelayMs());
+                if (minDelayMs == 0)
+                {
+                    break;
+                }
+            }
+
+            if (minDelayMs <= 0)
+            {
+                return;
+            }
+
+            timeoutOverrideMs = timeoutOverrideMs != null
+                ? Math.Min(timeoutOverrideMs.Value, minDelayMs)
+                : minDelayMs;
+
+            ignoreRenderRequests = true;
         }
 
         var dispatcher = _dispatcher;
         if (dispatcher != null && dispatcher.HasPendingWork)
         {
-            return;
+            // Work can be posted while rendering/input handling. If we simply return here,
+            // the platform loop can become a busy loop. Pump a bounded amount of dispatcher
+            // work before deciding whether we still need to spin.
+            const int MaxPumps = 8;
+            for (int i = 0; i < MaxPumps; i++)
+            {
+                dispatcher.ProcessWorkItems();
+                if (!dispatcher.HasPendingWork)
+                {
+                    break;
+                }
+            }
+
+            if (dispatcher.HasPendingWork)
+            {
+                return;
+            }
         }
 
         // If poll-based waiting isn't available, fall back to a modest sleep to avoid a busy loop.
@@ -587,6 +668,36 @@ public sealed class X11PlatformHost : IPlatformHost
         }
     }
 
+    private void TryUpdateSystemTheme(bool force = false)
+    {
+        // X11 doesn't have a single universal theme API. We do best-effort detection by reading
+        // XSettings (Gtk/ThemeName, Net/ThemeName) and GTK_THEME env override.
+        const int PollIntervalMs = 500;
+
+        var app = _app;
+        if (app == null || app.ThemeMode != ThemeVariant.System)
+        {
+            return;
+        }
+
+        long now = Environment.TickCount64;
+        if (!force && now - _lastThemePollTick < PollIntervalMs)
+        {
+            return;
+        }
+
+        _lastThemePollTick = now;
+
+        var current = DetectSystemThemeVariant();
+        if (current == _lastSystemTheme)
+        {
+            return;
+        }
+
+        _lastSystemTheme = current;
+        app.NotifySystemThemeChanged();
+    }
+
     private void HandlePropertyNotify(in XPropertyEvent e)
     {
         if (e.window == _rootWindow)
@@ -601,6 +712,7 @@ public sealed class X11PlatformHost : IPlatformHost
             {
                 UpdateXsettingsOwner();
                 PollDpiChanges(force: true);
+                TryUpdateSystemTheme(force: true);
             }
             return;
         }
@@ -611,6 +723,7 @@ public sealed class X11PlatformHost : IPlatformHost
             e.atom == _xsettingsAtom)
         {
             PollDpiChanges(force: true);
+            TryUpdateSystemTheme(force: true);
         }
     }
 
@@ -681,6 +794,286 @@ public sealed class X11PlatformHost : IPlatformHost
         {
             NativeX11.XFree(prop);
         }
+    }
+
+    private ThemeVariant DetectSystemThemeVariant()
+    {
+        // 1) Environment override (GTK_THEME=Adwaita:dark etc).
+        var gtkTheme = Environment.GetEnvironmentVariable("GTK_THEME");
+        if (!string.IsNullOrWhiteSpace(gtkTheme) && ContainsDarkKeyword(gtkTheme))
+        {
+            return ThemeVariant.Dark;
+        }
+
+        // 2) XSettings: prefer-dark flag (GNOME/GTK commonly sets this even when theme name doesn't contain "dark").
+        // Key: Gtk/ApplicationPreferDarkTheme (int; 0 or 1).
+        int? preferDark = TryGetXSettingsInt(Display, _xsettingsOwnerWindow, _xsettingsAtom, "Gtk/ApplicationPreferDarkTheme");
+        if (preferDark is > 0)
+        {
+            return ThemeVariant.Dark;
+        }
+
+        // 3) XSettings: theme name (Gtk/ThemeName or Net/ThemeName) when available.
+        string? themeName = TryGetXSettingsString(Display, _xsettingsOwnerWindow, _xsettingsAtom, "Gtk/ThemeName")
+            ?? TryGetXSettingsString(Display, _xsettingsOwnerWindow, _xsettingsAtom, "Net/ThemeName");
+
+        if (!string.IsNullOrWhiteSpace(themeName) && ContainsDarkKeyword(themeName))
+        {
+            return ThemeVariant.Dark;
+        }
+
+        // 4) Fallback to config-file heuristics (GTK settings.ini / KDE kdeglobals).
+        return LinuxThemeDetector.DetectSystemThemeVariant();
+    }
+
+    private static bool ContainsDarkKeyword(string value)
+        => value.Contains("dark", StringComparison.OrdinalIgnoreCase) ||
+           value.Contains(":dark", StringComparison.OrdinalIgnoreCase) ||
+           value.EndsWith("-dark", StringComparison.OrdinalIgnoreCase);
+
+    private static string? TryGetXSettingsString(nint display, nint xsettingsOwnerWindow, nint xsettingsSettingsAtom, string key)
+    {
+        if (display == 0 || xsettingsOwnerWindow == 0 || xsettingsSettingsAtom == 0)
+        {
+            return null;
+        }
+
+        const nint AnyPropertyType = 0;
+        int status = NativeX11.XGetWindowProperty(
+            display,
+            xsettingsOwnerWindow,
+            xsettingsSettingsAtom,
+            long_offset: 0,
+            long_length: 64 * 1024,
+            delete: false,
+            req_type: AnyPropertyType,
+            out _,
+            out int actualFormat,
+            out nuint nitems,
+            out _,
+            out nint prop);
+
+        if (status != 0 || prop == 0 || actualFormat != 8 || nitems == 0)
+        {
+            if (prop != 0)
+            {
+                NativeX11.XFree(prop);
+            }
+
+            return null;
+        }
+
+        try
+        {
+            int len = checked((int)nitems);
+            unsafe
+            {
+                var bytes = new ReadOnlySpan<byte>((void*)prop, len);
+                return ParseXSettingsString(bytes, key);
+            }
+        }
+        finally
+        {
+            NativeX11.XFree(prop);
+        }
+    }
+
+    private static int? TryGetXSettingsInt(nint display, nint xsettingsOwnerWindow, nint xsettingsSettingsAtom, string key)
+    {
+        if (display == 0 || xsettingsOwnerWindow == 0 || xsettingsSettingsAtom == 0)
+        {
+            return null;
+        }
+
+        const nint AnyPropertyType = 0;
+        int status = NativeX11.XGetWindowProperty(
+            display,
+            xsettingsOwnerWindow,
+            xsettingsSettingsAtom,
+            long_offset: 0,
+            long_length: 64 * 1024,
+            delete: false,
+            req_type: AnyPropertyType,
+            out _,
+            out int actualFormat,
+            out nuint nitems,
+            out _,
+            out nint prop);
+
+        if (status != 0 || prop == 0 || actualFormat != 8 || nitems == 0)
+        {
+            if (prop != 0)
+            {
+                NativeX11.XFree(prop);
+            }
+
+            return null;
+        }
+
+        try
+        {
+            int len = checked((int)nitems);
+            unsafe
+            {
+                var bytes = new ReadOnlySpan<byte>((void*)prop, len);
+                return ParseXSettingsInt(bytes, key);
+            }
+        }
+        finally
+        {
+            NativeX11.XFree(prop);
+        }
+    }
+
+    private static string? ParseXSettingsString(ReadOnlySpan<byte> data, string key)
+    {
+        if (data.Length < 12)
+        {
+            return null;
+        }
+
+        bool littleEndian = data[0] switch
+        {
+            (byte)'l' => true,
+            (byte)'B' => false,
+            _ => BitConverter.IsLittleEndian
+        };
+
+        int offset = 4;
+        _ = ReadUInt32(data, ref offset, littleEndian); // serial
+        uint count = ReadUInt32(data, ref offset, littleEndian);
+
+        for (uint i = 0; i < count; i++)
+        {
+            if (offset + 4 > data.Length)
+            {
+                return null;
+            }
+
+            byte type = data[offset++];
+            offset++; // pad
+            ushort nameLen = ReadUInt16(data, ref offset, littleEndian);
+
+            if (offset + nameLen > data.Length)
+            {
+                return null;
+            }
+
+            string name = Encoding.ASCII.GetString(data.Slice(offset, nameLen));
+            offset += nameLen;
+            offset = Align4(offset);
+
+            _ = ReadUInt32(data, ref offset, littleEndian); // last_change_serial
+
+            if (type == 0)
+            {
+                // int
+                _ = ReadInt32(data, ref offset, littleEndian);
+                continue;
+            }
+
+            if (type == 2)
+            {
+                // color: 4 * uint16
+                offset += 8;
+                continue;
+            }
+
+            if (type != 1)
+            {
+                return null;
+            }
+
+            uint strLen = ReadUInt32(data, ref offset, littleEndian);
+            if (offset + strLen > data.Length)
+            {
+                return null;
+            }
+
+            if (string.Equals(name, key, StringComparison.Ordinal))
+            {
+                var raw = data.Slice(offset, checked((int)strLen));
+                var value = Encoding.UTF8.GetString(raw);
+                return value;
+            }
+
+            offset += checked((int)strLen);
+            offset = Align4(offset);
+        }
+
+        return null;
+    }
+
+    private static int? ParseXSettingsInt(ReadOnlySpan<byte> data, string key)
+    {
+        if (data.Length < 12)
+        {
+            return null;
+        }
+
+        bool littleEndian = data[0] switch
+        {
+            (byte)'l' => true,
+            (byte)'B' => false,
+            _ => BitConverter.IsLittleEndian
+        };
+
+        int offset = 4;
+        _ = ReadUInt32(data, ref offset, littleEndian); // serial
+        uint count = ReadUInt32(data, ref offset, littleEndian);
+
+        for (uint i = 0; i < count; i++)
+        {
+            if (offset + 4 > data.Length)
+            {
+                return null;
+            }
+
+            byte type = data[offset++];
+            offset++; // pad
+            ushort nameLen = ReadUInt16(data, ref offset, littleEndian);
+
+            if (offset + nameLen > data.Length)
+            {
+                return null;
+            }
+
+            string name = Encoding.ASCII.GetString(data.Slice(offset, nameLen));
+            offset += nameLen;
+            offset = Align4(offset);
+
+            _ = ReadUInt32(data, ref offset, littleEndian); // last_change_serial
+
+            if (type == 0)
+            {
+                int value = ReadInt32(data, ref offset, littleEndian);
+                if (string.Equals(name, key, StringComparison.Ordinal))
+                {
+                    return value;
+                }
+                continue;
+            }
+
+            if (type == 1)
+            {
+                // string
+                uint strLen = ReadUInt32(data, ref offset, littleEndian);
+                offset += checked((int)strLen);
+                offset = Align4(offset);
+                continue;
+            }
+
+            if (type == 2)
+            {
+                // color: 4 * uint16
+                offset += 8;
+                continue;
+            }
+
+            return null;
+        }
+
+        return null;
     }
 
     private static uint? ParseXSettingsDpi(ReadOnlySpan<byte> data)

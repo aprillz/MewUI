@@ -96,9 +96,22 @@ internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
 
     public void ProcessWorkItems()
     {
-        _queue.Process();
+        // Pump the queue/timers until they become stable (bounded).
+        // Work items can schedule new work at a higher priority; without re-pumping,
+        // the platform loop can observe HasPendingWork=true continuously and never block in poll().
+        const int MaxPumpIterations = 32;
+        for (int i = 0; i < MaxPumpIterations; i++)
+        {
+            _queue.Process();
+            ProcessTimers();
 
-        ProcessTimers();
+            GetPendingState(out var queueHasWork, out var dueTimers, out _);
+            if (!queueHasWork && dueTimers == 0)
+            {
+                break;
+            }
+        }
+
     }
 
     internal void SetWake(Action? wake)
@@ -189,6 +202,35 @@ internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
         }
 
         return (int)Math.Min(maxMs, Math.Max(0, Math.Ceiling(ms)));
+    }
+
+    internal void GetPendingState(out bool queueHasWork, out int dueTimers, out int totalTimers)
+    {
+        queueHasWork = _queue.HasWork;
+
+        long now = Stopwatch.GetTimestamp();
+        int due = 0;
+        int total = 0;
+        lock (_timersGate)
+        {
+            for (int i = 0; i < _timers.Count; i++)
+            {
+                var timer = _timers[i];
+                if (timer.Canceled)
+                {
+                    continue;
+                }
+
+                total++;
+                if (timer.DueAtTicks <= now)
+                {
+                    due++;
+                }
+            }
+        }
+
+        dueTimers = due;
+        totalTimers = total;
     }
 
     private void ProcessTimers()

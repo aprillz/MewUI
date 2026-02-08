@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewUI.Resources;
@@ -190,6 +191,15 @@ internal sealed class X11WindowBackend : IWindowBackend
         uint width = (uint)Math.Max(1, (int)Math.Round(Window.Width * dpiScale));
         uint height = (uint)Math.Max(1, (int)Math.Round(Window.Height * dpiScale));
 
+        int x = 0;
+        int y = 0;
+        if (Window.StartupLocation == WindowStartupLocation.CenterScreen &&
+            NativeX11.XGetWindowAttributes(Display, root, out var rootAttrs) != 0)
+        {
+            x = Math.Max(0, (rootAttrs.width - (int)width) / 2);
+            y = Math.Max(0, (rootAttrs.height - (int)height) / 2);
+        }
+
         // Choose a GLX visual for OpenGL rendering and create the window with that visual.
         // This keeps it compatible with later Wayland/EGL abstraction (window owns the surface config).
         // Try MSAA first to reduce jaggies on filled primitives (RoundRect, Ellipse, etc).
@@ -273,7 +283,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         Handle = NativeX11.XCreateWindow(
             Display,
             root,
-            0, 0,
+            x, y,
             width, height,
             0,
             visualInfo.depth,
@@ -512,8 +522,16 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     internal void RenderIfNeeded()
     {
-        if (!NeedsRender || Handle == 0 || Display == 0)
+        if (!NeedsRender)
         {
+            return;
+        }
+
+        // If the window is not renderable (already closed/destroyed), clear the flag
+        // to avoid keeping the platform host loop hot.
+        if (Handle == 0 || Display == 0)
+        {
+            NeedsRender = false;
             return;
         }
 
@@ -528,6 +546,23 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         NeedsRender = false;
         RenderNowCore();
+    }
+
+    internal int GetRenderDelayMs()
+    {
+        if (!NeedsRender)
+        {
+            return int.MaxValue;
+        }
+
+        long now = Environment.TickCount64;
+        long elapsed = now - _lastRenderTick;
+        if (elapsed >= 16)
+        {
+            return 0;
+        }
+
+        return (int)Math.Clamp(16 - elapsed, 0, 16);
     }
 
     internal void RenderNow()
@@ -647,24 +682,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         int xPx = e.x;
         int yPx = e.y;
         var pos = new Point(xPx / Window.DpiScale, yPx / Window.DpiScale);
-        Window.UpdateLastMousePosition(pos, pos);
-
-        if (isDown)
-        {
-            Window.ClosePopupsIfClickOutside(pos);
-        }
-
-        var element = _capturedElement ?? Window.HitTest(pos);
-        if (element == null)
-        {
-            return;
-        }
-
-        if (element != _mouseOverElement)
-        {
-            Window.UpdateMouseOverChain(_mouseOverElement, element);
-            _mouseOverElement = element;
-        }
 
         // X11 button: 1 left, 2 middle, 3 right, 4/5 wheel.
         if (e.button == 4 || e.button == 5)
@@ -674,14 +691,14 @@ internal sealed class X11WindowBackend : IWindowBackend
                 return;
             }
 
-            int delta = e.button == 4 ? 120 : -120;
-            var wheelArgs = new MouseWheelEventArgs(pos, pos, delta, isHorizontal: false);
+            var wheelElement = WindowInputRouter.HitTest(Window, _capturedElement, pos);
+            WindowInputRouter.UpdateMouseOver(Window, ref _mouseOverElement, wheelElement);
 
-            // Bubble to parents until handled (ScrollViewer etc.).
-            for (var current = element; current != null && !wheelArgs.Handled; current = current.Parent as UIElement)
-            {
-                current.RaiseMouseWheel(wheelArgs);
-            }
+            int delta = e.button == 4 ? 120 : -120;
+            bool leftDown = (e.state & (1u << 8)) != 0;
+            bool middleDown = (e.state & (1u << 9)) != 0;
+            bool rightDown = (e.state & (1u << 10)) != 0;
+            WindowInputRouter.MouseWheel(Window, pos, pos, delta, isHorizontal: false, leftDown, rightDown, middleDown);
 
             return;
         }
@@ -699,19 +716,17 @@ internal sealed class X11WindowBackend : IWindowBackend
         bool right = (e.state & (1u << 10)) != 0;
 
         // Include the current transition.
-        if (btn == MouseButton.Left)
+        switch (btn)
         {
-            left = isDown;
-        }
-
-        if (btn == MouseButton.Middle)
-        {
-            middle = isDown;
-        }
-
-        if (btn == MouseButton.Right)
-        {
-            right = isDown;
+            case MouseButton.Left:
+                left = isDown;
+                break;
+            case MouseButton.Middle:
+                middle = isDown;
+                break;
+            case MouseButton.Right:
+                right = isDown;
+                break;
         }
 
         int clickCount = 1;
@@ -735,47 +750,29 @@ internal sealed class X11WindowBackend : IWindowBackend
             }
         }
 
-        var args = new MouseEventArgs(pos, pos, btn, leftButton: left, rightButton: right, middleButton: middle, clickCount: clickCount);
-
-        if (isDown)
-        {
-            element.RaiseMouseDown(args);
-            if (clickCount == 2)
-            {
-                var dblArgs = new MouseEventArgs(pos, pos, btn, leftButton: left, rightButton: right, middleButton: middle, clickCount: 2);
-                element.RaiseMouseDoubleClick(dblArgs);
-            }
-        }
-        else
-        {
-            element.RaiseMouseUp(args);
-            Window.RequerySuggested();
-        }
+        WindowInputRouter.MouseButton(
+            Window,
+            ref _mouseOverElement,
+            _capturedElement,
+            pos,
+            pos,
+            btn,
+            isDown,
+            leftDown: left,
+            rightDown: right,
+            middleDown: middle,
+            clickCount: clickCount);
     }
 
     private void HandleMotion(XMotionEvent e)
     {
         var pos = new Point(e.x / Window.DpiScale, e.y / Window.DpiScale);
-        Window.UpdateLastMousePosition(pos, pos);
-        var element = _capturedElement ?? Window.HitTest(pos);
-
-        if (element != _mouseOverElement)
-        {
-            Window.UpdateMouseOverChain(_mouseOverElement, element);
-            _mouseOverElement = element;
-        }
-
-        if (element == null)
-        {
-            return;
-        }
 
         bool left = (e.state & (1u << 8)) != 0;
         bool middle = (e.state & (1u << 9)) != 0;
         bool right = (e.state & (1u << 10)) != 0;
 
-        var args = new MouseEventArgs(pos, pos, MouseButton.Left, leftButton: left, rightButton: right, middleButton: middle);
-        element.RaiseMouseMove(args);
+        WindowInputRouter.MouseMove(Window, ref _mouseOverElement, _capturedElement, pos, pos, leftDown: left, rightDown: right, middleDown: middle);
     }
 
     internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
