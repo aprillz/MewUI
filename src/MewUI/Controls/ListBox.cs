@@ -118,6 +118,9 @@ public partial class ListBox : Control
         }
     }
 
+    /// <summary>
+    /// Gets or sets the item template. If not set explicitly, the default template is used.
+    /// </summary>
     public IDataTemplate ItemTemplate
     {
         get => _itemsHost.ItemTemplate;

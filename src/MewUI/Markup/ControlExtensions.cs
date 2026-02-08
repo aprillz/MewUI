@@ -1183,10 +1183,10 @@ public static class ControlExtensions
     /// <param name="items">Items collection.</param>
     /// <param name="textSelector">Text selector function.</param>
     /// <returns>The list box for chaining.</returns>
-    public static ListBox Items<T>(this ListBox listBox, IReadOnlyList<T> items, Func<T, string> textSelector)
+    public static ListBox Items<T>(this ListBox listBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(listBox);
-        listBox.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector);
+        listBox.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector, keySelector);
         return listBox;
     }
 
@@ -1294,6 +1294,31 @@ public static class ControlExtensions
         treeView.ItemsSource = items == null
             ? ItemsView.Empty
             : TreeItemsView.Create(items, n => n.Children, textSelector: n => n.Text, keySelector: n => n);
+        return treeView;
+    }
+
+    /// <summary>
+    /// Sets a hierarchical items source using a children selector.
+    /// </summary>
+    /// <param name="treeView">Target tree view.</param>
+    /// <param name="roots">Root items collection.</param>
+    /// <param name="childrenSelector">Selector for child collection.</param>
+    /// <param name="textSelector">Optional text selector for the default template.</param>
+    /// <param name="keySelector">Optional key selector for selection/state stability.</param>
+    /// <returns>The tree view for chaining.</returns>
+    public static TreeView Items<T>(
+        this TreeView treeView,
+        IReadOnlyList<T> roots,
+        Func<T, IReadOnlyList<T>> childrenSelector,
+        Func<T, string>? textSelector = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+
+        treeView.ItemsSource = roots == null
+            ? ItemsView.Empty
+            : TreeItemsView.Create(roots, childrenSelector, textSelector, keySelector);
+
         return treeView;
     }
 
@@ -1727,10 +1752,10 @@ public static class ControlExtensions
     /// <param name="items">Items collection.</param>
     /// <param name="textSelector">Text selector function.</param>
     /// <returns>The combo box for chaining.</returns>
-    public static ComboBox Items<T>(this ComboBox comboBox, IReadOnlyList<T> items, Func<T, string> textSelector)
+    public static ComboBox Items<T>(this ComboBox comboBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
-        comboBox.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector);
+        comboBox.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector, keySelector);
         return comboBox;
     }
 

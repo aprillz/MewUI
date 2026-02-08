@@ -117,6 +117,9 @@ public sealed class TreeView : Control, IVisualTreeHost
         }
     }
 
+    /// <summary>
+    /// Gets or sets the node template. If not set explicitly, the default template is used.
+    /// </summary>
     public IDataTemplate ItemTemplate
     {
         get => _itemsHost.ItemTemplate;

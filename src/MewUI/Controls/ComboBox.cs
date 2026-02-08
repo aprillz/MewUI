@@ -131,6 +131,9 @@ public sealed partial class ComboBox : Control, IPopupOwner
         }
     } = 160;
 
+    /// <summary>
+    /// Gets or sets the item template for the dropdown list. If null, the list uses its default template.
+    /// </summary>
     public IDataTemplate? ItemTemplate
     {
         get => _itemTemplate;
