@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
@@ -271,13 +272,28 @@ internal sealed class Win32WindowBackend : IWindowBackend
         uint style = GetWindowStyle();
         User32.AdjustWindowRectEx(ref rect, style, false, 0);
 
+        int x = 100;
+        int y = 100;
+        if (Window.StartupLocation == WindowStartupLocation.CenterScreen)
+        {
+            const int SM_CXSCREEN = 0;
+            const int SM_CYSCREEN = 1;
+            int screenW = User32.GetSystemMetrics(SM_CXSCREEN);
+            int screenH = User32.GetSystemMetrics(SM_CYSCREEN);
+            if (screenW > 0 && screenH > 0)
+            {
+                x = Math.Max(0, (screenW - rect.Width) / 2);
+                y = Math.Max(0, (screenH - rect.Height) / 2);
+            }
+        }
+
         Handle = User32.CreateWindowEx(
             0,
             Win32PlatformHost.WindowClassName,
             Window.Title,
             style,
-            100,
-            100,
+            x,
+            y,
             rect.Width,
             rect.Height,
             0,
@@ -347,6 +363,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         _initialEraseDone = true;
         return 1;
     }
+
+    // (system backdrop support removed)
 
     private void ApplyIcons()
     {
@@ -520,6 +538,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         // Render without relying on WM_PAINT. This matches the request-driven model (WPF-style coalescing).
         // If the window is in an invalid paint state (e.g., uncovered), ValidateRect prevents redundant WM_PAINT storms.
+
         nint hdc = User32.GetDC(Handle);
         if (hdc == 0)
         {
@@ -594,21 +613,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         var pos = GetMousePosition(lParam);
         var screenPos = ClientToScreen(pos);
-        Window.UpdateLastMousePosition(pos, screenPos);
-
-        var element = _capturedElement ?? Window.HitTest(pos);
-
-        if (element != _mouseOverElement)
-        {
-            Window.UpdateMouseOverChain(_mouseOverElement, element);
-            _mouseOverElement = element;
-        }
 
         bool leftDown = (User32.GetKeyState(VirtualKeys.VK_LBUTTON) & 0x8000) != 0;
         bool rightDown = (User32.GetKeyState(VirtualKeys.VK_RBUTTON) & 0x8000) != 0;
         bool middleDown = (User32.GetKeyState(VirtualKeys.VK_MBUTTON) & 0x8000) != 0;
-        var args = new MouseEventArgs(pos, screenPos, MouseButton.Left, leftDown, rightDown, middleDown);
-        element?.RaiseMouseMove(args);
+        WindowInputRouter.MouseMove(Window, ref _mouseOverElement, _capturedElement, pos, screenPos, leftDown, rightDown, middleDown);
 
         return 0;
     }
@@ -619,14 +628,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
         int yPx = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
         var pos = new Point(xPx / Window.DpiScale, yPx / Window.DpiScale);
         var screenPos = ClientToScreen(pos);
-        Window.UpdateLastMousePosition(pos, screenPos);
-
-        if (isDown)
-        {
-            Window.ClosePopupsIfClickOutside(pos);
-        }
-
-        var element = _capturedElement ?? Window.HitTest(pos);
+        bool leftDown = (User32.GetKeyState(VirtualKeys.VK_LBUTTON) & 0x8000) != 0;
+        bool rightDown = (User32.GetKeyState(VirtualKeys.VK_RBUTTON) & 0x8000) != 0;
+        bool middleDown = (User32.GetKeyState(VirtualKeys.VK_MBUTTON) & 0x8000) != 0;
 
         int clickCount = 1;
         int buttonIndex = (int)button;
@@ -658,36 +662,18 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 }
             }
         }
-
-        var args = new MouseEventArgs(pos, screenPos, button,
-            button == MouseButton.Left && isDown,
-            button == MouseButton.Right && isDown,
-            button == MouseButton.Middle && isDown,
-            clickCount: clickCount);
-
-        if (isDown)
-        {
-            if (element?.Focusable == true)
-            {
-                Window.FocusManager.SetFocus(element);
-            }
-
-            element?.RaiseMouseDown(args);
-            if (clickCount == 2)
-            {
-                var dblArgs = new MouseEventArgs(pos, screenPos, button,
-                    button == MouseButton.Left && isDown,
-                    button == MouseButton.Right && isDown,
-                    button == MouseButton.Middle && isDown,
-                    clickCount: 2);
-                element?.RaiseMouseDoubleClick(dblArgs);
-            }
-        }
-        else
-        {
-            element?.RaiseMouseUp(args);
-            Window.RequerySuggested();
-        }
+        WindowInputRouter.MouseButton(
+            Window,
+            ref _mouseOverElement,
+            _capturedElement,
+            pos,
+            screenPos,
+            button,
+            isDown,
+            leftDown,
+            rightDown,
+            middleDown,
+            clickCount);
 
         return 0;
     }
@@ -701,15 +687,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         var pt = new POINT(screenX, screenY);
         User32.ScreenToClient(Handle, ref pt);
         var pos = new Point(pt.x / Window.DpiScale, pt.y / Window.DpiScale);
-
-        var element = Window.HitTest(pos);
-        var args = new MouseWheelEventArgs(pos, new Point(screenX, screenY), delta, isHorizontal);
-
-        // Bubble to parents until handled (ScrollViewer etc.).
-        for (var current = element; current != null && !args.Handled; current = current.Parent as UIElement)
-        {
-            current.RaiseMouseWheel(args);
-        }
+        WindowInputRouter.MouseWheel(Window, pos, new Point(screenX, screenY), delta, isHorizontal);
 
         return 0;
     }
