@@ -34,6 +34,8 @@ public class Window : ContentControl, ILayoutRoundingHost
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
     private readonly List<UIElement> _mouseOverNewPath = new(capacity: 16);
+    private UIElement? _mouseOverElement;
+    private UIElement? _capturedElement;
     private Point _lastMousePositionDip;
     private Point _lastMouseScreenPositionPx;
     private bool _loadedRaised;
@@ -46,6 +48,32 @@ public class Window : ContentControl, ILayoutRoundingHost
     internal Point LastMousePositionDip => _lastMousePositionDip;
 
     internal Point LastMouseScreenPositionPx => _lastMouseScreenPositionPx;
+
+    internal UIElement? MouseOverElement => _mouseOverElement;
+
+    internal UIElement? CapturedElement => _capturedElement;
+
+    internal bool HasMouseCapture => _capturedElement != null;
+
+    internal void ClearMouseCaptureState()
+    {
+        if (_capturedElement != null)
+        {
+            _capturedElement.SetMouseCaptured(false);
+            _capturedElement = null;
+        }
+    }
+
+    internal void ClearMouseOverState()
+    {
+        if (_mouseOverElement != null)
+        {
+            UpdateMouseOverChain(_mouseOverElement, null);
+            _mouseOverElement = null;
+        }
+    }
+
+    internal void SetMouseOverElement(UIElement? element) => _mouseOverElement = element;
 
     internal void UpdateLastMousePosition(Point positionDip, Point screenPositionPx)
     {
@@ -708,13 +736,30 @@ public class Window : ContentControl, ILayoutRoundingHost
     public void CaptureMouse(UIElement element)
     {
         EnsureBackend();
-        _backend!.CaptureMouse(element);
+        if (_backend!.Handle == 0)
+        {
+            return;
+        }
+
+        _backend.CaptureMouse();
+
+        if (_capturedElement != null && !ReferenceEquals(_capturedElement, element))
+        {
+            _capturedElement.SetMouseCaptured(false);
+        }
+
+        _capturedElement = element;
+        element.SetMouseCaptured(true);
     }
 
     /// <summary>
     /// Releases any active mouse capture for this window.
     /// </summary>
-    public void ReleaseMouseCapture() => _backend?.ReleaseMouseCapture();
+    public void ReleaseMouseCapture()
+    {
+        _backend?.ReleaseMouseCapture();
+        ClearMouseCaptureState();
+    }
 
     internal void AttachBackend(IWindowBackend backend)
     {

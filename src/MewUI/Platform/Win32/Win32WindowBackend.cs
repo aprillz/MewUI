@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
@@ -16,8 +15,6 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private readonly Win32PlatformHost _host;
     internal Window Window { get; }
 
-    private UIElement? _mouseOverElement;
-    private UIElement? _capturedElement;
     private readonly ClickCountTracker _clickCountTracker = new();
     private readonly int[] _lastPressClickCounts = new int[5];
     private nint _hIconSmall;
@@ -143,7 +140,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         User32.SetWindowPos(Handle, 0, 0, 0, rect.Width, rect.Height, 0x0002 | 0x0004); // SWP_NOMOVE | SWP_NOZORDER
     }
 
-    public void CaptureMouse(UIElement element)
+    public void CaptureMouse()
     {
         if (Handle == 0)
         {
@@ -151,18 +148,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         User32.SetCapture(Handle);
-        _capturedElement = element;
-        element.SetMouseCaptured(true);
     }
 
     public void ReleaseMouseCapture()
     {
         User32.ReleaseCapture();
-        if (_capturedElement != null)
-        {
-            _capturedElement.SetMouseCaptured(false);
-            _capturedElement = null;
-        }
     }
 
     public nint ProcessMessage(uint msg, nint wParam, nint lParam)
@@ -183,6 +173,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 Window.RaiseClosed();
                 User32.DestroyWindow(Handle);
                 return 0;
+
+            case WindowMessages.WM_CANCELMODE:
+            case WindowMessages.WM_CAPTURECHANGED:
+                // Capture can be revoked by the OS (e.g. deactivation). Keep UI state consistent.
+                Window.ClearMouseCaptureState();
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_PAINT:
                 return HandlePaint();
@@ -482,6 +478,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         _titleBarThemeSync.Dispose();
         DestroyIcons();
+        User32.ReleaseCapture();
+        Window.ClearMouseOverState();
+        Window.ClearMouseCaptureState();
         if (Window.GraphicsFactory is Rendering.IWindowResourceReleaser releaser)
         {
             releaser.ReleaseWindowResources(Handle);
@@ -618,7 +617,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         bool leftDown = (User32.GetKeyState(VirtualKeys.VK_LBUTTON) & 0x8000) != 0;
         bool rightDown = (User32.GetKeyState(VirtualKeys.VK_RBUTTON) & 0x8000) != 0;
         bool middleDown = (User32.GetKeyState(VirtualKeys.VK_MBUTTON) & 0x8000) != 0;
-        WindowInputRouter.MouseMove(Window, ref _mouseOverElement, _capturedElement, pos, screenPos, leftDown, rightDown, middleDown);
+        WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown, rightDown, middleDown);
 
         return 0;
     }
@@ -665,8 +664,6 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
         WindowInputRouter.MouseButton(
             Window,
-            ref _mouseOverElement,
-            _capturedElement,
             pos,
             screenPos,
             button,
@@ -695,11 +692,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandleMouseLeave()
     {
-        if (_mouseOverElement != null)
-        {
-            Window.UpdateMouseOverChain(_mouseOverElement, null);
-            _mouseOverElement = null;
-        }
+        WindowInputRouter.UpdateMouseOver(Window, null);
         return 0;
     }
 

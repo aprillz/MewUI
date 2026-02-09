@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Controls;
-
 namespace Aprillz.MewUI.Platform;
 
 /// <summary>
@@ -59,10 +57,10 @@ public interface IWindowBackend : IDisposable
     void SetClientSize(double widthDip, double heightDip);
 
     /// <summary>
-    /// Captures mouse input so that the specified element continues to receive mouse events.
+    /// Captures mouse input at the native window level so the window continues to receive mouse events,
+    /// even when the pointer leaves the client area (platform dependent).
     /// </summary>
-    /// <param name="element">Element requesting capture.</param>
-    void CaptureMouse(UIElement element);
+    void CaptureMouse();
 
     /// <summary>
     /// Releases any active mouse capture.

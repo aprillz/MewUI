@@ -30,9 +30,9 @@ internal sealed class Win32TitleBarThemeSynchronizer : IDisposable
 
 
     /// <summary>
-    /// Synchronizes the window's title bar appearance with the specified theme.
+    /// Synchronizes the window's title bar appearance with the specified theme mode.
     /// </summary>
-    /// <param name="theme">The theme to apply to the title bar.</param>
+    /// <param name="isDark"><see langword="true"/> to use the dark title bar theme; otherwise, <see langword="false"/>.</param>
     public void ApplyTheme(bool isDark)
     {
         _isDark = isDark;

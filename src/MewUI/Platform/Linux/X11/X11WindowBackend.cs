@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 
-using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.OpenGL;
@@ -24,8 +23,6 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _wmProtocolsAtom;
     private long _lastRenderTick;
 
-    private UIElement? _mouseOverElement;
-    private UIElement? _capturedElement;
     private readonly ClickCountTracker _clickCountTracker = new();
     private readonly int[] _lastPressClickCounts = new int[5];
     private IconSource? _icon;
@@ -123,21 +120,14 @@ internal sealed class X11WindowBackend : IWindowBackend
         // TODO: XResizeWindow
     }
 
-    public void CaptureMouse(UIElement element)
+    public void CaptureMouse()
     {
         // TODO: XGrabPointer
-        _capturedElement = element;
-        element.SetMouseCaptured(true);
     }
 
     public void ReleaseMouseCapture()
     {
         // TODO: XUngrabPointer
-        if (_capturedElement != null)
-        {
-            _capturedElement.SetMouseCaptured(false);
-            _capturedElement = null;
-        }
     }
 
     public Point ClientToScreen(Point clientPointDip)
@@ -692,8 +682,8 @@ internal sealed class X11WindowBackend : IWindowBackend
                 return;
             }
 
-            var wheelElement = WindowInputRouter.HitTest(Window, _capturedElement, pos);
-            WindowInputRouter.UpdateMouseOver(Window, ref _mouseOverElement, wheelElement);
+            var wheelElement = WindowInputRouter.HitTest(Window, pos);
+            WindowInputRouter.UpdateMouseOver(Window, wheelElement);
 
             int delta = e.button == 4 ? 120 : -120;
             bool leftDown = (e.state & (1u << 8)) != 0;
@@ -753,8 +743,6 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         WindowInputRouter.MouseButton(
             Window,
-            ref _mouseOverElement,
-            _capturedElement,
             pos,
             pos,
             btn,
@@ -773,7 +761,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         bool middle = (e.state & (1u << 9)) != 0;
         bool right = (e.state & (1u << 10)) != 0;
 
-        WindowInputRouter.MouseMove(Window, ref _mouseOverElement, _capturedElement, pos, pos, leftDown: left, rightDown: right, middleDown: middle);
+        WindowInputRouter.MouseMove(Window, pos, pos, leftDown: left, rightDown: right, middleDown: middle);
     }
 
     internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
@@ -882,14 +870,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         _disposed = true;
 
-        _mouseOverElement?.SetMouseOver(false);
-        _mouseOverElement = null;
-
-        if (_capturedElement != null)
-        {
-            _capturedElement.SetMouseCaptured(false);
-            _capturedElement = null;
-        }
+        Window.ClearMouseOverState();
+        Window.ClearMouseCaptureState();
 
         RaiseClosedOnce();
         Cleanup(Handle, destroyWindow: true);

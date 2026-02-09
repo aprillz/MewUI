@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Controls;
-
 namespace Aprillz.MewUI.Platform.Linux;
 
 internal sealed class LinuxWindowBackend : IWindowBackend
@@ -27,7 +25,7 @@ internal sealed class LinuxWindowBackend : IWindowBackend
 
     public void SetClientSize(double widthDip, double heightDip) { }
 
-    public void CaptureMouse(UIElement element) { }
+    public void CaptureMouse() { }
 
     public void ReleaseMouseCapture() { }
 
