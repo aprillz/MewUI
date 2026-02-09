@@ -1,5 +1,8 @@
 namespace Aprillz.MewUI.Resources;
 
+/// <summary>
+/// Maintains a process-wide registry of image decoders used by <see cref="ImageSource"/>.
+/// </summary>
 public static class ImageDecoders
 {
     private static long _nextOrder;
@@ -63,6 +66,12 @@ public static class ImageDecoders
         }
     }
 
+    /// <summary>
+    /// Attempts to decode an encoded image span into a <see cref="DecodedBitmap"/>.
+    /// </summary>
+    /// <param name="encoded">Encoded image bytes.</param>
+    /// <param name="bitmap">Decoded bitmap on success.</param>
+    /// <returns><see langword="true"/> if a decoder matched and decoding succeeded; otherwise, <see langword="false"/>.</returns>
     public static bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
     {
         IImageDecoder? decoder = null;
@@ -95,6 +104,12 @@ public static class ImageDecoders
         return ok;
     }
 
+    /// <summary>
+    /// Attempts to decode an encoded image byte array into a <see cref="DecodedBitmap"/>.
+    /// </summary>
+    /// <param name="encoded">Encoded image bytes.</param>
+    /// <param name="bitmap">Decoded bitmap on success.</param>
+    /// <returns><see langword="true"/> if a decoder matched and decoding succeeded; otherwise, <see langword="false"/>.</returns>
     public static bool TryDecode(byte[] encoded, out DecodedBitmap bitmap)
     {
         ArgumentNullException.ThrowIfNull(encoded);

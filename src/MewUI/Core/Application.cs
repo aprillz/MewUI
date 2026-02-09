@@ -38,10 +38,19 @@ public sealed class Application
     /// </summary>
     public static Application Current => _current ?? throw new InvalidOperationException("Application not initialized. Call Application.Run() first.");
 
+    /// <summary>
+    /// Gets the currently active theme.
+    /// </summary>
     public Theme Theme => _themeManager.CurrentTheme;
 
+    /// <summary>
+    /// Gets the render loop settings controlling frame scheduling.
+    /// </summary>
     public RenderLoopSettings RenderLoopSettings => _renderLoopSettings;
 
+    /// <summary>
+    /// Raised when the theme changes.
+    /// </summary>
     public event Action<Theme, Theme>? ThemeChanged;
 
     internal ThemeVariant ThemeMode => _themeManager.Mode;

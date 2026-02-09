@@ -29,8 +29,4 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="$(TargetDir)$(AssemblyName).xml" Pack="true" PackagePath="lib/$(TargetFramework)/" Condition="'$(TargetDir)' != ''" />
-  </ItemGroup>
 </Project>

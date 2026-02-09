@@ -1,7 +1,15 @@
+using Aprillz.MewUI.Controls;
+
 namespace Aprillz.MewUI.Input;
 
+/// <summary>
+/// Routes window-level raw input events to the appropriate UI elements (hit testing, mouse-over updates, bubbling).
+/// </summary>
 internal static class WindowInputRouter
 {
+    /// <summary>
+    /// Updates the current mouse-over element and the window's mouse-over chain.
+    /// </summary>
     public static void UpdateMouseOver(Window window, ref UIElement? mouseOverElement, UIElement? newLeaf)
     {
         if (ReferenceEquals(mouseOverElement, newLeaf))
@@ -16,6 +24,9 @@ internal static class WindowInputRouter
     public static UIElement? HitTest(Window window, UIElement? capturedElement, Point positionInWindow)
         => capturedElement ?? window.HitTest(positionInWindow);
 
+    /// <summary>
+    /// Routes a mouse move to the current hit-tested element and updates mouse-over state.
+    /// </summary>
     public static void MouseMove(
         Window window,
         ref UIElement? mouseOverElement,
@@ -35,6 +46,9 @@ internal static class WindowInputRouter
         element?.RaiseMouseMove(args);
     }
 
+    /// <summary>
+    /// Routes a mouse button press/release to the current hit-tested element and manages focus/mouse-over state.
+    /// </summary>
     public static void MouseButton(
         Window window,
         ref UIElement? mouseOverElement,
@@ -86,6 +100,9 @@ internal static class WindowInputRouter
         }
     }
 
+    /// <summary>
+    /// Routes a mouse wheel event by bubbling from the hit-tested element to the root until handled.
+    /// </summary>
     public static void MouseWheel(
         Window window,
         Point positionInWindow,

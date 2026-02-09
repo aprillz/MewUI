@@ -3,6 +3,7 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Cross-platform key identifiers (independent from Win32 virtual-key codes).
 /// </summary>
+#pragma warning disable CS1591
 public enum Key
 {
     None = 0,

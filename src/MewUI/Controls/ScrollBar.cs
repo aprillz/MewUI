@@ -2,12 +2,18 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// A scrollbar control used to represent and change a scroll offset.
+/// </summary>
 public sealed class ScrollBar : RangeBase
 {
     private bool _dragging;
     private double _dragStartPos;
     private double _dragStartValue;
 
+    /// <summary>
+    /// Gets or sets the scroll direction (vertical or horizontal).
+    /// </summary>
     public Orientation Orientation
     {
         get;
@@ -21,6 +27,10 @@ public sealed class ScrollBar : RangeBase
         }
     } = Orientation.Vertical;
 
+    /// <summary>
+    /// Gets or sets the viewport size in DIPs.
+    /// Used to compute thumb size relative to the scroll range.
+    /// </summary>
     public double ViewportSize
     {
         get;
@@ -36,10 +46,19 @@ public sealed class ScrollBar : RangeBase
         }
     }
 
+    /// <summary>
+    /// Gets or sets the amount to scroll for small changes (e.g. mouse wheel).
+    /// </summary>
     public double SmallChange { get; set; } = 24;
 
+    /// <summary>
+    /// Gets or sets the amount to scroll for large changes (e.g. track click).
+    /// </summary>
     public double LargeChange { get; set; } = 120;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ScrollBar"/> class.
+    /// </summary>
     public ScrollBar()
     {
         Background = Color.Transparent;

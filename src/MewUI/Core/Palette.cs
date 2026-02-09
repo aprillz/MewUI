@@ -1,13 +1,20 @@
 namespace Aprillz.MewUI;
 
+/// <summary>
+/// Computed theme colors derived from a <see cref="ThemeSeed"/> and an accent.
+/// </summary>
 public sealed class Palette
 {
+    /// <summary>Window background color.</summary>
     public Color WindowBackground { get; }
 
+    /// <summary>Default window foreground/text color.</summary>
     public Color WindowText { get; }
 
+    /// <summary>Default control background color.</summary>
     public Color ControlBackground { get; }
 
+    /// <summary>Default control border color.</summary>
     public Color ControlBorder { get; }
 
     public Color ContainerBackground { get; }
@@ -46,6 +53,9 @@ public sealed class Palette
 
     public ThemeSeed Seed { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Palette"/> class.
+    /// </summary>
     public Palette(
         ThemeSeed baseColors,
         Color accent,
@@ -92,11 +102,17 @@ public sealed class Palette
 
     internal static bool UseAlphaPalette { get; set; } = false;
 
+    /// <summary>
+    /// Creates a copy of this palette with a different accent.
+    /// </summary>
     public Palette WithAccent(Color accent, Color? accentText = null)
     {
         return new Palette(Seed, accent, accentText);
     }
 
+    /// <summary>
+    /// Returns true if a background should be treated as dark.
+    /// </summary>
     public static bool IsDarkBackground(Color color) => (color.R + color.G + color.B) < 128 * 3;
 
     private static Color ComputeControlBorder(Color baseColor, Color windowText, Color accent)

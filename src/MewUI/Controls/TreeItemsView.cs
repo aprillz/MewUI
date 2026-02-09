@@ -5,18 +5,50 @@ using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI;
 
+/// <summary>
+/// Represents a hierarchical items view for <see cref="Controls.TreeView"/>, including expansion state and depth.
+/// </summary>
 public interface ITreeItemsView : IItemsView
 {
+    /// <summary>
+    /// Gets the depth (indent level) for the item at <paramref name="index"/>.
+    /// </summary>
     int GetDepth(int index);
+
+    /// <summary>
+    /// Gets whether the item at <paramref name="index"/> has children.
+    /// </summary>
     bool GetHasChildren(int index);
+
+    /// <summary>
+    /// Gets whether the item at <paramref name="index"/> is expanded.
+    /// </summary>
     bool GetIsExpanded(int index);
+
+    /// <summary>
+    /// Sets the expanded state for the item at <paramref name="index"/>.
+    /// </summary>
     void SetIsExpanded(int index, bool value);
 }
 
+/// <summary>
+/// Helpers for creating <see cref="ITreeItemsView"/> instances.
+/// </summary>
 public static class TreeItemsView
 {
+    /// <summary>
+    /// Gets an empty, non-null items view.
+    /// </summary>
     public static ITreeItemsView Empty { get; } = new EmptyTreeItemsView();
 
+    /// <summary>
+    /// Creates a tree items view backed by a root list and a child selector.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="roots">Root items.</param>
+    /// <param name="childrenSelector">Function that returns children for a given item.</param>
+    /// <param name="textSelector">Function that returns display text for a given item.</param>
+    /// <param name="keySelector">Function that returns a stable key for a given item (used for expansion/selection stability).</param>
     public static TreeItemsView<T> Create<T>(
         IReadOnlyList<T> roots,
         Func<T, IReadOnlyList<T>> childrenSelector,
@@ -63,6 +95,10 @@ public static class TreeItemsView
     }
 }
 
+/// <summary>
+/// Default <see cref="ITreeItemsView"/> implementation for a hierarchical data source.
+/// </summary>
+/// <typeparam name="T">Item type.</typeparam>
 public sealed class TreeItemsView<T> : ITreeItemsView
 {
     private readonly Func<T, IReadOnlyList<T>> _childrenSelector;
@@ -112,10 +148,19 @@ public sealed class TreeItemsView<T> : ITreeItemsView
 
     public IReadOnlyList<T> Roots { get; }
 
+    /// <summary>
+    /// Gets the number of currently visible rows (after applying expansion state).
+    /// </summary>
     public int Count => _visible.Count;
 
+    /// <summary>
+    /// Gets a key selector for object-typed APIs (used by controls for selection stability).
+    /// </summary>
     public Func<object?, object?>? KeySelector => _keySelectorObject;
 
+    /// <summary>
+    /// Gets or sets the selected visible-row index.
+    /// </summary>
     public int SelectedIndex
     {
         get => _selectedIndex;
@@ -162,8 +207,14 @@ public sealed class TreeItemsView<T> : ITreeItemsView
     public event Action<ItemsChange>? Changed;
     public event Action<int>? SelectionChanged;
 
+    /// <summary>
+    /// Gets the item at the given visible-row index.
+    /// </summary>
     public object? GetItem(int index) => index >= 0 && index < _visible.Count ? _visible[index].Item : null;
 
+    /// <summary>
+    /// Gets the display text for the item at the given visible-row index.
+    /// </summary>
     public string GetText(int index)
     {
         if (index < 0 || index >= _visible.Count)
@@ -174,8 +225,14 @@ public sealed class TreeItemsView<T> : ITreeItemsView
         return _textSelector(_visible[index].Item);
     }
 
+    /// <summary>
+    /// Gets the depth (indent level) for the given visible-row index.
+    /// </summary>
     public int GetDepth(int index) => index >= 0 && index < _visible.Count ? _visible[index].Depth : 0;
 
+    /// <summary>
+    /// Gets whether the item at the given visible-row index has children.
+    /// </summary>
     public bool GetHasChildren(int index)
     {
         if (index < 0 || index >= _visible.Count)
@@ -187,6 +244,9 @@ public sealed class TreeItemsView<T> : ITreeItemsView
         return children != null && children.Count > 0;
     }
 
+    /// <summary>
+    /// Gets whether the item at the given visible-row index is expanded.
+    /// </summary>
     public bool GetIsExpanded(int index)
     {
         if (index < 0 || index >= _visible.Count)
@@ -197,6 +257,9 @@ public sealed class TreeItemsView<T> : ITreeItemsView
         return _expandedKeys.Contains(_visible[index].Key);
     }
 
+    /// <summary>
+    /// Sets the expanded state for the item at the given visible-row index.
+    /// </summary>
     public void SetIsExpanded(int index, bool value)
     {
         if (index < 0 || index >= _visible.Count)

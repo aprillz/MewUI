@@ -48,43 +48,4 @@ public sealed class Menu
     /// Optional per-menu item padding override. When null, the visual presenter chooses a theme-based default.
     /// </summary>
     public Thickness? ItemPadding { get; set; }
-
-    public Menu Add(MenuEntry entry)
-    {
-        ArgumentNullException.ThrowIfNull(entry);
-        _items.Add(entry);
-        return this;
-    }
-
-    public Menu Item(string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
-    {
-        _items.Add(new MenuItem
-        {
-            Text = text ?? string.Empty,
-            Click = onClick,
-            IsEnabled = isEnabled,
-            ShortcutText = shortcutText
-        });
-        return this;
-    }
-
-    public Menu SubMenu(string text, Menu subMenu, bool isEnabled = true, string? shortcutText = null)
-    {
-        ArgumentNullException.ThrowIfNull(subMenu);
-
-        _items.Add(new MenuItem
-        {
-            Text = text ?? string.Empty,
-            IsEnabled = isEnabled,
-            ShortcutText = shortcutText,
-            SubMenu = subMenu
-        });
-        return this;
-    }
-
-    public Menu Separator()
-    {
-        _items.Add(MenuSeparator.Instance);
-        return this;
-    }
 }

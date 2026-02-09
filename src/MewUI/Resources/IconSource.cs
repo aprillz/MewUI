@@ -9,8 +9,16 @@ public sealed class IconSource
 
     private sealed record Entry(int SizePx, ImageSource Source);
 
+    /// <summary>
+    /// Loads an icon from a file path.
+    /// </summary>
+    /// <param name="path">Path to an .ico file.</param>
     public static IconSource FromFile(string path) => FromBytes(File.ReadAllBytes(path));
 
+    /// <summary>
+    /// Loads an icon from a stream.
+    /// </summary>
+    /// <param name="stream">Stream containing .ico bytes.</param>
     public static IconSource FromStream(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -40,6 +48,10 @@ public sealed class IconSource
         return FromBytes(copy.ToArray());
     }
 
+    /// <summary>
+    /// Loads an icon from raw .ico bytes.
+    /// </summary>
+    /// <param name="icoData">The .ico file bytes.</param>
     public static IconSource FromBytes(byte[] icoData)
     {
         ArgumentNullException.ThrowIfNull(icoData);
@@ -110,6 +122,12 @@ public sealed class IconSource
         return result;
     }
 
+    /// <summary>
+    /// Adds an image source for a given icon size.
+    /// </summary>
+    /// <param name="sizePx">Icon size in pixels.</param>
+    /// <param name="source">The image source.</param>
+    /// <returns>This instance for chaining.</returns>
     public IconSource Add(int sizePx, ImageSource source)
     {
         if (sizePx <= 0)
@@ -126,6 +144,11 @@ public sealed class IconSource
         return this;
     }
 
+    /// <summary>
+    /// Picks the closest matching image for the requested size.
+    /// </summary>
+    /// <param name="desiredSizePx">Desired icon size in pixels.</param>
+    /// <returns>The closest match, or <see langword="null"/> if no entries exist.</returns>
     public ImageSource? Pick(int desiredSizePx)
     {
         if (_entries.Count == 0)

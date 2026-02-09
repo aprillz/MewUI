@@ -6,10 +6,15 @@ namespace Aprillz.MewUI;
 [Flags]
 public enum ModifierKeys
 {
+    /// <summary>No modifier keys.</summary>
     None = 0,
+    /// <summary>Control key.</summary>
     Control = 1,
+    /// <summary>Shift key.</summary>
     Shift = 2,
+    /// <summary>Alt key.</summary>
     Alt = 4,
+    /// <summary>Windows / Command key.</summary>
     Windows = 8
 }
 
@@ -43,6 +48,13 @@ public class KeyEventArgs
     /// </summary>
     public bool Handled { get; set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KeyEventArgs"/> class.
+    /// </summary>
+    /// <param name="key">Cross-platform key identifier.</param>
+    /// <param name="platformKey">Platform-specific key code (e.g. Win32 virtual-key).</param>
+    /// <param name="modifiers">Modifier keys pressed.</param>
+    /// <param name="isRepeat">Whether this is an auto-repeat event.</param>
     public KeyEventArgs(Key key, int platformKey, ModifierKeys modifiers = ModifierKeys.None, bool isRepeat = false)
     {
         Key = key;
@@ -87,6 +99,10 @@ public class TextInputEventArgs
     /// </summary>
     public bool Handled { get; set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TextInputEventArgs"/> class.
+    /// </summary>
+    /// <param name="text">Input text.</param>
     public TextInputEventArgs(string text)
     {
         Text = text;

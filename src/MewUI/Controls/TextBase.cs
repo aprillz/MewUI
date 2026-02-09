@@ -1,5 +1,5 @@
+using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -165,6 +165,7 @@ public abstract partial class TextBase : Control
     }
 
     public event Action<string>? TextChanged;
+
     public event Action<bool>? WrapChanged;
 
     public bool CanUndo => _editor.CanUndo;
@@ -292,7 +293,6 @@ public abstract partial class TextBase : Control
 
     protected Rect GetViewportInnerBounds()
     {
-        
         var innerBounds = GetTextInnerBounds();
         return AdjustViewportBoundsForScrollbars(innerBounds, Theme);
     }
@@ -311,9 +311,8 @@ public abstract partial class TextBase : Control
     {
     }
 
-    protected sealed override void OnRender(IGraphicsContext context)
+    protected override sealed void OnRender(IGraphicsContext context)
     {
-        
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = Theme.Metrics.ControlCornerRadius;
 

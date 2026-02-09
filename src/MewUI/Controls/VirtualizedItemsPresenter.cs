@@ -2,6 +2,12 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// Realizes and recycles item containers for a scrollable items host to reduce UI element allocations.
+/// </summary>
+/// <remarks>
+/// This presenter is intended for fixed-height item layouts where only a contiguous visible range is rendered.
+/// </remarks>
 internal sealed class VirtualizedItemsPresenter
 {
     private readonly FrameworkElement _owner;
@@ -12,6 +18,9 @@ internal sealed class VirtualizedItemsPresenter
     private readonly Dictionary<int, FrameworkElement> _realized = new();
     private readonly Stack<FrameworkElement> _pool = new();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VirtualizedItemsPresenter"/> class.
+    /// </summary>
     public VirtualizedItemsPresenter(
         FrameworkElement owner,
         Func<FrameworkElement> createContainer,
@@ -24,8 +33,14 @@ internal sealed class VirtualizedItemsPresenter
         _unbind = unbind;
     }
 
+    /// <summary>
+    /// Gets the number of currently realized containers.
+    /// </summary>
     public int RealizedCount => _realized.Count;
 
+    /// <summary>
+    /// Updates the container factory/binding callbacks used for realization.
+    /// </summary>
     public void SetTemplate(
         Func<FrameworkElement> createContainer,
         Action<FrameworkElement, int> bind,
@@ -47,6 +62,9 @@ internal sealed class VirtualizedItemsPresenter
         _unbind = unbind;
     }
 
+    /// <summary>
+    /// Recycles all realized containers back into the pool.
+    /// </summary>
     public void RecycleAll()
     {
         foreach (var index in _realized.Keys.ToArray())
@@ -55,6 +73,9 @@ internal sealed class VirtualizedItemsPresenter
         }
     }
 
+    /// <summary>
+    /// Visits all realized containers (useful for diagnostic traversal).
+    /// </summary>
     public void VisitRealized(Action<Element> visitor)
     {
         foreach (var child in _realized.Values)
@@ -63,6 +84,9 @@ internal sealed class VirtualizedItemsPresenter
         }
     }
 
+    /// <summary>
+    /// Realizes, arranges, and renders a contiguous range of items.
+    /// </summary>
     public void RenderRange(
         IGraphicsContext context,
         Rect contentBounds,
@@ -103,6 +127,9 @@ internal sealed class VirtualizedItemsPresenter
         }
     }
 
+    /// <summary>
+    /// Realizes and arranges a contiguous range of items without rendering.
+    /// </summary>
     public void ArrangeRange(
         Rect contentBounds,
         int first,

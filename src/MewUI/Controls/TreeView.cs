@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;

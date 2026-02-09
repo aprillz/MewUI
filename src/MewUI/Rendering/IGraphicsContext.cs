@@ -132,28 +132,3 @@ namespace Aprillz.MewUI.Rendering
         #endregion
     }
 }
-
-namespace Aprillz.MewUI
-{
-    /// <summary>
-    /// Text horizontal/vertical alignment options.
-    /// </summary>
-    public enum TextAlignment
-    {
-        Left,
-        Center,
-        Right,
-        Top = Left,
-        Bottom = Right
-    }
-
-    /// <summary>
-    /// Text wrapping options.
-    /// </summary>
-    public enum TextWrapping
-    {
-        NoWrap,
-        Wrap,
-        WrapWithOverflow
-    }
-}

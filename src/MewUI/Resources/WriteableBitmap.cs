@@ -18,9 +18,24 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     private bool _disposed;
     private PixelRegion? _dirtyRegion;
 
+    /// <summary>
+    /// Gets the bitmap width in pixels.
+    /// </summary>
     public int PixelWidth { get; }
+
+    /// <summary>
+    /// Gets the bitmap height in pixels.
+    /// </summary>
     public int PixelHeight { get; }
+
+    /// <summary>
+    /// Gets the stride (bytes per row).
+    /// </summary>
     public int StrideBytes => PixelWidth * 4;
+
+    /// <summary>
+    /// Gets the pixel format (always BGRA32).
+    /// </summary>
     public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
 
     /// <summary>
@@ -28,8 +43,17 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// </summary>
     public int Version => Volatile.Read(ref _version);
 
+    /// <summary>
+    /// Raised when pixels have changed and the bitmap should be re-uploaded/redrawn.
+    /// </summary>
     public event Action? Changed;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="WriteableBitmap"/> class.
+    /// </summary>
+    /// <param name="widthPx">Bitmap width in pixels.</param>
+    /// <param name="heightPx">Bitmap height in pixels.</param>
+    /// <param name="clear"><see langword="true"/> to clear the buffer to zero; otherwise leaves it uninitialized.</param>
     public WriteableBitmap(int widthPx, int heightPx, bool clear = true)
     {
         if (widthPx <= 0)
@@ -52,6 +76,11 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         }
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="WriteableBitmap"/> class from a decoded bitmap.
+    /// The pixel buffer is taken as-is (BGRA32, straight alpha).
+    /// </summary>
+    /// <param name="bitmap">The decoded bitmap.</param>
     public WriteableBitmap(DecodedBitmap bitmap)
     {
         if (bitmap.PixelFormat != BitmapPixelFormat.Bgra32)
@@ -73,6 +102,9 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         }
     }
 
+    /// <summary>
+    /// Releases the pixel buffer. Further operations throw <see cref="ObjectDisposedException"/>.
+    /// </summary>
     public void Dispose()
     {
         lock (_lock)
@@ -87,6 +119,11 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// Locks the bitmap for writing.
     /// The returned context will publish changes on Dispose (unless <paramref name="markDirtyOnDispose"/> is false).
     /// </summary>
+    /// <param name="markDirtyOnDispose">
+    /// When <see langword="true"/>, increments <see cref="Version"/> and raises <see cref="Changed"/> when the context is disposed,
+    /// even if no dirty rect was recorded.
+    /// </param>
+    /// <returns>A write context that must be disposed to release the lock.</returns>
     public WriteContext LockForWrite(bool markDirtyOnDispose = true)
     {
         Monitor.Enter(_lock);
@@ -102,6 +139,12 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// <summary>
     /// Writes pixels into this bitmap.
     /// </summary>
+    /// <param name="x">Destination X in pixels.</param>
+    /// <param name="y">Destination Y in pixels.</param>
+    /// <param name="width">Width in pixels.</param>
+    /// <param name="height">Height in pixels.</param>
+    /// <param name="srcBgra">Source buffer in BGRA order (straight alpha).</param>
+    /// <param name="srcStrideBytes">Source stride in bytes per row.</param>
     public void WritePixels(int x, int y, int width, int height, ReadOnlySpan<byte> srcBgra, int srcStrideBytes)
     {
         if (width <= 0 || height <= 0)
@@ -149,6 +192,13 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         changed?.Invoke();
     }
 
+    /// <summary>
+    /// Clears the bitmap to a constant BGRA color.
+    /// </summary>
+    /// <param name="b">Blue component.</param>
+    /// <param name="g">Green component.</param>
+    /// <param name="r">Red component.</param>
+    /// <param name="a">Alpha component.</param>
     public void Clear(byte b, byte g, byte r, byte a = 255)
     {
         Action? changed;
@@ -167,6 +217,10 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         changed?.Invoke();
     }
 
+    /// <summary>
+    /// Clears the bitmap to a constant color.
+    /// </summary>
+    /// <param name="color">The clear color.</param>
     public void Clear(Color color)
     {
         using var ctx = LockForWrite();
@@ -230,6 +284,10 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         }
     }
 
+    /// <summary>
+    /// Represents a locked write scope for a <see cref="WriteableBitmap"/>.
+    /// Disposing the scope releases the lock and optionally raises <see cref="Changed"/>.
+    /// </summary>
     public ref struct WriteContext
     {
         private readonly WriteableBitmap _owner;
@@ -238,13 +296,44 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         private bool _hasDirtyRect;
         private PixelRect _dirtyRect;
 
+        /// <summary>
+        /// Gets the bitmap width in pixels.
+        /// </summary>
         public int PixelWidth => _owner.PixelWidth;
+
+        /// <summary>
+        /// Gets the bitmap height in pixels.
+        /// </summary>
         public int PixelHeight => _owner.PixelHeight;
+
+        /// <summary>
+        /// Gets the stride (bytes per row).
+        /// </summary>
         public int StrideBytes => _owner.StrideBytes;
+
+        /// <summary>
+        /// Gets the bitmap width in pixels.
+        /// </summary>
         public int Width => _owner.PixelWidth;
+
+        /// <summary>
+        /// Gets the bitmap height in pixels.
+        /// </summary>
         public int Height => _owner.PixelHeight;
+
+        /// <summary>
+        /// Gets the stride (bytes per row).
+        /// </summary>
         public int Stride => _owner.StrideBytes;
+
+        /// <summary>
+        /// Gets a mutable view of the pixel buffer in BGRA32 byte order.
+        /// </summary>
         public Span<byte> PixelsBgra32 => _owner.GetPixelsMutableNoLock();
+
+        /// <summary>
+        /// Gets a mutable view of the pixel buffer as packed BGRA32 <see cref="uint"/> values.
+        /// </summary>
         public Span<uint> PixelsUInt32 => MemoryMarshal.Cast<byte, uint>(_owner.GetPixelsMutableNoLock());
 
         internal WriteContext(WriteableBitmap owner, bool markDirtyOnDispose)
@@ -256,6 +345,13 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             _dirtyRect = default;
         }
 
+        /// <summary>
+        /// Marks a dirty rectangle in pixel coordinates to minimize texture updates.
+        /// </summary>
+        /// <param name="x">X in pixels.</param>
+        /// <param name="y">Y in pixels.</param>
+        /// <param name="width">Width in pixels.</param>
+        /// <param name="height">Height in pixels.</param>
         public void AddDirtyRect(int x, int y, int width, int height)
         {
             if (width <= 0 || height <= 0)
@@ -277,6 +373,10 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             _hasDirtyRect = true;
         }
 
+        /// <summary>
+        /// Clears the bitmap to a constant color and marks it dirty.
+        /// </summary>
+        /// <param name="color">The clear color.</param>
         public void Clear(Color color)
         {
             uint bgra = (uint)(color.B | (color.G << 8) | (color.R << 16) | (color.A << 24));
@@ -284,6 +384,9 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             AddDirtyRect(0, 0, PixelWidth, PixelHeight);
         }
 
+        /// <summary>
+        /// Commits changes (if configured) and releases the write lock.
+        /// </summary>
         public void Dispose()
         {
             if (_disposed)

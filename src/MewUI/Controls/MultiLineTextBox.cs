@@ -1,5 +1,5 @@
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Text;
+using Aprillz.MewUI.Controls.Text;
 
 namespace Aprillz.MewUI.Controls;
 

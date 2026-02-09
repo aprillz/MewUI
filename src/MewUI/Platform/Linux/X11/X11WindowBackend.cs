@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.OpenGL;

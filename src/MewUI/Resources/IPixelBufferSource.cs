@@ -1,10 +1,28 @@
 namespace Aprillz.MewUI.Resources;
 
+/// <summary>
+/// Exposes a lockable CPU-side pixel buffer that backends can upload to GPU resources.
+/// </summary>
 public interface IPixelBufferSource
 {
+    /// <summary>
+    /// Gets the buffer width in pixels.
+    /// </summary>
     int PixelWidth { get; }
+
+    /// <summary>
+    /// Gets the buffer height in pixels.
+    /// </summary>
     int PixelHeight { get; }
+
+    /// <summary>
+    /// Gets the stride in bytes per row.
+    /// </summary>
     int StrideBytes { get; }
+
+    /// <summary>
+    /// Gets the pixel format.
+    /// </summary>
     BitmapPixelFormat PixelFormat { get; }
 
     /// <summary>
@@ -12,6 +30,12 @@ public interface IPixelBufferSource
     /// </summary>
     int Version { get; }
 
+    /// <summary>
+    /// Locks and returns the current pixel buffer snapshot.
+    /// </summary>
+    /// <remarks>
+    /// Disposing the returned lock releases any underlying synchronization.
+    /// </remarks>
     PixelBufferLock Lock();
 }
 
@@ -20,6 +44,9 @@ public interface IPixelBufferSource
 /// </summary>
 public readonly record struct PixelRegion(int X, int Y, int Width, int Height)
 {
+    /// <summary>
+    /// Returns the smallest region that contains both input regions.
+    /// </summary>
     public static PixelRegion Union(PixelRegion a, PixelRegion b)
     {
         int x1 = Math.Min(a.X, b.X);
@@ -29,20 +56,48 @@ public readonly record struct PixelRegion(int X, int Y, int Width, int Height)
         return new PixelRegion(x1, y1, x2 - x1, y2 - y1);
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the region is empty.
+    /// </summary>
     public bool IsEmpty => Width <= 0 || Height <= 0;
 }
 
+/// <summary>
+/// Represents a locked pixel buffer snapshot and optional dirty region metadata.
+/// </summary>
 public sealed class PixelBufferLock : IDisposable
 {
     private readonly Action? _release;
     private bool _disposed;
 
+    /// <summary>
+    /// Gets the buffer width in pixels.
+    /// </summary>
     public int PixelWidth { get; }
+
+    /// <summary>
+    /// Gets the buffer height in pixels.
+    /// </summary>
     public int PixelHeight { get; }
+
+    /// <summary>
+    /// Gets the stride in bytes per row.
+    /// </summary>
     public int StrideBytes { get; }
+
+    /// <summary>
+    /// Gets the pixel format.
+    /// </summary>
     public BitmapPixelFormat PixelFormat { get; }
+
+    /// <summary>
+    /// Gets the source version captured at lock time.
+    /// </summary>
     public int Version { get; }
 
+    /// <summary>
+    /// Gets the backing byte buffer containing pixel data.
+    /// </summary>
     public byte[] Buffer { get; }
 
     /// <summary>
@@ -71,6 +126,9 @@ public sealed class PixelBufferLock : IDisposable
         _release = release;
     }
 
+    /// <summary>
+    /// Releases the lock.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -82,4 +140,3 @@ public sealed class PixelBufferLock : IDisposable
         _release?.Invoke();
     }
 }
-

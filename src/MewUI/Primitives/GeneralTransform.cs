@@ -6,17 +6,34 @@ namespace Aprillz.MewUI;
 /// </summary>
 public abstract class GeneralTransform
 {
+    /// <summary>
+    /// Transforms a point from the source coordinate space to the target coordinate space.
+    /// </summary>
+    /// <param name="point">The point to transform.</param>
     public abstract Point Transform(Point point);
 
+    /// <summary>
+    /// Transforms a bounding rectangle.
+    /// </summary>
+    /// <param name="rect">The rectangle to transform.</param>
     public virtual Rect TransformBounds(Rect rect) =>
         new(Transform(rect.Position), rect.Size);
 
+    /// <summary>
+    /// Attempts to transform a point.
+    /// </summary>
+    /// <param name="inPoint">The input point.</param>
+    /// <param name="result">The transformed point.</param>
+    /// <returns><see langword="true"/> if the transformation succeeded.</returns>
     public virtual bool TryTransform(Point inPoint, out Point result)
     {
         result = Transform(inPoint);
         return true;
     }
 
+    /// <summary>
+    /// Gets the inverse transform.
+    /// </summary>
     public abstract GeneralTransform Inverse { get; }
 }
 
@@ -53,4 +70,3 @@ internal sealed class TranslateGeneralTransform : GeneralTransform
     public override GeneralTransform Inverse =>
         new TranslateGeneralTransform(-_dx, -_dy);
 }
-

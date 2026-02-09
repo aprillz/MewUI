@@ -1,6 +1,6 @@
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Base class for elements that support input handling and visibility.
@@ -281,7 +281,7 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Controls whether <see cref="SetMouseOver"/> triggers an <see cref="InvalidateVisual"/>.
+    /// Controls whether <see cref="SetMouseOver"/> triggers an <see cref="Element.InvalidateVisual"/>.
     /// Container elements like panels can opt out to avoid redundant redraw on hover changes
     /// when they don't have any hover-dependent visuals.
     /// </summary>

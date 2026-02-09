@@ -1,6 +1,6 @@
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Controls;
+namespace Aprillz.MewUI.Controls.Text;
 
 internal sealed class TextWrapVirtualizer
 {

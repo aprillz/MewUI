@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI;
+namespace Aprillz.MewUI.Controls;
 
 public abstract partial class UIElement
 {

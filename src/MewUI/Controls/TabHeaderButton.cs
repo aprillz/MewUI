@@ -2,16 +2,31 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+/// <summary>
+/// Tab header presenter used by <see cref="TabControl"/> to render and interact with individual tab headers.
+/// </summary>
 internal sealed class TabHeaderButton : ContentControl
 {
     private bool _isPressed;
 
+    /// <summary>
+    /// Gets or sets the tab index this header represents.
+    /// </summary>
     public int Index { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether this tab is currently selected.
+    /// </summary>
     public bool IsSelected { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the associated tab is enabled for interaction.
+    /// </summary>
     public bool IsTabEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Raised when the header is clicked (tab selection request).
+    /// </summary>
     public event Action<int>? Clicked;
 
     protected override Color DefaultBackground => Theme.Palette.ButtonFace;

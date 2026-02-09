@@ -116,4 +116,78 @@ public static class MenuExtensions
         item.ShortcutText = shortcutText;
         return item;
     }
+
+
+    /// <summary>
+    /// Adds an entry to the menu.
+    /// </summary>
+    /// <param name="menu">Target menu.</param>
+    /// <param name="entry">Menu entry to add.</param>
+    /// <returns>The menu for chaining.</returns>
+    public static Menu Add(this Menu menu, MenuEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(entry);
+        menu.Items.Add(entry);
+        return menu;
+    }
+
+    /// <summary>
+    /// Adds a clickable menu item.
+    /// </summary>
+    /// <param name="menu">Target menu.</param>
+    /// <param name="text">Menu item text.</param>
+    /// <param name="onClick">Click handler.</param>
+    /// <param name="isEnabled">Whether the item is enabled.</param>
+    /// <param name="shortcutText">Shortcut display text (optional).</param>
+    /// <returns>The menu for chaining.</returns>
+    public static Menu Item(this Menu menu, string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        menu.Items.Add(new MenuItem
+        {
+            Text = text ?? string.Empty,
+            Click = onClick,
+            IsEnabled = isEnabled,
+            ShortcutText = shortcutText
+        });
+        return menu;
+    }
+
+    /// <summary>
+    /// Adds a submenu item.
+    /// </summary>
+    /// <param name="menu">Target menu.</param>
+    /// <param name="text">Menu item text.</param>
+    /// <param name="subMenu">Submenu.</param>
+    /// <param name="isEnabled">Whether the item is enabled.</param>
+    /// <param name="shortcutText">Shortcut display text (optional).</param>
+    /// <returns>The menu for chaining.</returns>
+    public static Menu SubMenu(this Menu menu, string text, Menu subMenu, bool isEnabled = true, string? shortcutText = null)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(subMenu);
+
+        menu.Items.Add(new MenuItem
+        {
+            Text = text ?? string.Empty,
+            IsEnabled = isEnabled,
+            ShortcutText = shortcutText,
+            SubMenu = subMenu
+        });
+        return menu;
+    }
+
+    /// <summary>
+    /// Adds a separator.
+    /// </summary>
+    /// <param name="menu">Target menu.</param>
+    /// <returns>The menu for chaining.</returns>
+    public static Menu Separator(this Menu menu)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        menu.Items.Add(MenuSeparator.Instance);
+        return menu;
+    }
 }
+

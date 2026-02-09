@@ -1,5 +1,8 @@
 namespace Aprillz.MewUI;
 
+/// <summary>
+/// Utilities for snapping layout and rendering geometry to device pixels (WPF-style).
+/// </summary>
 public static class LayoutRounding
 {
     /// <summary>
@@ -29,6 +32,9 @@ public static class LayoutRounding
     public static Rect SnapConstraintRectToPixels(Rect rect, double dpiScale) =>
         SnapRectEdgesToPixels(rect, dpiScale);
 
+    /// <summary>
+    /// Snaps a thickness value in DIPs to an integer number of pixels (with a minimum pixel count).
+    /// </summary>
     public static double SnapThicknessToPixels(double thicknessDip, double dpiScale, int minPixels)
     {
         if (thicknessDip <= 0)
@@ -45,6 +51,9 @@ public static class LayoutRounding
         return px / dpiScale;
     }
 
+    /// <summary>
+    /// Rounds a size to device pixels.
+    /// </summary>
     public static Size RoundSizeToPixels(Size size, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -62,6 +71,9 @@ public static class LayoutRounding
         return new Size(Math.Max(0, w), Math.Max(0, h));
     }
 
+    /// <summary>
+    /// Snaps a rectangle by rounding both edges to pixels (may change size slightly).
+    /// </summary>
     public static Rect SnapRectEdgesToPixels(Rect rect, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -90,6 +102,9 @@ public static class LayoutRounding
         return new Rect(x, y, w, h);
     }
 
+    /// <summary>
+    /// Snaps a rectangle outward (floor left/top, ceil right/bottom) so it never shrinks.
+    /// </summary>
     public static Rect SnapRectEdgesToPixelsOutward(Rect rect, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -118,6 +133,9 @@ public static class LayoutRounding
         return new Rect(x, y, w, h);
     }
 
+    /// <summary>
+    /// Expands a clip rectangle by whole device pixels and snaps outward.
+    /// </summary>
     public static Rect ExpandClipByDevicePixels(Rect rect, double dpiScale, int rightPx = 1, int bottomPx = 1)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -144,6 +162,9 @@ public static class LayoutRounding
         return SnapRectEdgesToPixelsOutward(expanded, dpiScale);
     }
 
+    /// <summary>
+    /// Rounds a rectangle position/size independently (avoids edge-based jitter).
+    /// </summary>
     public static Rect RoundRectToPixels(Rect rect, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -171,6 +192,9 @@ public static class LayoutRounding
         return new Rect(x, y, w, h);
     }
 
+    /// <summary>
+    /// Rounds a DIP value to a pixel-aligned integer coordinate.
+    /// </summary>
     public static int RoundToPixelInt(double value, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -186,6 +210,9 @@ public static class LayoutRounding
         return (int)Math.Round(value * dpiScale, MidpointRounding.AwayFromZero);
     }
 
+    /// <summary>
+    /// Ceils a DIP value to a pixel-aligned integer coordinate.
+    /// </summary>
     public static int CeilToPixelInt(double value, double dpiScale)
     {
         if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
@@ -201,6 +228,9 @@ public static class LayoutRounding
         return (int)Math.Ceiling(value * dpiScale);
     }
 
+    /// <summary>
+    /// Rounds a DIP value to a pixel-aligned DIP value.
+    /// </summary>
     public static double RoundToPixel(double value, double dpiScale)
     {
         if (double.IsNaN(value) || double.IsInfinity(value))

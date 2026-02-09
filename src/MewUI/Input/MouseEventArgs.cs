@@ -5,10 +5,15 @@ namespace Aprillz.MewUI;
 /// </summary>
 public enum MouseButton
 {
+    /// <summary>Left button.</summary>
     Left,
+    /// <summary>Right button.</summary>
     Right,
+    /// <summary>Middle button (wheel).</summary>
     Middle,
+    /// <summary>First extra button.</summary>
     XButton1,
+    /// <summary>Second extra button.</summary>
     XButton2
 }
 
@@ -57,6 +62,16 @@ public class MouseEventArgs
     /// </summary>
     public int ClickCount { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MouseEventArgs"/> class.
+    /// </summary>
+    /// <param name="position">Mouse position relative to the element (DIPs).</param>
+    /// <param name="screenPosition">Mouse position in screen coordinates.</param>
+    /// <param name="button">Button associated with the event.</param>
+    /// <param name="leftButton">Whether the left button is pressed.</param>
+    /// <param name="rightButton">Whether the right button is pressed.</param>
+    /// <param name="middleButton">Whether the middle button is pressed.</param>
+    /// <param name="clickCount">Click count (1 = single, 2 = double).</param>
     public MouseEventArgs(Point position, Point screenPosition, MouseButton button = MouseButton.Left,
         bool leftButton = false, bool rightButton = false, bool middleButton = false, int clickCount = 1)
     {
@@ -85,6 +100,16 @@ public class MouseWheelEventArgs : MouseEventArgs
     /// </summary>
     public bool IsHorizontal { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MouseWheelEventArgs"/> class.
+    /// </summary>
+    /// <param name="position">Mouse position relative to the element (DIPs).</param>
+    /// <param name="screenPosition">Mouse position in screen coordinates.</param>
+    /// <param name="delta">Wheel delta (positive = up, negative = down).</param>
+    /// <param name="isHorizontal"><see langword="true"/> for horizontal scroll; otherwise, <see langword="false"/>.</param>
+    /// <param name="leftButton">Whether the left button is pressed.</param>
+    /// <param name="rightButton">Whether the right button is pressed.</param>
+    /// <param name="middleButton">Whether the middle button is pressed.</param>
     public MouseWheelEventArgs(Point position, Point screenPosition, int delta, bool isHorizontal = false,
         bool leftButton = false, bool rightButton = false, bool middleButton = false)
         : base(position, screenPosition, MouseButton.Middle, leftButton, rightButton, middleButton)

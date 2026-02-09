@@ -32,5 +32,8 @@ public sealed class FontResource : IDisposable
 
     internal string Key { get; }
 
+    /// <summary>
+    /// Releases this handle and decrements the internal font cache reference count.
+    /// </summary>
     public void Dispose() => FontResources.Release(Key);
 }

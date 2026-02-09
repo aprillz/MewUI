@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Text;
+namespace Aprillz.MewUI.Controls.Text;
 
 internal sealed class TextEditorCore
 {

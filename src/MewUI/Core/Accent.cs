@@ -1,5 +1,8 @@
 namespace Aprillz.MewUI;
 
+/// <summary>
+/// Provides built-in accent colors for <see cref="ThemeManager"/> defaults and quick selection.
+/// </summary>
 public static class BuiltInAccent
 {
     private static readonly BuiltInAccentPair[] _builtInAccents =
@@ -14,6 +17,9 @@ public static class BuiltInAccent
         new BuiltInAccentPair(Color.FromRgb(150, 150, 150), Color.FromRgb(165, 165, 165)), // Gray
     ];
 
+    /// <summary>
+    /// Gets all built-in accent identifiers.
+    /// </summary>
     public static IReadOnlyList<Accent> Accents { get; } = Enum.GetValues<Accent>();
 
     private readonly struct BuiltInAccentPair
@@ -45,6 +51,10 @@ public static class BuiltInAccent
         => GetColor(accent, isDark);
 }
 
+/// <summary>
+/// Built-in accent identifiers.
+/// </summary>
+#pragma warning disable CS1591
 public enum Accent
 {
     Blue,

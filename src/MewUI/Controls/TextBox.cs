@@ -1,5 +1,5 @@
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Text.Text;
+using Aprillz.MewUI.Controls.Text;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -192,6 +192,4 @@ public class TextBox : TextBase
         using var measure = BeginTextMeasurement();
         ClampScrollOffset(measure.Context, measure.Font, contentBounds.Width);
     }
-
-    // Key handling is centralized in TextBase.
 }

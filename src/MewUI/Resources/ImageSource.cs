@@ -17,6 +17,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class ImageSource : IImageSource
 {
+    /// <summary>
+    /// Gets the encoded image payload (e.g. PNG/JPEG/BMP).
+    /// </summary>
     public byte[] Data { get; }
 
     /// <summary>
@@ -35,8 +38,15 @@ public sealed class ImageSource : IImageSource
         Data = data;
     }
 
+    /// <summary>
+    /// Creates an <see cref="ImageSource"/> from encoded image bytes.
+    /// </summary>
     public static ImageSource FromBytes(byte[] data) => new(data);
 
+    /// <summary>
+    /// Loads an <see cref="ImageSource"/> from a file path.
+    /// </summary>
+    /// <param name="path">Path to an encoded image file.</param>
     public static ImageSource FromFile(string path) => new(File.ReadAllBytes(path));
 
     /// <summary>
@@ -67,6 +77,13 @@ public sealed class ImageSource : IImageSource
     public static ImageSource FromResource<TAnchor>(string resourceName) =>
         FromResource(typeof(TAnchor).Assembly, resourceName);
 
+    /// <summary>
+    /// Attempts to load an embedded resource from the specified assembly.
+    /// </summary>
+    /// <param name="assembly">The assembly that contains the resource.</param>
+    /// <param name="resourceName">The manifest resource name.</param>
+    /// <param name="source">The created image source on success.</param>
+    /// <returns><see langword="true"/> if the resource was found; otherwise, <see langword="false"/>.</returns>
     public static bool TryFromResource(Assembly assembly, string resourceName, out ImageSource? source)
     {
         source = null;
@@ -85,6 +102,13 @@ public sealed class ImageSource : IImageSource
         return true;
     }
 
+    /// <summary>
+    /// Attempts to load an embedded resource using an anchor type's assembly (recommended for AOT).
+    /// </summary>
+    /// <typeparam name="TAnchor">An anchor type in the assembly that contains the resource.</typeparam>
+    /// <param name="resourceName">The manifest resource name.</param>
+    /// <param name="source">The created image source on success.</param>
+    /// <returns><see langword="true"/> if the resource was found; otherwise, <see langword="false"/>.</returns>
     public static bool TryFromResource<TAnchor>(string resourceName, out ImageSource? source) =>
         TryFromResource(typeof(TAnchor).Assembly, resourceName, out source);
 
@@ -146,6 +170,10 @@ public sealed class ImageSource : IImageSource
         }
     }
 
+    /// <summary>
+    /// Creates a backend image for rendering.
+    /// </summary>
+    /// <param name="factory">The graphics factory used to create backend resources.</param>
     public IImage CreateImage(IGraphicsFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);

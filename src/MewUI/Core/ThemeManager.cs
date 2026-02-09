@@ -71,6 +71,10 @@ public sealed class ThemeManager
         }
     } = ThemeSeed.DefaultLight;
 
+    /// <summary>
+    /// Gets or sets the default seed used to construct the dark theme when no custom theme is provided.
+    /// This property must be set before the application starts.
+    /// </summary>
     public static ThemeSeed DefaultDarkSeed
     {
         get;
@@ -93,6 +97,10 @@ public sealed class ThemeManager
         }
     } = ThemeSeed.DefaultDark;
 
+    /// <summary>
+    /// Gets or sets the default metrics used for theme construction.
+    /// This property must be set before the application starts.
+    /// </summary>
     public static ThemeMetrics DefaultMetrics
     {
         get;
@@ -115,6 +123,10 @@ public sealed class ThemeManager
         }
     } = ThemeMetrics.Default;
 
+    /// <summary>
+    /// Gets or sets the default accent used for theme construction.
+    /// This property must be set before the application starts.
+    /// </summary>
     public static Accent DefaultAccent
     {
         get;
@@ -135,6 +147,10 @@ public sealed class ThemeManager
         }
     } = Accent.Blue;
 
+    /// <summary>
+    /// Gets or sets the default theme variant.
+    /// This property must be set before the application starts.
+    /// </summary>
     public static ThemeVariant Default
     {
         get;

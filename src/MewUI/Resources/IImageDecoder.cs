@@ -1,5 +1,8 @@
 namespace Aprillz.MewUI.Resources;
 
+/// <summary>
+/// Decodes encoded image bytes into a <see cref="DecodedBitmap"/>.
+/// </summary>
 public interface IImageDecoder
 {
     /// <summary>
@@ -14,5 +17,11 @@ public interface IImageDecoder
     /// </summary>
     bool CanDecode(ReadOnlySpan<byte> encoded);
 
+    /// <summary>
+    /// Attempts to decode the provided encoded bytes.
+    /// </summary>
+    /// <param name="encoded">Encoded image bytes.</param>
+    /// <param name="bitmap">Decoded bitmap on success.</param>
+    /// <returns><see langword="true"/> if decoding succeeded; otherwise, <see langword="false"/>.</returns>
     bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap);
 }

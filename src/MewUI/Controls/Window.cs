@@ -98,6 +98,9 @@ public class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Window"/> class.
+    /// </summary>
     public Window()
     {
         Padding = new Thickness(16);
@@ -279,6 +282,9 @@ public class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
+    /// <summary>
+    /// Gets or sets the initial window placement behavior.
+    /// </summary>
     public WindowStartupLocation StartupLocation { get; set; } = WindowStartupLocation.CenterScreen;
 
     /// <summary>
@@ -397,6 +403,10 @@ public class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public event Action<KeyEventArgs>? PreviewKeyDown;
 
+    /// <summary>
+    /// Preview (tunneling) keyboard events for the whole window.
+    /// If <see cref="KeyEventArgs.Handled"/> is set, the focused element will not receive the event.
+    /// </summary>
     public event Action<KeyEventArgs>? PreviewKeyUp;
 
     /// <summary>
@@ -614,6 +624,9 @@ public class Window : ContentControl, ILayoutRoundingHost
 
     public void Invalidate() => RequestRender();
 
+    /// <summary>
+    /// Requests that the window be redrawn.
+    /// </summary>
     public override void InvalidateVisual() => RequestRender();
 
     private void InvalidateBackend()
@@ -632,6 +645,9 @@ public class Window : ContentControl, ILayoutRoundingHost
         RequestLayout();
     }
 
+    /// <summary>
+    /// Invalidates arrangement and schedules a layout pass.
+    /// </summary>
     public override void InvalidateArrange()
     {
         base.InvalidateArrange();
@@ -685,12 +701,19 @@ public class Window : ContentControl, ILayoutRoundingHost
         });
     }
 
+    /// <summary>
+    /// Captures mouse input for the specified element until released.
+    /// </summary>
+    /// <param name="element">Element that should receive captured mouse events.</param>
     public void CaptureMouse(UIElement element)
     {
         EnsureBackend();
         _backend!.CaptureMouse(element);
     }
 
+    /// <summary>
+    /// Releases any active mouse capture for this window.
+    /// </summary>
     public void ReleaseMouseCapture() => _backend?.ReleaseMouseCapture();
 
     internal void AttachBackend(IWindowBackend backend)

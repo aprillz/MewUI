@@ -1,6 +1,6 @@
 using Aprillz.MewUI.Rendering;
 
-namespace Aprillz.MewUI.Text;
+namespace Aprillz.MewUI.Controls.Text;
 
 internal sealed class MultiLineTextView
 {

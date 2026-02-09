@@ -1,7 +1,7 @@
 using Aprillz.MewUI.Rendering;
 using System.Runtime.CompilerServices;
 
-namespace Aprillz.MewUI;
+namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Base class for all UI elements. Provides the core Measure/Arrange layout system.
