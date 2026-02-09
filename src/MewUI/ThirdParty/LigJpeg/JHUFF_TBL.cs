@@ -3,7 +3,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// <summary>
 /// Huffman coding table.
 /// </summary>
-public class JHUFF_TBL
+internal class JHUFF_TBL
 {
     /* These two fields directly represent the contents of a JPEG DHT marker */
 

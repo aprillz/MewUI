@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This file defines the error and message codes for the JPEG library.
  */
 
@@ -8,7 +8,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// Message codes used in code to signal errors, warning and trace messages.
 /// </summary>
 /// <seealso cref="jpeg_error_mgr"/>
-public enum J_MESSAGE_CODE
+internal enum J_MESSAGE_CODE
 {
     /// <summary>
     /// Must be first entry!

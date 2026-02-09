@@ -6,7 +6,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// A contiguous 2D buffer backed by a single 1D array.
 /// Provides better cache locality than jagged arrays (byte[][]).
 /// </summary>
-public readonly struct Buffer2D<T>
+internal readonly struct Buffer2D<T>
 {
     public Buffer2D(int width, int height)
     {
@@ -45,7 +45,7 @@ public readonly struct Buffer2D<T>
     /// </summary>
     public RowAccessor this[int row] => new RowAccessor(Data, row * Width, Width);
 
-    public readonly ref struct RowAccessor
+    internal readonly ref struct RowAccessor
     {
         private readonly T[] _data;
         private readonly int _offset;
@@ -107,7 +107,7 @@ public readonly struct Buffer2D<T>
 /// <summary>
 /// Extension methods for Buffer2D interop with legacy byte[][] code.
 /// </summary>
-public static class Buffer2DExtensions
+internal static class Buffer2DExtensions
 {
     /// <summary>
     /// Wraps an existing jagged array as a Buffer2D-like accessor.
@@ -123,7 +123,7 @@ public static class Buffer2DExtensions
 /// Wrapper that provides Buffer2D-like interface for existing jagged arrays.
 /// Used during migration to avoid breaking changes.
 /// </summary>
-public readonly struct JaggedArrayWrapper<T>
+internal readonly struct JaggedArrayWrapper<T>
 {
     private readonly T[][] _rows;
 

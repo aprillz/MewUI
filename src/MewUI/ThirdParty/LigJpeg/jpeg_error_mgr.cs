@@ -18,7 +18,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// </summary>
 /// <remarks>This class is used by both the compression and decompression code.</remarks>
 /// <seealso href="41dc1a3b-0dea-4594-87d2-c213ab1049e1.htm" target="_self">Error handling</seealso>
-public class jpeg_error_mgr
+internal class jpeg_error_mgr
 {
     // The message ID code and any parameters are saved in fields below. 
     internal int m_msg_code;

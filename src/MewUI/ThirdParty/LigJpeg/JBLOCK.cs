@@ -3,7 +3,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// <summary>
 /// One block of coefficients (DCTSIZE2).
 /// </summary>
-public unsafe struct JBLOCK
+internal unsafe struct JBLOCK
 {
     private fixed short m_data[JpegConstants.DCTSIZE2];
 

@@ -42,7 +42,7 @@ internal readonly struct JvirtArrayWindow<T>
 /// <see cref="jpeg_common_struct.CreateSamplesArray"/> and
 /// <see cref="jpeg_common_struct.CreateBlocksArray"/>.
 /// </remarks>
-public class jvirt_array<T>
+internal class jvirt_array<T>
 {
     internal delegate T[][] Allocator(int width, int height);
 

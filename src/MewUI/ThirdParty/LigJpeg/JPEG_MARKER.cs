@@ -1,10 +1,10 @@
-﻿namespace BitMiracle.LibJpeg.Classic;
+namespace BitMiracle.LibJpeg.Classic;
 
 /// <summary>
 /// JPEG marker codes.
 /// </summary>
 /// <seealso href="81c88818-a5d7-4550-9ce5-024a768f7b1e.htm" target="_self">Special markers</seealso>
-public enum JPEG_MARKER
+internal enum JPEG_MARKER
 {
     /// <summary>
     /// 

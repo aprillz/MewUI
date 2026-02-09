@@ -10,7 +10,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// There are no actual instances of <see cref="jpeg_common_struct"/>, only of
 /// <see cref="jpeg_decompress_struct"/>.
 /// </remarks>
-public abstract class jpeg_common_struct
+internal abstract class jpeg_common_struct
 {
     internal enum JpegState
     {

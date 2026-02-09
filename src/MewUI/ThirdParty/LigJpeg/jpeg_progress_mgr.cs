@@ -4,7 +4,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// The progress monitor object.
 /// </summary>
 /// <seealso href="febdc6af-ca72-4f3b-8cfe-3473ce6a7c7f.htm" target="_self">Progress monitoring</seealso>
-public class jpeg_progress_mgr
+internal class jpeg_progress_mgr
 {
 
     /// <summary>

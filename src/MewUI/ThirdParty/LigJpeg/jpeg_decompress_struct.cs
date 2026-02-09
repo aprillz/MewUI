@@ -1,11 +1,16 @@
 using BitMiracle.LibJpeg.Classic.Internal;
 
+#pragma warning disable 0419 // Ambiguous cref in third-party XML documentation.
+#pragma warning disable 1572 // Mismatched <param> tag in third-party XML documentation.
+#pragma warning disable 1574 // Invalid cref in third-party XML documentation.
+#pragma warning disable 1587 // Misplaced XML documentation in third-party source.
+
 namespace BitMiracle.LibJpeg.Classic;
 
 /// <summary>
 /// JPEG decompression routine.
 /// </summary>
-public class jpeg_decompress_struct : jpeg_common_struct
+internal class jpeg_decompress_struct : jpeg_common_struct
 {
     /* Source of compressed data */
     internal jpeg_source_mgr m_src;
@@ -1907,3 +1912,8 @@ public class jpeg_decompress_struct : jpeg_common_struct
         return retcode;
     }
 }
+
+#pragma warning restore 0419
+#pragma warning restore 1572
+#pragma warning restore 1574
+#pragma warning restore 1587

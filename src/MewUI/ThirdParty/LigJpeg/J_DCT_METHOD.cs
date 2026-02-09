@@ -1,4 +1,4 @@
-﻿namespace BitMiracle.LibJpeg.Classic;
+namespace BitMiracle.LibJpeg.Classic;
 
 /// <summary>
 /// Algorithm used for the DCT step.
@@ -10,7 +10,7 @@
 /// The <c>IFAST</c> method is considerably less accurate than the other two; its use is not recommended
 /// if high quality is a concern.</remarks>
 /// <seealso cref="jpeg_decompress_struct.Dct_method"/>
-public enum J_DCT_METHOD
+internal enum J_DCT_METHOD
 {
     /// <summary>
     /// Slow but accurate integer algorithm.

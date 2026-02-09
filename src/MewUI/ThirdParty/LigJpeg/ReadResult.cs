@@ -1,10 +1,10 @@
-﻿namespace BitMiracle.LibJpeg.Classic;
+namespace BitMiracle.LibJpeg.Classic;
 
 /// <summary>
 /// Describes a result of read operation.
 /// </summary>
 /// <seealso cref="jpeg_decompress_struct.jpeg_consume_input"/>
-public enum ReadResult
+internal enum ReadResult
 {
     /// <summary>
     /// Suspended due to lack of input data. Can occur only if a suspending data source is used.

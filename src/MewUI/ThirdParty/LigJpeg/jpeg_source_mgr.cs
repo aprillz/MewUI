@@ -4,7 +4,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// Data source object for decompression.
 /// This fork supports only stream input (no external source manager extensions).
 /// </summary>
-public struct jpeg_source_mgr
+internal struct jpeg_source_mgr
 {
     private const int INPUT_BUF_SIZE = 16384; // 16KB for better I/O efficiency
 

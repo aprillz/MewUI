@@ -1,9 +1,9 @@
-﻿namespace BitMiracle.LibJpeg.Classic;
+namespace BitMiracle.LibJpeg.Classic;
 
 /// <summary>
 /// Supported color transforms.
 /// </summary>
-public enum J_COLOR_TRANSFORM
+internal enum J_COLOR_TRANSFORM
 {
     /// <summary>
     /// No transform

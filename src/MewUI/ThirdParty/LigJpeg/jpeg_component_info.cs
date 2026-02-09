@@ -3,7 +3,7 @@ namespace BitMiracle.LibJpeg.Classic;
 /// <summary>
 /// Basic info about one component (color channel).
 /// </summary>
-public class jpeg_component_info
+internal class jpeg_component_info
 {
     /* These values are fixed over the whole image. */
     /* For compression, they must be supplied by parameter setup; */

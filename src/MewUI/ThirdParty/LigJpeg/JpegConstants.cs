@@ -1,9 +1,9 @@
-﻿namespace BitMiracle.LibJpeg.Classic;
+namespace BitMiracle.LibJpeg.Classic;
 
 /// <summary>
 /// Defines some JPEG constants.
 /// </summary>
-public static class JpegConstants
+internal static class JpegConstants
 {
     //////////////////////////////////////////////////////////////////////////
     // All of these are specified by the JPEG standard, so don't change them
