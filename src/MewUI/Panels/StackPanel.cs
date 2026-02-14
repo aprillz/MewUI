@@ -63,7 +63,10 @@ public class StackPanel : Panel
             }
             else
             {
-                child.Measure(new Size(double.PositiveInfinity, paddedSize.Height));
+                var widthConstraint = double.IsPositiveInfinity(paddedSize.Width)
+                    ? double.PositiveInfinity
+                    : paddedSize.Width;
+                child.Measure(new Size(widthConstraint, paddedSize.Height));
                 usedMain += child.DesiredSize.Width;
                 maxCross = Math.Max(maxCross, child.DesiredSize.Height);
             }

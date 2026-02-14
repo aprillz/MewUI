@@ -289,6 +289,20 @@ public class Grid : Panel
         // Calculate row heights
         CalculateLengths(_rowDefinitions, availableHeight, false);
 
+        // Second pass: re-measure children with actual cell sizes when constrained.
+        // This is required for wrapped text to compute correct line breaks within the final width.
+        if (!double.IsPositiveInfinity(availableWidth) || !double.IsPositiveInfinity(availableHeight))
+        {
+            MeasureChildrenWithActuals(colGaps, rowGaps);
+
+            // Recalculate auto sizes based on updated DesiredSize.
+            if (_columnDefinitions.Any(c => c.Width.IsAuto) || _rowDefinitions.Any(r => r.Height.IsAuto))
+            {
+                CalculateLengths(_columnDefinitions, availableWidth, true);
+                CalculateLengths(_rowDefinitions, availableHeight, false);
+            }
+        }
+
         // Calculate total size
         double totalWidth = 0;
         double totalHeight = 0;
@@ -746,6 +760,51 @@ public class Grid : Panel
                 row.Offset = offset;
                 offset += row.ActualHeight + spacing;
             }
+        }
+    }
+
+    private void MeasureChildrenWithActuals(double colGaps, double rowGaps)
+    {
+        foreach (var child in Children)
+        {
+            if (child is UIElement ui && !ui.IsVisible)
+            {
+                continue;
+            }
+
+            int row = GetRow(child);
+            int col = GetColumn(child);
+            int rowSpan = GetRowSpan(child);
+            int colSpan = GetColumnSpan(child);
+
+            row = Math.Clamp(row, 0, _rowDefinitions.Count - 1);
+            col = Math.Clamp(col, 0, _columnDefinitions.Count - 1);
+            rowSpan = Math.Clamp(rowSpan, 1, _rowDefinitions.Count - row);
+            colSpan = Math.Clamp(colSpan, 1, _columnDefinitions.Count - col);
+
+            double width = 0;
+            for (int i = col; i < col + colSpan; i++)
+            {
+                width += _columnDefinitions[i].ActualWidth;
+            }
+
+            double height = 0;
+            for (int i = row; i < row + rowSpan; i++)
+            {
+                height += _rowDefinitions[i].ActualHeight;
+            }
+
+            if (colSpan > 1)
+            {
+                width += (colSpan - 1) * Spacing;
+            }
+
+            if (rowSpan > 1)
+            {
+                height += (rowSpan - 1) * Spacing;
+            }
+
+            child.Measure(new Size(width, height));
         }
     }
 }

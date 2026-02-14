@@ -9,6 +9,7 @@ namespace Aprillz.MewUI.Controls;
 public partial class Label : Control
 {
     private TextMeasureCache _textMeasureCache;
+    private double? _lastWrapMeasureWidth;
     protected override bool InvalidateOnMouseOverChanged => false;
 
     /// <summary>
@@ -27,6 +28,7 @@ public partial class Label : Control
 
             field = value;
             _textMeasureCache.Invalidate();
+            _lastWrapMeasureWidth = null;
             InvalidateMeasure();
         }
     } = string.Empty;
@@ -72,6 +74,7 @@ public partial class Label : Control
 
             field = value;
             _textMeasureCache.Invalidate();
+            _lastWrapMeasureWidth = null;
             InvalidateMeasure();
         }
     } = TextWrapping.NoWrap;
@@ -111,10 +114,36 @@ public partial class Label : Control
             }
 
             maxWidth = maxWidth > 0 ? maxWidth : 1_000_000;
+            _lastWrapMeasureWidth = maxWidth;
         }
 
         var size = _textMeasureCache.Measure(factory, GetDpi(), font, Text, wrapping, maxWidth);
+
         return size.Inflate(Padding);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+
+        if (TextWrapping == TextWrapping.NoWrap)
+        {
+            return;
+        }
+
+        var contentWidth = bounds.Width - Padding.HorizontalThickness;
+        if (double.IsNaN(contentWidth) || double.IsInfinity(contentWidth))
+        {
+            return;
+        }
+
+        if (!_lastWrapMeasureWidth.HasValue || !_lastWrapMeasureWidth.Value.Equals(contentWidth))
+        {
+            // If layout gives us a different width than we measured with, re-measure so wrap height is correct.
+            _lastWrapMeasureWidth = contentWidth;
+
+            InvalidateMeasure();
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -139,7 +168,7 @@ public partial class Label : Control
 
         var bounds = Bounds.Deflate(Padding);
         var font = GetFont();
-        
+
         var color = IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText;
         context.DrawText(Text, bounds, font, color, TextAlignment, VerticalTextAlignment, wrapping);
     }
