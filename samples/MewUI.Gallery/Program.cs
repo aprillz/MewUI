@@ -2,6 +2,9 @@ using System.Diagnostics;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+#if DEBUG
+[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
+#endif
 
 var stopwatch = Stopwatch.StartNew();
 Startup();
@@ -19,7 +22,8 @@ var maxFpsEnabled = new ObservableValue<bool>(false);
 var currentAccent = ThemeManager.DefaultAccent;
 
 var app = Application
-    .Create();
+    .Create()
+    .UseAccent(Accent.Purple);
 
 var logo = ImageSource.FromFile("logo_h-1280.png");
 var april = ImageSource.FromFile("april.jpg");
@@ -32,36 +36,33 @@ var name = new ObservableValue<string>("Type your name");
 
 var root = new Window()
     .Resizable(1080, 840)
-    .Ref(out window)
-    .Title("Aprillz.MewUI Controls Gallery")
-    .Padding(0)
-    .Content(
-        new DockPanel()
-            .Children(
-                TopBar()
-                    .DockTop(),
-                new DockPanel()
-                    .Padding(8)
-                    .Spacing(8)
-                    .Children(
-                        GalleryRoot()
-                    )
-            )
-    )
-    .OnLoaded(() => { UpdateTopBar(); timer.Start(); })
-    .OnClosed(() => maxFpsEnabled.Value = false)
-    .OnFrameRendered(() =>
-    {
-        if (!fpsStopwatch.IsRunning)
+    .OnBuild(x => x
+        .Ref(out window)
+        .Title("Aprillz.MewUI Controls Gallery")
+        .Padding(16)
+        .Content(
+            new DockPanel()
+                .Children(
+                    TopBar()
+                        .DockTop(),
+                    GalleryRoot()
+                )
+        )
+        .OnLoaded(() => { UpdateTopBar(); timer.Start(); })
+        .OnClosed(() => maxFpsEnabled.Value = false)
+        .OnFrameRendered(() =>
         {
-            fpsStopwatch.Restart();
-            fpsFrames = 0;
-            return;
-        }
+            if (!fpsStopwatch.IsRunning)
+            {
+                fpsStopwatch.Restart();
+                fpsFrames = 0;
+                return;
+            }
 
-        fpsFrames++;
-        CheckFPS(ref fpsFrames);
-    });
+            fpsFrames++;
+            CheckFPS(ref fpsFrames);
+        })
+    );
 
 using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewUI.Gallery.appicon.ico")!)
 {
@@ -69,6 +70,93 @@ using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewU
 }
 
 app.Run(root);
+
+void EnableWindowDrag(Window window, UIElement element)
+{
+    ArgumentNullException.ThrowIfNull(element);
+
+    bool dragging = false;
+    Point dragStartScreenDip = default;
+    Point windowStartDip = default;
+
+    element.MouseDown += e =>
+    {
+        if (e.Button != MouseButton.Left)
+        {
+            return;
+        }
+
+        if (!element.Bounds.Contains(e.Position))
+        {
+            if (element.IsMouseCaptured)
+            {
+                window.ReleaseMouseCapture();
+            }
+            return;
+        }
+
+        dragging = true;
+        dragStartScreenDip = GetScreenDip(window, e);
+        windowStartDip = window.Position;
+
+        window.CaptureMouse(element);
+        e.Handled = true;
+    };
+
+    element.MouseMove += e =>
+    {
+        if (!dragging)
+        {
+            return;
+        }
+
+        if (!e.LeftButton)
+        {
+            dragging = false;
+            window.ReleaseMouseCapture();
+            return;
+        }
+
+        var screenDip = GetScreenDip(window, e);
+        double dx = screenDip.X - dragStartScreenDip.X;
+        double dy = screenDip.Y - dragStartScreenDip.Y;
+
+        Debug.WriteLine(window.DpiScale);
+        Debug.WriteLine($"{window.ClientToScreen(e.Position)} vs {e.ScreenPosition}");
+
+        window.MoveTo(windowStartDip.X + dx, windowStartDip.Y + dy);
+
+        e.Handled = true;
+    };
+
+    element.MouseUp += e =>
+    {
+        if (e.Button != MouseButton.Left)
+        {
+            return;
+        }
+
+        if (!dragging)
+        {
+            return;
+        }
+
+        dragging = false;
+        window.ReleaseMouseCapture();
+        e.Handled = true;
+    };
+
+    static Point GetScreenDip(Window window, MouseEventArgs e)
+    {
+        var screen = window.ClientToScreen(e.Position);
+        if (OperatingSystem.IsWindows())
+        {
+            var scale = Math.Max(1.0, window.DpiScale);
+            return new Point(screen.X / scale, screen.Y / scale);
+        }
+        return screen;
+    }
+}
 
 void CheckFPS(ref int fpsFrames)
 {
@@ -237,6 +325,7 @@ FrameworkElement BuildGalleryContent()
             Section("Buttons", ButtonsPage()),
             Section("Inputs", InputsPage()),
             Section("Menus", MenusPage()),
+            Section("Windows", WindowsPage()),
             Section("Selection", SelectionPage()),
             Section("Lists", ListsPage()),
             Section("Panels", PanelsPage()),
@@ -291,6 +380,152 @@ FrameworkElement ButtonsPage() =>
                 )
         )
     );
+
+FrameworkElement WindowsPage()
+{
+    var dialogStatus = new ObservableValue<string>("Dialog: -");
+    var transparentStatus = new ObservableValue<string>("Transparent: -");
+
+    async void ShowDialogSample()
+    {
+        dialogStatus.Value = "Dialog: opening...";
+
+        var dlg = new Window()
+            .Resizable(420, 220)
+            .OnBuild(x => x
+                .Title("ShowDialog sample")
+                .Padding(16)
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(10)
+                        .Children(
+                            new Label()
+                                .Text("This is a modal window. The owner is disabled until you close this dialog.")
+                                .FontSize(12),
+
+                            new StackPanel()
+                                .Horizontal()
+                                .Spacing(8)
+                                .Children(
+                                    new Button()
+                                        .Content("Open dialog")
+                                        .OnClick(ShowDialogSample),
+                                    new Button()
+                                        .Content("Close")
+                                        .OnClick(() => x.Close())
+                                )
+                        )
+                )
+            );
+
+        try
+        {
+            await dlg.ShowDialogAsync(window);
+            dialogStatus.Value = "Dialog: closed";
+        }
+        catch (Exception ex)
+        {
+            dialogStatus.Value = $"Dialog: error ({ex.GetType().Name})";
+        }
+    }
+
+    void ShowTransparentSample()
+    {
+        transparentStatus.Value = "Transparent: opening...";
+
+        Window tw = null!;
+
+        new Window()
+            .Ref(out tw)
+            .Resizable(520, 400)
+            .OnBuild(x =>
+            {
+                x.Title = "Transparent window sample";
+                x.AllowsTransparency = true;
+                x.Background = Color.Transparent;
+                x.Padding = new Thickness(20);
+                x.Content =
+                        new Grid()
+                            .Children(
+                                new Image()
+                                    .Source(logo)
+                                    .Apply(x => EnableWindowDrag(tw, x))
+                                    .Width(500)
+                                    .Height(256)
+                                    .ImageScaleQuality(ImageScaleQuality.HighQuality)
+                                    .StretchMode(ImageStretch.Uniform)
+                                    .Bottom(),
+                                new Border()
+                                    .Padding(16)
+                                    .Top()
+                                    .WithTheme((t, b) => b.Background(t.Palette.Accent.WithAlpha(32)))
+                                    .CornerRadius(10)
+                                    .Child(
+                                        new StackPanel()
+                                            .Vertical()
+                                            .Spacing(10)
+                                            .Children(
+
+                                                new StackPanel()
+                                                    .Vertical()
+                                                    .Spacing(6)
+                                                    .Children(
+                                                        new Label()
+                                                            .TextWrapping(TextWrapping.Wrap)
+                                                            .Text("Wrapped label followed by a button. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."),
+                                                        new Button()
+                                                            .Content("Close")
+                                                            .OnClick(() => x.Close())
+                                                        )
+                                            )
+                                    )
+                        );
+            });
+
+        try
+        {
+            tw.Show();
+            transparentStatus.Value = "Transparent: shown";
+        }
+        catch (Exception ex)
+        {
+            transparentStatus.Value = $"Transparent: error ({ex.GetType().Name})";
+        }
+    }
+
+    return CardGrid(
+        Card(
+            "ShowDialogAsync",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new Button()
+                        .Content("Open dialog")
+                        .OnClick(ShowDialogSample),
+                    new Label()
+                        .BindText(dialogStatus)
+                        .FontSize(11)
+                )
+        ),
+
+        Card(
+            "Transparent Window",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new Button()
+                        .Content("Open transparent window")
+                        .OnClick(ShowTransparentSample),
+                    new Label()
+                        .BindText(transparentStatus)
+                        .FontSize(11)
+                )
+        )
+    );
+}
 
 FrameworkElement InputsPage() =>
     CardGrid(
@@ -630,8 +865,38 @@ FrameworkElement ListsPage()
 }
 
 
-FrameworkElement LayoutPage() =>
-    CardGrid(
+FrameworkElement LayoutPage()
+{
+    FrameworkElement LabelBox(string title, TextAlignment horizontal, TextAlignment vertical, TextWrapping wrapping)
+    {
+        const string sample =
+            "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog";
+
+        return new StackPanel()
+            .Vertical()
+            .Spacing(4)
+            .Children(
+                new Label()
+                    .Text(title)
+                    .FontSize(11),
+                new Border()
+                    .Width(240)
+                    .Height(80)
+                    .Padding(6)
+                    .BorderThickness(1)
+                    .CornerRadius(6)
+                    .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+                    .Child(
+                        new Label()
+                            .Text(sample)
+                            .TextWrapping(wrapping)
+                            .TextAlignment(horizontal)
+                            .VerticalTextAlignment(vertical)
+                    )
+            );
+    }
+
+    return CardGrid(
         Card(
             "GroupBox",
             new GroupBox()
@@ -662,6 +927,89 @@ FrameworkElement LayoutPage() =>
         ),
 
         Card(
+            "Label Wrap/Alignment",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new WrapPanel()
+                        .Orientation(Orientation.Horizontal)
+                        .Spacing(8)
+                        .Children(
+                            LabelBox("Left/Top + Wrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap),
+                            LabelBox("Center/Top + Wrap", TextAlignment.Center, TextAlignment.Top, TextWrapping.Wrap),
+                            LabelBox("Right/Top + Wrap", TextAlignment.Right, TextAlignment.Top, TextWrapping.Wrap),
+                            LabelBox("Left/Center + Wrap", TextAlignment.Left, TextAlignment.Center, TextWrapping.Wrap),
+                            LabelBox("Left/Bottom + Wrap", TextAlignment.Left, TextAlignment.Bottom, TextWrapping.Wrap),
+                            LabelBox("Left/Top + NoWrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap)
+                        )
+                )
+        ),
+
+        Card(
+            "Border Top + Wrap Growth",
+            new Border()
+                .Width(260)
+                .Top()
+                .Padding(8)
+                .BorderThickness(1)
+                .CornerRadius(8)
+                .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+                .Child(
+                    new Label()
+                        .TextWrapping(TextWrapping.Wrap)
+                        .Text("Top-aligned border should grow with wrapped text. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
+                )
+        ),
+
+        Card(
+            "StackPanel Wrap Growth",
+            new Border()
+                .Width(260)
+                .Top()
+                .Padding(8)
+                .BorderThickness(1)
+                .CornerRadius(8)
+                .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+                .Child(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(6)
+                        .Children(
+                            new Label()
+                                .TextWrapping(TextWrapping.Wrap)
+                                .Text("First wrapped label. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."),
+                            new Label()
+                                .TextWrapping(TextWrapping.Wrap)
+                                .Text("Second wrapped label. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
+                        )
+                )
+        ),
+
+        Card(
+            "Wrap + Button",
+            new Border()
+                .Width(260)
+                .Top()
+                .Padding(8)
+                .BorderThickness(1)
+                .CornerRadius(8)
+                .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+                .Child(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(6)
+                        .Children(
+                            new Label()
+                                .TextWrapping(TextWrapping.Wrap)
+                                .Text("Wrapped label followed by a button. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."),
+                            new Button()
+                                .Content("After Wrap")
+                        )
+                )
+        ),
+
+        Card(
             "ScrollViewer",
             new ScrollViewer()
                 .Height(120)
@@ -676,6 +1024,7 @@ FrameworkElement LayoutPage() =>
                 )
         )
     );
+}
 
 FrameworkElement PanelsPage()
 {
