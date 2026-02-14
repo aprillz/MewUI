@@ -5,6 +5,8 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class WrapPanel : Panel
 {
+    private double _lastMeasuredMain = double.NaN;
+
     /// <summary>
     /// Gets or sets the orientation of the wrap panel.
     /// </summary>
@@ -70,57 +72,23 @@ public class WrapPanel : Panel
         var paddedSize = availableSize.Deflate(Padding);
 
         bool horizontal = Orientation == Orientation.Horizontal;
-        double lineSize = 0;      // Size of current line (height for horizontal, width for vertical)
-        double lineOffset = 0;    // Offset of current line
-        double totalMain = 0;     // Total size in main direction
-        double totalCross = 0;    // Total size in cross direction
+        var measuredMain = horizontal ? paddedSize.Width : paddedSize.Height;
+        _lastMeasuredMain = measuredMain;
 
-        double maxMain = horizontal ? paddedSize.Width : paddedSize.Height;
-        bool hasPrevious = false;
+        var items = CollectVisibleChildren(paddedSize, measureChildren: true);
+        var lines = BuildLines(items, measuredMain);
 
-        foreach (var child in Children)
+        double totalMain = 0;
+        double totalCross = 0;
+        for (int i = 0; i < lines.Count; i++)
         {
-            if (child is UIElement ui && !ui.IsVisible)
+            totalMain = Math.Max(totalMain, lines[i].main);
+            totalCross += lines[i].size;
+            if (i < lines.Count - 1)
             {
-                continue;
+                totalCross += Spacing;
             }
-
-            // Measure with item constraints if specified
-            var measureSize = new Size(
-                double.IsNaN(ItemWidth) ? paddedSize.Width : ItemWidth,
-                double.IsNaN(ItemHeight) ? paddedSize.Height : ItemHeight
-            );
-            child.Measure(measureSize);
-
-            double childWidth = double.IsNaN(ItemWidth) ? child.DesiredSize.Width : ItemWidth;
-            double childHeight = double.IsNaN(ItemHeight) ? child.DesiredSize.Height : ItemHeight;
-            double childMain = horizontal ? childWidth : childHeight;
-            double childCross = horizontal ? childHeight : childWidth;
-
-            double spacing = hasPrevious && lineOffset > 0 ? Spacing : 0;
-
-            // Check if we need to wrap
-            if (lineOffset + spacing + childMain > maxMain && lineOffset > 0)
-            {
-                // Wrap to next line
-                totalCross += lineSize + Spacing;
-                lineSize = childCross;
-                lineOffset = childMain;
-                totalMain = Math.Max(totalMain, lineOffset);
-            }
-            else
-            {
-                // Continue on current line
-                lineOffset += spacing + childMain;
-                lineSize = Math.Max(lineSize, childCross);
-                totalMain = Math.Max(totalMain, lineOffset);
-            }
-
-            hasPrevious = true;
         }
-
-        // Add last line
-        totalCross += lineSize;
 
         var contentSize = horizontal
             ? new Size(totalMain, totalCross)
@@ -134,81 +102,123 @@ public class WrapPanel : Panel
         var contentBounds = bounds.Deflate(Padding);
 
         bool horizontal = Orientation == Orientation.Horizontal;
-        double lineSize = 0;
-        double lineOffset = 0;
-        double crossOffset = 0;
+        var arrangedMain = horizontal ? contentBounds.Width : contentBounds.Height;
+        var effectiveMain = double.IsNaN(_lastMeasuredMain) ? arrangedMain : Math.Min(arrangedMain, _lastMeasuredMain);
+        var items = CollectVisibleChildren(contentBounds.Size, measureChildren: false);
+        var lines = BuildLines(items, effectiveMain);
 
-        double maxMain = horizontal ? contentBounds.Width : contentBounds.Height;
-
-        // First pass: calculate line sizes
-        var lines = new List<(int start, int count, double size)>();
-        int lineStart = 0;
-        int lineCount = 0;
-
-        for (int i = 0; i < Children.Count; i++)
+        double totalMain = 0;
+        double totalCross = 0;
+        for (int i = 0; i < lines.Count; i++)
         {
-            var child = Children[i];
+            totalMain = Math.Max(totalMain, lines[i].main);
+            totalCross += lines[i].size;
+            if (i < lines.Count - 1)
+            {
+                totalCross += Spacing;
+            }
+        }
+
+        double crossOffset = 0;
+        for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+        {
+            var line = lines[lineIndex];
+            double mainOffset = 0;
+
+            for (int i = 0; i < line.count; i++)
+            {
+                var item = items[line.start + i];
+                var child = item.child;
+
+                var childRect = horizontal
+                    ? new Rect(contentBounds.X + mainOffset, contentBounds.Y + crossOffset, item.width, item.height)
+                    : new Rect(contentBounds.X + crossOffset, contentBounds.Y + mainOffset, item.width, item.height);
+
+                child.Arrange(childRect);
+                mainOffset += item.main;
+                if (i < line.count - 1)
+                {
+                    mainOffset += Spacing;
+                }
+            }
+
+            crossOffset += line.size;
+            if (lineIndex < lines.Count - 1)
+            {
+                crossOffset += Spacing;
+            }
+        }
+    }
+
+    private List<ChildInfo> CollectVisibleChildren(Size constraintSize, bool measureChildren)
+    {
+        var items = new List<ChildInfo>(Children.Count);
+        foreach (var child in Children)
+        {
             if (child is UIElement ui && !ui.IsVisible)
             {
                 continue;
             }
 
-            double childWidth = double.IsNaN(ItemWidth) ? child.DesiredSize.Width : ItemWidth;
-            double childHeight = double.IsNaN(ItemHeight) ? child.DesiredSize.Height : ItemHeight;
-            double childMain = horizontal ? childWidth : childHeight;
-            double childCross = horizontal ? childHeight : childWidth;
-
-            double spacing = lineCount > 0 ? Spacing : 0;
-
-            if (lineOffset + spacing + childMain > maxMain && lineCount > 0)
+            if (measureChildren)
             {
-                lines.Add((lineStart, lineCount, lineSize));
+                var measureSize = new Size(
+                    double.IsNaN(ItemWidth) ? constraintSize.Width : ItemWidth,
+                    double.IsNaN(ItemHeight) ? constraintSize.Height : ItemHeight
+                );
+                child.Measure(measureSize);
+            }
+
+            double width = double.IsNaN(ItemWidth) ? child.DesiredSize.Width : ItemWidth;
+            double height = double.IsNaN(ItemHeight) ? child.DesiredSize.Height : ItemHeight;
+            double main = Orientation == Orientation.Horizontal ? width : height;
+            double cross = Orientation == Orientation.Horizontal ? height : width;
+
+            items.Add(new ChildInfo(child, width, height, main, cross));
+        }
+
+        return items;
+    }
+
+    private List<LineInfo> BuildLines(List<ChildInfo> items, double maxMain)
+    {
+        var lines = new List<LineInfo>();
+        double lineSize = 0;
+        double lineOffset = 0;
+        int lineStart = 0;
+        int lineCount = 0;
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            double addSpacing = lineCount > 0 ? Spacing : 0;
+            double nextOffset = lineOffset + addSpacing + item.main;
+
+            if (lineCount > 0 && nextOffset > maxMain)
+            {
+                lines.Add(new LineInfo(lineStart, lineCount, lineSize, lineOffset));
                 lineStart = i;
                 lineCount = 1;
-                lineSize = childCross;
-                lineOffset = childMain;
+                lineSize = item.cross;
+                lineOffset = item.main;
             }
             else
             {
+                lineOffset = nextOffset;
                 lineCount++;
-                lineSize = Math.Max(lineSize, childCross);
-                lineOffset += spacing + childMain;
+                lineSize = Math.Max(lineSize, item.cross);
             }
         }
 
         if (lineCount > 0)
         {
-            lines.Add((lineStart, lineCount, lineSize));
+            lines.Add(new LineInfo(lineStart, lineCount, lineSize, lineOffset));
         }
 
-        // Second pass: arrange children
-        crossOffset = 0;
-        foreach (var (start, count, size) in lines)
-        {
-            double mainOffset = 0;
-            int arranged = 0;
-
-            for (int i = start; i < Children.Count && arranged < count; i++)
-            {
-                var child = Children[i];
-                if (child is UIElement ui && !ui.IsVisible)
-                {
-                    continue;
-                }
-
-                double childWidth = double.IsNaN(ItemWidth) ? child.DesiredSize.Width : ItemWidth;
-                double childHeight = double.IsNaN(ItemHeight) ? child.DesiredSize.Height : ItemHeight;
-
-                var childRect = horizontal
-                    ? new Rect(contentBounds.X + mainOffset, contentBounds.Y + crossOffset, childWidth, childHeight)
-                    : new Rect(contentBounds.X + crossOffset, contentBounds.Y + mainOffset, childWidth, childHeight);
-
-                child.Arrange(childRect);
-                mainOffset += (horizontal ? childWidth : childHeight) + Spacing;
-                arranged++;
-            }
-
-            crossOffset += size + Spacing;
-        }
+        return lines;
     }
+
+    private readonly record struct ChildInfo(Element child, double width, double height, double main, double cross);
+
+    private readonly record struct LineInfo(int start, int count, double size, double main);
 }
