@@ -269,6 +269,7 @@ public class Window : ContentControl, ILayoutRoundingHost
         get;
         set
         {
+            var previous = field;
             field = value;
             if (!double.IsNaN(field.Width))
             {
@@ -280,7 +281,10 @@ public class Window : ContentControl, ILayoutRoundingHost
                 Height = field.Height;
             }
 
-            _backend?.SetResizable(field.IsResizable);
+            if (_backend != null && previous.IsResizable != field.IsResizable)
+            {
+                _backend.SetResizable(field.IsResizable);
+            }
         }
     } = WindowSize.Resizable(800, 600);
 
@@ -348,10 +352,10 @@ public class Window : ContentControl, ILayoutRoundingHost
     public new double Width
     {
         get;
-        private set
+        internal set
         {
             field = value;
-            _backend?.SetClientSize(Width, Height);
+            RequestClientSizeUpdate();
         }
     } = WindowSize.Resizable(800, 600).Width;
 
@@ -361,10 +365,10 @@ public class Window : ContentControl, ILayoutRoundingHost
     public new double Height
     {
         get;
-        private set
+        internal set
         {
             field = value;
-            _backend?.SetClientSize(Width, Height);
+            RequestClientSizeUpdate();
         }
     } = WindowSize.Resizable(800, 600).Height;
 
@@ -811,10 +815,6 @@ public class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-#if DEV_DEBUG
-        Debug.WriteLine("PerformLayout");
-#endif
-
         const int maxPasses = 8;
         var contentSize = clientSize.Deflate(padding);
 
@@ -1004,6 +1004,17 @@ public class Window : ContentControl, ILayoutRoundingHost
         _backend.SetIcon(Icon);
         _backend.SetOpacity(Opacity);
         _backend.SetAllowsTransparency(AllowsTransparency);
+        RequestClientSizeUpdate();
+    }
+
+    private void RequestClientSizeUpdate()
+    {
+        if (_backend == null)
+        {
+            return;
+        }
+
+        _backend.SetClientSize(Width, Height);
     }
 
     internal void ReleaseWindowGraphicsResources(nint windowHandle)

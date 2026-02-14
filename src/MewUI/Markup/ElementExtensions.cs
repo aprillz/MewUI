@@ -15,7 +15,15 @@ public static class ElementExtensions
     /// <returns>The window for chaining.</returns>
     public static Window Width(this Window window, double width)
     {
-        window.WindowSize = WindowSize.Resizable(width, window.Height);
+        window.WindowSize = window.WindowSize.Mode switch
+        {
+            WindowSizeMode.Fixed => WindowSize.Fixed(width, ResolveWindowHeight(window)),
+            WindowSizeMode.FitContentWidth => WindowSize.FitContentWidth(width, ResolveWindowHeight(window)),
+            WindowSizeMode.FitContentHeight => WindowSize.FitContentHeight(width, ResolveWindowMaxHeight(window)),
+            WindowSizeMode.FitContentSize => WindowSize.FitContentSize(width, ResolveWindowMaxHeight(window)),
+            _ => WindowSize.Resizable(width, ResolveWindowHeight(window))
+        };
+        window.Width = width;
         return window;
     }
 
@@ -27,7 +35,15 @@ public static class ElementExtensions
     /// <returns>The window for chaining.</returns>
     public static Window Height(this Window window, double height)
     {
-        window.WindowSize = WindowSize.Resizable(window.Width, height);
+        window.WindowSize = window.WindowSize.Mode switch
+        {
+            WindowSizeMode.Fixed => WindowSize.Fixed(ResolveWindowWidth(window), height),
+            WindowSizeMode.FitContentWidth => WindowSize.FitContentWidth(ResolveWindowMaxWidth(window), height),
+            WindowSizeMode.FitContentHeight => WindowSize.FitContentHeight(ResolveWindowWidth(window), height),
+            WindowSizeMode.FitContentSize => WindowSize.FitContentSize(ResolveWindowMaxWidth(window), height),
+            _ => WindowSize.Resizable(ResolveWindowWidth(window), height)
+        };
+        window.Height = height;
         return window;
     }
 
@@ -40,9 +56,30 @@ public static class ElementExtensions
     /// <returns>The window for chaining.</returns>
     public static Window Size(this Window window, double width, double height)
     {
-        window.WindowSize = WindowSize.Resizable(width, height);
+        window.WindowSize = window.WindowSize.Mode switch
+        {
+            WindowSizeMode.Fixed => WindowSize.Fixed(width, height),
+            WindowSizeMode.FitContentWidth => WindowSize.FitContentWidth(width, height),
+            WindowSizeMode.FitContentHeight => WindowSize.FitContentHeight(width, height),
+            WindowSizeMode.FitContentSize => WindowSize.FitContentSize(width, height),
+            _ => WindowSize.Resizable(width, height)
+        };
+        window.Width = width;
+        window.Height = height;
         return window;
     }
+
+    private static double ResolveWindowWidth(Window window)
+        => double.IsNaN(window.WindowSize.Width) ? window.Width : window.WindowSize.Width;
+
+    private static double ResolveWindowHeight(Window window)
+        => double.IsNaN(window.WindowSize.Height) ? window.Height : window.WindowSize.Height;
+
+    private static double ResolveWindowMaxWidth(Window window)
+        => double.IsNaN(window.WindowSize.MaxWidth) ? window.Width : window.WindowSize.MaxWidth;
+
+    private static double ResolveWindowMaxHeight(Window window)
+        => double.IsNaN(window.WindowSize.MaxHeight) ? window.Height : window.WindowSize.MaxHeight;
 
     /// <summary>
     /// Sets the window size uniformly.
