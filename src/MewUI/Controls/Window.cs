@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
@@ -32,6 +30,7 @@ public class Window : ContentControl, ILayoutRoundingHost
     private Element? _lastLayoutContent;
     private readonly List<PopupEntry> _popups = new();
     private readonly RadioGroupManager _radioGroups = new();
+    private readonly List<Window> _modalChildren = new();
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
     private readonly List<UIElement> _mouseOverNewPath = new(capacity: 16);
     private UIElement? _mouseOverElement;
@@ -43,6 +42,7 @@ public class Window : ContentControl, ILayoutRoundingHost
     private bool _firstFrameRenderedPending;
     private bool _subscribedToDispatcherChanged;
     private WindowLifetimeState _lifetimeState;
+    private int _modalDisableCount;
     internal Action<Window>? BuildCallback { get; private set; }
 
     internal Point LastMousePositionDip => _lastMousePositionDip;
@@ -236,7 +236,7 @@ public class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     /// <param name="clientPointDip">The client point in DIPs.</param>
     /// <returns>The screen point.</returns>
-    internal Point ClientToScreen(Point clientPointDip)
+    public Point ClientToScreen(Point clientPointDip)
     {
         if (_backend == null || Handle == 0)
         {
@@ -251,7 +251,7 @@ public class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     /// <param name="screenPointPx">The screen point in pixels.</param>
     /// <returns>The client point in DIPs.</returns>
-    internal Point ScreenToClient(Point screenPointPx)
+    public Point ScreenToClient(Point screenPointPx)
     {
         if (_backend == null || Handle == 0)
         {
@@ -316,6 +316,33 @@ public class Window : ContentControl, ILayoutRoundingHost
     public WindowStartupLocation StartupLocation { get; set; } = WindowStartupLocation.CenterScreen;
 
     /// <summary>
+    /// Gets or sets the window opacity (0..1).
+    /// </summary>
+    public double Opacity
+    {
+        get;
+        set
+        {
+            field = Math.Clamp(value, 0.0, 1.0);
+            _backend?.SetOpacity(field);
+        }
+    } = 1.0;
+
+    /// <summary>
+    /// Gets or sets whether the window supports per-pixel transparency (platform dependent).
+    /// </summary>
+    public bool AllowsTransparency
+    {
+        get;
+        set
+        {
+            field = value;
+            _backend?.SetAllowsTransparency(field);
+            Invalidate();
+        }
+    }
+
+    /// <summary>
     /// Gets the window client width in DIPs.
     /// </summary>
     public new double Width
@@ -359,7 +386,45 @@ public class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Gets the client size in DIPs.
     /// </summary>
-    internal Size ClientSizeDip => _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+    public Size ClientSize => _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+
+    /// <summary>
+    /// Gets or sets the window position in screen coordinates (DIPs).
+    /// </summary>
+    public Point Position
+    {
+        get
+        {
+            if (_backend == null || Handle == 0)
+            {
+                return default;
+            }
+
+            return _backend.GetPosition();
+        }
+        set
+        {
+            if (_backend == null || Handle == 0)
+            {
+                return;
+            }
+
+            _backend.SetPosition(value.X, value.Y);
+        }
+    }
+
+    /// <summary>
+    /// Moves the window to the specified screen position (DIPs).
+    /// </summary>
+    public void MoveTo(double leftDip, double topDip)
+    {
+        if (_backend == null || Handle == 0)
+        {
+            return;
+        }
+
+        _backend.SetPosition(leftDip, topDip);
+    }
 
     /// <summary>
     /// Gets or sets whether layout rounding is enabled.
@@ -535,6 +600,173 @@ public class Window : ContentControl, ILayoutRoundingHost
         _backend.Close();
     }
 
+    /// <summary>
+    /// Attempts to activate the window (bring to front / focus), platform dependent.
+    /// </summary>
+    public void Activate()
+    {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+        {
+            return;
+        }
+
+        if (_backend == null || Handle == 0)
+        {
+            return;
+        }
+
+        _backend.Activate();
+    }
+
+    /// <summary>
+    /// Shows the window as a modal dialog and completes when the dialog is closed.
+    /// </summary>
+    /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
+    public Task ShowDialogAsync(Window? owner = null)
+    {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+        {
+            throw new InvalidOperationException("Cannot show a closed window.");
+        }
+
+        if (owner != null && ReferenceEquals(owner, this))
+        {
+            throw new ArgumentException("Owner cannot be the dialog itself.", nameof(owner));
+        }
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnClosed()
+        {
+            Closed -= OnClosed;
+            if (owner != null)
+            {
+                owner.ReleaseModalDisable();
+                owner.UnregisterModalChild(this);
+                if (owner._lifetimeState != WindowLifetimeState.Closed)
+                {
+                    var target = owner.GetTopModalChild() ?? owner;
+                    target.Activate();
+                }
+            }
+            tcs.TrySetResult();
+        }
+
+        Closed += OnClosed;
+
+        try
+        {
+            if (owner != null)
+            {
+                owner.AcquireModalDisable();
+                owner.RegisterModalChild(this);
+            }
+
+            Show();
+            if (owner != null && _backend != null && Handle != 0)
+            {
+                _backend.SetOwner(owner.Handle);
+            }
+            Activate();
+        }
+        catch (Exception ex)
+        {
+            Closed -= OnClosed;
+            if (owner != null)
+            {
+                owner.ReleaseModalDisable();
+                owner.UnregisterModalChild(this);
+            }
+            tcs.TrySetException(ex);
+        }
+
+        return tcs.Task;
+    }
+
+    private void RegisterModalChild(Window child)
+    {
+        if (child == null || ReferenceEquals(child, this))
+        {
+            return;
+        }
+
+        if (_modalChildren.Contains(child))
+        {
+            return;
+        }
+
+        _modalChildren.Add(child);
+    }
+
+    private void UnregisterModalChild(Window child)
+    {
+        _modalChildren.Remove(child);
+    }
+
+    internal Window? GetTopModalChild()
+    {
+        Window? current = this;
+        Window? result = null;
+
+        while (current != null)
+        {
+            Window? next = null;
+            for (int i = current._modalChildren.Count - 1; i >= 0; i--)
+            {
+                var child = current._modalChildren[i];
+                if (child != null && child._lifetimeState != WindowLifetimeState.Closed)
+                {
+                    next = child;
+                    break;
+                }
+            }
+
+            if (next == null)
+            {
+                break;
+            }
+
+            result = next;
+            current = next;
+        }
+
+        return result;
+    }
+
+    internal void NotifyInputWhenDisabled()
+    {
+        var child = GetTopModalChild();
+        child?.Activate();
+    }
+
+    private void AcquireModalDisable()
+    {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+        {
+            return;
+        }
+
+        _modalDisableCount++;
+        if (_modalDisableCount == 1)
+        {
+            _backend?.SetEnabled(false);
+        }
+    }
+
+    private void ReleaseModalDisable()
+    {
+        if (_modalDisableCount <= 0)
+        {
+            return;
+        }
+
+        _modalDisableCount--;
+        if (_modalDisableCount == 0 && _backend != null)
+        {
+            _backend.SetEnabled(true);
+        }
+    }
+
     private void EnsureBackend()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
@@ -586,7 +818,10 @@ public class Window : ContentControl, ILayoutRoundingHost
         const int maxPasses = 8;
         var contentSize = clientSize.Deflate(padding);
 
-        bool needMeasure = HasMeasureDirty(Content);
+        bool needMeasure = HasMeasureDirty(Content)
+            || clientSize != _lastLayoutClientSizeDip
+            || padding != _lastLayoutPadding
+            || Content != _lastLayoutContent;
         for (int pass = 0; pass < maxPasses; pass++)
         {
             if (needMeasure)
@@ -767,6 +1002,21 @@ public class Window : ContentControl, ILayoutRoundingHost
         _backend.SetTitle(Title);
         _backend.SetResizable(WindowSize.IsResizable);
         _backend.SetIcon(Icon);
+        _backend.SetOpacity(Opacity);
+        _backend.SetAllowsTransparency(AllowsTransparency);
+    }
+
+    internal void ReleaseWindowGraphicsResources(nint windowHandle)
+    {
+        if (windowHandle == 0)
+        {
+            return;
+        }
+
+        if (GraphicsFactory is IWindowResourceReleaser releaser)
+        {
+            releaser.ReleaseWindowResources(windowHandle);
+        }
     }
 
     internal void SetDpi(uint dpi) => Dpi = dpi;
@@ -802,6 +1052,18 @@ public class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
+        // Close modal children first (best-effort) so modal tasks complete before owner closes.
+        // Copy to avoid modification during Close()->RaiseClosed cascades.
+        if (_modalChildren.Count > 0)
+        {
+            var children = _modalChildren.ToArray();
+            _modalChildren.Clear();
+            for (int i = 0; i < children.Length; i++)
+            {
+                try { children[i]?.Close(); } catch { }
+            }
+        }
+
         _lifetimeState = WindowLifetimeState.Closed;
         UnsubscribeFromDispatcherChanged();
 
@@ -815,7 +1077,7 @@ public class Window : ContentControl, ILayoutRoundingHost
 
     internal void RaiseClientSizeChanged(double widthDip, double heightDip) => ClientSizeChanged?.Invoke(new Size(widthDip, heightDip));
 
-    internal void RenderFrame(nint hdc)
+    internal void RenderFrame(IWindowSurface surface)
     {
         // Some platforms can render before Loaded is raised due to Run/Show/Dispatcher ordering.
         // Ensure Loaded is raised as soon as the dispatcher is available, and always before FirstFrameRendered.
@@ -824,13 +1086,49 @@ public class Window : ContentControl, ILayoutRoundingHost
             RaiseLoaded();
         }
 
+        ArgumentNullException.ThrowIfNull(surface);
         var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
-        int pixelWidth = (int)Math.Ceiling(clientSize.Width * DpiScale);
-        int pixelHeight = (int)Math.Ceiling(clientSize.Height * DpiScale);
-        var target = new WindowRenderTarget(Handle, hdc, pixelWidth, pixelHeight, DpiScale);
+        RenderFrameCore(new WindowRenderTarget(surface), clientSize);
 
+    }
+
+    internal void RenderFrameToBitmap(IBitmapRenderTarget bitmapTarget)
+    {
+        if (bitmapTarget == null)
+        {
+            throw new ArgumentNullException(nameof(bitmapTarget));
+        }
+
+        var clientSizeDip = new Size(
+            bitmapTarget.PixelWidth / Math.Max(1.0, bitmapTarget.DpiScale),
+            bitmapTarget.PixelHeight / Math.Max(1.0, bitmapTarget.DpiScale));
+
+        RenderFrameCore(bitmapTarget, clientSizeDip);
+    }
+
+    private void RenderFrameCore(IRenderTarget target, Size clientSize)
+    {
         using var context = GraphicsFactory.CreateContext(target);
-        context.Clear(Background.A > 0 ? Background : Theme.Palette.WindowBackground);
+
+        Color clearColor;
+        if (AllowsTransparency)
+        {
+            // Always clear to transparent black so the output remains premultiplied when composited.
+            clearColor = Color.Transparent;
+        }
+        else
+        {
+            // Default to an opaque window background when the user does not specify one.
+            clearColor = Background.A > 0 ? Background : Theme.Palette.WindowBackground;
+        }
+
+        context.Clear(clearColor);
+
+        if (AllowsTransparency && Background.A > 0)
+        {
+            // Draw the background through the normal pipeline so alpha is handled consistently.
+            context.FillRectangle(new Rect(0, 0, clientSize.Width, clientSize.Height), Background);
+        }
 
         // Ensure nothing paints outside the client area.
         context.Save();
