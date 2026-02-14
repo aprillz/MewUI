@@ -2,6 +2,9 @@ using Aprillz.MewUI.Platform;
 
 namespace Aprillz.MewUI;
 
+/// <summary>
+/// Application-wide defaults applied by <see cref="ApplicationBuilder"/> before starting the message loop.
+/// </summary>
 public sealed class AppOptions
 {
     public PlatformHostKind? Platform { get; set; }

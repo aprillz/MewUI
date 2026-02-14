@@ -1,108 +1,77 @@
 namespace Aprillz.MewUI;
 
-using Aprillz.MewUI.Platform;
-using Aprillz.MewUI.Rendering;
-
+/// <summary>
+/// Configures and runs an <see cref="Application"/> using an <see cref="AppOptions"/> instance.
+/// </summary>
 public sealed class ApplicationBuilder
 {
-    private Func<Window>? _mainWindowFactory;
+    /// <summary>
+    /// Gets or sets a factory used to create the main window when calling <see cref="Run()"/>.
+    /// </summary>
+    public Func<Window>? MainWindowFactory { get; set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ApplicationBuilder"/> class.
+    /// </summary>
+    /// <param name="options">Application options.</param>
     public ApplicationBuilder(AppOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         Options = options;
     }
 
+    /// <summary>
+    /// Gets the options to be applied when running the application.
+    /// </summary>
     public AppOptions Options { get; }
 
-    public ApplicationBuilder UseWin32()
-    {
-        Options.Platform = PlatformHostKind.Win32;
-        return this;
-    }
-
-    public ApplicationBuilder UseX11()
-    {
-        Options.Platform = PlatformHostKind.X11;
-        return this;
-    }
-
-    public ApplicationBuilder UseDirect2D()
-    {
-        Options.GraphicsBackend = GraphicsBackend.Direct2D;
-        return this;
-    }
-
-    public ApplicationBuilder UseGdi()
-    {
-        Options.GraphicsBackend = GraphicsBackend.Gdi;
-        return this;
-    }
-
-    public ApplicationBuilder UseOpenGL()
-    {
-        Options.GraphicsBackend = GraphicsBackend.OpenGL;
-        return this;
-    }
-
-    public ApplicationBuilder UseTheme(ThemeVariant themeMode)
-    {
-        Options.ThemeMode = themeMode;
-        return this;
-    }
-
-    public ApplicationBuilder UseAccent(Accent accent)
-    {
-        Options.Accent = accent;
-        return this;
-    }
-
-    public ApplicationBuilder UseSeed(ThemeSeed lightSeed, ThemeSeed darkSeed)
-    {
-        ArgumentNullException.ThrowIfNull(lightSeed);
-        ArgumentNullException.ThrowIfNull(darkSeed);
-
-        Options.LightSeed = lightSeed;
-        Options.DarkSeed = darkSeed;
-        return this;
-    }
-
-    public ApplicationBuilder UseMetrics(ThemeMetrics metrics)
-    {
-        ArgumentNullException.ThrowIfNull(metrics);
-
-        Options.Metrics = metrics;
-        return this;
-    }
-
-    public ApplicationBuilder UseMainWindow(Func<Window> factory)
-    {
-        ArgumentNullException.ThrowIfNull(factory);
-
-        _mainWindowFactory = factory;
-        return this;
-    }
-
+    /// <summary>
+    /// Applies configured options and runs the application using <see cref="MainWindowFactory"/>.
+    /// </summary>
     public void Run()
     {
-        if (_mainWindowFactory == null)
+        if (Application.IsRunning)
+        {
+            throw new InvalidOperationException("ApplicationBuilder cannot be used after Application is running.");
+        }
+        if (MainWindowFactory == null)
         {
             throw new InvalidOperationException("Main window is not configured. Use UseMainWindow(...) or Run<TWindow>().");
         }
 
-        Run(_mainWindowFactory());
+        Run(MainWindowFactory());
     }
 
+    /// <summary>
+    /// Applies configured options and runs the application with the given main window.
+    /// </summary>
     public void Run(Window mainWindow)
     {
+        if (Application.IsRunning)
+        {
+            throw new InvalidOperationException("ApplicationBuilder cannot be used after Application is running.");
+        }
+        if (MainWindowFactory is not null)
+        {
+            throw new InvalidOperationException("Main window factory is already set. Use Run().");
+        }
+
         ArgumentNullException.ThrowIfNull(mainWindow);
 
         ApplyOptions();
         Application.Run(mainWindow);
     }
 
+    /// <summary>
+    /// Applies configured options and runs the application using a new instance of <typeparamref name="TWindow"/>.
+    /// </summary>
     public void Run<TWindow>() where TWindow : Window, new()
     {
+        if (MainWindowFactory is not null)
+        {
+            throw new InvalidOperationException("Main window factory is already set. Use Run().");
+        }
+
         ApplyOptions();
         Application.Run(new TWindow());
     }
@@ -140,4 +109,3 @@ public sealed class ApplicationBuilder
         }
     }
 }
-
