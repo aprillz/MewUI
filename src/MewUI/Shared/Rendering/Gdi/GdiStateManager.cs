@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -86,20 +87,20 @@ internal sealed class GdiStateManager
     /// <summary>
     /// Converts a logical point to device coordinates.
     /// </summary>
-    public POINT ToDevicePoint(Point pt) => new POINT(
-        LayoutRounding.RoundToPixelInt(pt.X + TranslateX, DpiScale),
-        LayoutRounding.RoundToPixelInt(pt.Y + TranslateY, DpiScale)
-    );
+    public POINT ToDevicePoint(Point pt)
+    {
+        var (x, y) = RenderingUtil.ToDevicePoint(pt, TranslateX, TranslateY, DpiScale);
+        return new POINT(x, y);
+    }
 
     /// <summary>
     /// Converts a logical rectangle to device coordinates.
     /// </summary>
-    public RECT ToDeviceRect(Rect rect) => RECT.FromLTRB(
-        LayoutRounding.RoundToPixelInt(rect.X + TranslateX, DpiScale),
-        LayoutRounding.RoundToPixelInt(rect.Y + TranslateY, DpiScale),
-        LayoutRounding.RoundToPixelInt(rect.Right + TranslateX, DpiScale),
-        LayoutRounding.RoundToPixelInt(rect.Bottom + TranslateY, DpiScale)
-    );
+    public RECT ToDeviceRect(Rect rect)
+    {
+        var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, TranslateX, TranslateY, DpiScale);
+        return new RECT(left, top, right, bottom);
+    }
 
     /// <summary>
     /// Quantizes a thickness value to device pixels.

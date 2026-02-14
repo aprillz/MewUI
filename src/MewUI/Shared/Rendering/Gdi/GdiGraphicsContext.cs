@@ -1,6 +1,7 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Gdi.Core;
 using Aprillz.MewUI.Rendering.Gdi.Rendering;
 
@@ -570,7 +571,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             return;
         }
 
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontUse.Default));
+        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
         var oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
 
         try
@@ -609,140 +610,205 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
                 return;
             }
 
-            RECT r;
-            if (wrapping == TextWrapping.NoWrap)
+            var r = GetTextLayoutRect(bounds, wrapping);
+            uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping);
+            int yOffsetPx = 0;
+            int textHeightPx = 0;
+            if (wrapping != TextWrapping.NoWrap)
             {
-                r = _stateManager.ToDeviceRect(bounds);
-            }
-            else
-            {
-                var tl = _stateManager.ToDevicePoint(bounds.TopLeft);
-                int w = _stateManager.QuantizeLengthPx(bounds.Width);
-                int h = _stateManager.QuantizeLengthPx(bounds.Height);
-                if (w <= 0)
-                {
-                    w = 1;
-                }
-                if (h <= 0)
-                {
-                    h = 1;
-                }
-
-                r = RECT.FromLTRB(tl.x, tl.y, tl.x + w, tl.y + h);
+                ComputeWrappedTextOffsetsPx(
+                    text,
+                    gdiFont.GetHandle(GdiFontRenderMode.Coverage),
+                    r.Width,
+                    r.Height,
+                    verticalAlignment,
+                    out yOffsetPx,
+                    out textHeightPx);
             }
 
-            uint format = GdiConstants.DT_NOPREFIX;
-            format |= horizontalAlignment switch
-            {
-                TextAlignment.Left => GdiConstants.DT_LEFT,
-                TextAlignment.Center => GdiConstants.DT_CENTER,
-                TextAlignment.Right => GdiConstants.DT_RIGHT,
-                _ => GdiConstants.DT_LEFT
-            };
-
-            if (wrapping == TextWrapping.NoWrap)
-            {
-                format |= GdiConstants.DT_SINGLELINE;
-                format |= verticalAlignment switch
-                {
-                    TextAlignment.Top => GdiConstants.DT_TOP,
-                    TextAlignment.Center => GdiConstants.DT_VCENTER,
-                    TextAlignment.Bottom => GdiConstants.DT_BOTTOM,
-                    _ => GdiConstants.DT_TOP
-                };
-            }
-            else
-            {
-                format |= GdiConstants.DT_WORDBREAK;
-            }
-
-            PerPixelAlphaTextRenderer.DrawText(Hdc, _bitmapTarget, _surfacePool, text, r, gdiFont, color, format);
+            PerPixelAlphaTextRenderer.DrawText(Hdc, _bitmapTarget, _surfacePool, text, r, gdiFont, color, format, yOffsetPx, textHeightPx);
             return;
         }
 
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontUse.Default));
+        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
         var oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
 
         try
         {
-            RECT r;
-            if (wrapping == TextWrapping.NoWrap)
-            {
-                r = _stateManager.ToDeviceRect(bounds);
-            }
-            else
-            {
-                // Keep wrap width consistent with measurement.
-                // Measurement uses QuantizeLengthPx(maxWidth), while ToDeviceRect rounds left/right edges
-                // independently and can shrink/grow width by 1px depending on subpixel X.
-                // That can change word-wrapping and produce a render height larger than DesiredSize.
-                var tl = _stateManager.ToDevicePoint(bounds.TopLeft);
-                int w = _stateManager.QuantizeLengthPx(bounds.Width);
-                int h = _stateManager.QuantizeLengthPx(bounds.Height);
-                if (w <= 0)
-                {
-                    w = 1;
-                }
-                if (h <= 0)
-                {
-                    h = 1;
-                }
-
-                r = RECT.FromLTRB(tl.x, tl.y, tl.x + w, tl.y + h);
-            }
-            uint format = GdiConstants.DT_NOPREFIX;
-
-            format |= horizontalAlignment switch
-            {
-                TextAlignment.Left => GdiConstants.DT_LEFT,
-                TextAlignment.Center => GdiConstants.DT_CENTER,
-                TextAlignment.Right => GdiConstants.DT_RIGHT,
-                _ => GdiConstants.DT_LEFT
-            };
-
-            if (wrapping == TextWrapping.NoWrap)
-            {
-                format |= GdiConstants.DT_SINGLELINE;
-                format |= verticalAlignment switch
-                {
-                    TextAlignment.Top => GdiConstants.DT_TOP,
-                    TextAlignment.Center => GdiConstants.DT_VCENTER,
-                    TextAlignment.Bottom => GdiConstants.DT_BOTTOM,
-                    _ => GdiConstants.DT_TOP
-                };
-            }
-            else
-            {
-                format |= GdiConstants.DT_WORDBREAK;
-            }
-
-            // DrawText should clip by default when DT_NOCLIP isn't used, but in practice we've seen
-            // wrapped text leak past its arranged bounds on some configurations (becomes obvious
-            // when the next control has a translucent fill). Force a clip for wrapped text.
-            int clipState = 0;
+            var r = GetTextLayoutRect(bounds, wrapping);
+            uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping);
+            int yOffsetPx = 0;
+            int textHeightPx = 0;
             if (wrapping != TextWrapping.NoWrap)
             {
-                clipState = Gdi32.SaveDC(Hdc);
-                if (clipState != 0)
-                {
-                    Gdi32.IntersectClipRect(Hdc, r.left, r.top, r.right, r.bottom);
-                }
+                ComputeWrappedTextOffsetsPx(
+                    text,
+                    gdiFont.GetHandle(GdiFontRenderMode.Default),
+                    r.Width,
+                    r.Height,
+                    verticalAlignment,
+                    out yOffsetPx,
+                    out textHeightPx);
             }
+
+            int clipState = ApplyTextClip(r, wrapping);
 
             fixed (char* pText = text)
             {
+                ApplyVerticalOffset(ref r, yOffsetPx, textHeightPx);
                 Gdi32.DrawText(Hdc, pText, text.Length, ref r, format);
             }
 
-            if (clipState != 0)
-            {
-                Gdi32.RestoreDC(Hdc, clipState);
-            }
+            RestoreTextClip(clipState);
         }
         finally
         {
             Gdi32.SetTextColor(Hdc, oldColor);
             Gdi32.SelectObject(Hdc, oldFont);
+        }
+    }
+
+    private int ApplyTextClip(RECT boundsPx, TextWrapping wrapping)
+    {
+        if (wrapping == TextWrapping.NoWrap)
+        {
+            return 0;
+        }
+
+        int clipState = Gdi32.SaveDC(Hdc);
+        if (clipState != 0)
+        {
+            Gdi32.IntersectClipRect(Hdc, boundsPx.left, boundsPx.top, boundsPx.right, boundsPx.bottom);
+        }
+
+        return clipState;
+    }
+
+    private void RestoreTextClip(int clipState)
+    {
+        if (clipState != 0)
+        {
+            Gdi32.RestoreDC(Hdc, clipState);
+        }
+    }
+
+    private RECT GetTextLayoutRect(Rect bounds, TextWrapping wrapping)
+    {
+        if (wrapping == TextWrapping.NoWrap)
+        {
+            return _stateManager.ToDeviceRect(bounds);
+        }
+
+        // Keep wrap width consistent with measurement.
+        // Measurement uses QuantizeLengthPx(maxWidth), while ToDeviceRect rounds left/right edges
+        // independently and can shrink/grow width by 1px depending on subpixel X.
+        // That can change word-wrapping and produce a render height larger than DesiredSize.
+        var tl = _stateManager.ToDevicePoint(bounds.TopLeft);
+        int w = _stateManager.QuantizeLengthPx(bounds.Width);
+        int h = _stateManager.QuantizeLengthPx(bounds.Height);
+        if (w <= 0)
+        {
+            w = 1;
+        }
+        if (h <= 0)
+        {
+            h = 1;
+        }
+
+        return RECT.FromLTRB(tl.x, tl.y, tl.x + w, tl.y + h);
+    }
+
+    private unsafe void ComputeWrappedTextOffsetsPx(
+        ReadOnlySpan<char> text,
+        nint fontHandle,
+        int widthPx,
+        int heightPx,
+        TextAlignment verticalAlignment,
+        out int yOffsetPx,
+        out int textHeightPx)
+    {
+        if (verticalAlignment == TextAlignment.Top)
+        {
+            yOffsetPx = 0;
+            textHeightPx = 0;
+            return;
+        }
+
+        if (widthPx <= 0 || heightPx <= 0 || text.IsEmpty || fontHandle == 0 || Hdc == 0)
+        {
+            yOffsetPx = 0;
+            textHeightPx = 0;
+            return;
+        }
+
+        var oldFont = Gdi32.SelectObject(Hdc, fontHandle);
+        try
+        {
+            var rect = new RECT(0, 0, widthPx, 0);
+            fixed (char* pText = text)
+            {
+                Gdi32.DrawText(Hdc, pText, text.Length, ref rect,
+                    GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX);
+            }
+
+            textHeightPx = rect.Height;
+            int remaining = heightPx - textHeightPx;
+            if (remaining <= 0)
+            {
+                yOffsetPx = 0;
+                return;
+            }
+
+            yOffsetPx = verticalAlignment == TextAlignment.Bottom
+                ? remaining
+                : remaining / 2;
+        }
+        finally
+        {
+            Gdi32.SelectObject(Hdc, oldFont);
+        }
+    }
+
+    private static uint BuildTextFormat(TextAlignment horizontalAlignment, TextAlignment verticalAlignment, TextWrapping wrapping)
+    {
+        uint format = GdiConstants.DT_NOPREFIX;
+        format |= horizontalAlignment switch
+        {
+            TextAlignment.Left => GdiConstants.DT_LEFT,
+            TextAlignment.Center => GdiConstants.DT_CENTER,
+            TextAlignment.Right => GdiConstants.DT_RIGHT,
+            _ => GdiConstants.DT_LEFT
+        };
+
+        if (wrapping == TextWrapping.NoWrap)
+        {
+            format |= GdiConstants.DT_SINGLELINE;
+            format |= verticalAlignment switch
+            {
+                TextAlignment.Top => GdiConstants.DT_TOP,
+                TextAlignment.Center => GdiConstants.DT_VCENTER,
+                TextAlignment.Bottom => GdiConstants.DT_BOTTOM,
+                _ => GdiConstants.DT_TOP
+            };
+        }
+        else
+        {
+            format |= GdiConstants.DT_WORDBREAK;
+        }
+
+        return format;
+    }
+
+    private static void ApplyVerticalOffset(ref RECT rect, int yOffsetPx, int textHeightPx)
+    {
+        if (yOffsetPx != 0)
+        {
+            rect.top += yOffsetPx;
+            rect.bottom += yOffsetPx;
+        }
+        if (textHeightPx > 0)
+        {
+            rect.bottom = rect.top + textHeightPx;
         }
     }
 
@@ -777,7 +843,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
                 Gdi32.DrawText(Hdc, pText, text.Length, ref rect, format);
             }
 
-            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
+            return new Size(TextMeasurePolicy.ApplyWidthPadding(rect.Width) / DpiScale, rect.Height / DpiScale);
         }
         finally
         {
@@ -809,7 +875,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
                     GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX);
             }
 
-            return new Size(rect.Width / DpiScale, rect.Height / DpiScale);
+            return new Size(TextMeasurePolicy.ApplyWidthPadding(rect.Width) / DpiScale, rect.Height / DpiScale);
         }
         finally
         {

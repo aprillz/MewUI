@@ -164,7 +164,7 @@ internal sealed class OpenGLImage : IImage
 
         if (_rgbaCache == null || _rgbaCacheVersion != version || _rgbaCacheLength != bgra.Length)
         {
-            _rgbaCache = OpenGLPixelUtils.ConvertBgraToRgba(bgra);
+            _rgbaCache = ImagePixelUtils.ConvertBgraToRgba(bgra);
             _rgbaCacheVersion = version;
             _rgbaCacheLength = bgra.Length;
         }

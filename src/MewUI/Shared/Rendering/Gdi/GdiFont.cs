@@ -61,9 +61,9 @@ internal sealed class GdiFont : IFont
         );
     }
 
-    internal nint GetHandle(GdiFontUse use)
+    internal nint GetHandle(GdiFontRenderMode mode)
     {
-        if (use == GdiFontUse.Default)
+        if (mode == GdiFontRenderMode.Default)
         {
             return Handle;
         }
@@ -74,6 +74,7 @@ internal sealed class GdiFont : IFont
         }
 
         int height = -(int)Math.Round(Size * Dpi / 96.0, MidpointRounding.AwayFromZero);
+        // Coverage mode uses grayscale AA so we can extract per-pixel alpha reliably.
         _perPixelAlphaHandle = CreateFontCore(height, GdiConstants.ANTIALIASED_QUALITY);
         return _perPixelAlphaHandle == 0 ? Handle : _perPixelAlphaHandle;
     }
@@ -94,8 +95,8 @@ internal sealed class GdiFont : IFont
     }
 }
 
-internal enum GdiFontUse
+internal enum GdiFontRenderMode
 {
     Default,
-    PerPixelAlpha
+    Coverage
 }

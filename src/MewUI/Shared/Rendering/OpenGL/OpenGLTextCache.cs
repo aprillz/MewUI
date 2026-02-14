@@ -1,19 +1,9 @@
 using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
-internal readonly record struct OpenGLTextCacheKey(
-    int TextHash,
-    nint FontHandle,
-    string FontId,
-    int FontSizePx,
-    uint ColorArgb,
-    int WidthPx,
-    int HeightPx,
-    int HAlign,
-    int VAlign,
-    int Wrapping
-);
+internal readonly record struct OpenGLTextCacheKey(TextCacheKey Core);
 
 internal readonly record struct OpenGLTextureEntry(uint TextureId, int WidthPx, int HeightPx);
 
@@ -93,7 +83,7 @@ internal sealed class OpenGLTextCache : IDisposable
         // If BGRA is not supported, we convert.
         if (!supportsBgra)
         {
-            data = OpenGLPixelUtils.ConvertBgraToRgba(data);
+            data = ImagePixelUtils.ConvertBgraToRgba(data);
         }
 
         unsafe

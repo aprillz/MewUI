@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
@@ -258,16 +259,13 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
     private static ClipRectPx Intersect(ClipRectPx a, ClipRectPx b)
     {
-        int left = Math.Max(a.X, b.X);
-        int top = Math.Max(a.Y, b.Y);
-        int right = Math.Min(a.X + a.Width, b.X + b.Width);
-        int bottom = Math.Min(a.Y + a.Height, b.Y + b.Height);
+        var (left, top, width, height) = RenderingUtil.Intersect(a.X, a.Y, a.Width, a.Height, b.X, b.Y, b.Width, b.Height);
         return new ClipRectPx
         {
             X = left,
             Y = top,
-            Width = Math.Max(0, right - left),
-            Height = Math.Max(0, bottom - top),
+            Width = width,
+            Height = height,
         };
     }
 
@@ -551,6 +549,21 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
         boundsPx = new RECT(boundsPx.left, boundsPx.top, boundsPx.left + widthPx, boundsPx.top + heightPx);
 
+        if (wrapping != TextWrapping.NoWrap && verticalAlignment != TextAlignment.Top)
+        {
+            var measured = MeasureText(text, font, bounds.Width);
+            int textHeightPx = Math.Max(1, LayoutRounding.CeilToPixelInt(measured.Height, DpiScale));
+            int remaining = heightPx - textHeightPx;
+            if (remaining > 0)
+            {
+                int yOffsetPx = verticalAlignment == TextAlignment.Bottom
+                    ? remaining
+                    : remaining / 2;
+                boundsPx = new RECT(boundsPx.left, boundsPx.top + yOffsetPx, boundsPx.right, boundsPx.top + yOffsetPx + textHeightPx);
+                heightPx = textHeightPx;
+            }
+        }
+
         bool drawHandled = false;
         TryDrawTextNative(text, boundsPx, font, color, widthPx, heightPx, horizontalAlignment, verticalAlignment, wrapping, ref drawHandled);
     }
@@ -815,30 +828,14 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
     private float ToDeviceCoord(double valueDipWithTranslate, int thicknessPx)
     {
-        int px = LayoutRounding.RoundToPixelInt(valueDipWithTranslate, DpiScale);
+        int px = RenderingUtil.RoundToPixelInt(valueDipWithTranslate, DpiScale);
         float offset = (thicknessPx & 1) == 1 ? 0.5f : 0f;
         return px + offset;
     }
 
     private RECT ToDeviceRect(Rect rect)
     {
-        // Round edges (left/right, top/bottom) instead of rounding width/height.
-        // This avoids off-by-1 clipping at right/bottom for non-integer DIP sizes.
-        int left = LayoutRounding.RoundToPixelInt(rect.X + _translateX, DpiScale);
-        int top = LayoutRounding.RoundToPixelInt(rect.Y + _translateY, DpiScale);
-        int right = LayoutRounding.RoundToPixelInt(rect.Right + _translateX, DpiScale);
-        int bottom = LayoutRounding.RoundToPixelInt(rect.Bottom + _translateY, DpiScale);
-
-        if (right < left)
-        {
-            right = left;
-        }
-
-        if (bottom < top)
-        {
-            bottom = top;
-        }
-
+        var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, _translateX, _translateY, DpiScale);
         return new RECT(left, top, right, bottom);
     }
 

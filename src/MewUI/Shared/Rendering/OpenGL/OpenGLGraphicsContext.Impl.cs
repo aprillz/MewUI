@@ -82,8 +82,17 @@ internal sealed partial class OpenGLGraphicsContext
                 return;
             }
 
-            var key = new OpenGLTextCacheKey(string.GetHashCode(text), gdiFont.Handle, FontId: string.Empty, FontSizePx: 0, color.ToArgb(), widthPx, heightPx,
-                (int)horizontalAlignment, (int)verticalAlignment, (int)wrapping);
+            var key = new OpenGLTextCacheKey(new TextCacheKey(
+                string.GetHashCode(text),
+                gdiFont.Handle,
+                string.Empty,
+                0,
+                color.ToArgb(),
+                widthPx,
+                heightPx,
+                (int)horizontalAlignment,
+                (int)verticalAlignment,
+                (int)wrapping));
 
             if (!_resources.TextCache.TryGet(_resources.SupportsBgra, _hdc, key, out var texture))
             {
@@ -96,13 +105,23 @@ internal sealed partial class OpenGLGraphicsContext
         }
         else if (OperatingSystem.IsLinux())
         {
+
             if (font is not FreeTypeFont ftFont)
             {
                 return;
             }
 
-            var key = new OpenGLTextCacheKey(string.GetHashCode(text), 0, ftFont.FontPath, ftFont.PixelHeight, color.ToArgb(), widthPx, heightPx,
-                (int)horizontalAlignment, (int)verticalAlignment, (int)wrapping);
+            var key = new OpenGLTextCacheKey(new TextCacheKey(
+                string.GetHashCode(text),
+                0,
+                ftFont.FontPath,
+                ftFont.PixelHeight,
+                color.ToArgb(),
+                widthPx,
+                heightPx,
+                (int)horizontalAlignment,
+                (int)verticalAlignment,
+                (int)wrapping));
 
             if (!_resources.TextCache.TryGet(_resources.SupportsBgra, _hdc, key, out var texture))
             {
@@ -112,6 +131,7 @@ internal sealed partial class OpenGLGraphicsContext
 
             DrawTexturedQuad(boundsPx, ref texture);
             handled = true;
+
         }
     }
 
@@ -141,8 +161,11 @@ internal sealed partial class OpenGLGraphicsContext
         {
             if (font is FreeTypeFont ftFont)
             {
-                // TODO: wrapping-aware measurement; for now ignore maxWidthDip.
-                var px = FreeTypeText.Measure(text, ftFont);
+                int maxWidthPx = maxWidthDip <= 0
+                    ? 0
+                    : Math.Max(1, LayoutRounding.CeilToPixelInt(maxWidthDip, DpiScale));
+
+                var px = FreeTypeText.Measure(text, ftFont, maxWidthPx, wrapping);
                 result = new Size(px.Width / DpiScale, px.Height / DpiScale);
                 handled = true;
                 return;

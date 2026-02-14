@@ -607,9 +607,6 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandlePaint()
     {
-#if DEV_DEBUG
-        Debug.WriteLine("HandlePaint");
-#endif
         var ps = new PAINTSTRUCT();
         nint hdc = User32.BeginPaint(Handle, out ps);
 

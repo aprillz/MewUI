@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Native.FreeType;
+using Aprillz.MewUI.Rendering;
 
 using FT = Aprillz.MewUI.Native.FreeType.FreeType;
 
@@ -12,55 +13,41 @@ internal static unsafe class FreeTypeText
 
     public static Size Measure(ReadOnlySpan<char> text, FreeTypeFont font)
     {
+        return Measure(text, font, maxWidthPx: 0, TextWrapping.NoWrap);
+    }
+
+    public static Size Measure(ReadOnlySpan<char> text, FreeTypeFont font, int maxWidthPx, TextWrapping wrapping)
+    {
         if (text.IsEmpty)
         {
             return Size.Empty;
         }
 
         var face = FreeTypeFaceCache.Instance.Get(font.FontPath, font.PixelHeight);
-
         int lineHeightPx = Math.Max(1, (int)Math.Round(font.PixelHeight * 1.25));
-        int maxWidthPx = 0;
-        int curWidthPx = 0;
-        int lines = 1;
-        uint prevGlyph = 0;
 
-        for (int i = 0; i < text.Length; i++)
+        int maxLineWidth = 0;
+        int lines = 0;
+
+        TextLayout.EnumerateLines(text, maxWidthPx, wrapping, span => MeasureRunWidthPx(span, face), line =>
         {
-            char ch = text[i];
-            if (ch == '\r')
+            int width = (int)Math.Ceiling(line.Width);
+            if (width > maxLineWidth)
             {
-                continue;
+                maxLineWidth = width;
             }
+            lines++;
+        });
 
-            if (ch == '\n')
-            {
-                if (curWidthPx > maxWidthPx)
-                {
-                    maxWidthPx = curWidthPx;
-                }
-
-                curWidthPx = 0;
-                lines++;
-                prevGlyph = 0;
-                continue;
-            }
-
-            uint code = ch;
-            uint glyph = face.GetGlyphIndex(code);
-            curWidthPx += GetKerningPx(face, prevGlyph, glyph);
-            curWidthPx += face.GetAdvancePx(code);
-            prevGlyph = glyph;
+        if (lines <= 0)
+        {
+            lines = 1;
         }
 
-        if (curWidthPx > maxWidthPx)
-        {
-            maxWidthPx = curWidthPx;
-        }
+        maxLineWidth = (int)Math.Round(TextMeasurePolicy.ApplyWidthPadding(maxLineWidth));
 
         int heightPx = lines * lineHeightPx;
-
-        return new Size(maxWidthPx, heightPx);
+        return new Size(maxLineWidth, heightPx);
     }
 
     public static TextBitmap Rasterize(
@@ -88,9 +75,20 @@ internal static unsafe class FreeTypeText
 
         int lineHeightPx = Math.Max(1, (int)Math.Round(font.PixelHeight * 1.25));
 
-        var measured = Measure(text, font);
-        int contentW = Math.Min(widthPx, (int)Math.Ceiling(measured.Width));
-        int contentH = Math.Min(heightPx, (int)Math.Ceiling(measured.Height));
+        var lines = new List<TextLayout.LineSegment>();
+        int maxLineWidth = 0;
+        TextLayout.EnumerateLines(text, wrapping == TextWrapping.Wrap ? widthPx : 0, wrapping, span => MeasureRunWidthPx(span, face), line =>
+        {
+            int width = (int)Math.Ceiling(line.Width);
+            if (width > maxLineWidth)
+            {
+                maxLineWidth = width;
+            }
+            lines.Add(new TextLayout.LineSegment(line.Start, line.Length, width));
+        });
+
+        int contentW = Math.Min(widthPx, (int)Math.Round(TextMeasurePolicy.ApplyWidthPadding(maxLineWidth)));
+        int contentH = Math.Min(heightPx, lines.Count * lineHeightPx);
 
         int startX = hAlign switch
         {
@@ -106,85 +104,122 @@ internal static unsafe class FreeTypeText
             _ => 0
         };
 
-        int penX = startX;
-        int penY = startY;
-
-        uint prevGlyph = 0;
-        foreach (char ch in text)
+        for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
-            if (ch == '\r')
+            var line = lines[lineIndex];
+            if (line.Length <= 0)
             {
                 continue;
             }
 
-            if (ch == '\n')
+            int lineWidthPx = line.Width > 0 ? (int)Math.Ceiling(TextMeasurePolicy.ApplyWidthPadding(line.Width)) : 0;
+            int lineX = hAlign switch
             {
-                penX = startX;
-                penY += lineHeightPx;
-                prevGlyph = 0;
+                TextAlignment.Center => startX + (contentW - lineWidthPx) / 2,
+                TextAlignment.Right => startX + (contentW - lineWidthPx),
+                _ => startX
+            };
+
+            int penX = lineX;
+            int penY = startY + (lineIndex * lineHeightPx);
+            uint prevGlyph = 0;
+
+            for (int i = 0; i < line.Length; i++)
+            {
+                char ch = text[line.Start + i];
+                if (ch == '\r' || ch == '\n')
+                {
+                    continue;
+                }
+
+                uint code = ch;
+                uint glyph = face.GetGlyphIndex(code);
+                penX += GetKerningPx(face, prevGlyph, glyph);
+                prevGlyph = glyph;
+
+                lock (face.SyncRoot)
+                {
+                    // Prefer LIGHT target for crisper UI text on typical Linux setups.
+                    // Avoid FORCE_AUTOHINT by default; it can make some fonts look blurrier/thicker than expected.
+                    int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
+                    if (FT.FT_Load_Char(face.Face, code, flags) != 0)
+                    {
+                        goto Advance;
+                    }
+
+                    var slotPtr = face.GetGlyphSlotPointer();
+                    if (slotPtr != 0 && FT.FT_Get_Glyph(slotPtr, out var glyphPtr) == 0 && glyphPtr != 0)
+                    {
+                        nint bmpGlyphPtr = 0;
+                        try
+                        {
+                            bmpGlyphPtr = glyphPtr;
+                            int err = FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false);
+                            if (err == 0 && bmpGlyphPtr != 0)
+                            {
+                                var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
+
+                                int glyphW = (int)bmpGlyph.bitmap.width;
+                                int glyphH = (int)bmpGlyph.bitmap.rows;
+                                int left = bmpGlyph.left;
+                                int top = bmpGlyph.top;
+
+                                // baseline at (penX, penY + ascent). Approx using pixel height.
+                                int baseY = penY + font.PixelHeight;
+
+                                int dstX0 = penX + left;
+                                int dstY0 = baseY - top;
+
+                                BlitGlyph(bmpGlyph.bitmap, glyphW, glyphH, dstX0, dstY0, buffer, widthPx, heightPx, color);
+                            }
+                        }
+                        finally
+                        {
+                            // When destroy=false, both the original and the (optional) bitmap glyph may need cleanup.
+                            // Some FreeType builds may convert in-place, so guard against double-free.
+                            if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
+                            {
+                                FT.FT_Done_Glyph(bmpGlyphPtr);
+                            }
+
+                            FT.FT_Done_Glyph(glyphPtr);
+                        }
+                    }
+                }
+
+                Advance:
+                penX += face.GetAdvancePx(code);
+            }
+        }
+
+        return new TextBitmap(widthPx, heightPx, buffer);
+    }
+
+    private static int MeasureRunWidthPx(ReadOnlySpan<char> text, FreeTypeFaceCache.FaceEntry face)
+    {
+        if (text.IsEmpty)
+        {
+            return 0;
+        }
+
+        int width = 0;
+        uint prevGlyph = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char ch = text[i];
+            if (ch == '\r' || ch == '\n')
+            {
                 continue;
             }
 
             uint code = ch;
             uint glyph = face.GetGlyphIndex(code);
-            penX += GetKerningPx(face, prevGlyph, glyph);
+            width += GetKerningPx(face, prevGlyph, glyph);
+            width += face.GetAdvancePx(code);
             prevGlyph = glyph;
-
-            lock (face.SyncRoot)
-            {
-                // Prefer LIGHT target for crisper UI text on typical Linux setups.
-                // Avoid FORCE_AUTOHINT by default; it can make some fonts look blurrier/thicker than expected.
-                int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
-                if (FT.FT_Load_Char(face.Face, code, flags) != 0)
-                {
-                    goto Advance;
-                }
-
-                var slotPtr = face.GetGlyphSlotPointer();
-                if (slotPtr != 0 && FT.FT_Get_Glyph(slotPtr, out var glyphPtr) == 0 && glyphPtr != 0)
-                {
-                    nint bmpGlyphPtr = 0;
-                    try
-                    {
-                        bmpGlyphPtr = glyphPtr;
-                        int err = FT.FT_Glyph_To_Bitmap(ref bmpGlyphPtr, FreeTypeRenderMode.FT_RENDER_MODE_NORMAL, origin: 0, destroy: false);
-                        if (err == 0 && bmpGlyphPtr != 0)
-                        {
-                            var bmpGlyph = Marshal.PtrToStructure<FT_BitmapGlyphRec>(bmpGlyphPtr);
-
-                            int glyphW = (int)bmpGlyph.bitmap.width;
-                            int glyphH = (int)bmpGlyph.bitmap.rows;
-                            int left = bmpGlyph.left;
-                            int top = bmpGlyph.top;
-
-                            // baseline at (penX, penY + ascent). Approx using pixel height.
-                            int baseY = penY + font.PixelHeight;
-
-                            int dstX0 = penX + left;
-                            int dstY0 = baseY - top;
-
-                            BlitGlyph(bmpGlyph.bitmap, glyphW, glyphH, dstX0, dstY0, buffer, widthPx, heightPx, color);
-                        }
-                    }
-                    finally
-                    {
-                        // When destroy=false, both the original and the (optional) bitmap glyph may need cleanup.
-                        // Some FreeType builds may convert in-place, so guard against double-free.
-                        if (bmpGlyphPtr != 0 && bmpGlyphPtr != glyphPtr)
-                        {
-                            FT.FT_Done_Glyph(bmpGlyphPtr);
-                        }
-
-                        FT.FT_Done_Glyph(glyphPtr);
-                    }
-                }
-            }
-
-            Advance:
-            penX += face.GetAdvancePx(code);
         }
 
-        return new TextBitmap(widthPx, heightPx, buffer);
+        return width;
     }
 
     private static int GetKerningPx(FreeTypeFaceCache.FaceEntry face, uint leftGlyph, uint rightGlyph)

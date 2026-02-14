@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.DirectWrite;
@@ -294,35 +295,14 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
             throw new ArgumentException("Font must be a DirectWriteFont", nameof(font));
         }
 
-        nint textFormat = 0;
+        nint textFormat = CreateTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
+        if (textFormat == 0)
+        {
+            return;
+        }
+
         try
         {
-            var weight = (DWRITE_FONT_WEIGHT)(int)dwFont.Weight;
-            var style = dwFont.IsItalic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL;
-            int hr = DWriteVTable.CreateTextFormat((IDWriteFactory*)_dwriteFactory, dwFont.Family, weight, style, (float)dwFont.Size, out textFormat);
-            if (hr < 0 || textFormat == 0)
-            {
-                return;
-            }
-
-            DWriteVTable.SetTextAlignment(textFormat, horizontalAlignment switch
-            {
-                TextAlignment.Left => DWRITE_TEXT_ALIGNMENT.LEADING,
-                TextAlignment.Center => DWRITE_TEXT_ALIGNMENT.CENTER,
-                TextAlignment.Right => DWRITE_TEXT_ALIGNMENT.TRAILING,
-                _ => DWRITE_TEXT_ALIGNMENT.LEADING
-            });
-
-            DWriteVTable.SetParagraphAlignment(textFormat, verticalAlignment switch
-            {
-                TextAlignment.Top => DWRITE_PARAGRAPH_ALIGNMENT.NEAR,
-                TextAlignment.Center => DWRITE_PARAGRAPH_ALIGNMENT.CENTER,
-                TextAlignment.Bottom => DWRITE_PARAGRAPH_ALIGNMENT.FAR,
-                _ => DWRITE_PARAGRAPH_ALIGNMENT.NEAR
-            });
-
-            DWriteVTable.SetWordWrapping(textFormat, wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
-
             nint brush = GetSolidBrush(color);
             // Direct2D does not clip text to the layout rectangle unless CLIP is specified.
             // Without CLIP, wrapped text can draw outside the arranged bounds and become visible
@@ -356,19 +336,14 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         nint textLayout = 0;
         try
         {
-            var weight = (DWRITE_FONT_WEIGHT)(int)dwFont.Weight;
-            var style = dwFont.IsItalic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL;
-            int hr = DWriteVTable.CreateTextFormat((IDWriteFactory*)_dwriteFactory, dwFont.Family, weight, style, (float)dwFont.Size, out textFormat);
-            if (hr < 0 || textFormat == 0)
+            textFormat = CreateTextFormat(dwFont, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+            if (textFormat == 0)
             {
                 return Size.Empty;
             }
 
-            // When a max width is provided, we want DWrite to wrap within that width.
-            DWriteVTable.SetWordWrapping(textFormat, DWRITE_WORD_WRAPPING.WRAP);
-
             float w = maxWidth >= float.MaxValue ? float.MaxValue : (float)Math.Max(0, maxWidth);
-            hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, textFormat, w, float.MaxValue, out textLayout);
+            int hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, textFormat, w, float.MaxValue, out textLayout);
             if (hr < 0 || textLayout == 0)
             {
                 return Size.Empty;
@@ -386,13 +361,44 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
                 height += -metrics.top;
             }
 
-            return new Size(metrics.widthIncludingTrailingWhitespace, height);
+            return new Size(TextMeasurePolicy.ApplyWidthPadding(metrics.widthIncludingTrailingWhitespace), height);
         }
         finally
         {
             ComHelpers.Release(textLayout);
             ComHelpers.Release(textFormat);
         }
+    }
+
+    private nint CreateTextFormat(DirectWriteFont font, TextAlignment horizontalAlignment, TextAlignment verticalAlignment, TextWrapping wrapping)
+    {
+        nint textFormat = 0;
+        var weight = (DWRITE_FONT_WEIGHT)(int)font.Weight;
+        var style = font.IsItalic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL;
+        int hr = DWriteVTable.CreateTextFormat((IDWriteFactory*)_dwriteFactory, font.Family, weight, style, (float)font.Size, out textFormat);
+        if (hr < 0 || textFormat == 0)
+        {
+            return 0;
+        }
+
+        DWriteVTable.SetTextAlignment(textFormat, horizontalAlignment switch
+        {
+            TextAlignment.Left => DWRITE_TEXT_ALIGNMENT.LEADING,
+            TextAlignment.Center => DWRITE_TEXT_ALIGNMENT.CENTER,
+            TextAlignment.Right => DWRITE_TEXT_ALIGNMENT.TRAILING,
+            _ => DWRITE_TEXT_ALIGNMENT.LEADING
+        });
+
+        DWriteVTable.SetParagraphAlignment(textFormat, verticalAlignment switch
+        {
+            TextAlignment.Top => DWRITE_PARAGRAPH_ALIGNMENT.NEAR,
+            TextAlignment.Center => DWRITE_PARAGRAPH_ALIGNMENT.CENTER,
+            TextAlignment.Bottom => DWRITE_PARAGRAPH_ALIGNMENT.FAR,
+            _ => DWRITE_PARAGRAPH_ALIGNMENT.NEAR
+        });
+
+        DWriteVTable.SetWordWrapping(textFormat, wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
+        return textFormat;
     }
 
     public void DrawImage(IImage image, Point location) =>

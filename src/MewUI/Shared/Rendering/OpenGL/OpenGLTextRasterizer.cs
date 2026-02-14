@@ -71,12 +71,26 @@ internal static class OpenGLTextRasterizer
                     _ => GdiConstants.DT_LEFT
                 };
 
-                format |= verticalAlignment switch
+                // For wrapped text, GDI ignores DT_VCENTER/DT_BOTTOM, so we manually offset.
+                int yOffsetPx = 0;
+                int textHeightPx = 0;
+                if (wrapping != TextWrapping.NoWrap && verticalAlignment != TextAlignment.Top)
+                {
+                    ComputeWrappedTextOffsetsPx(memDc, text, font.Handle, widthPx, heightPx, verticalAlignment, out yOffsetPx, out textHeightPx);
+                }
+
+                format |= (wrapping == TextWrapping.NoWrap) ? verticalAlignment switch
                 {
                     TextAlignment.Center => GdiConstants.DT_VCENTER,
                     TextAlignment.Bottom => GdiConstants.DT_BOTTOM,
                     _ => GdiConstants.DT_TOP
-                };
+                } : GdiConstants.DT_TOP;
+
+                if (yOffsetPx != 0)
+                {
+                    rect.top += yOffsetPx;
+                    rect.bottom = rect.top + (textHeightPx > 0 ? textHeightPx : rect.Height);
+                }
 
                 fixed (char* pText = text)
                 {
@@ -142,6 +156,58 @@ internal static class OpenGLTextRasterizer
             bgra[i + 1] = g;
             bgra[i + 2] = r;
             bgra[i + 3] = (byte)a;
+        }
+    }
+
+    private static unsafe void ComputeWrappedTextOffsetsPx(
+        nint hdc,
+        ReadOnlySpan<char> text,
+        nint fontHandle,
+        int widthPx,
+        int heightPx,
+        TextAlignment verticalAlignment,
+        out int yOffsetPx,
+        out int textHeightPx)
+    {
+        if (verticalAlignment == TextAlignment.Top)
+        {
+            yOffsetPx = 0;
+            textHeightPx = 0;
+            return;
+        }
+
+        if (widthPx <= 0 || heightPx <= 0 || text.IsEmpty || fontHandle == 0 || hdc == 0)
+        {
+            yOffsetPx = 0;
+            textHeightPx = 0;
+            return;
+        }
+
+        var oldFont = Gdi32.SelectObject(hdc, fontHandle);
+        try
+        {
+            var rect = new RECT(0, 0, widthPx, 0);
+            fixed (char* pText = text)
+            {
+                Gdi32.DrawText(hdc, pText, text.Length, ref rect,
+                    GdiConstants.DT_CALCRECT | GdiConstants.DT_WORDBREAK | GdiConstants.DT_NOPREFIX);
+            }
+
+            textHeightPx = rect.Height;
+            int remaining = heightPx - textHeightPx;
+            if (remaining <= 0)
+            {
+                yOffsetPx = 0;
+                return;
+            }
+
+            yOffsetPx = verticalAlignment == TextAlignment.Bottom
+                ? remaining
+                : remaining / 2;
+        }
+        finally
+        {
+            Gdi32.SelectObject(hdc, oldFont);
         }
     }
 }

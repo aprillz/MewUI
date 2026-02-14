@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
@@ -161,14 +162,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         }
 
         // Create a temporary RGBA buffer (OpenGL expects RGBA, we store BGRA)
-        var rgba = new byte[_pixels.Length];
-        for (int i = 0; i < _pixels.Length; i += 4)
-        {
-            rgba[i + 0] = _pixels[i + 2]; // R from B
-            rgba[i + 1] = _pixels[i + 1]; // G
-            rgba[i + 2] = _pixels[i + 0]; // B from R
-            rgba[i + 3] = _pixels[i + 3]; // A
-        }
+        var rgba = ImagePixelUtils.ConvertBgraToRgba(_pixels);
 
         // Flip vertically for OpenGL's bottom-left origin
         int stride = PixelWidth * 4;
@@ -205,15 +199,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     }
 
     private void ConvertRgbaToBgra()
-    {
-        for (int i = 0; i < _pixels.Length; i += 4)
-        {
-            byte r = _pixels[i + 0];
-            byte b = _pixels[i + 2];
-            _pixels[i + 0] = b;
-            _pixels[i + 2] = r;
-        }
-    }
+        => ImagePixelUtils.ConvertRgbaToBgraInPlace(_pixels);
 
     public byte[] CopyPixels()
     {

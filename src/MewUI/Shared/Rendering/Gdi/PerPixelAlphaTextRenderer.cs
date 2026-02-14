@@ -17,7 +17,9 @@ internal static class PerPixelAlphaTextRenderer
         RECT targetRect,
         GdiFont font,
         Color color,
-        uint format)
+        uint format,
+        int yOffsetPx = 0,
+        int textHeightPx = 0)
     {
         int width = targetRect.Width;
         int height = targetRect.Height;
@@ -26,15 +28,26 @@ internal static class PerPixelAlphaTextRenderer
             return;
         }
 
-        if (IsOpaqueUnderText(bitmapTarget, targetRect))
+        var drawRect = targetRect;
+        if (yOffsetPx != 0)
         {
-            DrawTextDirect(hdc, text, targetRect, font.GetHandle(GdiFontUse.PerPixelAlpha), color, format);
+            drawRect.top += yOffsetPx;
+            drawRect.bottom += yOffsetPx;
+        }
+        if (textHeightPx > 0)
+        {
+            drawRect.bottom = drawRect.top + textHeightPx;
+        }
+
+        if (IsOpaqueUnderText(bitmapTarget, drawRect))
+        {
+            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format);
             return;
         }
 
         if (width > GdiRenderingConstants.MaxAaSurfaceSize || height > GdiRenderingConstants.MaxAaSurfaceSize)
         {
-            DrawTextDirect(hdc, text, targetRect, font.GetHandle(GdiFontUse.PerPixelAlpha), color, format);
+            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format);
             return;
         }
 
@@ -49,13 +62,22 @@ internal static class PerPixelAlphaTextRenderer
         {
             surface.Clear();
 
-            var oldFont = Gdi32.SelectObject(surface.MemDc, font.GetHandle(GdiFontUse.PerPixelAlpha));
+            var oldFont = Gdi32.SelectObject(surface.MemDc, font.GetHandle(GdiFontRenderMode.Coverage));
             var oldColor = Gdi32.SetTextColor(surface.MemDc, 0x00FFFFFF);
             int oldBkMode = Gdi32.SetBkMode(surface.MemDc, GdiConstants.TRANSPARENT);
 
             try
             {
                 var localRect = RECT.FromLTRB(0, 0, width, height);
+                if (yOffsetPx != 0)
+                {
+                    localRect.top += yOffsetPx;
+                    localRect.bottom += yOffsetPx;
+                }
+                if (textHeightPx > 0)
+                {
+                    localRect.bottom = localRect.top + textHeightPx;
+                }
                 fixed (char* pText = text)
                 {
                     Gdi32.DrawText(surface.MemDc, pText, text.Length, ref localRect, format);
