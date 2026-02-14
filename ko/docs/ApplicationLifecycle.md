@@ -160,6 +160,18 @@ ThemeVariant/Accent/ThemeSeed/ThemeMetrics 설정은 아래 문서를 참고한�
 3) Loaded 이벤트 발생
 4) 첫 Layout & Render 실행
 
+### 3.3 ShowDialogAsync (모달)
+`ShowDialogAsync`는 창을 모달 다이얼로그로 띄우고 **닫힐 때 완료**된다.  
+`owner`를 지정하면 다이얼로그가 열려 있는 동안 **owner가 비활성화**된다(플랫폼 의존).
+
+```csharp
+var dialog = new Window()
+    .Title("Dialog")
+    .Content(new TextBlock().Text("Hello from dialog"));
+
+await dialog.ShowDialogAsync(owner: main);
+```
+
 #### 예시: 다중 창
 ```csharp
 var main = new Window()

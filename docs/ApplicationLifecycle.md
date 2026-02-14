@@ -161,6 +161,18 @@ At `Window.Show()` time:
 3) Raise Loaded
 4) Perform first Layout & Render
 
+### 3.3 ShowDialogAsync (Modal)
+`ShowDialogAsync` shows a window as a modal dialog and completes when it is closed.
+When an `owner` is provided, the owner window is disabled while the dialog is open (platform dependent).
+
+```csharp
+var dialog = new Window()
+    .Title("Dialog")
+    .Content(new TextBlock().Text("Hello from dialog"));
+
+await dialog.ShowDialogAsync(owner: main);
+```
+
 #### Example: Multiple Windows
 ```csharp
 var main = new Window()
