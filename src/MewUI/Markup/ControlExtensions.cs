@@ -1155,6 +1155,12 @@ public static class ControlExtensions
         return listBox;
     }
 
+    /// <summary>
+    /// Sets the items source from a legacy <see cref="MewUI.ItemsSource"/>.
+    /// </summary>
+    /// <param name="listBox">Target list box.</param>
+    /// <param name="itemsSource">Legacy items source.</param>
+    /// <returns>The list box for chaining.</returns>
     public static ListBox ItemsSource(this ListBox listBox, ItemsSource itemsSource)
     {
         ArgumentNullException.ThrowIfNull(listBox);
@@ -1182,6 +1188,7 @@ public static class ControlExtensions
     /// <param name="listBox">Target list box.</param>
     /// <param name="items">Items collection.</param>
     /// <param name="textSelector">Text selector function.</param>
+    /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
     /// <returns>The list box for chaining.</returns>
     public static ListBox Items<T>(this ListBox listBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
     {
@@ -1229,6 +1236,14 @@ public static class ControlExtensions
         return listBox;
     }
 
+    /// <summary>
+    /// Sets the item template using delegate-based templating.
+    /// </summary>
+    /// <typeparam name="TItem">Item type.</typeparam>
+    /// <param name="listBox">Target list box.</param>
+    /// <param name="build">Template build callback.</param>
+    /// <param name="bind">Template bind callback.</param>
+    /// <returns>The list box for chaining.</returns>
     public static ListBox ItemTemplate<TItem>(
         this ListBox listBox,
         Func<TemplateContext, FrameworkElement> build,
@@ -1376,6 +1391,14 @@ public static class ControlExtensions
         return treeView;
     }
 
+    /// <summary>
+    /// Sets the item template using delegate-based templating.
+    /// </summary>
+    /// <typeparam name="TItem">Item type.</typeparam>
+    /// <param name="treeView">Target tree view.</param>
+    /// <param name="build">Template build callback.</param>
+    /// <param name="bind">Template bind callback.</param>
+    /// <returns>The tree view for chaining.</returns>
     public static TreeView ItemTemplate<TItem>(
         this TreeView treeView,
         Func<TemplateContext, FrameworkElement> build,
@@ -1392,6 +1415,19 @@ public static class ControlExtensions
     {
         ArgumentNullException.ThrowIfNull(treeView);
         treeView.Indent = indent;
+        return treeView;
+    }
+
+    /// <summary>
+    /// Sets which user interaction toggles node expansion.
+    /// </summary>
+    /// <param name="treeView">Target tree view.</param>
+    /// <param name="expandTrigger">Expansion trigger mode.</param>
+    /// <returns>The tree view for chaining.</returns>
+    public static TreeView ExpandTrigger(this TreeView treeView, TreeViewExpandTrigger expandTrigger)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+        treeView.ExpandTrigger = expandTrigger;
         return treeView;
     }
 
@@ -1724,6 +1760,12 @@ public static class ControlExtensions
         return comboBox;
     }
 
+    /// <summary>
+    /// Sets the items source from a legacy <see cref="MewUI.ItemsSource"/>.
+    /// </summary>
+    /// <param name="comboBox">Target combo box.</param>
+    /// <param name="itemsSource">Legacy items source.</param>
+    /// <returns>The combo box for chaining.</returns>
     public static ComboBox ItemsSource(this ComboBox comboBox, ItemsSource itemsSource)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
@@ -1751,6 +1793,7 @@ public static class ControlExtensions
     /// <param name="comboBox">Target combo box.</param>
     /// <param name="items">Items collection.</param>
     /// <param name="textSelector">Text selector function.</param>
+    /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
     /// <returns>The combo box for chaining.</returns>
     public static ComboBox Items<T>(this ComboBox comboBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
     {
@@ -1774,6 +1817,14 @@ public static class ControlExtensions
         return comboBox;
     }
 
+    /// <summary>
+    /// Sets the item template using delegate-based templating.
+    /// </summary>
+    /// <typeparam name="TItem">Item type.</typeparam>
+    /// <param name="comboBox">Target combo box.</param>
+    /// <param name="build">Template build callback.</param>
+    /// <param name="bind">Template bind callback.</param>
+    /// <returns>The combo box for chaining.</returns>
     public static ComboBox ItemTemplate<TItem>(
         this ComboBox comboBox,
         Func<TemplateContext, FrameworkElement> build,
