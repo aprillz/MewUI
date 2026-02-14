@@ -72,7 +72,7 @@ public sealed class FocusManager
             return null;
         }
 
-        if (root is Controls.TabControl tabControl)
+        if (root is TabControl tabControl)
         {
             var fromContent = FindFirstFocusable(tabControl.SelectedTab?.Content);
             if (fromContent != null)
@@ -220,7 +220,7 @@ public sealed class FocusManager
 
     private void CollectFocusableElementsCore(Element? element, List<UIElement> result)
     {
-        if (element is Controls.TabControl tabControl)
+        if (element is TabControl tabControl)
         {
             int before = result.Count;
             CollectFocusableElementsCore(tabControl.SelectedTab?.Content, result);

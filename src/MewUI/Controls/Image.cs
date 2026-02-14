@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;

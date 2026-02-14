@@ -1,9 +1,28 @@
-using System.Runtime.CompilerServices;
-
 using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
+
+/// <summary>
+/// Specifies which user interaction(s) toggle node expansion in a <see cref="TreeView"/>.
+/// </summary>
+public enum TreeViewExpandTrigger
+{
+    /// <summary>
+    /// Expands/collapses when the expander chevron is clicked.
+    /// </summary>
+    ClickChevron,
+
+    /// <summary>
+    /// Expands/collapses when the expander chevron is clicked, or when a node row is double-clicked.
+    /// </summary>
+    DoubleClickNode,
+
+    /// <summary>
+    /// Expands/collapses when the expander chevron is clicked, or when a node row is single-clicked.
+    /// </summary>
+    ClickNode,
+}
 
 /// <summary>
 /// A hierarchical tree view control with expand/collapse functionality.
@@ -142,6 +161,11 @@ public sealed class TreeView : Control, IVisualTreeHost
             }
         }
     } = 16;
+
+    /// <summary>
+    /// Gets or sets which user interactions toggle node expansion.
+    /// </summary>
+    public TreeViewExpandTrigger ExpandTrigger { get; set; } = TreeViewExpandTrigger.ClickChevron;
 
     /// <summary>
     /// Initializes a new instance of the TreeView class.
@@ -630,11 +654,46 @@ public sealed class TreeView : Control, IVisualTreeHost
         }
 
         _itemsSource.SelectedIndex = index;
-        if (onGlyph && _itemsSource.GetHasChildren(index))
+        bool hasChildren = _itemsSource.GetHasChildren(index);
+        if (onGlyph && hasChildren)
+        {
+            _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
+        }
+        else if (!onGlyph && hasChildren && ExpandTrigger == TreeViewExpandTrigger.ClickNode)
         {
             _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
         }
 
+        e.Handled = true;
+    }
+
+    protected override void OnMouseDoubleClick(MouseEventArgs e)
+    {
+        base.OnMouseDoubleClick(e);
+
+        if (e.Handled || !IsEnabled || e.Button != MouseButton.Left)
+        {
+            return;
+        }
+
+        if (ExpandTrigger != TreeViewExpandTrigger.DoubleClickNode)
+        {
+            return;
+        }
+
+        if (!TryHitRow(e.Position, out int index, out bool onGlyph) || onGlyph)
+        {
+            return;
+        }
+
+        if (!_itemsSource.GetHasChildren(index))
+        {
+            return;
+        }
+
+        Focus();
+        _itemsSource.SelectedIndex = index;
+        _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
         e.Handled = true;
     }
 

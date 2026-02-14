@@ -47,7 +47,7 @@ public abstract partial class UIElement : Element
         }
     } = true;
 
-    internal bool IsEffectivelyEnabled => IsEnabled && GetSuggestedIsEnabled();
+    public bool IsEffectivelyEnabled => IsEnabled && GetSuggestedIsEnabled();
 
     /// <summary>
     /// Gets or sets whether the element participates in hit testing.

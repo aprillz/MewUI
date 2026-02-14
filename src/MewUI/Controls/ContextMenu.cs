@@ -180,7 +180,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         _parentMenu = null;
 
         // Measure without passing infinity into backends that may convert widths to ints.
-        var client = window.ClientSizeDip;
+        var client = window.ClientSize;
         Measure(new Size(Math.Max(0, client.Width), Math.Max(0, client.Height)));
         var desired = DesiredSize;
 
@@ -573,7 +573,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         }
         subMenuPopup._parentMenu = this;
 
-        var client = window.ClientSizeDip;
+        var client = window.ClientSize;
         subMenuPopup.Measure(new Size(Math.Max(0, client.Width), Math.Max(0, client.Height)));
         var desired = subMenuPopup.DesiredSize;
 

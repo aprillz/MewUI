@@ -495,7 +495,7 @@ public abstract class Control : FrameworkElement
 
         var toolTipText = ToolTipText!;
 
-        var client = window.ClientSizeDip;
+        var client = window.ClientSize;
         var anchor = window.LastMousePositionDip;
         if (anchor.X == 0 && anchor.Y == 0)
         {

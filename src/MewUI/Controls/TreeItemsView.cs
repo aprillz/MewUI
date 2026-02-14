@@ -6,7 +6,7 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Represents a hierarchical items view for <see cref="Controls.TreeView"/>, including expansion state and depth.
+/// Represents a hierarchical items view for <see cref="TreeView"/>, including expansion state and depth.
 /// </summary>
 public interface ITreeItemsView : IItemsView
 {

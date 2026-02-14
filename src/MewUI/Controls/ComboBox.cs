@@ -617,7 +617,7 @@ public sealed partial class ComboBox : Control, IPopupOwner
             width = 120;
         }
 
-        var client = window.ClientSizeDip;
+        var client = window.ClientSize;
         double x = bounds.X;
 
         // Clamp horizontally to client area.

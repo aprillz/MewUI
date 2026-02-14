@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Provides data for a <see cref="Aprillz.MewUI.Controls.FrameworkElement.SizeChanged"/> event.
+/// Provides data for a <see cref="Controls.FrameworkElement.SizeChanged"/> event.
 /// All values are in DIP units.
 /// </summary>
 public sealed class SizeChangedEventArgs
