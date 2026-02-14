@@ -330,7 +330,7 @@ public sealed class TabControl : Control
 
         var inner = availableSize.Deflate(border);
 
-        _headerStrip.Measure(new Size(availableSize.Width, double.PositiveInfinity));
+        _headerStrip.Measure(new Size(inner.Width, double.PositiveInfinity));
         double headerH = _headerStrip.DesiredSize.Height;
 
         double contentW = inner.Width;
@@ -369,6 +369,7 @@ public sealed class TabControl : Control
         
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
+        var inner = bounds.Deflate(new Thickness(borderInset));
 
         double headerH = _headerStrip.Bounds.Height;
         if (headerH <= 0)
@@ -379,13 +380,13 @@ public sealed class TabControl : Control
         var stripBg = GetTabStripBackground(Theme);
         var contentBg = Theme.Palette.ContainerBackground;
 
-        var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, Math.Max(0, headerH));
+        var headerRect = new Rect(inner.X, inner.Y, inner.Width, Math.Max(0, headerH));
 
         var contentRect = new Rect(
-            bounds.X,
-            bounds.Y + headerRect.Height + borderInset,
-            bounds.Width,
-            Math.Max(0, bounds.Height - headerRect.Height + Theme.Metrics.ControlCornerRadius - borderInset));
+            inner.X,
+            inner.Y + headerRect.Height,
+            inner.Width,
+            Math.Max(0, inner.Height - headerRect.Height));
 
 
         var outline = GetOutlineColor(Theme);
