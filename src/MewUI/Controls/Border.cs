@@ -96,7 +96,18 @@ public sealed class Border : Control, IVisualTreeHost
 
         if (Child != null)
         {
+            var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
+            var inner = Bounds.Deflate(border).Deflate(Padding);
+            var dpiScale = GetDpi() / 96.0;
+            if (dpiScale <= 0)
+            {
+                dpiScale = 1.0;
+            }
+
+            context.Save();
+            context.SetClip(LayoutRounding.MakeClipRect(inner, dpiScale));
             Child.Render(context);
+            context.Restore();
         }
     }
 
