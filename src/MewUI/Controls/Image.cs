@@ -7,7 +7,8 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class Image : FrameworkElement
 {
-    private readonly Dictionary<GraphicsBackend, IImage> _cache = new();
+    private readonly Dictionary<IGraphicsFactory, IImage> _cache =
+        new(ReferenceEqualityComparer<IGraphicsFactory>.Instance);
     private INotifyImageChanged? _notifySource;
 
     /// <summary>
@@ -399,15 +400,13 @@ public sealed class Image : FrameworkElement
         }
 
         var factory = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
-        var backend = factory.Backend;
-
-        if (_cache.TryGetValue(backend, out var cached))
+        if (_cache.TryGetValue(factory, out var cached))
         {
             return cached;
         }
 
         var created = Source.CreateImage(factory);
-        _cache[backend] = created;
+        _cache[factory] = created;
         return created;
     }
 
