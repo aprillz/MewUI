@@ -324,8 +324,7 @@ FrameworkElement BuildGalleryContent()
         .Children(
             Section("Buttons", ButtonsPage()),
             Section("Inputs", InputsPage()),
-            Section("Menus", MenusPage()),
-            Section("Windows", WindowsPage()),
+            Section("Window/Menu", WindowsMenuPage()),
             Section("Selection", SelectionPage()),
             Section("Lists", ListsPage()),
             Section("Panels", PanelsPage()),
@@ -652,6 +651,13 @@ FrameworkElement MenusPage()
     );
 }
 
+FrameworkElement WindowsMenuPage() => new WrapPanel()
+    .Spacing(12)
+    .Children(
+        MenusPage(),
+        WindowsPage()
+    );
+
 FrameworkElement SelectionPage() =>
     CardGrid(
         Card(
@@ -751,6 +757,7 @@ FrameworkElement ListsPage()
     var treeView = new TreeView()
         .Width(240)
         .ItemsSource(treeItems)
+        .ExpandTrigger(TreeViewExpandTrigger.DoubleClickNode)
         .OnSelectionChanged(obj =>
         {
             var n = obj as TreeViewNode;
@@ -928,21 +935,16 @@ FrameworkElement LayoutPage()
 
         Card(
             "Label Wrap/Alignment",
-            new StackPanel()
-                .Vertical()
+            new UniformGrid()
+                .Columns(3)
                 .Spacing(8)
                 .Children(
-                    new WrapPanel()
-                        .Orientation(Orientation.Horizontal)
-                        .Spacing(8)
-                        .Children(
-                            LabelBox("Left/Top + Wrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap),
-                            LabelBox("Center/Top + Wrap", TextAlignment.Center, TextAlignment.Top, TextWrapping.Wrap),
-                            LabelBox("Right/Top + Wrap", TextAlignment.Right, TextAlignment.Top, TextWrapping.Wrap),
-                            LabelBox("Left/Center + Wrap", TextAlignment.Left, TextAlignment.Center, TextWrapping.Wrap),
-                            LabelBox("Left/Bottom + Wrap", TextAlignment.Left, TextAlignment.Bottom, TextWrapping.Wrap),
-                            LabelBox("Left/Top + NoWrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap)
-                        )
+                    LabelBox("Left/Top + Wrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap),
+                    LabelBox("Center/Top + Wrap", TextAlignment.Center, TextAlignment.Top, TextWrapping.Wrap),
+                    LabelBox("Right/Top + Wrap", TextAlignment.Right, TextAlignment.Top, TextWrapping.Wrap),
+                    LabelBox("Left/Center + Wrap", TextAlignment.Left, TextAlignment.Center, TextWrapping.Wrap),
+                    LabelBox("Left/Bottom + Wrap", TextAlignment.Left, TextAlignment.Bottom, TextWrapping.Wrap),
+                    LabelBox("Left/Top + NoWrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap)
                 )
         ),
 
