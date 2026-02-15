@@ -165,53 +165,26 @@ public sealed class ScrollViewer : ContentControl
         double slotH = Math.Max(0, chromeSlot.Height);
 
         
-        int barPx = Math.Max(0, LayoutRounding.RoundToPixelInt(Theme.Metrics.ScrollBarHitThickness, dpiScale));
+        double viewportW0 = Math.Max(0, slotW - Padding.HorizontalThickness);
+        double viewportH0 = Math.Max(0, slotH - Padding.VerticalThickness);
 
-        // Reserve space for scrollbars inside the viewport (WPF-like), but keep it stable by iterating
-        // until visibility decisions stop changing.
-        int reserveW = 0;
-        int reserveH = 0;
-        bool needV = false;
-        bool needH = false;
+        var viewportRect = LayoutRounding.SnapConstraintRectToPixels(new Rect(0, 0, viewportW0, viewportH0), dpiScale);
+        _viewport = LayoutRounding.RoundSizeToPixels(viewportRect.Size, dpiScale);
 
-        for (int pass = 0; pass < 2; pass++)
-        {
-            double viewportW0 = Math.Max(0, slotW - Padding.HorizontalThickness - (reserveW > 0 ? reserveW / dpiScale : 0));
-            double viewportH0 = Math.Max(0, slotH - Padding.VerticalThickness - (reserveH > 0 ? reserveH / dpiScale : 0));
+        var measureSize = new Size(
+            HorizontalScroll == ScrollMode.Disabled ? _viewport.Width : double.PositiveInfinity,
+            VerticalScroll == ScrollMode.Disabled ? _viewport.Height : double.PositiveInfinity);
 
-            var viewportRect = LayoutRounding.SnapConstraintRectToPixels(new Rect(0, 0, viewportW0, viewportH0), dpiScale);
-            _viewport = viewportRect.Size;
+        content.Measure(measureSize);
+        _extent = LayoutRounding.RoundSizeToPixels(content.DesiredSize, dpiScale);
 
-            var measureSize = new Size(
-                HorizontalScroll == ScrollMode.Disabled ? _viewport.Width : double.PositiveInfinity,
-                VerticalScroll == ScrollMode.Disabled ? _viewport.Height : double.PositiveInfinity);
+        _scroll.SetMetricsDip(0, _extent.Width, _viewport.Width);
+        _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
 
-            content.Measure(measureSize);
-            _extent = content.DesiredSize;
-
-            _scroll.SetMetricsDip(0, _extent.Width, _viewport.Width);
-            _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
-
-            needV = _scroll.GetExtentPx(1) > _scroll.GetViewportPx(1);
-            needH = _scroll.GetExtentPx(0) > _scroll.GetViewportPx(0);
-
-            bool showV = IsBarVisible(VerticalScroll, needV);
-            bool showH = IsBarVisible(HorizontalScroll, needH);
-            int nextReserveW = showV ? barPx : 0;
-            int nextReserveH = showH ? barPx : 0;
-
-            if (nextReserveW == reserveW && nextReserveH == reserveH)
-            {
-                _vBar.IsVisible = showV;
-                _hBar.IsVisible = showH;
-                break;
-            }
-
-            reserveW = nextReserveW;
-            reserveH = nextReserveH;
-            _vBar.IsVisible = showV;
-            _hBar.IsVisible = showH;
-        }
+        bool needV = _scroll.GetExtentPx(1) > _scroll.GetViewportPx(1);
+        bool needH = _scroll.GetExtentPx(0) > _scroll.GetViewportPx(0);
+        _vBar.IsVisible = IsBarVisible(VerticalScroll, needV);
+        _hBar.IsVisible = IsBarVisible(HorizontalScroll, needH);
 
         SyncBars();
 
@@ -236,9 +209,9 @@ public sealed class ScrollViewer : ContentControl
         var borderInset = GetBorderVisualInset();
         var viewport = GetContentViewportBounds(bounds, borderInset);
 
-        // Keep viewport consistent with the one used for clamping offsets and bar ranges.
-        _viewport = viewport.Size;
         var dpiScale = DpiScale;
+        // Keep viewport consistent with the one used for clamping offsets and bar ranges.
+        _viewport = LayoutRounding.RoundSizeToPixels(viewport.Size, dpiScale);
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(0, _extent.Width, _viewport.Width);
         _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);

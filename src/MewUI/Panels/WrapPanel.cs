@@ -5,8 +5,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class WrapPanel : Panel
 {
-    private double _lastMeasuredMain = double.NaN;
-
     /// <summary>
     /// Gets or sets the orientation of the wrap panel.
     /// </summary>
@@ -73,7 +71,7 @@ public class WrapPanel : Panel
 
         bool horizontal = Orientation == Orientation.Horizontal;
         var measuredMain = horizontal ? paddedSize.Width : paddedSize.Height;
-        _lastMeasuredMain = measuredMain;
+        measuredMain = RoundMainToPixels(measuredMain);
 
         var items = CollectVisibleChildren(paddedSize, measureChildren: true);
         var lines = BuildLines(items, measuredMain);
@@ -103,9 +101,9 @@ public class WrapPanel : Panel
 
         bool horizontal = Orientation == Orientation.Horizontal;
         var arrangedMain = horizontal ? contentBounds.Width : contentBounds.Height;
-        var effectiveMain = double.IsNaN(_lastMeasuredMain) ? arrangedMain : Math.Min(arrangedMain, _lastMeasuredMain);
+        arrangedMain = RoundMainToPixels(arrangedMain);
         var items = CollectVisibleChildren(contentBounds.Size, measureChildren: false);
-        var lines = BuildLines(items, effectiveMain);
+        var lines = BuildLines(items, arrangedMain);
 
         double totalMain = 0;
         double totalCross = 0;
@@ -216,6 +214,17 @@ public class WrapPanel : Panel
         }
 
         return lines;
+    }
+
+    private double RoundMainToPixels(double value)
+    {
+        var dpiScale = GetDpi() / 96.0;
+        if (dpiScale <= 0 || double.IsNaN(dpiScale) || double.IsInfinity(dpiScale))
+        {
+            return value;
+        }
+
+        return LayoutRounding.RoundToPixel(value, dpiScale);
     }
 
     private readonly record struct ChildInfo(Element child, double width, double height, double main, double cross);
