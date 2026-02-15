@@ -226,6 +226,8 @@ If neither is available in `PATH`, MewUI throws:
 - [Application Lifecycle](docs/ApplicationLifecycle.md)
 - [Layout](docs/Layout.md)
 - [RenderLoop](docs/RenderLoop.md)
+- [Hot Reload](docs/HotReload.md)
+- [Custom Controls](docs/CustomControls.md)
 
 ---
 ## 🧭 Roadmap (TODO)
@@ -235,5 +237,5 @@ If neither is available in `PATH`, MewUI throws:
 - [ ] macOS
 
 **Tooling**
-- [ ] Hot Reload 
+- [x] Hot Reload 
 - [ ] Design-time preview
