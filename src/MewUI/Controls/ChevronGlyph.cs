@@ -2,7 +2,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-internal enum ChevronDirection
+public enum ChevronDirection
 {
     Up,
     Down,
@@ -10,7 +10,7 @@ internal enum ChevronDirection
     Right,
 }
 
-internal static class ChevronGlyph
+public static class ChevronGlyph
 {
     public static void Draw(IGraphicsContext context, Point center, double size, Color color, ChevronDirection direction)
     {

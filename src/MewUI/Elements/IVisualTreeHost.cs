@@ -5,7 +5,7 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Provides child traversal for the visual tree.
 /// </summary>
-internal interface IVisualTreeHost
+public interface IVisualTreeHost
 {
     /// <summary>
     /// Visits visual children of the current element.

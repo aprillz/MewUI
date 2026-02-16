@@ -72,6 +72,42 @@ public abstract class Element
     }
 
     /// <summary>
+    /// Attaches a child element to this element. Use this in derived controls
+    /// instead of setting Parent directly.
+    /// </summary>
+    /// <param name="child">The child to attach.</param>
+    protected void AttachChild(Element child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+
+        if (child.Parent == this)
+        {
+            return;
+        }
+
+        if (child.Parent != null)
+        {
+            throw new InvalidOperationException("The element already has a parent.");
+        }
+
+        child.Parent = this;
+    }
+
+    /// <summary>
+    /// Detaches a child element from this element if attached.
+    /// </summary>
+    /// <param name="child">The child to detach.</param>
+    protected void DetachChild(Element child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+
+        if (child.Parent == this)
+        {
+            child.Parent = null;
+        }
+    }
+
+    /// <summary>
     /// Gets whether a new Measure pass is needed.
     /// </summary>
     public bool IsMeasureDirty { get; private set; } = true;

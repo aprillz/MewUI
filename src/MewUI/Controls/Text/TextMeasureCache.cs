@@ -2,7 +2,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls.Text;
 
-internal struct TextMeasureCache
+public struct TextMeasureCache
 {
     private Key _lastKey;
     private Size _lastMeasuredSize;
