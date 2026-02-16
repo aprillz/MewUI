@@ -2070,43 +2070,50 @@ public static class ControlExtensions
 
     #endregion
 
-    #region ProgressBar
+    #region RangeBase
 
     /// <summary>
     /// Sets the minimum value.
     /// </summary>
-    /// <param name="progressBar">Target progress bar.</param>
+    /// <typeparam name="T">RangeBase type.</typeparam>
+    /// <param name="rangeBase">Target range-based control.</param>
     /// <param name="minimum">Minimum value.</param>
-    /// <returns>The progress bar for chaining.</returns>
-    public static ProgressBar Minimum(this ProgressBar progressBar, double minimum)
+    /// <returns>The control for chaining.</returns>
+    public static T Minimum<T>(this T rangeBase, double minimum) where T : RangeBase
     {
-        progressBar.Minimum = minimum;
-        return progressBar;
+        rangeBase.Minimum = minimum;
+        return rangeBase;
     }
 
     /// <summary>
     /// Sets the maximum value.
     /// </summary>
-    /// <param name="progressBar">Target progress bar.</param>
+    /// <typeparam name="T">RangeBase type.</typeparam>
+    /// <param name="rangeBase">Target range-based control.</param>
     /// <param name="maximum">Maximum value.</param>
-    /// <returns>The progress bar for chaining.</returns>
-    public static ProgressBar Maximum(this ProgressBar progressBar, double maximum)
+    /// <returns>The control for chaining.</returns>
+    public static T Maximum<T>(this T rangeBase, double maximum) where T : RangeBase
     {
-        progressBar.Maximum = maximum;
-        return progressBar;
+        rangeBase.Maximum = maximum;
+        return rangeBase;
     }
 
     /// <summary>
     /// Sets the value.
     /// </summary>
-    /// <param name="progressBar">Target progress bar.</param>
+    /// <typeparam name="T">RangeBase type.</typeparam>
+    /// <param name="rangeBase">Target range-based control.</param>
     /// <param name="value">Value.</param>
-    /// <returns>The progress bar for chaining.</returns>
-    public static ProgressBar Value(this ProgressBar progressBar, double value)
+    /// <returns>The control for chaining.</returns>
+    public static T Value<T>(this T rangeBase, double value) where T : RangeBase
     {
-        progressBar.Value = value;
-        return progressBar;
+        rangeBase.Value = value;
+        return rangeBase;
     }
+
+    #endregion
+
+    #region ProgressBar
 
     /// <summary>
     /// Binds the value to an observable value.
@@ -2129,42 +2136,6 @@ public static class ControlExtensions
     #endregion
 
     #region Slider
-
-    /// <summary>
-    /// Sets the minimum value.
-    /// </summary>
-    /// <param name="slider">Target slider.</param>
-    /// <param name="minimum">Minimum value.</param>
-    /// <returns>The slider for chaining.</returns>
-    public static Slider Minimum(this Slider slider, double minimum)
-    {
-        slider.Minimum = minimum;
-        return slider;
-    }
-
-    /// <summary>
-    /// Sets the maximum value.
-    /// </summary>
-    /// <param name="slider">Target slider.</param>
-    /// <param name="maximum">Maximum value.</param>
-    /// <returns>The slider for chaining.</returns>
-    public static Slider Maximum(this Slider slider, double maximum)
-    {
-        slider.Maximum = maximum;
-        return slider;
-    }
-
-    /// <summary>
-    /// Sets the value.
-    /// </summary>
-    /// <param name="slider">Target slider.</param>
-    /// <param name="value">Value.</param>
-    /// <returns>The slider for chaining.</returns>
-    public static Slider Value(this Slider slider, double value)
-    {
-        slider.Value = value;
-        return slider;
-    }
 
     /// <summary>
     /// Sets the small change value.
@@ -2207,6 +2178,96 @@ public static class ControlExtensions
             h => source.Changed += h,
             h => source.Changed -= h);
         return slider;
+    }
+
+    #endregion
+
+    #region NumericUpDown
+
+    /// <summary>
+    /// Sets the step value.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="step">Step value.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown Step(this NumericUpDown numericUpDown, double step)
+    {
+        numericUpDown.Step = step;
+        return numericUpDown;
+    }
+
+    /// <summary>
+    /// Sets the format string.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="format">Format string.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown Format(this NumericUpDown numericUpDown, string format)
+    {
+        numericUpDown.Format = format;
+        return numericUpDown;
+    }
+
+    /// <summary>
+    /// Sets edit mode.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="editMode">Edit mode state.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown EditMode(this NumericUpDown numericUpDown, bool editMode = true)
+    {
+        numericUpDown.EditMode = editMode;
+        return numericUpDown;
+    }
+
+    /// <summary>
+    /// Adds a value changed event handler.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="handler">Event handler.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown OnValueChanged(this NumericUpDown numericUpDown, Action<double> handler)
+    {
+        numericUpDown.ValueChanged += handler;
+        return numericUpDown;
+    }
+
+    /// <summary>
+    /// Binds the value to an observable value.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown BindValue(this NumericUpDown numericUpDown, ObservableValue<double> source)
+    {
+        ArgumentNullException.ThrowIfNull(numericUpDown);
+        ArgumentNullException.ThrowIfNull(source);
+
+        numericUpDown.SetValueBinding(
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return numericUpDown;
+    }
+
+    /// <summary>
+    /// Binds the value to an observable integer value.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown BindValue(this NumericUpDown numericUpDown, ObservableValue<int> source)
+    {
+        ArgumentNullException.ThrowIfNull(numericUpDown);
+        ArgumentNullException.ThrowIfNull(source);
+
+        numericUpDown.SetValueBinding(
+            () => source.Value,
+            v => source.Value = (int)Math.Round(v),
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return numericUpDown;
     }
 
     #endregion

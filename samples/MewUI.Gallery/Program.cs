@@ -33,6 +33,8 @@ var iconFile = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resource
 
 var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() => CheckFPS(ref fpsFrames));
 var name = new ObservableValue<string>("Type your name");
+var intBinding = new ObservableValue<int>(1);
+var doubleBinding = new ObservableValue<double>(42.5);
 
 var root = new Window()
     .Resizable(1080, 840)
@@ -120,9 +122,6 @@ void EnableWindowDrag(Window window, UIElement element)
         var screenDip = GetScreenDip(window, e);
         double dx = screenDip.X - dragStartScreenDip.X;
         double dy = screenDip.Y - dragStartScreenDip.Y;
-
-        Debug.WriteLine(window.DpiScale);
-        Debug.WriteLine($"{window.ClientToScreen(e.Position)} vs {e.ScreenPosition}");
 
         window.MoveTo(windowStartDip.X + dx, windowStartDip.Y + dy);
 
@@ -538,6 +537,50 @@ FrameworkElement InputsPage() =>
                     new TextBox().Placeholder("Your name"),
                     new TextBox().BindText(name),
                     new TextBox().Text("Disabled").Disable()
+                )
+        ),
+
+        Card(
+            "NumericUpDown (int/double)",
+            new Grid()
+                .Columns("Auto,Auto,Auto")
+                .Rows("Auto,Auto")
+                .Spacing(8)
+                .AutoIndexing()
+                .Children(
+                    new Label()
+                        .Text("Int")
+                        .CenterVertical(),
+
+                    new NumericUpDown()
+                        .Width(140)
+                        .Minimum(0)
+                        .Maximum(100)
+                        .Step(1)
+                        .Format("0")
+                        .BindValue(intBinding)
+                        .CenterVertical(),
+
+                    new Label()
+                        .BindText(intBinding, value => $"Value: {value}")
+                        .CenterVertical(),
+
+                    new Label()
+                        .Text("Double")
+                        .CenterVertical(),
+
+                    new NumericUpDown()
+                        .Width(140)
+                        .Minimum(0)
+                        .Maximum(100)
+                        .Step(0.1)
+                        .Format("0.##")
+                        .BindValue(doubleBinding)
+                        .CenterVertical(),
+
+                    new Label()
+                        .BindText(doubleBinding, value => $"Value: {value:0.##}")
+                        .CenterVertical()
                 )
         ),
 
@@ -1202,7 +1245,6 @@ FrameworkElement MediaPage() =>
                     new Label()
                         .BindText(imagePeekText)
                         .FontFamily("Consolas")
-                        .FontSize(11)
                         .Center()
                 )
         ),
