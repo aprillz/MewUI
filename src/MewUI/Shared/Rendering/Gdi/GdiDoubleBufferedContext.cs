@@ -12,7 +12,7 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
     private readonly nint _hwnd;
     private readonly nint _screenDc;
     private readonly BackBuffer _backBuffer;
-    private readonly GdiGraphicsContext _context;
+    private readonly GdiPlusGraphicsContext _context;
     private readonly int _width;
     private readonly int _height;
     private bool _disposed;
@@ -148,7 +148,7 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
         _backBuffer = BackBuffer.GetOrCreate(hwnd, screenDc, _width, _height);
 
         // Create the inner context that renders to the memory DC
-        _context = new GdiGraphicsContext(hwnd, _backBuffer.MemDc, dpiScale, curveQuality, imageScaleQuality, false);
+        _context = new GdiPlusGraphicsContext(hwnd, _backBuffer.MemDc, dpiScale, imageScaleQuality, false);
     }
 
     public void Dispose()
@@ -169,6 +169,9 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
     public void Save() => _context.Save();
     public void Restore() => _context.Restore();
     public void SetClip(Rect rect) => _context.SetClip(rect);
+
+    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+        => _context.SetClipRoundedRect(rect, radiusX, radiusY);
     public void Translate(double dx, double dy) => _context.Translate(dx, dy);
     public void Clear(Color color) => _context.Clear(color);
     public void DrawLine(Point start, Point end, Color color, double thickness = 1) => _context.DrawLine(start, end, color, thickness);

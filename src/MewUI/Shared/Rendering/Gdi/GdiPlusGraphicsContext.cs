@@ -1,64 +1,58 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Gdi.Core;
 using Aprillz.MewUI.Rendering.Gdi.Rendering;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
-/// GDI graphics context implementation with hybrid SDF/SSAA anti-aliasing.
-/// Provides high-quality rendering while maintaining good performance.
+/// GDI+ graphics context (vector/clip quality), while keeping GDI text measurement/rendering.
 /// </summary>
-internal sealed class GdiGraphicsContext : IGraphicsContext
+internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 {
-    private const byte OpaqueAlphaThreshold = 250;
-
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
-    private readonly GdiCurveQuality _curveQuality;
     private readonly ImageScaleQuality _imageScaleQuality;
-    private readonly int _supersampleFactor;
     private readonly GdiBitmapRenderTarget? _bitmapTarget;
 
-    // For bitmap rendering without hwnd
     private readonly int _pixelWidth;
     private readonly int _pixelHeight;
 
-    private readonly GdiStateManager _stateManager;
+    private readonly GdiStateManager _textStateManager;
     private readonly GdiPrimitiveRenderer _primitiveRenderer;
-    private HybridShapeRenderer? _shapeRenderer;
-    private readonly AaSurfacePool _surfacePool;
-    private readonly AaSurface _alphaPixelSurface;
-    private uint _alphaPixel;
+    private readonly AaSurfacePool _surfacePool = new();
 
-
+    private nint _graphics;
+    private readonly Stack<GraphicsStateSnapshot> _states = new();
     private bool _disposed;
+    private readonly double _dpiScale;
+    private double _translateX;
+    private double _translateY;
 
-    public double DpiScale => _stateManager.DpiScale;
+    public double DpiScale => _dpiScale;
 
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
 
     internal nint Hdc { get; }
 
-    public GdiGraphicsContext(
+    public GdiPlusGraphicsContext(
         nint hwnd,
         nint hdc,
         double dpiScale,
-        GdiCurveQuality curveQuality,
         ImageScaleQuality imageScaleQuality,
         bool ownsDc = false)
-        : this(hwnd, hdc, 0, 0, dpiScale, curveQuality, imageScaleQuality, ownsDc)
+        : this(hwnd, hdc, 0, 0, dpiScale, imageScaleQuality, ownsDc)
     {
     }
 
-    internal GdiGraphicsContext(
+    internal GdiPlusGraphicsContext(
         nint hwnd,
         nint hdc,
         int pixelWidth,
         int pixelHeight,
         double dpiScale,
-        GdiCurveQuality curveQuality,
         ImageScaleQuality imageScaleQuality,
         bool ownsDc = false,
         GdiBitmapRenderTarget? bitmapTarget = null)
@@ -68,228 +62,37 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
         _pixelWidth = pixelWidth;
         _pixelHeight = pixelHeight;
         _ownsDc = ownsDc;
-        _curveQuality = curveQuality;
         _imageScaleQuality = imageScaleQuality;
-        _supersampleFactor = (int)curveQuality switch { 2 => 2, 3 => 3, _ => 1 };
         _bitmapTarget = bitmapTarget;
 
-        _stateManager = new GdiStateManager(hdc, dpiScale);
-        _primitiveRenderer = new GdiPrimitiveRenderer(hdc, _stateManager);
-        _surfacePool = new AaSurfacePool();
-        _alphaPixelSurface = new AaSurface(hdc, 1, 1);
+        _dpiScale = dpiScale;
+        _textStateManager = new GdiStateManager(hdc, dpiScale);
+        _primitiveRenderer = new GdiPrimitiveRenderer(hdc, _textStateManager);
 
-        if (curveQuality != GdiCurveQuality.Fast)
-        {
-            _shapeRenderer = new HybridShapeRenderer(_surfacePool, _supersampleFactor);
-        }
-
-        // Set default modes
         Gdi32.SetBkMode(Hdc, GdiConstants.TRANSPARENT);
-    }
-
-    private HybridShapeRenderer GetShapeRendererForAlpha()
-    {
-        // GDI primitives don't support per-pixel alpha. For A<255 we render into a 32bpp surface and composite.
-        // If the user selected Fast, use a 1x supersample factor (still supports alpha, just without extra SSAA).
-        _shapeRenderer ??= new HybridShapeRenderer(_surfacePool, 1);
-        return _shapeRenderer;
-    }
-
-    private static uint GetPremultipliedBgraPixel(Color color)
-    {
-        // Premultiply for AlphaBlend with AC_SRC_ALPHA.
-        uint a = color.A;
-        uint r = (uint)(color.R * a + 127) / 255;
-        uint g = (uint)(color.G * a + 127) / 255;
-        uint b = (uint)(color.B * a + 127) / 255;
-
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private unsafe void AlphaFillRectangleFast(int destX, int destY, int width, int height, Color color)
-    {
-        if (width <= 0 || height <= 0 || color.A == 0)
-        {
-            return;
-        }
-
-        // Fast fill via stretching a cached 1x1 premultiplied pixel surface.
-        // This avoids writing WxH pixels on CPU; AlphaBlend still covers the target area but with far less setup overhead.
-        if (_alphaPixelSurface.IsValid)
-        {
-            uint pixel = GetPremultipliedBgraPixel(color);
-            if (_alphaPixel != pixel)
-            {
-                byte* p = _alphaPixelSurface.GetRowPointer(0);
-                if (p == null)
-                {
-                    return;
-                }
-
-                *(uint*)p = pixel;
-                _alphaPixel = pixel;
-            }
-
-            _alphaPixelSurface.AlphaBlendToStretch(Hdc, destX, destY, width, height);
-            return;
-        }
-
-        // Fallback: render into a dedicated surface and alpha blend.
-        var surface = _surfacePool.Rent(Hdc, width, height);
-        if (!surface.IsValid)
-        {
-            return;
-        }
-
-        try
-        {
-            uint pixel = GetPremultipliedBgraPixel(color);
-
-            for (int y = 0; y < height; y++)
-            {
-                byte* rowPtr = surface.GetRowPointer(y);
-                if (rowPtr == null)
-                {
-                    return;
-                }
-
-                new Span<uint>((void*)rowPtr, width).Fill(pixel);
-            }
-
-            surface.AlphaBlendTo(Hdc, destX, destY, width, height, 0, 0);
-        }
-        finally
-        {
-            _surfacePool.Return(surface);
-        }
-    }
-
-    private unsafe void AlphaDrawRectangleFast(int destX, int destY, int width, int height, Color color, int thicknessPx)
-    {
-        if (width <= 0 || height <= 0 || color.A == 0 || thicknessPx <= 0)
-        {
-            return;
-        }
-
-        thicknessPx = Math.Min(thicknessPx, Math.Min(width / 2, height / 2));
-        if (thicknessPx <= 0)
-        {
-            return;
-        }
-
-        // AlphaBlend is expensive; avoid blending a full WxH area for a thin border.
-        // Render only the non-overlapping strips (top/bottom + left/right excluding corners).
-        int topH = Math.Min(thicknessPx, height);
-        int bottomStart = Math.Max(topH, height - thicknessPx);
-        int bottomH = height - bottomStart;
-
-        int middleY = topH;
-        int middleH = Math.Max(0, bottomStart - topH);
-
-        int sideW = Math.Min(thicknessPx, width);
-        int rightX = width - sideW;
-
-        long fullArea = (long)width * height;
-        long borderArea = (long)width * topH + (long)width * bottomH;
-        if (middleH > 0 && sideW > 0)
-        {
-            // Left + right borders (excluding top/bottom already counted).
-            borderArea += (long)sideW * middleH;
-            if (rightX != 0)
-            {
-                borderArea += (long)sideW * middleH;
-            }
-        }
-
-        // Heuristic: for small rects or thick borders, a single AlphaBlend can be cheaper than 3-4 calls.
-        bool useSingleBlend = fullArea <= 4096 || borderArea * 2 >= fullArea;
-
-        if (useSingleBlend || !_alphaPixelSurface.IsValid)
-        {
-            var surface = _surfacePool.Rent(Hdc, width, height);
-            if (!surface.IsValid)
-            {
-                return;
-            }
-
-            try
-            {
-                uint pixel = GetPremultipliedBgraPixel(color);
-
-                for (int y = 0; y < height; y++)
-                {
-                    byte* rowPtr = surface.GetRowPointer(y);
-                    if (rowPtr == null)
-                    {
-                        return;
-                    }
-
-                    var row = new Span<uint>((void*)rowPtr, width);
-
-                    if (y < topH || y >= bottomStart)
-                    {
-                        row.Fill(pixel);
-                        continue;
-                    }
-
-                    row.Clear();
-                    if (sideW > 0)
-                    {
-                        row.Slice(0, sideW).Fill(pixel);
-                        if (rightX != 0)
-                        {
-                            row.Slice(rightX, sideW).Fill(pixel);
-                        }
-                    }
-                }
-
-                surface.AlphaBlendTo(Hdc, destX, destY, width, height, 0, 0);
-            }
-            finally
-            {
-                _surfacePool.Return(surface);
-            }
-
-            return;
-        }
-
-        // Thin border: minimize blended area by drawing strips.
-        if (topH > 0)
-        {
-            AlphaFillRectangleFast(destX, destY, width, topH, color);
-        }
-
-        if (bottomH > 0)
-        {
-            AlphaFillRectangleFast(destX, destY + bottomStart, width, bottomH, color);
-        }
-
-        if (middleH > 0 && sideW > 0 && rightX >= 0)
-        {
-            AlphaFillRectangleFast(destX, destY + middleY, sideW, middleH, color);
-
-            if (rightX != 0)
-            {
-                AlphaFillRectangleFast(destX + rightX, destY + middleY, sideW, middleH, color);
-            }
-        }
+        GdiPlusInterop.EnsureInitialized();
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        if (_disposed)
         {
+            return;
+        }
 
-            if (_ownsDc && Hdc != 0)
-            {
-                User32.ReleaseDC(_hwnd, Hdc);
-            }
+        _disposed = true;
 
-            _alphaPixelSurface.Dispose();
-            _primitiveRenderer.Dispose();
-            _surfacePool.Dispose();
+        _surfacePool.Dispose();
 
-            _disposed = true;
+        if (_graphics != 0)
+        {
+            GdiPlusInterop.GdipDeleteGraphics(_graphics);
+            _graphics = 0;
+        }
+
+        if (_ownsDc && Hdc != 0)
+        {
+            User32.ReleaseDC(_hwnd, Hdc);
         }
     }
 
@@ -297,30 +100,109 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     public void Save()
     {
-        _stateManager.Save();
+        _textStateManager.Save();
+
+        uint state = 0;
+        if (EnsureGraphics())
+        {
+            GdiPlusInterop.GdipSaveGraphics(_graphics, out state);
+        }
+
+        _states.Push(new GraphicsStateSnapshot
+        {
+            GdiPlusState = state,
+            TranslateX = _translateX,
+            TranslateY = _translateY,
+        });
     }
 
     public void Restore()
     {
-        _stateManager.Restore();
+        _textStateManager.Restore();
+
+        if (_states.Count == 0)
+        {
+            return;
+        }
+
+        var state = _states.Pop();
+        _translateX = state.TranslateX;
+        _translateY = state.TranslateY;
+
+        if (_graphics != 0 && state.GdiPlusState != 0)
+        {
+            GdiPlusInterop.GdipRestoreGraphics(_graphics, state.GdiPlusState);
+        }
     }
 
     public void SetClip(Rect rect)
     {
-        _stateManager.SetClip(rect);
+        // Keep HDC clip in sync for GDI text rendering.
+        _textStateManager.SetClip(rect);
+
+        if (!EnsureGraphics())
+        {
+            return;
+        }
+
+        var clip = LayoutRounding.SnapViewportRectToPixels(rect, _dpiScale);
+        var r = ToDeviceRect(clip);
+        GdiPlusInterop.GdipSetClipRectI(_graphics, r.left, r.top, r.Width, r.Height, GdiPlusInterop.CombineMode.Intersect);
     }
 
     public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
     {
-        // GDI only supports rectangular clip regions.
-        _stateManager.SetClip(rect);
+        // GDI text can only do rectangle clip; keep it close to bounds.
+        _textStateManager.SetClip(rect);
+
+        if (!EnsureGraphics())
+        {
+            return;
+        }
+
+        if (radiusX <= 0 && radiusY <= 0)
+        {
+            SetClip(rect);
+            return;
+        }
+
+        var clip = LayoutRounding.SnapViewportRectToPixels(rect, _dpiScale);
+        var r = ToDeviceRect(clip);
+        int ellipseW = Math.Max(1, QuantizeLengthPx(radiusX * 2));
+        int ellipseH = Math.Max(1, QuantizeLengthPx(radiusY * 2));
+
+        if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ellipseW, ellipseH);
+            GdiPlusInterop.GdipClosePathFigure(path);
+            GdiPlusInterop.GdipSetClipPath(_graphics, path, GdiPlusInterop.CombineMode.Intersect);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(path);
+        }
     }
 
-    public void Translate(double dx, double dy) => _stateManager.Translate(dx, dy);
+    public void Translate(double dx, double dy)
+    {
+        _translateX += dx;
+        _translateY += dy;
+        _textStateManager.Translate(dx, dy);
+
+        if (EnsureGraphics())
+        {
+            GdiPlusInterop.GdipTranslateWorldTransform(_graphics, (float)(dx * _dpiScale), (float)(dy * _dpiScale), GdiPlusInterop.MatrixOrder.Append);
+        }
+    }
 
     #endregion
 
-    #region Drawing Primitives
+    #region Drawing Primitives (GDI+)
 
     public void Clear(Color color)
     {
@@ -340,224 +222,238 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     public void DrawLine(Point start, Point end, Color color, double thickness = 1)
     {
-        if (color.A == 0 || thickness <= 0)
+        if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
-        if (color.A < 255)
+        float widthPx = (float)ToDevicePx(thickness);
+        if (widthPx <= 0)
         {
-            var (ax, ay) = _stateManager.ToDeviceCoords(start.X, start.Y);
-            var (bx, by) = _stateManager.ToDeviceCoords(end.X, end.Y);
-
-            float strokePx = (float)_stateManager.ToDevicePx(thickness);
-            GetShapeRendererForAlpha().DrawLine(
-                Hdc,
-                (float)ax, (float)ay,
-                (float)bx, (float)by,
-                strokePx,
-                color.B, color.G, color.R, color.A);
             return;
         }
 
-        // Check if line is axis-aligned (no AA needed)
-        var (ax0, ay0) = _stateManager.ToDeviceCoords(start.X, start.Y);
-        var (bx0, by0) = _stateManager.ToDeviceCoords(end.X, end.Y);
+        var (ax, ay) = ToDeviceCoords(start.X, start.Y);
+        var (bx, by) = ToDeviceCoords(end.X, end.Y);
 
-        double dx = bx0 - ax0;
-        double dy = by0 - ay0;
-
-        bool isAxisAligned = Math.Abs(dx) < GdiRenderingConstants.Epsilon || Math.Abs(dy) < GdiRenderingConstants.Epsilon;
-
-        if (isAxisAligned || _curveQuality == GdiCurveQuality.Fast || _shapeRenderer == null)
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
         {
-            _primitiveRenderer.DrawLine(start, end, color, thickness);
             return;
         }
 
-        // Use AA renderer for non-axis-aligned lines
-        float strokePx1 = (float)_stateManager.ToDevicePx(thickness);
-        _shapeRenderer.DrawLine(
-            Hdc,
-            (float)ax0, (float)ay0,
-            (float)bx0, (float)by0,
-            strokePx1,
-            color.B, color.G, color.R, color.A);
+        try
+        {
+            GdiPlusInterop.GdipDrawLineI(_graphics, pen, (int)Math.Round(ax), (int)Math.Round(ay), (int)Math.Round(bx), (int)Math.Round(by));
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePen(pen);
+        }
     }
 
     public void DrawRectangle(Rect rect, Color color, double thickness = 1)
     {
-        if (color.A == 0 || thickness <= 0)
+        if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
-        var dst = _stateManager.ToDeviceRect(rect);
-        if (dst.Width <= 0 || dst.Height <= 0)
+        var r = ToDeviceRect(rect);
+        if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        if (color.A < 255)
+        float widthPx = (float)ToDevicePx(thickness);
+        if (widthPx <= 0)
         {
-            int tPx = _stateManager.QuantizePenWidthPx(thickness);
-            AlphaDrawRectangleFast(dst.left, dst.top, dst.Width, dst.Height, color, tPx);
             return;
         }
 
-        _primitiveRenderer.DrawRectangle(rect, color, thickness);
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            GdiPlusInterop.GdipDrawRectangleI(_graphics, pen, r.left, r.top, r.Width, r.Height);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePen(pen);
+        }
     }
 
     public void FillRectangle(Rect rect, Color color)
     {
-        if (color.A == 0)
+        if (color.A == 0 || !EnsureGraphics())
         {
             return;
         }
 
-        var dst = _stateManager.ToDeviceRect(rect);
-        if (dst.Width <= 0 || dst.Height <= 0)
+        var r = ToDeviceRect(rect);
+        if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        if (color.A < 255)
+        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
         {
-            AlphaFillRectangleFast(dst.left, dst.top, dst.Width, dst.Height, color);
             return;
         }
 
-        _primitiveRenderer.FillRectangle(rect, color);
+        try
+        {
+            GdiPlusInterop.GdipFillRectangleI(_graphics, brush, r.left, r.top, r.Width, r.Height);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeleteBrush(brush);
+        }
     }
 
     public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
     {
-        if (color.A == 0 || thickness <= 0)
+        if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
-        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
-        {
-            _primitiveRenderer.DrawRoundedRectangle(rect, radiusX, radiusY, color, thickness);
-            return;
-        }
-
-        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
-
-        var dst = _stateManager.ToDeviceRect(rect);
-        if (dst.Width <= 0 || dst.Height <= 0)
+        var r = ToDeviceRect(rect);
+        if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        float rx = (float)_stateManager.ToDevicePx(radiusX);
-        float ry = (float)_stateManager.ToDevicePx(radiusY);
-        float strokePx = (float)_stateManager.ToDevicePx(thickness);
+        float widthPx = (float)ToDevicePx(thickness);
+        int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
+        int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
-        renderer.DrawRoundedRectangle(
-            Hdc,
-            dst.left, dst.top,
-            dst.Width, dst.Height,
-            rx, ry, strokePx,
-            color.B, color.G, color.R, color.A);
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        {
+            return;
+        }
+
+        if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0)
+        {
+            GdiPlusInterop.GdipDeletePen(pen);
+            return;
+        }
+
+        try
+        {
+            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
+            GdiPlusInterop.GdipClosePathFigure(path);
+            GdiPlusInterop.GdipDrawPath(_graphics, pen, path);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(path);
+            GdiPlusInterop.GdipDeletePen(pen);
+        }
     }
 
     public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
     {
-        if (color.A == 0)
+        if (color.A == 0 || !EnsureGraphics())
         {
             return;
         }
 
-        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
-        {
-            _primitiveRenderer.FillRoundedRectangle(rect, radiusX, radiusY, color);
-            return;
-        }
-
-        var dst = _stateManager.ToDeviceRect(rect);
-        if (dst.Width <= 0 || dst.Height <= 0)
+        var r = ToDeviceRect(rect);
+        if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        float rx = (float)_stateManager.ToDevicePx(radiusX);
-        float ry = (float)_stateManager.ToDevicePx(radiusY);
+        int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
+        int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
-        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
+        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        {
+            return;
+        }
 
-        renderer.FillRoundedRectangle(
-            Hdc,
-            dst.left, dst.top,
-            dst.Width, dst.Height,
-            rx, ry,
-            color.B, color.G, color.R, color.A);
+        if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0)
+        {
+            GdiPlusInterop.GdipDeleteBrush(brush);
+            return;
+        }
+
+        try
+        {
+            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
+            GdiPlusInterop.GdipClosePathFigure(path);
+            GdiPlusInterop.GdipFillPath(_graphics, brush, path);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(path);
+            GdiPlusInterop.GdipDeleteBrush(brush);
+        }
     }
 
     public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
     {
-        if (color.A == 0 || thickness <= 0)
+        if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
-        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
-        {
-            _primitiveRenderer.DrawEllipse(bounds, color, thickness);
-            return;
-        }
-
-        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
-
-        var dst = _stateManager.ToDeviceRect(bounds);
-        if (dst.Width <= 0 || dst.Height <= 0)
+        var r = ToDeviceRect(bounds);
+        if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        float strokePx = (float)_stateManager.ToDevicePx(thickness);
+        float widthPx = (float)ToDevicePx(thickness);
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        {
+            return;
+        }
 
-        renderer.DrawEllipse(
-            Hdc,
-            dst.left, dst.top,
-            dst.Width, dst.Height,
-            strokePx,
-            color.B, color.G, color.R, color.A);
+        try
+        {
+            GdiPlusInterop.GdipDrawEllipseI(_graphics, pen, r.left, r.top, r.Width, r.Height);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePen(pen);
+        }
     }
 
     public void FillEllipse(Rect bounds, Color color)
     {
-        if (color.A == 0)
+        if (color.A == 0 || !EnsureGraphics())
         {
             return;
         }
 
-        if (color.A == 255 && (_shapeRenderer == null || _curveQuality == GdiCurveQuality.Fast))
-        {
-            _primitiveRenderer.FillEllipse(bounds, color);
-            return;
-        }
-
-        var renderer = _shapeRenderer ?? GetShapeRendererForAlpha();
-
-        var dst = _stateManager.ToDeviceRect(bounds);
-        if (dst.Width <= 0 || dst.Height <= 0)
+        var r = ToDeviceRect(bounds);
+        if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        renderer.FillEllipse(
-            Hdc,
-            dst.left, dst.top,
-            dst.Width, dst.Height,
-            color.B, color.G, color.R, color.A);
+        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            GdiPlusInterop.GdipFillEllipseI(_graphics, brush, r.left, r.top, r.Width, r.Height);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeleteBrush(brush);
+        }
     }
 
     #endregion
 
-
-    #region Text Rendering
+    #region Text Rendering (GDI)
 
     public unsafe void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
     {
@@ -566,24 +462,21 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             throw new ArgumentException("Font must be a GdiFont", nameof(font));
         }
 
-        if (_bitmapTarget?.PresentationMode == GdiPresentationMode.PerPixelAlpha)
+        if (text.IsEmpty || color.A == 0)
         {
-            if (text.IsEmpty || color.A == 0)
-            {
-                return;
-            }
+            return;
+        }
 
-            var size = MeasureText(text, gdiFont);
-            int w = _stateManager.QuantizeLengthPx(size.Width);
-            int h = _stateManager.QuantizeLengthPx(size.Height);
-            if (w <= 0 || h <= 0)
-            {
-                return;
-            }
-
-            var pt = _stateManager.ToDevicePoint(location);
+        // For layered/bitmap targets, legacy GDI text APIs do not produce usable per-pixel alpha.
+        // Use coverage-based rendering and synthesize premultiplied alpha for smooth edges.
+        if (_bitmapTarget != null)
+        {
+            var sizeDip = MeasureText(text, gdiFont);
+            int w = Math.Max(1, QuantizeLengthPx(sizeDip.Width));
+            int h = Math.Max(1, QuantizeLengthPx(sizeDip.Height));
+            var pt = ToDevicePoint(location);
             var r = RECT.FromLTRB(pt.x, pt.y, pt.x + w, pt.y + h);
-            uint format = GdiConstants.DT_NOPREFIX | GdiConstants.DT_SINGLELINE | GdiConstants.DT_LEFT | GdiConstants.DT_TOP;
+            uint format = GdiConstants.DT_NOPREFIX | GdiConstants.DT_LEFT | GdiConstants.DT_TOP | GdiConstants.DT_SINGLELINE;
             PerPixelAlphaTextRenderer.DrawText(Hdc, _bitmapTarget, _surfacePool, text, r, gdiFont, color, format);
             return;
         }
@@ -593,7 +486,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
         try
         {
-            var pt = _stateManager.ToDevicePoint(location);
+            var pt = ToDevicePoint(location);
             fixed (char* pText = text)
             {
                 Gdi32.TextOut(Hdc, pt.x, pt.y, pText, text.Length);
@@ -620,13 +513,13 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             throw new ArgumentException("Font must be a GdiFont", nameof(font));
         }
 
-        if (_bitmapTarget?.PresentationMode == GdiPresentationMode.PerPixelAlpha)
+        if (text.IsEmpty || color.A == 0)
         {
-            if (text.IsEmpty || color.A == 0)
-            {
-                return;
-            }
+            return;
+        }
 
+        if (_bitmapTarget != null)
+        {
             var r = GetTextLayoutRect(bounds, wrapping);
             uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping);
             int yOffsetPx = 0;
@@ -643,7 +536,17 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
                     out textHeightPx);
             }
 
-            PerPixelAlphaTextRenderer.DrawText(Hdc, _bitmapTarget, _surfacePool, text, r, gdiFont, color, format, yOffsetPx, textHeightPx);
+            PerPixelAlphaTextRenderer.DrawText(
+                Hdc,
+                _bitmapTarget,
+                _surfacePool,
+                text,
+                r,
+                gdiFont,
+                color,
+                format,
+                yOffsetPx,
+                textHeightPx);
             return;
         }
 
@@ -713,16 +616,12 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     {
         if (wrapping == TextWrapping.NoWrap)
         {
-            return _stateManager.ToDeviceRect(bounds);
+        return ToDeviceRect(bounds);
         }
 
-        // Keep wrap width consistent with measurement.
-        // Measurement uses QuantizeLengthPx(maxWidth), while ToDeviceRect rounds left/right edges
-        // independently and can shrink/grow width by 1px depending on subpixel X.
-        // That can change word-wrapping and produce a render height larger than DesiredSize.
-        var tl = _stateManager.ToDevicePoint(bounds.TopLeft);
-        int w = _stateManager.QuantizeLengthPx(bounds.Width);
-        int h = _stateManager.QuantizeLengthPx(bounds.Height);
+        var tl = ToDevicePoint(bounds.TopLeft);
+        int w = QuantizeLengthPx(bounds.Width);
+        int h = QuantizeLengthPx(bounds.Height);
         if (w <= 0)
         {
             w = 1;
@@ -829,7 +728,6 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
         }
     }
 
-
     public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         if (font is not GdiFont gdiFont)
@@ -848,7 +746,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
             var hasLineBreaks = text.IndexOfAny('\r', '\n') >= 0;
             var rect = hasLineBreaks
-                ? new RECT(0, 0, _stateManager.QuantizeLengthPx(1_000_000), 0)
+                ? new RECT(0, 0, QuantizeLengthPx(1_000_000), 0)
                 : new RECT(0, 0, 0, 0);
 
             uint format = hasLineBreaks
@@ -884,7 +782,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
                 maxWidth = 1_000_000;
             }
 
-            var rect = new RECT(0, 0, _stateManager.QuantizeLengthPx(maxWidth), 0);
+            var rect = new RECT(0, 0, QuantizeLengthPx(maxWidth), 0);
 
             fixed (char* pText = text)
             {
@@ -902,7 +800,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     #endregion
 
-    #region Image Rendering
+    #region Image Rendering (GDI)
 
     public void DrawImage(IImage image, Point location)
     {
@@ -938,7 +836,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     {
         gdiImage.EnsureUpToDate();
 
-        var destPx = _stateManager.ToDeviceRect(destRect);
+        var destPx = ToDeviceRect(destRect);
         if (destPx.Width <= 0 || destPx.Height <= 0)
         {
             return;
@@ -1083,4 +981,91 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     private static bool IsNearInt(double value) => Math.Abs(value - Math.Round(value)) <= 0.0001;
 
     #endregion
+
+    private bool EnsureGraphics()
+    {
+        if (_graphics != 0)
+        {
+            return true;
+        }
+
+        if (GdiPlusInterop.GdipCreateFromHDC(Hdc, out _graphics) != 0 || _graphics == 0)
+        {
+            return false;
+        }
+
+        GdiPlusInterop.GdipSetSmoothingMode(_graphics, GdiPlusInterop.SmoothingMode.AntiAlias);
+        GdiPlusInterop.GdipSetPixelOffsetMode(_graphics, GdiPlusInterop.PixelOffsetMode.Half);
+        GdiPlusInterop.GdipSetCompositingMode(_graphics, GdiPlusInterop.CompositingMode.SourceOver);
+        GdiPlusInterop.GdipSetCompositingQuality(_graphics, GdiPlusInterop.CompositingQuality.HighQuality);
+
+        if (_translateX != 0 || _translateY != 0)
+        {
+            GdiPlusInterop.GdipTranslateWorldTransform(
+                _graphics,
+                (float)(_translateX * _dpiScale),
+                (float)(_translateY * _dpiScale),
+                GdiPlusInterop.MatrixOrder.Append);
+        }
+
+        return true;
+    }
+
+    private static uint ToArgb(Color color)
+        => (uint)(color.A << 24 | color.R << 16 | color.G << 8 | color.B);
+
+    private static void AddRoundedRectPathI(nint path, int x, int y, int width, int height, int ellipseW, int ellipseH)
+    {
+        int w = Math.Max(0, width);
+        int h = Math.Max(0, height);
+        if (w == 0 || h == 0)
+        {
+            return;
+        }
+
+        int ew = Math.Min(ellipseW, w);
+        int eh = Math.Min(ellipseH, h);
+
+        int right = x + w;
+        int bottom = y + h;
+
+        GdiPlusInterop.GdipAddPathArcI(path, x, y, ew, eh, 180, 90);
+        GdiPlusInterop.GdipAddPathArcI(path, right - ew, y, ew, eh, 270, 90);
+        GdiPlusInterop.GdipAddPathArcI(path, right - ew, bottom - eh, ew, eh, 0, 90);
+        GdiPlusInterop.GdipAddPathArcI(path, x, bottom - eh, ew, eh, 90, 90);
+    }
+
+    private POINT ToDevicePoint(Point pt)
+    {
+        var (x, y) = RenderingUtil.ToDevicePoint(pt, _translateX, _translateY, _dpiScale);
+        return new POINT(x, y);
+    }
+
+    private RECT ToDeviceRect(Rect rect)
+    {
+        var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, _translateX, _translateY, _dpiScale);
+        return new RECT(left, top, right, bottom);
+    }
+
+    private int QuantizeLengthPx(double lengthDip)
+    {
+        if (lengthDip <= 0 || double.IsNaN(lengthDip) || double.IsInfinity(lengthDip))
+        {
+            return 0;
+        }
+
+        return LayoutRounding.RoundToPixelInt(lengthDip, _dpiScale);
+    }
+
+    private (double x, double y) ToDeviceCoords(double x, double y)
+        => ((x + _translateX) * _dpiScale, (y + _translateY) * _dpiScale);
+
+    private double ToDevicePx(double logicalValue) => logicalValue * _dpiScale;
+
+    private readonly struct GraphicsStateSnapshot
+    {
+        public required uint GdiPlusState { get; init; }
+        public required double TranslateX { get; init; }
+        public required double TranslateY { get; init; }
+    }
 }

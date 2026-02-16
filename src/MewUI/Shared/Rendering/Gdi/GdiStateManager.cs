@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -64,6 +63,33 @@ internal sealed class GdiStateManager
     {
         var r = ToDeviceRect(rect);
         Gdi32.IntersectClipRect(_hdc, r.left, r.top, r.right, r.bottom);
+    }
+
+    /// <summary>
+    /// Sets a rounded-rectangle clipping region.
+    /// </summary>
+    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    {
+        if (radiusX <= 0 && radiusY <= 0)
+        {
+            SetClip(rect);
+            return;
+        }
+
+        // Avoid 1px shrink by snapping outward for clip regions.
+        var clip = LayoutRounding.MakeClipRect(rect, DpiScale, rightPx: 1, bottomPx: 1);
+        var r = ToDeviceRect(clip);
+        int ellipseW = Math.Max(1, QuantizeLengthPx(radiusX * 2));
+        int ellipseH = Math.Max(1, QuantizeLengthPx(radiusY * 2));
+
+        // GDI does not provide an easy "intersect with current clip region"
+        // without CombineRgn; SelectClipRgn replaces the current clip.
+        var hrgn = Gdi32.CreateRoundRectRgn(r.left, r.top, r.right, r.bottom, ellipseW, ellipseH);
+        if (hrgn != 0)
+        {
+            Gdi32.SelectClipRgn(_hdc, hrgn);
+            Gdi32.DeleteObject(hrgn);
+        }
     }
 
     /// <summary>

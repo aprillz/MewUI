@@ -100,13 +100,12 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         if (target is GdiBitmapRenderTarget bitmapTarget)
         {
             // Use target's Hdc directly - no wrapper needed
-            return new GdiGraphicsContext(
+            return new GdiPlusGraphicsContext(
                 hwnd: 0,
                 hdc: bitmapTarget.Hdc,
                 pixelWidth: bitmapTarget.PixelWidth,
                 pixelHeight: bitmapTarget.PixelHeight,
                 dpiScale: bitmapTarget.DpiScale,
-                curveQuality: CurveQuality,
                 imageScaleQuality: ImageScaleQuality,
                 ownsDc: false,
                 bitmapTarget: bitmapTarget);
@@ -126,7 +125,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
     private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale)
         => IsDoubleBuffered
         ? new GdiDoubleBufferedContext(hwnd, hdc, dpiScale, CurveQuality, ImageScaleQuality)
-        : new GdiGraphicsContext(hwnd, hdc, dpiScale, CurveQuality, ImageScaleQuality);
+        : new GdiPlusGraphicsContext(hwnd, hdc, dpiScale, ImageScaleQuality);
 
 
     public IGraphicsContext CreateMeasurementContext(uint dpi)
