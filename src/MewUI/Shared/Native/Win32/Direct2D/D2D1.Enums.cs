@@ -56,3 +56,9 @@ internal enum D2D1_BITMAP_INTERPOLATION_MODE : uint
     NEAREST_NEIGHBOR = 0,
     LINEAR = 1
 }
+
+internal enum D2D1_LAYER_OPTIONS : uint
+{
+    NONE = 0,
+    INITIALIZE_FOR_CLEARTYPE = 1
+}

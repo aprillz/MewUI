@@ -1,4 +1,6 @@
+using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 
 namespace Aprillz.MewUI.Native;
@@ -16,6 +18,7 @@ internal static class GL
 
     internal const uint GL_BLEND = 0x0BE2;
     internal const uint GL_SCISSOR_TEST = 0x0C11;
+    internal const uint GL_STENCIL_TEST = 0x0B90;
     internal const uint GL_TEXTURE_2D = 0x0DE1;
     internal const uint GL_LINE_SMOOTH = 0x0B20;
     internal const uint GL_MULTISAMPLE = 0x809D;
@@ -23,11 +26,13 @@ internal static class GL
     internal const uint GL_SRC_ALPHA = 0x0302;
     internal const uint GL_ONE_MINUS_SRC_ALPHA = 0x0303;
     internal const uint GL_ONE = 0x0001;
+    internal const uint GL_ZERO = 0x0000;
 
     internal const uint GL_QUADS = 0x0007;
     internal const uint GL_LINE_LOOP = 0x0002;
     internal const uint GL_LINE_STRIP = 0x0003;
     internal const uint GL_TRIANGLE_FAN = 0x0006;
+    internal const uint GL_TRIANGLES = 0x0004;
 
     internal const uint GL_RGBA = 0x1908;
     internal const uint GL_ALPHA = 0x1906;
@@ -41,6 +46,7 @@ internal static class GL
 
     internal const uint GL_SAMPLE_BUFFERS = 0x80A8;
     internal const uint GL_SAMPLES = 0x80A9;
+    internal const uint GL_STENCIL_BITS = 0x0D57;
 
     internal const uint GL_TEXTURE_MIN_FILTER = 0x2801;
     internal const uint GL_TEXTURE_MAG_FILTER = 0x2800;
@@ -53,6 +59,15 @@ internal static class GL
     internal const uint GL_CLAMP_TO_EDGE = 0x812F;
 
     internal const uint GL_UNPACK_ALIGNMENT = 0x0CF5;
+    internal const uint GL_STENCIL_BUFFER_BIT = 0x00000400;
+    internal const uint GL_KEEP = 0x1E00;
+    internal const uint GL_REPLACE = 0x1E01;
+    internal const uint GL_INCR = 0x1E02;
+    internal const uint GL_DECR = 0x1E03;
+    internal const uint GL_INVERT = 0x150A;
+    internal const uint GL_NOTEQUAL = 0x0205;
+    internal const uint GL_EQUAL = 0x0202;
+    internal const uint GL_ALWAYS = 0x0207;
 
     internal const uint GL_LINE_SMOOTH_HINT = 0x0C52;
     internal const uint GL_NICEST = 0x1102;
@@ -137,6 +152,51 @@ internal static class GL
             GLNativeWin32.BlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
         else if (OperatingSystem.IsLinux())
             GLNativeX11.BlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+        else throw new PlatformNotSupportedException();
+    }
+
+    public static void StencilFunc(uint func, int @ref, uint mask)
+    {
+        if (OperatingSystem.IsWindows())
+            GLNativeWin32.StencilFunc(func, @ref, mask);
+        else if (OperatingSystem.IsLinux())
+            GLNativeX11.StencilFunc(func, @ref, mask);
+        else throw new PlatformNotSupportedException();
+    }
+
+    public static void StencilOp(uint sfail, uint dpfail, uint dppass)
+    {
+        if (OperatingSystem.IsWindows())
+            GLNativeWin32.StencilOp(sfail, dpfail, dppass);
+        else if (OperatingSystem.IsLinux())
+            GLNativeX11.StencilOp(sfail, dpfail, dppass);
+        else throw new PlatformNotSupportedException();
+    }
+
+    public static void StencilMask(uint mask)
+    {
+        if (OperatingSystem.IsWindows())
+            GLNativeWin32.StencilMask(mask);
+        else if (OperatingSystem.IsLinux())
+            GLNativeX11.StencilMask(mask);
+        else throw new PlatformNotSupportedException();
+    }
+
+    public static void ColorMask(bool red, bool green, bool blue, bool alpha)
+    {
+        if (OperatingSystem.IsWindows())
+            GLNativeWin32.ColorMask(red, green, blue, alpha);
+        else if (OperatingSystem.IsLinux())
+            GLNativeX11.ColorMask(red, green, blue, alpha);
+        else throw new PlatformNotSupportedException();
+    }
+
+    public static void ClearStencil(int s)
+    {
+        if (OperatingSystem.IsWindows())
+            GLNativeWin32.ClearStencil(s);
+        else if (OperatingSystem.IsLinux())
+            GLNativeX11.ClearStencil(s);
         else throw new PlatformNotSupportedException();
     }
 

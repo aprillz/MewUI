@@ -16,6 +16,16 @@ internal unsafe struct ID2D1RenderTarget
     public void** lpVtbl;
 }
 
+internal unsafe struct ID2D1Layer
+{
+    public void** lpVtbl;
+}
+
+internal unsafe struct ID2D1Geometry
+{
+    public void** lpVtbl;
+}
+
 internal unsafe struct ID2D1Bitmap
 {
     public void** lpVtbl;
@@ -46,6 +56,22 @@ internal static unsafe class D2D1VTable
             var fn = (delegate* unmanaged[Stdcall]<ID2D1Factory*, D2D1_RENDER_TARGET_PROPERTIES*, D2D1_HWND_RENDER_TARGET_PROPERTIES*, nint*, int>)factory->lpVtbl[CreateHwndRenderTargetIndex];
             int hr = fn(factory, pRt, pHwnd, &rt);
             renderTarget = rt;
+            return hr;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateRoundedRectangleGeometry(
+        ID2D1Factory* factory,
+        in D2D1_ROUNDED_RECT rect,
+        out nint geometry)
+    {
+        nint g = 0;
+        fixed (D2D1_ROUNDED_RECT* pRect = &rect)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1Factory*, D2D1_ROUNDED_RECT*, nint*, int>)factory->lpVtbl[6];
+            int hr = fn(factory, pRect, &g);
+            geometry = g;
             return hr;
         }
     }
@@ -119,6 +145,33 @@ internal static unsafe class D2D1VTable
             brush = b;
             return hr;
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateLayer(ID2D1RenderTarget* rt, out nint layer)
+    {
+        nint l = 0;
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, D2D1_SIZE_F*, nint*, int>)rt->lpVtbl[13];
+        int hr = fn(rt, null, &l);
+        layer = l;
+        return hr;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void PushLayer(ID2D1RenderTarget* rt, in D2D1_LAYER_PARAMETERS parameters, nint layer)
+    {
+        fixed (D2D1_LAYER_PARAMETERS* pParams = &parameters)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, D2D1_LAYER_PARAMETERS*, nint, void>)rt->lpVtbl[40];
+            fn(rt, pParams, layer);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void PopLayer(ID2D1RenderTarget* rt)
+    {
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, void>)rt->lpVtbl[41];
+        fn(rt);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

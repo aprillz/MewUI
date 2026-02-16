@@ -31,8 +31,6 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     private readonly AaSurfacePool _surfacePool;
     private readonly AaSurface _alphaPixelSurface;
     private uint _alphaPixel;
-
-
     private bool _disposed;
 
     public double DpiScale => _stateManager.DpiScale;
@@ -279,7 +277,6 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     {
         if (!_disposed)
         {
-
             if (_ownsDc && Hdc != 0)
             {
                 User32.ReleaseDC(_hwnd, Hdc);
@@ -556,7 +553,6 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
 
     #endregion
 
-
     #region Text Rendering
 
     public unsafe void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
@@ -828,7 +824,6 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             rect.bottom = rect.top + textHeightPx;
         }
     }
-
 
     public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {

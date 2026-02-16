@@ -24,6 +24,16 @@ internal static class GLNativeX11
     public static void BlendFuncSeparate(uint srcRgb, uint dstRgb, uint srcAlpha, uint dstAlpha)
         => LibGL.glBlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
 
+    public static void StencilFunc(uint func, int @ref, uint mask) => LibGL.glStencilFunc(func, @ref, mask);
+
+    public static void StencilOp(uint sfail, uint dpfail, uint dppass) => LibGL.glStencilOp(sfail, dpfail, dppass);
+
+    public static void StencilMask(uint mask) => LibGL.glStencilMask(mask);
+
+    public static void ColorMask(bool red, bool green, bool blue, bool alpha) => LibGL.glColorMask(red, green, blue, alpha);
+
+    public static void ClearStencil(int s) => LibGL.glClearStencil(s);
+
     public static void Hint(uint target, uint mode) => LibGL.glHint(target, mode);
 
     public static void ClearColor(float red, float green, float blue, float alpha) => LibGL.glClearColor(red, green, blue, alpha);

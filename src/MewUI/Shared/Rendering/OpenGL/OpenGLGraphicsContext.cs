@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
@@ -15,6 +14,9 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
     private double _translateX;
     private double _translateY;
     private ClipRectPx? _clipPx;
+    private int _stencilDepth;
+    private bool _clipUsesStencil;
+    private readonly List<RoundedClip> _roundedClips = new();
     private int _viewportWidthPx;
     private int _viewportHeightPx;
     private bool _disposed;
@@ -28,6 +30,9 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         public required double TranslateXDip { get; init; }
         public required double TranslateYDip { get; init; }
         public required ClipRectPx? ClipPx { get; init; }
+        public required int StencilDepth { get; init; }
+        public required bool ClipUsesStencil { get; init; }
+        public required int RoundedClipCount { get; init; }
     }
 
     private readonly struct ClipRectPx
@@ -218,7 +223,10 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         {
             TranslateXDip = _translateX,
             TranslateYDip = _translateY,
-            ClipPx = _clipPx
+            ClipPx = _clipPx,
+            StencilDepth = _stencilDepth,
+            ClipUsesStencil = _clipUsesStencil,
+            RoundedClipCount = _roundedClips.Count
         });
     }
 
@@ -233,6 +241,21 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         _translateX = state.TranslateXDip;
         _translateY = state.TranslateYDip;
         _clipPx = state.ClipPx;
+        _clipUsesStencil = state.ClipUsesStencil;
+
+        if (_roundedClips.Count > state.RoundedClipCount)
+        {
+            _roundedClips.RemoveRange(state.RoundedClipCount, _roundedClips.Count - state.RoundedClipCount);
+            RebuildStencilFromRoundedClips();
+        }
+        else
+        {
+            _stencilDepth = Math.Max(0, state.StencilDepth);
+            if (_stencilDepth == 0 && !_clipUsesStencil)
+            {
+                GL.Disable(GL.GL_STENCIL_TEST);
+            }
+        }
         ApplyClip();
     }
 
@@ -249,6 +272,39 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
         _clipPx = _clipPx.HasValue ? Intersect(_clipPx.Value, next) : next;
         ApplyClip();
+    }
+
+    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    {
+        if (radiusX <= 0 && radiusY <= 0)
+        {
+            SetClip(rect);
+            return;
+        }
+
+        bool hasStencil = _bitmapTarget?.HasStencil ?? (GL.GetInteger(GL.GL_STENCIL_BITS) > 0);
+        if (!hasStencil)
+        {
+            // No stencil buffer available; fallback to axis-aligned clip.
+            SetClip(rect);
+            return;
+        }
+
+        // Keep a scissor clip for bounding box optimization/intersection.
+        var r = ToDeviceRect(rect);
+        var next = new ClipRectPx
+        {
+            X = r.left,
+            Y = r.top,
+            Width = Math.Max(0, r.Width),
+            Height = Math.Max(0, r.Height),
+        };
+        _clipPx = _clipPx.HasValue ? Intersect(_clipPx.Value, next) : next;
+        ApplyClip();
+
+        _clipUsesStencil = true;
+        _roundedClips.Add(new RoundedClip(rect, radiusX, radiusY));
+        ApplyRoundedClipToStencil(rect, radiusX, radiusY);
     }
 
     public void Translate(double dx, double dy)
@@ -274,6 +330,11 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         if (!_clipPx.HasValue)
         {
             GL.Disable(GL.GL_SCISSOR_TEST);
+            if (_clipUsesStencil)
+            {
+                GL.Disable(GL.GL_STENCIL_TEST);
+                _clipUsesStencil = false;
+            }
             return;
         }
 
@@ -287,6 +348,71 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
         GL.Enable(GL.GL_SCISSOR_TEST);
         GL.Scissor(x, y, w, h);
+    }
+
+    private void ApplyRoundedClipToStencil(Rect rect, double radiusX, double radiusY)
+    {
+        GL.Enable(GL.GL_STENCIL_TEST);
+
+        int nextDepth = _stencilDepth + 1;
+        if (_stencilDepth == 0)
+        {
+            GL.ClearStencil(0);
+            GL.Clear(GL.GL_STENCIL_BUFFER_BIT);
+            GL.StencilMask(0xFF);
+            GL.StencilFunc(GL.GL_ALWAYS, 1, 0xFF);
+            GL.StencilOp(GL.GL_KEEP, GL.GL_KEEP, GL.GL_REPLACE);
+        }
+        else
+        {
+            GL.StencilMask(0xFF);
+            GL.StencilFunc(GL.GL_EQUAL, _stencilDepth, 0xFF);
+            GL.StencilOp(GL.GL_KEEP, GL.GL_KEEP, GL.GL_INCR);
+        }
+
+        // Draw mask (color writes disabled).
+        GL.ColorMask(false, false, false, false);
+        FillRoundedRectangle(rect, radiusX, radiusY, new Color(255, 255, 255, 255));
+        GL.ColorMask(true, true, true, true);
+
+        // Now clip to stencil == nextDepth
+        GL.StencilFunc(GL.GL_EQUAL, nextDepth, 0xFF);
+        GL.StencilMask(0x00);
+        GL.StencilOp(GL.GL_KEEP, GL.GL_KEEP, GL.GL_KEEP);
+
+        _stencilDepth = nextDepth;
+    }
+
+    private void RebuildStencilFromRoundedClips()
+    {
+        if (_roundedClips.Count == 0)
+        {
+            _stencilDepth = 0;
+            _clipUsesStencil = false;
+            GL.Disable(GL.GL_STENCIL_TEST);
+            return;
+        }
+
+        _stencilDepth = 0;
+        _clipUsesStencil = true;
+        foreach (var clip in _roundedClips)
+        {
+            ApplyRoundedClipToStencil(clip.Rect, clip.RadiusX, clip.RadiusY);
+        }
+    }
+
+    private readonly struct RoundedClip
+    {
+        public RoundedClip(Rect rect, double radiusX, double radiusY)
+        {
+            Rect = rect;
+            RadiusX = radiusX;
+            RadiusY = radiusY;
+        }
+
+        public Rect Rect { get; }
+        public double RadiusX { get; }
+        public double RadiusY { get; }
     }
 
     #endregion

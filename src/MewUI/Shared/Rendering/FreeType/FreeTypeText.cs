@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Native.FreeType;
-using Aprillz.MewUI.Rendering;
 
 using FT = Aprillz.MewUI.Native.FreeType.FreeType;
 

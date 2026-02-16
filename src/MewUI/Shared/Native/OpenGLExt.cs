@@ -10,15 +10,24 @@ internal static unsafe partial class OpenGLExt
     public const uint GL_RENDERBUFFER = 0x8D41;
     public const uint GL_COLOR_ATTACHMENT0 = 0x8CE0;
     public const uint GL_DEPTH_ATTACHMENT = 0x8D00;
+    public const uint GL_STENCIL_ATTACHMENT = 0x8D20;
+    public const uint GL_DEPTH_STENCIL_ATTACHMENT = 0x821A;
     public const uint GL_FRAMEBUFFER_COMPLETE = 0x8CD5;
     public const uint GL_DRAW_FRAMEBUFFER = 0x8CA9;
     public const uint GL_READ_FRAMEBUFFER = 0x8CA8;
+    public const uint GL_DEPTH_STENCIL = 0x84F9;
+    public const uint GL_DEPTH24_STENCIL8 = 0x88F0;
 
     // Function pointers
     private static delegate* unmanaged<int, uint*, void> _glGenFramebuffers;
     private static delegate* unmanaged<int, uint*, void> _glDeleteFramebuffers;
     private static delegate* unmanaged<uint, uint, void> _glBindFramebuffer;
     private static delegate* unmanaged<uint, uint, uint, uint, int, void> _glFramebufferTexture2D;
+    private static delegate* unmanaged<int, uint*, void> _glGenRenderbuffers;
+    private static delegate* unmanaged<int, uint*, void> _glDeleteRenderbuffers;
+    private static delegate* unmanaged<uint, uint, void> _glBindRenderbuffer;
+    private static delegate* unmanaged<uint, uint, int, int, void> _glRenderbufferStorage;
+    private static delegate* unmanaged<uint, uint, uint, uint, void> _glFramebufferRenderbuffer;
     private static delegate* unmanaged<uint, uint> _glCheckFramebufferStatus;
 
     private static bool _initialized;
@@ -68,6 +77,11 @@ internal static unsafe partial class OpenGLExt
                          _glDeleteFramebuffers != null &&
                          _glBindFramebuffer != null &&
                          _glFramebufferTexture2D != null &&
+                         _glGenRenderbuffers != null &&
+                         _glDeleteRenderbuffers != null &&
+                         _glBindRenderbuffer != null &&
+                         _glRenderbufferStorage != null &&
+                         _glFramebufferRenderbuffer != null &&
                          _glCheckFramebufferStatus != null;
         }
     }
@@ -105,6 +119,51 @@ internal static unsafe partial class OpenGLExt
         if (_glFramebufferTexture2D != null)
         {
             _glFramebufferTexture2D(target, attachment, textarget, texture, level);
+        }
+    }
+
+    public static void GenRenderbuffers(int n, uint* renderbuffers)
+    {
+        EnsureInitialized();
+        if (_glGenRenderbuffers != null)
+        {
+            _glGenRenderbuffers(n, renderbuffers);
+        }
+    }
+
+    public static void DeleteRenderbuffers(int n, uint* renderbuffers)
+    {
+        EnsureInitialized();
+        if (_glDeleteRenderbuffers != null)
+        {
+            _glDeleteRenderbuffers(n, renderbuffers);
+        }
+    }
+
+    public static void BindRenderbuffer(uint target, uint renderbuffer)
+    {
+        EnsureInitialized();
+        if (_glBindRenderbuffer != null)
+        {
+            _glBindRenderbuffer(target, renderbuffer);
+        }
+    }
+
+    public static void RenderbufferStorage(uint target, uint internalformat, int width, int height)
+    {
+        EnsureInitialized();
+        if (_glRenderbufferStorage != null)
+        {
+            _glRenderbufferStorage(target, internalformat, width, height);
+        }
+    }
+
+    public static void FramebufferRenderbuffer(uint target, uint attachment, uint renderbuffertarget, uint renderbuffer)
+    {
+        EnsureInitialized();
+        if (_glFramebufferRenderbuffer != null)
+        {
+            _glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
         }
     }
 

@@ -55,6 +55,8 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
     public static WglOpenGLWindowResources Create(nint hwnd, nint hdc, WglPixelFormatOptions options)
     {
         var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGlDoubleBuffered();
+        pfd.cDepthBits = (byte)Math.Clamp(options.DepthBits, 0, 32);
+        pfd.cStencilBits = (byte)Math.Clamp(options.StencilBits, 0, 16);
 
         int preferredSamples = Math.Max(0, options.PreferredMsaaSamples);
         bool choseMultisample = false;

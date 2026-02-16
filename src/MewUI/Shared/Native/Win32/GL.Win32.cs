@@ -51,6 +51,16 @@ internal static class GLNativeWin32
         BlendFunc(srcRgb, dstRgb);
     }
 
+    public static void StencilFunc(uint func, int @ref, uint mask) => OpenGL32.glStencilFunc(func, @ref, mask);
+
+    public static void StencilOp(uint sfail, uint dpfail, uint dppass) => OpenGL32.glStencilOp(sfail, dpfail, dppass);
+
+    public static void StencilMask(uint mask) => OpenGL32.glStencilMask(mask);
+
+    public static void ColorMask(bool red, bool green, bool blue, bool alpha) => OpenGL32.glColorMask(red, green, blue, alpha);
+
+    public static void ClearStencil(int s) => OpenGL32.glClearStencil(s);
+
     public static void Hint(uint target, uint mode) => OpenGL32.glHint(target, mode);
 
     public static void ClearColor(float red, float green, float blue, float alpha) => OpenGL32.glClearColor(red, green, blue, alpha);

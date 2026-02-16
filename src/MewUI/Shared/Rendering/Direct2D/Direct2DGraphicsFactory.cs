@@ -162,6 +162,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             dpiScale,
             rt,
             generation,
+            _d2dFactory,
             _dwriteFactory,
             onRecreateTarget: () => InvalidateCachedWindowTarget(hwnd),
             ownsRenderTarget: false);
@@ -178,6 +179,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             dpiScale: target.DpiScale,
             renderTarget: rt,
             renderTargetGeneration: generation,
+            d2dFactory: _d2dFactory,
             dwriteFactory: _dwriteFactory,
             onRecreateTarget: null,
             ownsRenderTarget: true);

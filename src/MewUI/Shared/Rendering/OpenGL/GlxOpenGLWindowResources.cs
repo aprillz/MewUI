@@ -51,6 +51,8 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
         // GLX_SAMPLE_BUFFERS / GLX_SAMPLES are from GLX_ARB_multisample.
         const int GLX_SAMPLE_BUFFERS = 100000;
         const int GLX_SAMPLES = 100001;
+        const int GLX_STENCIL_SIZE = 13;
+        int stencilBits = Math.Max(0, 4);
 
         int[] attribsMsaa =
         {
@@ -64,6 +66,7 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
             8,
             11, // GLX_ALPHA_SIZE
             8,
+            GLX_STENCIL_SIZE, stencilBits,
             GLX_SAMPLE_BUFFERS, 1,
             GLX_SAMPLES, 4,
             0   // None
@@ -92,6 +95,7 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
                 8,
                 11, // GLX_ALPHA_SIZE
                 8,
+                GLX_STENCIL_SIZE, stencilBits,
                 0   // None
             };
 

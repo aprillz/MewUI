@@ -35,6 +35,13 @@ internal readonly struct D2D1_SIZE_U(uint width, uint height)
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_SIZE_F(float width, float height)
+{
+    public readonly float width = width;
+    public readonly float height = height;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct D2D1_PIXEL_FORMAT(uint format, D2D1_ALPHA_MODE alphaMode)
 {
     public readonly uint format = format;
@@ -80,6 +87,38 @@ internal readonly struct D2D1_ROUNDED_RECT(D2D1_RECT_F rect, float radiusX, floa
     public readonly D2D1_RECT_F rect = rect;
     public readonly float radiusX = radiusX;
     public readonly float radiusY = radiusY;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_MATRIX_3X2_F(float m11, float m12, float m21, float m22, float dx, float dy)
+{
+    public readonly float m11 = m11;
+    public readonly float m12 = m12;
+    public readonly float m21 = m21;
+    public readonly float m22 = m22;
+    public readonly float dx = dx;
+    public readonly float dy = dy;
+
+    public static D2D1_MATRIX_3X2_F Identity => new(1, 0, 0, 1, 0, 0);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_LAYER_PARAMETERS(
+    D2D1_RECT_F contentBounds,
+    nint geometricMask,
+    D2D1_ANTIALIAS_MODE maskAntialiasMode,
+    D2D1_MATRIX_3X2_F maskTransform,
+    float opacity,
+    nint opacityBrush,
+    D2D1_LAYER_OPTIONS layerOptions)
+{
+    public readonly D2D1_RECT_F contentBounds = contentBounds;
+    public readonly nint geometricMask = geometricMask;
+    public readonly D2D1_ANTIALIAS_MODE maskAntialiasMode = maskAntialiasMode;
+    public readonly D2D1_MATRIX_3X2_F maskTransform = maskTransform;
+    public readonly float opacity = opacity;
+    public readonly nint opacityBrush = opacityBrush;
+    public readonly D2D1_LAYER_OPTIONS layerOptions = layerOptions;
 }
 
 [StructLayout(LayoutKind.Sequential)]

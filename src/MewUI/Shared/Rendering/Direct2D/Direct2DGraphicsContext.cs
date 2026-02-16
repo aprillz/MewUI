@@ -1,6 +1,5 @@
 using System.Diagnostics;
 
-using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.DirectWrite;
@@ -13,6 +12,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
 
     private readonly nint _hwnd;
+    private readonly nint _d2dFactory;
     private readonly nint _dwriteFactory;
     private readonly Action? _onRecreateTarget;
     private readonly bool _ownsRenderTarget;
@@ -20,10 +20,10 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
     private nint _renderTarget; // ID2D1RenderTarget* 
     private readonly int _renderTargetGeneration;
     private readonly Dictionary<uint, nint> _solidBrushes = new();
-    private readonly Stack<(double tx, double ty, int clipDepth)> _states = new();
+    private readonly Stack<(double tx, double ty, int clipCount)> _states = new();
+    private readonly Stack<ClipEntry> _clipStack = new();
     private double _translateX;
     private double _translateY;
-    private int _clipDepth;
     private bool _disposed;
 
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
@@ -35,11 +35,13 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         double dpiScale,
         nint renderTarget,
         int renderTargetGeneration,
+        nint d2dFactory,
         nint dwriteFactory,
         Action? onRecreateTarget,
         bool ownsRenderTarget)
     {
         _hwnd = hwnd;
+        _d2dFactory = d2dFactory;
         _dwriteFactory = dwriteFactory;
         _onRecreateTarget = onRecreateTarget;
         _ownsRenderTarget = ownsRenderTarget;
@@ -81,10 +83,9 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         {
             if (_renderTarget != 0)
             {
-                while (_clipDepth > 0)
+                while (_clipStack.Count > 0)
                 {
-                    D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)_renderTarget);
-                    _clipDepth--;
+                    PopClip();
                 }
 
                 int hr = D2D1VTable.EndDraw((ID2D1RenderTarget*)_renderTarget);
@@ -114,7 +115,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void Save() => _states.Push((_translateX, _translateY, _clipDepth));
+    public void Save() => _states.Push((_translateX, _translateY, _clipStack.Count));
 
     public void Restore()
     {
@@ -124,10 +125,9 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
 
         var state = _states.Pop();
-        while (_clipDepth > state.clipDepth)
+        while (_clipStack.Count > state.clipCount)
         {
-            D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)_renderTarget);
-            _clipDepth--;
+            PopClip();
         }
 
         _translateX = state.tx;
@@ -142,7 +142,55 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
 
         D2D1VTable.PushAxisAlignedClip((ID2D1RenderTarget*)_renderTarget, ToRectF(rect));
-        _clipDepth++;
+        _clipStack.Push(new ClipEntry(ClipKind.AxisAligned, 0, 0));
+    }
+
+    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    {
+        if (_renderTarget == 0)
+        {
+            return;
+        }
+
+        if (radiusX <= 0 && radiusY <= 0)
+        {
+            SetClip(rect);
+            return;
+        }
+
+        if (_d2dFactory == 0)
+        {
+            SetClip(rect);
+            return;
+        }
+
+        var rr = new D2D1_ROUNDED_RECT(ToRectF(rect), (float)radiusX, (float)radiusY);
+        int hr = D2D1VTable.CreateRoundedRectangleGeometry((ID2D1Factory*)_d2dFactory, rr, out var geometry);
+        if (hr < 0 || geometry == 0)
+        {
+            SetClip(rect);
+            return;
+        }
+
+        hr = D2D1VTable.CreateLayer((ID2D1RenderTarget*)_renderTarget, out var layer);
+        if (hr < 0 || layer == 0)
+        {
+            ComHelpers.Release(geometry);
+            SetClip(rect);
+            return;
+        }
+
+        var parameters = new D2D1_LAYER_PARAMETERS(
+            contentBounds: ToRectF(rect),
+            geometricMask: geometry,
+            maskAntialiasMode: D2D1_ANTIALIAS_MODE.PER_PRIMITIVE,
+            maskTransform: D2D1_MATRIX_3X2_F.Identity,
+            opacity: 1.0f,
+            opacityBrush: 0,
+            layerOptions: D2D1_LAYER_OPTIONS.NONE);
+
+        D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
+        _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry));
     }
 
     public void Translate(double dx, double dy)
@@ -584,5 +632,46 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
 
         return 0.5f / (float)DpiScale;
+    }
+
+    private void PopClip()
+    {
+        if (_clipStack.Count == 0 || _renderTarget == 0)
+        {
+            return;
+        }
+
+        var entry = _clipStack.Pop();
+        if (entry.Kind == ClipKind.AxisAligned)
+        {
+            D2D1VTable.PopAxisAlignedClip((ID2D1RenderTarget*)_renderTarget);
+            return;
+        }
+
+        D2D1VTable.PopLayer((ID2D1RenderTarget*)_renderTarget);
+        ComHelpers.Release(entry.Geometry);
+        ComHelpers.Release(entry.Layer);
+    }
+
+    private enum ClipKind
+    {
+        AxisAligned,
+        Layer
+    }
+
+    private readonly struct ClipEntry
+    {
+        public ClipEntry(ClipKind kind, nint layer, nint geometry)
+        {
+            Kind = kind;
+            Layer = layer;
+            Geometry = geometry;
+        }
+
+        public ClipKind Kind { get; }
+
+        public nint Layer { get; }
+
+        public nint Geometry { get; }
     }
 }

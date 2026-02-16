@@ -59,6 +59,21 @@ internal static partial class OpenGL32
     public static partial void glBlendFuncSeparate(uint srcRgb, uint dstRgb, uint srcAlpha, uint dstAlpha);
 
     [LibraryImport(LibraryName)]
+    public static partial void glStencilFunc(uint func, int @ref, uint mask);
+
+    [LibraryImport(LibraryName)]
+    public static partial void glStencilOp(uint sfail, uint dpfail, uint dppass);
+
+    [LibraryImport(LibraryName)]
+    public static partial void glStencilMask(uint mask);
+
+    [LibraryImport(LibraryName)]
+    public static partial void glColorMask([MarshalAs(UnmanagedType.Bool)] bool red, [MarshalAs(UnmanagedType.Bool)] bool green, [MarshalAs(UnmanagedType.Bool)] bool blue, [MarshalAs(UnmanagedType.Bool)] bool alpha);
+
+    [LibraryImport(LibraryName)]
+    public static partial void glClearStencil(int s);
+
+    [LibraryImport(LibraryName)]
     public static partial void glHint(uint target, uint mode);
 
     [LibraryImport(LibraryName)]

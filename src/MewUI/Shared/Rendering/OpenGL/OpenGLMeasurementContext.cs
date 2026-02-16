@@ -126,6 +126,8 @@ internal sealed partial class OpenGLMeasurementContext : IGraphicsContext
     public void Save() { }
     public void Restore() { }
     public void SetClip(Rect rect) { }
+
+    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY) { }
     public void Translate(double dx, double dy) { }
     public void Clear(Color color) { }
     public void DrawLine(Point start, Point end, Color color, double thickness = 1) { }

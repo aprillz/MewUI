@@ -29,6 +29,12 @@ namespace Aprillz.MewUI.Rendering
         void SetClip(Rect rect);
 
         /// <summary>
+        /// Sets a rounded-rectangle clipping region.
+        /// Backends may fall back to a rectangular clip if rounded clips are not supported.
+        /// </summary>
+        void SetClipRoundedRect(Rect rect, double radiusX, double radiusY);
+
+        /// <summary>
         /// Translates the origin of the coordinate system.
         /// </summary>
         void Translate(double dx, double dy);
