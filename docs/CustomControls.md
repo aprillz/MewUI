@@ -66,6 +66,8 @@
 
 ## Full Sample Code
 
+https://github.com/user-attachments/assets/340e24a6-5b39-4d77-a857-69811e857133
+
 ```csharp
 public sealed class NumericUpDown : RangeBase
 {
