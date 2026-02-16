@@ -73,6 +73,11 @@ public class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
+    public void ClearMouseOver()
+    {
+        ClearMouseOverState();
+    }
+
     internal void SetMouseOverElement(UIElement? element) => _mouseOverElement = element;
 
     internal void UpdateLastMousePosition(Point positionDip, Point screenPositionPx)
