@@ -206,7 +206,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
             context.DrawLine(new Point(x, decRect.Y + 4), new Point(x, decRect.Bottom - 4), Theme.Palette.ControlBorder, 1);
 
             x = decRect.Left;
-            context.DrawLine(new Point(x, decRect.Y), new Point(x, decRect.Bottom), border, 1);
+            context.DrawLine(new Point(x, decRect.Y), new Point(x, decRect.Bottom), Theme.Palette.ControlBorder, 1);
 
             context.Restore();
         }
