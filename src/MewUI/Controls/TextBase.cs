@@ -91,6 +91,44 @@ public abstract partial class TextBase : Control
     }
 
     /// <summary>
+    /// Scrolls the view so the caret is visible.
+    /// </summary>
+    public void ScrollToCaret()
+    {
+        EnsureCaretVisibleCore(GetInteractionContentBounds());
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Appends text to the end of the document without allocating a full new <see cref="Text"/> string.
+    /// This is the preferred way to build large logs in a MultiLineTextBox.
+    /// </summary>
+    public void AppendText(string? text, bool scrollToCaret = false)
+    {
+        if (IsReadOnly)
+        {
+            return;
+        }
+
+        var normalized = NormalizeText(text ?? string.Empty);
+        if (normalized.Length == 0)
+        {
+            return;
+        }
+
+        // Append at end (WPF-style). We intentionally move the caret to the end so ScrollToCaret works.
+        _editor.SetCaretAndSelection(GetTextLengthCore(), extendSelection: false);
+        _editor.InsertTextAtCaretForEdit(normalized);
+
+        if (scrollToCaret)
+        {
+            EnsureCaretVisibleCore(GetInteractionContentBounds());
+        }
+
+        InvalidateVisual();
+    }
+
+    /// <summary>
     /// Gets or sets the text content.
     /// </summary>
     public string Text

@@ -3,6 +3,10 @@ using System.Diagnostics;
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
+#if DEBUG
+[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
+#endif
+
 var stopwatch = Stopwatch.StartNew();
 
 Startup(Environment.GetCommandLineArgs(), out var isBench, out var isSmoke);
@@ -20,92 +24,96 @@ var fpsFrames = 0;
 Window window;
 var accentSwatches = new List<(Accent accent, Button button)>();
 var currentAccent = ThemeManager.DefaultAccent;
+
 Label title = null!;
 var vm = new DemoViewModel();
 
-var logo = ImageSource.FromFile("logo-256.png");
+var logo = ImageSource.FromFile("logo_c-256.png");
 var april = ImageSource.FromFile("april.jpg");
 
 var root = new Window()
-    .Ref(out window)
-    .Padding(0)
-    .Title("Aprillz.MewUI Demo")
     .Resizable(744, 700)
-    .OnLoaded(() =>
-    {
-        loadedMs = stopwatch.Elapsed.TotalMilliseconds;
-        UpdateAccentSwatches();
-    })
-    .OnClosed(() =>
-    {
-        maxFpsEnabled.Value = false;
-        metricsTimer?.Dispose();
-    })
-    .Content(
-        new DockPanel()
-            .LastChildFill()
-            .Children(
-                MenuDemo()
-                .DockTop(),
-
-                new DockPanel()
-                    .Padding(16)
-                    .Spacing(16)
-                    .Children(
-                        TopSection()
-                            .DockTop(),
-
-                        Buttons()
-                            .DockBottom(),
-
-                        new TabControl()
-                            .VerticalScroll(ScrollMode.Auto)
-                            .TabItems(
-                                new TabItem()
-                                    .Header("Controls")
-                                    .Content(
-                                        NormalControls()
-                                    ),
-
-                                new TabItem()
-                                    .Header("Binding")
-                                    .Content(
-                                        BindSamples()
-                                    ),
-
-                                new TabItem()
-                                    .Header("Commanding")
-                                    .Content(
-                                        CommandingSamples()
-                                    )
-                            )
-                    )
-            )
-    )
-    .OnThemeChanged((_, _) => UpdateAccentSwatches())
-    .OnFirstFrameRendered(() =>
-    {
-        ProcessMetric();
-        metricsTimer.Start();
-    })
-    .OnFrameRendered(() =>
-    {
-        if (!fpsStopwatch.IsRunning)
+    .OnBuild(x => x
+        .WithTheme((_, _) => x.Background(new Color()))
+        .Ref(out window)
+        .Title("Aprillz.MewUI Demo")
+        .Padding(0)
+        .OnLoaded(() =>
         {
-            fpsStopwatch.Restart();
-            fpsFrames = 0;
-            return;
-        }
-
-        fpsFrames++;
-        double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
-        if (elapsed >= 1.0)
+            loadedMs = stopwatch.Elapsed.TotalMilliseconds;
+            UpdateAccentSwatches();
+        })
+        .OnClosed(() =>
         {
-            fpsText.Value = $"FPS: {fpsFrames / elapsed:0.0}";
-            fpsFrames = 0;
-            fpsStopwatch.Restart();
-        }
-    });
+            maxFpsEnabled.Value = false;
+            metricsTimer?.Dispose();
+        })
+        .Content(
+            new DockPanel()
+                .LastChildFill()
+                .Children(
+                    MenuDemo()
+                    .DockTop(),
+
+                    new DockPanel()
+                        .Padding(16)
+                        .Spacing(16)
+                        .Children(
+                            TopSection()
+                                .DockTop(),
+
+                            Buttons()
+                                .DockBottom(),
+
+                            new TabControl()
+                                .VerticalScroll(ScrollMode.Auto)
+                                .TabItems(
+                                    new TabItem()
+                                        .Header("Controls")
+                                        .Content(
+                                            NormalControls()
+                                        ),
+
+                                    new TabItem()
+                                        .Header("Commanding")
+                                        .Content(
+                                            CommandingSamples()
+                                        ),
+
+                                    new TabItem()
+                                        .Header("Binding")
+                                        .Content(
+                                            BindSamples()
+                                        )
+                                )
+                        )
+                )
+        )
+        .OnThemeChanged((_, _) => UpdateAccentSwatches())
+        .OnFirstFrameRendered(() =>
+        {
+            ProcessMetric();
+            metricsTimer.Start();
+        })
+        .OnFrameRendered(() =>
+        {
+            if (!fpsStopwatch.IsRunning)
+            {
+                fpsStopwatch.Restart();
+                fpsFrames = 0;
+                return;
+            }
+
+            fpsFrames++;
+            double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
+            if (elapsed >= 1.0)
+            {
+                fpsText.Value = $"FPS: {fpsFrames / elapsed:0.0}";
+                fpsFrames = 0;
+                fpsStopwatch.Restart();
+            }
+        })
+    );
 
 using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewUI.Sample.appicon.ico")!)
 {
@@ -238,6 +246,7 @@ Element ThemeControls()
                 .BindIsChecked(maxFpsEnabled)
                 .OnCheckedChanged(_ => EnsureMaxFpsLoop())
                 .CenterVertical(),
+
             new Label()
                 .Text("Theme: Light")
                 .WithTheme((t, c) =>
@@ -246,7 +255,7 @@ Element ThemeControls()
                     UpdateAccentSwatches();
                 }, false)
                 .CenterVertical()
-    );
+        );
 }
 
 FrameworkElement AccentPicker() => new StackPanel()
@@ -293,6 +302,7 @@ Element NormalControls()
 {
     MultiLineTextBox notesTextBox = null!;
     CheckBox wrapCheck = null!;
+    int appendCount = 0;
     var demoMenu = new ContextMenu();
     var nestedMenu = new ContextMenu()
         .Item("Option 1", () => MessageBox.Show(window.Handle, "Option 1", "Nested ContextMenu"))
@@ -517,57 +527,58 @@ Element NormalControls()
                                         .Text("Three-state (Indeterminate)")
                                         .IsThreeState(true)
                                         .IsChecked(null),
-                                            new StackPanel()
-                                                .Horizontal()
-                                                .Spacing(8)
-                                                .Children(
-                                                    new Label()
-                                                        .Text("GroupName: group1")
-                                                        .CenterVertical(),
 
-                                                    new RadioButton()
-                                                        .Text("A")
-                                                        .GroupName("group1")
-                                                        .IsChecked(true),
+                                    new StackPanel()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Label()
+                                                .Text("GroupName: group1")
+                                                .CenterVertical(),
 
-                                                    new RadioButton()
-                                                        .Text("B")
-                                                        .GroupName("group1")
-                                                ),
+                                            new RadioButton()
+                                                .Text("A")
+                                                .GroupName("group1")
+                                                .IsChecked(true),
 
-                                            new StackPanel()
-                                                .Horizontal()
-                                                .Spacing(8)
-                                                .Children(
-                                                    new Label().Text("GroupName: group2")
-                                                        .CenterVertical(),
+                                            new RadioButton()
+                                                .Text("B")
+                                                .GroupName("group1")
+                                        ),
 
-                                                    new RadioButton()
-                                                        .Text("C")
-                                                        .GroupName("group2")
-                                                        .IsChecked(true),
+                                    new StackPanel()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Label().Text("GroupName: group2")
+                                                .CenterVertical(),
 
-                                                    new RadioButton()
-                                                        .Text("D")
-                                                        .GroupName("group2")
-                                                ),
+                                            new RadioButton()
+                                                .Text("C")
+                                                .GroupName("group2")
+                                                .IsChecked(true),
 
-                                            new StackPanel()
-                                                .Horizontal()
-                                                .Spacing(8)
-                                                .Children(
-                                                    new Label().Text("GroupName: (parent-scope)")
-                                                        .CenterVertical(),
+                                            new RadioButton()
+                                                .Text("D")
+                                                .GroupName("group2")
+                                        ),
 
-                                                    new RadioButton()
-                                                        .Text("X")
-                                                        .IsChecked(true),
+                                    new StackPanel()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Label().Text("GroupName: (parent-scope)")
+                                                .CenterVertical(),
 
-                                                    new RadioButton()
-                                                        .Text("Y")
-                                                )
+                                            new RadioButton()
+                                                .Text("X")
+                                                .IsChecked(true),
+
+                                            new RadioButton()
+                                                .Text("Y")
                                         )
-                                ),
+                                )
+                        ),
 
                     new GroupBox()
                         .Header("MultiLineTextBox")
@@ -576,6 +587,22 @@ Element NormalControls()
                             new DockPanel()
                                 .Spacing(8)
                                 .Children(
+                                    new StackPanel()
+                                        .DockBottom()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Button()
+                                                .Content("Append + ScrollToCaret")
+                                                .OnClick(() =>
+                                                {
+                                                    // Demo: append text then scroll so the caret becomes visible.
+                                                    appendCount++;
+                                                    var line = $"Appended {appendCount} at {DateTime.Now:HH:mm:ss.fff}";
+                                                    notesTextBox.AppendText(line + "\n", scrollToCaret: true);
+                                                })
+                                        ),
+
                                     new CheckBox()
                                         .DockBottom()
                                         .Ref(out wrapCheck)
@@ -622,147 +649,147 @@ FrameworkElement ImageDemo() => new UniformGrid()
 
         new Image()
             .ImageScaleQuality(ImageScaleQuality.HighQuality)
-            .SourceFile("logo-256.png")
+            .SourceFile("logo_c-256.png")
             .Size(96, 96)
             .StretchMode(ImageStretch.Uniform)
     );
 
 FrameworkElement CommandingSamples() => new StackPanel()
-    .Vertical()
-    .Spacing(16)
-    .Children(
-        new Label()
-            .Text("Commanding Demo")
-            .Bold()
-            .FontSize(14),
+        .Vertical()
+        .Spacing(16)
+        .Children(
+            new Label()
+                .Text("Commanding Demo")
+                .Bold()
+                .FontSize(14),
 
-        new Label()
-            .Text("Delegate-based commanding (Action + Func<bool>) for Native AOT compatibility."),
+            new Label()
+                .Text("Delegate-based commanding (Action + Func<bool>) for Native AOT compatibility."),
 
-        // Example 1: Basic CanExecute based on text input
-        new GroupBox()
-            .Header("CanExecute with Input Validation")
-            .Content(
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Label()
-                            .Text("Enter text to enable the Submit button:"),
+            // Example 1: Basic CanExecute based on text input
+            new GroupBox()
+                .Header("CanExecute with Input Validation")
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Children(
+                            new Label()
+                                .Text("Enter text to enable the Submit button:"),
 
-                        new TextBox()
-                            .Placeholder("Type something...")
-                            .BindText(vm.InputText),
+                            new TextBox()
+                                .Placeholder("Type something...")
+                                .BindText(vm.InputText),
 
-                        new Button()
-                            .Content("Submit")
-                            .OnCanClick(() => !string.IsNullOrWhiteSpace(vm.InputText.Value))
-                            .OnClick(() => { vm.CommandLog.Value = $"Submitted: \"{vm.InputText.Value}\" at {DateTime.Now:HH:mm:ss}"; })
-                    )
-            ),
+                            new Button()
+                                .Content("Submit")
+                                .OnCanClick(() => !string.IsNullOrWhiteSpace(vm.InputText.Value))
+                                .OnClick(() => { vm.CommandLog.Value = $"Submitted: \"{vm.InputText.Value}\" at {DateTime.Now:HH:mm:ss}"; })
+                        )
+                ),
 
-        // Example 2: Counter with bounds
-        new GroupBox()
-            .Header("Counter with Min/Max Bounds")
-            .Content(
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Label()
-                            .BindText(vm.Counter, c => $"Count: {c} (range: 0-10)"),
+            // Example 2: Counter with bounds
+            new GroupBox()
+                .Header("Counter with Min/Max Bounds")
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Children(
+                            new Label()
+                                .BindText(vm.Counter, c => $"Count: {c} (range: 0-10)"),
 
-                        new StackPanel()
-                            .Horizontal()
-                            .Spacing(8)
-                            .Children(
-                                new Button()
-                                    .Content("- Decrement")
-                                    .Width(100)
-                                    .OnCanClick(() => vm.Counter.Value > 0)
-                                    .OnClick(() => { vm.Counter.Value--; vm.CommandLog.Value = $"Decremented to {vm.Counter.Value}"; }),
+                            new StackPanel()
+                                .Horizontal()
+                                .Spacing(8)
+                                .Children(
+                                    new Button()
+                                        .Content("- Decrement")
+                                        .Width(100)
+                                        .OnCanClick(() => vm.Counter.Value > 0)
+                                        .OnClick(() => { vm.Counter.Value--; vm.CommandLog.Value = $"Decremented to {vm.Counter.Value}"; }),
 
-                                new Button()
-                                    .Content("+ Increment")
-                                    .Width(100)
-                                    .OnCanClick(() => vm.Counter.Value < 10)
-                                    .OnClick(() => { vm.Counter.Value++; vm.CommandLog.Value = $"Incremented to {vm.Counter.Value}"; }),
+                                    new Button()
+                                        .Content("+ Increment")
+                                        .Width(100)
+                                        .OnCanClick(() => vm.Counter.Value < 10)
+                                        .OnClick(() => { vm.Counter.Value++; vm.CommandLog.Value = $"Incremented to {vm.Counter.Value}"; }),
 
-                                new Button()
-                                    .Content("Reset")
-                                    .Width(80)
-                                    .OnCanClick(() => vm.Counter.Value != 5)
-                                    .OnClick(() => { vm.Counter.Value = 5; vm.CommandLog.Value = "Reset to 5"; })
-                            )
-                    )
-            ),
+                                    new Button()
+                                        .Content("Reset")
+                                        .Width(80)
+                                        .OnCanClick(() => vm.Counter.Value != 5)
+                                        .OnClick(() => { vm.Counter.Value = 5; vm.CommandLog.Value = "Reset to 5"; })
+                                )
+                        )
+                ),
 
-        // Example 3: Feature toggle affecting multiple commands
-        new GroupBox()
-            .Header("Feature Toggle (Multiple Commands)")
-            .Content(
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new CheckBox()
-                            .Text("Enable Premium Features")
-                            .BindIsChecked(vm.IsFeatureEnabled),
+            // Example 3: Feature toggle affecting multiple commands
+            new GroupBox()
+                .Header("Feature Toggle (Multiple Commands)")
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Children(
+                            new CheckBox()
+                                .Text("Enable Premium Features")
+                                .BindIsChecked(vm.IsFeatureEnabled),
 
-                        new StackPanel()
-                            .Horizontal()
-                            .Spacing(8)
-                            .Children(
-                                new Button()
-                                    .Content("Export PDF")
-                                    .OnCanClick(() => vm.IsFeatureEnabled.Value)
-                                    .OnClick(() => { vm.CommandLog.Value = "Exporting PDF..."; }),
+                            new StackPanel()
+                                .Horizontal()
+                                .Spacing(8)
+                                .Children(
+                                    new Button()
+                                        .Content("Export PDF")
+                                        .OnCanClick(() => vm.IsFeatureEnabled.Value)
+                                        .OnClick(() => { vm.CommandLog.Value = "Exporting PDF..."; }),
 
-                                new Button()
-                                    .Content("Cloud Sync")
-                                    .OnCanClick(() => vm.IsFeatureEnabled.Value)
-                                    .OnClick(() => { vm.CommandLog.Value = "Syncing to cloud..."; }),
+                                    new Button()
+                                        .Content("Cloud Sync")
+                                        .OnCanClick(() => vm.IsFeatureEnabled.Value)
+                                        .OnClick(() => { vm.CommandLog.Value = "Syncing to cloud..."; }),
 
-                                new Button()
-                                    .Content("Analytics")
-                                    .OnCanClick(() => vm.IsFeatureEnabled.Value)
-                                    .OnClick(() => { vm.CommandLog.Value = "Opening analytics..."; })
-                            ),
+                                    new Button()
+                                        .Content("Analytics")
+                                        .OnCanClick(() => vm.IsFeatureEnabled.Value)
+                                        .OnClick(() => { vm.CommandLog.Value = "Opening analytics..."; })
+                                ),
 
-                        new Label()
-                            .Text("(Enable the checkbox above to unlock these features)")
-                            .FontSize(11)
-                    )
-            ),
+                            new Label()
+                                .Text("(Enable the checkbox above to unlock these features)")
+                                .FontSize(11)
+                        )
+                ),
 
-        // Example 4: Combined conditions
-        new GroupBox()
-            .Header("Combined Conditions")
-            .Content(
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
-                        new Label()
-                            .Text("Button enabled when: text is entered AND feature is enabled AND counter > 0"),
+            // Example 4: Combined conditions
+            new GroupBox()
+                .Header("Combined Conditions")
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Children(
+                            new Label()
+                                .Text("Button enabled when: text is entered AND feature is enabled AND counter > 0"),
 
-                        new Button()
-                            .Content("Execute Complex Action")
-                            .OnCanClick(() =>
-                                !string.IsNullOrWhiteSpace(vm.InputText.Value) &&
-                                vm.IsFeatureEnabled.Value &&
-                                vm.Counter.Value > 0)
-                            .OnClick(() => { vm.CommandLog.Value = $"Complex action: text=\"{vm.InputText.Value}\", count={vm.Counter.Value}"; })
-                    )
-            ),
+                            new Button()
+                                .Content("Execute Complex Action")
+                                .OnCanClick(() =>
+                                    !string.IsNullOrWhiteSpace(vm.InputText.Value) &&
+                                    vm.IsFeatureEnabled.Value &&
+                                    vm.Counter.Value > 0)
+                                .OnClick(() => { vm.CommandLog.Value = $"Complex action: text=\"{vm.InputText.Value}\", count={vm.Counter.Value}"; })
+                        )
+                ),
 
-        // Command log output
-        new GroupBox()
-            .Header("Command Log")
-            .Content(
-                new Label()
-                    .BindText(vm.CommandLog)
-                    .FontFamily("Consolas")
+            // Command log output
+            new GroupBox()
+                .Header("Command Log")
+                .Content(
+                    new Label()
+                        .BindText(vm.CommandLog)
+                        .FontFamily("Consolas")
             )
     );
 
@@ -852,7 +879,7 @@ FrameworkElement BindSamples()
                             .Spacing(8)
                             .Children(
                                 new Label()
-                                    .BindText(vm.SelectedIndex, i => $@"SelectedIndex = {i}{Environment.NewLine}Item = {selectionListBox.SelectedItem ?? string.Empty}"),
+                                    .BindText(vm.SelectedIndex, i => $@"SelectedIndex = {i}{Environment.NewLine}Item = {selectionListBox.SelectedText ?? string.Empty}"),
 
                                 new Button()
                                     .Content("Add 40,000 ")

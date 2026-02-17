@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\assets\logo\logo-256.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\assets\logo\logo_c-256.png" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\assets\images\april.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
