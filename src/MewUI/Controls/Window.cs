@@ -29,6 +29,7 @@ public class Window : ContentControl, ILayoutRoundingHost
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
     private readonly List<PopupEntry> _popups = new();
+    private readonly List<AdornerEntry> _adorners = new();
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<Window> _modalChildren = new();
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
@@ -137,9 +138,12 @@ public class Window : ContentControl, ILayoutRoundingHost
     public Window()
     {
         Padding = new Thickness(16);
+        AdornerLayer = new AdornerLayer(this);
     }
 
     protected override Color DefaultBackground => Theme.Palette.WindowBackground;
+
+    public AdornerLayer AdornerLayer { get; }
 
     private sealed class PopupEntry
     {
@@ -148,6 +152,14 @@ public class Window : ContentControl, ILayoutRoundingHost
         public required UIElement Owner { get; set; }
 
         public Rect Bounds { get; set; }
+
+        public bool StaysOpen { get; set; }
+    }
+
+    private sealed class AdornerEntry
+    {
+        public required UIElement Adorned { get; init; }
+        public required UIElement Element { get; init; }
     }
 
     private sealed class RadioGroupManager
@@ -851,6 +863,32 @@ public class Window : ContentControl, ILayoutRoundingHost
         _lastLayoutClientSizeDip = clientSize;
         _lastLayoutPadding = padding;
         _lastLayoutContent = Content;
+
+        LayoutAdorners();
+    }
+
+    private void LayoutAdorners()
+    {
+        if (_adorners.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _adorners.Count; i++)
+        {
+            var adorned = _adorners[i].Adorned;
+            var adorner = _adorners[i].Element;
+
+            if (!adorned.IsVisible || !adorner.IsVisible)
+            {
+                continue;
+            }
+
+            // MewUI bounds are in window coordinates, so we can arrange directly.
+            var bounds = adorned.Bounds;
+            adorner.Measure(new Size(bounds.Width, bounds.Height));
+            adorner.Arrange(bounds);
+        }
     }
 
     private static bool HasMeasureDirty(Element root)
@@ -1155,6 +1193,11 @@ public class Window : ContentControl, ILayoutRoundingHost
         {
             Content?.Render(context);
 
+            for (int i = 0; i < _adorners.Count; i++)
+            {
+                _adorners[i].Element.Render(context);
+            }
+
             // Popups render last (on top).
             for (int i = 0; i < _popups.Count; i++)
             {
@@ -1228,6 +1271,7 @@ public class Window : ContentControl, ILayoutRoundingHost
     {
         if (Content == null)
         {
+            DisposeAdorners();
             DisposePopups();
             return;
         }
@@ -1240,6 +1284,7 @@ public class Window : ContentControl, ILayoutRoundingHost
             }
         });
 
+        DisposeAdorners();
         DisposePopups();
     }
 
@@ -1255,6 +1300,21 @@ public class Window : ContentControl, ILayoutRoundingHost
             popup.Element.Parent = null;
         }
         _popups.Clear();
+    }
+
+    private void DisposeAdorners()
+    {
+        foreach (var adorner in _adorners)
+        {
+            if (adorner.Element is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
+            adorner.Element.Parent = null;
+        }
+
+        _adorners.Clear();
     }
 
     internal void BroadcastThemeChanged(Theme oldTheme, Theme newTheme)
@@ -1279,6 +1339,14 @@ public class Window : ContentControl, ILayoutRoundingHost
         for (int i = 0; i < _popups.Count; i++)
         {
             if (_popups[i].Element is Control c)
+            {
+                c.NotifyThemeChanged(oldTheme, newTheme);
+            }
+        }
+
+        for (int i = 0; i < _adorners.Count; i++)
+        {
+            if (_adorners[i].Element is Control c)
             {
                 c.NotifyThemeChanged(oldTheme, newTheme);
             }
@@ -1318,6 +1386,16 @@ public class Window : ContentControl, ILayoutRoundingHost
 
             _popups[i].Element.ClearDpiCacheDeep();
         }
+
+        for (int i = 0; i < _adorners.Count; i++)
+        {
+            if (_adorners[i].Element is Control c)
+            {
+                c.NotifyDpiChanged(oldDpi, newDpi);
+            }
+
+            _adorners[i].Element.ClearDpiCacheDeep();
+        }
     }
 
     internal void ClosePopupsIfClickOutside(Point position)
@@ -1335,7 +1413,7 @@ public class Window : ContentControl, ILayoutRoundingHost
             }
         }
 
-        CloseAllPopups();
+        CloseNonStaysOpenPopups();
     }
 
     internal void CloseAllPopups()
@@ -1355,7 +1433,7 @@ public class Window : ContentControl, ILayoutRoundingHost
         Invalidate();
     }
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds)
+    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool staysOpen = false)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(popup);
@@ -1381,10 +1459,43 @@ public class Window : ContentControl, ILayoutRoundingHost
         popup.Parent = this;
         ApplyPopupDpiChange(popup, oldDpi, Dpi);
         ApplyPopupThemeChange(popup, oldTheme, Theme);
-        var entry = new PopupEntry { Owner = owner, Element = popup, Bounds = bounds };
+        var entry = new PopupEntry { Owner = owner, Element = popup, Bounds = bounds, StaysOpen = staysOpen };
         _popups.Add(entry);
         LayoutPopup(entry);
         Invalidate();
+    }
+
+    private void CloseNonStaysOpenPopups()
+    {
+        if (_popups.Count == 0)
+        {
+            return;
+        }
+
+        bool removedAny = false;
+        for (int i = _popups.Count - 1; i >= 0; i--)
+        {
+            if (_popups[i].StaysOpen)
+            {
+                continue;
+            }
+
+            var entry = _popups[i];
+            entry.Element.Parent = null;
+            if (entry.Owner is IPopupOwner owner)
+            {
+                owner.OnPopupClosed(entry.Element);
+            }
+
+            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
+            _popups.RemoveAt(i);
+            removedAny = true;
+        }
+
+        if (removedAny)
+        {
+            Invalidate();
+        }
     }
 
     private ToolTip? _toolTip;
@@ -1393,7 +1504,19 @@ public class Window : ContentControl, ILayoutRoundingHost
     internal Size MeasureToolTip(string text, Size availableSize)
     {
         _toolTip ??= new ToolTip();
+        _toolTip.Content = null;
         _toolTip.Text = text ?? string.Empty;
+        _toolTip.Measure(availableSize);
+        return _toolTip.DesiredSize;
+    }
+
+    internal Size MeasureToolTip(Element content, Size availableSize)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        _toolTip ??= new ToolTip();
+        _toolTip.Text = string.Empty;
+        _toolTip.Content = content;
         _toolTip.Measure(availableSize);
         return _toolTip.DesiredSize;
     }
@@ -1403,7 +1526,20 @@ public class Window : ContentControl, ILayoutRoundingHost
         ArgumentNullException.ThrowIfNull(owner);
 
         _toolTip ??= new ToolTip();
+        _toolTip.Content = null;
         _toolTip.Text = text ?? string.Empty;
+        _toolTipOwner = owner;
+        ShowPopup(owner, _toolTip, bounds);
+    }
+
+    internal void ShowToolTip(UIElement owner, Element content, Rect bounds)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(content);
+
+        _toolTip ??= new ToolTip();
+        _toolTip.Text = string.Empty;
+        _toolTip.Content = content;
         _toolTipOwner = owner;
         ShowPopup(owner, _toolTip, bounds);
     }
@@ -1600,7 +1736,90 @@ public class Window : ContentControl, ILayoutRoundingHost
             }
         }
 
+        for (int i = _adorners.Count - 1; i >= 0; i--)
+        {
+            var hit = _adorners[i].Element.HitTest(point);
+            if (hit != null)
+            {
+                return hit;
+            }
+        }
+
         return (Content as UIElement)?.HitTest(point);
+    }
+
+    internal void AddAdornerInternal(UIElement adornedElement, UIElement adorner)
+    {
+        ArgumentNullException.ThrowIfNull(adornedElement);
+        ArgumentNullException.ThrowIfNull(adorner);
+
+        // Attach to this window so FindVisualRoot()/theme/DPI work.
+        adorner.Parent = this;
+
+        _adorners.Add(new AdornerEntry
+        {
+            Adorned = adornedElement,
+            Element = adorner
+        });
+
+        RequestLayout();
+        RequestRender();
+    }
+
+    internal bool RemoveAdornerInternal(UIElement adorner)
+    {
+        for (int i = _adorners.Count - 1; i >= 0; i--)
+        {
+            if (ReferenceEquals(_adorners[i].Element, adorner))
+            {
+                _adorners[i].Element.Parent = null;
+                _adorners.RemoveAt(i);
+                RequestLayout();
+                RequestRender();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal int RemoveAllAdornersInternal(UIElement adornedElement)
+    {
+        int removed = 0;
+        for (int i = _adorners.Count - 1; i >= 0; i--)
+        {
+            if (ReferenceEquals(_adorners[i].Adorned, adornedElement))
+            {
+                _adorners[i].Element.Parent = null;
+                _adorners.RemoveAt(i);
+                removed++;
+            }
+        }
+
+        if (removed > 0)
+        {
+            RequestLayout();
+            RequestRender();
+        }
+
+        return removed;
+    }
+
+    internal void ClearAdornersInternal()
+    {
+        if (_adorners.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _adorners.Count; i++)
+        {
+            _adorners[i].Element.Parent = null;
+        }
+
+        _adorners.Clear();
+        RequestLayout();
+        RequestRender();
     }
 
     internal void EnsureTheme(Theme theme)
