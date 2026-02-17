@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\images\april.jpg" LogicalName="Aprillz.MewUI.GraphicsBackendTest.april.jpg" />
+    <EmbeddedResource Include="..\..\assets\logo\logo_c-256.png" LogicalName="Aprillz.MewUI.GraphicsBackendTest.logo_c-256.png" />
   </ItemGroup>
 
 </Project>
