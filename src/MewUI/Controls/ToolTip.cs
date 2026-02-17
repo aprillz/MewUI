@@ -38,6 +38,7 @@ public sealed class ToolTip : ContentControl
     /// </summary>
     public ToolTip()
     {
+        IsHitTestVisible = false;
         Padding = new Thickness(8, 4, 8, 4);
         BorderThickness = 1;
     }

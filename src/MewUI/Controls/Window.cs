@@ -827,7 +827,8 @@ public class Window : ContentControl, ILayoutRoundingHost
         if (clientSize == _lastLayoutClientSizeDip &&
             padding == _lastLayoutPadding &&
             Content == _lastLayoutContent &&
-            !IsLayoutDirty(Content))
+            !IsLayoutDirty(Content) &&
+            !HasOverlayLayoutDirty())
         {
             return;
         }
@@ -865,6 +866,34 @@ public class Window : ContentControl, ILayoutRoundingHost
         _lastLayoutContent = Content;
 
         LayoutAdorners();
+        LayoutPopups();
+    }
+
+    private bool HasOverlayLayoutDirty()
+    {
+        // Popups/adorners are not part of the window Content tree, but they still bubble invalidation
+        // up to the Window (Parent = this). If we early-return purely based on Content dirtiness,
+        // overlay elements can get stuck with stale DesiredSize/Bounds until the owner explicitly
+        // re-calls ShowPopup/UpdatePopup.
+        for (int i = 0; i < _adorners.Count; i++)
+        {
+            var element = _adorners[i].Element;
+            if (element.IsMeasureDirty || element.IsArrangeDirty)
+            {
+                return true;
+            }
+        }
+
+        for (int i = 0; i < _popups.Count; i++)
+        {
+            var element = _popups[i].Element;
+            if (element.IsMeasureDirty || element.IsArrangeDirty)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void LayoutAdorners()
@@ -888,6 +917,30 @@ public class Window : ContentControl, ILayoutRoundingHost
             var bounds = adorned.Bounds;
             adorner.Measure(new Size(bounds.Width, bounds.Height));
             adorner.Arrange(bounds);
+        }
+    }
+
+    private void LayoutPopups()
+    {
+        if (_popups.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _popups.Count; i++)
+        {
+            var entry = _popups[i];
+            if (!entry.Element.IsVisible)
+            {
+                continue;
+            }
+
+            if (!entry.Element.IsMeasureDirty && !entry.Element.IsArrangeDirty)
+            {
+                continue;
+            }
+
+            LayoutPopup(entry);
         }
     }
 
@@ -1407,6 +1460,12 @@ public class Window : ContentControl, ILayoutRoundingHost
 
         for (int i = _popups.Count - 1; i >= 0; i--)
         {
+            // Hit-test-invisible popups (e.g. ToolTip) should not block "click outside" behavior.
+            if (!_popups[i].Element.IsHitTestVisible)
+            {
+                continue;
+            }
+
             if (_popups[i].Bounds.Contains(position))
             {
                 return;
