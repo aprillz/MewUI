@@ -32,21 +32,32 @@ public partial class ListBox : Control
         get => _itemsSource;
         set
         {
-            value ??= ItemsView.Empty;
-            if (ReferenceEquals(_itemsSource, value))
-            {
-                return;
-            }
+            ApplyItemsSource(value, preserveListBoxSelection: true);
+        }
+    }
 
-            int oldIndex = SelectedIndex;
+    internal void ApplyItemsSource(IItemsView? value, bool preserveListBoxSelection)
+    {
+        value ??= ItemsView.Empty;
+        if (ReferenceEquals(_itemsSource, value))
+        {
+            return;
+        }
 
-            _itemsSource.Changed -= OnItemsChanged;
-            _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+        int oldIndex = SelectedIndex;
 
-            _itemsSource = value;
-            _itemsSource.SelectionChanged += OnItemsSelectionChanged;
-            _itemsSource.Changed += OnItemsChanged;
+        _itemsSource.Changed -= OnItemsChanged;
+        _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
 
+        _itemsSource = value;
+        _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+        _itemsSource.Changed += OnItemsChanged;
+
+        _hoverIndex = -1;
+        _rebindVisibleOnNextRender = true;
+
+        if (preserveListBoxSelection)
+        {
             _suppressItemsSelectionChanged = true;
             try
             {
@@ -62,10 +73,20 @@ public partial class ListBox : Control
             {
                 OnItemsSelectionChanged(newIndex);
             }
-
-            InvalidateMeasure();
-            InvalidateVisual();
         }
+        else
+        {
+            // Do not push ListBox's old selection into the new view.
+            // Still try to keep the selected item visible without raising SelectionChanged.
+            int newIndex = _itemsSource.SelectedIndex;
+            if (newIndex >= 0)
+            {
+                ScrollIntoView(newIndex);
+            }
+        }
+
+        InvalidateMeasure();
+        InvalidateVisual();
     }
 
     /// <summary>
