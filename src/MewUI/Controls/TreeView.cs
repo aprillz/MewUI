@@ -42,6 +42,7 @@ public sealed class TreeView : Control, IVisualTreeHost
 
     private double _extentHeight;
     private double _viewportHeight;
+    private ScrollIntoViewRequest _scrollIntoViewRequest;
 
     /// <summary>
     /// Gets or sets the root nodes collection.
@@ -283,6 +284,59 @@ public sealed class TreeView : Control, IVisualTreeHost
 
         SelectedNodeChanged?.Invoke(node);
         SelectionChanged?.Invoke(node);
+        ScrollIntoView(index);
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Scrolls the selected node into view.
+    /// </summary>
+    public void ScrollIntoViewSelected() => ScrollIntoView(_itemsSource.SelectedIndex);
+
+    /// <summary>
+    /// Scrolls the specified visible item index into view.
+    /// </summary>
+    public void ScrollIntoView(int index)
+    {
+        int count = _itemsSource.Count;
+        if (index < 0 || index >= count)
+        {
+            return;
+        }
+
+        double viewport = GetViewportHeightDip();
+        if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
+        {
+            _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
+            return;
+        }
+
+        double itemHeight = ResolveItemHeight();
+        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        {
+            return;
+        }
+
+        _extentHeight = count * itemHeight;
+
+        double oldOffset = _scroll.GetOffsetDip(1);
+        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, itemHeight, viewport, oldOffset);
+
+        _scroll.DpiScale = GetDpi() / 96.0;
+        _scroll.SetMetricsDip(1, _extentHeight, viewport);
+        _scroll.SetOffsetDip(1, newOffset);
+
+        double applied = _scroll.GetOffsetDip(1);
+        if (applied.Equals(oldOffset))
+        {
+            return;
+        }
+
+        if (_vBar.IsVisible)
+        {
+            _vBar.Value = applied;
+        }
+
         InvalidateVisual();
     }
 
@@ -494,6 +548,21 @@ public sealed class TreeView : Control, IVisualTreeHost
                 innerBounds.Y + inset,
                 t,
                 Math.Max(0, innerBounds.Height - inset * 2)));
+        }
+
+        if (!_scrollIntoViewRequest.IsNone)
+        {
+            var request = _scrollIntoViewRequest;
+            _scrollIntoViewRequest.Clear();
+
+            if (request.Kind == ScrollIntoViewRequestKind.Index)
+            {
+                ScrollIntoView(request.Index);
+            }
+            else if (request.Kind == ScrollIntoViewRequestKind.Selected)
+            {
+                ScrollIntoViewSelected();
+            }
         }
     }
 

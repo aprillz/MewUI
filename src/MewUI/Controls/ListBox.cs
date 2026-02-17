@@ -22,7 +22,7 @@ public partial class ListBox : Control
     private readonly ScrollController _scroll = new();
     private double _extentHeight;
     private double _viewportHeight;
-    private int? _pendingScrollIntoViewIndex;
+    private ScrollIntoViewRequest _scrollIntoViewRequest;
 
     /// <summary>
     /// Gets or sets the items data source.
@@ -529,10 +529,20 @@ public partial class ListBox : Control
                 Math.Max(0, innerBounds.Height - inset * 2)));
         }
 
-        if (_pendingScrollIntoViewIndex is int pending)
+        if (!_scrollIntoViewRequest.IsNone)
         {
-            _pendingScrollIntoViewIndex = null;
-            ScrollIntoView(pending);
+            // Clear first; ScrollIntoView may re-request if the viewport isn't valid yet.
+            var request = _scrollIntoViewRequest;
+            _scrollIntoViewRequest.Clear();
+
+            if (request.Kind == ScrollIntoViewRequestKind.Index)
+            {
+                ScrollIntoView(request.Index);
+            }
+            else if (request.Kind == ScrollIntoViewRequestKind.Selected)
+            {
+                ScrollIntoViewSelected();
+            }
         }
     }
 
@@ -785,7 +795,7 @@ public partial class ListBox : Control
         double viewport = GetViewportHeightDip();
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
-            _pendingScrollIntoViewIndex = index;
+            _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
             return;
         }
 
@@ -795,19 +805,8 @@ public partial class ListBox : Control
             return;
         }
 
-        double itemTop = index * itemHeight;
-        double itemBottom = itemTop + itemHeight;
-
         double oldOffset = _scroll.GetOffsetDip(1);
-        double newOffset = oldOffset;
-        if (itemTop < newOffset)
-        {
-            newOffset = itemTop;
-        }
-        else if (itemBottom > newOffset + viewport)
-        {
-            newOffset = itemBottom - viewport;
-        }
+        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, itemHeight, viewport, oldOffset);
 
         _scroll.DpiScale = GetDpi() / 96.0;
         _scroll.SetMetricsDip(1, _extentHeight, viewport);

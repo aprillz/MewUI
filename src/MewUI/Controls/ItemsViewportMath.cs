@@ -2,6 +2,36 @@ namespace Aprillz.MewUI.Controls;
 
 internal static class ItemsViewportMath
 {
+    public static double ComputeScrollOffsetToBringItemIntoView(
+        int index,
+        double itemHeight,
+        double viewportHeight,
+        double currentOffset)
+    {
+        if (index < 0 || itemHeight <= 0 || viewportHeight <= 0 ||
+            double.IsNaN(itemHeight) || double.IsInfinity(itemHeight) ||
+            double.IsNaN(viewportHeight) || double.IsInfinity(viewportHeight) ||
+            double.IsNaN(currentOffset) || double.IsInfinity(currentOffset))
+        {
+            return currentOffset;
+        }
+
+        double itemTop = index * itemHeight;
+        double itemBottom = itemTop + itemHeight;
+
+        double newOffset = currentOffset;
+        if (itemTop < newOffset)
+        {
+            newOffset = itemTop;
+        }
+        else if (itemBottom > newOffset + viewportHeight)
+        {
+            newOffset = itemBottom - viewportHeight;
+        }
+
+        return newOffset;
+    }
+
     public static void ComputeVisibleRange(
         int count,
         double itemHeight,
@@ -49,4 +79,3 @@ internal static class ItemsViewportMath
         return index >= 0 && index < count;
     }
 }
-

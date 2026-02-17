@@ -191,6 +191,7 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
     private double _rowsExtentHeight;
     private double _viewportHeight;
     private int _columnsVersion;
+    private ScrollIntoViewRequest _scrollIntoViewRequest;
 
     public GridViewCore()
     {
@@ -574,6 +575,23 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
         {
             _itemsHost.RecycleAll();
         }
+
+        if (!_scrollIntoViewRequest.IsNone)
+        {
+            var request = _scrollIntoViewRequest;
+            _scrollIntoViewRequest.Clear();
+
+            if (request.Kind == ScrollIntoViewRequestKind.Selected)
+            {
+                ScrollSelectedIntoView();
+            }
+            else if (request.Kind == ScrollIntoViewRequestKind.Index)
+            {
+                // Placeholder for a future ScrollIntoView(int) API.
+                // For now, fall back to selected behavior.
+                ScrollSelectedIntoView();
+            }
+        }
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -751,6 +769,53 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
     {
         SelectionChanged?.Invoke(SelectedItem);
         _rebindVisibleOnNextRender = true;
+        ScrollSelectedIntoView();
+        InvalidateVisual();
+    }
+
+    private void ScrollSelectedIntoView()
+    {
+        int index = SelectedIndex;
+        int count = _itemsView.Count;
+        if (index < 0 || index >= count)
+        {
+            return;
+        }
+
+        double viewport = _viewportHeight;
+        if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
+        {
+            _scrollIntoViewRequest = ScrollIntoViewRequest.Selected();
+            return;
+        }
+
+        double rowH = ResolveRowHeight();
+        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        {
+            return;
+        }
+
+        _rowsExtentHeight = count * rowH;
+
+        double oldOffset = _scroll.GetOffsetDip(1);
+        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, rowH, viewport, oldOffset);
+
+        _scroll.DpiScale = GetDpi() / 96.0;
+        _scroll.SetMetricsDip(1, _rowsExtentHeight, viewport);
+        _scroll.SetOffsetDip(1, newOffset);
+
+        double applied = _scroll.GetOffsetDip(1);
+        if (applied.Equals(oldOffset))
+        {
+            return;
+        }
+
+        if (_vBar.IsVisible)
+        {
+            _vBar.Value = applied;
+        }
+
+        InvalidateArrange();
         InvalidateVisual();
     }
 
