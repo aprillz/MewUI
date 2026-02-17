@@ -9,9 +9,6 @@ namespace Aprillz.MewUI.Controls;
 public sealed class ToggleSwitch : ToggleBase
 {
     private bool _isPressed;
-    private bool _isDragging;
-    private double _dragT;
-    private double _dragStartX;
     private TextMeasureCache _textMeasureCache;
 
     public ToggleSwitch()
@@ -82,9 +79,7 @@ public sealed class ToggleSwitch : ToggleBase
         double borderInset = GetBorderVisualInset();
         double stroke = Math.Max(1, BorderThickness);
 
-        double t = _isDragging ? _dragT : (IsChecked ? 1.0 : 0.0);
-
-        var state = GetVisualState(_isPressed, _isPressed || _isDragging);
+        var state = GetVisualState(_isPressed, _isPressed);
         var isHot = state.IsHot;
         var isFocus = state.IsFocused;
         var isActive = state.IsActive;
@@ -113,7 +108,7 @@ public sealed class ToggleSwitch : ToggleBase
             trackOn = Theme.Palette.DisabledAccent;
         }
 
-        var trackFill = trackOff.Lerp(trackOn, t);
+        var trackFill = IsChecked ? trackOn : trackOff;
 
         if (IsChecked)
         {
@@ -130,7 +125,7 @@ public sealed class ToggleSwitch : ToggleBase
         double thumbSize = Math.Max(0, trackRect.Height - thumbInset * 2);
         double thumbXMin = trackRect.X + thumbInset;
         double thumbXMax = trackRect.Right - thumbInset - thumbSize;
-        double thumbX = thumbXMin + (thumbXMax - thumbXMin) * t;
+        double thumbX = IsChecked ? thumbXMax : thumbXMin;
         var thumbRect = new Rect(thumbX, trackRect.Y + thumbInset, thumbSize, thumbSize);
 
         Color thumbFill;
@@ -171,9 +166,6 @@ public sealed class ToggleSwitch : ToggleBase
         }
 
         _isPressed = true;
-        _isDragging = false;
-        _dragT = IsChecked ? 1 : 0;
-        _dragStartX = e.Position.X;
         Focus();
 
         var root = FindVisualRoot();
@@ -186,33 +178,6 @@ public sealed class ToggleSwitch : ToggleBase
         e.Handled = true;
     }
 
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        base.OnMouseMove(e);
-
-        if (!IsEffectivelyEnabled || !_isPressed || !IsMouseCaptured || !e.LeftButton)
-        {
-            return;
-        }
-
-        const double dragThreshold = 3;
-        double dx = e.Position.X - _dragStartX;
-        if (!_isDragging && Math.Abs(dx) >= dragThreshold)
-        {
-            _isDragging = true;
-        }
-
-        if (_isDragging)
-        {
-            double t0 = IsChecked ? 1.0 : 0.0;
-            var (trackWidth, trackHeight) = GetTrackSize();
-            var dragRange = Math.Max(1, trackWidth - trackHeight);
-            _dragT = Math.Clamp(t0 + dx / dragRange, 0, 1);
-            InvalidateVisual();
-        }
-
-        e.Handled = true;
-    }
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
@@ -223,9 +188,7 @@ public sealed class ToggleSwitch : ToggleBase
             return;
         }
 
-        bool wasDragging = _isDragging;
         _isPressed = false;
-        _isDragging = false;
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -238,14 +201,7 @@ public sealed class ToggleSwitch : ToggleBase
             return;
         }
 
-        if (wasDragging)
-        {
-            IsChecked = _dragT >= 0.5;
-        }
-        else if (Bounds.Contains(e.Position))
-        {
-            IsChecked = !IsChecked;
-        }
+        IsChecked = !IsChecked;
 
         InvalidateVisual();
         e.Handled = true;

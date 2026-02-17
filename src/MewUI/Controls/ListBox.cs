@@ -824,7 +824,6 @@ public partial class ListBox : Control
         }
 
         InvalidateVisual();
-        ScrollChanged?.Invoke();
     }
 
     /// <summary>

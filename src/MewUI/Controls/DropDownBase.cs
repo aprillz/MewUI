@@ -80,15 +80,21 @@ public abstract class DropDownBase : Control, IPopupOwner
     /// </summary>
     protected virtual double CornerRadiusDip => Theme.Metrics.ControlCornerRadius;
 
+
+    /// <summary>
+    /// Gets the default background color.
+    /// </summary>
+    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
+
+    /// <summary>
+    /// Gets the default border brush color.
+    /// </summary>
+    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
     /// <summary>
     /// Gets the default minimum height.
     /// </summary>
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    /// <summary>
-    /// Gets the default border color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     /// <summary>
     /// Creates the popup content (cached and reused).

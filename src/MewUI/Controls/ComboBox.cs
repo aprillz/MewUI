@@ -160,21 +160,6 @@ public sealed partial class ComboBox : DropDownBase
     public event Action<object?>? SelectionChanged;
 
     /// <summary>
-    /// Gets the default background color.
-    /// </summary>
-    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
-
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    /// <summary>
-    /// Gets the default minimum height.
-    /// </summary>
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    /// <summary>
     /// Initializes a new instance of the ComboBox class.
     /// </summary>
     public ComboBox()
