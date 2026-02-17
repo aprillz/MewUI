@@ -479,7 +479,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         base.OnMouseUp(e);
 
-        if (!IsEnabled || e.Handled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Handled || e.Button != MouseButton.Left)
         {
             return;
         }

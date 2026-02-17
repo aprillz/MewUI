@@ -222,11 +222,11 @@ public abstract class DropDownBase : Control, IPopupOwner
         var borderInset = GetBorderVisualInset();
         double radius = CornerRadiusDip;
 
-        var bg = IsEnabled ? Background : Theme.Palette.ButtonDisabledBackground;
-
         var state = GetVisualState(isPressed: false, isActive: IsDropDownOpen);
 
-        Color baseBorder = IsEnabled ? BorderBrush : Theme.Palette.ControlBorder;
+        var bg = PickButtonBackground(state);
+
+        Color baseBorder = state.IsEnabled ? BorderBrush : Theme.Palette.ControlBorder;
         var borderColor = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.6);
 
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
@@ -235,7 +235,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
         var innerHeaderRect = headerRect.Deflate(new Thickness(borderInset));
 
-        ArrowForeground = IsEnabled ? Foreground : Theme.Palette.DisabledText;
+        ArrowForeground = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
         RenderHeaderContent(context, headerRect, innerHeaderRect);
 
         DrawArrow(context, headerRect, ArrowForeground, IsDropDownOpen);
@@ -277,7 +277,7 @@ public abstract class DropDownBase : Control, IPopupOwner
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left || e.Handled)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left || e.Handled)
         {
             return;
         }
@@ -299,7 +299,7 @@ public abstract class DropDownBase : Control, IPopupOwner
     {
         base.OnKeyDown(e);
 
-        if (!IsEnabled || e.Handled)
+        if (!IsEffectivelyEnabled || e.Handled)
         {
             return;
         }

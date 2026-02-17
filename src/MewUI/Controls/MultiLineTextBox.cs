@@ -318,7 +318,7 @@ public sealed class MultiLineTextBox : TextBase
 
     protected override UIElement? HitTestOverride(Point point)
     {
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return null;
         }
@@ -373,13 +373,13 @@ public sealed class MultiLineTextBox : TextBase
     {
         double lineHeight = GetLineHeight();
         int lineCount = Math.Max(1, _lineStarts.Count);
-        var textColor = IsEnabled ? Foreground : theme.Palette.DisabledText;
+        var textColor = IsEffectivelyEnabled ? Foreground : theme.Palette.DisabledText;
 
         if (!WrapEnabled)
         {
             int caretLine = -1;
             int caretLineStart = 0;
-            if (IsFocused && IsEnabled)
+            if (IsFocused && IsEffectivelyEnabled)
             {
                 GetLineFromIndex(CaretPosition, out caretLine, out caretLineStart, out _);
             }
@@ -446,7 +446,7 @@ public sealed class MultiLineTextBox : TextBase
         int rendered = 0;
 
         (int start, int end) selection = default;
-        bool canDrawCaret = IsFocused && IsEnabled;
+        bool canDrawCaret = IsFocused && IsEffectivelyEnabled;
         bool canDrawSelection = HasSelection;
         if (canDrawSelection)
         {
@@ -886,7 +886,7 @@ public sealed class MultiLineTextBox : TextBase
         double y,
         MultiLineTextView.CachedLineMeasure lineMeasure)
     {
-        if (!IsFocused || !IsEnabled)
+        if (!IsFocused || !IsEffectivelyEnabled)
         {
             return;
         }

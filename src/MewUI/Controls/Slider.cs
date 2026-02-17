@@ -55,8 +55,6 @@ public sealed partial class Slider : RangeBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        
-
         if (!_isDragging && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
         {
             SetValueFromSource(valueBinding.Get());
@@ -64,18 +62,19 @@ public sealed partial class Slider : RangeBase
 
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
+        var state = GetVisualState();
 
         // Track
         double trackHeight = 4;
         double trackY = contentBounds.Y + (contentBounds.Height - trackHeight) / 2;
         var trackRect = new Rect(contentBounds.X, trackY, contentBounds.Width, trackHeight);
 
-        var trackBg = IsEnabled
+        var trackBg = state.IsEnabled
             ? Theme.Palette.ControlBackground.Lerp(Theme.Palette.WindowText, 0.12)
             : Theme.Palette.DisabledControlBackground;
 
         context.FillRoundedRectangle(trackRect, 2, 2, trackBg);
-        if (IsEnabled)
+        if (state.IsEnabled)
         {
             var trackBorder = trackBg.Lerp(Theme.Palette.WindowText, 0.12);
             context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, 1);
@@ -86,7 +85,7 @@ public sealed partial class Slider : RangeBase
         var fillRect = new Rect(trackRect.X, trackRect.Y, trackRect.Width * t, trackRect.Height);
         if (fillRect.Width > 0)
         {
-            var fillColor = IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
+            var fillColor = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
             context.FillRoundedRectangle(fillRect, 2, 2, fillColor);
         }
 
@@ -98,12 +97,12 @@ public sealed partial class Slider : RangeBase
         double thumbY = contentBounds.Y + (contentBounds.Height - thumbSize) / 2;
         var thumbRect = new Rect(thumbX, thumbY, thumbSize, thumbSize);
 
-        var thumbFill = IsEnabled ? Theme.Palette.ControlBackground : Theme.Palette.DisabledControlBackground;
+        var thumbFill = PickControlBackground(GetVisualState(), Theme.Palette.ControlBackground);
 
         context.FillEllipse(thumbRect, thumbFill);
 
-        var state = GetVisualState(IsFocused, IsFocused);
-        Color thumbBorder = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        var thumbState = GetVisualState(_isDragging, _isDragging);
+        Color thumbBorder = PickAccentBorder(Theme, BorderBrush, thumbState, 0.6);
 
 
         context.DrawEllipse(thumbRect, thumbBorder, 1);
@@ -113,7 +112,7 @@ public sealed partial class Slider : RangeBase
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -135,7 +134,7 @@ public sealed partial class Slider : RangeBase
     {
         base.OnMouseMove(e);
 
-        if (!IsEnabled || !_isDragging || !IsMouseCaptured || !e.LeftButton)
+        if (!IsEffectivelyEnabled || !_isDragging || !IsMouseCaptured || !e.LeftButton)
         {
             return;
         }
@@ -168,7 +167,7 @@ public sealed partial class Slider : RangeBase
     {
         base.OnKeyDown(e);
 
-        if (e.Handled || !IsEnabled)
+        if (e.Handled || !IsEffectivelyEnabled)
         {
             return;
         }

@@ -27,6 +27,14 @@ public sealed class Palette
 
     public Color ButtonDisabledBackground { get; }
 
+    public Color AccentHoverOverlay { get; }
+
+    public Color AccentPressedOverlay { get; }
+
+    public Color AccentBorderHotOverlay { get; }
+
+    public Color AccentBorderActiveOverlay { get; }
+
     public Color Accent { get; }
 
     public Color AccentText { get; }
@@ -85,6 +93,14 @@ public sealed class Palette
         var hoverT = isDark ? 0.22 : 0.14;
         var pressedT = isDark ? 0.32 : 0.24;
 
+        AccentHoverOverlay = accent.WithAlpha((byte)Math.Clamp(Math.Round(hoverT * 255.0), 0, 255));
+        AccentPressedOverlay = accent.WithAlpha((byte)Math.Clamp(Math.Round(pressedT * 255.0), 0, 255));
+
+        // Border overlays are typically stronger than background overlays.
+        AccentBorderHotOverlay = accent.WithAlpha((byte)Math.Clamp(Math.Round(0.6 * 255.0), 0, 255));
+        // Used when a control supplies a custom BorderBrush; keep some of the original hue instead of hard-replacing.
+        AccentBorderActiveOverlay = accent.WithAlpha((byte)Math.Clamp(Math.Round(0.85 * 255.0), 0, 255));
+
         SelectionBackground = ComputeSelectionBackground(controlBackground, accent);
         SelectionText = GetDefaultAccentText(SelectionBackground);
 
@@ -93,8 +109,11 @@ public sealed class Palette
         DisabledAccent = ComputeDisabledAccent(windowBackground, accent, DisabledText);
         PlaceholderText = ComputePlaceholderText(windowBackground, DisabledText);
         DisabledControlBackground = ComputeDisabledControlBackground(windowBackground, controlBackground, windowText);
-        ButtonHoverBackground = buttonFace.Lerp(accent, hoverT);
-        ButtonPressedBackground = buttonFace.Lerp(accent, pressedT);
+
+        // Back-compat result colors derived from overlays (keep ButtonFace-based defaults consistent
+        // while allowing controls with custom backgrounds to composite overlays themselves).
+        ButtonHoverBackground = Color.Composite(buttonFace, AccentHoverOverlay);
+        ButtonPressedBackground = Color.Composite(buttonFace, AccentPressedOverlay);
         Focus = accent;
 
         (ScrollBarThumb, ScrollBarThumbHover, ScrollBarThumbActive) = ComputeScrollBarThumbs(windowBackground);

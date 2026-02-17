@@ -118,7 +118,7 @@ public partial class CheckBox : Control
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var boxRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = state.IsEnabled ? Theme.Palette.ControlBackground : Theme.Palette.DisabledControlBackground;
+        var fill = PickControlBackground(state, Theme.Palette.ControlBackground);
         var radius = Math.Max(0, Theme.Metrics.ControlCornerRadius * 0.5);
 
         var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
@@ -157,7 +157,7 @@ public partial class CheckBox : Control
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -192,7 +192,7 @@ public partial class CheckBox : Control
             window.ReleaseMouseCapture();
         }
 
-        if (IsEnabled && Bounds.Contains(e.Position))
+        if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
             ToggleFromInput();
         }
@@ -205,7 +205,7 @@ public partial class CheckBox : Control
     {
         base.OnKeyUp(e);
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }

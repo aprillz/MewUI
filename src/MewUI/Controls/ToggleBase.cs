@@ -117,7 +117,7 @@ public abstract partial class ToggleBase : Control
     {
         base.OnKeyUp(e);
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }

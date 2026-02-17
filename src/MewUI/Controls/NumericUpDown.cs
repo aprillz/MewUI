@@ -145,9 +145,9 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         double radius = Theme.Metrics.ControlCornerRadius;
 
-        bool isEnabled = IsEffectivelyEnabled;
-        Color bg = isEnabled ? Background : Theme.Palette.DisabledControlBackground;
         var state = GetVisualState(_pressedPart != ButtonPart.None, _pressedPart != ButtonPart.None);
+        bool isEnabled = state.IsEnabled;
+        Color bg = PickControlBackground(state);
         Color border = PickAccentBorder(Theme, BorderBrush, state, 0.6);
 
         var metrics = GetBorderRenderMetrics(Bounds, radius);
@@ -172,8 +172,8 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         var incRect = new Rect(buttonRect.X + buttonRect.Width / 2, buttonRect.Y, buttonRect.Width / 2, buttonRect.Height);
 
         Color baseButton = Theme.Palette.ButtonFace;
-        Color hoverButton = Theme.Palette.ButtonHoverBackground;
-        Color pressedButton = Theme.Palette.ButtonPressedBackground;
+        Color hoverButton = Color.Composite(baseButton, Theme.Palette.AccentHoverOverlay);
+        Color pressedButton = Color.Composite(baseButton, Theme.Palette.AccentPressedOverlay);
         Color disabledButton = Theme.Palette.ButtonDisabledBackground;
 
         Color decBg = !isEnabled

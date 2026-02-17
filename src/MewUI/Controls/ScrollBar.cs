@@ -75,7 +75,7 @@ public sealed class ScrollBar : RangeBase
 
     protected override void OnRender(IGraphicsContext context)
     {
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }
@@ -107,7 +107,7 @@ public sealed class ScrollBar : RangeBase
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -153,7 +153,7 @@ public sealed class ScrollBar : RangeBase
     {
         base.OnMouseMove(e);
 
-        if (!IsEnabled || !_dragging || !IsMouseCaptured || !e.LeftButton)
+        if (!IsEffectivelyEnabled || !_dragging || !IsMouseCaptured || !e.LeftButton)
         {
             return;
         }
@@ -202,7 +202,7 @@ public sealed class ScrollBar : RangeBase
     {
         base.OnMouseWheel(e);
 
-        if (!IsEnabled || e.Handled)
+        if (!IsEffectivelyEnabled || e.Handled)
         {
             return;
         }

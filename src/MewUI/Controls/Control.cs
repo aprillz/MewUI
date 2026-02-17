@@ -22,6 +22,12 @@ public abstract class Control : FrameworkElement
     public string? ToolTipText { get; set; }
 
     /// <summary>
+    /// Gets or sets the tooltip content for this control.
+    /// When set, this takes precedence over <see cref="ToolTipText"/>.
+    /// </summary>
+    public Element? ToolTipContent { get; set; }
+
+    /// <summary>
     /// Gets or sets the context menu for this control.
     /// </summary>
     public ContextMenu? ContextMenu { get; set; }
@@ -138,7 +144,6 @@ public abstract class Control : FrameworkElement
         }
     }
 
-    internal static bool PreferFillStrokeTrick { get; } = false;
 
     protected virtual Color DefaultBackground => Color.Transparent;
 
@@ -269,6 +274,16 @@ public abstract class Control : FrameworkElement
         return new VisualState(enabled, hot, focused, pressed, active);
     }
 
+    protected VisualState GetVisualState(bool isPressed, bool isActive, bool enabledOverride)
+    {
+        var enabled = enabledOverride;
+        var hot = enabled && (IsMouseOver || IsMouseCaptured);
+        var focused = enabled && (IsFocused || IsFocusWithin);
+        var pressed = enabled && isPressed;
+        var active = enabled && isActive;
+        return new VisualState(enabled, hot, focused, pressed, active);
+    }
+
     protected Color PickAccentBorder(Theme theme, Color baseBorder, in VisualState state, double hoverMix = 0.6)
     {
         if (!state.IsEnabled)
@@ -276,17 +291,60 @@ public abstract class Control : FrameworkElement
             return baseBorder;
         }
 
+        var accent = theme.Palette.Accent;
+
         if (state.IsFocused || state.IsActive || state.IsPressed)
         {
-            return theme.Palette.Accent;
+            // If the control uses the standard border color, keep the strong accent border.
+            // If a custom border was supplied, tint it toward the accent instead of hard-replacing it.
+            // This avoids "jumping" to a ButtonFace/ControlBorder-based accent when Background/BorderBrush is customized.
+            return baseBorder == theme.Palette.ControlBorder
+                ? accent
+                : Color.Composite(baseBorder, theme.Palette.AccentBorderActiveOverlay);
         }
 
         if (state.IsHot)
         {
-            return baseBorder.Lerp(theme.Palette.Accent, hoverMix);
+            var overlay = hoverMix == 0.6
+                ? theme.Palette.AccentBorderHotOverlay
+                : accent.WithAlpha((byte)Math.Clamp(Math.Round(hoverMix * 255.0), 0, 255));
+
+            return Color.Composite(baseBorder, overlay);
         }
 
         return baseBorder;
+    }
+
+    protected Color PickButtonBackground(in VisualState state, Color? normalBackground = null)
+    {
+        var baseBg = normalBackground ?? Background;
+
+        if (!state.IsEnabled)
+        {
+            return Theme.Palette.ButtonDisabledBackground;
+        }
+
+        if (state.IsPressed || state.IsActive)
+        {
+            return Color.Composite(baseBg, Theme.Palette.AccentPressedOverlay);
+        }
+
+        if (state.IsHot)
+        {
+            return Color.Composite(baseBg, Theme.Palette.AccentHoverOverlay);
+        }
+
+        return baseBg;
+    }
+
+    protected Color PickControlBackground(in VisualState state, Color? normalBackground = null)
+    {
+        return state.IsEnabled ? (normalBackground ?? Background) : Theme.Palette.DisabledControlBackground;
+    }
+
+    protected Color PickControlBackground(in VisualState state, Color normalBackground)
+    {
+        return state.IsEnabled ? normalBackground : Theme.Palette.DisabledControlBackground;
     }
 
     /// <summary>
@@ -337,10 +395,10 @@ public abstract class Control : FrameworkElement
         var borderThickness = metrics.BorderThickness;
         var radius = metrics.CornerRadius;
 
-        bool canUseFillStrokeTrick = PreferFillStrokeTrick &&
-                                     borderThickness > 0 &&
-                                     borderBrush.A > 0 &&
-                                     background.A > 0;
+
+        bool canUseFillStrokeTrick = borderThickness > 0 &&
+                                  borderBrush.A > 0 &&
+                                  background.A > 0;
 
         if (canUseFillStrokeTrick || background.A == 255)
         {
@@ -487,7 +545,7 @@ public abstract class Control : FrameworkElement
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(ToolTipText))
+        if (ToolTipContent == null && string.IsNullOrWhiteSpace(ToolTipText))
         {
             return;
         }
@@ -497,8 +555,6 @@ public abstract class Control : FrameworkElement
         {
             return;
         }
-
-        var toolTipText = ToolTipText!;
 
         var client = window.ClientSize;
         var anchor = window.LastMousePositionDip;
@@ -516,10 +572,21 @@ public abstract class Control : FrameworkElement
         double x = anchor.X + dx;
         double y = anchor.Y + dy;
 
-        // Measure using the window-owned tooltip instance so sizing matches what will be shown.
-        // This avoids creating a tooltip per control.
-        var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
-        var desired = window.MeasureToolTip(toolTipText, measureSize);
+        Size desired;
+        if (ToolTipContent != null)
+        {
+            // Measure using the window-owned tooltip instance so sizing matches what will be shown.
+            // This avoids creating a tooltip per control.
+            var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
+            desired = window.MeasureToolTip(ToolTipContent, measureSize);
+        }
+        else
+        {
+            var toolTipText = ToolTipText!;
+            var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
+            desired = window.MeasureToolTip(toolTipText, measureSize);
+        }
+
         double w = Math.Max(0, desired.Width);
         double h = Math.Max(0, desired.Height);
 
@@ -537,7 +604,14 @@ public abstract class Control : FrameworkElement
             }
         }
 
-        window.ShowToolTip(this, toolTipText, new Rect(x, y, w, h));
+        if (ToolTipContent != null)
+        {
+            window.ShowToolTip(this, ToolTipContent, new Rect(x, y, w, h));
+        }
+        else
+        {
+            window.ShowToolTip(this, ToolTipText!, new Rect(x, y, w, h));
+        }
     }
 
     private void HideToolTip()

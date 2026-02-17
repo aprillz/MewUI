@@ -59,7 +59,7 @@ public sealed partial class ProgressBar : RangeBase
         var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(borderInset));
         double radius = Math.Min(bounds.Height / 2, Theme.Metrics.ControlCornerRadius);
 
-        var bg = IsEnabled ? Background : Theme.Palette.DisabledControlBackground;
+        var bg = PickControlBackground(GetVisualState());
         DrawBackgroundAndBorder(context, bounds, bg, BorderBrush, radius);
 
         double t = GetNormalizedValue();
@@ -67,7 +67,7 @@ public sealed partial class ProgressBar : RangeBase
         var fillRect = new Rect(contentBounds.X, contentBounds.Y, contentBounds.Width * t, contentBounds.Height);
         if (fillRect.Width > 0)
         {
-            var fillColor = IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
+            var fillColor = IsEffectivelyEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
             if (radius - 1 > 0)
             {
                 double rx = Math.Min(radius - 1, fillRect.Height / 2.0);

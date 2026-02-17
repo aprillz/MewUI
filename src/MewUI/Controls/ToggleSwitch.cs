@@ -165,7 +165,7 @@ public sealed class ToggleSwitch : ToggleBase
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -190,7 +190,7 @@ public sealed class ToggleSwitch : ToggleBase
     {
         base.OnMouseMove(e);
 
-        if (!IsEnabled || !_isPressed || !IsMouseCaptured || !e.LeftButton)
+        if (!IsEffectivelyEnabled || !_isPressed || !IsMouseCaptured || !e.LeftButton)
         {
             return;
         }
@@ -233,7 +233,7 @@ public sealed class ToggleSwitch : ToggleBase
             window.ReleaseMouseCapture();
         }
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }

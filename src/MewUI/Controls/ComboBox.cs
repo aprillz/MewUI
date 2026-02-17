@@ -264,11 +264,10 @@ public sealed partial class ComboBox : DropDownBase
         var textRect = new Rect(innerHeaderRect.X, innerHeaderRect.Y, innerHeaderRect.Width - ArrowAreaWidth, innerHeaderRect.Height)
             .Deflate(Padding);
 
-        if (SelectedText == "Beta" || IsDropDownOpen) { }
-
         string text = SelectedText ?? string.Empty;
-        var textColor = IsEnabled ? Foreground : Theme.Palette.DisabledText;
-        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !IsFocused)
+        var state = GetVisualState(isPressed: false, isActive: IsDropDownOpen);
+        var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+        if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
         {
             text = Placeholder;
             textColor = Theme.Palette.PlaceholderText;
@@ -406,7 +405,7 @@ public sealed partial class ComboBox : DropDownBase
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             base.OnKeyDown(e);
             return;

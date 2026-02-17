@@ -171,7 +171,7 @@ public class RadioButton : ToggleBase
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var circleRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = state.IsEnabled ? Theme.Palette.ControlBackground : Theme.Palette.DisabledControlBackground;
+        var fill = PickControlBackground(state, Theme.Palette.ControlBackground);
         context.FillEllipse(circleRect, fill);
 
         var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
@@ -197,7 +197,7 @@ public class RadioButton : ToggleBase
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -232,7 +232,7 @@ public class RadioButton : ToggleBase
             window.ReleaseMouseCapture();
         }
 
-        if (IsEnabled && Bounds.Contains(e.Position))
+        if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
             IsChecked = true;
         }

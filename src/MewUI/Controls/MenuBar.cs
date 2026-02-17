@@ -173,7 +173,7 @@ public sealed class MenuBar : Control, IPopupOwner
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
-        if (!IsEnabled || e.Handled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Handled || e.Button != MouseButton.Left)
         {
             return;
         }

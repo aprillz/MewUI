@@ -83,26 +83,8 @@ public partial class Button : Control
     {
         var state = GetVisualState(_isPressed, _isPressed);
 
-        // Determine visual state
-        Color bgColor;
-        Color borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
-
-        if (!state.IsEnabled)
-        {
-            bgColor = Theme.Palette.ButtonDisabledBackground;
-        }
-        else if (state.IsPressed)
-        {
-            bgColor = Theme.Palette.ButtonPressedBackground;
-        }
-        else if (state.IsHot)
-        {
-            bgColor = Theme.Palette.ButtonHoverBackground;
-        }
-        else
-        {
-            bgColor = Background;
-        }
+        var bgColor = PickButtonBackground(state);
+        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
 
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = Theme.Metrics.ControlCornerRadius;

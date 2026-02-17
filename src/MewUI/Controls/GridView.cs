@@ -478,7 +478,7 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -580,21 +580,9 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
     {
         var theme = Theme;
         var bounds = GetSnappedBorderBounds(Bounds);
-        var bg = IsEnabled ? Background : theme.Palette.DisabledControlBackground;
-
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused)
-            {
-                borderColor = theme.Palette.Accent;
-            }
-            else if (IsMouseOver)
-            {
-                borderColor = BorderBrush.Lerp(theme.Palette.Accent, 0.6);
-            }
-        }
-
+        var state = GetVisualState();
+        var bg = PickControlBackground(state);
+        var borderColor = PickAccentBorder(theme, BorderBrush, state, 0.6);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, theme.Metrics.ControlCornerRadius);
     }
 
@@ -896,7 +884,7 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
                 return;
             }
 
-            if (!_owner.IsEnabled)
+            if (!_owner.IsEffectivelyEnabled)
             {
                 return;
             }
@@ -1161,7 +1149,7 @@ internal sealed class GridViewCore<TItem> : Control, IVisualTreeHost
                     return;
                 }
 
-                if (!_row._owner.IsEnabled)
+                if (!_row._owner.IsEffectivelyEnabled)
                 {
                     return;
                 }

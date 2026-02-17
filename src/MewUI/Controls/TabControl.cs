@@ -215,7 +215,7 @@ public sealed class TabControl : Control
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (e.Handled || !IsEnabled)
+        if (e.Handled || !IsEffectivelyEnabled)
         {
             return;
         }

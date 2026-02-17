@@ -254,7 +254,7 @@ public sealed class TreeView : Control, IVisualTreeHost
         int depth = _itemsSource.GetDepth(i);
         double indentX = itemRect.X + depth * Indent;
         var glyphRect = new Rect(indentX, itemRect.Y, Indent, itemRect.Height);
-        var textColor = selected ? Theme.Palette.SelectionText : (IsEnabled ? Foreground : Theme.Palette.DisabledText);
+        var textColor = selected ? Theme.Palette.SelectionText : (IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText);
         if (_itemsSource.GetHasChildren(i))
         {
             DrawExpanderGlyph(context, glyphRect, _itemsSource.GetIsExpanded(i), textColor);
@@ -463,7 +463,7 @@ public sealed class TreeView : Control, IVisualTreeHost
     {
         base.ArrangeContent(bounds);
 
-        
+
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
@@ -498,26 +498,16 @@ public sealed class TreeView : Control, IVisualTreeHost
     }
 
     protected override void OnRender(IGraphicsContext context)
-    {        
+    {
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
         double radius = Theme.Metrics.ControlCornerRadius;
         var borderInset = GetBorderVisualInset();
         double itemRadius = Math.Max(0, radius - borderInset);
 
-        var bg = IsEnabled ? Background : Theme.Palette.DisabledControlBackground;
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused)
-            {
-                borderColor = Theme.Palette.Accent;
-            }
-            else if (IsMouseOver)
-            {
-                borderColor = BorderBrush.Lerp(Theme.Palette.Accent, 0.6);
-            }
-        }
+        var state = GetVisualState();
+        var bg = PickControlBackground(state);
+        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
         if (_itemsSource.Count == 0)
@@ -609,13 +599,14 @@ public sealed class TreeView : Control, IVisualTreeHost
                     tb.FontWeight = FontWeight;
                 }
 
-                if (tb.IsEnabled != IsEnabled)
+                var enabled = IsEffectivelyEnabled;
+                if (tb.IsEnabled != enabled)
                 {
-                    tb.IsEnabled = IsEnabled;
+                    tb.IsEnabled = enabled;
                 }
 
                 bool selected = index == _itemsSource.SelectedIndex;
-                var fg = selected ? Theme.Palette.SelectionText : (IsEnabled ? Foreground : Theme.Palette.DisabledText);
+                var fg = selected ? Theme.Palette.SelectionText : (enabled ? Foreground : Theme.Palette.DisabledText);
                 if (tb.Foreground != fg)
                 {
                     tb.Foreground = fg;
@@ -624,7 +615,7 @@ public sealed class TreeView : Control, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible || !IsEnabled)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }
@@ -641,7 +632,7 @@ public sealed class TreeView : Control, IVisualTreeHost
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -671,7 +662,7 @@ public sealed class TreeView : Control, IVisualTreeHost
     {
         base.OnMouseDoubleClick(e);
 
-        if (e.Handled || !IsEnabled || e.Button != MouseButton.Left)
+        if (e.Handled || !IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -734,7 +725,7 @@ public sealed class TreeView : Control, IVisualTreeHost
     {
         base.OnMouseMove(e);
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }

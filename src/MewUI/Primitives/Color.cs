@@ -126,6 +126,41 @@ public readonly struct Color : IEquatable<Color>
         );
     }
 
+    /// <summary>
+    /// Alpha-composites <paramref name="overlay"/> over <paramref name="backdrop"/> using straight (unpremultiplied) alpha.
+    /// </summary>
+    public static Color Composite(Color backdrop, Color overlay)
+    {
+        if (overlay.A == 0)
+        {
+            return backdrop;
+        }
+
+        if (backdrop.A == 0)
+        {
+            return overlay;
+        }
+
+        double oa = overlay.A / 255.0;
+        double ba = backdrop.A / 255.0;
+
+        double outA = oa + (ba * (1 - oa));
+        if (outA <= 0)
+        {
+            return Transparent;
+        }
+
+        double outR = ((overlay.R * oa) + (backdrop.R * ba * (1 - oa))) / outA;
+        double outG = ((overlay.G * oa) + (backdrop.G * ba * (1 - oa))) / outA;
+        double outB = ((overlay.B * oa) + (backdrop.B * ba * (1 - oa))) / outA;
+
+        return new Color(
+            (byte)Math.Clamp(Math.Round(outA * 255.0), 0, 255),
+            (byte)Math.Clamp(Math.Round(outR), 0, 255),
+            (byte)Math.Clamp(Math.Round(outG), 0, 255),
+            (byte)Math.Clamp(Math.Round(outB), 0, 255));
+    }
+
     // Common colors
 
     /// <summary>

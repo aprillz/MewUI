@@ -360,7 +360,7 @@ public abstract partial class TextBase : Control
         DrawBackgroundAndBorder(
             context,
             bounds,
-            state.IsEnabled ? Background : Theme.Palette.DisabledControlBackground,
+            PickControlBackground(state),
             borderColor,
             radius);
 
@@ -653,7 +653,7 @@ public abstract partial class TextBase : Control
             return;
         }
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }
@@ -721,7 +721,7 @@ public abstract partial class TextBase : Control
     {
         base.OnMouseMove(e);
 
-        if (!IsEnabled || !IsMouseCaptured || !e.LeftButton)
+        if (!IsEffectivelyEnabled || !IsMouseCaptured || !e.LeftButton)
         {
             return;
         }

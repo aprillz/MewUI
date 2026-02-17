@@ -318,14 +318,15 @@ public partial class ListBox : Control
                     tb.FontWeight = FontWeight;
                 }
 
-                if (tb.IsEnabled != IsEnabled)
+                var enabled = IsEffectivelyEnabled;
+                if (tb.IsEnabled != enabled)
                 {
-                    tb.IsEnabled = IsEnabled;
+                    tb.IsEnabled = enabled;
                 }
 
                 var fg = index == SelectedIndex
                     ? Theme.Palette.SelectionText
-                    : (IsEnabled ? Foreground : Theme.Palette.DisabledText);
+                    : (enabled ? Foreground : Theme.Palette.DisabledText);
 
                 if (tb.Foreground != fg)
                 {
@@ -543,19 +544,9 @@ public partial class ListBox : Control
         var borderInset = GetBorderVisualInset();
         double itemRadius = Math.Max(0, radius - borderInset);
 
-        var bg = IsEnabled ? Background : Theme.Palette.DisabledControlBackground;
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused)
-            {
-                borderColor = Theme.Palette.Accent;
-            }
-            else if (IsMouseOver)
-            {
-                borderColor = BorderBrush.Lerp(Theme.Palette.Accent, 0.6);
-            }
-        }
+        var state = GetVisualState();
+        var bg = PickControlBackground(state);
+        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
         if (ItemsSource.Count == 0)
@@ -612,7 +603,7 @@ public partial class ListBox : Control
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible || !IsEnabled)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }
@@ -629,7 +620,7 @@ public partial class ListBox : Control
     {
         base.OnMouseDown(e);
 
-        if (!IsEnabled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -647,7 +638,7 @@ public partial class ListBox : Control
     {
         base.OnMouseUp(e);
 
-        if (!IsEnabled || e.Handled || e.Button != MouseButton.Left)
+        if (!IsEffectivelyEnabled || e.Handled || e.Button != MouseButton.Left)
         {
             return;
         }
@@ -700,7 +691,7 @@ public partial class ListBox : Control
     {
         base.OnMouseMove(e);
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }
@@ -738,7 +729,7 @@ public partial class ListBox : Control
     {
         base.OnKeyDown(e);
 
-        if (!IsEnabled)
+        if (!IsEffectivelyEnabled)
         {
             return;
         }
@@ -833,6 +824,7 @@ public partial class ListBox : Control
         }
 
         InvalidateVisual();
+        ScrollChanged?.Invoke();
     }
 
     /// <summary>
