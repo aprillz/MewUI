@@ -407,11 +407,16 @@ public abstract class Control : FrameworkElement
             return;
         }
 
+        // Use the shared state-based border color logic (focus/hover/pressed/active).
+        // This keeps base rendering consistent with other controls.
+        var state = GetVisualState();
+        var borderBrush = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+
         DrawBackgroundAndBorder(
             context,
             Bounds,
             Background,
-            BorderBrush,
+            borderBrush,
             0);
     }
 

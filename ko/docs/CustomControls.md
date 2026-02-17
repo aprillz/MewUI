@@ -23,8 +23,22 @@
 - 이 단계는 “컨트롤이 필요로 하는 공간”만 계산하며, 실제 배치 위치는 다루지 않습니다.
 - 표시 문자열(포맷 반영)을 기준으로 텍스트를 측정합니다.
 - `Padding`과 크롬(버튼 영역), `GetBorderVisualInset()`을 포함해 최종 크기를 결정합니다.
+- 테마 기본 높이에 맞추려면 `DefaultMinHeight`를 `Theme.Metrics.BaseControlHeight`로 설정합니다.
+- 이 경우 `MeasureContent`는 자연 높이를 반환하고, `MinHeight`가 기준 높이를 보장합니다.
 - `Format`, `Value` 변경은 텍스트 폭이 바뀔 수 있으므로 **Measure 무효화**가 필요합니다.
 - 캐시가 있는 경우라도 **측정 입력(폰트, DPI, 문자열, 래핑 정책)**이 바뀌면 즉시 무효화합니다.
+
+예시:
+```csharp
+protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
+
+protected override Size MeasureContent(Size available)
+{
+    var textHeight = /* 텍스트 높이 측정 */;
+    double height = textHeight + Padding.VerticalThickness;
+    return new Size(Width, height);
+}
+```
 
 ### <a id="arrange"></a>내부 배치 (ArrangeContent)
 
@@ -56,6 +70,30 @@
 - 테마 변경 시 텍스트 측정 캐시를 무효화합니다.
 - 테마 변화는 **색상뿐 아니라 폰트/크기/패딩 규칙**까지 바꿀 수 있으므로 Measure 재계산이 안전합니다.
 
+### <a id="utils"></a>유틸리티 메서드 (상태, 보더, DIP)
+
+- `GetDpi()`는 유효 DPI(`uint`)를 반환합니다. DIP→픽셀 변환은 보통 `dpiScale = GetDpi() / 96.0`를 사용합니다.
+- `GetVisualState(...)`는 `enabled/hot/focused/pressed/active` 상태를 한 번에 계산한 스냅샷을 만듭니다.
+- `PickAccentBorder(theme, baseBorder, state, hoverMix)`는 상태에 따라 보더 색을 결정합니다(포커스/눌림/활성은 Accent, hover는 tint).
+- `DrawBackgroundAndBorder(context, bounds, background, borderBrush, cornerRadiusDip)`는 백엔드에 상관없이 일관된 배경/보더 렌더링을 제공합니다.
+- `GetBorderRenderMetrics(bounds, cornerRadiusDip)`는 픽셀 스냅된 border 두께/코너 반경을 계산해 레이아웃과 렌더링이 어긋나지 않게 합니다.
+- `LayoutRounding`은 fractional DPI에서 흔한 1px 잘림/떨림을 줄이기 위한 유틸입니다.
+- `LayoutRounding.SnapBoundsRectToPixels(...)`는 background/border 같은 “박스” 지오메트리에 사용합니다.
+- `LayoutRounding.SnapViewportRectToPixels(...)`는 viewport/clip 같은 “잘라야 하는 영역”에 사용합니다(줄어들지 않게).
+- `LayoutRounding.SnapThicknessToPixels(...)`는 보더 두께를 정수 픽셀로 맞출 때 사용합니다.
+- `LayoutRounding.ExpandClipByDevicePixels(...)`는 클립이 마지막 1px을 누락하지 않게 확장할 때 사용합니다.
+
+예: 상태 기반 보더 + 픽셀 스냅
+
+```csharp
+var dpiScale = GetDpi() / 96.0;
+var state = GetVisualState(isPressed: isPressed, isActive: isActive);
+var border = PickAccentBorder(Theme, BorderBrush, state, hoverMix: 0.6);
+
+var bounds = LayoutRounding.SnapBoundsRectToPixels(Bounds, dpiScale);
+DrawBackgroundAndBorder(context, bounds, Background, border, cornerRadiusDip: 0);
+```
+
 ### <a id="invalidate"></a>Invalidate 기준
 
 - `Format` 변경: `InvalidateMeasure()` + `InvalidateVisual()`
@@ -65,6 +103,8 @@
 ---
 
 ## 전체 샘플 코드
+
+https://github.com/user-attachments/assets/340e24a6-5b39-4d77-a857-69811e857133
 
 ```csharp
 public sealed class NumericUpDown : RangeBase
@@ -103,6 +143,9 @@ public sealed class NumericUpDown : RangeBase
         // Border는 Measure에 포함되어야 하며, 기본값을 지정해두는 편이 안전하다.
         BorderThickness = 1;
 
+        // 기본 범위를 지정한다.
+        Maximum = 100;
+
         // 콘텐츠와 크롬 영역을 분리한다.
         // 커스텀 컨트롤은 콘텐츠 영역과 장식/조작 영역을 분리해 설계하는 편이 일관적이다.
         Padding = new Thickness(8, 4, 8, 4);
@@ -111,6 +154,7 @@ public sealed class NumericUpDown : RangeBase
     // 기본 테마 색을 제공해 일관된 기본 스타일을 보장한다.
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     // 키보드 입력을 수용하는 컨트롤임을 명시한다.
     public override bool Focusable => true;
@@ -192,8 +236,8 @@ public sealed class NumericUpDown : RangeBase
         // 콘텐츠 + 패딩 + 크롬의 합으로 폭을 결정한다.
         double width = textSize.Width + Padding.HorizontalThickness + buttonAreaWidth;
 
-        // 최소 높이 규칙을 보장한다.
-        double height = Math.Max(textSize.Height + Padding.VerticalThickness, Theme.Metrics.BaseControlHeight);
+        // 자연 높이를 사용하고, MinHeight가 기준 높이를 보장한다.
+        double height = textSize.Height + Padding.VerticalThickness;
 
         // 보더 inset까지 포함해 DesiredSize를 확정한다.
         return new Size(width, height).Inflate(new Thickness(GetBorderVisualInset()));
@@ -211,7 +255,9 @@ public sealed class NumericUpDown : RangeBase
         // 상태에 따른 색상 결정은 렌더 전에 정리한다.
         bool isEnabled = IsEffectivelyEnabled;
         Color bg = isEnabled ? Background : Theme.Palette.DisabledControlBackground;
-        Color border = isEnabled ? BorderBrush : Theme.Palette.ControlBorder;
+        Color baseBorder = isEnabled ? BorderBrush : Theme.Palette.ControlBorder;
+        var state = GetVisualState(isPressed: _pressedPart != ButtonPart.None, isActive: _pressedPart != ButtonPart.None);
+        Color border = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.6);
 
         // 크롬(배경/보더)을 먼저 렌더한다.
         DrawBackgroundAndBorder(context, bounds, bg, border, radius);
@@ -258,14 +304,22 @@ public sealed class NumericUpDown : RangeBase
         {
             // 크롬 영역을 렌더한다.
             context.FillRectangle(decRect, decBg);
+
+            var innerRadius = Math.Max(0, radius - GetBorderVisualInset());
+            context.Save();
+            context.SetClipRoundedRect(
+                LayoutRounding.MakeClipRect(inner, context.DpiScale, rightPx: 0, bottomPx: 0),
+                innerRadius,
+                innerRadius);
             context.FillRectangle(incRect, incBg);
+            context.Restore();
 
             // 시각적 분리를 위해 경계선을 그린다.
             var x = decRect.Right;
-            context.DrawLine(new Point(x, decRect.Y + 2), new Point(x, decRect.Bottom - 2), Theme.Palette.ControlBorder, 1);
+            context.DrawLine(new Point(x, decRect.Y + 4), new Point(x, decRect.Bottom - 4), Theme.Palette.ControlBorder, 1);
 
             x = decRect.Left;
-            context.DrawLine(new Point(x, decRect.Y), new Point(x, decRect.Bottom), Theme.Palette.ControlBorder, 1);
+            context.DrawLine(new Point(x, decRect.Y + 1), new Point(x, decRect.Bottom - 1), Theme.Palette.ControlBorder, 1);
         }
 
         // 텍스트는 마지막에 렌더하여 크롬 위에 올린다.

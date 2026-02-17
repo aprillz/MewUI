@@ -45,7 +45,7 @@ public abstract class RangeBase : Control
             CoerceValueAfterRangeChange();
             InvalidateVisual();
         }
-    }
+    } = 1.0;
 
     /// <summary>
     /// Gets or sets the current value.

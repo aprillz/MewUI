@@ -23,8 +23,22 @@
 - This stage only computes how much space the control needs; it does not decide placement.
 - Text is measured using the display string (format applied).
 - The final size includes `Padding`, chrome (button area), and `GetBorderVisualInset()`.
+- If the control should align with the theme’s baseline size, set `DefaultMinHeight` to `Theme.Metrics.BaseControlHeight`.
+- In that case, `MeasureContent` can return the natural content height; the framework applies `MinHeight`.
 - `Format` and `Value` changes can alter text width, so **measure invalidation** is required.
 - Even with caching, **invalidate when inputs change** (font, DPI, string, wrapping policy).
+
+Example:
+```csharp
+protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
+
+protected override Size MeasureContent(Size available)
+{
+    var textHeight = /* measure text height */;
+    double height = textHeight + Padding.VerticalThickness;
+    return new Size(Width, height);
+}
+```
 
 ### <a id="arrange"></a>Internal Layout (ArrangeContent)
 
@@ -55,6 +69,30 @@
 - Colors and sizes come from `Theme.Palette.*` and `Theme.Metrics.*`.
 - Theme changes invalidate text measurement caches.
 - Theme changes can affect **fonts, sizes, and padding rules**, so re‑measuring is safer.
+
+### <a id="utils"></a>Utility Methods (State, Border, and DIP)
+
+- `GetDpi()` returns the effective DPI (`uint`). Use `dpiScale = GetDpi() / 96.0` when converting DIPs to device pixels.
+- `GetVisualState(...)` creates a stable snapshot of `enabled/hot/focused/pressed/active` for the current frame.
+- `PickAccentBorder(theme, baseBorder, state, hoverMix)` maps that state to a border color (accent on focused/pressed/active; tinted on hover).
+- `DrawBackgroundAndBorder(context, bounds, background, borderBrush, cornerRadiusDip)` draws a consistent background + border using the current backend.
+- `GetBorderRenderMetrics(bounds, cornerRadiusDip)` returns pixel-snapped border thickness and corner radius so rendering matches layout.
+- `LayoutRounding` helpers keep geometry stable across fractional DPI and avoid 1px clipping artifacts:
+- `LayoutRounding.SnapBoundsRectToPixels(...)` for background/border/layout boxes.
+- `LayoutRounding.SnapViewportRectToPixels(...)` for viewports and clip rectangles (won’t shrink).
+- `LayoutRounding.SnapThicknessToPixels(...)` for border thickness that must be whole pixels.
+- `LayoutRounding.ExpandClipByDevicePixels(...)` for clip rects that must include the last pixel row/col.
+
+Example: state-driven border + pixel snapping
+
+```csharp
+var dpiScale = GetDpi() / 96.0;
+var state = GetVisualState(isPressed: isPressed, isActive: isActive);
+var border = PickAccentBorder(Theme, BorderBrush, state, hoverMix: 0.6);
+
+var bounds = LayoutRounding.SnapBoundsRectToPixels(Bounds, dpiScale);
+DrawBackgroundAndBorder(context, bounds, Background, border, cornerRadiusDip: 0);
+```
 
 ### <a id="invalidate"></a>Invalidation Rules
 
@@ -105,6 +143,9 @@ public sealed class NumericUpDown : RangeBase
         // Border participates in Measure; set a safe default.
         BorderThickness = 1;
 
+        // Set default range.
+        Maximum = 100;
+
         // Separate content from chrome.
         // Custom controls should keep content and chrome areas distinct.
         Padding = new Thickness(8, 4, 8, 4);
@@ -113,6 +154,7 @@ public sealed class NumericUpDown : RangeBase
     // Provide theme defaults for consistent styling.
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     // Controls that accept keyboard input must be focusable.
     public override bool Focusable => true;
@@ -193,8 +235,8 @@ public sealed class NumericUpDown : RangeBase
         // Content + padding + chrome.
         double width = textSize.Width + Padding.HorizontalThickness + buttonAreaWidth;
 
-        // Enforce minimum control height.
-        double height = Math.Max(textSize.Height + Padding.VerticalThickness, Theme.Metrics.BaseControlHeight);
+        // Use natural content height; MinHeight enforces the baseline size.
+        double height = textSize.Height + Padding.VerticalThickness;
 
         // Include border inset in desired size.
         return new Size(width, height).Inflate(new Thickness(GetBorderVisualInset()));
@@ -212,7 +254,9 @@ public sealed class NumericUpDown : RangeBase
         // Resolve state‑dependent colors before drawing.
         bool isEnabled = IsEffectivelyEnabled;
         Color bg = isEnabled ? Background : Theme.Palette.DisabledControlBackground;
-        Color border = isEnabled ? BorderBrush : Theme.Palette.ControlBorder;
+        Color baseBorder = isEnabled ? BorderBrush : Theme.Palette.ControlBorder;
+        var state = GetVisualState(isPressed: _pressedPart != ButtonPart.None, isActive: _pressedPart != ButtonPart.None);
+        Color border = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.6);
 
         // Draw chrome first.
         DrawBackgroundAndBorder(context, bounds, bg, border, radius);
@@ -259,7 +303,15 @@ public sealed class NumericUpDown : RangeBase
         {
             // Draw chrome area.
             context.FillRectangle(decRect, decBg);
+
+            var innerRadius = Math.Max(0, radius - GetBorderVisualInset());
+            context.Save();
+            context.SetClipRoundedRect(
+                LayoutRounding.MakeClipRect(inner, context.DpiScale, rightPx: 0, bottomPx: 0),
+                innerRadius,
+                innerRadius);
             context.FillRectangle(incRect, incBg);
+            context.Restore();
 
             // Visual separators for clarity.
             var x = decRect.Right;
