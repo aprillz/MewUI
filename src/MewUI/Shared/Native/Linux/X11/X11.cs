@@ -132,6 +132,31 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static unsafe partial int XLookupString(ref XKeyEvent event_struct, byte* buffer_return, int bytes_buffer, out nint keysym_return, out nint status_in_out);
 
+    // XIM / UTF-8 input (minimal; XCreateIC is varargs and is bound via dynamic delegates in platform code).
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial nint XSetLocaleModifiers(string modifiers);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint XOpenIM(nint display, nint rdb, nint res_name, nint res_class);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XCloseIM(nint im);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XDestroyIC(nint ic);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XSetICFocus(nint ic);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XUnsetICFocus(nint ic);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XFilterEvent(ref XEvent ev, nint window);
+
+    [LibraryImport(LibraryName)]
+    public static unsafe partial int Xutf8LookupString(nint ic, ref XKeyEvent event_struct, byte* buffer_return, int bytes_buffer, out nint keysym_return, out int status_return);
+
     [LibraryImport(LibraryName)]
     public static partial int XSetWMNormalHints(nint display, nint window, ref XSizeHints hints);
 
@@ -294,6 +319,22 @@ internal struct XEvent
 
     [FieldOffset(0)]
     public XPropertyEvent xproperty;
+
+    [FieldOffset(0)]
+    public XFocusChangeEvent xfocus;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XFocusChangeEvent
+{
+    public int type;
+    public ulong serial;
+    [MarshalAs(UnmanagedType.Bool)]
+    public bool send_event;
+    public nint display;
+    public nint window;
+    public int mode;
+    public int detail;
 }
 
 [StructLayout(LayoutKind.Sequential)]
