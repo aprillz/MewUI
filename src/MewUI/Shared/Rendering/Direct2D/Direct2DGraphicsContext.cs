@@ -16,6 +16,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
     private readonly nint _dwriteFactory;
     private readonly Action? _onRecreateTarget;
     private readonly bool _ownsRenderTarget;
+    private readonly bool _useClearTypeText;
 
     private nint _renderTarget; // ID2D1RenderTarget* 
     private readonly int _renderTargetGeneration;
@@ -56,6 +57,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         var textAa = _hwnd == 0
             ? D2D1_TEXT_ANTIALIAS_MODE.GRAYSCALE
             : D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE;
+        _useClearTypeText = textAa == D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE;
         D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, textAa);
     }
 
@@ -187,7 +189,9 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
             maskTransform: D2D1_MATRIX_3X2_F.Identity,
             opacity: 1.0f,
             opacityBrush: 0,
-            layerOptions: D2D1_LAYER_OPTIONS.NONE);
+            // When ClearType is enabled for the render target, D2D requires this option for layers used
+            // with geometric masks; otherwise text rendering inside the layer can fail.
+            layerOptions: _useClearTypeText ? D2D1_LAYER_OPTIONS.INITIALIZE_FOR_CLEARTYPE : D2D1_LAYER_OPTIONS.NONE);
 
         D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
         _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry));
