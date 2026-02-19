@@ -39,7 +39,11 @@ public sealed class ApplicationBuilder
             throw new InvalidOperationException("Main window is not configured. Use UseMainWindow(...) or Run<TWindow>().");
         }
 
-        Run(MainWindowFactory());
+        var mainWindow = MainWindowFactory();
+        ArgumentNullException.ThrowIfNull(mainWindow);
+
+        ApplyOptions();
+        Application.Run(mainWindow);
     }
 
     /// <summary>
