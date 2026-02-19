@@ -129,7 +129,7 @@ public static class ItemsView
             get => _selectedIndex;
             set
             {
-                int clamped = ItemsView.ClampIndex(value, Count);
+                int clamped = ClampIndex(value, Count);
                 if (_selectedIndex == clamped)
                 {
                     return;
