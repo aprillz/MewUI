@@ -11,9 +11,10 @@ public sealed class ToggleSwitch : ToggleBase
     private bool _isPressed;
     private TextMeasureCache _textMeasureCache;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     public ToggleSwitch()
     {
-        BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
 
         // ToggleBase sets Background=Transparent. For ToggleSwitch we want a normal control background by default.

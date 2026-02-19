@@ -14,6 +14,8 @@ public class RadioButton : ToggleBase
     private Element? _registeredParentScope;
     private TextMeasureCache _textMeasureCache;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     /// <summary>
     /// Ensures the radio button is registered with its group if checked.
     /// </summary>
@@ -53,7 +55,6 @@ public class RadioButton : ToggleBase
 
     public RadioButton()
     {
-        BorderThickness = 1;
         Padding = new Thickness(2);
     }
 

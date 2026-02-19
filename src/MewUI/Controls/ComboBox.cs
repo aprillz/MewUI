@@ -15,6 +15,8 @@ public sealed partial class ComboBox : DropDownBase
     private IItemsView _itemsSource = ItemsView.Empty;
     private IDataTemplate? _itemTemplate;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     /// <summary>
     /// Gets or sets the items data source.
     /// </summary>
@@ -164,7 +166,6 @@ public sealed partial class ComboBox : DropDownBase
     /// </summary>
     public ComboBox()
     {
-        BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
         // Do not set explicit Height, otherwise FrameworkElement.MeasureOverride will clamp DesiredSize
         // and the drop-down cannot expand. Use MinHeight as the default header height.

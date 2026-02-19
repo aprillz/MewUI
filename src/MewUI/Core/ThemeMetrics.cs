@@ -12,6 +12,7 @@ public sealed record class ThemeMetrics
     {
         BaseControlHeight = 28,
         ControlCornerRadius = 4,
+        ControlBorderThickness = 1,
         ItemPadding = new Thickness(8, 2, 8, 2),
         FontFamily = "Segoe UI",
         FontSize = 12,
@@ -33,6 +34,11 @@ public sealed record class ThemeMetrics
     /// Gets the default corner radius for controls (in DIPs).
     /// </summary>
     public required double ControlCornerRadius { get; init; }
+
+    /// <summary>
+    /// Gets the default border thickness for standard controls (in DIPs).
+    /// </summary>
+    public required double ControlBorderThickness { get; init; }
 
     /// <summary>
     /// Gets the default padding for list items (in DIPs).

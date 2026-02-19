@@ -16,13 +16,14 @@ public partial class CheckBox : Control
     public CheckBox()
     {
         Background = Color.Transparent;
-        BorderThickness = 1;
         Padding = new Thickness(2);
     }
 
     public override bool Focusable => true;
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     /// <summary>
     /// Gets or sets the checkbox label text.

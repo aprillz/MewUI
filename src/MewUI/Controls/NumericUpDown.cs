@@ -21,9 +21,10 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
     private bool _editMode;
     private bool _suppressTextBoxUpdate;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     public NumericUpDown()
     {
-        BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
 
         _textBox = new TextBox
@@ -221,8 +222,8 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         if (buttonRect.Width > 0)
         {
             var chevronSize = Theme.Metrics.BaseControlHeight / 6;
-            ChevronGlyph.Draw(context, decRect.Center, chevronSize, textColor, ChevronDirection.Down);
-            ChevronGlyph.Draw(context, incRect.Center, chevronSize, textColor, ChevronDirection.Up);
+            Glyph.Draw(context, decRect.Center, chevronSize, textColor, GlyphKind.ChevronDown);
+            Glyph.Draw(context, incRect.Center, chevronSize, textColor, GlyphKind.ChevronUp);
         }
     }
 

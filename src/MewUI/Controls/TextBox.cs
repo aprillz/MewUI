@@ -14,11 +14,12 @@ public class TextBox : TextBase
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public TextBox()
     {
-        BorderThickness = 1;
         Padding = new Thickness(4);
     }
 

@@ -15,11 +15,12 @@ public partial class Button : Control
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public Button()
     {
-        BorderThickness = 1;
         Padding = new Thickness(8, 4, 8, 4);
     }
 

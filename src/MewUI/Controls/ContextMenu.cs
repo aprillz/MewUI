@@ -112,7 +112,6 @@ public sealed class ContextMenu : Control, IPopupOwner
         {
             ItemPadding = Theme.Metrics.ItemPadding;
         }
-        BorderThickness = 1;
         Padding = new Thickness(1);
 
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false, Parent = this };
@@ -125,6 +124,8 @@ public sealed class ContextMenu : Control, IPopupOwner
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     public void AddItem(string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
     {
@@ -820,7 +821,7 @@ public sealed class ContextMenu : Control, IPopupOwner
                 {
                     // Submenu chevron indicator (matches ComboBox/TreeView chevron style).
                     var center = new Point(paddedRow.Right - (SubMenuGlyphAreaWidth / 2), paddedRow.Y + paddedRow.Height / 2);
-                    ChevronGlyph.Draw(context, center, size: 3, fg, ChevronDirection.Right);
+                    Glyph.Draw(context, center, size: 3, fg, GlyphKind.ChevronRight);
                 }
             }
 

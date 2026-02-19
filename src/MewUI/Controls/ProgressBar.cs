@@ -18,13 +18,14 @@ public sealed partial class ProgressBar : RangeBase
     /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     /// <summary>
     /// Initializes a new instance of the ProgressBar class.
     /// </summary>
     public ProgressBar()
     {
         Maximum = 100;
-        BorderThickness = 1;
         Padding = new Thickness(1);
         Height = 10;
     }

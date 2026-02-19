@@ -9,6 +9,7 @@ public sealed class GroupBox : HeaderedContentControl
 {
     protected override Color DefaultBackground => Theme.Palette.ContainerBackground;
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
     /// <summary>
     /// Gets whether to invalidate visual on mouse over changes.
     /// </summary>
@@ -35,7 +36,6 @@ public sealed class GroupBox : HeaderedContentControl
     /// </summary>
     public GroupBox()
     {
-        BorderThickness = 1;
         Padding = new Thickness(8);
         HeaderSpacing = 4;
     }

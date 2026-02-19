@@ -60,7 +60,6 @@ public abstract partial class ToggleBase : Control
     protected ToggleBase()
     {
         Background = Color.Transparent;
-        BorderThickness = 1;
     }
 
     /// <summary>

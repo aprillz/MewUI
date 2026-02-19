@@ -212,12 +212,13 @@ public partial class ListBox : Control
     /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     /// <summary>
     /// Initializes a new instance of the ListBox class.
     /// </summary>
     public ListBox()
     {
-        BorderThickness = 1;
         Padding = new Thickness(1);
         ItemPadding = Theme.Metrics.ItemPadding;
 

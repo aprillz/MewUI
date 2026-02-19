@@ -33,11 +33,12 @@ public sealed class MultiLineTextBox : TextBase
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
     public MultiLineTextBox()
     {
-        BorderThickness = 1;
         Padding = new Thickness(4);
         AcceptReturn = true;
 

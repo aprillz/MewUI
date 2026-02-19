@@ -133,11 +133,12 @@ public sealed class TabControl : Control
     /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     public override bool Focusable => true;
 
     public TabControl()
     {
-        BorderThickness = 1;
         base.Padding = Thickness.Zero;
 
         _headerStrip = new StackPanel

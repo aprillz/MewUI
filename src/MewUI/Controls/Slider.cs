@@ -19,6 +19,8 @@ public sealed partial class Slider : RangeBase
     /// </summary>
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     /// <summary>
     /// Gets whether the slider can receive keyboard focus.
     /// </summary>
@@ -31,7 +33,6 @@ public sealed partial class Slider : RangeBase
     {
         Maximum = 100;
         Background = Color.Transparent;
-        BorderThickness = 1;
         Height = 24;
     }
 

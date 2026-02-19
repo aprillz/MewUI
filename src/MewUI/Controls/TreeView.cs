@@ -44,6 +44,8 @@ public sealed class TreeView : Control, IVisualTreeHost
     private double _viewportHeight;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
 
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+
     /// <summary>
     /// Gets or sets the root nodes collection.
     /// </summary>
@@ -173,7 +175,6 @@ public sealed class TreeView : Control, IVisualTreeHost
     /// </summary>
     public TreeView()
     {
-        BorderThickness = 1;
         Padding = new Thickness(1);
         ItemPadding = Theme.Metrics.ItemPadding;
 
@@ -908,6 +909,6 @@ public sealed class TreeView : Control, IVisualTreeHost
         // Match the ComboBox drop-down chevron style for visual consistency.
         var center = new Point(glyphRect.X + glyphRect.Width / 2, glyphRect.Y + glyphRect.Height / 2);
         double size = 4;
-        ChevronGlyph.Draw(context, center, size, color, expanded ? ChevronDirection.Down : ChevronDirection.Right);
+        Glyph.Draw(context, center, size, color, expanded ? GlyphKind.ChevronDown : GlyphKind.ChevronRight);
     }
 }

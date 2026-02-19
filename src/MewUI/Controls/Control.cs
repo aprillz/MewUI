@@ -11,6 +11,7 @@ public abstract class Control : FrameworkElement
     private Color? _background;
     private Color? _foreground;
     private Color? _borderBrush;
+    private double? _borderThickness;
     private string? _fontFamily;
     private double? _fontSize;
     private FontWeight? _fontWeight;
@@ -91,10 +92,17 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public double BorderThickness
     {
-        get;
+        get => _borderThickness ?? DefaultBorderThickness;
         set
         {
-            field = value;
+            if (BorderThickness.Equals(value))
+            {
+                return;
+            }
+
+            _borderThickness = value;
+            InvalidateMeasure();
+            InvalidateArrange();
             InvalidateVisual();
         }
     }
@@ -151,6 +159,8 @@ public abstract class Control : FrameworkElement
 
     protected virtual Color DefaultBorderBrush => Color.Transparent;
 
+    protected virtual double DefaultBorderThickness => 0;
+
 
     protected virtual string DefaultFontFamily => Theme.Metrics.FontFamily;
 
@@ -188,6 +198,19 @@ public abstract class Control : FrameworkElement
         }
 
         _borderBrush = null;
+        InvalidateVisual();
+    }
+
+    public void ClearBorderThickness()
+    {
+        if (_borderThickness == null)
+        {
+            return;
+        }
+
+        _borderThickness = null;
+        InvalidateMeasure();
+        InvalidateArrange();
         InvalidateVisual();
     }
 

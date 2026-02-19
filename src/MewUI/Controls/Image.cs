@@ -185,8 +185,8 @@ public sealed class Image : FrameworkElement
         double sx = src.X + u * src.Width;
         double sy = src.Y + v * src.Height;
 
-        int px = (int)System.Math.Floor(sx);
-        int py = (int)System.Math.Floor(sy);
+        int px = (int)Math.Floor(sx);
+        int py = (int)Math.Floor(sy);
 
         if ((uint)px >= (uint)decoded.WidthPx || (uint)py >= (uint)decoded.HeightPx)
         {
@@ -263,8 +263,8 @@ public sealed class Image : FrameworkElement
 
     private Rect GetViewBoxPixels(int pixelWidth, int pixelHeight)
     {
-        double iw = System.Math.Max(0, pixelWidth);
-        double ih = System.Math.Max(0, pixelHeight);
+        double iw = Math.Max(0, pixelWidth);
+        double ih = Math.Max(0, pixelHeight);
         var full = new Rect(0, 0, iw, ih);
         if (ViewBox is not Rect vb)
         {

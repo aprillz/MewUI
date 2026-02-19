@@ -345,12 +345,12 @@ public abstract class DropDownBase : Control, IPopupOwner
         double centerX = headerRect.Right - ArrowAreaWidth / 2;
         double centerY = headerRect.Y + headerRect.Height / 2;
 
-        ChevronGlyph.Draw(
+        Glyph.Draw(
             context,
             new Point(centerX, centerY),
             size: 4,
             color,
-            isUp ? ChevronDirection.Up : ChevronDirection.Down);
+            isUp ? GlyphKind.ChevronUp : GlyphKind.ChevronDown);
     }
 
     private UIElement EnsurePopupContent()

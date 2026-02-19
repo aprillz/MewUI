@@ -40,12 +40,13 @@ public sealed class ToolTip : ContentControl
     {
         IsHitTestVisible = false;
         Padding = new Thickness(8, 4, 8, 4);
-        BorderThickness = 1;
     }
 
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
 
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+
+    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     protected override Size MeasureContent(Size availableSize)
     {
