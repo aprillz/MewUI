@@ -74,6 +74,9 @@ internal static partial class GdiPlusInterop
     public static partial int GdipAddPathArcI(nint path, int x, int y, int width, int height, float startAngle, float sweepAngle);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipAddPathRectangleI(nint path, int x, int y, int width, int height);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipClosePathFigure(nint path);
 
     [LibraryImport("gdiplus.dll")]
@@ -95,16 +98,28 @@ internal static partial class GdiPlusInterop
     public static partial int GdipDeletePen(nint pen);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPenMode(nint pen, PenAlignment mode);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipDrawRectangleI(nint graphics, nint pen, int x, int y, int width, int height);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipDrawRectangle(nint graphics, nint pen, float x, float y, float width, float height);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipDrawLineI(nint graphics, nint pen, int x1, int y1, int x2, int y2);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipDrawLine(nint graphics, nint pen, float x1, float y1, float x2, float y2);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipDrawPath(nint graphics, nint pen, nint path);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipDrawEllipseI(nint graphics, nint pen, int x, int y, int width, int height);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipDrawEllipse(nint graphics, nint pen, float x, float y, float width, float height);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipFillEllipseI(nint graphics, nint brush, int x, int y, int width, int height);
@@ -132,12 +147,20 @@ internal static partial class GdiPlusInterop
 
     public enum SmoothingMode
     {
-        AntiAlias = 4
+        Default = 0,
+        HighSpeed = 1,
+        HighQuality = 2,
+        None = 3,
+        AntiAlias = 4,
     }
 
     public enum PixelOffsetMode
     {
-        Half = 4
+        Default = 0,
+        HighSpeed = 1,
+        HighQuality = 2,
+        None = 3,
+        Half = 4,
     }
 
     public enum CompositingMode
@@ -153,6 +176,12 @@ internal static partial class GdiPlusInterop
     public enum Unit
     {
         Pixel = 2
+    }
+
+    public enum PenAlignment
+    {
+        Center = 0,
+        Inset = 1
     }
 
     public enum MatrixOrder

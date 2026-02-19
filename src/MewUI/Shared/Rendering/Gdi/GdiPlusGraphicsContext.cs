@@ -193,11 +193,6 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         _translateX += dx;
         _translateY += dy;
         _textStateManager.Translate(dx, dy);
-
-        if (EnsureGraphics())
-        {
-            GdiPlusInterop.GdipTranslateWorldTransform(_graphics, (float)(dx * _dpiScale), (float)(dy * _dpiScale), GdiPlusInterop.MatrixOrder.Append);
-        }
     }
 
     #endregion
@@ -998,15 +993,6 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         GdiPlusInterop.GdipSetPixelOffsetMode(_graphics, GdiPlusInterop.PixelOffsetMode.Half);
         GdiPlusInterop.GdipSetCompositingMode(_graphics, GdiPlusInterop.CompositingMode.SourceOver);
         GdiPlusInterop.GdipSetCompositingQuality(_graphics, GdiPlusInterop.CompositingQuality.HighQuality);
-
-        if (_translateX != 0 || _translateY != 0)
-        {
-            GdiPlusInterop.GdipTranslateWorldTransform(
-                _graphics,
-                (float)(_translateX * _dpiScale),
-                (float)(_translateY * _dpiScale),
-                GdiPlusInterop.MatrixOrder.Append);
-        }
 
         return true;
     }
