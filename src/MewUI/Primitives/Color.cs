@@ -6,7 +6,7 @@ namespace Aprillz.MewUI;
 /// Represents a 32-bit ARGB color.
 /// </summary>
 [DebuggerDisplay("Color(A={A}, R={R}, G={G}, B={B})")]
-public readonly struct Color : IEquatable<Color>
+public readonly partial struct Color : IEquatable<Color>
 {
     private readonly uint _value;
 
@@ -161,88 +161,6 @@ public readonly struct Color : IEquatable<Color>
             (byte)Math.Clamp(Math.Round(outB), 0, 255));
     }
 
-    // Common colors
-
-    /// <summary>
-    /// Gets a fully transparent color.
-    /// </summary>
-    public static Color Transparent => new(0, 0, 0, 0);
-
-    /// <summary>
-    /// Gets black (RGB 0,0,0).
-    /// </summary>
-    public static Color Black => new(0, 0, 0);
-
-    /// <summary>
-    /// Gets white (RGB 255,255,255).
-    /// </summary>
-    public static Color White => new(255, 255, 255);
-
-    /// <summary>
-    /// Gets red (RGB 255,0,0).
-    /// </summary>
-    public static Color Red => new(255, 0, 0);
-
-    /// <summary>
-    /// Gets green (RGB 0,128,0).
-    /// </summary>
-    public static Color Green => new(0, 128, 0);
-
-    /// <summary>
-    /// Gets blue (RGB 0,0,255).
-    /// </summary>
-    public static Color Blue => new(0, 0, 255);
-
-    /// <summary>
-    /// Gets yellow (RGB 255,255,0).
-    /// </summary>
-    public static Color Yellow => new(255, 255, 0);
-
-    /// <summary>
-    /// Gets cyan (RGB 0,255,255).
-    /// </summary>
-    public static Color Cyan => new(0, 255, 255);
-
-    /// <summary>
-    /// Gets magenta (RGB 255,0,255).
-    /// </summary>
-    public static Color Magenta => new(255, 0, 255);
-
-    /// <summary>
-    /// Gets gray (RGB 128,128,128).
-    /// </summary>
-    public static Color Gray => new(128, 128, 128);
-
-    /// <summary>
-    /// Gets light gray (RGB 211,211,211).
-    /// </summary>
-    public static Color LightGray => new(211, 211, 211);
-
-    /// <summary>
-    /// Gets dark gray (RGB 64,64,64).
-    /// </summary>
-    public static Color DarkGray => new(64, 64, 64);
-
-    /// <summary>
-    /// Gets orange (RGB 255,165,0).
-    /// </summary>
-    public static Color Orange => new(255, 165, 0);
-
-    /// <summary>
-    /// Gets purple (RGB 128,0,128).
-    /// </summary>
-    public static Color Purple => new(128, 0, 128);
-
-    /// <summary>
-    /// Gets pink (RGB 255,192,203).
-    /// </summary>
-    public static Color Pink => new(255, 192, 203);
-
-    /// <summary>
-    /// Gets brown (RGB 139,69,19).
-    /// </summary>
-    public static Color Brown => new(139, 69, 19);
-     
     /// <summary>
     /// Determines whether two colors are equal.
     /// </summary>
