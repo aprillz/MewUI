@@ -572,7 +572,18 @@ public partial class ListBox : Control
         var contentBounds = LayoutRounding.SnapViewportRectToPixels(viewportBounds.Deflate(Padding), dpiScale);
 
         context.Save();
-        context.SetClip(LayoutRounding.MakeClipRect(contentBounds, dpiScale));
+        var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
+        var clipRadius = Math.Max(0, radius - borderInset);
+        clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
+        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
+        if (clipRadius > 0)
+        {
+            context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
+        }
+        else
+        {
+            context.SetClip(clipRect);
+        }
 
         double itemHeight = ResolveItemHeight();
         double verticalOffset = _scroll.GetOffsetDip(1);
