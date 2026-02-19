@@ -819,7 +819,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                     return;
                 }
 
-                Window.FocusManager.FocusedElement?.RaiseKeyDown(args);
+                WindowInputRouter.KeyDown(Window, args);
             }
 
             // Text input after key handling (best-effort).
@@ -867,7 +867,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             Window.RaisePreviewKeyUp(args);
             if (!args.Handled)
             {
-                Window.FocusManager.FocusedElement?.RaiseKeyUp(args);
+                WindowInputRouter.KeyUp(Window, args);
             }
 
             Window.RequerySuggested();

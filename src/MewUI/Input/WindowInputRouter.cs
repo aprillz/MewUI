@@ -7,6 +7,18 @@ namespace Aprillz.MewUI.Input;
 /// </summary>
 internal static class WindowInputRouter
 {
+    internal static UIElement? GetInputBubbleParent(Window window, UIElement current)
+    {
+        // Bubble across popup roots back to their owners.
+        // This keeps input semantics closer to WPF: a click/wheel inside a popup can be handled by the owning control.
+        if (window.TryGetPopupOwner(current, out var owner) && !ReferenceEquals(owner, current))
+        {
+            return owner;
+        }
+
+        return current.Parent as UIElement;
+    }
+
     /// <summary>
     /// Updates the current mouse-over element and the window's mouse-over chain.
     /// </summary>
@@ -40,8 +52,11 @@ internal static class WindowInputRouter
         var element = HitTest(window, positionInWindow);
         UpdateMouseOver(window, element);
 
-        var args = new MouseEventArgs(positionInWindow, screenPosition, global::Aprillz.MewUI.MouseButton.Left, leftDown, rightDown, middleDown);
-        element?.RaiseMouseMove(args);
+        var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown);
+        for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+        {
+            current.RaiseMouseMove(args);
+        }
     }
 
     /// <summary>
@@ -81,17 +96,26 @@ internal static class WindowInputRouter
                 window.FocusManager.SetFocus(element);
             }
 
-            element?.RaiseMouseDown(args);
+            for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+            {
+                current.RaiseMouseDown(args);
+            }
 
             if (clickCount == 2)
             {
-                var dblArgs = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2);
-                element?.RaiseMouseDoubleClick(dblArgs);
+                args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2);
+                for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+                {
+                    current.RaiseMouseDoubleClick(args);
+                }
             }
         }
         else
         {
-            element?.RaiseMouseUp(args);
+            for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+            {
+                current.RaiseMouseUp(args);
+            }
             window.RequerySuggested();
         }
     }
@@ -114,9 +138,31 @@ internal static class WindowInputRouter
         var element = window.HitTest(positionInWindow);
         var args = new MouseWheelEventArgs(positionInWindow, screenPosition, delta, isHorizontal, leftDown, rightDown, middleDown);
 
-        for (var current = element; current != null && !args.Handled; current = current.Parent as UIElement)
+        for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseMouseWheel(args);
+        }
+    }
+
+    /// <summary>
+    /// Routes a KeyDown event by bubbling from the focused element to the root until handled.
+    /// </summary>
+    public static void KeyDown(Window window, KeyEventArgs args)
+    {
+        for (var current = window.FocusManager.FocusedElement; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+        {
+            current.RaiseKeyDown(args);
+        }
+    }
+
+    /// <summary>
+    /// Routes a KeyUp event by bubbling from the focused element to the root until handled.
+    /// </summary>
+    public static void KeyUp(Window window, KeyEventArgs args)
+    {
+        for (var current = window.FocusManager.FocusedElement; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+        {
+            current.RaiseKeyUp(args);
         }
     }
 }

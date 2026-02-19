@@ -1045,7 +1045,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return 0;
         }
 
-        Window.FocusManager.FocusedElement?.RaiseKeyDown(args);
+        WindowInputRouter.KeyDown(Window, args);
 
         return args.Handled ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
     }
@@ -1059,7 +1059,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         Window.RaisePreviewKeyUp(args);
         if (!args.Handled)
         {
-            Window.FocusManager.FocusedElement?.RaiseKeyUp(args);
+            WindowInputRouter.KeyUp(Window, args);
         }
 
         Window.RequerySuggested();
