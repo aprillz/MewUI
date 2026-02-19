@@ -137,7 +137,7 @@ public sealed class X11PlatformHost : IPlatformHost
                             topModal.Activate();
                             continue;
                         }
-                        backend.ProcessEvent(ev);
+                        backend.ProcessEvent(ref ev);
                     }
                 }
 
@@ -272,7 +272,7 @@ public sealed class X11PlatformHost : IPlatformHost
                     topModal.Activate();
                     continue;
                 }
-                backend.ProcessEvent(ev);
+                backend.ProcessEvent(ref ev);
             }
         }
 

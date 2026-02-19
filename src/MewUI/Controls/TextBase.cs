@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls.Text;
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -6,8 +7,16 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for text input controls.
 /// </summary>
-public abstract partial class TextBase : Control
+public abstract partial class TextBase : Control, ITextCompositionClient, ITextInputClient
 {
+    public event Action<TextInputEventArgs>? TextInput;
+
+    public event Action<TextCompositionEventArgs>? TextCompositionStart;
+
+    public event Action<TextCompositionEventArgs>? TextCompositionUpdate;
+
+    public event Action<TextCompositionEventArgs>? TextCompositionEnd;
+
     private bool _suppressBindingSet;
     private string? _cachedText;
     private int _cachedTextVersion = -1;
@@ -16,6 +25,10 @@ public abstract partial class TextBase : Control
 
     private bool _suppressTextInputNewline;
     private bool _suppressTextInputTab;
+
+    private bool _isTextComposing;
+    private int _compositionStart;
+    private int _compositionLength;
 
     private ContextMenu? _defaultContextMenu;
 
@@ -201,6 +214,41 @@ public abstract partial class TextBase : Control
             }
         }
     }
+
+    internal int CompositionStartIndex => _compositionStart;
+    internal int CompositionLength => _compositionLength;
+
+    internal (int start, int end) SelectionRange
+    {
+        get
+        {
+            return _editor.GetSelectionRange();
+        }
+    }
+
+    // Platform text services (IME) sometimes report a replacement range (e.g. AppKit insertText/setMarkedText).
+    // We need a controlled way for backends to align our caret/selection with that range *before* starting
+    // a composition, so the composition replaces the correct characters.
+    internal void SetSelectionRangeForPlatform(int start, int end)
+    {
+        int textLength = GetTextLengthCore();
+        start = Math.Clamp(start, 0, textLength);
+        end = Math.Clamp(end, 0, textLength);
+
+        // Ensure a predictable direction.
+        if (end < start)
+        {
+            (start, end) = (end, start);
+        }
+
+        // Select [start, end) with caret at end.
+        _editor.SetCaretAndSelection(start, extendSelection: false);
+        _editor.SetCaretAndSelection(end, extendSelection: true);
+    }
+
+    internal int TextLengthInternal => GetTextLengthCore();
+
+    internal string GetTextSubstringInternal(int start, int length) => GetTextSubstringCore(start, length);
 
     public event Action<string>? TextChanged;
 
@@ -601,12 +649,20 @@ public abstract partial class TextBase : Control
         }
     }
 
-    protected override void OnTextInput(TextInputEventArgs e)
+    protected virtual void OnTextInput(TextInputEventArgs e)
     {
-        base.OnTextInput(e);
+        TextInput?.Invoke(e);
         if (e.Handled || IsReadOnly)
         {
             return;
+        }
+
+        // If the platform provides IME composition updates, we may have a transient preedit range inserted
+        // into the document. If we receive committed text (WM_CHAR / KeyDown->TextInput path) while a
+        // composition is active, treat this as the commit point and clear the transient range first.
+        if (_isTextComposing)
+        {
+            EndTextCompositionInternal();
         }
 
         var text = e.Text ?? string.Empty;
@@ -642,6 +698,143 @@ public abstract partial class TextBase : Control
 
         EnsureCaretVisibleCore(GetInteractionContentBounds());
         InvalidateVisual();
+    }
+
+    protected virtual void OnTextCompositionStart(TextCompositionEventArgs e)
+    {
+        TextCompositionStart?.Invoke(e);
+        if (e.Handled || IsReadOnly || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        BeginTextCompositionInternal();
+    }
+
+    protected virtual void OnTextCompositionUpdate(TextCompositionEventArgs e)
+    {
+        TextCompositionUpdate?.Invoke(e);
+        if (e.Handled || IsReadOnly || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        if (!_isTextComposing)
+        {
+            BeginTextCompositionInternal();
+        }
+
+        string text = e.Text ?? string.Empty;
+
+        // Replace the previous preedit range with the latest IME composition string.
+        if (_compositionLength > 0)
+        {
+            ApplyRemoveForEdit(_compositionStart, _compositionLength);
+        }
+
+        if (text.Length > 0)
+        {
+            ApplyInsertForEdit(_compositionStart, text);
+        }
+
+        _compositionLength = text.Length;
+
+        SetCaretAndSelection(_compositionStart + _compositionLength, extendSelection: false);
+        EnsureCaretVisibleCore(GetInteractionContentBounds());
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    protected virtual void OnTextCompositionEnd(TextCompositionEventArgs e)
+    {
+        TextCompositionEnd?.Invoke(e);
+        if (e.Handled || IsReadOnly || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        EndTextCompositionInternal();
+        EnsureCaretVisibleCore(GetInteractionContentBounds());
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    void ITextCompositionClient.HandleTextCompositionStart(TextCompositionEventArgs e)
+        => OnTextCompositionStart(e);
+
+    void ITextCompositionClient.HandleTextCompositionUpdate(TextCompositionEventArgs e)
+        => OnTextCompositionUpdate(e);
+
+    void ITextCompositionClient.HandleTextCompositionEnd(TextCompositionEventArgs e)
+        => OnTextCompositionEnd(e);
+
+    void ITextInputClient.HandleTextInput(TextInputEventArgs e)
+        => OnTextInput(e);
+
+    protected override void OnLostFocus()
+    {
+        base.OnLostFocus();
+        if (_isTextComposing)
+        {
+            EndTextCompositionInternal();
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
+
+    private void BeginTextCompositionInternal()
+    {
+        // IME composition replaces selection in typical text controls.
+        if (HasSelection)
+        {
+            var (start, end) = GetSelectionRange();
+            int len = end - start;
+            if (len > 0)
+            {
+                ApplyRemoveForEdit(start, len);
+                SetCaretAndSelection(start, extendSelection: false);
+                InvalidateMeasure();
+            }
+        }
+
+        _isTextComposing = true;
+        _compositionStart = CaretPosition;
+        _compositionLength = 0;
+    }
+
+    private void EndTextCompositionInternal()
+    {
+        if (!_isTextComposing)
+        {
+            return;
+        }
+
+        if (_compositionLength > 0)
+        {
+            ApplyRemoveForEdit(_compositionStart, _compositionLength);
+        }
+
+        SetCaretAndSelection(_compositionStart, extendSelection: false);
+
+        _isTextComposing = false;
+        _compositionStart = 0;
+        _compositionLength = 0;
+    }
+
+    internal void CommitTextCompositionInternal()
+    {
+        if (!_isTextComposing)
+        {
+            return;
+        }
+
+        // Keep the current preedit text in the document and just finalize the composing state.
+        // (Some platforms deliver the committed string via the same text services pipeline, without a separate TextInput.)
+        SetCaretAndSelection(_compositionStart + _compositionLength, extendSelection: false);
+
+        _isTextComposing = false;
+        _compositionStart = 0;
+        _compositionLength = 0;
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

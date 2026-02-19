@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
@@ -318,6 +320,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             case WindowMessages.WM_CHAR:
                 return HandleChar(wParam);
+
+            case WindowMessages.WM_IME_STARTCOMPOSITION:
+                return HandleImeStartComposition();
+            case WindowMessages.WM_IME_COMPOSITION:
+                return HandleImeComposition(lParam);
+            case WindowMessages.WM_IME_ENDCOMPOSITION:
+                return HandleImeEndComposition();
 
             case WindowMessages.WM_SETFOCUS:
                 User32.CreateCaret(Handle, 0, 1, 20);
@@ -1084,14 +1093,136 @@ internal sealed class Win32WindowBackend : IWindowBackend
         Window.RaisePreviewTextInput(args);
         if (!args.Handled)
         {
-            Window.FocusManager.FocusedElement?.RaiseTextInput(args);
+            if (Window.FocusManager.FocusedElement is ITextInputClient client)
+            {
+                client.HandleTextInput(args);
+            }
         }
 
         return 0;
     }
 
+    private nint HandleImeStartComposition()
+    {
+        var args = new TextCompositionEventArgs();
+        Window.RaisePreviewTextCompositionStart(args);
+        if (!args.Handled)
+        {
+            if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
+            {
+                client.HandleTextCompositionStart(args);
+            }
+        }
+
+        return 0;
+    }
+
+    private nint HandleImeComposition(nint lParam)
+    {
+        int flags = (int)lParam.ToInt64();
+
+        if ((flags & Imm32.CompositionStringFlags.GCS_COMPSTR) != 0)
+        {
+            string comp = GetImeCompositionString(Imm32.CompositionStringFlags.GCS_COMPSTR);
+            var args = new TextCompositionEventArgs(comp);
+            Window.RaisePreviewTextCompositionUpdate(args);
+            if (!args.Handled)
+            {
+                if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
+                {
+                    client.HandleTextCompositionUpdate(args);
+                }
+            }
+        }
+
+        // Forward committed IME text explicitly.
+        // Relying on WM_CHAR for IME commits is fragile because DefWindowProc is responsible for generating
+        // those messages, and this backend intentionally intercepts WM_IME_COMPOSITION.
+        if ((flags & Imm32.CompositionStringFlags.GCS_RESULTSTR) != 0)
+        {
+            string result = GetImeCompositionString(Imm32.CompositionStringFlags.GCS_RESULTSTR);
+            if (!string.IsNullOrEmpty(result))
+            {
+                var ti = new TextInputEventArgs(result);
+                Window.RaisePreviewTextInput(ti);
+                if (!ti.Handled)
+                {
+                    if (Window.FocusManager.FocusedElement is ITextInputClient client)
+                    {
+                        client.HandleTextInput(ti);
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    private nint HandleImeEndComposition()
+    {
+        var args = new TextCompositionEventArgs();
+        Window.RaisePreviewTextCompositionEnd(args);
+        if (!args.Handled)
+        {
+            if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
+            {
+                client.HandleTextCompositionEnd(args);
+            }
+        }
+
+        return 0;
+    }
+
+    private string GetImeCompositionString(int dwIndex)
+    {
+        nint himc = Imm32.ImmGetContext(Handle);
+        if (himc == 0)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            int byteCount = Imm32.ImmGetCompositionStringW(himc, dwIndex, 0, 0);
+            if (byteCount <= 0)
+            {
+                return string.Empty;
+            }
+
+            // IMM returns UTF-16LE bytes.
+            byteCount = Math.Min(byteCount, 1024 * 1024);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(byteCount);
+            try
+            {
+                unsafe
+                {
+                    fixed (byte* p = rented)
+                    {
+                        _ = Imm32.ImmGetCompositionStringW(himc, dwIndex, (nint)p, byteCount);
+                    }
+                }
+
+                return Encoding.Unicode.GetString(rented, 0, byteCount);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+        finally
+        {
+            Imm32.ImmReleaseContext(Handle, himc);
+        }
+    }
+
     private static Key MapKey(int vk)
     {
+        // Function keys
+        if (vk is >= VirtualKeys.VK_F1 and <= VirtualKeys.VK_F24)
+        {
+            return (Key)((int)Key.F1 + (vk - VirtualKeys.VK_F1));
+        }
+
         // Digits (top row)
         if (vk is >= 0x30 and <= 0x39)
         {

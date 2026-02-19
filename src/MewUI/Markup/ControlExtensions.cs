@@ -407,9 +407,27 @@ public static class ControlExtensions
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
-    public static T OnTextInput<T>(this T element, Action<TextInputEventArgs> handler) where T : UIElement
+    public static T OnTextInput<T>(this T element, Action<TextInputEventArgs> handler) where T : TextBase
     {
         element.TextInput += handler;
+        return element;
+    }
+
+    public static T OnTextCompositionStart<T>(this T element, Action<TextCompositionEventArgs> handler) where T : TextBase
+    {
+        element.TextCompositionStart += handler;
+        return element;
+    }
+
+    public static T OnTextCompositionUpdate<T>(this T element, Action<TextCompositionEventArgs> handler) where T : TextBase
+    {
+        element.TextCompositionUpdate += handler;
+        return element;
+    }
+
+    public static T OnTextCompositionEnd<T>(this T element, Action<TextCompositionEventArgs> handler) where T : TextBase
+    {
+        element.TextCompositionEnd += handler;
         return element;
     }
 
@@ -2445,6 +2463,24 @@ public static class ControlExtensions
     public static Window OnPreviewTextInput(this Window window, Action<TextInputEventArgs> handler)
     {
         window.PreviewTextInput += handler;
+        return window;
+    }
+
+    public static Window OnPreviewTextCompositionStart(this Window window, Action<TextCompositionEventArgs> handler)
+    {
+        window.PreviewTextCompositionStart += handler;
+        return window;
+    }
+
+    public static Window OnPreviewTextCompositionUpdate(this Window window, Action<TextCompositionEventArgs> handler)
+    {
+        window.PreviewTextCompositionUpdate += handler;
+        return window;
+    }
+
+    public static Window OnPreviewTextCompositionEnd(this Window window, Action<TextCompositionEventArgs> handler)
+    {
+        window.PreviewTextCompositionEnd += handler;
         return window;
     }
 

@@ -10,5 +10,6 @@ internal static class X11EventMask
     public const long PointerMotionMask = 1L << 6;
     public const long ExposureMask = 1L << 15;
     public const long StructureNotifyMask = 1L << 17;
+    public const long FocusChangeMask = 1L << 21;
     public const long PropertyChangeMask = 1L << 22;
 }

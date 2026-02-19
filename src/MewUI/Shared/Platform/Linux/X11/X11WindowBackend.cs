@@ -30,6 +30,15 @@ internal sealed class X11WindowBackend : IWindowBackend
     private double _opacity = 1.0;
     private bool _allowsTransparency;
     private bool _enabled = true;
+    private nint _xim;
+    private nint _xic;
+    private GCHandle _imeOwnerHandle;
+    private nint _imePreeditStartCallback;
+    private nint _imePreeditDrawCallback;
+    private nint _imePreeditDoneCallback;
+    private bool _imeHasPreeditCallbacks;
+    private bool _imePreeditActive;
+    private string _imePreeditText = string.Empty;
 
     internal bool NeedsRender { get; private set; }
 
@@ -420,7 +429,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             event_mask = (nint)(X11EventMask.ExposureMask | X11EventMask.StructureNotifyMask |
                                X11EventMask.KeyPressMask | X11EventMask.KeyReleaseMask |
                                X11EventMask.ButtonPressMask | X11EventMask.ButtonReleaseMask |
-                               X11EventMask.PointerMotionMask),
+                               X11EventMask.PointerMotionMask | X11EventMask.FocusChangeMask),
         };
 
         ulong valueMask = CWEventMask | CWColormap;
@@ -476,6 +485,21 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         ApplyOpacity();
         ApplyResizeMode();
+
+        if (X11Ime.TryCreateInputContext(
+            Display,
+            Handle,
+            this,
+            out _xim,
+            out _xic,
+            out _imeOwnerHandle,
+            out _imePreeditStartCallback,
+            out _imePreeditDrawCallback,
+            out _imePreeditDoneCallback,
+            out _imeHasPreeditCallbacks))
+        {
+            DiagLog.Write($"[X11] XIM enabled: im=0x{_xim.ToInt64():X} ic=0x{_xic.ToInt64():X} preedit={_imeHasPreeditCallbacks}");
+        }
 
         NeedsRender = true;
     }
@@ -640,11 +664,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         while (NativeX11.XPending(Display) != 0)
         {
             NativeX11.XNextEvent(Display, out var ev);
-            ProcessEvent(ev);
+            ProcessEvent(ref ev);
         }
     }
 
-    internal void ProcessEvent(XEvent ev)
+    internal void ProcessEvent(ref XEvent ev)
     {
         const int Expose = 12;
         const int DestroyNotify = 17;
@@ -655,6 +679,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         const int ButtonPress = 4;
         const int ButtonRelease = 5;
         const int MotionNotify = 6;
+        const int FocusIn = 9;
+        const int FocusOut = 10;
 
         if (!_enabled && (ev.type == KeyPress || ev.type == KeyRelease || ev.type == ButtonPress || ev.type == ButtonRelease || ev.type == MotionNotify))
         {
@@ -703,7 +729,11 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case KeyPress:
             case KeyRelease:
-                HandleKey(ev.xkey, isDown: ev.type == KeyPress);
+                // XIM may "filter" the key event while still producing committed characters.
+                // We still run our key handler so KeyDown/Up can bubble when appropriate and
+                // so Xutf8LookupString can deliver committed text (TextInput).
+                bool filtered = _xic != 0 && NativeX11.XFilterEvent(ref ev, 0) != 0;
+                HandleKey(ev.xkey, isDown: ev.type == KeyPress, isFilteredByIme: filtered);
                 break;
 
             case ButtonPress:
@@ -714,7 +744,119 @@ internal sealed class X11WindowBackend : IWindowBackend
             case MotionNotify:
                 HandleMotion(ev.xmotion);
                 break;
+
+            case FocusIn:
+                if (_xic != 0) NativeX11.XSetICFocus(_xic);
+                break;
+
+            case FocusOut:
+                if (_xic != 0) NativeX11.XUnsetICFocus(_xic);
+                if (_imePreeditActive)
+                {
+                    ImePreeditDone();
+                }
+                break;
         }
+    }
+
+    internal void ImePreeditStart()
+    {
+        if (!_imeHasPreeditCallbacks || Window.Content == null)
+        {
+            return;
+        }
+
+        if (_imePreeditActive)
+        {
+            return;
+        }
+
+        _imePreeditActive = true;
+        _imePreeditText = string.Empty;
+
+        var args = new TextCompositionEventArgs();
+        Window.RaisePreviewTextCompositionStart(args);
+        if (args.Handled)
+        {
+            return;
+        }
+
+        if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
+        {
+            client.HandleTextCompositionStart(args);
+        }
+    }
+
+    internal void ImePreeditDraw(int changeFirst, int changeLength, string replacementText)
+    {
+        if (!_imeHasPreeditCallbacks || Window.Content == null)
+        {
+            return;
+        }
+
+        if (!_imePreeditActive)
+        {
+            ImePreeditStart();
+        }
+
+        changeFirst = Math.Max(0, changeFirst);
+        changeLength = Math.Max(0, changeLength);
+
+        string current = _imePreeditText ?? string.Empty;
+        if (changeFirst > current.Length)
+        {
+            changeFirst = current.Length;
+        }
+
+        int removable = Math.Min(changeLength, current.Length - changeFirst);
+        if (removable > 0)
+        {
+            current = current.Remove(changeFirst, removable);
+        }
+
+        replacementText ??= string.Empty;
+        if (replacementText.Length > 0)
+        {
+            current = current.Insert(changeFirst, replacementText);
+        }
+
+        _imePreeditText = current;
+
+        var args = new TextCompositionEventArgs(current);
+        Window.RaisePreviewTextCompositionUpdate(args);
+        if (args.Handled)
+        {
+            return;
+        }
+
+        if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
+        {
+            client.HandleTextCompositionUpdate(args);
+        }
+    }
+
+    internal void ImePreeditDone()
+    {
+        if (!_imeHasPreeditCallbacks || !_imePreeditActive || Window.Content == null)
+        {
+            _imePreeditActive = false;
+            _imePreeditText = string.Empty;
+            return;
+        }
+
+        string text = _imePreeditText ?? string.Empty;
+        var args = new TextCompositionEventArgs(text);
+        Window.RaisePreviewTextCompositionEnd(args);
+        if (!args.Handled)
+        {
+            if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
+            {
+                client.HandleTextCompositionEnd(args);
+            }
+        }
+
+        _imePreeditActive = false;
+        _imePreeditText = string.Empty;
     }
 
     internal void RenderIfNeeded()
@@ -778,7 +920,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         Render();
     }
 
-    private void HandleKey(XKeyEvent e, bool isDown)
+    private void HandleKey(XKeyEvent e, bool isDown, bool isFilteredByIme)
     {
         if (Window.Content == null)
         {
@@ -792,6 +934,10 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         if (isDown)
         {
+            // If XIM filtered this key press, don't route KeyDown/Tab navigation into the UI:
+            // it is likely being used for IME candidate navigation or composition control.
+            bool routeKeyDown = !isFilteredByIme;
+
             // Many window managers send WM_DELETE_WINDOW for Alt+F4, but not all do (especially for secondary windows).
             // Handle it ourselves to ensure consistent close behavior.
             const long XK_F4 = 0xFFC1;
@@ -801,48 +947,64 @@ internal sealed class X11WindowBackend : IWindowBackend
                 return;
             }
 
-            Window.RaisePreviewKeyDown(args);
-            if (!args.Handled)
+            if (routeKeyDown)
             {
-                if (args.Key == Key.Tab)
+                Window.RaisePreviewKeyDown(args);
+                if (!args.Handled && args.Key == Key.Tab)
                 {
-                    if (args.Modifiers.HasFlag(ModifierKeys.Shift))
+                    // Tab is focus navigation only when not composing.
+                    // When composing, many IMEs use Tab to navigate candidates.
+                    if (!_imePreeditActive)
                     {
-                        Window.FocusManager.MoveFocusPrevious();
-                    }
-                    else
-                    {
-                        Window.FocusManager.MoveFocusNext();
-                    }
+                        if (args.Modifiers.HasFlag(ModifierKeys.Shift))
+                        {
+                            Window.FocusManager.MoveFocusPrevious();
+                        }
+                        else
+                        {
+                            Window.FocusManager.MoveFocusNext();
+                        }
 
-                    args.Handled = true;
-                    return;
+                        args.Handled = true;
+                        return;
+                    }
                 }
-
-                WindowInputRouter.KeyDown(Window, args);
+                if (!args.Handled)
+                {
+                    WindowInputRouter.KeyDown(Window, args);
+                }
             }
 
             // Text input after key handling (best-effort).
-            if (!args.Handled)
+            // Do not gate text input on KeyDown handling: text controls may handle Enter/Backspace/etc. while
+            // still requiring IME commits (or dead-key composed text) to flow through TextInput.
+            // Instead, only suppress obvious shortcut-modifier combinations.
+            if (!args.Modifiers.HasFlag(ModifierKeys.Control) && !args.Modifiers.HasFlag(ModifierKeys.Alt))
             {
-                Span<byte> buf = stackalloc byte[64];
+                Span<byte> buf = stackalloc byte[128];
+                int byteCount = 0;
+                int lookupStatus = 0;
                 unsafe
                 {
                     fixed (byte* p = buf)
                     {
-                        NativeX11.XLookupString(ref e, p, buf.Length, out _, out _);
+                        if (_xic != 0)
+                        {
+                            byteCount = NativeX11.Xutf8LookupString(_xic, ref e, p, buf.Length, out _, out lookupStatus);
+                        }
+                        else
+                        {
+                            byteCount = NativeX11.XLookupString(ref e, p, buf.Length, out _, out _);
+                            lookupStatus = 2; // XLookupChars (best-effort)
+                        }
                     }
                 }
 
-                if (buf[0] != 0)
+                // XLookupChars=2, XLookupBoth=4. Anything else means "no committed chars".
+                if ((lookupStatus == 2 || lookupStatus == 4) && byteCount > 0)
                 {
-                    int len = buf.IndexOf((byte)0);
-                    if (len < 0)
-                    {
-                        len = buf.Length;
-                    }
-
-                    string s = System.Text.Encoding.UTF8.GetString(buf[..len]);
+                    byteCount = Math.Min(byteCount, buf.Length);
+                    string s = System.Text.Encoding.UTF8.GetString(buf[..byteCount]);
                     if (!string.IsNullOrEmpty(s))
                     {
                         // Filter control characters so Tab doesn't get inserted into TextBox.
@@ -856,7 +1018,10 @@ internal sealed class X11WindowBackend : IWindowBackend
                         Window.RaisePreviewTextInput(ti);
                         if (!ti.Handled)
                         {
-                            Window.FocusManager.FocusedElement?.RaiseTextInput(ti);
+                            if (Window.FocusManager.FocusedElement is ITextInputClient client)
+                            {
+                                client.HandleTextInput(ti);
+                            }
                         }
                     }
                 }
@@ -864,10 +1029,13 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
         else
         {
-            Window.RaisePreviewKeyUp(args);
-            if (!args.Handled)
+            if (!isFilteredByIme)
             {
-                WindowInputRouter.KeyUp(Window, args);
+                Window.RaisePreviewKeyUp(args);
+                if (!args.Handled)
+                {
+                    WindowInputRouter.KeyUp(Window, args);
+                }
             }
 
             Window.RequerySuggested();
@@ -992,6 +1160,12 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private static Key MapKeysymToKey(long keysym)
     {
+        // Function keys
+        if (keysym is >= 0xFFBE and <= 0xFFD5) // XK_F1..XK_F24
+        {
+            return (Key)((int)Key.F1 + (int)(keysym - 0xFFBE));
+        }
+
         // Minimal mapping for navigation/editing.
         // KeySyms for ASCII letters/numbers are their Unicode code points
         // (e.g. 'A' == 0x41, 'a' == 0x61, '0' == 0x30).
@@ -1106,6 +1280,47 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (handle == 0 || Display == 0)
         {
             return;
+        }
+
+        try
+        {
+            if (_xic != 0)
+            {
+                NativeX11.XDestroyIC(_xic);
+                _xic = 0;
+            }
+            if (_xim != 0)
+            {
+                _ = NativeX11.XCloseIM(_xim);
+                _xim = 0;
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            if (_imePreeditStartCallback != 0) Marshal.FreeHGlobal(_imePreeditStartCallback);
+            if (_imePreeditDrawCallback != 0) Marshal.FreeHGlobal(_imePreeditDrawCallback);
+            if (_imePreeditDoneCallback != 0) Marshal.FreeHGlobal(_imePreeditDoneCallback);
+            _imePreeditStartCallback = 0;
+            _imePreeditDrawCallback = 0;
+            _imePreeditDoneCallback = 0;
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            if (_imeOwnerHandle.IsAllocated)
+            {
+                _imeOwnerHandle.Free();
+            }
+        }
+        catch
+        {
         }
 
         if (destroyWindow)

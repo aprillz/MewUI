@@ -137,11 +137,6 @@ public abstract partial class UIElement : Element
     /// </summary>
     public event Action<KeyEventArgs>? KeyUp;
 
-    /// <summary>
-    /// Occurs when text input is received while the element has focus.
-    /// </summary>
-    public event Action<TextInputEventArgs>? TextInput;
-
     #endregion
 
     protected override Size MeasureCore(Size availableSize)
@@ -526,8 +521,6 @@ public abstract partial class UIElement : Element
 
     internal void RaiseKeyUp(KeyEventArgs e) => OnKeyUp(e);
 
-    internal void RaiseTextInput(TextInputEventArgs e) => OnTextInput(e);
-
     // Protected virtual hooks for derived controls (public API surface stays small).
     /// <summary>
     /// Called when a mouse button is pressed.
@@ -570,12 +563,6 @@ public abstract partial class UIElement : Element
     /// </summary>
     /// <param name="e">Key event arguments.</param>
     protected virtual void OnKeyUp(KeyEventArgs e) => KeyUp?.Invoke(e);
-
-    /// <summary>
-    /// Called when text input is received.
-    /// </summary>
-    /// <param name="e">Text input event arguments.</param>
-    protected virtual void OnTextInput(TextInputEventArgs e) => TextInput?.Invoke(e);
 
     #endregion
 

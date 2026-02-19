@@ -529,6 +529,24 @@ public class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public event Action<TextInputEventArgs>? PreviewTextInput;
 
+    /// <summary>
+    /// Preview (tunneling) text composition (IME pre-edit) start for the whole window.
+    /// If <see cref="TextCompositionEventArgs.Handled"/> is set, the focused element will not receive the event.
+    /// </summary>
+    public event Action<TextCompositionEventArgs>? PreviewTextCompositionStart;
+
+    /// <summary>
+    /// Preview (tunneling) text composition (IME pre-edit) update for the whole window.
+    /// If <see cref="TextCompositionEventArgs.Handled"/> is set, the focused element will not receive the event.
+    /// </summary>
+    public event Action<TextCompositionEventArgs>? PreviewTextCompositionUpdate;
+
+    /// <summary>
+    /// Preview (tunneling) text composition (IME pre-edit) end for the whole window.
+    /// If <see cref="TextCompositionEventArgs.Handled"/> is set, the focused element will not receive the event.
+    /// </summary>
+    public event Action<TextCompositionEventArgs>? PreviewTextCompositionEnd;
+
     #endregion
 
     internal void RaisePreviewKeyDown(KeyEventArgs e) => PreviewKeyDown?.Invoke(e);
@@ -536,6 +554,12 @@ public class Window : ContentControl, ILayoutRoundingHost
     internal void RaisePreviewKeyUp(KeyEventArgs e) => PreviewKeyUp?.Invoke(e);
 
     internal void RaisePreviewTextInput(TextInputEventArgs e) => PreviewTextInput?.Invoke(e);
+
+    internal void RaisePreviewTextCompositionStart(TextCompositionEventArgs e) => PreviewTextCompositionStart?.Invoke(e);
+
+    internal void RaisePreviewTextCompositionUpdate(TextCompositionEventArgs e) => PreviewTextCompositionUpdate?.Invoke(e);
+
+    internal void RaisePreviewTextCompositionEnd(TextCompositionEventArgs e) => PreviewTextCompositionEnd?.Invoke(e);
 
     internal void RaiseActivated() => Activated?.Invoke();
 
