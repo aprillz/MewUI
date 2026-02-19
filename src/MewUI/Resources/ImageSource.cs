@@ -180,10 +180,17 @@ public sealed class ImageSource : IImageSource
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
         // Fall back to the factory's byte-based creation so custom factories can handle formats not supported
-        // by the built-in decoders.
-        if (factory.Backend != GraphicsBackend.Custom && TryEnsureDecoded(out var pixels))
+        // by the built-in decoders or don't support pixel sources.
+        if (TryEnsureDecoded(out var pixels))
         {
-            return factory.CreateImageFromPixelSource(pixels);
+            try
+            {
+                return factory.CreateImageFromPixelSource(pixels);
+            }
+            catch (NotSupportedException)
+            {
+                // Fall through to byte-based creation.
+            }
         }
 
         return factory.CreateImageFromBytes(Data);
