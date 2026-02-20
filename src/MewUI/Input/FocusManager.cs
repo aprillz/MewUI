@@ -47,9 +47,33 @@ public sealed class FocusManager
         // WPF-like policy: close non-stays-open popups when focus moves outside both the popup and its owner.
         _window.CloseNonStaysOpenPopupsIfFocusMovedOutside(element);
 
+        // If focus moved into a templated control (e.g. TreeView/GridView item template),
+        // let the nearest items host update selection and scroll the owning item into view.
+        NotifyFocusIntoViewHosts(element);
+
         _window.RequerySuggested();
 
         return true;
+    }
+
+    private void NotifyFocusIntoViewHosts(UIElement? focusedElement)
+    {
+        if (focusedElement == null)
+        {
+            return;
+        }
+
+        // Walk up the visual tree: the nearest host should win.
+        for (Element? current = focusedElement; current != null; current = current.Parent)
+        {
+            if (current is IFocusIntoViewHost host)
+            {
+                if (host.OnDescendantFocused(focusedElement))
+                {
+                    return;
+                }
+            }
+        }
     }
 
     private static UIElement? ResolveDefaultFocusTarget(UIElement? element)
@@ -137,6 +161,14 @@ public sealed class FocusManager
         int currentIndex = anchor != null ? focusable.IndexOf(anchor) : -1;
         int nextIndex = (currentIndex + 1) % focusable.Count;
 
+        if (currentIndex == focusable.Count - 1 && FocusedElement != null)
+        {
+            if (TryMoveVirtualizedFocus(FocusedElement, moveForward: true))
+            {
+                return true;
+            }
+        }
+
         return SetFocus(focusable[nextIndex]);
     }
 
@@ -155,7 +187,28 @@ public sealed class FocusManager
         int currentIndex = anchor != null ? focusable.IndexOf(anchor) : focusable.Count;
         int prevIndex = (currentIndex - 1 + focusable.Count) % focusable.Count;
 
+        if (currentIndex == 0 && FocusedElement != null)
+        {
+            if (TryMoveVirtualizedFocus(FocusedElement, moveForward: false))
+            {
+                return true;
+            }
+        }
+
         return SetFocus(focusable[prevIndex]);
+    }
+
+    private bool TryMoveVirtualizedFocus(UIElement focusedElement, bool moveForward)
+    {
+        for (Element? current = focusedElement; current != null; current = current.Parent)
+        {
+            if (current is IVirtualizedTabNavigationHost host)
+            {
+                return host.TryMoveFocusFromDescendant(focusedElement, moveForward);
+            }
+        }
+
+        return false;
     }
 
     private UIElement? ResolveFocusNavigationAnchor(UIElement? focusedElement, List<UIElement> focusableInWindow)
