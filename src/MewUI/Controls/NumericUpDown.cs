@@ -111,6 +111,11 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         _measureCache.Invalidate();
         InvalidateMeasure();
         UpdateTextBoxFromValue();
+
+        if (fromUser && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
+        {
+            valueBinding.Set(value);
+        }
     }
 
     protected override Size MeasureContent(Size available)
@@ -397,7 +402,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         return base.OnHitTest(point);
     }
 
-    private double GetButtonAreaWidth() => Theme.Metrics.BaseControlHeight * 2;
+    private double GetButtonAreaWidth() => (Theme.Metrics.BaseControlHeight - Theme.Metrics.ControlBorderThickness * 2) * 2;
 
     private (Rect decRect, Rect incRect) GetButtonRects()
     {
