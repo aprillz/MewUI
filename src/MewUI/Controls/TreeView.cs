@@ -357,6 +357,41 @@ public sealed class TreeView : Control, IVisualTreeHost
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     /// <summary>
+    /// Attempts to find the item (row) index at the specified position in this control's coordinates.
+    /// </summary>
+    public bool TryGetItemIndexAt(Point position, out int index)
+        => TryGetItemIndexAtCore(position, out index);
+
+    /// <summary>
+    /// Attempts to find the item (row) index for a mouse event routed by the window input router.
+    /// </summary>
+    public bool TryGetItemIndexAt(MouseEventArgs e, out int index)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return TryGetItemIndexAtCore(e.GetPosition(this), out index);
+    }
+
+    private bool TryGetItemIndexAtCore(Point position, out int index)
+    {
+        index = -1;
+
+        // Don't treat scrollbar interaction as item hit/activation.
+        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
+        {
+            return false;
+        }
+
+        return TryHitRow(position, out index, out _);
+    }
+
+    private Rect GetLocalBounds(UIElement element)
+        => new(
+            element.Bounds.X - Bounds.X,
+            element.Bounds.Y - Bounds.Y,
+            element.Bounds.Width,
+            element.Bounds.Height);
+
+    /// <summary>
     /// Called when the theme changes.
     /// </summary>
     /// <param name="oldTheme">The previous theme.</param>
@@ -720,7 +755,7 @@ public sealed class TreeView : Control, IVisualTreeHost
 
         Focus();
 
-        if (!TryHitRow(e.Position, out int index, out bool onGlyph))
+        if (!TryHitRow(e.GetPosition(this), out int index, out bool onGlyph))
         {
             return;
         }
@@ -753,7 +788,7 @@ public sealed class TreeView : Control, IVisualTreeHost
             return;
         }
 
-        if (!TryHitRow(e.Position, out int index, out bool onGlyph) || onGlyph)
+        if (!TryHitRow(e.GetPosition(this), out int index, out bool onGlyph) || onGlyph)
         {
             return;
         }
@@ -815,7 +850,7 @@ public sealed class TreeView : Control, IVisualTreeHost
         _lastMousePosition = e.Position;
 
         int newHover = -1;
-        if (TryHitRow(e.Position, out int index, out _))
+        if (TryHitRow(e.GetPosition(this), out int index, out _))
         {
             newHover = index;
         }
@@ -845,7 +880,7 @@ public sealed class TreeView : Control, IVisualTreeHost
         index = -1;
         onGlyph = false;
 
-        if (_vBar.IsVisible && _vBar.Bounds.Contains(position))
+        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
         {
             return false;
         }
@@ -855,7 +890,7 @@ public sealed class TreeView : Control, IVisualTreeHost
             return false;
         }
 
-        var bounds = GetSnappedBorderBounds(Bounds);
+        var bounds = GetSnappedBorderBounds(new Rect(0, 0, Bounds.Width, Bounds.Height));
         var dpiScale = GetDpi() / 96.0;
         var innerBounds = bounds.Deflate(new Thickness(GetBorderVisualInset()));
         var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);

@@ -203,6 +203,222 @@ public sealed class GridView : Control, IVisualTreeHost
         _core.SetColumns(ConvertColumns(columns));
     }
 
+    /// <summary>
+    /// Attempts to find the item (row) index at the specified position in this control's coordinates.
+    /// </summary>
+    public bool TryGetItemIndexAt(Point position, out int index)
+        => TryGetItemIndexAtCore(position, out index);
+
+    /// <summary>
+    /// Attempts to find the item (row) index for a mouse event routed by the window input router.
+    /// </summary>
+    public bool TryGetItemIndexAt(MouseEventArgs e, out int index)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return TryGetItemIndexAtCore(e.GetPosition(this), out index);
+    }
+
+    private bool TryGetItemIndexAtCore(Point position, out int index)
+    {
+        index = -1;
+
+        // Don't treat scrollbar interaction as item hit/activation.
+        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
+        {
+            return false;
+        }
+
+        if (!TryGetContentBounds(out var contentBounds, out double headerH))
+        {
+            return false;
+        }
+
+        double rowsHeight = Math.Max(0, contentBounds.Height - headerH);
+        double rowsY = contentBounds.Y + headerH;
+        if (rowsHeight <= 0)
+        {
+            return false;
+        }
+
+        if (position.Y < rowsY || position.Y >= rowsY + rowsHeight)
+        {
+            return false;
+        }
+
+        double rowH = ResolveRowHeight();
+        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        {
+            return false;
+        }
+
+        return ItemsViewportMath.TryGetItemIndexAtY(
+            position.Y,
+            rowsY,
+            _scroll.GetOffsetDip(1),
+            rowH,
+            _core.ItemsSource.Count,
+            out index);
+    }
+
+    /// <summary>
+    /// Attempts to find the column index at the specified position in this control's coordinates.
+    /// Returns <see langword="true"/> only when the position is over the header or a row area.
+    /// </summary>
+    public bool TryGetColumnIndexAt(Point position, out int columnIndex)
+        => TryGetColumnIndexAtCore(position, out columnIndex);
+
+    /// <summary>
+    /// Attempts to find the column index for a mouse event routed by the window input router.
+    /// </summary>
+    public bool TryGetColumnIndexAt(MouseEventArgs e, out int columnIndex)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return TryGetColumnIndexAtCore(e.GetPosition(this), out columnIndex);
+    }
+
+    private bool TryGetColumnIndexAtCore(Point position, out int columnIndex)
+    {
+        columnIndex = -1;
+
+        // Don't treat scrollbar interaction as column hit.
+        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
+        {
+            return false;
+        }
+
+        if (!TryGetContentBounds(out var contentBounds, out double headerH))
+        {
+            return false;
+        }
+
+        double y0 = contentBounds.Y;
+        double y1 = contentBounds.Y + contentBounds.Height;
+        if (position.Y < y0 || position.Y >= y1)
+        {
+            return false;
+        }
+
+        return TryGetColumnIndexAtX(position.X, contentBounds.X, contentBounds.Width, out columnIndex);
+    }
+
+    /// <summary>
+    /// Attempts to find the cell (row/column) indices at the specified position in this control's coordinates.
+    /// When the position is over the header, returns <see langword="true"/> with <paramref name="isHeader"/> set
+    /// and <paramref name="rowIndex"/> set to -1.
+    /// </summary>
+    public bool TryGetCellIndexAt(Point position, out int rowIndex, out int columnIndex, out bool isHeader)
+        => TryGetCellIndexAtCore(position, out rowIndex, out columnIndex, out isHeader);
+
+    /// <summary>
+    /// Attempts to find the cell (row/column) indices for a mouse event routed by the window input router.
+    /// </summary>
+    public bool TryGetCellIndexAt(MouseEventArgs e, out int rowIndex, out int columnIndex, out bool isHeader)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return TryGetCellIndexAtCore(e.GetPosition(this), out rowIndex, out columnIndex, out isHeader);
+    }
+
+    private bool TryGetCellIndexAtCore(Point position, out int rowIndex, out int columnIndex, out bool isHeader)
+    {
+        rowIndex = -1;
+        columnIndex = -1;
+        isHeader = false;
+
+        // Don't treat scrollbar interaction as cell hit.
+        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
+        {
+            return false;
+        }
+
+        if (!TryGetContentBounds(out var contentBounds, out double headerH))
+        {
+            return false;
+        }
+
+        double headerY0 = contentBounds.Y;
+        double headerY1 = contentBounds.Y + headerH;
+        if (position.Y >= headerY0 && position.Y < headerY1)
+        {
+            if (!TryGetColumnIndexAtX(position.X, contentBounds.X, contentBounds.Width, out columnIndex))
+            {
+                return false;
+            }
+
+            isHeader = true;
+            rowIndex = -1;
+            return true;
+        }
+
+        if (!TryGetItemIndexAtCore(position, out rowIndex))
+        {
+            return false;
+        }
+
+        if (!TryGetColumnIndexAtX(position.X, contentBounds.X, contentBounds.Width, out columnIndex))
+        {
+            return false;
+        }
+
+        isHeader = false;
+        return true;
+    }
+
+    private Rect GetLocalBounds(UIElement element)
+        => new(
+            element.Bounds.X - Bounds.X,
+            element.Bounds.Y - Bounds.Y,
+            element.Bounds.Width,
+            element.Bounds.Height);
+
+    private bool TryGetContentBounds(out Rect contentBounds, out double headerHeight)
+    {
+        contentBounds = default;
+        headerHeight = 0;
+
+        var bounds = GetSnappedBorderBounds(new Rect(0, 0, Bounds.Width, Bounds.Height));
+        var dpiScale = GetDpi() / 96.0;
+        var innerBounds = bounds.Deflate(new Thickness(GetBorderVisualInset()));
+        var viewportBounds = innerBounds;
+        // Viewport/clip rect should not shrink due to edge rounding; snap outward.
+        contentBounds = LayoutRounding.SnapViewportRectToPixels(viewportBounds.Deflate(Padding), dpiScale);
+        headerHeight = ResolveHeaderHeight();
+
+        if (contentBounds.Width <= 0 || contentBounds.Height <= 0 || headerHeight < 0 ||
+            double.IsNaN(contentBounds.Width) || double.IsNaN(contentBounds.Height) ||
+            double.IsInfinity(contentBounds.Width) || double.IsInfinity(contentBounds.Height))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryGetColumnIndexAtX(double x, double contentX, double contentWidth, out int columnIndex)
+    {
+        columnIndex = -1;
+
+        if (x < contentX || x >= contentX + contentWidth)
+        {
+            return false;
+        }
+
+        // Hit-test column by accumulated widths.
+        double cur = contentX;
+        for (int i = 0; i < _core.Columns.Count; i++)
+        {
+            double w = Math.Max(0, _core.Columns[i].Width);
+            double next = cur + w;
+            if (x >= cur && x < next)
+            {
+                columnIndex = i;
+                return true;
+            }
+            cur = next;
+        }
+
+        return false;
+    }
+
     public void AddColumns<TItem>(params GridViewColumn<TItem>[] columns)
     {
         ArgumentNullException.ThrowIfNull(columns);
@@ -737,14 +953,7 @@ public sealed class GridView : Control, IVisualTreeHost
             var snapped = GetSnappedBorderBounds(Bounds);
             var bg = theme.Palette.ButtonFace;
 
-            if (theme.Metrics.ControlCornerRadius - 2 is double r && r > 0)
-            {
-                context.FillRoundedRectangle(snapped, r, r, bg);
-            }
-            else
-            {
-                context.FillRectangle(snapped, bg);
-            }
+            context.FillRectangle(snapped, bg);
 
             var stroke = theme.Palette.ControlBorder;
             context.DrawLine(new Point(snapped.X, snapped.Bottom - 1), new Point(snapped.Right, snapped.Bottom - 1), stroke, 1);

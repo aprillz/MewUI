@@ -160,22 +160,37 @@ public partial class ListBox : Control
     public event Action<int>? ItemActivated;
 
     /// <summary>
+    /// Attempts to find the item index at the specified position in this control's coordinates.
+    /// </summary>
+    public bool TryGetItemIndexAt(Point position, out int index)
+        => TryGetItemIndexAtCore(position, out index);
+
+    /// <summary>
+    /// Attempts to find the item index for a mouse event routed by the window input router.
+    /// </summary>
+    public bool TryGetItemIndexAt(MouseEventArgs e, out int index)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return TryGetItemIndexAtCore(e.GetPosition(this), out index);
+    }
+
+    /// <summary>
     /// Attempts to find the item index at the specified position.
     /// </summary>
     /// <param name="position">The position to test.</param>
     /// <param name="index">The item index if found.</param>
     /// <returns>True if an item was found at the position.</returns>
-    private bool TryGetItemIndexAt(Point position, out int index)
+    private bool TryGetItemIndexAtCore(Point position, out int index)
     {
         index = -1;
 
         // Don't treat scrollbar interaction as item hit/activation.
-        if (_vBar.IsVisible && _vBar.Bounds.Contains(position))
+        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
         {
             return false;
         }
 
-        var bounds = GetSnappedBorderBounds(Bounds);
+        var bounds = GetSnappedBorderBounds(new Rect(0, 0, Bounds.Width, Bounds.Height));
         var dpiScale = GetDpi() / 96.0;
         var innerBounds = bounds.Deflate(new Thickness(GetBorderVisualInset()));
         var viewportBounds = innerBounds;
@@ -196,6 +211,13 @@ public partial class ListBox : Control
             ItemsSource.Count,
             out index);
     }
+
+    private Rect GetLocalBounds(UIElement element)
+        => new(
+            element.Bounds.X - Bounds.X,
+            element.Bounds.Y - Bounds.Y,
+            element.Bounds.Width,
+            element.Bounds.Height);
 
     /// <summary>
     /// Gets whether the listbox can receive keyboard focus.
@@ -649,7 +671,7 @@ public partial class ListBox : Control
 
         Focus();
 
-        if (TryGetItemIndexAt(e.Position, out int index))
+        if (TryGetItemIndexAtCore(e.GetPosition(this), out int index))
         {
             SelectedIndex = index;
             e.Handled = true;
@@ -665,7 +687,7 @@ public partial class ListBox : Control
             return;
         }
 
-        if (!TryGetItemIndexAt(e.Position, out int index))
+        if (!TryGetItemIndexAtCore(e.GetPosition(this), out int index))
         {
             return;
         }
@@ -696,7 +718,7 @@ public partial class ListBox : Control
         _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
         _vBar.Value = _scroll.GetOffsetDip(1);
 
-        if (_hasLastMousePosition && TryGetItemIndexAt(_lastMousePosition, out int hover))
+        if (_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover))
         {
             _hoverIndex = hover;
         }
@@ -722,7 +744,7 @@ public partial class ListBox : Control
         _lastMousePosition = e.Position;
 
         int newHover = -1;
-        if (TryGetItemIndexAt(e.Position, out int index))
+        if (TryGetItemIndexAtCore(e.GetPosition(this), out int index))
         {
             newHover = index;
         }
