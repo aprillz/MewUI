@@ -323,6 +323,19 @@ public static class ElementExtensions
     /// </summary>
     /// <typeparam name="T">Element type.</typeparam>
     /// <param name="element">Target element.</param>
+    /// <param name="value">Margin value.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T Margin<T>(this T element, Thickness value) where T : FrameworkElement
+    {
+        element.Margin = value;
+        return element;
+    }
+
+    /// <summary>
+    /// Sets the margin uniformly.
+    /// </summary>
+    /// <typeparam name="T">Element type.</typeparam>
+    /// <param name="element">Target element.</param>
     /// <param name="uniform">Uniform margin value.</param>
     /// <returns>The element for chaining.</returns>
     public static T Margin<T>(this T element, double uniform) where T : FrameworkElement
