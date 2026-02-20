@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI.Controls;
@@ -44,10 +45,18 @@ public abstract class Element
     public Size DesiredSize { get; private set; }
 
     /// <summary>
-    /// Gets the final bounds calculated during the Arrange pass.
+    /// Gets the final bounds calculated during the Arrange pass, in the parent's coordinate space.
+    /// Prefer <see cref="RenderSize"/> for WPF-like usage.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public Rect Bounds { get; private set; }
 
+    /// <summary>
+    /// Gets the final render size calculated during the Arrange pass.
+    /// Equivalent to WPF's <c>RenderSize</c>.
+    /// </summary>
+    public Size RenderSize => new(Bounds.Width, Bounds.Height);
+ 
     /// <summary>
     /// Gets or sets the parent element.
     /// </summary>

@@ -88,7 +88,11 @@ internal static class WindowInputRouter
 
         UpdateMouseOver(window, element);
 
-        var args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: clickCount);
+        var args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: clickCount)
+        {
+            OriginalSource = element,
+            Source = element,
+        };
         if (isDown)
         {
             if (element?.Focusable == true)
@@ -98,14 +102,20 @@ internal static class WindowInputRouter
 
             for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
             {
+                args.Source = current;
                 current.RaiseMouseDown(args);
             }
 
             if (clickCount == 2)
             {
-                args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2);
+                args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2)
+                {
+                    OriginalSource = element,
+                    Source = element,
+                };
                 for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
                 {
+                    args.Source = current;
                     current.RaiseMouseDoubleClick(args);
                 }
             }
@@ -114,6 +124,7 @@ internal static class WindowInputRouter
         {
             for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
             {
+                args.Source = current;
                 current.RaiseMouseUp(args);
             }
             window.RequerySuggested();
@@ -136,10 +147,15 @@ internal static class WindowInputRouter
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
         var element = window.HitTest(positionInWindow);
-        var args = new MouseWheelEventArgs(positionInWindow, screenPosition, delta, isHorizontal, leftDown, rightDown, middleDown);
+        var args = new MouseWheelEventArgs(positionInWindow, screenPosition, delta, isHorizontal, leftDown, rightDown, middleDown)
+        {
+            OriginalSource = element,
+            Source = element,
+        };
 
         for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
+            args.Source = current;
             current.RaiseMouseWheel(args);
         }
     }

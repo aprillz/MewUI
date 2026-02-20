@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Controls;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -23,9 +25,21 @@ public enum MouseButton
 public class MouseEventArgs
 {
     /// <summary>
-    /// Gets the position of the mouse relative to the element.
+    /// Gets the original element that was hit-tested for this event.
+    /// This value remains stable while the event bubbles.
     /// </summary>
-    public Point Position { get; }
+    internal UIElement? OriginalSource { get; set; }
+
+    /// <summary>
+    /// Gets the current element receiving the event as it bubbles.
+    /// </summary>
+    public UIElement? Source { get; internal set; }
+
+    /// <summary>
+    /// Gets the mouse position relative to the window (root) in DIPs.
+    /// Not exposed publicly (WPF-style); use <see cref="GetPosition"/> to obtain coordinates.
+    /// </summary>
+    internal Point Position { get; }
 
     /// <summary>
     /// Gets the position of the mouse in screen coordinates.
@@ -65,23 +79,40 @@ public class MouseEventArgs
     /// <summary>
     /// Initializes a new instance of the <see cref="MouseEventArgs"/> class.
     /// </summary>
-    /// <param name="position">Mouse position relative to the element (DIPs).</param>
+    /// <param name="positionInWindow">Mouse position relative to the window (root) (DIPs).</param>
     /// <param name="screenPosition">Mouse position in screen coordinates.</param>
     /// <param name="button">Button associated with the event.</param>
     /// <param name="leftButton">Whether the left button is pressed.</param>
     /// <param name="rightButton">Whether the right button is pressed.</param>
     /// <param name="middleButton">Whether the middle button is pressed.</param>
     /// <param name="clickCount">Click count (1 = single, 2 = double).</param>
-    public MouseEventArgs(Point position, Point screenPosition, MouseButton button = MouseButton.Left,
+    public MouseEventArgs(Point positionInWindow, Point screenPosition, MouseButton button = MouseButton.Left,
         bool leftButton = false, bool rightButton = false, bool middleButton = false, int clickCount = 1)
     {
-        Position = position;
+        Position = positionInWindow;
         ScreenPosition = screenPosition;
         Button = button;
         LeftButton = leftButton;
         RightButton = rightButton;
         MiddleButton = middleButton;
         ClickCount = clickCount;
+    }
+
+    /// <summary>
+    /// Gets the mouse position relative to the specified element (DIPs).
+    /// Equivalent to WPF's <c>MouseEventArgs.GetPosition</c> behavior.
+    /// </summary>
+    public Point GetPosition(UIElement relativeTo)
+    {
+        ArgumentNullException.ThrowIfNull(relativeTo);
+
+        var root = relativeTo.FindVisualRoot();
+        if (root is not Window window || window.Handle == 0)
+        {
+            throw new InvalidOperationException("The visual is not connected to a window.");
+        }
+
+        return window.TranslatePoint(Position, relativeTo);
     }
 }
 
