@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <MewUITitle>Aprillz.MewUI</MewUITitle>
-    <MewUIVersion>0.10.6</MewUIVersion>
+    <MewUIVersion>0.11.0</MewUIVersion>
     <MewUIAuthor>Aprillz</MewUIAuthor>
     <MewUIDescription>A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT</MewUIDescription>
 
