@@ -196,6 +196,7 @@ FrameworkElement TopBar() => new Border()
                             .Children(
                                 new Label()
                                     .Text("Aprillz.MewUI Gallery")
+                                    .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
                                     .FontSize(18)
                                     .Bold(),
 
@@ -912,17 +913,17 @@ FrameworkElement ListsPage()
                         .Columns(
                             new GridViewColumn<SimpleGridRow>()
                                 .Header("#")
-                                .Width(50)
+                                .Width(60)
                                 .Text(row => row.Id.ToString()),
 
                             new GridViewColumn<SimpleGridRow>()
                                 .Header("Name")
-                                .Width(70)
+                                .Width(100)
                                 .Text(row => row.Name),
 
                             new GridViewColumn<SimpleGridRow>()
                                 .Header("Status")
-                                .Width(70)
+                                .Width(100)
                                 .Template(
                                     build: _ => new Label().Padding(8, 0).CenterVertical(),
                                     bind: (view, row) => view
@@ -1145,12 +1146,13 @@ FrameworkElement ListsPage()
         return Card(
             "GridView (complex cell templates)",
             new DockPanel()
+                .Width(480)
                 .Height(240)
                 .Spacing(8)
                 .Children(                    
                     new Label()
                         .DockTop()
-                        .Text("Shows delegate-based complex cell templates (nested layout + multiple bound controls) similar to MewUI.Concept.")
+                        .Text("Shows delegate-based complex cell templates (nested layout + multiple bound controls)")
                         .TextWrapping(TextWrapping.Wrap),
 
                     ComplexCellsGrid()
@@ -1160,7 +1162,6 @@ FrameworkElement ListsPage()
         );
 
         GridView ComplexCellsGrid() => new GridView()
-            .HeaderHeight(28)
             .RowHeight(44)
             .ZebraStriping()
             .Columns(
@@ -1218,7 +1219,7 @@ FrameworkElement ListsPage()
 
                 new GridViewColumn<TemplateComplexPersonRow>()
                     .Header("Progress")
-                    .Width(140)
+                    .Width(200)
                     .Bind(
                         build: _ => new ProgressBar()
                             .Minimum(0)
