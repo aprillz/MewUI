@@ -1744,7 +1744,7 @@ public class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
-    private static bool IsInSubtreeOf(UIElement element, UIElement root)
+    internal static bool IsInSubtreeOf(UIElement element, UIElement root)
     {
         for (Element? current = element; current != null; current = current.Parent)
         {
@@ -1755,6 +1755,52 @@ public class Window : ContentControl, ILayoutRoundingHost
         }
 
         return false;
+    }
+
+    internal void CloseNonStaysOpenPopupsIfFocusMovedOutside(UIElement? newFocusedElement)
+    {
+        if (_popups.Count == 0)
+        {
+            return;
+        }
+
+        bool removedAny = false;
+        for (int i = _popups.Count - 1; i >= 0; i--)
+        {
+            var entry = _popups[i];
+            if (entry.StaysOpen)
+            {
+                continue;
+            }
+
+            if (newFocusedElement != null)
+            {
+                if (ReferenceEquals(newFocusedElement, entry.Element) || IsInSubtreeOf(newFocusedElement, entry.Element))
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(newFocusedElement, entry.Owner) || IsInSubtreeOf(newFocusedElement, entry.Owner))
+                {
+                    continue;
+                }
+            }
+
+            entry.Element.Parent = null;
+            if (entry.Owner is IPopupOwner owner)
+            {
+                owner.OnPopupClosed(entry.Element);
+            }
+
+            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
+            _popups.RemoveAt(i);
+            removedAny = true;
+        }
+
+        if (removedAny)
+        {
+            Invalidate();
+        }
     }
 
     private void LayoutPopup(PopupEntry entry)

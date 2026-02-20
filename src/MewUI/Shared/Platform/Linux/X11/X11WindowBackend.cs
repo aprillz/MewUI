@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Resources;
@@ -10,6 +11,8 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 
 internal sealed class X11WindowBackend : IWindowBackend
 {
+    private static readonly EnvDebugLog.Logger ImeLogger = new("MEWUI_IME_DEBUG", "[X11][IME]");
+
     private readonly X11PlatformHost _host;
 
     private bool _shown;
@@ -32,13 +35,9 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _enabled = true;
     private nint _xim;
     private nint _xic;
-    private GCHandle _imeOwnerHandle;
-    private nint _imePreeditStartCallback;
-    private nint _imePreeditDrawCallback;
-    private nint _imePreeditDoneCallback;
-    private bool _imeHasPreeditCallbacks;
-    private bool _imePreeditActive;
-    private string _imePreeditText = string.Empty;
+    private nint _imePreeditAttributesList;
+    private nint _imeSpotLocationPtr;
+    private bool _imeUsesPreeditPosition;
 
     internal bool NeedsRender { get; private set; }
 
@@ -75,6 +74,14 @@ internal sealed class X11WindowBackend : IWindowBackend
         _shown = true;
         NativeX11.XMapWindow(Display, Handle);
         NativeX11.XFlush(Display);
+
+        // Some IM modules don't start preedit until the IC is focused.
+        // Relying solely on FocusIn can miss cases where focus is already on the window when mapped.
+        if (_xic != 0)
+        {
+            ImeLogger.Write($"Show -> XSetICFocus ic=0x{_xic.ToInt64():X}");
+            try { NativeX11.XSetICFocus(_xic); } catch { }
+        }
     }
 
     public void Hide()
@@ -251,6 +258,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         const int GLX_WINDOW_BIT = 0x00000001;
         const int GLX_RGBA_BIT = 0x00000001;
         const int GLX_ALPHA_SIZE = 11;
+        const int GLX_DEPTH_SIZE = 12;
+        const int GLX_STENCIL_SIZE = 13;
 
         XVisualInfo visualInfo = default;
         bool usedFbConfig = false;
@@ -273,6 +282,10 @@ internal sealed class X11WindowBackend : IWindowBackend
                 8,
                 GLX_ALPHA_SIZE,
                 8,
+                GLX_DEPTH_SIZE,
+                24,
+                GLX_STENCIL_SIZE,
+                8,
                 GLX_SAMPLE_BUFFERS, 1,
                 GLX_SAMPLES, 4,
                 0
@@ -283,6 +296,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             {
                 XVisualInfo? best = null;
                 int bestSamples = -1;
+                int bestStencil = -1;
 
                 for (int i = 0; i < fbCount; i++)
                 {
@@ -295,6 +309,16 @@ internal sealed class X11WindowBackend : IWindowBackend
                     int alphaSize = 0;
                     _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_ALPHA_SIZE, out alphaSize);
                     if (alphaSize < 8)
+                    {
+                        continue;
+                    }
+
+                    int depthSize = 0;
+                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_DEPTH_SIZE, out depthSize);
+
+                    int stencilSize = 0;
+                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_STENCIL_SIZE, out stencilSize);
+                    if (depthSize < 16 || stencilSize < 8)
                     {
                         continue;
                     }
@@ -319,10 +343,15 @@ internal sealed class X11WindowBackend : IWindowBackend
                     _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_SAMPLES, out samples);
                     int score = sampleBuffers > 0 ? samples : 0;
 
-                    if (best == null || score > bestSamples)
+                    // Prefer configs with a stencil buffer (required for rounded clip via stencil),
+                    // then prefer higher MSAA.
+                    if (best == null ||
+                        stencilSize > bestStencil ||
+                        (stencilSize == bestStencil && score > bestSamples))
                     {
                         best = vi;
                         bestSamples = score;
+                        bestStencil = stencilSize;
                     }
                 }
 
@@ -350,6 +379,10 @@ internal sealed class X11WindowBackend : IWindowBackend
                 10, // GLX_BLUE_SIZE
                 8,
                 GLX_ALPHA_SIZE,
+                8,
+                GLX_DEPTH_SIZE,
+                24,
+                GLX_STENCIL_SIZE,
                 8,
                 GLX_SAMPLE_BUFFERS, 1,
                 GLX_SAMPLES, 4,
@@ -379,6 +412,10 @@ internal sealed class X11WindowBackend : IWindowBackend
                     8,
                     GLX_ALPHA_SIZE,
                     8,
+                    GLX_DEPTH_SIZE,
+                    24,
+                    GLX_STENCIL_SIZE,
+                    8,
                     0
                 };
 
@@ -392,7 +429,36 @@ internal sealed class X11WindowBackend : IWindowBackend
 
                 if (visualInfoPtr == 0)
                 {
-                    throw new InvalidOperationException("glXChooseVisual failed.");
+                    // Last resort: allow a visual without stencil (rounded clip may not work).
+                    int[] attribsNoStencil =
+                    {
+                        4,  // GLX_RGBA
+                        5,  // GLX_DOUBLEBUFFER
+                        8,  // GLX_RED_SIZE
+                        8,
+                        9,  // GLX_GREEN_SIZE
+                        8,
+                        10, // GLX_BLUE_SIZE
+                        8,
+                        GLX_ALPHA_SIZE,
+                        8,
+                        GLX_DEPTH_SIZE,
+                        24,
+                        0
+                    };
+
+                    unsafe
+                    {
+                        fixed (int* p = attribsNoStencil)
+                        {
+                            visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
+                        }
+                    }
+
+                    if (visualInfoPtr == 0)
+                    {
+                        throw new InvalidOperationException("glXChooseVisual failed.");
+                    }
                 }
             }
 
@@ -489,16 +555,22 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (X11Ime.TryCreateInputContext(
             Display,
             Handle,
-            this,
             out _xim,
             out _xic,
-            out _imeOwnerHandle,
-            out _imePreeditStartCallback,
-            out _imePreeditDrawCallback,
-            out _imePreeditDoneCallback,
-            out _imeHasPreeditCallbacks))
+            out _imePreeditAttributesList,
+            out _imeSpotLocationPtr,
+            out _imeUsesPreeditPosition))
         {
-            DiagLog.Write($"[X11] XIM enabled: im=0x{_xim.ToInt64():X} ic=0x{_xic.ToInt64():X} preedit={_imeHasPreeditCallbacks}");
+            DiagLog.Write($"[X11] XIM enabled: im=0x{_xim.ToInt64():X} ic=0x{_xic.ToInt64():X} preeditPosition={_imeUsesPreeditPosition}");
+            ImeLogger.Write($"XIM enabled: im=0x{_xim.ToInt64():X} ic=0x{_xic.ToInt64():X} preeditPosition={_imeUsesPreeditPosition}");
+        }
+        else
+        {
+            ImeLogger.Write(
+                $"XIM disabled: im=0x{_xim.ToInt64():X} ic=0x{_xic.ToInt64():X} " +
+                $"XMODIFIERS='{Environment.GetEnvironmentVariable("XMODIFIERS") ?? ""}' " +
+                $"GTK_IM_MODULE='{Environment.GetEnvironmentVariable("GTK_IM_MODULE") ?? ""}' " +
+                $"QT_IM_MODULE='{Environment.GetEnvironmentVariable("QT_IM_MODULE") ?? ""}'");
         }
 
         NeedsRender = true;
@@ -729,11 +801,25 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case KeyPress:
             case KeyRelease:
-                // XIM may "filter" the key event while still producing committed characters.
-                // We still run our key handler so KeyDown/Up can bubble when appropriate and
-                // so Xutf8LookupString can deliver committed text (TextInput).
-                bool filtered = _xic != 0 && NativeX11.XFilterEvent(ref ev, 0) != 0;
-                HandleKey(ev.xkey, isDown: ev.type == KeyPress, isFilteredByIme: filtered);
+                // XIM handling:
+                // - Always call XFilterEvent when we have an IC so IME hotkeys (e.g. Shift+Space) can work.
+                // - Even if XFilterEvent returns true, Xutf8LookupString may still deliver committed text for this event.
+                bool filteredByIme = _xic != 0 && NativeX11.XFilterEvent(ref ev, Handle) != 0;
+                if (_xic != 0)
+                {
+                    ImeLogger.Write($"XFilterEvent type={ev.type} filtered={filteredByIme} xic=0x{_xic.ToInt64():X}");
+                }
+
+                // Avalonia-style:
+                // - When using preedit-position, a filtered event is owned by the IME and should not be processed.
+                // - In commit-only mode, some IM modules still report filtered=true while requiring Xutf8LookupString
+                //   to obtain committed text. So only short-circuit when preedit-position is active.
+                if (filteredByIme && _imeUsesPreeditPosition)
+                {
+                    break;
+                }
+
+                HandleKey(ev.xkey, isDown: ev.type == KeyPress, isFilteredByIme: filteredByIme);
                 break;
 
             case ButtonPress:
@@ -746,117 +832,21 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case FocusIn:
-                if (_xic != 0) NativeX11.XSetICFocus(_xic);
+                if (_xic != 0)
+                {
+                    ImeLogger.Write($"FocusIn -> XSetICFocus ic=0x{_xic.ToInt64():X}");
+                    NativeX11.XSetICFocus(_xic);
+                }
                 break;
 
             case FocusOut:
-                if (_xic != 0) NativeX11.XUnsetICFocus(_xic);
-                if (_imePreeditActive)
+                if (_xic != 0)
                 {
-                    ImePreeditDone();
+                    ImeLogger.Write($"FocusOut -> XUnsetICFocus ic=0x{_xic.ToInt64():X}");
+                    NativeX11.XUnsetICFocus(_xic);
                 }
                 break;
         }
-    }
-
-    internal void ImePreeditStart()
-    {
-        if (!_imeHasPreeditCallbacks || Window.Content == null)
-        {
-            return;
-        }
-
-        if (_imePreeditActive)
-        {
-            return;
-        }
-
-        _imePreeditActive = true;
-        _imePreeditText = string.Empty;
-
-        var args = new TextCompositionEventArgs();
-        Window.RaisePreviewTextCompositionStart(args);
-        if (args.Handled)
-        {
-            return;
-        }
-
-        if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
-        {
-            client.HandleTextCompositionStart(args);
-        }
-    }
-
-    internal void ImePreeditDraw(int changeFirst, int changeLength, string replacementText)
-    {
-        if (!_imeHasPreeditCallbacks || Window.Content == null)
-        {
-            return;
-        }
-
-        if (!_imePreeditActive)
-        {
-            ImePreeditStart();
-        }
-
-        changeFirst = Math.Max(0, changeFirst);
-        changeLength = Math.Max(0, changeLength);
-
-        string current = _imePreeditText ?? string.Empty;
-        if (changeFirst > current.Length)
-        {
-            changeFirst = current.Length;
-        }
-
-        int removable = Math.Min(changeLength, current.Length - changeFirst);
-        if (removable > 0)
-        {
-            current = current.Remove(changeFirst, removable);
-        }
-
-        replacementText ??= string.Empty;
-        if (replacementText.Length > 0)
-        {
-            current = current.Insert(changeFirst, replacementText);
-        }
-
-        _imePreeditText = current;
-
-        var args = new TextCompositionEventArgs(current);
-        Window.RaisePreviewTextCompositionUpdate(args);
-        if (args.Handled)
-        {
-            return;
-        }
-
-        if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
-        {
-            client.HandleTextCompositionUpdate(args);
-        }
-    }
-
-    internal void ImePreeditDone()
-    {
-        if (!_imeHasPreeditCallbacks || !_imePreeditActive || Window.Content == null)
-        {
-            _imePreeditActive = false;
-            _imePreeditText = string.Empty;
-            return;
-        }
-
-        string text = _imePreeditText ?? string.Empty;
-        var args = new TextCompositionEventArgs(text);
-        Window.RaisePreviewTextCompositionEnd(args);
-        if (!args.Handled)
-        {
-            if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
-            {
-                client.HandleTextCompositionEnd(args);
-            }
-        }
-
-        _imePreeditActive = false;
-        _imePreeditText = string.Empty;
     }
 
     internal void RenderIfNeeded()
@@ -936,7 +926,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             // If XIM filtered this key press, don't route KeyDown/Tab navigation into the UI:
             // it is likely being used for IME candidate navigation or composition control.
-            bool routeKeyDown = !isFilteredByIme;
+            // Some setups report filtered=true even in commit-only mode; don't break key routing in that case.
+            bool routeKeyDown = !(isFilteredByIme && _imeUsesPreeditPosition);
 
             // Many window managers send WM_DELETE_WINDOW for Alt+F4, but not all do (especially for secondary windows).
             // Handle it ourselves to ensure consistent close behavior.
@@ -947,14 +938,18 @@ internal sealed class X11WindowBackend : IWindowBackend
                 return;
             }
 
-            if (routeKeyDown)
-            {
-                Window.RaisePreviewKeyDown(args);
-                if (!args.Handled && args.Key == Key.Tab)
+                if (routeKeyDown)
                 {
-                    // Tab is focus navigation only when not composing.
-                    // When composing, many IMEs use Tab to navigate candidates.
-                    if (!_imePreeditActive)
+                    Window.RaisePreviewKeyDown(args);
+                    if (!args.Handled)
+                    {
+                        WindowInputRouter.KeyDown(Window, args);
+                    }
+
+                    // WPF-like Tab behavior:
+                    // - Always let the focused element see KeyDown first.
+                    // - Only perform focus navigation if the key is still unhandled.
+                    if (!args.Handled && args.Key == Key.Tab)
                     {
                         if (args.Modifiers.HasFlag(ModifierKeys.Shift))
                         {
@@ -969,18 +964,22 @@ internal sealed class X11WindowBackend : IWindowBackend
                         return;
                     }
                 }
-                if (!args.Handled)
-                {
-                    WindowInputRouter.KeyDown(Window, args);
-                }
-            }
 
-            // Text input after key handling (best-effort).
+                // Text input after key handling (best-effort).
             // Do not gate text input on KeyDown handling: text controls may handle Enter/Backspace/etc. while
             // still requiring IME commits (or dead-key composed text) to flow through TextInput.
             // Instead, only suppress obvious shortcut-modifier combinations.
             if (!args.Modifiers.HasFlag(ModifierKeys.Control) && !args.Modifiers.HasFlag(ModifierKeys.Alt))
             {
+                // Avalonia-style XIM behavior:
+                // - When using preedit-position, filtered events are owned by the IME and should not emit text.
+                // - In commit-only mode, some IM modules still report filtered=true while requiring Xutf8LookupString
+                //   to obtain committed text (and even for plain English input). So only suppress in preedit-position mode.
+                if (isFilteredByIme && _imeUsesPreeditPosition)
+                {
+                    return;
+                }
+
                 Span<byte> buf = stackalloc byte[128];
                 int byteCount = 0;
                 int lookupStatus = 0;
@@ -1000,13 +999,30 @@ internal sealed class X11WindowBackend : IWindowBackend
                     }
                 }
 
+                ImeLogger.Write($"Xutf8LookupString status={lookupStatus} bytes={byteCount} filtered={isFilteredByIme} key={args.Key} mods={args.Modifiers}");
+
                 // XLookupChars=2, XLookupBoth=4. Anything else means "no committed chars".
                 if ((lookupStatus == 2 || lookupStatus == 4) && byteCount > 0)
                 {
                     byteCount = Math.Min(byteCount, buf.Length);
                     string s = System.Text.Encoding.UTF8.GetString(buf[..byteCount]);
+                    ImeLogger.Write($"  -> text '{s}'");
                     if (!string.IsNullOrEmpty(s))
                     {
+                        // KeyDown-handled Enter/Tab should not also emit committed text input.
+                        // (e.g. TextBox may insert '\n'/'\t' on KeyDown and then receive duplicate text from Xutf8LookupString.)
+                        if (TextInputSuppression.ShouldSuppressCommittedText(args, s))
+                        {
+                            return;
+                        }
+
+                        // Many IMEs use Shift+Space to toggle input mode (e.g., Hangul/English).
+                        // When that happens, some setups still report a literal space; suppress it.
+                        if (_xic != 0 && isFilteredByIme && args.Key == Key.Space && args.Modifiers == ModifierKeys.Shift && s == " ")
+                        {
+                            return;
+                        }
+
                         // Filter control characters so Tab doesn't get inserted into TextBox.
                         // (Tab is handled above for focus navigation)
                         if (s.Length == 1 && char.IsControl(s[0]) && s[0] != '\r' && s[0] != '\n')
@@ -1029,7 +1045,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
         else
         {
-            if (!isFilteredByIme)
+            if (!(isFilteredByIme && _imeUsesPreeditPosition))
             {
                 Window.RaisePreviewKeyUp(args);
                 if (!args.Handled)
@@ -1301,22 +1317,15 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         try
         {
-            if (_imePreeditStartCallback != 0) Marshal.FreeHGlobal(_imePreeditStartCallback);
-            if (_imePreeditDrawCallback != 0) Marshal.FreeHGlobal(_imePreeditDrawCallback);
-            if (_imePreeditDoneCallback != 0) Marshal.FreeHGlobal(_imePreeditDoneCallback);
-            _imePreeditStartCallback = 0;
-            _imePreeditDrawCallback = 0;
-            _imePreeditDoneCallback = 0;
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            if (_imeOwnerHandle.IsAllocated)
+            if (_imePreeditAttributesList != 0)
             {
-                _imeOwnerHandle.Free();
+                NativeX11.XFree(_imePreeditAttributesList);
+                _imePreeditAttributesList = 0;
+            }
+            if (_imeSpotLocationPtr != 0)
+            {
+                Marshal.FreeHGlobal(_imeSpotLocationPtr);
+                _imeSpotLocationPtr = 0;
             }
         }
         catch

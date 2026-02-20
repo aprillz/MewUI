@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 
+using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
@@ -24,6 +25,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private bool _initialEraseDone;
     private double _opacity = 1.0;
     private bool _allowsTransparency;
+
+    private readonly TextInputSuppression _textInputSuppression = new();
 
     internal bool NeedsRender { get; private set; }
 
@@ -1021,6 +1024,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandleKeyDown(uint msg, nint wParam, nint lParam)
     {
+        _textInputSuppression.ResetPerKeyDown();
+
         int platformKey = (int)wParam.ToInt64();
         bool isRepeat = ((lParam.ToInt64() >> 30) & 1) != 0;
         var modifiers = GetModifierKeys();
@@ -1040,7 +1045,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return 0;
         }
 
-        if (args.Key == Key.Tab)
+        WindowInputRouter.KeyDown(Window, args);
+
+        // WPF-like Tab behavior:
+        // - Always let the focused element see KeyDown first.
+        // - Only perform focus navigation if the key is still unhandled.
+        if (!args.Handled && args.Key == Key.Tab)
         {
             if (modifiers.HasFlag(ModifierKeys.Shift))
             {
@@ -1051,10 +1061,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 Window.FocusManager.MoveFocusNext();
             }
 
+            // Prevent a subsequent WM_CHAR '\t' from inserting a tab into the newly focused element.
+            _textInputSuppression.SuppressNextFromHandledKeyDown(Key.Tab);
             return 0;
         }
 
-        WindowInputRouter.KeyDown(Window, args);
+        if (args.Handled)
+        {
+            // KeyDown-handled Enter/Tab should not also emit WM_CHAR text input.
+            _textInputSuppression.SuppressNextFromHandledKeyDown(args.Key);
+        }
 
         return args.Handled ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
     }
@@ -1079,6 +1095,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private nint HandleChar(nint wParam)
     {
         char c = (char)wParam.ToInt64();
+
+        if (_textInputSuppression.TryConsumeChar(c))
+        {
+            return 0;
+        }
+
         if (c == '\b')
         {
             return 0;

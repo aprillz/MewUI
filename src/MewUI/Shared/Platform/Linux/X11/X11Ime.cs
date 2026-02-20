@@ -1,246 +1,121 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Diagnostics;
 using NativeX11 = Aprillz.MewUI.Native.X11;
 
 namespace Aprillz.MewUI.Platform.Linux.X11;
 
-internal static class X11Ime
+// Avalonia-style XIM setup:
+// - Prefer XIMPreeditPosition (IME draws preedit UI; we provide spot location).
+// - Fall back to XIMPreeditNothing (commit-only).
+internal static partial class X11Ime
 {
-    private const long XIMPreeditCallbacks = 0x0002L;
-    // XIMPreeditNothing | XIMStatusNothing
+    private const int LC_CTYPE = 0;
+
+    private const long XIMPreeditPosition = 0x0004L;
     private const long XIMPreeditNothing = 0x0008L;
     private const long XIMStatusNothing = 0x0400L;
 
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate nint XCreateIC_3Pairs_Delegate(
-        nint im,
-        nint name1, nint value1,
-        nint name2, nint value2,
-        nint name3, nint value3,
-        nint terminator);
+    private static partial class LibC
+    {
+        [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8)]
+        internal static partial nint setlocale(int category, string locale);
+    }
 
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate nint XCreateIC_4Pairs_Delegate(
-        nint im,
-        nint name1, nint value1,
-        nint name2, nint value2,
-        nint name3, nint value3,
-        nint name4, nint value4,
-        nint terminator);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate nint XVaCreateNestedList_3Pairs_Delegate(
-        nint dummy,
-        nint name1, nint value1,
-        nint name2, nint value2,
-        nint name3, nint value3,
-        nint terminator);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate int XIMProc(nint ic, nint clientData, nint callData);
+    private static readonly EnvDebugLog.Logger ImeLogger = new("MEWUI_IME_DEBUG", "[X11][IME]");
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct XIMCallback
+    private struct XPoint
     {
-        public nint callback;
-        public nint client_data;
+        public int x;
+        public int y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct XIMPreeditDrawCallbackStruct
+    private struct XIMStyles
     {
-        public int caret;
-        public int chg_first;
-        public int chg_length;
-        public nint text; // XIMText*
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct XIMText
-    {
-        public ushort length;
-        public nint feedback; // XIMFeedback*
-        public int encoding_is_wchar; // Bool
-        public XIMStringUnion @string;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct XIMStringUnion
-    {
-        [FieldOffset(0)]
-        public nint multi_byte; // char*
-
-        [FieldOffset(0)]
-        public nint wide_char; // wchar_t*
-    }
-
-    private static readonly XIMProc s_preeditStartProc = PreeditStart;
-    private static readonly XIMProc s_preeditDrawProc = PreeditDraw;
-    private static readonly XIMProc s_preeditDoneProc = PreeditDone;
-
-    private static readonly nint s_preeditStartPtr = Marshal.GetFunctionPointerForDelegate(s_preeditStartProc);
-    private static readonly nint s_preeditDrawPtr = Marshal.GetFunctionPointerForDelegate(s_preeditDrawProc);
-    private static readonly nint s_preeditDonePtr = Marshal.GetFunctionPointerForDelegate(s_preeditDoneProc);
-
-    private static int PreeditStart(nint ic, nint clientData, nint callData)
-    {
-        try
-        {
-            var handle = GCHandle.FromIntPtr(clientData);
-            if (handle.Target is X11WindowBackend backend)
-            {
-                backend.ImePreeditStart();
-            }
-        }
-        catch
-        {
-        }
-
-        return 0;
-    }
-
-    private static int PreeditDraw(nint ic, nint clientData, nint callData)
-    {
-        try
-        {
-            var handle = GCHandle.FromIntPtr(clientData);
-            if (handle.Target is not X11WindowBackend backend)
-            {
-                return 0;
-            }
-
-            if (callData == 0)
-            {
-                return 0;
-            }
-
-            var draw = Marshal.PtrToStructure<XIMPreeditDrawCallbackStruct>(callData);
-
-            string replacement = string.Empty;
-            if (draw.text != 0)
-            {
-                var text = Marshal.PtrToStructure<XIMText>(draw.text);
-                if (text.length > 0)
-                {
-                    if (text.encoding_is_wchar != 0 && text.@string.wide_char != 0)
-                    {
-                        // wchar_t on Linux is typically 4 bytes (UTF-32 code points).
-                        unsafe
-                        {
-                            int count = text.length;
-                            var p = (uint*)text.@string.wide_char;
-                            Span<uint> scalars = new(p, count);
-                            var sb = new System.Text.StringBuilder(capacity: count);
-                            Span<char> tmp = stackalloc char[2];
-                            for (int i = 0; i < scalars.Length; i++)
-                            {
-                                uint scalar = scalars[i];
-                                if (scalar == 0)
-                                {
-                                    continue;
-                                }
-
-                                if (!System.Text.Rune.TryCreate(scalar, out var rune))
-                                {
-                                    continue;
-                                }
-
-                                int len = rune.EncodeToUtf16(tmp);
-                                sb.Append(tmp[..len]);
-                            }
-
-                            replacement = sb.ToString();
-                        }
-                    }
-                    else if (text.@string.multi_byte != 0)
-                    {
-                        unsafe
-                        {
-                            int byteCount = text.length;
-                            byteCount = Math.Clamp(byteCount, 0, 4096);
-                            var p = (byte*)text.@string.multi_byte;
-                            Span<byte> bytes = new(p, byteCount);
-                            replacement = System.Text.Encoding.UTF8.GetString(bytes);
-                        }
-                    }
-                }
-            }
-
-            backend.ImePreeditDraw(draw.chg_first, draw.chg_length, replacement);
-        }
-        catch
-        {
-        }
-
-        return 0;
-    }
-
-    private static int PreeditDone(nint ic, nint clientData, nint callData)
-    {
-        try
-        {
-            var handle = GCHandle.FromIntPtr(clientData);
-            if (handle.Target is X11WindowBackend backend)
-            {
-                backend.ImePreeditDone();
-            }
-        }
-        catch
-        {
-        }
-
-        return 0;
+        public ushort count_styles;
+        public nint supported_styles; // XIMStyle*
     }
 
     internal static bool TryCreateInputContext(
         nint display,
         nint window,
-        X11WindowBackend owner,
         out nint im,
         out nint ic,
-        out GCHandle ownerHandle,
-        out nint preeditStartCallback,
-        out nint preeditDrawCallback,
-        out nint preeditDoneCallback,
-        out bool hasPreeditCallbacks)
+        out nint preeditAttributesList,
+        out nint spotLocationPtr,
+        out bool usesPreeditPosition)
     {
         im = 0;
         ic = 0;
-        ownerHandle = default;
-        preeditStartCallback = 0;
-        preeditDrawCallback = 0;
-        preeditDoneCallback = 0;
-        hasPreeditCallbacks = false;
+        preeditAttributesList = 0;
+        spotLocationPtr = 0;
+        usesPreeditPosition = false;
 
         if (display == 0 || window == 0)
         {
             return false;
         }
 
-        // Enable locale modifiers (best-effort). The caller is responsible for configuring the process locale.
         try
         {
-            _ = NativeX11.XSetLocaleModifiers(string.Empty);
+            var p = LibC.setlocale(LC_CTYPE, string.Empty);
+            var locale = p != 0 ? Marshal.PtrToStringUTF8(p) : null;
+            ImeLogger.Write($"setlocale(LC_CTYPE, \"\") -> {(locale ?? "null")}");
         }
         catch
         {
         }
 
-        im = NativeX11.XOpenIM(display, 0, 0, 0);
+        // Choose XIM module (ibus/fcitx) before XOpenIM.
+        string? envXModifiers = null;
+        try { envXModifiers = Environment.GetEnvironmentVariable("XMODIFIERS"); } catch { }
+
+        string[] candidates = new string[5];
+        int candidateCount = 0;
+        if (!string.IsNullOrWhiteSpace(envXModifiers))
+        {
+            candidates[candidateCount++] = envXModifiers!;
+        }
+        candidates[candidateCount++] = "@im=ibus";
+        candidates[candidateCount++] = "@im=fcitx5";
+        candidates[candidateCount++] = "@im=fcitx";
+        candidates[candidateCount++] = string.Empty;
+
+        for (int i = 0; i < candidateCount && im == 0; i++)
+        {
+            string mod = candidates[i];
+            try
+            {
+                var r = NativeX11.XSetLocaleModifiers(mod);
+                var picked = r != 0 ? Marshal.PtrToStringUTF8(r) : null;
+                ImeLogger.Write($"XSetLocaleModifiers(\"{mod}\") -> {(picked ?? "null")}");
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                im = NativeX11.XOpenIM(display, 0, 0, 0);
+                ImeLogger.Write($"XOpenIM (after '{mod}') -> 0x{im.ToInt64():X}");
+            }
+            catch
+            {
+                im = 0;
+            }
+        }
+
         if (im == 0)
         {
             return false;
         }
 
-        if (!NativeLibrary.TryLoad("libX11.so.6", out var lib))
-        {
-            NativeX11.XCloseIM(im);
-            im = 0;
-            return false;
-        }
-
+        nint lib = 0;
         try
         {
+            lib = NativeLibrary.Load("libX11.so.6");
             if (!NativeLibrary.TryGetExport(lib, "XCreateIC", out var pCreateIc) || pCreateIc == 0)
             {
                 NativeX11.XCloseIM(im);
@@ -248,107 +123,56 @@ internal static class X11Ime
                 return false;
             }
 
-            var createIc3 = Marshal.GetDelegateForFunctionPointer<XCreateIC_3Pairs_Delegate>(pCreateIc);
-            var createIc4 = Marshal.GetDelegateForFunctionPointer<XCreateIC_4Pairs_Delegate>(pCreateIc);
-
-            NativeLibrary.TryGetExport(lib, "XVaCreateNestedList", out var pNestedList);
-            XVaCreateNestedList_3Pairs_Delegate? createNestedList = null;
-            if (pNestedList != 0)
+            unsafe
             {
-                createNestedList = Marshal.GetDelegateForFunctionPointer<XVaCreateNestedList_3Pairs_Delegate>(pNestedList);
-            }
+                var createIc3 = (delegate* unmanaged[Cdecl]<
+                    nint,
+                    nint, nint,
+                    nint, nint,
+                    nint, nint,
+                    nint,
+                    nint>)pCreateIc;
 
-            nint nInputStyle = 0;
-            nint nClientWindow = 0;
-            nint nFocusWindow = 0;
-            nint nPreeditAttributes = 0;
-            nint nPreeditStartCallback = 0;
-            nint nPreeditDrawCallback = 0;
-            nint nPreeditDoneCallback = 0;
-            try
-            {
-                nInputStyle = Marshal.StringToCoTaskMemUTF8("inputStyle");
-                nClientWindow = Marshal.StringToCoTaskMemUTF8("clientWindow");
-                nFocusWindow = Marshal.StringToCoTaskMemUTF8("focusWindow");
+                var createIc4 = (delegate* unmanaged[Cdecl]<
+                    nint,
+                    nint, nint,
+                    nint, nint,
+                    nint, nint,
+                    nint, nint,
+                    nint,
+                    nint>)pCreateIc;
 
-                // Prefer preedit callbacks if possible; fall back to "nothing" (commit-only) otherwise.
-                if (createNestedList != null)
+                delegate* unmanaged[Cdecl]<nint, nint, nint, nint, nint> createNestedList = null;
+                if (NativeLibrary.TryGetExport(lib, "XVaCreateNestedList", out var pNestedList) && pNestedList != 0)
                 {
-                    nPreeditAttributes = Marshal.StringToCoTaskMemUTF8("preeditAttributes");
-                    nPreeditStartCallback = Marshal.StringToCoTaskMemUTF8("preeditStartCallback");
-                    nPreeditDrawCallback = Marshal.StringToCoTaskMemUTF8("preeditDrawCallback");
-                    nPreeditDoneCallback = Marshal.StringToCoTaskMemUTF8("preeditDoneCallback");
+                    createNestedList = (delegate* unmanaged[Cdecl]<nint, nint, nint, nint, nint>)pNestedList;
+                }
 
-                    ownerHandle = GCHandle.Alloc(owner);
-                    nint ownerPtr = GCHandle.ToIntPtr(ownerHandle);
+                delegate* unmanaged[Cdecl]<nint, nint, nint*, nint, nint> getImValues = null;
+                if (NativeLibrary.TryGetExport(lib, "XGetIMValues", out var pGetImValues) && pGetImValues != 0)
+                {
+                    getImValues = (delegate* unmanaged[Cdecl]<nint, nint, nint*, nint, nint>)pGetImValues;
+                }
 
-                    preeditStartCallback = Marshal.AllocHGlobal(Marshal.SizeOf<XIMCallback>());
-                    preeditDrawCallback = Marshal.AllocHGlobal(Marshal.SizeOf<XIMCallback>());
-                    preeditDoneCallback = Marshal.AllocHGlobal(Marshal.SizeOf<XIMCallback>());
-
-                    Marshal.StructureToPtr(new XIMCallback { callback = s_preeditStartPtr, client_data = ownerPtr }, preeditStartCallback, fDeleteOld: false);
-                    Marshal.StructureToPtr(new XIMCallback { callback = s_preeditDrawPtr, client_data = ownerPtr }, preeditDrawCallback, fDeleteOld: false);
-                    Marshal.StructureToPtr(new XIMCallback { callback = s_preeditDonePtr, client_data = ownerPtr }, preeditDoneCallback, fDeleteOld: false);
-
-                    nint nested = createNestedList(
-                        0,
-                        nPreeditStartCallback, preeditStartCallback,
-                        nPreeditDrawCallback, preeditDrawCallback,
-                        nPreeditDoneCallback, preeditDoneCallback,
-                        0);
-
-                    if (nested != 0)
-                    {
-                        long style = XIMPreeditCallbacks | XIMStatusNothing;
-                        ic = createIc4(
-                            im,
-                            nInputStyle, (nint)style,
-                            nClientWindow, window,
-                            nFocusWindow, window,
-                            nPreeditAttributes, nested,
-                            0);
-
-                        try { NativeX11.XFree(nested); } catch { }
-                    }
+                long style = ChooseInputStyle(im, getImValues, out usesPreeditPosition);
+                if (usesPreeditPosition && createNestedList != null)
+                {
+                    ic = TryCreatePreeditPositionIc(
+                        im,
+                        window,
+                        style,
+                        createIc4,
+                        createNestedList,
+                        out preeditAttributesList,
+                        out spotLocationPtr);
                 }
 
                 if (ic == 0)
                 {
-                    // Fall back to commit-only input.
-                    if (ownerHandle.IsAllocated)
-                    {
-                        ownerHandle.Free();
-                    }
-                    if (preeditStartCallback != 0) Marshal.FreeHGlobal(preeditStartCallback);
-                    if (preeditDrawCallback != 0) Marshal.FreeHGlobal(preeditDrawCallback);
-                    if (preeditDoneCallback != 0) Marshal.FreeHGlobal(preeditDoneCallback);
-                    ownerHandle = default;
-                    preeditStartCallback = 0;
-                    preeditDrawCallback = 0;
-                    preeditDoneCallback = 0;
-
-                    long style = XIMPreeditNothing | XIMStatusNothing;
-                    ic = createIc3(
-                        im,
-                        nInputStyle, (nint)style,
-                        nClientWindow, window,
-                        nFocusWindow, window,
-                        0);
+                    usesPreeditPosition = false;
+                    style = XIMPreeditNothing | XIMStatusNothing;
+                    ic = TryCreateCommitOnlyIc(im, window, style, createIc3);
                 }
-                else
-                {
-                    hasPreeditCallbacks = true;
-                }
-            }
-            finally
-            {
-                if (nInputStyle != 0) Marshal.FreeCoTaskMem(nInputStyle);
-                if (nClientWindow != 0) Marshal.FreeCoTaskMem(nClientWindow);
-                if (nFocusWindow != 0) Marshal.FreeCoTaskMem(nFocusWindow);
-                if (nPreeditAttributes != 0) Marshal.FreeCoTaskMem(nPreeditAttributes);
-                if (nPreeditStartCallback != 0) Marshal.FreeCoTaskMem(nPreeditStartCallback);
-                if (nPreeditDrawCallback != 0) Marshal.FreeCoTaskMem(nPreeditDrawCallback);
-                if (nPreeditDoneCallback != 0) Marshal.FreeCoTaskMem(nPreeditDoneCallback);
             }
 
             if (ic == 0)
@@ -362,7 +186,180 @@ internal static class X11Ime
         }
         finally
         {
-            NativeLibrary.Free(lib);
+            if (lib != 0)
+            {
+                try { NativeLibrary.Free(lib); } catch { }
+            }
+        }
+    }
+
+    private static unsafe long ChooseInputStyle(nint im, delegate* unmanaged[Cdecl]<nint, nint, nint*, nint, nint> getImValues, out bool usesPreeditPosition)
+    {
+        usesPreeditPosition = false;
+
+        if (getImValues == null)
+        {
+            return XIMPreeditNothing | XIMStatusNothing;
+        }
+
+        nint nQueryInputStyle = 0;
+        nint stylesPtr = 0;
+        try
+        {
+            nQueryInputStyle = Marshal.StringToCoTaskMemUTF8("queryInputStyle");
+            nint err = 0;
+            try
+            {
+                err = getImValues(im, nQueryInputStyle, &stylesPtr, 0);
+            }
+            catch
+            {
+                stylesPtr = 0;
+            }
+
+            if (err != 0)
+            {
+                var errName = Marshal.PtrToStringUTF8(err) ?? "(unknown)";
+                ImeLogger.Write($"XGetIMValues failed at '{errName}', falling back.");
+            }
+
+            if (stylesPtr == 0)
+            {
+                return XIMPreeditNothing | XIMStatusNothing;
+            }
+
+            var styles = Marshal.PtrToStructure<XIMStyles>(stylesPtr);
+            int count = styles.count_styles;
+            if (count <= 0 || styles.supported_styles == 0)
+            {
+                return XIMPreeditNothing | XIMStatusNothing;
+            }
+
+            var p = (ulong*)styles.supported_styles;
+            long fallback = XIMPreeditNothing | XIMStatusNothing;
+            for (int i = 0; i < count; i++)
+            {
+                long s = unchecked((long)p[i]);
+                if ((s & XIMPreeditPosition) != 0 && (s & XIMStatusNothing) != 0)
+                {
+                    usesPreeditPosition = true;
+                    return s;
+                }
+                if ((s & XIMPreeditNothing) != 0 && (s & XIMStatusNothing) != 0)
+                {
+                    fallback = s;
+                }
+            }
+
+            return fallback;
+        }
+        finally
+        {
+            if (stylesPtr != 0)
+            {
+                try { NativeX11.XFree(stylesPtr); } catch { }
+            }
+            if (nQueryInputStyle != 0) Marshal.FreeCoTaskMem(nQueryInputStyle);
+        }
+    }
+
+    private static unsafe nint TryCreateCommitOnlyIc(
+        nint im,
+        nint window,
+        long style,
+        delegate* unmanaged[Cdecl]<
+            nint,
+            nint, nint,
+            nint, nint,
+            nint, nint,
+            nint,
+            nint> createIc3)
+    {
+        nint nInputStyle = 0;
+        nint nClientWindow = 0;
+        nint nFocusWindow = 0;
+        try
+        {
+            nInputStyle = Marshal.StringToCoTaskMemUTF8("inputStyle");
+            nClientWindow = Marshal.StringToCoTaskMemUTF8("clientWindow");
+            nFocusWindow = Marshal.StringToCoTaskMemUTF8("focusWindow");
+            return createIc3(
+                im,
+                nInputStyle, (nint)style,
+                nClientWindow, window,
+                nFocusWindow, window,
+                0);
+        }
+        finally
+        {
+            if (nInputStyle != 0) Marshal.FreeCoTaskMem(nInputStyle);
+            if (nClientWindow != 0) Marshal.FreeCoTaskMem(nClientWindow);
+            if (nFocusWindow != 0) Marshal.FreeCoTaskMem(nFocusWindow);
+        }
+    }
+
+    private static unsafe nint TryCreatePreeditPositionIc(
+        nint im,
+        nint window,
+        long style,
+        delegate* unmanaged[Cdecl]<
+            nint,
+            nint, nint,
+            nint, nint,
+            nint, nint,
+            nint, nint,
+            nint,
+            nint> createIc4,
+        delegate* unmanaged[Cdecl]<nint, nint, nint, nint, nint> createNestedList,
+        out nint preeditAttributesList,
+        out nint spotLocationPtr)
+    {
+        preeditAttributesList = 0;
+        spotLocationPtr = 0;
+
+        nint nInputStyle = 0;
+        nint nClientWindow = 0;
+        nint nFocusWindow = 0;
+        nint nPreeditAttributes = 0;
+        nint nSpotLocation = 0;
+        try
+        {
+            nInputStyle = Marshal.StringToCoTaskMemUTF8("inputStyle");
+            nClientWindow = Marshal.StringToCoTaskMemUTF8("clientWindow");
+            nFocusWindow = Marshal.StringToCoTaskMemUTF8("focusWindow");
+            nPreeditAttributes = Marshal.StringToCoTaskMemUTF8("preeditAttributes");
+            nSpotLocation = Marshal.StringToCoTaskMemUTF8("spotLocation");
+
+            spotLocationPtr = Marshal.AllocHGlobal(Marshal.SizeOf<XPoint>());
+            Marshal.StructureToPtr(new XPoint { x = 0, y = 0 }, spotLocationPtr, fDeleteOld: false);
+
+            preeditAttributesList = createNestedList(0, nSpotLocation, spotLocationPtr, 0);
+            if (preeditAttributesList == 0)
+            {
+                Marshal.FreeHGlobal(spotLocationPtr);
+                spotLocationPtr = 0;
+                return 0;
+            }
+
+            return createIc4(
+                im,
+                nInputStyle, (nint)style,
+                nClientWindow, window,
+                nFocusWindow, window,
+                nPreeditAttributes, preeditAttributesList,
+                0);
+        }
+        catch
+        {
+            return 0;
+        }
+        finally
+        {
+            if (nInputStyle != 0) Marshal.FreeCoTaskMem(nInputStyle);
+            if (nClientWindow != 0) Marshal.FreeCoTaskMem(nClientWindow);
+            if (nFocusWindow != 0) Marshal.FreeCoTaskMem(nFocusWindow);
+            if (nPreeditAttributes != 0) Marshal.FreeCoTaskMem(nPreeditAttributes);
+            if (nSpotLocation != 0) Marshal.FreeCoTaskMem(nSpotLocation);
         }
     }
 }

@@ -105,6 +105,24 @@ public class TextInputEventArgs
     /// <param name="text">Input text.</param>
     public TextInputEventArgs(string text)
     {
-        Text = text;
+        Text = NormalizeText(text);
+    }
+
+    internal static string NormalizeText(string? text)
+    {
+        text ??= string.Empty;
+        if (text.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Normalize newlines to '\n' so controls get consistent input across platforms.
+        // (Win32 typically emits '\r' via WM_CHAR, other platforms vary.)
+        if (text.IndexOf('\r') >= 0)
+        {
+            return text.Replace("\r\n", "\n").Replace('\r', '\n');
+        }
+
+        return text;
     }
 }

@@ -44,6 +44,9 @@ public sealed class FocusManager
         oldElement?.SetFocused(false);
         element?.SetFocused(true);
 
+        // WPF-like policy: close non-stays-open popups when focus moves outside both the popup and its owner.
+        _window.CloseNonStaysOpenPopupsIfFocusMovedOutside(element);
+
         _window.RequerySuggested();
 
         return true;
@@ -130,7 +133,8 @@ public sealed class FocusManager
             return false;
         }
 
-        int currentIndex = FocusedElement != null ? focusable.IndexOf(FocusedElement) : -1;
+        var anchor = ResolveFocusNavigationAnchor(FocusedElement, focusable);
+        int currentIndex = anchor != null ? focusable.IndexOf(anchor) : -1;
         int nextIndex = (currentIndex + 1) % focusable.Count;
 
         return SetFocus(focusable[nextIndex]);
@@ -147,10 +151,52 @@ public sealed class FocusManager
             return false;
         }
 
-        int currentIndex = FocusedElement != null ? focusable.IndexOf(FocusedElement) : focusable.Count;
+        var anchor = ResolveFocusNavigationAnchor(FocusedElement, focusable);
+        int currentIndex = anchor != null ? focusable.IndexOf(anchor) : focusable.Count;
         int prevIndex = (currentIndex - 1 + focusable.Count) % focusable.Count;
 
         return SetFocus(focusable[prevIndex]);
+    }
+
+    private UIElement? ResolveFocusNavigationAnchor(UIElement? focusedElement, List<UIElement> focusableInWindow)
+    {
+        if (focusedElement == null)
+        {
+            return null;
+        }
+
+        if (focusableInWindow.Contains(focusedElement))
+        {
+            return focusedElement;
+        }
+
+        // Focus may be inside a popup. For tab navigation, anchor to the popup owner
+        // so we move to the next element after the owning control (WPF-like behavior).
+        var visited = new HashSet<UIElement>();
+        Element? current = focusedElement;
+        for (int i = 0; i < 32 && current != null; i++)
+        {
+            if (current is UIElement ui && !visited.Add(ui))
+            {
+                break;
+            }
+
+            if (current is UIElement currentUi && _window.TryGetPopupOwner(currentUi, out var owner) && !ReferenceEquals(owner, currentUi))
+            {
+                current = owner;
+            }
+            else
+            {
+                current = current.Parent;
+            }
+
+            if (current is UIElement candidate && focusableInWindow.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private List<UIElement> CollectFocusableElements(Element? root)
