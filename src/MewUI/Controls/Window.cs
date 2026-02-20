@@ -10,7 +10,7 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Represents a top-level window.
 /// </summary>
-public class Window : ContentControl, ILayoutRoundingHost
+public partial class Window : ContentControl, ILayoutRoundingHost
 {
     private readonly DispatcherMergeKey _layoutMergeKey = new(UiDispatcherPriority.Layout);
     private readonly DispatcherMergeKey _renderMergeKey = new(UiDispatcherPriority.Render);
@@ -139,6 +139,10 @@ public class Window : ContentControl, ILayoutRoundingHost
     {
         Padding = new Thickness(16);
         AdornerLayer = new AdornerLayer(this);
+
+#if DEBUG
+        InitializeDebugDevTools();
+#endif
     }
 
     protected override Color DefaultBackground => Theme.Palette.WindowBackground;
@@ -1746,7 +1750,15 @@ public class Window : ContentControl, ILayoutRoundingHost
         {
             FocusManager.ClearFocus();
         }
+
+#if DEBUG
+        DebugOnAfterMouseDownHitTest(positionInWindow, button, element);
+#endif
     }
+
+#if DEBUG
+    partial void DebugOnAfterMouseDownHitTest(Point positionInWindow, MouseButton button, UIElement? element);
+#endif
 
     private void EnsureFocusNotInClosedPopup(UIElement popup, UIElement owner)
     {
