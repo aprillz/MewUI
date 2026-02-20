@@ -27,7 +27,7 @@ public enum TreeViewExpandTrigger
 /// <summary>
 /// A hierarchical tree view control with expand/collapse functionality.
 /// </summary>
-public sealed class TreeView : Control, IVisualTreeHost
+public sealed class TreeView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFocusIntoViewHost, Aprillz.MewUI.Input.IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly ScrollBar _vBar;
@@ -43,6 +43,8 @@ public sealed class TreeView : Control, IVisualTreeHost
     private double _extentHeight;
     private double _viewportHeight;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
+    private int _pendingTabFocusIndex = -1;
+    private int _pendingTabFocusAttempts;
 
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
@@ -873,6 +875,254 @@ public sealed class TreeView : Control, IVisualTreeHost
             _hoverVisibleIndex = -1;
             InvalidateVisual();
         }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (e.Handled || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        int count = _itemsSource.Count;
+        if (count <= 0)
+        {
+            return;
+        }
+
+        int selected = _itemsSource.SelectedIndex;
+        int current = selected >= 0 ? selected : 0;
+
+        switch (e.Key)
+        {
+            case Key.Up:
+                _itemsSource.SelectedIndex = Math.Max(0, current - 1);
+                e.Handled = true;
+                break;
+
+            case Key.Down:
+                _itemsSource.SelectedIndex = Math.Min(count - 1, current + 1);
+                e.Handled = true;
+                break;
+
+            case Key.Home:
+                _itemsSource.SelectedIndex = 0;
+                e.Handled = true;
+                break;
+
+            case Key.End:
+                _itemsSource.SelectedIndex = count - 1;
+                e.Handled = true;
+                break;
+
+            case Key.Space:
+                {
+                    int index = _itemsSource.SelectedIndex;
+                    if (index < 0 || index >= count)
+                    {
+                        _itemsSource.SelectedIndex = 0;
+                        e.Handled = true;
+                        break;
+                    }
+
+                    if (_itemsSource.GetHasChildren(index))
+                    {
+                        _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
+                        e.Handled = true;
+                    }
+                }
+                break;
+
+            case Key.Right:
+                {
+                    int index = _itemsSource.SelectedIndex;
+                    if (index < 0 || index >= count)
+                    {
+                        break;
+                    }
+
+                    if (_itemsSource.GetHasChildren(index) && !_itemsSource.GetIsExpanded(index))
+                    {
+                        _itemsSource.SetIsExpanded(index, true);
+                        e.Handled = true;
+                    }
+                }
+                break;
+
+            case Key.Left:
+                {
+                    int index = _itemsSource.SelectedIndex;
+                    if (index < 0 || index >= count)
+                    {
+                        break;
+                    }
+
+                    if (_itemsSource.GetHasChildren(index) && _itemsSource.GetIsExpanded(index))
+                    {
+                        _itemsSource.SetIsExpanded(index, false);
+                        e.Handled = true;
+                    }
+                }
+                break;
+        }
+
+        if (e.Handled)
+        {
+            Focus();
+            InvalidateVisual();
+        }
+    }
+
+    bool Aprillz.MewUI.Input.IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
+    {
+        if (focusedElement == this)
+        {
+            return false;
+        }
+
+        int found = -1;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (found != -1)
+            {
+                return;
+            }
+
+            if (IsInSubtreeOf(focusedElement, element))
+            {
+                found = i;
+            }
+        });
+
+        if (found < 0 || found >= _itemsSource.Count)
+        {
+            return false;
+        }
+
+        if (_itemsSource.SelectedIndex != found)
+        {
+            _itemsSource.SelectedIndex = found;
+        }
+        else
+        {
+            ScrollIntoView(found);
+        }
+
+        return true;
+    }
+
+    bool Aprillz.MewUI.Input.IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
+    {
+        if (!IsEffectivelyEnabled || _itemsSource.Count == 0)
+        {
+            return false;
+        }
+
+        int found = -1;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (found != -1)
+            {
+                return;
+            }
+
+            if (IsInSubtreeOf(focusedElement, element))
+            {
+                found = i;
+            }
+        });
+
+        if (found < 0)
+        {
+            return false;
+        }
+
+        int target = moveForward ? found + 1 : found - 1;
+        if (target < 0 || target >= _itemsSource.Count)
+        {
+            return false;
+        }
+
+        _itemsSource.SelectedIndex = target;
+        ScrollIntoView(target);
+        _pendingTabFocusIndex = target;
+        _pendingTabFocusAttempts = 0;
+        SchedulePendingTabFocus();
+        return true;
+    }
+
+    private void SchedulePendingTabFocus()
+    {
+        if (_pendingTabFocusIndex < 0)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            return;
+        }
+
+        window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
+    }
+
+    private void ApplyPendingTabFocus()
+    {
+        if (_pendingTabFocusIndex < 0)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            _pendingTabFocusIndex = -1;
+            return;
+        }
+
+        FrameworkElement? container = null;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (i == _pendingTabFocusIndex)
+            {
+                container = element;
+            }
+        });
+
+        if (container == null)
+        {
+            if (_pendingTabFocusAttempts++ < 4)
+            {
+                window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
+            }
+            else
+            {
+                _pendingTabFocusIndex = -1;
+            }
+            return;
+        }
+
+        var target = Input.FocusManager.FindFirstFocusable(container);
+        if (target != null)
+        {
+            window.FocusManager.SetFocus(target);
+        }
+
+        _pendingTabFocusIndex = -1;
+    }
+
+    private static bool IsInSubtreeOf(UIElement element, UIElement root)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool TryHitRow(Point position, out int index, out bool onGlyph)

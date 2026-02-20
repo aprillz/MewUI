@@ -2,7 +2,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class GridView : Control, IVisualTreeHost
+public sealed class GridView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFocusIntoViewHost, Aprillz.MewUI.Input.IVirtualizedTabNavigationHost
 {
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
@@ -16,6 +16,8 @@ public sealed class GridView : Control, IVisualTreeHost
     private double _rowsExtentHeight;
     private double _viewportHeight;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
+    private int _pendingTabFocusIndex = -1;
+    private int _pendingTabFocusAttempts;
 
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
@@ -145,6 +147,231 @@ public sealed class GridView : Control, IVisualTreeHost
         base.OnThemeChanged(oldTheme, newTheme);
         _rebindVisibleOnNextRender = true;
         InvalidateVisual();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (e.Handled || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        int count = _core.ItemsSource.Count;
+        if (count <= 0)
+        {
+            return;
+        }
+
+        int current = SelectedIndex >= 0 ? SelectedIndex : 0;
+
+        switch (e.Key)
+        {
+            case Key.Up:
+                SelectedIndex = Math.Max(0, current - 1);
+                e.Handled = true;
+                break;
+
+            case Key.Down:
+                SelectedIndex = Math.Min(count - 1, current + 1);
+                e.Handled = true;
+                break;
+
+            case Key.Home:
+                SelectedIndex = 0;
+                e.Handled = true;
+                break;
+
+            case Key.End:
+                SelectedIndex = count - 1;
+                e.Handled = true;
+                break;
+
+            case Key.PageUp:
+                SelectedIndex = Math.Max(0, current - ResolvePageStep(count));
+                e.Handled = true;
+                break;
+
+            case Key.PageDown:
+                SelectedIndex = Math.Min(count - 1, current + ResolvePageStep(count));
+                e.Handled = true;
+                break;
+        }
+
+        if (e.Handled)
+        {
+            Focus();
+            InvalidateVisual();
+        }
+    }
+
+    private int ResolvePageStep(int count)
+    {
+        double rowH = ResolveRowHeight();
+        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        {
+            return 1;
+        }
+
+        double viewport = _viewportHeight;
+        if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
+        {
+            return 1;
+        }
+
+        int step = (int)Math.Floor(viewport / rowH);
+        return Math.Clamp(step, 1, Math.Max(1, count));
+    }
+
+    bool Aprillz.MewUI.Input.IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
+    {
+        if (focusedElement == this)
+        {
+            return false;
+        }
+
+        int found = -1;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (found != -1)
+            {
+                return;
+            }
+
+            if (IsInSubtreeOf(focusedElement, element))
+            {
+                found = i;
+            }
+        });
+
+        if (found < 0 || found >= _core.ItemsSource.Count)
+        {
+            return false;
+        }
+
+        if (SelectedIndex != found)
+        {
+            SelectedIndex = found;
+        }
+        else
+        {
+            ScrollIntoView(found);
+        }
+
+        return true;
+    }
+
+    bool Aprillz.MewUI.Input.IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
+    {
+        if (!IsEffectivelyEnabled || _core.ItemsSource.Count == 0)
+        {
+            return false;
+        }
+
+        int found = -1;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (found != -1)
+            {
+                return;
+            }
+
+            if (IsInSubtreeOf(focusedElement, element))
+            {
+                found = i;
+            }
+        });
+
+        if (found < 0)
+        {
+            return false;
+        }
+
+        int targetIndex = moveForward ? found + 1 : found - 1;
+        if (targetIndex < 0 || targetIndex >= _core.ItemsSource.Count)
+        {
+            return false;
+        }
+
+        SelectedIndex = targetIndex;
+        ScrollIntoView(targetIndex);
+        _pendingTabFocusIndex = targetIndex;
+        _pendingTabFocusAttempts = 0;
+        SchedulePendingTabFocus();
+        return true;
+    }
+
+    private void SchedulePendingTabFocus()
+    {
+        if (_pendingTabFocusIndex < 0)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            return;
+        }
+
+        window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
+    }
+
+    private void ApplyPendingTabFocus()
+    {
+        if (_pendingTabFocusIndex < 0)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            _pendingTabFocusIndex = -1;
+            return;
+        }
+
+        FrameworkElement? container = null;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (i == _pendingTabFocusIndex)
+            {
+                container = element;
+            }
+        });
+
+        if (container == null)
+        {
+            if (_pendingTabFocusAttempts++ < 4)
+            {
+                window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
+            }
+            else
+            {
+                _pendingTabFocusIndex = -1;
+            }
+            return;
+        }
+
+        var target = Input.FocusManager.FindFirstFocusable(container);
+        if (target != null)
+        {
+            window.FocusManager.SetFocus(target);
+        }
+
+        _pendingTabFocusIndex = -1;
+    }
+
+    private static bool IsInSubtreeOf(UIElement element, UIElement root)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)

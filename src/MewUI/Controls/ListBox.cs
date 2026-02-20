@@ -8,6 +8,7 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class ListBox : Control
     , IVisualTreeHost
+    , Aprillz.MewUI.Input.IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly TemplatedItemsHost _itemsHost;
@@ -23,6 +24,8 @@ public partial class ListBox : Control
     private double _extentHeight;
     private double _viewportHeight;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
+    private int _pendingTabFocusIndex = -1;
+    private int _pendingTabFocusAttempts;
 
     /// <summary>
     /// Gets or sets the items data source.
@@ -798,6 +801,26 @@ public partial class ListBox : Control
 
             e.Handled = true;
         }
+        else if (e.Key == Key.Home)
+        {
+            int count = ItemsSource.Count;
+            if (count > 0)
+            {
+                SelectedIndex = 0;
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.End)
+        {
+            int count = ItemsSource.Count;
+            if (count > 0)
+            {
+                SelectedIndex = count - 1;
+            }
+
+            e.Handled = true;
+        }
         else if (e.Key == Key.Enter)
         {
             int count = ItemsSource.Count;
@@ -901,6 +924,118 @@ public partial class ListBox : Control
         Action<Action>? unsubscribe = null)
     {
         SetSelectedIndexBindingCore(get, set, subscribe, unsubscribe);
+    }
+
+    bool Aprillz.MewUI.Input.IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
+    {
+        if (!IsEffectivelyEnabled || ItemsSource.Count == 0)
+        {
+            return false;
+        }
+
+        int found = -1;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (found != -1)
+            {
+                return;
+            }
+
+            if (IsInSubtreeOf(focusedElement, element))
+            {
+                found = i;
+            }
+        });
+
+        if (found < 0)
+        {
+            return false;
+        }
+
+        int target = moveForward ? found + 1 : found - 1;
+        if (target < 0 || target >= ItemsSource.Count)
+        {
+            return false;
+        }
+
+        SelectedIndex = target;
+        ScrollIntoView(target);
+        _pendingTabFocusIndex = target;
+        _pendingTabFocusAttempts = 0;
+        SchedulePendingTabFocus();
+        return true;
+    }
+
+    private void SchedulePendingTabFocus()
+    {
+        if (_pendingTabFocusIndex < 0)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            return;
+        }
+
+        window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
+    }
+
+    private void ApplyPendingTabFocus()
+    {
+        if (_pendingTabFocusIndex < 0)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            _pendingTabFocusIndex = -1;
+            return;
+        }
+
+        FrameworkElement? container = null;
+        _itemsHost.VisitRealized((i, element) =>
+        {
+            if (i == _pendingTabFocusIndex)
+            {
+                container = element;
+            }
+        });
+
+        if (container == null)
+        {
+            if (_pendingTabFocusAttempts++ < 4)
+            {
+                window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
+            }
+            else
+            {
+                _pendingTabFocusIndex = -1;
+            }
+            return;
+        }
+
+        var target = Input.FocusManager.FindFirstFocusable(container);
+        if (target != null)
+        {
+            window.FocusManager.SetFocus(target);
+        }
+
+        _pendingTabFocusIndex = -1;
+    }
+
+    private static bool IsInSubtreeOf(UIElement element, UIElement root)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected override void OnDispose()

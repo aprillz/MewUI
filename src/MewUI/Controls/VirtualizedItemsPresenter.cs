@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using System.Linq;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -78,9 +79,27 @@ internal sealed class VirtualizedItemsPresenter
     /// </summary>
     public void VisitRealized(Action<Element> visitor)
     {
-        foreach (var child in _realized.Values)
+        if (_realized.Count == 0)
         {
-            visitor(child);
+            return;
+        }
+
+        foreach (var key in _realized.Keys.OrderBy(static k => k))
+        {
+            visitor(_realized[key]);
+        }
+    }
+
+    public void VisitRealized(Action<int, FrameworkElement> visitor)
+    {
+        if (_realized.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var key in _realized.Keys.OrderBy(static k => k))
+        {
+            visitor(key, _realized[key]);
         }
     }
 

@@ -79,6 +79,8 @@ internal sealed class TemplatedItemsHost
 
     public void VisitRealized(Action<Element> visitor) => _presenter.VisitRealized(visitor);
 
+    public void VisitRealized(Action<int, FrameworkElement> visitor) => _presenter.VisitRealized(visitor);
+
     public void Render(IGraphicsContext context)
     {
         _presenter.RenderRange(
