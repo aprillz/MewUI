@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Input;
 /// Platform text input target. Used to deliver committed text (including IME commits) to text controls
 /// without exposing text input events on every <c>UIElement</c>.
 /// </summary>
-internal interface ITextInputClient
+public interface ITextInputClient
 {
     void HandleTextInput(TextInputEventArgs e);
 }

@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Input;
 /// Receives IME text composition (preedit) events.
 /// Implement this only on elements that actively edit text (e.g. TextBox).
 /// </summary>
-internal interface ITextCompositionClient
+public interface ITextCompositionClient
 {
     void HandleTextCompositionStart(TextCompositionEventArgs e);
 
