@@ -156,6 +156,8 @@ public class Window : ContentControl, ILayoutRoundingHost
         public bool StaysOpen { get; set; }
     }
 
+    private bool _isClosingPopups;
+
     private sealed class AdornerEntry
     {
         public required UIElement Adorned { get; init; }
@@ -1555,29 +1557,55 @@ public class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        bool removedAny = false;
-        for (int i = _popups.Count - 1; i >= 0; i--)
+        if (_isClosingPopups)
         {
-            if (_popups[i].StaysOpen)
-            {
-                continue;
-            }
-
-            var entry = _popups[i];
-            entry.Element.Parent = null;
-            if (entry.Owner is IPopupOwner owner)
-            {
-                owner.OnPopupClosed(entry.Element);
-            }
-
-            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
-            _popups.RemoveAt(i);
-            removedAny = true;
+            return;
         }
 
-        if (removedAny)
+        _isClosingPopups = true;
+        try
         {
-            Invalidate();
+            var focused = FocusManager.FocusedElement;
+            UIElement? restoreFocusTo = null;
+
+            bool removedAny = false;
+            for (int i = _popups.Count - 1; i >= 0; i--)
+            {
+                if (_popups[i].StaysOpen)
+                {
+                    continue;
+                }
+
+                var entry = _popups[i];
+
+                if (focused != null && (focused == entry.Element || IsInSubtreeOf(focused, entry.Element)))
+                {
+                    restoreFocusTo = entry.Owner;
+                }
+
+                entry.Element.Parent = null;
+                if (entry.Owner is IPopupOwner owner)
+                {
+                    owner.OnPopupClosed(entry.Element);
+                }
+
+                _popups.RemoveAt(i);
+                removedAny = true;
+            }
+
+            if (restoreFocusTo != null)
+            {
+                FocusManager.SetFocus(restoreFocusTo);
+            }
+
+            if (removedAny)
+            {
+                Invalidate();
+            }
+        }
+        finally
+        {
+            _isClosingPopups = false;
         }
     }
 
@@ -1764,42 +1792,67 @@ public class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        bool removedAny = false;
-        for (int i = _popups.Count - 1; i >= 0; i--)
+        if (_isClosingPopups)
         {
-            var entry = _popups[i];
-            if (entry.StaysOpen)
-            {
-                continue;
-            }
-
-            if (newFocusedElement != null)
-            {
-                if (ReferenceEquals(newFocusedElement, entry.Element) || IsInSubtreeOf(newFocusedElement, entry.Element))
-                {
-                    continue;
-                }
-
-                if (ReferenceEquals(newFocusedElement, entry.Owner) || IsInSubtreeOf(newFocusedElement, entry.Owner))
-                {
-                    continue;
-                }
-            }
-
-            entry.Element.Parent = null;
-            if (entry.Owner is IPopupOwner owner)
-            {
-                owner.OnPopupClosed(entry.Element);
-            }
-
-            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
-            _popups.RemoveAt(i);
-            removedAny = true;
+            return;
         }
 
-        if (removedAny)
+        _isClosingPopups = true;
+        try
         {
-            Invalidate();
+            var focused = FocusManager.FocusedElement;
+            UIElement? restoreFocusTo = null;
+
+            bool removedAny = false;
+            for (int i = _popups.Count - 1; i >= 0; i--)
+            {
+                var entry = _popups[i];
+                if (entry.StaysOpen)
+                {
+                    continue;
+                }
+
+                if (newFocusedElement != null)
+                {
+                    if (ReferenceEquals(newFocusedElement, entry.Element) || IsInSubtreeOf(newFocusedElement, entry.Element))
+                    {
+                        continue;
+                    }
+
+                    if (ReferenceEquals(newFocusedElement, entry.Owner) || IsInSubtreeOf(newFocusedElement, entry.Owner))
+                    {
+                        continue;
+                    }
+                }
+
+                if (focused != null && (focused == entry.Element || IsInSubtreeOf(focused, entry.Element)))
+                {
+                    restoreFocusTo = entry.Owner;
+                }
+
+                entry.Element.Parent = null;
+                if (entry.Owner is IPopupOwner owner)
+                {
+                    owner.OnPopupClosed(entry.Element);
+                }
+
+                _popups.RemoveAt(i);
+                removedAny = true;
+            }
+
+            if (restoreFocusTo != null)
+            {
+                FocusManager.SetFocus(restoreFocusTo);
+            }
+
+            if (removedAny)
+            {
+                Invalidate();
+            }
+        }
+        finally
+        {
+            _isClosingPopups = false;
         }
     }
 
