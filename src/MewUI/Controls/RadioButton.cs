@@ -55,6 +55,7 @@ public class RadioButton : ToggleBase
 
     public RadioButton()
     {
+        Background = Color.Transparent;
         Padding = new Thickness(2);
     }
 

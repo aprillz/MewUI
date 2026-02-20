@@ -59,7 +59,6 @@ public abstract partial class ToggleBase : Control
     /// </summary>
     protected ToggleBase()
     {
-        Background = Color.Transparent;
     }
 
     /// <summary>

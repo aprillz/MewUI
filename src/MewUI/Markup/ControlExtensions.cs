@@ -1099,6 +1099,65 @@ public static class ControlExtensions
 
     #endregion
 
+    #region ToggleButton
+
+    /// <summary>
+    /// Sets the content text.
+    /// </summary>
+    /// <param name="toggleButton">Target toggle button.</param>
+    /// <param name="content">Text content.</param>
+    /// <returns>The toggle button for chaining.</returns>
+    public static ToggleButton Content(this ToggleButton toggleButton, string content)
+    {
+        toggleButton.Content = content;
+        return toggleButton;
+    }
+
+    /// <summary>
+    /// Sets the checked state.
+    /// </summary>
+    /// <param name="toggleButton">Target toggle button.</param>
+    /// <param name="isChecked">Checked state.</param>
+    /// <returns>The toggle button for chaining.</returns>
+    public static ToggleButton IsChecked(this ToggleButton toggleButton, bool isChecked = true)
+    {
+        toggleButton.IsChecked = isChecked;
+        return toggleButton;
+    }
+
+    /// <summary>
+    /// Adds a checked changed event handler.
+    /// </summary>
+    /// <param name="toggleButton">Target toggle button.</param>
+    /// <param name="handler">Event handler.</param>
+    /// <returns>The toggle button for chaining.</returns>
+    public static ToggleButton OnCheckedChanged(this ToggleButton toggleButton, Action<bool> handler)
+    {
+        toggleButton.CheckedChanged += handler;
+        return toggleButton;
+    }
+
+    /// <summary>
+    /// Binds the checked state to an observable value.
+    /// </summary>
+    /// <param name="toggleButton">Target toggle button.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The toggle button for chaining.</returns>
+    public static ToggleButton BindIsChecked(this ToggleButton toggleButton, ObservableValue<bool> source)
+    {
+        ArgumentNullException.ThrowIfNull(toggleButton);
+        ArgumentNullException.ThrowIfNull(source);
+
+        toggleButton.SetIsCheckedBinding(
+            () => source.Value,
+            v => source.Value = v,
+            h => source.Changed += h,
+            h => source.Changed -= h);
+        return toggleButton;
+    }
+
+    #endregion
+
     #region ToggleSwitch
 
     /// <summary>
