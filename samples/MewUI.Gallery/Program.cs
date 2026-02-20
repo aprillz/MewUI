@@ -719,6 +719,83 @@ FrameworkElement WindowsMenuPage() => new WrapPanel()
         DevToolsPage()
     );
 
+FrameworkElement DevToolsPage()
+{
+    var shortcuts = new Label()
+        .FontSize(11)
+        .Text("Shortcuts:\n- Inspector: Ctrl/Cmd+Shift+I\n- Visual Tree: Ctrl/Cmd+Shift+T");
+
+    FrameworkElement content;
+#if DEBUG
+    bool updating = false;
+    var inspectorToggle = new ToggleButton()
+        .Content("Inspector Overlay");
+    var treeToggle = new ToggleButton()
+        .Content("Visual Tree Window");
+
+    void UpdateToggles()
+    {
+        updating = true;
+        try
+        {
+            inspectorToggle.IsChecked = window.DevToolsInspectorIsOpen;
+            treeToggle.IsChecked = window.DevToolsVisualTreeIsOpen;
+        }
+        finally
+        {
+            updating = false;
+        }
+    }
+
+    inspectorToggle.CheckedChanged += _ =>
+    {
+        if (updating)
+        {
+            return;
+        }
+
+        window.DevToolsToggleInspector();
+        UpdateToggles();
+    };
+
+    treeToggle.CheckedChanged += _ =>
+    {
+        if (updating)
+        {
+            return;
+        }
+
+        window.DevToolsToggleVisualTree();
+        UpdateToggles();
+    };
+
+    window.DevToolsInspectorOpenChanged += _ => UpdateToggles();
+    window.DevToolsVisualTreeOpenChanged += _ => UpdateToggles();
+    UpdateToggles();
+
+    content = new StackPanel()
+        .Vertical()
+        .Spacing(8)
+        .Children(
+            inspectorToggle,
+            treeToggle,
+            shortcuts
+        );
+#else
+    content = new StackPanel()
+        .Vertical()
+        .Spacing(8)
+        .Children(
+            new Label()
+                .FontSize(11)
+                .Text("DevTools are available in Debug builds only."),
+            shortcuts
+        );
+#endif
+
+    return Card("DevTools", content);
+}
+
 FrameworkElement SelectionPage() =>
     CardGrid(
         Card(

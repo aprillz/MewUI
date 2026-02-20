@@ -11,6 +11,20 @@ public partial class Window
     private DebugInspectorOverlay? _debugInspectorOverlay;
     private DebugVisualTreeWindow? _debugVisualTreeWindow;
 
+#if DEBUG
+    public void DevToolsToggleInspector() => ToggleDebugInspector();
+
+    public void DevToolsToggleVisualTree() => ToggleDebugVisualTree();
+
+    public bool DevToolsInspectorIsOpen => _debugInspectorAdorner != null;
+
+    public bool DevToolsVisualTreeIsOpen => _debugVisualTreeWindow != null;
+
+    public event Action<bool>? DevToolsInspectorOpenChanged;
+
+    public event Action<bool>? DevToolsVisualTreeOpenChanged;
+#endif
+
     private void InitializeDebugDevTools()
     {
         PreviewKeyDown += OnDebugDevToolsPreviewKeyDown;
@@ -46,6 +60,9 @@ public partial class Window
             _debugInspectorOverlay = null;
             RequestLayout();
             RequestRender();
+#if DEBUG
+            DevToolsInspectorOpenChanged?.Invoke(false);
+#endif
             return;
         }
 
@@ -62,6 +79,9 @@ public partial class Window
         };
 
         AdornerLayer.Add(_debugInspectorAdorner);
+#if DEBUG
+        DevToolsInspectorOpenChanged?.Invoke(true);
+#endif
     }
 
     private void ToggleDebugVisualTree()
@@ -70,6 +90,9 @@ public partial class Window
         {
             try { _debugVisualTreeWindow.Close(); } catch { }
             _debugVisualTreeWindow = null;
+#if DEBUG
+            DevToolsVisualTreeOpenChanged?.Invoke(false);
+#endif
             return;
         }
 
@@ -88,6 +111,9 @@ public partial class Window
             if (ReferenceEquals(_debugVisualTreeWindow, treeWindow))
             {
                 _debugVisualTreeWindow = null;
+#if DEBUG
+                DevToolsVisualTreeOpenChanged?.Invoke(false);
+#endif
             }
 
             if (_debugInspectorOverlay != null)
@@ -103,9 +129,15 @@ public partial class Window
             Closed -= CloseTreeOnOwnerClose;
             try { _debugVisualTreeWindow?.Close(); } catch { }
             _debugVisualTreeWindow = null;
+#if DEBUG
+            DevToolsVisualTreeOpenChanged?.Invoke(false);
+#endif
         }
 
         treeWindow.Show();
+#if DEBUG
+        DevToolsVisualTreeOpenChanged?.Invoke(true);
+#endif
     }
 
     partial void DebugOnAfterMouseDownHitTest(Point positionInWindow, MouseButton button, UIElement? element)
