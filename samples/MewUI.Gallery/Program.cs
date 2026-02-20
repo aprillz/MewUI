@@ -403,8 +403,7 @@ FrameworkElement WindowsPage()
                         .Spacing(10)
                         .Children(
                             new Label()
-                                .Text("This is a modal window. The owner is disabled until you close this dialog.")
-                                .FontSize(12),
+                                .Text("This is a modal window. The owner is disabled until you close this dialog."),
 
                             new StackPanel()
                                 .Horizontal()
@@ -1505,7 +1504,7 @@ FrameworkElement PanelsPage()
                 .Spacing(6)
                 .Children(
                     new Border()
-                        .Height(120)
+                        .Height(140)
                         .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
                         .BorderThickness(1)
                         .CornerRadius(10)
@@ -1525,6 +1524,61 @@ FrameworkElement PanelsPage()
                         .FontSize(11)
                 ),
             minWidth: 320
+        ),
+
+        PanelCard(
+            "SplitPanel",
+            new SplitPanel()
+                .Horizontal()
+                .SplitterThickness(8)
+                .Height(140)
+                .MinFirst(60)
+                .MinSecond(60)
+                .FirstLength(GridLength.Stars(1))
+                .SecondLength(GridLength.Stars(1))
+                .First(
+                    new Border()
+                        .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
+                        .BorderThickness(1)
+                        .CornerRadius(8)
+                        .Padding(8)
+                        .Child(new Label().Text("First"))
+                )
+                .Second(
+                    new Border()
+                        .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
+                        .BorderThickness(1)
+                        .CornerRadius(8)
+                        .Padding(8)
+                        .Child(new Label().Text("Second"))
+                )
+        ),
+
+        PanelCard(
+            "SplitPanel (Vertical)",
+            new SplitPanel()
+                .Vertical()
+                .SplitterThickness(8)
+                .Height(140)
+                .MinFirst(40)
+                .MinSecond(40)
+                .FirstLength(GridLength.Stars(1))
+                .SecondLength(GridLength.Stars(1))
+                .First(
+                    new Border()
+                        .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
+                        .CornerRadius(8)
+                        .Padding(8)
+                        .Child(new Label().Text("Top"))
+                )
+                .Second(
+                    new Border()
+                        .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
+                        .BorderThickness(1)
+                        .CornerRadius(8)
+                        .Padding(8)
+                        .Child(new Label().Text("Bottom"))
+                )
         )
     );
 }

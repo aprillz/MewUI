@@ -193,6 +193,82 @@ public static class PanelExtensions
 
     #endregion
 
+    #region SplitPanel
+
+    public static SplitPanel Orientation(this SplitPanel panel, Orientation orientation)
+    {
+        panel.Orientation = orientation;
+        return panel;
+    }
+
+    public static SplitPanel Horizontal(this SplitPanel panel)
+    {
+        panel.Orientation = MewUI.Orientation.Horizontal;
+        return panel;
+    }
+
+    public static SplitPanel Vertical(this SplitPanel panel)
+    {
+        panel.Orientation = MewUI.Orientation.Vertical;
+        return panel;
+    }
+
+    public static SplitPanel SplitterThickness(this SplitPanel panel, double thickness)
+    {
+        panel.SplitterThickness = thickness;
+        return panel;
+    }
+
+    public static SplitPanel FirstLength(this SplitPanel panel, GridLength length)
+    {
+        panel.FirstLength = length;
+        return panel;
+    }
+
+    public static SplitPanel SecondLength(this SplitPanel panel, GridLength length)
+    {
+        panel.SecondLength = length;
+        return panel;
+    }
+
+    public static SplitPanel MinFirst(this SplitPanel panel, double value)
+    {
+        panel.MinFirst = value;
+        return panel;
+    }
+
+    public static SplitPanel MinSecond(this SplitPanel panel, double value)
+    {
+        panel.MinSecond = value;
+        return panel;
+    }
+
+    public static SplitPanel MaxFirst(this SplitPanel panel, double value)
+    {
+        panel.MaxFirst = value;
+        return panel;
+    }
+
+    public static SplitPanel MaxSecond(this SplitPanel panel, double value)
+    {
+        panel.MaxSecond = value;
+        return panel;
+    }
+
+    public static SplitPanel First(this SplitPanel panel, UIElement? element)
+    {
+        panel.First = element;
+        return panel;
+    }
+
+    public static SplitPanel Second(this SplitPanel panel, UIElement? element)
+    {
+        panel.Second = element;
+        return panel;
+    }
+
+    #endregion
+
     #region UniformGrid
 
     /// <summary>
