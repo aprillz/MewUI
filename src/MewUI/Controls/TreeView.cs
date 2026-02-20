@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
@@ -27,7 +28,7 @@ public enum TreeViewExpandTrigger
 /// <summary>
 /// A hierarchical tree view control with expand/collapse functionality.
 /// </summary>
-public sealed class TreeView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFocusIntoViewHost, Aprillz.MewUI.Input.IVirtualizedTabNavigationHost
+public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly ScrollBar _vBar;
@@ -918,54 +919,54 @@ public sealed class TreeView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
                 break;
 
             case Key.Space:
+            {
+                int index = _itemsSource.SelectedIndex;
+                if (index < 0 || index >= count)
                 {
-                    int index = _itemsSource.SelectedIndex;
-                    if (index < 0 || index >= count)
-                    {
-                        _itemsSource.SelectedIndex = 0;
-                        e.Handled = true;
-                        break;
-                    }
-
-                    if (_itemsSource.GetHasChildren(index))
-                    {
-                        _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
-                        e.Handled = true;
-                    }
+                    _itemsSource.SelectedIndex = 0;
+                    e.Handled = true;
+                    break;
                 }
-                break;
+
+                if (_itemsSource.GetHasChildren(index))
+                {
+                    _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
+                    e.Handled = true;
+                }
+            }
+            break;
 
             case Key.Right:
+            {
+                int index = _itemsSource.SelectedIndex;
+                if (index < 0 || index >= count)
                 {
-                    int index = _itemsSource.SelectedIndex;
-                    if (index < 0 || index >= count)
-                    {
-                        break;
-                    }
-
-                    if (_itemsSource.GetHasChildren(index) && !_itemsSource.GetIsExpanded(index))
-                    {
-                        _itemsSource.SetIsExpanded(index, true);
-                        e.Handled = true;
-                    }
+                    break;
                 }
-                break;
+
+                if (_itemsSource.GetHasChildren(index) && !_itemsSource.GetIsExpanded(index))
+                {
+                    _itemsSource.SetIsExpanded(index, true);
+                    e.Handled = true;
+                }
+            }
+            break;
 
             case Key.Left:
+            {
+                int index = _itemsSource.SelectedIndex;
+                if (index < 0 || index >= count)
                 {
-                    int index = _itemsSource.SelectedIndex;
-                    if (index < 0 || index >= count)
-                    {
-                        break;
-                    }
-
-                    if (_itemsSource.GetHasChildren(index) && _itemsSource.GetIsExpanded(index))
-                    {
-                        _itemsSource.SetIsExpanded(index, false);
-                        e.Handled = true;
-                    }
+                    break;
                 }
-                break;
+
+                if (_itemsSource.GetHasChildren(index) && _itemsSource.GetIsExpanded(index))
+                {
+                    _itemsSource.SetIsExpanded(index, false);
+                    e.Handled = true;
+                }
+            }
+            break;
         }
 
         if (e.Handled)
@@ -975,7 +976,7 @@ public sealed class TreeView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
         }
     }
 
-    bool Aprillz.MewUI.Input.IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
+    bool IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
     {
         if (focusedElement == this)
         {
@@ -1013,7 +1014,7 @@ public sealed class TreeView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
         return true;
     }
 
-    bool Aprillz.MewUI.Input.IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
+    bool IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
     {
         if (!IsEffectivelyEnabled || _itemsSource.Count == 0)
         {
@@ -1103,7 +1104,7 @@ public sealed class TreeView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
             return;
         }
 
-        var target = Input.FocusManager.FindFirstFocusable(container);
+        var target = FocusManager.FindFirstFocusable(container);
         if (target != null)
         {
             window.FocusManager.SetFocus(target);

@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls.Text;
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -6,9 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollable list control with item selection.
 /// </summary>
-public partial class ListBox : Control
-    , IVisualTreeHost
-    , Aprillz.MewUI.Input.IVirtualizedTabNavigationHost
+public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly TemplatedItemsHost _itemsHost;
@@ -926,7 +925,7 @@ public partial class ListBox : Control
         SetSelectedIndexBindingCore(get, set, subscribe, unsubscribe);
     }
 
-    bool Aprillz.MewUI.Input.IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
+    bool IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
     {
         if (!IsEffectivelyEnabled || ItemsSource.Count == 0)
         {
@@ -1016,7 +1015,7 @@ public partial class ListBox : Control
             return;
         }
 
-        var target = Input.FocusManager.FindFirstFocusable(container);
+        var target = FocusManager.FindFirstFocusable(container);
         if (target != null)
         {
             window.FocusManager.SetFocus(target);

@@ -1,8 +1,9 @@
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class GridView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFocusIntoViewHost, Aprillz.MewUI.Input.IVirtualizedTabNavigationHost
+public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
 {
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
@@ -224,7 +225,7 @@ public sealed class GridView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
         return Math.Clamp(step, 1, Math.Max(1, count));
     }
 
-    bool Aprillz.MewUI.Input.IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
+    bool IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
     {
         if (focusedElement == this)
         {
@@ -262,7 +263,7 @@ public sealed class GridView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
         return true;
     }
 
-    bool Aprillz.MewUI.Input.IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
+    bool IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
     {
         if (!IsEffectivelyEnabled || _core.ItemsSource.Count == 0)
         {
@@ -352,7 +353,7 @@ public sealed class GridView : Control, IVisualTreeHost, Aprillz.MewUI.Input.IFo
             return;
         }
 
-        var target = Input.FocusManager.FindFirstFocusable(container);
+        var target = FocusManager.FindFirstFocusable(container);
         if (target != null)
         {
             window.FocusManager.SetFocus(target);

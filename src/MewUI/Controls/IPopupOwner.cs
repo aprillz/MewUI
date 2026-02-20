@@ -1,6 +1,6 @@
 namespace Aprillz.MewUI.Controls;
 
-internal interface IPopupOwner
+public interface IPopupOwner
 {
     void OnPopupClosed(UIElement popup);
 }
