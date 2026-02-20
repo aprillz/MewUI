@@ -8,42 +8,40 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class Popup : FrameworkElement, IPopupOwner
 {
-    private bool _isOpen;
     private bool _closingFromWindow;
-    private UIElement? _child;
     private Window? _window;
 
     public UIElement? Child
     {
-        get => _child;
+        get;
         set
         {
-            if (ReferenceEquals(_child, value))
+            if ((field) == value)
             {
                 return;
             }
 
-            if (_isOpen)
+            if (IsOpen)
             {
                 CloseCore();
             }
 
-            _child = value;
+            field = value;
         }
     }
 
     public bool IsOpen
     {
-        get => _isOpen;
+        get;
         set
         {
-            if (_isOpen == value)
+            if (field == value)
             {
                 return;
             }
 
-            _isOpen = value;
-            if (_isOpen)
+            field = value;
+            if (field)
             {
                 OpenCore();
             }
@@ -85,12 +83,12 @@ public sealed class Popup : FrameworkElement, IPopupOwner
 
     public void UpdatePosition()
     {
-        if (!_isOpen)
+        if (!IsOpen)
         {
             return;
         }
 
-        if (_child == null)
+        if (Child == null)
         {
             return;
         }
@@ -101,34 +99,34 @@ public sealed class Popup : FrameworkElement, IPopupOwner
             return;
         }
 
-        var bounds = CalculatePopupBounds(window, _child);
-        window.UpdatePopup(_child, bounds);
+        var bounds = CalculatePopupBounds(window, Child);
+        window.UpdatePopup(Child, bounds);
     }
 
     private void OpenCore()
     {
-        if (_child == null)
+        if (Child == null)
         {
-            _isOpen = false;
+            IsOpen = false;
             return;
         }
 
         var window = ResolveWindow();
         if (window == null)
         {
-            _isOpen = false;
+            IsOpen = false;
             return;
         }
 
         _window = window;
-        var bounds = CalculatePopupBounds(window, _child);
-        window.ShowPopup(this, _child, bounds, staysOpen: StaysOpen);
+        var bounds = CalculatePopupBounds(window, Child);
+        window.ShowPopup(this, Child, bounds, staysOpen: StaysOpen);
         Opened?.Invoke();
     }
 
     private void CloseCore()
     {
-        if (_child == null)
+        if (Child == null)
         {
             return;
         }
@@ -144,7 +142,7 @@ public sealed class Popup : FrameworkElement, IPopupOwner
             return;
         }
 
-        window.ClosePopup(_child);
+        window.ClosePopup(Child);
         Closed?.Invoke();
     }
 
@@ -204,7 +202,7 @@ public sealed class Popup : FrameworkElement, IPopupOwner
             };
         }
 
-    measure:
+        measure:
         // Measure with a generous maximum to avoid infinite sizes.
         var max = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
         if (max.Width <= 0) max = max.WithWidth(1_000_000);
@@ -262,7 +260,7 @@ public sealed class Popup : FrameworkElement, IPopupOwner
 
     void IPopupOwner.OnPopupClosed(UIElement popup)
     {
-        if (!ReferenceEquals(popup, _child))
+        if (!ReferenceEquals(popup, Child))
         {
             return;
         }
@@ -270,7 +268,7 @@ public sealed class Popup : FrameworkElement, IPopupOwner
         _closingFromWindow = true;
         try
         {
-            _isOpen = false;
+            IsOpen = false;
             Closed?.Invoke();
         }
         finally

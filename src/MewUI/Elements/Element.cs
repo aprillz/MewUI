@@ -62,7 +62,8 @@ public abstract class Element
     /// </summary>
     public Element? Parent
     {
-        get; internal set
+        get;
+        internal set
         {
             if (field != value)
             {
