@@ -357,6 +357,19 @@ FrameworkElement ButtonsPage() =>
         ),
 
         Card(
+            "ToggleButton",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new ToggleButton().Content("Toggle"),
+                    new ToggleButton().Content("Checked").IsChecked(true),
+                    new ToggleButton().Content("Disabled").Disable(),
+                    new ToggleButton().Content("Disabled (Checked)").IsChecked(true).Disable()
+                )
+        ),
+
+        Card(
             "Toggle / Switch",
             new StackPanel()
                 .Vertical()
@@ -702,7 +715,8 @@ FrameworkElement WindowsMenuPage() => new WrapPanel()
     .Spacing(12)
     .Children(
         MenusPage(),
-        WindowsPage()
+        WindowsPage(),
+        DevToolsPage()
     );
 
 FrameworkElement SelectionPage() =>
