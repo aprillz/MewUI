@@ -174,8 +174,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         textRect = LayoutRounding.SnapBoundsRectToPixels(textRect, context.DpiScale);
         buttonRect = LayoutRounding.SnapBoundsRectToPixels(buttonRect, context.DpiScale);
 
-        var decRect = new Rect(buttonRect.X, buttonRect.Y, buttonRect.Width / 2, buttonRect.Height);
-        var incRect = new Rect(buttonRect.X + buttonRect.Width / 2, buttonRect.Y, buttonRect.Width / 2, buttonRect.Height);
+        (var decRect, var incRect) = GetButtonRects();
 
         Color baseButton = Theme.Palette.ButtonFace;
         Color hoverButton = Color.Composite(baseButton, Theme.Palette.AccentHoverOverlay);
@@ -208,11 +207,10 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
             context.FillRectangle(decRect, decBg);
             context.FillRectangle(incRect, incBg);
 
-            var x = decRect.Right;
-            context.DrawLine(new Point(x, decRect.Y + 4), new Point(x, decRect.Bottom - 4), Theme.Palette.ControlBorder, 1);
-
-            x = decRect.Left;
-            context.DrawLine(new Point(x, decRect.Y), new Point(x, decRect.Bottom), Theme.Palette.ControlBorder, 1);
+            if (BorderThickness > 0)
+            {
+                context.DrawLine(new Point(buttonRect.Left, buttonRect.Y), new Point(buttonRect.Left, buttonRect.Bottom), Theme.Palette.ControlBorder, BorderThickness);
+            }
 
             context.Restore();
         }
@@ -226,7 +224,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (buttonRect.Width > 0)
         {
-            var chevronSize = Theme.Metrics.BaseControlHeight / 6;
+            var chevronSize = Theme.Metrics.BaseControlHeight / 3;
             Glyph.Draw(context, decRect.Center, chevronSize, textColor, GlyphKind.ChevronDown);
             Glyph.Draw(context, incRect.Center, chevronSize, textColor, GlyphKind.ChevronUp);
         }
@@ -402,15 +400,15 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         return base.OnHitTest(point);
     }
 
-    private double GetButtonAreaWidth() => (Theme.Metrics.BaseControlHeight - Theme.Metrics.ControlBorderThickness * 2) * 2;
+    private double GetButtonAreaWidth() => (Theme.Metrics.BaseControlHeight - Theme.Metrics.ControlBorderThickness * 2);
 
     private (Rect decRect, Rect incRect) GetButtonRects()
     {
         var inner = GetSnappedBorderBounds(Bounds).Deflate(new Thickness(GetBorderVisualInset()));
         double buttonAreaWidth = Math.Min(GetButtonAreaWidth(), inner.Width);
         var buttonRect = new Rect(inner.Right - buttonAreaWidth, inner.Y, buttonAreaWidth, inner.Height);
-        var decRect = new Rect(buttonRect.X, buttonRect.Y, buttonRect.Width / 2, buttonRect.Height);
-        var incRect = new Rect(buttonRect.X + buttonRect.Width / 2, buttonRect.Y, buttonRect.Width / 2, buttonRect.Height);
+        var incRect = new Rect(buttonRect.X, buttonRect.Y, buttonRect.Width, buttonRect.Height / 2);
+        var decRect = new Rect(buttonRect.X, buttonRect.Y + buttonRect.Height / 2, buttonRect.Width, buttonRect.Height / 2);
         return (decRect, incRect);
     }
 
