@@ -45,7 +45,7 @@ public sealed class FocusManager
         element?.SetFocused(true);
 
         // WPF-like policy: close non-stays-open popups when focus moves outside both the popup and its owner.
-        _window.CloseNonStaysOpenPopupsIfFocusMovedOutside(element);
+        _window.OnFocusChanged(element);
 
         // If focus moved into a templated control (e.g. TreeView/GridView item template),
         // let the nearest items host update selection and scroll the owning item into view.

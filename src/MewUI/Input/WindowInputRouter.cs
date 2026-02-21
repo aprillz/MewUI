@@ -75,11 +75,6 @@ internal static class WindowInputRouter
     {
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
-        if (isDown)
-        {
-            window.OnBeforeMouseDown(positionInWindow, button);
-        }
-
         var element = HitTest(window, positionInWindow);
         if (isDown)
         {
@@ -98,6 +93,25 @@ internal static class WindowInputRouter
             if (element?.Focusable == true)
             {
                 window.FocusManager.SetFocus(element);
+            }
+            else
+            {
+                // WPF-like: focus the nearest focusable ancestor instead of requiring the leaf hit-test target
+                // to be focusable (e.g. clicking a Label inside a focusable control should focus the control).
+                UIElement? focusTarget = null;
+                for (var current = element; current != null; current = GetInputBubbleParent(window, current))
+                {
+                    if (current.Focusable)
+                    {
+                        focusTarget = current;
+                        break;
+                    }
+                }
+
+                if (focusTarget != null)
+                {
+                    window.FocusManager.SetFocus(focusTarget);
+                }
             }
 
             for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
@@ -119,6 +133,9 @@ internal static class WindowInputRouter
                     current.RaiseMouseDoubleClick(args);
                 }
             }
+
+            // After routing the click, close transient popups that are not related to the click target.
+            window.RequestClosePopups(PopupCloseRequest.PointerDown(element));
         }
         else
         {

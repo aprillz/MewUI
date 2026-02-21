@@ -523,12 +523,12 @@ public partial class Window
                 roots.Add(new TreeViewNode("Content (null)"));
             }
 
-            if (_target._popups.Count > 0)
+            if (_target._popupManager.Count > 0)
             {
-                var popupNodes = new List<TreeViewNode>(_target._popups.Count);
-                for (int i = 0; i < _target._popups.Count; i++)
+                var popupNodes = new List<TreeViewNode>(_target._popupManager.Count);
+                for (int i = 0; i < _target._popupManager.Count; i++)
                 {
-                    popupNodes.Add(BuildNode(_target._popups[i].Element));
+                    popupNodes.Add(BuildNode(_target._popupManager.ElementAt(i)));
                 }
 
                 var popupsRoot = new TreeViewNode("Popups", popupNodes);

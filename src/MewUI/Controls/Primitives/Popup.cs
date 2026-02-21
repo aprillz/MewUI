@@ -258,7 +258,7 @@ public sealed class Popup : FrameworkElement, IPopupOwner
         return new Rect(x, y, w, h);
     }
 
-    void IPopupOwner.OnPopupClosed(UIElement popup)
+    void IPopupOwner.OnPopupClosed(UIElement popup, PopupCloseKind kind)
     {
         if (!ReferenceEquals(popup, Child))
         {

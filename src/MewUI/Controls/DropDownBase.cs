@@ -12,7 +12,6 @@ public abstract class DropDownBase : Control, IPopupOwner
     private bool _isDropDownOpen;
     private UIElement? _popup;
     private Rect? _lastPopupBounds;
-    private bool _restoreFocusAfterPopupClose;
 
     /// <summary>
     /// Gets or sets whether the popup is open.
@@ -202,13 +201,7 @@ public abstract class DropDownBase : Control, IPopupOwner
 
         return new Rect(x, y, width, height);
     }
-
-    /// <summary>
-    /// Requests focus to be restored to the owner when the popup closes.
-    /// If not requested, focus is cleared (when focus was inside the popup).
-    /// </summary>
-    protected void RequestRestoreFocusAfterPopupClose() => _restoreFocusAfterPopupClose = true;
-
+     
     protected override Size MeasureContent(Size availableSize) => MeasureHeader(availableSize);
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -424,7 +417,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         _lastPopupBounds = popupBounds;
     }
 
-    void IPopupOwner.OnPopupClosed(UIElement popup)
+    void IPopupOwner.OnPopupClosed(UIElement popup, PopupCloseKind kind)
     {
         if (_popup == null || !ReferenceEquals(popup, _popup))
         {
@@ -435,24 +428,30 @@ public abstract class DropDownBase : Control, IPopupOwner
         _lastPopupBounds = null;
         InvalidateVisual();
 
+        if (kind == PopupCloseKind.Lifecycle)
+        {
+            return;
+        }
+
         var root = FindVisualRoot();
         if (root is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            if (focused != null && (ReferenceEquals(focused, popup) || IsInSubtreeOf(focused, popup)))
+            bool focusWasInPopup = focused != null && (ReferenceEquals(focused, popup) || IsInSubtreeOf(focused, popup));
+
+            if (kind == PopupCloseKind.UserInitiated)
             {
-                if (_restoreFocusAfterPopupClose)
-                {
-                    window.FocusManager.SetFocus(this);
-                }
-                else
-                {
-                    window.FocusManager.ClearFocus();
-                }
+                // When the drop-down itself initiates closing (toggle, selection commit, etc.),
+                // keep keyboard focus on the owner so navigation continues naturally.
+                window.FocusManager.SetFocus(this);
+            }
+            else if (focusWasInPopup)
+            {
+                // A policy-driven close (click outside, focus moved) can detach the currently focused
+                // element if it lives inside the popup. Clear to avoid leaving a stale focused element.
+                window.FocusManager.ClearFocus();
             }
         }
-
-        _restoreFocusAfterPopupClose = false;
     }
 
     private static bool IsInSubtreeOf(UIElement element, UIElement root)

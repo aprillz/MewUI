@@ -248,7 +248,7 @@ public sealed class MenuBar : Control, IPopupOwner
         InvalidateVisual();
     }
 
-    void IPopupOwner.OnPopupClosed(UIElement popup)
+    void IPopupOwner.OnPopupClosed(UIElement popup, PopupCloseKind kind)
     {
         if (_openPopup != null && popup == _openPopup)
         {
@@ -274,8 +274,7 @@ public sealed class MenuBar : Control, IPopupOwner
     protected override void OnRender(IGraphicsContext context)
     {
         base.OnRender(context);
-
-        
+                
         var bounds = GetSnappedBorderBounds(Bounds);
         context.FillRectangle(bounds, Background);
 

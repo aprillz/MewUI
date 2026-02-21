@@ -360,7 +360,6 @@ public sealed partial class ComboBox : DropDownBase
     private void OnPopupListItemActivated(int index)
     {
         SelectedIndex = index;
-        RequestRestoreFocusAfterPopupClose();
         IsDropDownOpen = false;
     }
 

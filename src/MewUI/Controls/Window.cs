@@ -28,7 +28,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
-    private readonly List<PopupEntry> _popups = new();
     private readonly List<AdornerEntry> _adorners = new();
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<Window> _modalChildren = new();
@@ -139,6 +138,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     {
         Padding = new Thickness(16);
         AdornerLayer = new AdornerLayer(this);
+        _popupManager = new PopupManager(this);
 
 #if DEBUG
         InitializeDebugDevTools();
@@ -149,18 +149,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     public AdornerLayer AdornerLayer { get; }
 
-    private sealed class PopupEntry
-    {
-        public required UIElement Element { get; init; }
-
-        public required UIElement Owner { get; set; }
-
-        public Rect Bounds { get; set; }
-
-        public bool StaysOpen { get; set; }
-    }
-
-    private bool _isClosingPopups;
+    private readonly PopupManager _popupManager;
 
     private sealed class AdornerEntry
     {
@@ -914,13 +903,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
         }
 
-        for (int i = 0; i < _popups.Count; i++)
+        if (_popupManager.HasLayoutDirty())
         {
-            var element = _popups[i].Element;
-            if (element.IsMeasureDirty || element.IsArrangeDirty)
-            {
-                return true;
-            }
+            return true;
         }
 
         return false;
@@ -952,26 +937,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private void LayoutPopups()
     {
-        if (_popups.Count == 0)
-        {
-            return;
-        }
-
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var entry = _popups[i];
-            if (!entry.Element.IsVisible)
-            {
-                continue;
-            }
-
-            if (!entry.Element.IsMeasureDirty && !entry.Element.IsArrangeDirty)
-            {
-                continue;
-            }
-
-            LayoutPopup(entry);
-        }
+        _popupManager.LayoutDirtyPopups();
     }
 
     private static bool HasMeasureDirty(Element root)
@@ -1281,11 +1247,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 _adorners[i].Element.Render(context);
             }
 
-            // Popups render last (on top).
-            for (int i = 0; i < _popups.Count; i++)
-            {
-                _popups[i].Element.Render(context);
-            }
+            _popupManager.Render(context);
         }
         finally
         {
@@ -1355,7 +1317,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (Content == null)
         {
             DisposeAdorners();
-            DisposePopups();
+            _popupManager.Dispose();
             return;
         }
 
@@ -1368,21 +1330,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         });
 
         DisposeAdorners();
-        DisposePopups();
-    }
-
-    private void DisposePopups()
-    {
-        foreach (var popup in _popups)
-        {
-            if (popup.Element is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-
-            popup.Element.Parent = null;
-        }
-        _popups.Clear();
+        _popupManager.Dispose();
     }
 
     private void DisposeAdorners()
@@ -1419,13 +1367,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             });
         }
 
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            if (_popups[i].Element is Control c)
-            {
-                c.NotifyThemeChanged(oldTheme, newTheme);
-            }
-        }
+        _popupManager.NotifyThemeChanged(oldTheme, newTheme);
 
         for (int i = 0; i < _adorners.Count; i++)
         {
@@ -1460,15 +1402,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             });
         }
 
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            if (_popups[i].Element is Control c)
-            {
-                c.NotifyDpiChanged(oldDpi, newDpi);
-            }
-
-            _popups[i].Element.ClearDpiCacheDeep();
-        }
+        _popupManager.NotifyDpiChanged(oldDpi, newDpi);
 
         for (int i = 0; i < _adorners.Count; i++)
         {
@@ -1481,265 +1415,41 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
-    internal void ClosePopupsIfClickOutside(Point position)
-    {
-        if (_popups.Count == 0)
-        {
-            return;
-        }
-
-        for (int i = _popups.Count - 1; i >= 0; i--)
-        {
-            // Hit-test-invisible popups (e.g. ToolTip) should not block "click outside" behavior.
-            if (!_popups[i].Element.IsHitTestVisible)
-            {
-                continue;
-            }
-
-            if (_popups[i].Bounds.Contains(position))
-            {
-                return;
-            }
-        }
-
-        CloseNonStaysOpenPopups();
-    }
-
     internal void CloseAllPopups()
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var entry = _popups[i];
-            entry.Element.Parent = null;
-            if (entry.Owner is IPopupOwner owner)
-            {
-                owner.OnPopupClosed(entry.Element);
-            }
-
-            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
-        }
-        _popups.Clear();
-        Invalidate();
-    }
+        => _popupManager.CloseAllPopups();
 
     internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool staysOpen = false)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-        ArgumentNullException.ThrowIfNull(popup);
+        => _popupManager.ShowPopup(owner, popup, bounds, staysOpen);
 
-        // Replace if already present.
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            if (_popups[i].Element == popup)
-            {
-                _popups[i].Owner = owner;
-                UpdatePopup(popup, bounds);
-                return;
-            }
-        }
-
-        // Popups can be cached/reused (e.g. ComboBox keeps a ListBox instance even while closed).
-        // If a popup is moved between windows (or the window DPI differs), ensure the popup updates its DPI-sensitive
-        // caches (fonts, layout) before measuring/arranging.
-        uint oldDpi = popup.GetDpiCached();
-        var oldTheme = popup is FrameworkElement popupElement
-            ? popupElement.ThemeInternal
-            : Theme;
-        popup.Parent = this;
-        ApplyPopupDpiChange(popup, oldDpi, Dpi);
-        ApplyPopupThemeChange(popup, oldTheme, Theme);
-        var entry = new PopupEntry { Owner = owner, Element = popup, Bounds = bounds, StaysOpen = staysOpen };
-        _popups.Add(entry);
-        LayoutPopup(entry);
-        Invalidate();
-    }
-
-    private void CloseNonStaysOpenPopups()
-    {
-        if (_popups.Count == 0)
-        {
-            return;
-        }
-
-        if (_isClosingPopups)
-        {
-            return;
-        }
-
-        _isClosingPopups = true;
-        try
-        {
-            var focused = FocusManager.FocusedElement;
-            UIElement? restoreFocusTo = null;
-
-            bool removedAny = false;
-            for (int i = _popups.Count - 1; i >= 0; i--)
-            {
-                if (_popups[i].StaysOpen)
-                {
-                    continue;
-                }
-
-                var entry = _popups[i];
-
-                if (focused != null && (focused == entry.Element || IsInSubtreeOf(focused, entry.Element)))
-                {
-                    restoreFocusTo = entry.Owner;
-                }
-
-                entry.Element.Parent = null;
-                if (entry.Owner is IPopupOwner owner)
-                {
-                    owner.OnPopupClosed(entry.Element);
-                }
-
-                _popups.RemoveAt(i);
-                removedAny = true;
-            }
-
-            if (restoreFocusTo != null)
-            {
-                FocusManager.SetFocus(restoreFocusTo);
-            }
-
-            if (removedAny)
-            {
-                Invalidate();
-            }
-        }
-        finally
-        {
-            _isClosingPopups = false;
-        }
-    }
-
-    private ToolTip? _toolTip;
-    private UIElement? _toolTipOwner;
+    internal void RequestClosePopups(PopupCloseRequest request)
+        => _popupManager.RequestClosePopups(request);
 
     internal Size MeasureToolTip(string text, Size availableSize)
-    {
-        _toolTip ??= new ToolTip();
-        _toolTip.Content = null;
-        _toolTip.Text = text ?? string.Empty;
-        _toolTip.Measure(availableSize);
-        return _toolTip.DesiredSize;
-    }
+        => _popupManager.MeasureToolTip(text, availableSize);
 
     internal Size MeasureToolTip(Element content, Size availableSize)
-    {
-        ArgumentNullException.ThrowIfNull(content);
-
-        _toolTip ??= new ToolTip();
-        _toolTip.Text = string.Empty;
-        _toolTip.Content = content;
-        _toolTip.Measure(availableSize);
-        return _toolTip.DesiredSize;
-    }
+        => _popupManager.MeasureToolTip(content, availableSize);
 
     internal void ShowToolTip(UIElement owner, string text, Rect bounds)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-
-        _toolTip ??= new ToolTip();
-        _toolTip.Content = null;
-        _toolTip.Text = text ?? string.Empty;
-        _toolTipOwner = owner;
-        ShowPopup(owner, _toolTip, bounds);
-    }
+        => _popupManager.ShowToolTip(owner, text, bounds);
 
     internal void ShowToolTip(UIElement owner, Element content, Rect bounds)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-        ArgumentNullException.ThrowIfNull(content);
-
-        _toolTip ??= new ToolTip();
-        _toolTip.Text = string.Empty;
-        _toolTip.Content = content;
-        _toolTipOwner = owner;
-        ShowPopup(owner, _toolTip, bounds);
-    }
+        => _popupManager.ShowToolTip(owner, content, bounds);
 
     internal void CloseToolTip(UIElement? owner = null)
-    {
-        if (_toolTip == null)
-        {
-            return;
-        }
-
-        if (owner != null && !ReferenceEquals(_toolTipOwner, owner))
-        {
-            return;
-        }
-
-        ClosePopup(_toolTip);
-        _toolTipOwner = null;
-    }
+        => _popupManager.CloseToolTip(owner);
 
     internal bool TryGetPopupOwner(UIElement popup, out UIElement owner)
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            if (_popups[i].Element == popup)
-            {
-                owner = _popups[i].Owner;
-                return true;
-            }
-        }
-
-        owner = popup;
-        return false;
-    }
+        => _popupManager.TryGetPopupOwner(popup, out owner);
 
     internal void UpdatePopup(UIElement popup, Rect bounds)
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            if (_popups[i].Element != popup)
-            {
-                continue;
-            }
-
-            _popups[i].Bounds = bounds;
-            LayoutPopup(_popups[i]);
-            Invalidate();
-            return;
-        }
-    }
+        => _popupManager.UpdatePopup(popup, bounds);
 
     internal void ClosePopup(UIElement popup)
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            if (_popups[i].Element != popup)
-            {
-                continue;
-            }
+        => _popupManager.ClosePopup(popup, PopupCloseKind.UserInitiated);
 
-            var entry = _popups[i];
-            _popups[i].Element.Parent = null;
-            _popups.RemoveAt(i);
-            if (entry.Owner is IPopupOwner owner)
-            {
-                owner.OnPopupClosed(entry.Element);
-            }
-
-            EnsureFocusNotInClosedPopup(entry.Element, entry.Owner);
-
-            Invalidate();
-            if (ReferenceEquals(popup, _toolTip))
-            {
-                _toolTipOwner = null;
-            }
-            return;
-        }
-    }
-
-    internal void OnBeforeMouseDown(Point positionInWindow, MouseButton button)
-    {
-        // Centralized "mouse down" policy invoked by platform backends.
-        // Close any open popups when the click happens outside their bounds.
-        ClosePopupsIfClickOutside(positionInWindow);
-    }
+    internal void ClosePopup(UIElement popup, PopupCloseKind kind)
+        => _popupManager.ClosePopup(popup, kind);
 
     internal void OnAfterMouseDownHitTest(Point positionInWindow, MouseButton button, UIElement? element)
     {
@@ -1760,174 +1470,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     partial void DebugOnAfterMouseDownHitTest(Point positionInWindow, MouseButton button, UIElement? element);
 #endif
 
-    private void EnsureFocusNotInClosedPopup(UIElement popup, UIElement owner)
-    {
-        var focused = FocusManager.FocusedElement;
-        if (focused == null)
-        {
-            return;
-        }
-
-        if (focused != popup && !IsInSubtreeOf(focused, popup))
-        {
-            return;
-        }
-
-        // Prefer restoring focus to the owner, otherwise clear focus to avoid leaving focus on a detached popup.
-        if (owner.Focusable && owner.IsEffectivelyEnabled && owner.IsVisible)
-        {
-            FocusManager.SetFocus(owner);
-        }
-        else
-        {
-            FocusManager.ClearFocus();
-        }
-    }
-
-    internal static bool IsInSubtreeOf(UIElement element, UIElement root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    internal void CloseNonStaysOpenPopupsIfFocusMovedOutside(UIElement? newFocusedElement)
-    {
-        if (_popups.Count == 0)
-        {
-            return;
-        }
-
-        if (_isClosingPopups)
-        {
-            return;
-        }
-
-        _isClosingPopups = true;
-        try
-        {
-            var focused = FocusManager.FocusedElement;
-            UIElement? restoreFocusTo = null;
-
-            bool removedAny = false;
-            for (int i = _popups.Count - 1; i >= 0; i--)
-            {
-                var entry = _popups[i];
-                if (entry.StaysOpen)
-                {
-                    continue;
-                }
-
-                if (newFocusedElement != null)
-                {
-                    if (ReferenceEquals(newFocusedElement, entry.Element) || IsInSubtreeOf(newFocusedElement, entry.Element))
-                    {
-                        continue;
-                    }
-
-                    if (ReferenceEquals(newFocusedElement, entry.Owner) || IsInSubtreeOf(newFocusedElement, entry.Owner))
-                    {
-                        continue;
-                    }
-                }
-
-                if (focused != null && (focused == entry.Element || IsInSubtreeOf(focused, entry.Element)))
-                {
-                    restoreFocusTo = entry.Owner;
-                }
-
-                entry.Element.Parent = null;
-                if (entry.Owner is IPopupOwner owner)
-                {
-                    owner.OnPopupClosed(entry.Element);
-                }
-
-                _popups.RemoveAt(i);
-                removedAny = true;
-            }
-
-            if (restoreFocusTo != null)
-            {
-                FocusManager.SetFocus(restoreFocusTo);
-            }
-
-            if (removedAny)
-            {
-                Invalidate();
-            }
-        }
-        finally
-        {
-            _isClosingPopups = false;
-        }
-    }
-
-    private void LayoutPopup(PopupEntry entry)
-    {
-        entry.Element.Measure(new Size(entry.Bounds.Width, entry.Bounds.Height));
-        entry.Element.Arrange(entry.Bounds);
-
-        // Keep the stored bounds consistent with the actually arranged (layout-rounded) bounds,
-        // otherwise hit-testing (e.g. mouse wheel on popup content) can miss by sub-pixel rounding.
-        entry.Bounds = entry.Element.Bounds;
-    }
-
-    private static void ApplyPopupDpiChange(UIElement popup, uint oldDpi, uint newDpi)
-    {
-        if (oldDpi == 0 || newDpi == 0 || oldDpi == newDpi)
-        {
-            return;
-        }
-
-        // Clear DPI caches again (Parent assignment already does this, but be defensive for future changes),
-        // and notify controls so they can recreate DPI-dependent resources (fonts, etc.).
-        popup.ClearDpiCacheDeep();
-        VisitVisualTree(popup, e =>
-        {
-            e.ClearDpiCache();
-            if (e is Control c)
-            {
-                c.NotifyDpiChanged(oldDpi, newDpi);
-            }
-        });
-    }
-
-    private static void ApplyPopupThemeChange(UIElement popup, Theme oldTheme, Theme newTheme)
-    {
-        if (oldTheme == newTheme)
-        {
-            return;
-        }
-
-        VisitVisualTree(popup, e =>
-        {
-            if (e is FrameworkElement element)
-            {
-                element.NotifyThemeChanged(oldTheme, newTheme);
-            }
-        });
-    }
+    internal void OnFocusChanged(UIElement? newFocusedElement)
+        => _popupManager.RequestClosePopups(PopupCloseRequest.FocusChanged(newFocusedElement));
 
     protected override UIElement? OnHitTest(Point point)
     {
-        for (int i = _popups.Count - 1; i >= 0; i--)
+        var popupHit = _popupManager.HitTest(point);
+        if (popupHit != null)
         {
-            if (!_popups[i].Bounds.Contains(point))
-            {
-                continue;
-            }
-
-            var hit = _popups[i].Element.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
+            return popupHit;
         }
 
         for (int i = _adorners.Count - 1; i >= 0; i--)

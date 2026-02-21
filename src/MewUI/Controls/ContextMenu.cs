@@ -538,7 +538,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         }
     }
 
-    void IPopupOwner.OnPopupClosed(UIElement popup)
+    void IPopupOwner.OnPopupClosed(UIElement popup, PopupCloseKind kind)
     {
         if (_openSubMenu != null && popup == _openSubMenu)
         {
