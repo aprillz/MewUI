@@ -251,6 +251,8 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return false;
         }
 
+        EnsureHorizontalIntoView(focusedElement);
+
         int found = -1;
         _itemsHost.VisitRealized((i, element) =>
         {
@@ -280,6 +282,81 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         return true;
+    }
+
+    private void EnsureHorizontalIntoView(UIElement focusedElement)
+    {
+        if (_core.Columns.Count == 0)
+        {
+            return;
+        }
+
+        if (!TryGetContentBounds(out var contentLocal, out double headerH))
+        {
+            return;
+        }
+
+        double viewportW = Math.Max(0, contentLocal.Width);
+        if (viewportW <= 0 || double.IsNaN(viewportW) || double.IsInfinity(viewportW))
+        {
+            return;
+        }
+
+        double extentW = _columnsExtentWidth;
+        if (extentW <= 0 || double.IsNaN(extentW) || double.IsInfinity(extentW))
+        {
+            extentW = ComputeColumnsExtentWidth();
+        }
+
+        if (extentW <= viewportW + 0.5)
+        {
+            return;
+        }
+
+        var size = focusedElement.RenderSize;
+        var localRect = new Rect(0, 0, size.Width, size.Height);
+
+        Rect rectInGrid;
+        try
+        {
+            rectInGrid = focusedElement.TranslateRect(localRect, this);
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        // Both rectInGrid and contentLocal are in this GridView's coordinate space.
+        double viewportLeft = contentLocal.X;
+        double viewportRight = viewportLeft + viewportW;
+
+        double oldOffset = _scroll.GetOffsetDip(0);
+        double newOffset = oldOffset;
+
+        if (rectInGrid.Left < viewportLeft)
+        {
+            newOffset = oldOffset - (viewportLeft - rectInGrid.Left);
+        }
+        else if (rectInGrid.Right > viewportRight)
+        {
+            newOffset = oldOffset + (rectInGrid.Right - viewportRight);
+        }
+        else
+        {
+            return;
+        }
+
+        newOffset = Math.Clamp(newOffset, 0, Math.Max(0, extentW - viewportW));
+
+        _scroll.DpiScale = GetDpi() / 96.0;
+        _scroll.SetMetricsDip(0, extentW, viewportW);
+        if (_scroll.SetOffsetDip(0, newOffset))
+        {
+            _hBar.Value = _scroll.GetOffsetDip(0);
+            InvalidateHorizontalScrollLayout();
+            InvalidateArrange();
+            InvalidateVisual();
+        }
     }
 
     bool IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
