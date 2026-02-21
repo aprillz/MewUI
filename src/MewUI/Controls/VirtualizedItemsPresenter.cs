@@ -136,6 +136,11 @@ internal sealed class VirtualizedItemsPresenter
             getContainerRect,
             rebindExisting);
 
+        double dpiScale = _owner.GetDpiScaleCached();
+        int baseYPx = LayoutRounding.RoundToPixelInt(yStart, dpiScale);
+        int itemHeightPx = LayoutRounding.RoundToPixelInt(itemHeight, dpiScale);
+        double itemHeightDip = itemHeightPx / dpiScale;
+
         for (int i = first; i < lastExclusive; i++)
         {
             if (!_realized.TryGetValue(i, out var element))
@@ -143,8 +148,10 @@ internal sealed class VirtualizedItemsPresenter
                 continue;
             }
 
-            double y = yStart + (i - first) * itemHeight;
-            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeight);
+            // Use pixel-int math for Y to avoid accumulating floating error at fractional DPI (e.g. 150%).
+            int yPx = baseYPx + (i - first) * itemHeightPx;
+            double y = yPx / dpiScale;
+            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeightDip);
             beforeItemRender?.Invoke(context, i, itemRect);
             element.Render(context);
         }
@@ -168,6 +175,11 @@ internal sealed class VirtualizedItemsPresenter
             return;
         }
 
+        double dpiScale = _owner.GetDpiScaleCached();
+        int baseYPx = LayoutRounding.RoundToPixelInt(yStart, dpiScale);
+        int itemHeightPx = LayoutRounding.RoundToPixelInt(itemHeight, dpiScale);
+        double itemHeightDip = itemHeightPx / dpiScale;
+
         for (int i = first; i < lastExclusive; i++)
         {
             if (!_realized.TryGetValue(i, out var element))
@@ -175,8 +187,9 @@ internal sealed class VirtualizedItemsPresenter
                 continue;
             }
 
-            double y = yStart + (i - first) * itemHeight;
-            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeight);
+            int yPx = baseYPx + (i - first) * itemHeightPx;
+            double y = yPx / dpiScale;
+            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeightDip);
             beforeItemRender?.Invoke(context, i, itemRect);
             element.Render(context);
         }
@@ -208,12 +221,20 @@ internal sealed class VirtualizedItemsPresenter
             }
         }
 
+        double dpiScale = _owner.GetDpiScaleCached();
+        int baseYPx = LayoutRounding.RoundToPixelInt(yStart, dpiScale);
+        int itemHeightPx = LayoutRounding.RoundToPixelInt(itemHeight, dpiScale);
+        double itemHeightDip = itemHeightPx / dpiScale;
+
         for (int i = first; i < lastExclusive; i++)
         {
-            double y = yStart + (i - first) * itemHeight;
-            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeight);
+            int yPx = baseYPx + (i - first) * itemHeightPx;
+            double y = yPx / dpiScale;
+            var itemRect = new Rect(contentBounds.X, y, contentBounds.Width, itemHeightDip);
 
             var containerRect = getContainerRect != null ? getContainerRect(i, itemRect) : itemRect;
+            // Keep container geometry stable at fractional DPI (e.g. 150%) and avoid edge-based +1px drift.
+            containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
             var element = GetOrCreate(i, rebindExisting);
             element.Measure(new Size(Math.Max(0, containerRect.Width), Math.Max(0, containerRect.Height)));
             element.Arrange(containerRect);
