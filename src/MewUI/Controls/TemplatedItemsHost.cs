@@ -95,6 +95,18 @@ internal sealed class TemplatedItemsHost
             Layout.RebindExisting);
     }
 
+    public void RenderArranged(IGraphicsContext context)
+    {
+        _presenter.RenderArrangedRange(
+            context,
+            Layout.ContentBounds,
+            Layout.First,
+            Layout.LastExclusive,
+            Layout.ItemHeight,
+            Layout.YStart,
+            Options.BeforeItemRender);
+    }
+
     public void Arrange()
     {
         _presenter.ArrangeRange(

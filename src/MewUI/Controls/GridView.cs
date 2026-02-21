@@ -515,43 +515,42 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             InvalidateVisual();
             ReevaluateMouseOverAfterScroll();
             e.Handled = true;
-            return;
         }
         else
         {
-        int notches = Math.Sign(e.Delta);
-        if (notches == 0)
-        {
-            return;
-        }
+            int notches = Math.Sign(e.Delta);
+            if (notches == 0)
+            {
+                return;
+            }
 
-        double viewport = _viewportHeight;
-        if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
-        {
-            return;
-        }
+            double viewport = _viewportHeight;
+            if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
+            {
+                return;
+            }
 
-        int count = _core.ItemsSource.Count;
-        double rowH = ResolveRowHeight();
-        _rowsExtentHeight = count > 0 && rowH > 0 ? count * rowH : 0;
+            int count = _core.ItemsSource.Count;
+            double rowH = ResolveRowHeight();
+            _rowsExtentHeight = count > 0 && rowH > 0 ? count * rowH : 0;
 
-        if (_rowsExtentHeight <= viewport + 0.5)
-        {
-            return;
-        }
+            if (_rowsExtentHeight <= viewport + 0.5)
+            {
+                return;
+            }
 
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(1, _rowsExtentHeight, viewport);
-        _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
-        _vBar.Value = _scroll.GetOffsetDip(1);
+            _scroll.DpiScale = GetDpi() / 96.0;
+            _scroll.SetMetricsDip(1, _rowsExtentHeight, viewport);
+            _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
+            _vBar.Value = _scroll.GetOffsetDip(1);
 
-        InvalidateArrange();
-        InvalidateVisual();
+            InvalidateArrange();
+            InvalidateVisual();
 
             ReevaluateMouseOverAfterScroll();
 
-        e.Handled = true;
-    }
+            e.Handled = true;
+        }
     }
 
     private void ReevaluateMouseOverAfterScroll()
@@ -991,6 +990,51 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 ScrollIntoView(request.Index);
             }
         }
+
+        // Virtualization/layout belongs to Arrange, not Render. Realize+arrange the visible range now so hit testing,
+        // focus navigation, and mouse-over reevaluation see up-to-date arranged bounds.
+        var rowsViewport = new Rect(
+            contentBounds.X,
+            contentBounds.Y + headerH,
+            Math.Max(0, _viewportWidth),
+            Math.Max(0, _viewportHeight));
+
+        if (count > 0 && rowH > 0 && rowsViewport.Height > 0)
+        {
+            if (TryComputeVisibleRows(rowsViewport, rowH, out int first, out int lastExclusive, out double yStart))
+            {
+                bool rebind = _rebindVisibleOnNextRender;
+                _rebindVisibleOnNextRender = false;
+
+                _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
+                {
+                    ContentBounds = rowsViewport,
+                    First = first,
+                    LastExclusive = lastExclusive,
+                    // Ensure pixel-aligned item geometry at fractional DPI (e.g. 150%) so row backgrounds/borders
+                    // don't accumulate rounding gaps between adjacent containers.
+                    ItemHeight = LayoutRounding.RoundToPixel(rowH, dpiScale),
+                    YStart = LayoutRounding.RoundToPixel(yStart, dpiScale),
+                    RebindExisting = rebind,
+                };
+
+                _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
+                {
+                    BeforeItemRender = BeforeRowRender,
+                    GetContainerRect = GetRowContainerRect,
+                };
+
+                _itemsHost.Arrange();
+            }
+            else
+            {
+                _itemsHost.RecycleAll();
+            }
+        }
+        else
+        {
+            _itemsHost.RecycleAll();
+        }
     }
 
     public override void Render(IGraphicsContext context)
@@ -1031,43 +1075,13 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             context.SetClip(clipRect);
         }
 
-        // Ensure header children are re-arranged when horizontal offset changes.
-        // Items are re-arranged as part of virtualization each render, but header isn't unless we mark it dirty.
-        _header.Arrange(new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width), headerH));
         _header.Render(context);
 
         context.Save();
         context.SetClip(LayoutRounding.ExpandClipByDevicePixels(rowsViewport, dpiScale));
         try
         {
-            var rowH = ResolveRowHeight();
-            if (TryComputeVisibleRows(rowsViewport, rowH, out int first, out int lastExclusive, out double yStart))
-            {
-                bool rebind = _rebindVisibleOnNextRender;
-                _rebindVisibleOnNextRender = false;
-
-                _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
-                {
-                    ContentBounds = rowsViewport,
-                    First = first,
-                    LastExclusive = lastExclusive,
-                    ItemHeight = rowH,
-                    YStart = yStart,
-                    RebindExisting = rebind,
-                };
-
-                _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
-                {
-                    BeforeItemRender = BeforeRowRender,
-                    GetContainerRect = GetRowContainerRect,
-                };
-
-                _itemsHost.Render(context);
-            }
-            else
-            {
-                _itemsHost.RecycleAll();
-            }
+            _itemsHost.RenderArranged(context);
         }
         finally
         {
@@ -1150,18 +1164,18 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         UIElement? rowHit = null;
         if (hitTestRows)
         {
-        _itemsHost.VisitRealized(element =>
-        {
-            if (rowHit != null)
+            _itemsHost.VisitRealized(element =>
             {
-                return;
-            }
+                if (rowHit != null)
+                {
+                    return;
+                }
 
-            if (element is UIElement ui)
-            {
-                rowHit = ui.HitTest(point);
-            }
-        });
+                if (element is UIElement ui)
+                {
+                    rowHit = ui.HitTest(point);
+                }
+            });
         }
 
         if (rowHit != null)
@@ -1494,7 +1508,6 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            _owner.Focus();
             _owner.SelectedIndex = _rowIndex;
         }
 
@@ -1772,12 +1785,16 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                     return;
                 }
 
+                if (e.Handled)
+                {
+                    return;
+                }
+
                 if (!_row._owner.IsEffectivelyEnabled)
                 {
                     return;
                 }
 
-                _row._owner.Focus();
                 _row._owner.SelectedIndex = _row._rowIndex;
             }
         }
