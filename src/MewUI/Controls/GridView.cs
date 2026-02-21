@@ -1115,6 +1115,13 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return null;
         }
 
+        // IMPORTANT: children may be arranged outside this control's bounds due to scrolling.
+        // Hit testing must be clipped to the control bounds to avoid "ghost" input on clipped content.
+        if (!Bounds.Contains(point))
+        {
+            return null;
+        }
+
         var vbarHit = _vBar.HitTest(point);
         if (vbarHit != null)
         {
@@ -1127,7 +1134,22 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return hbarHit;
         }
 
+        bool hitTestRows = true;
+        if (TryGetContentBounds(out var contentLocal, out double headerH))
+        {
+            var localPoint = new Point(point.X - Bounds.X, point.Y - Bounds.Y);
+            var rowsViewportLocal = new Rect(
+                contentLocal.X,
+                contentLocal.Y + headerH,
+                Math.Max(0, contentLocal.Width),
+                Math.Max(0, contentLocal.Height - headerH));
+
+            hitTestRows = rowsViewportLocal.Contains(localPoint);
+        }
+
         UIElement? rowHit = null;
+        if (hitTestRows)
+        {
         _itemsHost.VisitRealized(element =>
         {
             if (rowHit != null)
@@ -1140,6 +1162,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 rowHit = ui.HitTest(point);
             }
         });
+        }
 
         if (rowHit != null)
         {
