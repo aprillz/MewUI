@@ -178,18 +178,21 @@ public sealed class TreeItemsView<T> : ITreeItemsView
         }
     }
 
-    public object? SelectedItem
+    /// <summary>
+    /// Gets or sets the selected item (typed).
+    /// </summary>
+    public T? SelectedItem
     {
-        get => _selectedIndex >= 0 && _selectedIndex < Count ? _visible[_selectedIndex].Item : null;
+        get => _selectedIndex >= 0 && _selectedIndex < Count ? _visible[_selectedIndex].Item : default;
         set
         {
-            if (value == null)
+            if (value is null)
             {
                 SelectedIndex = -1;
                 return;
             }
 
-            var key = _keySelectorObject(value);
+            var key = _keySelector(value);
             if (key == null)
             {
                 SelectedIndex = -1;
@@ -201,6 +204,27 @@ public sealed class TreeItemsView<T> : ITreeItemsView
             {
                 SelectedIndex = idx;
             }
+        }
+    }
+
+    object? IItemsView.SelectedItem
+    {
+        get => SelectedItem;
+        set
+        {
+            if (value is null)
+            {
+                SelectedItem = default;
+                return;
+            }
+
+            if (value is T t)
+            {
+                SelectedItem = t;
+                return;
+            }
+
+            SelectedIndex = -1;
         }
     }
 
