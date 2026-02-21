@@ -104,8 +104,6 @@ DrawBackgroundAndBorder(context, bounds, Background, border, cornerRadiusDip: 0)
 
 ## 전체 샘플 코드
 
-https://github.com/user-attachments/assets/340e24a6-5b39-4d77-a857-69811e857133
-
 ```csharp
 public sealed class NumericUpDown : RangeBase
 {
@@ -331,8 +329,8 @@ public sealed class NumericUpDown : RangeBase
         {
             // 아이콘/글리프 크기는 테마 메트릭을 따른다.
             var chevronSize = Theme.Metrics.BaseControlHeight / 6;
-            ChevronGlyph.Draw(context, decRect.Center, chevronSize, textColor, ChevronDirection.Down);
-            ChevronGlyph.Draw(context, incRect.Center, chevronSize, textColor, ChevronDirection.Up);
+            Glyph.Draw(context, decRect.Center, chevronSize, textColor, GlyphKind.ChevronDown);
+            Glyph.Draw(context, incRect.Center, chevronSize, textColor, GlyphKind.ChevronUp);
         }
     }
 
