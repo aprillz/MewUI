@@ -284,8 +284,9 @@ public abstract class DropDownBase : Control, IPopupOwner
         Focus();
 
         var bounds = Bounds;
-        double headerHeight = ResolveHeaderHeight();
-        var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
+        // Use full arranged bounds for hit-testing. The header can be measured smaller than the final layout
+        // (e.g. stretch in a panel), but the whole button face should toggle.
+        var headerRect = bounds;
 
         if (IsToggleHit(headerRect, e.Position))
         {
@@ -319,6 +320,33 @@ public abstract class DropDownBase : Control, IPopupOwner
         {
             IsDropDownOpen = true;
             e.Handled = true;
+        }
+    }
+
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        // If this control is detached from its Window (common with virtualization/recycling),
+        // ensure an open dropdown popup is closed. The popup is owned by the old Window's overlay layer,
+        // so ClosePopupCore() cannot be used after detaching (FindVisualRoot() would no longer be the window).
+        if (!_isDropDownOpen || _popup == null)
+        {
+            return;
+        }
+
+        if (oldRoot is Window oldWindow && newRoot is not Window)
+        {
+            // Lifecycle-close should not restore focus to this control (it may be leaving the tree).
+            // If focus currently lives inside the popup subtree, clear it to avoid leaving focus
+            // pointing at a soon-to-be-detached element.
+            var focused = oldWindow.FocusManager.FocusedElement;
+            if (focused != null && (ReferenceEquals(focused, _popup) || IsInSubtreeOf(focused, _popup)))
+            {
+                oldWindow.FocusManager.ClearFocus();
+            }
+
+            oldWindow.ClosePopup(_popup, PopupCloseKind.Lifecycle);
         }
     }
 
