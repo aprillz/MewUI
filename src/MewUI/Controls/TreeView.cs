@@ -213,6 +213,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             _hoverVisibleIndex = -1;
             _hasLastMousePosition = false;
             InvalidateVisual();
+            ReevaluateMouseOverAfterScroll();
         };
 
         _hBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
@@ -227,6 +228,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 _hasLastMousePosition = false;
                 InvalidateArrange();
                 InvalidateVisual();
+                ReevaluateMouseOverAfterScroll();
             }
         };
     }
@@ -291,6 +293,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         _hoverVisibleIndex = -1;
         InvalidateMeasure();
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
     }
 
     private void OnItemsSelectionChanged(int index)
@@ -946,7 +949,16 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
         e.Handled = true;
+    }
+
+    private void ReevaluateMouseOverAfterScroll()
+    {
+        if (FindVisualRoot() is Window window)
+        {
+            window.ReevaluateMouseOver();
+        }
     }
 
     protected override void OnMouseMove(MouseEventArgs e)

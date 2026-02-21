@@ -86,6 +86,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _lastMouseScreenPositionPx = screenPositionPx;
     }
 
+    internal void ReevaluateMouseOver()
+    {
+        ApplicationDispatcher?.Post(() =>
+        {
+            // When layout/scroll offsets change without an actual mouse move, the element under the cursor can change.
+            // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
+            var leaf = WindowInputRouter.HitTest(this, _lastMousePositionDip);
+            WindowInputRouter.UpdateMouseOver(this, leaf);
+
+        },UiDispatcherPriority.Layout);
+    }
+
     internal void UpdateMouseOverChain(UIElement? oldLeaf, UIElement? newLeaf)
     {
         if (ReferenceEquals(oldLeaf, newLeaf))

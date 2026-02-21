@@ -103,6 +103,7 @@ public sealed class ScrollViewer : ContentControl
         VerticalOffset = verticalOffset;
         SyncBars();
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
     }
 
     /// <summary>
@@ -124,12 +125,14 @@ public sealed class ScrollViewer : ContentControl
         {
             VerticalOffset = v;
             InvalidateVisual();
+            ReevaluateMouseOverAfterScroll();
         };
 
         _hBar.ValueChanged += v =>
         {
             HorizontalOffset = v;
             InvalidateVisual();
+            ReevaluateMouseOverAfterScroll();
         };
     }
 
@@ -164,7 +167,7 @@ public sealed class ScrollViewer : ContentControl
         double slotW = Math.Max(0, chromeSlot.Width);
         double slotH = Math.Max(0, chromeSlot.Height);
 
-        
+
         double viewportW0 = Math.Max(0, slotW - Padding.HorizontalThickness);
         double viewportH0 = Math.Max(0, slotH - Padding.VerticalThickness);
 
@@ -240,7 +243,7 @@ public sealed class ScrollViewer : ContentControl
         // Optional background/border (thin style defaults to none).
         if (Background.A > 0 || BorderThickness > 0)
         {
-            
+
             DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, Theme.Metrics.ControlCornerRadius);
         }
 
@@ -371,6 +374,7 @@ public sealed class ScrollViewer : ContentControl
         }
         SyncBars();
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
     }
 
     public void ScrollByHorizontal(double delta)
@@ -389,11 +393,20 @@ public sealed class ScrollViewer : ContentControl
         }
         SyncBars();
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
+    }
+
+    private void ReevaluateMouseOverAfterScroll()
+    {
+        if (FindVisualRoot() is Window window)
+        {
+            window.ReevaluateMouseOver();
+        }
     }
 
     private void ArrangeBars(Rect viewport)
     {
-        
+
         double t = Theme.Metrics.ScrollBarHitThickness;
         const double inset = 0;
 

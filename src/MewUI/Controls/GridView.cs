@@ -41,6 +41,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             {
                 InvalidateArrange();
                 InvalidateVisual();
+                ReevaluateMouseOverAfterScroll();
             }
         };
         _hBar.ValueChanged += v =>
@@ -54,6 +55,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 InvalidateHorizontalScrollLayout();
                 InvalidateArrange();
                 InvalidateVisual();
+                ReevaluateMouseOverAfterScroll();
             }
         };
 
@@ -434,10 +436,12 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             InvalidateHorizontalScrollLayout();
             InvalidateArrange();
             InvalidateVisual();
+            ReevaluateMouseOverAfterScroll();
             e.Handled = true;
             return;
         }
-
+        else
+        {
         int notches = Math.Sign(e.Delta);
         if (notches == 0)
         {
@@ -466,7 +470,19 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         InvalidateArrange();
         InvalidateVisual();
+
+            ReevaluateMouseOverAfterScroll();
+
         e.Handled = true;
+    }
+    }
+
+    private void ReevaluateMouseOverAfterScroll()
+    {
+        if (FindVisualRoot() is Window window)
+        {
+            window.ReevaluateMouseOver();
+        }
     }
 
     public void SetItemsSource<TItem>(IReadOnlyList<TItem> items)

@@ -271,6 +271,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
             _hoverIndex = -1;
             _hasLastMousePosition = false;
             InvalidateVisual();
+            ReevaluateMouseOverAfterScroll();
         };
     }
 
@@ -730,6 +731,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         }
 
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
         e.Handled = true;
     }
 
@@ -879,6 +881,15 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         }
 
         InvalidateVisual();
+        ReevaluateMouseOverAfterScroll();
+    }
+
+    private void ReevaluateMouseOverAfterScroll()
+    {
+        if (FindVisualRoot() is Window window)
+        {
+            window.ReevaluateMouseOver();
+        }
     }
 
     /// <summary>
