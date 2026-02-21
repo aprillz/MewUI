@@ -75,10 +75,11 @@ public sealed partial class Slider : RangeBase
             : Theme.Palette.DisabledControlBackground;
 
         context.FillRoundedRectangle(trackRect, 2, 2, trackBg);
-        if (state.IsEnabled)
+
+        if (state.IsEnabled && Theme.Metrics.ControlBorderThickness > 0)
         {
             var trackBorder = trackBg.Lerp(Theme.Palette.WindowText, 0.12);
-            context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, 1);
+            context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, Theme.Metrics.ControlBorderThickness);
         }
 
         // Filled track
@@ -105,8 +106,10 @@ public sealed partial class Slider : RangeBase
         var thumbState = GetVisualState(_isDragging, _isDragging);
         Color thumbBorder = PickAccentBorder(Theme, BorderBrush, thumbState, 0.6);
 
-
-        context.DrawEllipse(thumbRect, thumbBorder, 1);
+        if (BorderThickness > 0)
+        {
+            context.DrawEllipse(thumbRect, thumbBorder, BorderThickness);
+        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

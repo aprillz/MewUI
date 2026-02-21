@@ -425,14 +425,17 @@ public abstract class Control : FrameworkElement
 
         if (canUseFillStrokeTrick || background.A == 255)
         {
-            // Fill "stroke" using outer + inner shapes (avoids half-pixel pen alignment issues).
-            if (radius > 0)
+            if (borderThickness > 0)
             {
-                context.FillRoundedRectangle(bounds, radius, radius, borderBrush);
-            }
-            else
-            {
-                context.FillRectangle(bounds, borderBrush);
+                // Fill "stroke" using outer + inner shapes (avoids half-pixel pen alignment issues).
+                if (radius > 0)
+                {
+                    context.FillRoundedRectangle(bounds, radius, radius, borderBrush);
+                }
+                else
+                {
+                    context.FillRectangle(bounds, borderBrush);
+                }
             }
 
             var inner = bounds.Deflate(new Thickness(borderThickness));

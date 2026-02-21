@@ -176,8 +176,11 @@ public class RadioButton : ToggleBase
         var fill = PickControlBackground(state, Theme.Palette.ControlBackground);
         context.FillEllipse(circleRect, fill);
 
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
-        context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness));
+        if (BorderThickness > 0)
+        {
+            var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+            context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness));
+        }
 
         if (IsChecked)
         {

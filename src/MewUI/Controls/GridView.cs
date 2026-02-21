@@ -1317,25 +1317,32 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         protected override void OnRender(IGraphicsContext context)
         {
             var theme = Theme;
-            var snapped = GetSnappedBorderBounds(Bounds);
+            var bounds = GetSnappedBorderBounds(Bounds);
             var bg = theme.Palette.ButtonFace;
 
-            context.FillRectangle(snapped, bg);
+            context.FillRectangle(bounds, bg);
 
             var stroke = theme.Palette.ControlBorder;
-            context.DrawLine(new Point(snapped.X, snapped.Bottom - 1), new Point(snapped.Right, snapped.Bottom - 1), stroke, 1);
 
-            double x = snapped.X - _owner._scroll.GetOffsetDip(0);
-            double inset = Math.Min(6, Math.Max(0, (snapped.Height - 2) / 2));
+            // Simple bottom separator.
+            var dpiScale = GetDpi() / 96.0;
+            var thickness = LayoutRounding.SnapThicknessToPixels(1.0 / dpiScale, dpiScale, 1);
+            var rect = LayoutRounding.SnapBoundsRectToPixels(
+                new Rect(bounds.X, bounds.Bottom - thickness, Math.Max(0, bounds.Width), thickness),
+                dpiScale);
+            context.FillRectangle(rect, Theme.Palette.ControlBorder);
+
+            double x = bounds.X - _owner._scroll.GetOffsetDip(0);
+            double inset = Math.Min(6, Math.Max(0, (bounds.Height - 2) / 2));
             for (int i = 0; i < _owner._core.Columns.Count; i++)
             {
                 x += Math.Max(0, _owner._core.Columns[i].Width);
-                if (x >= snapped.Right - 0.5)
+                if (x >= bounds.Right - 0.5)
                 {
                     break;
                 }
 
-                context.DrawLine(new Point(x, snapped.Y + inset), new Point(x, snapped.Bottom - inset), stroke, 1);
+                context.DrawLine(new Point(x, bounds.Y + inset), new Point(x, bounds.Bottom - inset), stroke, 1);
             }
         }
     }
