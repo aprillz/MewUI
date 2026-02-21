@@ -281,10 +281,11 @@ public partial class Window
         private readonly CheckBox _autoExpandFocus;
         private Button? _goFocusButton;
 
-        private readonly Dictionary<UIElement, TreeViewNode> _nodeByElement = new();
-        private readonly Dictionary<TreeViewNode, TreeViewNode?> _parentByNode = new();
+        private readonly Dictionary<object, object?> _parentByKey = new();
+        private TreeItemsView<VisualTreeNodeModel>? _items;
 
         private UIElement? _lastFocused;
+        private UIElement? _lastNonNullFocused;
         private long _lastRebuildTick;
         private bool _pickArmed;
         private Button? _pickButton;
@@ -304,53 +305,41 @@ public partial class Window
             _followFocus.CheckedChanged += _ => UpdateFollowUi();
 
             _tree = new TreeView()
-                .ExpandTrigger(TreeViewExpandTrigger.DoubleClickNode);
+                .ItemHeight(20)
+                .ExpandTrigger(TreeViewExpandTrigger.ClickNode);
 
-            _tree.ItemTemplate<TreeViewNode>(
+            _tree.ItemTemplate<VisualTreeNodeModel>(
                 build: ctx => new Label().CenterVertical().Padding(8, 0),
                 bind: (view, item, _, ctx) =>
                 {
-                    ((Label)view).Text(item.Text);
+                    ((Label)view).Text(item.DisplayText);
                 });
-
-            _tree.OnSelectionChanged(obj =>
-            {
-            var node = obj as TreeViewNode;
-            var element = node?.Tag as UIElement;
-
-            if (_target._debugInspectorOverlay != null)
-            {
-                _target._debugInspectorOverlay.HighlightedElement = element;
-                _target.RequestRender();
-            }
-
-                _selectedLabel.Text = element == null
-                    ? "Selected: (none)"
-                    : $"Selected: {element.GetType().Name} {FormatRect(GetElementRectInWindow(element))}";
-            });
 
             var refreshBtn = new Button { Content = "Refresh" };
             refreshBtn.Click += Refresh;
 
             _goFocusButton = new Button { Content = "Go Focus" };
-            _goFocusButton.Click += () => PeekElement(_target.FocusManager.FocusedElement);
+            _goFocusButton.Click += () => PeekElement(_lastNonNullFocused ?? _target.FocusManager.FocusedElement);
 
             var pickBtn = new Button { Content = "Pick (Click)" };
             _pickButton = pickBtn;
             pickBtn.Click += TogglePick;
 
-            var clearBtn = new Button { Content = "Clear Selection" };
-            clearBtn.Click += () =>
-            {
-                if (_target._debugInspectorOverlay != null)
-                {
-                    _target._debugInspectorOverlay.HighlightedElement = null;
-                    _target.RequestRender();
-                }
+             var clearBtn = new Button { Content = "Clear Selection" };
+             clearBtn.Click += () =>
+             {
+                 if (_target._debugInspectorOverlay != null)
+                 {
+                     _target._debugInspectorOverlay.HighlightedElement = null;
+                     _target.RequestRender();
+                 }
 
-                _tree.SelectedNode = null;
-                _selectedLabel.Text = "Selected: (none)";
-            };
+                if (_items != null)
+                {
+                    _items.SelectedIndex = -1;
+                }
+                 _selectedLabel.Text = "Selected: (none)";
+             };
              
 
             Content = new DockPanel()
@@ -434,13 +423,16 @@ public partial class Window
                     _target._debugInspectorOverlay.HighlightedElement = null;
                     _target.RequestRender();
                 }
-                _tree.SelectedNode = null;
+                if (_items != null)
+                {
+                    _items.SelectedIndex = -1;
+                }
                 _selectedLabel.Text = "Selected: (none)";
                 return;
             }
 
             // Keep the UI responsive: tree might be slightly stale, so rebuild once if needed.
-            if (!_nodeByElement.ContainsKey(element))
+            if (!_parentByKey.ContainsKey(element))
             {
                 Refresh(preserveExpansion: true, preserveSelection: true);
             }
@@ -458,6 +450,10 @@ public partial class Window
             var focused = _target.FocusManager.FocusedElement;
             bool focusChanged = !ReferenceEquals(_lastFocused, focused);
             _lastFocused = focused;
+            if (focused != null)
+            {
+                _lastNonNullFocused = focused;
+            }
 
             if (rebuild)
             {
@@ -482,136 +478,142 @@ public partial class Window
 
         private void Refresh(bool preserveExpansion, bool preserveSelection)
         {
-            var expandedElements = preserveExpansion ? CaptureExpandedElements() : null;
-            var selectedElement = preserveSelection ? _tree.SelectedNode?.Tag as UIElement : null;
+            var expandedKeys = preserveExpansion ? CaptureExpandedKeys() : null;
+            var selectedKey = preserveSelection ? _items?.SelectedItem?.Key : null;
 
             var roots = BuildRoots();
 
-            _tree.ItemsSource = ItemsView.Create(roots, n => n.Text);
-
-            if (expandedElements != null)
+            if (_items != null)
             {
-                RestoreExpandedElements(expandedElements);
+                _items.SelectionChanged -= OnItemsSelectionChanged;
             }
 
-            if (selectedElement != null)
+            _items = TreeItemsView.Create(
+                roots,
+                childrenSelector: n => n.Children,
+                textSelector: n => n.DisplayText,
+                keySelector: n => n.Key);
+            _items.SelectionChanged += OnItemsSelectionChanged;
+
+            _tree.ItemsSource = _items;
+
+            if (expandedKeys != null)
             {
-                SelectAndReveal(selectedElement);
+                RestoreExpandedKeys(expandedKeys);
             }
 
-            if (roots.Count > 0)
+            if (selectedKey != null)
             {
-                _tree.Expand(roots[0]);
+                ExpandAncestors(selectedKey);
+                SelectByKey(selectedKey);
+                _tree.ScrollIntoViewSelected();
+            }
+
+            if (!preserveExpansion && roots.Count > 0)
+            {
+                ExpandByKey(roots[0].Key);
             }
         }
 
-        private IReadOnlyList<TreeViewNode> BuildRoots()
+        private IReadOnlyList<VisualTreeNodeModel> BuildRoots()
         {
-            _nodeByElement.Clear();
-            _parentByNode.Clear();
+            _parentByKey.Clear();
 
-            var roots = new List<TreeViewNode>(4);
+            var roots = new List<VisualTreeNodeModel>(4);
 
             if (_target.Content is Element content)
             {
-                var contentNode = new TreeViewNode("Content", new[] { BuildNode(content) }, tag: content);
-                RegisterParentChain(contentNode, parent: null);
-                roots.Add(contentNode);
+                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: new[] { BuildModel(content, parentKey: "root:content") });
+                roots.Add(contentRoot);
             }
             else
             {
-                roots.Add(new TreeViewNode("Content (null)"));
+                roots.Add(new VisualTreeNodeModel(key: "root:content", text: "Content (null)", element: null, children: Array.Empty<VisualTreeNodeModel>()));
             }
 
             if (_target._popupManager.Count > 0)
             {
-                var popupNodes = new List<TreeViewNode>(_target._popupManager.Count);
+                var popupModels = new List<VisualTreeNodeModel>(_target._popupManager.Count);
                 for (int i = 0; i < _target._popupManager.Count; i++)
                 {
-                    popupNodes.Add(BuildNode(_target._popupManager.ElementAt(i)));
+                    popupModels.Add(BuildModel(_target._popupManager.ElementAt(i), parentKey: "root:popups"));
                 }
 
-                var popupsRoot = new TreeViewNode("Popups", popupNodes);
-                RegisterParentChain(popupsRoot, parent: null);
-                roots.Add(popupsRoot);
+                roots.Add(new VisualTreeNodeModel(key: "root:popups", text: "Popups", element: null, children: popupModels));
             }
 
             if (_target._adorners.Count > 0)
             {
-                var adornerNodes = new List<TreeViewNode>(_target._adorners.Count);
+                var adornerModels = new List<VisualTreeNodeModel>(_target._adorners.Count);
                 for (int i = 0; i < _target._adorners.Count; i++)
                 {
-                    adornerNodes.Add(BuildNode(_target._adorners[i].Element));
+                    adornerModels.Add(BuildModel(_target._adorners[i].Element, parentKey: "root:adorners"));
                 }
 
-                var adornersRoot = new TreeViewNode("Adorners", adornerNodes);
-                RegisterParentChain(adornersRoot, parent: null);
-                roots.Add(adornersRoot);
+                roots.Add(new VisualTreeNodeModel(key: "root:adorners", text: "Adorners", element: null, children: adornerModels));
             }
 
             return roots;
         }
 
-        private TreeViewNode BuildNode(Element element)
+        private VisualTreeNodeModel BuildModel(Element element, object parentKey)
         {
-            var children = new List<TreeViewNode>();
+            var children = new List<VisualTreeNodeModel>();
             if (element is IVisualTreeHost host)
             {
-                host.VisitChildren(child => children.Add(BuildNode(child)));
+                host.VisitChildren(child => children.Add(BuildModel(child, parentKey: element)));
             }
 
-            string text;
-            if (element is UIElement u)
-            {
-                text = $"{u.GetType().Name} {FormatRect(GetElementRectInWindow(u))}";
-            }
-            else
-            {
-                text = element.GetType().Name;
-            }
+            string text = element.GetType().Name;
 
-            var node = new TreeViewNode(text, children, tag: element);
-            RegisterParentChain(node, parent: null);
-
-            if (element is UIElement ue)
-            {
-                _nodeByElement[ue] = node;
-            }
-
-            return node;
+            _parentByKey[element] = parentKey;
+            return new VisualTreeNodeModel(key: element, text: text, element: element, children: children);
         }
 
-        private void RegisterParentChain(TreeViewNode node, TreeViewNode? parent)
+        private void ExpandAncestors(object key)
         {
-            _parentByNode[node] = parent;
-            for (int i = 0; i < node.Children.Count; i++)
+            // Expand must happen from root -> leaf; otherwise keys for collapsed descendants won't be visible yet.
+            var chain = new List<object>(8);
+            for (object? current = key; current != null; current = _parentByKey.GetValueOrDefault(current))
             {
-                RegisterParentChain(node.Children[i], node);
+                chain.Add(current);
+            }
+
+            for (int i = chain.Count - 1; i >= 0; i--)
+            {
+                ExpandByKey(chain[i]);
             }
         }
 
-        private HashSet<UIElement> CaptureExpandedElements()
+        private sealed class VisualTreeNodeModel
         {
-            var set = new HashSet<UIElement>();
-            foreach (var kv in _nodeByElement)
+            public object Key { get; }
+            public string Text { get; }
+            public Element? Element { get; }
+            public IReadOnlyList<VisualTreeNodeModel> Children { get; }
+            public int DescendantCount { get; }
+
+            public string DisplayText => DescendantCount > 0 ? $"{Text} ({DescendantCount})" : Text;
+
+            public VisualTreeNodeModel(object key, string text, Element? element, IReadOnlyList<VisualTreeNodeModel> children)
             {
-                if (_tree.IsExpanded(kv.Value))
+                Key = key;
+                Text = text ?? string.Empty;
+                Element = element;
+                Children = children ?? Array.Empty<VisualTreeNodeModel>();
+                DescendantCount = CountDescendants(Children);
+            }
+
+            private static int CountDescendants(IReadOnlyList<VisualTreeNodeModel> children)
+            {
+                int count = 0;
+                for (int i = 0; i < children.Count; i++)
                 {
-                    set.Add(kv.Key);
+                    var child = children[i];
+                    count += 1 + child.DescendantCount;
                 }
-            }
-            return set;
-        }
 
-        private void RestoreExpandedElements(HashSet<UIElement> expandedElements)
-        {
-            foreach (var element in expandedElements)
-            {
-                if (_nodeByElement.TryGetValue(element, out var node))
-                {
-                    _tree.Expand(node);
-                    ExpandAncestors(node);
-                }
+                return count;
             }
         }
 
@@ -645,13 +647,9 @@ public partial class Window
                 return;
             }
 
-            if (!_nodeByElement.TryGetValue(element, out var node))
-            {
-                return;
-            }
-
-            ExpandAncestors(node);
-            _tree.SelectedNode = node;
+            ExpandAncestors(element);
+            SelectByKey(element);
+            _tree.ScrollIntoViewSelected();
         }
 
         private void ExpandToElement(UIElement? element)
@@ -661,20 +659,125 @@ public partial class Window
                 return;
             }
 
-            if (!_nodeByElement.TryGetValue(element, out var node))
+            ExpandAncestors(element);
+        }
+
+        private void OnItemsSelectionChanged(int index)
+        {
+            var element = _items?.SelectedItem?.Element as UIElement;
+
+            if (_target._debugInspectorOverlay != null)
+            {
+                _target._debugInspectorOverlay.HighlightedElement = element;
+                _target.RequestRender();
+            }
+
+            _selectedLabel.Text = element == null
+                ? "Selected: (none)"
+                : $"Selected: {element.GetType().Name} {FormatRect(GetElementRectInWindow(element))}";
+
+            _tree.ScrollIntoView(index);
+            _tree.InvalidateVisual();
+        }
+
+        private List<(object Key, int Depth)> CaptureExpandedKeys()
+        {
+            var items = _items;
+            if (items == null)
+            {
+                return new List<(object, int)>();
+            }
+
+            var result = new List<(object, int)>();
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (!items.GetIsExpanded(i))
+                {
+                    continue;
+                }
+
+                if (items.GetItem(i) is not VisualTreeNodeModel model)
+                {
+                    continue;
+                }
+
+                result.Add((model.Key, items.GetDepth(i)));
+            }
+
+            return result;
+        }
+
+        private void RestoreExpandedKeys(List<(object Key, int Depth)> expanded)
+        {
+            if (_items == null || expanded.Count == 0)
             {
                 return;
             }
 
-            ExpandAncestors(node);
+            expanded.Sort(static (a, b) => a.Depth.CompareTo(b.Depth));
+            for (int i = 0; i < expanded.Count; i++)
+            {
+                ExpandByKey(expanded[i].Key);
+            }
         }
 
-        private void ExpandAncestors(TreeViewNode node)
+        private void ExpandByKey(object key)
         {
-            for (TreeViewNode? current = node; current != null; current = _parentByNode.GetValueOrDefault(current))
+            var items = _items;
+            if (items == null)
             {
-                _tree.Expand(current);
+                return;
             }
+
+            int index = FindVisibleIndexByKey(items, key);
+            if (index < 0 || !items.GetHasChildren(index))
+            {
+                return;
+            }
+
+            items.SetIsExpanded(index, true);
+        }
+
+        private void SelectByKey(object key)
+        {
+            var items = _items;
+            if (items == null)
+            {
+                return;
+            }
+
+            int index = FindVisibleIndexByKey(items, key);
+            items.SelectedIndex = index;
+        }
+
+        private static int FindVisibleIndexByKey(ITreeItemsView items, object key)
+        {
+            var keySelector = items.KeySelector;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items.GetItem(i);
+                if (item == null)
+                {
+                    continue;
+                }
+
+                if (keySelector != null)
+                {
+                    if (Equals(keySelector(item), key))
+                    {
+                        return i;
+                    }
+                }
+                else
+                {
+                    if (ReferenceEquals(item, key) || Equals(item, key))
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            return -1;
         }
 
         private Rect GetElementRectInWindow(UIElement element)
