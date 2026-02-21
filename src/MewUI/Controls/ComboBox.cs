@@ -12,7 +12,7 @@ public sealed partial class ComboBox : DropDownBase
     private ListBox? _popupList;
     private bool _updatingFromSource;
     private bool _suppressItemsSelectionChanged;
-    private IItemsView _itemsSource = ItemsView.Empty;
+    private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private IDataTemplate? _itemTemplate;
 
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
@@ -20,12 +20,12 @@ public sealed partial class ComboBox : DropDownBase
     /// <summary>
     /// Gets or sets the items data source.
     /// </summary>
-    public IItemsView ItemsSource
+    public ISelectableItemsView ItemsSource
     {
         get => _itemsSource;
         set
         {
-            value ??= ItemsView.Empty;
+            value ??= ItemsView.EmptySelectable;
             if (ReferenceEquals(_itemsSource, value))
             {
                 return;

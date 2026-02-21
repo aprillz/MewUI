@@ -17,7 +17,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
     private bool _rebindVisibleOnNextRender = true;
     private bool _updatingFromSource;
     private bool _suppressItemsSelectionChanged;
-    private IItemsView _itemsSource = ItemsView.Empty;
+    private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private readonly ScrollBar _vBar;
     private readonly ScrollController _scroll = new();
     private double _extentHeight;
@@ -29,7 +29,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
     /// <summary>
     /// Gets or sets the items data source.
     /// </summary>
-    public IItemsView ItemsSource
+    public ISelectableItemsView ItemsSource
     {
         get => _itemsSource;
         set
@@ -38,9 +38,9 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         }
     }
 
-    internal void ApplyItemsSource(IItemsView? value, bool preserveListBoxSelection)
+    internal void ApplyItemsSource(ISelectableItemsView? value, bool preserveListBoxSelection)
     {
-        value ??= ItemsView.Empty;
+        value ??= ItemsView.EmptySelectable;
         if (ReferenceEquals(_itemsSource, value))
         {
             return;

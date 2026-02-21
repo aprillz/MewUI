@@ -1804,7 +1804,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     {
         internal readonly record struct ColumnDefinition(string Header, double Width, IDataTemplate CellTemplate);
 
-        private IItemsView _itemsView = ItemsView.Empty;
+        private ISelectableItemsView _itemsView = ItemsView.EmptySelectable;
         private readonly List<ColumnDefinition> _columns = new();
         private int _columnsVersion;
 
@@ -1812,7 +1812,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         public int ColumnsVersion => _columnsVersion;
 
-        public IItemsView ItemsSource => _itemsView;
+        public ISelectableItemsView ItemsSource => _itemsView;
 
         public int SelectedIndex
         {
@@ -1844,7 +1844,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         public event Action<object?>? SelectionChanged;
         public event Action? ColumnsChanged;
 
-        public void SetItems(IItemsView itemsView)
+        public void SetItems(ISelectableItemsView itemsView)
         {
             ArgumentNullException.ThrowIfNull(itemsView);
 
@@ -1890,13 +1890,13 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             ColumnsChanged?.Invoke();
         }
 
-        private void HookItemsView(IItemsView view)
+        private void HookItemsView(ISelectableItemsView view)
         {
             view.Changed += OnItemsChanged;
             view.SelectionChanged += OnItemsSelectionChanged;
         }
 
-        private void UnhookItemsView(IItemsView view)
+        private void UnhookItemsView(ISelectableItemsView view)
         {
             view.Changed -= OnItemsChanged;
             view.SelectionChanged -= OnItemsSelectionChanged;

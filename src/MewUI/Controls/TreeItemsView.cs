@@ -8,7 +8,7 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Represents a hierarchical items view for <see cref="TreeView"/>, including expansion state and depth.
 /// </summary>
-public interface ITreeItemsView : IItemsView
+public interface ITreeItemsView : ISelectableItemsView
 {
     /// <summary>
     /// Gets the depth (indent level) for the item at <paramref name="index"/>.
@@ -207,7 +207,7 @@ public sealed class TreeItemsView<T> : ITreeItemsView
         }
     }
 
-    object? IItemsView.SelectedItem
+    object? ISelectableItemsView.SelectedItem
     {
         get => SelectedItem;
         set

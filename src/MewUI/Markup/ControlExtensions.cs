@@ -1225,10 +1225,10 @@ public static class ControlExtensions
     /// <param name="listBox">Target list box.</param>
     /// <param name="itemsSource">Items source.</param>
     /// <returns>The list box for chaining.</returns>
-    public static ListBox ItemsSource(this ListBox listBox, IItemsView itemsSource)
+    public static ListBox ItemsSource(this ListBox listBox, ISelectableItemsView itemsSource)
     {
         ArgumentNullException.ThrowIfNull(listBox);
-        listBox.ItemsSource = itemsSource ?? ItemsView.Empty;
+        listBox.ItemsSource = itemsSource ?? ItemsView.EmptySelectable;
         return listBox;
     }
 
@@ -1270,7 +1270,7 @@ public static class ControlExtensions
     public static ListBox Items<T>(this ListBox listBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(listBox);
-        listBox.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector, keySelector);
+        listBox.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
         return listBox;
     }
 
@@ -1830,10 +1830,10 @@ public static class ControlExtensions
     /// <param name="comboBox">Target combo box.</param>
     /// <param name="itemsSource">Items source.</param>
     /// <returns>The combo box for chaining.</returns>
-    public static ComboBox ItemsSource(this ComboBox comboBox, IItemsView itemsSource)
+    public static ComboBox ItemsSource(this ComboBox comboBox, ISelectableItemsView itemsSource)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
-        comboBox.ItemsSource = itemsSource ?? ItemsView.Empty;
+        comboBox.ItemsSource = itemsSource ?? ItemsView.EmptySelectable;
         return comboBox;
     }
 
@@ -1875,7 +1875,7 @@ public static class ControlExtensions
     public static ComboBox Items<T>(this ComboBox comboBox, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
-        comboBox.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector, keySelector);
+        comboBox.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
         return comboBox;
     }
 

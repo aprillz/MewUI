@@ -56,10 +56,26 @@ public interface IItemsView
 
     /// <summary>
     /// Optional selector that returns a stable key for a given item.
-    /// When provided, selection can be preserved across collection changes by key.
+    /// When provided, selection/expansion can be preserved across collection changes by key.
     /// </summary>
     Func<object?, object?>? KeySelector { get; }
 
+    /// <summary>
+    /// Raised when the underlying collection changes.
+    /// </summary>
+    event Action<ItemsChange>? Changed;
+
+    /// <summary>
+    /// Forces a reset notification and re-applies selection policies.
+    /// </summary>
+    void Invalidate();
+}
+
+/// <summary>
+/// Adds selection state to an <see cref="IItemsView"/>.
+/// </summary>
+public interface ISelectableItemsView : IItemsView
+{
     /// <summary>
     /// Gets or sets the selected index (-1 means no selection).
     /// </summary>
@@ -71,19 +87,9 @@ public interface IItemsView
     object? SelectedItem { get; set; }
 
     /// <summary>
-    /// Raised when the underlying collection changes.
-    /// </summary>
-    event Action<ItemsChange>? Changed;
-
-    /// <summary>
     /// Raised when the selection index changes.
     /// </summary>
     event Action<int>? SelectionChanged;
-
-    /// <summary>
-    /// Forces a reset notification and re-applies selection policies.
-    /// </summary>
-    void Invalidate();
 }
 
 /// <summary>
@@ -94,7 +100,12 @@ public static class ItemsView
     /// <summary>
     /// Gets an empty items view instance.
     /// </summary>
-    public static IItemsView Empty { get; } = new EmptyItemsView();
+    public static IItemsView Empty { get; } = EmptySelectable;
+
+    /// <summary>
+    /// Gets an empty selectable items view instance.
+    /// </summary>
+    public static ISelectableItemsView EmptySelectable { get; } = new EmptyItemsView();
 
     /// <summary>
     /// Creates an items view for a list of strings.
@@ -116,9 +127,9 @@ public static class ItemsView
     /// Wraps the legacy <see cref="ItemsSource"/> type into an <see cref="IItemsView"/>.
     /// </summary>
     /// <param name="source">Legacy items source.</param>
-    public static IItemsView From(ItemsSource source) => source == null ? Empty : new LegacyItemsView(source);
+    public static ISelectableItemsView From(ItemsSource source) => source == null ? EmptySelectable : new LegacyItemsView(source);
 
-    private sealed class EmptyItemsView : IItemsView
+    private sealed class EmptyItemsView : ISelectableItemsView
     {
         public int Count => 0;
         public Func<object?, object?>? KeySelector => null;
@@ -150,7 +161,7 @@ public static class ItemsView
         public void Invalidate() => Changed?.Invoke(new ItemsChange(ItemsChangeKind.Reset, 0, 0));
     }
 
-    private sealed class LegacyItemsView : IItemsView
+    private sealed class LegacyItemsView : ISelectableItemsView
     {
         private readonly ItemsSource _source;
         private int _selectedIndex = -1;
@@ -231,7 +242,7 @@ public static class ItemsView
 /// A strongly-typed <see cref="IItemsView"/> that wraps an <see cref="IReadOnlyList{T}"/>.
 /// </summary>
 /// <typeparam name="T">Item type.</typeparam>
-public sealed class ItemsView<T> : IItemsView
+public sealed class ItemsView<T> : ISelectableItemsView
 {
     private readonly Func<T, string>? _textSelector;
     private readonly Func<T, object?>? _keySelector;
@@ -332,7 +343,7 @@ public sealed class ItemsView<T> : IItemsView
         }
     }
 
-    object? IItemsView.SelectedItem
+    object? ISelectableItemsView.SelectedItem
     {
         get => _selectedIndex >= 0 && _selectedIndex < Count ? Items[_selectedIndex] : null;
         set
