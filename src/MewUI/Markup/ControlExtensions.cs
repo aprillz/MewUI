@@ -1372,6 +1372,101 @@ public static class ControlExtensions
 
     #endregion
 
+    #region ItemsControl
+
+    /// <summary>
+    /// Sets the items source.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="itemsSource">Items source.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl ItemsSource(this ItemsControl itemsControl, IItemsView itemsSource)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        itemsControl.ItemsSource = itemsSource ?? ItemsView.Empty;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Sets the items source from a legacy <see cref="MewUI.ItemsSource"/>.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="itemsSource">Legacy items source.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl ItemsSource(this ItemsControl itemsControl, ItemsSource itemsSource)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        itemsControl.ItemsSource = ItemsView.From(itemsSource);
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Sets the items from string array.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="items">Items array.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl Items(this ItemsControl itemsControl, params string[] items)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        itemsControl.ItemsSource = ItemsView.Create(items ?? Array.Empty<string>());
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Sets the items with text selector.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="items">Items collection.</param>
+    /// <param name="textSelector">Text selector function.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl Items<T>(this ItemsControl itemsControl, IReadOnlyList<T> items, Func<T, string> textSelector)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        itemsControl.ItemsSource = items == null ? ItemsView.Empty : ItemsView.Create(items, textSelector);
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Sets the item template.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="itemTemplate">Item template.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl ItemTemplate(this ItemsControl itemsControl, IDataTemplate itemTemplate)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        itemsControl.ItemTemplate = itemTemplate;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Sets the item height.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="itemHeight">Item height.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl ItemHeight(this ItemsControl itemsControl, double itemHeight)
+    {
+        itemsControl.ItemHeight = itemHeight;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Sets the item padding.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="padding">Item padding.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl ItemPadding(this ItemsControl itemsControl, Thickness padding)
+    {
+        itemsControl.ItemPadding = padding;
+        return itemsControl;
+    }
+
+    #endregion
+
     #region TreeView
 
     /// <summary>
