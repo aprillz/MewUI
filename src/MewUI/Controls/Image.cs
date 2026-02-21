@@ -138,7 +138,7 @@ public sealed class Image : FrameworkElement
     }
 
     /// <summary>
-    /// Tries to read the source pixel color at the given position (window-relative DIPs).
+    /// Tries to read the source pixel color at the given position (local DIPs).
     /// </summary>
     /// <remarks>
     /// This reads pixels from the decoded <see cref="ImageSource"/> data (BGRA32) and maps the position through
@@ -167,7 +167,7 @@ public sealed class Image : FrameworkElement
             return false;
         }
 
-        ComputeRects(srcRect, Bounds, StretchMode, AlignmentX, AlignmentY, out var dest, out var src);
+        ComputeRects(srcRect, new (0, 0, ActualWidth, ActualHeight), StretchMode, AlignmentX, AlignmentY, out var dest, out var src);
         if (dest.Width <= 0 || dest.Height <= 0 || src.Width <= 0 || src.Height <= 0)
         {
             return false;
