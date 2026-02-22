@@ -1533,7 +1533,7 @@ public static class ControlExtensions
     {
         ArgumentNullException.ThrowIfNull(treeView);
         treeView.ItemsSource = items == null
-            ? ItemsView.Empty
+            ? TreeItemsView.Empty
             : TreeItemsView.Create(items, n => n.Children, textSelector: n => n.Text, keySelector: n => n);
         return treeView;
     }
@@ -1557,7 +1557,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(treeView);
 
         treeView.ItemsSource = roots == null
-            ? ItemsView.Empty
+            ? TreeItemsView.Empty
             : TreeItemsView.Create(roots, childrenSelector, textSelector, keySelector);
 
         return treeView;
