@@ -100,12 +100,15 @@ public static class ItemsView
     /// <summary>
     /// Gets an empty items view instance.
     /// </summary>
-    public static IItemsView Empty { get; } = EmptySelectable;
-
     /// <summary>
     /// Gets an empty selectable items view instance.
     /// </summary>
     public static ISelectableItemsView EmptySelectable { get; } = new EmptyItemsView();
+
+    /// <summary>
+    /// Gets an empty items view instance.
+    /// </summary>
+    public static IItemsView Empty { get; } = EmptySelectable;
 
     /// <summary>
     /// Creates an items view for a list of strings.

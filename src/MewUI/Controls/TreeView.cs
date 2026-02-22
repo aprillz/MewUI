@@ -258,7 +258,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int depth = _itemsSource.GetDepth(i);
-        double indentX = itemRect.X + depth * Indent + ItemPadding.Left;
+        double indentX = itemRect.X + depth * Indent + ItemPadding.Left / 2;
         var glyphRect = new Rect(indentX, itemRect.Y, Indent, itemRect.Height);
         var textColor = selected ? Theme.Palette.SelectionText : (IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText);
         if (_itemsSource.GetHasChildren(i))

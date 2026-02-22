@@ -1328,6 +1328,31 @@ public static class ControlExtensions
         => ItemTemplate(listBox, new DelegateTemplate<TItem>(build, bind));
 
     /// <summary>
+    /// Sets the items presenter mode.
+    /// </summary>
+    /// <param name="listBox">Target list box.</param>
+    /// <param name="mode">Presenter mode.</param>
+    /// <returns>The list box for chaining.</returns>
+    public static ListBox PresenterMode(this ListBox listBox, ItemsPresenterMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(listBox);
+        listBox.PresenterMode = mode;
+        return listBox;
+    }
+
+    /// <summary>
+    /// Uses fixed-size row virtualization.
+    /// </summary>
+    public static ListBox FixedPresenter(this ListBox listBox)
+        => listBox.PresenterMode(ItemsPresenterMode.Fixed);
+
+    /// <summary>
+    /// Uses variable-height virtualization (items are measured individually).
+    /// </summary>
+    public static ListBox VariablePresenter(this ListBox listBox)
+        => listBox.PresenterMode(ItemsPresenterMode.Variable);
+
+    /// <summary>
     /// Sets the selected index.
     /// </summary>
     /// <param name="listBox">Target list box.</param>
@@ -1464,6 +1489,35 @@ public static class ControlExtensions
         itemsControl.ItemPadding = padding;
         return itemsControl;
     }
+
+    /// <summary>
+    /// Sets the items presenter mode.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <param name="mode">Presenter mode.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl PresenterMode(this ItemsControl itemsControl, ItemsPresenterMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(itemsControl);
+        itemsControl.PresenterMode = mode;
+        return itemsControl;
+    }
+
+    /// <summary>
+    /// Uses fixed-size row virtualization.
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl FixedPresenter(this ItemsControl itemsControl)
+        => itemsControl.PresenterMode(ItemsPresenterMode.Fixed);
+
+    /// <summary>
+    /// Uses variable-height virtualization (items are measured individually).
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl VariablePresenter(this ItemsControl itemsControl)
+        => itemsControl.PresenterMode(ItemsPresenterMode.Variable);
 
     #endregion
 

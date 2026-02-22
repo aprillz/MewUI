@@ -10,7 +10,9 @@ internal sealed class ScrollController
 {
     private readonly int[] _extentPx = new int[2];
     private readonly int[] _viewportPx = new int[2];
-    private readonly int[] _offsetPx = new int[2];
+    // Canonical offsets are stored in DIPs so DPI changes preserve the logical scroll position.
+    // We still compute pixel offsets on-demand for stable rounding when interacting with bars.
+    private readonly double[] _offsetDip = new double[2];
 
     /// <summary>
     /// Gets or sets the current DPI scale factor used for DIP↔pixel conversion.
@@ -34,7 +36,7 @@ internal sealed class ScrollController
     /// <summary>
     /// Gets the scroll offset in pixels for the specified axis.
     /// </summary>
-    public int GetOffsetPx(int axis) => axis == 0 ? _offsetPx[0] : _offsetPx[1];
+    public int GetOffsetPx(int axis) => DipToPx(GetOffsetDip(axis));
 
     /// <summary>
     /// Gets the extent in DIPs for the specified axis.
@@ -49,7 +51,7 @@ internal sealed class ScrollController
     /// <summary>
     /// Gets the scroll offset in DIPs for the specified axis.
     /// </summary>
-    public double GetOffsetDip(int axis) => PxToDip(GetOffsetPx(axis));
+    public double GetOffsetDip(int axis) => axis == 0 ? _offsetDip[0] : _offsetDip[1];
 
     /// <summary>
     /// Gets the maximum scroll offset in DIPs for the specified axis.
@@ -89,32 +91,48 @@ internal sealed class ScrollController
 
         _extentPx[axis] = Math.Max(0, extentPx);
         _viewportPx[axis] = Math.Max(0, viewportPx);
-        _offsetPx[axis] = ClampOffsetPx(axis, _offsetPx[axis]);
+        // Clamp existing logical offset against the new metrics.
+        SetOffsetDip(axis, GetOffsetDip(axis));
     }
 
     /// <summary>
     /// Sets the scroll offset in DIPs (clamped).
     /// </summary>
-    public bool SetOffsetDip(int axis, double offsetDip) => SetOffsetPx(axis, DipToPx(offsetDip));
-
-    /// <summary>
-    /// Sets the scroll offset in pixels (clamped).
-    /// </summary>
-    public bool SetOffsetPx(int axis, int offsetPx)
+    public bool SetOffsetDip(int axis, double offsetDip)
     {
         if (axis != 0 && axis != 1)
         {
             throw new ArgumentOutOfRangeException(nameof(axis));
         }
 
-        int clamped = ClampOffsetPx(axis, offsetPx);
-        if (_offsetPx[axis] == clamped)
+        if (double.IsNaN(offsetDip) || double.IsInfinity(offsetDip) || offsetDip <= 0)
+        {
+            offsetDip = 0;
+        }
+
+        double maxDip = GetMaxDip(axis);
+        if (offsetDip >= maxDip)
+        {
+            offsetDip = maxDip;
+        }
+
+        double current = GetOffsetDip(axis);
+        if (current.Equals(offsetDip))
         {
             return false;
         }
 
-        _offsetPx[axis] = clamped;
+        _offsetDip[axis] = offsetDip;
         return true;
+    }
+
+    /// <summary>
+    /// Sets the scroll offset in pixels (clamped).
+    /// </summary>
+    public bool SetOffsetPx(int axis, int offsetPx)
+    {
+        // Convert the pixel offset to a DIP offset for canonical storage.
+        return SetOffsetDip(axis, PxToDip(offsetPx));
     }
 
     /// <summary>
@@ -130,22 +148,6 @@ internal sealed class ScrollController
         int stepPx = Math.Max(1, DipToPx(stepDip));
         int deltaPx = checked(notches * stepPx);
         return SetOffsetPx(axis, checked(GetOffsetPx(axis) + deltaPx));
-    }
-
-    private int ClampOffsetPx(int axis, int valuePx)
-    {
-        if (valuePx <= 0)
-        {
-            return 0;
-        }
-
-        int max = GetMaxPx(axis);
-        if (valuePx >= max)
-        {
-            return max;
-        }
-
-        return valuePx;
     }
 
     private int DipToPx(double dip) => LayoutRounding.RoundToPixelInt(dip, DpiScale);

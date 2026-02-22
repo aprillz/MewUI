@@ -270,8 +270,10 @@ public sealed class ScrollViewer : ContentControl
         // Extent/viewport changes (e.g. content becomes empty) can make existing offsets invalid.
         // Clamp them against the latest _extent/_viewport even when scrollbars are hidden.
         // Extent/viewport changes can make existing offsets invalid.
-        _scroll.SetOffsetPx(0, _scroll.GetOffsetPx(0));
-        _scroll.SetOffsetPx(1, _scroll.GetOffsetPx(1));
+        // Clamp using DIP offsets to avoid quantizing the logical offset via px roundtrips,
+        // especially noticeable when DPI changes.
+        _scroll.SetOffsetDip(0, _scroll.GetOffsetDip(0));
+        _scroll.SetOffsetDip(1, _scroll.GetOffsetDip(1));
         SyncBars();
         NotifyScrollChanged();
 
@@ -297,8 +299,10 @@ public sealed class ScrollViewer : ContentControl
         _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
 
         // Clamp offsets against the latest extent/viewport before arranging children.
-        _scroll.SetOffsetPx(0, _scroll.GetOffsetPx(0));
-        _scroll.SetOffsetPx(1, _scroll.GetOffsetPx(1));
+        // Clamp using DIP offsets to avoid quantizing the logical offset via px roundtrips,
+        // especially noticeable when DPI changes.
+        _scroll.SetOffsetDip(0, _scroll.GetOffsetDip(0));
+        _scroll.SetOffsetDip(1, _scroll.GetOffsetDip(1));
         SyncBars();
 
         if (Content is UIElement content)

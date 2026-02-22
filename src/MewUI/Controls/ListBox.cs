@@ -10,8 +10,10 @@ namespace Aprillz.MewUI.Controls;
 public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
-    private readonly FixedHeightItemsPresenter _presenter;
+    private IItemsPresenter _presenter;
     private readonly ScrollViewer _scrollViewer;
+    private IDataTemplate _itemTemplate;
+    private ItemsPresenterMode _presenterMode = ItemsPresenterMode.Fixed;
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
@@ -146,14 +148,33 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
     /// </summary>
     public IDataTemplate ItemTemplate
     {
-        get => _presenter.ItemTemplate;
+        get => _itemTemplate;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
+            _itemTemplate = value;
             _presenter.ItemTemplate = value;
             _rebindVisibleOnNextRender = true;
             InvalidateMeasure();
             InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// Selects the virtualization strategy for this control.
+    /// </summary>
+    public ItemsPresenterMode PresenterMode
+    {
+        get => _presenterMode;
+        set
+        {
+            if (Set(ref _presenterMode, value))
+            {
+                ReplacePresenter(value, preserveScrollOffsets: true);
+                _hoverIndex = -1;
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
         }
     }
 
@@ -210,14 +231,8 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
         _itemsSource.Changed += OnItemsChanged;
 
-        _presenter = new FixedHeightItemsPresenter
-        {
-            ItemsSource = _itemsSource,
-            ItemTemplate = CreateDefaultItemTemplate(),
-            BeforeItemRender = OnBeforeItemRender,
-            ItemHeight = ResolveItemHeight(),
-            RebindExisting = true,
-        };
+        _itemTemplate = CreateDefaultItemTemplate();
+        _presenter = CreatePresenter(PresenterMode);
 
         _scrollViewer = new ScrollViewer
         {
@@ -226,10 +241,54 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
             BorderThickness = 0,
             Background = default,
             Padding = Padding,
-            Content = _presenter,
+            Content = (UIElement)_presenter,
         };
         _scrollViewer.Parent = this;
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
+    }
+
+    private IItemsPresenter CreatePresenter(ItemsPresenterMode mode)
+    {
+        IItemsPresenter presenter = mode == ItemsPresenterMode.Variable
+            ? new VariableHeightItemsPresenter()
+            : new FixedHeightItemsPresenter();
+
+        presenter.ItemsSource = _itemsSource;
+        presenter.ItemTemplate = _itemTemplate;
+        presenter.BeforeItemRender = OnBeforeItemRender;
+        presenter.GetContainerRect = null;
+        presenter.ItemHeightHint = ResolveItemHeight();
+        presenter.ExtentWidth = double.NaN;
+        presenter.ItemRadius = 0;
+        presenter.RebindExisting = true;
+        presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
+        return presenter;
+    }
+
+    private void ReplacePresenter(ItemsPresenterMode mode, bool preserveScrollOffsets)
+    {
+        double oldX = _scrollViewer.HorizontalOffset;
+        double oldY = _scrollViewer.VerticalOffset;
+
+        _presenter.OffsetCorrectionRequested -= OnPresenterOffsetCorrectionRequested;
+        if (_presenter is IDisposable d)
+        {
+            d.Dispose();
+        }
+
+        _presenter = CreatePresenter(mode);
+        _scrollViewer.Content = (UIElement)_presenter;
+        _rebindVisibleOnNextRender = true;
+
+        if (preserveScrollOffsets)
+        {
+            _scrollViewer.SetScrollOffsets(oldX, oldY);
+        }
+    }
+
+    private void OnPresenterOffsetCorrectionRequested(Point offset)
+    {
+        _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, offset.Y);
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -328,7 +387,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         double itemHeight = ResolveItemHeight();
         double height = count * itemHeight;
 
-        _presenter.ItemHeight = itemHeight;
+        _presenter.ItemHeightHint = itemHeight;
         _presenter.ExtentWidth = maxWidth;
         _scrollViewer.Padding = Padding;
 
@@ -562,20 +621,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
             return;
         }
 
-        double itemHeight = ResolveItemHeight();
-        if (itemHeight <= 0)
-        {
-            return;
-        }
-
-        double oldOffset = _scrollViewer.VerticalOffset;
-        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, itemHeight, viewport, oldOffset);
-        if (newOffset.Equals(oldOffset))
-        {
-            return;
-        }
-
-        _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
+        _presenter.RequestScrollIntoView(index);
         InvalidateVisual();
     }
 
@@ -595,24 +641,23 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
             return false;
         }
 
-        var bounds = GetSnappedBorderBounds(new Rect(0, 0, Bounds.Width, Bounds.Height));
-        var dpiScale = GetDpi() / 96.0;
-        var innerBounds = bounds.Deflate(new Thickness(GetBorderVisualInset()));
-        var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
-
-        double itemHeight = ResolveItemHeight();
-        if (itemHeight <= 0)
+        if (_presenter is not Element presenterElement)
         {
             return false;
         }
 
-        return ItemsViewportMath.TryGetItemIndexAtY(
-            position.Y,
-            contentBounds.Y,
-            _scrollViewer.VerticalOffset,
-            itemHeight,
-            ItemsSource.Count,
-            out index);
+        var dpiScale = GetDpi() / 96.0;
+        var local = TranslatePoint(position, presenterElement);
+        var presenterRect = new Rect(0, 0, presenterElement.RenderSize.Width, presenterElement.RenderSize.Height);
+        if (!presenterRect.Contains(local))
+        {
+            return false;
+        }
+
+        double alignedLocalY = LayoutRounding.RoundToPixel(local.Y, dpiScale);
+        double alignedOffsetY = LayoutRounding.RoundToPixel(_scrollViewer.VerticalOffset, dpiScale);
+        double yContent = alignedLocalY + alignedOffsetY;
+        return _presenter.TryGetItemIndexAtY(yContent, out index);
     }
 
     private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)

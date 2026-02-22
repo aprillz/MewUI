@@ -7,6 +7,7 @@ using Aprillz.MewUI.Rendering;
 /// (e.g. <see cref="ScrollViewer"/>) via <see cref="IScrollContent"/>.
 /// </summary>
 internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScrollContent
+    , IItemsPresenter
 {
     private readonly TemplatedItemsHost _itemsHost;
 
@@ -15,6 +16,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
     private Size _extent;
     private double _extentWidth = double.NaN;
     private double _itemRadius;
+    private int _pendingScrollIntoViewIndex = -1;
 
     public IItemsView ItemsSource
     {
@@ -97,6 +99,14 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
 
     public bool RebindExisting { get; set; } = true;
+
+    public double ItemHeightHint
+    {
+        get => ItemHeight;
+        set => ItemHeight = value;
+    }
+
+    public event Action<Point>? OffsetCorrectionRequested;
 
     public void RecycleAll() => _itemsHost.RecycleAll();
 
@@ -189,6 +199,37 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
         double alignedOffsetY = LayoutRounding.RoundToPixel(_offset.Y, dpiScale);
         double alignedOffsetX = LayoutRounding.RoundToPixel(_offset.X, dpiScale);
 
+        if (_pendingScrollIntoViewIndex >= 0)
+        {
+            double viewportH = _viewport.Height;
+            double top = _pendingScrollIntoViewIndex * alignedItemHeight;
+            double bottom = top + alignedItemHeight;
+
+            double desiredOffsetY = alignedOffsetY;
+            if (top < alignedOffsetY)
+            {
+                desiredOffsetY = top;
+            }
+            else if (bottom > alignedOffsetY + viewportH)
+            {
+                desiredOffsetY = bottom - viewportH;
+            }
+
+            desiredOffsetY = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - viewportH));
+            double onePx = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+            if (Math.Abs(desiredOffsetY - alignedOffsetY) >= onePx * 0.99)
+            {
+                // Apply the corrected offset immediately for this render pass to avoid a one-frame
+                // "flash" at the old position; the owner will then update _offset via SetOffset.
+                alignedOffsetY = desiredOffsetY;
+                OffsetCorrectionRequested?.Invoke(new Point(_offset.X, desiredOffsetY));
+            }
+            else
+            {
+                _pendingScrollIntoViewIndex = -1;
+            }
+        }
+
         ItemsViewportMath.ComputeVisibleRange(
             ItemsSource.Count,
             alignedItemHeight,
@@ -204,7 +245,10 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
         var scrollContentBounds = new Rect(
             contentBounds.X - alignedOffsetX,
             contentBounds.Y,
-            Math.Max(contentBounds.Width, Extent.Width),
+            // See VariableHeightItemsPresenter: do not expand layout width beyond the current viewport
+            // unless the host explicitly enables horizontal scrolling. Using Extent.Width here can
+            // push right-aligned content outside the visible viewport due to rounding differences.
+            contentBounds.Width,
             contentBounds.Height);
 
         _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
@@ -271,6 +315,66 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
     {
         RecomputeExtent();
         InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    public bool TryGetItemIndexAtY(double yContent, out int index)
+    {
+        index = -1;
+
+        int count = ItemsSource.Count;
+        if (count <= 0)
+        {
+            return false;
+        }
+
+        double itemHeight = Math.Max(0, ItemHeight);
+        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        {
+            return false;
+        }
+
+        int i = (int)Math.Floor(yContent / itemHeight);
+        if (i < 0 || i >= count)
+        {
+            return false;
+        }
+
+        index = i;
+        return true;
+    }
+
+    public bool TryGetItemYRange(int index, out double top, out double bottom)
+    {
+        top = 0;
+        bottom = 0;
+
+        int count = ItemsSource.Count;
+        if (count <= 0 || index < 0 || index >= count)
+        {
+            return false;
+        }
+
+        double itemHeight = Math.Max(0, ItemHeight);
+        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        {
+            return false;
+        }
+
+        top = index * itemHeight;
+        bottom = top + itemHeight;
+        return true;
+    }
+
+    public void RequestScrollIntoView(int index)
+    {
+        int count = ItemsSource.Count;
+        if (count <= 0 || index < 0 || index >= count)
+        {
+            return;
+        }
+
+        _pendingScrollIntoViewIndex = index;
         InvalidateVisual();
     }
 

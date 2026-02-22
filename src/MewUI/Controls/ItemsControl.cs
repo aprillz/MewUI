@@ -10,7 +10,8 @@ namespace Aprillz.MewUI.Controls;
 public sealed class ItemsControl : Control, IVisualTreeHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
-    private readonly FixedHeightItemsPresenter _presenter;
+    private IItemsPresenter _presenter;
+    private IDataTemplate _itemTemplate;
     private readonly ScrollViewer _scrollViewer;
 
     private int _hoverIndex = -1;
@@ -19,6 +20,17 @@ public sealed class ItemsControl : Control, IVisualTreeHost
 
     private IItemsView _itemsSource = ItemsView.Empty;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
+    private ItemsPresenterMode _presenterMode = ItemsPresenterMode.Fixed;
+
+    /// <summary>
+    /// Gets the current vertical scroll offset in DIPs.
+    /// </summary>
+    public double VerticalOffset => _scrollViewer.VerticalOffset;
+
+    /// <summary>
+    /// Gets the current horizontal scroll offset in DIPs.
+    /// </summary>
+    public double HorizontalOffset => _scrollViewer.HorizontalOffset;
 
     /// <summary>
     /// Gets or sets the items data source.
@@ -83,27 +95,38 @@ public sealed class ItemsControl : Control, IVisualTreeHost
     /// </summary>
     public IDataTemplate ItemTemplate
     {
-        get => _presenter.ItemTemplate;
+        get => _itemTemplate;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
+            _itemTemplate = value;
             _presenter.ItemTemplate = value;
             InvalidateMeasure();
             InvalidateVisual();
         }
     }
 
+    /// <summary>
+    /// Selects the virtualization strategy for this control.
+    /// </summary>
+    public ItemsPresenterMode PresenterMode
+    {
+        get => _presenterMode;
+        set
+        {
+            if (Set(ref _presenterMode, value))
+            {
+                ReplacePresenter(value, preserveScrollOffsets: true);
+                _hoverIndex = -1;
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
+    }
+
     public ItemsControl()
     {
         _itemsSource.Changed += OnItemsChanged;
-
-        _presenter = new FixedHeightItemsPresenter
-        {
-            ItemsSource = _itemsSource,
-            ItemTemplate = CreateDefaultItemTemplate(),
-            BeforeItemRender = OnBeforeItemRender,
-            ItemHeight = ResolveItemHeight(),
-        };
 
         _scrollViewer = new ScrollViewer
         {
@@ -112,10 +135,14 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             BorderThickness = 0,
             Background = default,
             Padding = Padding,
-            Content = _presenter,
+            Content = null,
         };
         _scrollViewer.Parent = this;
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
+
+        _itemTemplate = CreateDefaultItemTemplate();
+        _presenter = CreatePresenter(PresenterMode);
+        _scrollViewer.Content = (UIElement)_presenter;
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -208,10 +235,19 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             }
 
             maxWidth = Math.Min(maxWidth, widthLimit);
+
+            // Variable-height presenter is usually used with wrapping content (chat/messages).
+            // In that case, using the max measured text width as horizontal extent causes
+            // the presenter to lay out against an oversized width, pushing right-aligned
+            // content outside the actual viewport.
+            if (PresenterMode == ItemsPresenterMode.Variable && !double.IsPositiveInfinity(widthLimit))
+            {
+                maxWidth = widthLimit;
+            }
         }
 
         double itemHeight = ResolveItemHeight();
-        _presenter.ItemHeight = itemHeight;
+        _presenter.ItemHeightHint = itemHeight;
         _presenter.ExtentWidth = maxWidth;
         _scrollViewer.Padding = Padding;
 
@@ -344,23 +380,17 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             return;
         }
 
-        double itemHeight = ResolveItemHeight();
-        if (itemHeight <= 0)
-        {
-            return;
-        }
-
-        double extent = count * itemHeight;
-        double oldOffset = _scrollViewer.VerticalOffset;
-        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, itemHeight, viewport, oldOffset);
-        if (newOffset.Equals(oldOffset))
-        {
-            return;
-        }
-
-        _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
+        _presenter.RequestScrollIntoView(index);
         InvalidateVisual();
     }
+
+    /// <summary>
+    /// Sets both scroll offsets simultaneously.
+    /// </summary>
+    /// <param name="horizontalOffset">The horizontal offset in DIPs.</param>
+    /// <param name="verticalOffset">The vertical offset in DIPs.</param>
+    public void SetScrollOffsets(double horizontalOffset, double verticalOffset)
+        => _scrollViewer.SetScrollOffsets(horizontalOffset, verticalOffset);
 
     private void OnItemsChanged(ItemsChange _)
     {
@@ -416,32 +446,28 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             return false;
         }
 
-        var bounds = GetSnappedBorderBounds(Bounds);
-        var borderInset = GetBorderVisualInset();
+        // Map to presenter-local coordinates to avoid duplicating ScrollViewer viewport math
+        // (padding/scrollbar visibility/snapping) which can drift at fractional DPI.
+        if (_presenter is not Element presenterElement)
+        {
+            return false;
+        }
+
         var dpiScale = GetDpi() / 96.0;
-        var innerBounds = bounds.Deflate(new Thickness(borderInset));
-        var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
+        var local = TranslatePoint(position, presenterElement);
+        var presenterRect = new Rect(0, 0, presenterElement.RenderSize.Width, presenterElement.RenderSize.Height);
 
-        if (!contentBounds.Contains(position))
+        if (!presenterRect.Contains(local))
         {
             return false;
         }
 
-        double itemHeight = ResolveItemHeight();
-        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
-        {
-            return false;
-        }
-
-        double y = position.Y - contentBounds.Y + _scrollViewer.VerticalOffset;
-        int i = (int)Math.Floor(y / itemHeight);
-        if (i < 0 || i >= count)
-        {
-            return false;
-        }
-
-        index = i;
-        return true;
+        // Map presenter-local Y to content-space Y and ask the presenter to resolve index.
+        // Keep rounding consistent with presenters (they align offsets to device pixels).
+        double alignedLocalY = LayoutRounding.RoundToPixel(local.Y, dpiScale);
+        double alignedOffsetY = LayoutRounding.RoundToPixel(_scrollViewer.VerticalOffset, dpiScale);
+        double yContent = alignedLocalY + alignedOffsetY;
+        return _presenter.TryGetItemIndexAtY(yContent, out index);
     }
 
     private double ResolveItemHeight()
@@ -472,9 +498,51 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             dsv.Dispose();
         }
 
+        _presenter.OffsetCorrectionRequested -= OnPresenterOffsetCorrectionRequested;
         if (_presenter is IDisposable dp)
         {
             dp.Dispose();
         }
+    }
+
+    private IItemsPresenter CreatePresenter(ItemsPresenterMode mode)
+    {
+        IItemsPresenter presenter = mode == ItemsPresenterMode.Variable
+            ? new VariableHeightItemsPresenter()
+            : new FixedHeightItemsPresenter();
+
+        presenter.ItemsSource = _itemsSource;
+        presenter.ItemTemplate = _itemTemplate;
+        presenter.BeforeItemRender = OnBeforeItemRender;
+        presenter.GetContainerRect = null;
+        presenter.ItemHeightHint = ResolveItemHeight();
+        presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
+
+        return presenter;
+    }
+
+    private void ReplacePresenter(ItemsPresenterMode mode, bool preserveScrollOffsets)
+    {
+        double oldX = _scrollViewer.HorizontalOffset;
+        double oldY = _scrollViewer.VerticalOffset;
+
+        _presenter.OffsetCorrectionRequested -= OnPresenterOffsetCorrectionRequested;
+        if (_presenter is IDisposable d)
+        {
+            d.Dispose();
+        }
+
+        _presenter = CreatePresenter(mode);
+        _scrollViewer.Content = (UIElement)_presenter;
+
+        if (preserveScrollOffsets)
+        {
+            _scrollViewer.SetScrollOffsets(oldX, oldY);
+        }
+    }
+
+    private void OnPresenterOffsetCorrectionRequested(Point offset)
+    {
+        _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, offset.Y);
     }
 }
