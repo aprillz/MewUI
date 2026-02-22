@@ -19,11 +19,6 @@ public abstract partial class TextBase
             unsubscribe,
             () =>
             {
-                if (IsFocused)
-                {
-                    return;
-                }
-
                 var value = NormalizeText(get() ?? string.Empty);
                 if (GetTextCore() == value)
                 {
