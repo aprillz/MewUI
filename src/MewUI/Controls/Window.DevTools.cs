@@ -312,7 +312,7 @@ public partial class Window
                 build: ctx => new Label().CenterVertical().Padding(8, 0),
                 bind: (view, item, _, ctx) =>
                 {
-                    ((Label)view).Text(item.DisplayText);
+                    ((Label)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold: FontWeight.Normal));
                 });
 
             var refreshBtn = new Button { Content = "Refresh" };
@@ -325,22 +325,22 @@ public partial class Window
             _pickButton = pickBtn;
             pickBtn.Click += TogglePick;
 
-             var clearBtn = new Button { Content = "Clear Selection" };
-             clearBtn.Click += () =>
-             {
-                 if (_target._debugInspectorOverlay != null)
-                 {
-                     _target._debugInspectorOverlay.HighlightedElement = null;
-                     _target.RequestRender();
-                 }
+            var clearBtn = new Button { Content = "Clear Selection" };
+            clearBtn.Click += () =>
+            {
+                if (_target._debugInspectorOverlay != null)
+                {
+                    _target._debugInspectorOverlay.HighlightedElement = null;
+                    _target.RequestRender();
+                }
 
                 if (_items != null)
                 {
                     _items.SelectedIndex = -1;
                 }
-                 _selectedLabel.Text = "Selected: (none)";
-             };
-             
+                _selectedLabel.Text = "Selected: (none)";
+            };
+
 
             Content = new DockPanel()
                 .Spacing(8)
