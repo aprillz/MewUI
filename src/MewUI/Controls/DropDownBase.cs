@@ -201,7 +201,7 @@ public abstract class DropDownBase : Control, IPopupOwner
 
         return new Rect(x, y, width, height);
     }
-     
+
     protected override Size MeasureContent(Size availableSize) => MeasureHeader(availableSize);
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -341,7 +341,7 @@ public abstract class DropDownBase : Control, IPopupOwner
             // If focus currently lives inside the popup subtree, clear it to avoid leaving focus
             // pointing at a soon-to-be-detached element.
             var focused = oldWindow.FocusManager.FocusedElement;
-            if (focused != null && (ReferenceEquals(focused, _popup) || IsInSubtreeOf(focused, _popup)))
+            if (focused != null && (ReferenceEquals(focused, _popup) || VisualTreeHelper.IsInSubtreeOf(focused, _popup)))
             {
                 oldWindow.FocusManager.ClearFocus();
             }
@@ -465,7 +465,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         if (root is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            bool focusWasInPopup = focused != null && (ReferenceEquals(focused, popup) || IsInSubtreeOf(focused, popup));
+            bool focusWasInPopup = focused != null && (ReferenceEquals(focused, popup) || VisualTreeHelper.IsInSubtreeOf(focused, popup));
 
             if (kind == PopupCloseKind.UserInitiated)
             {
@@ -480,19 +480,6 @@ public abstract class DropDownBase : Control, IPopupOwner
                 window.FocusManager.ClearFocus();
             }
         }
-    }
-
-    private static bool IsInSubtreeOf(UIElement element, UIElement root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected override void OnDispose()
