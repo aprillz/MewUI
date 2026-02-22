@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.9.0
+#:package Aprillz.MewUI@0.11.1
 
 using System.Globalization;
 using System.Text;
@@ -23,8 +23,7 @@ Application.DefaultGraphicsBackend = OperatingSystem.IsWindows()
     ? GraphicsBackend.Gdi
     : GraphicsBackend.OpenGL;
 
-ThemeManager.Default = ThemeVariant.Dark;
-ThemeManager.DefaultAccent = Accent.Pink;
+ThemeManager.DefaultAccent = Accent.Purple;
 
 var expression = new ObservableValue<string>(string.Empty);
 var result = new ObservableValue<string>("0");
@@ -35,36 +34,36 @@ UniformGrid Keypad() => new UniformGrid()
     .Rows(5)
     .Columns(4)
     .Children(
-        KeyButton("C", Clear),
-        KeyButton("(", () => Append("(")),
-        KeyButton(")", () => Append(")")),
-        KeyButton("⌫", Backspace),
+        KeyButton("C", Clear, Kind.Operator),
+        KeyButton("(", () => Append("("), Kind.Operator),
+        KeyButton(")", () => Append(")"), Kind.Operator),
+        KeyButton("⌫", Backspace, Kind.Operator),
 
         KeyButton("7", () => Append("7")),
         KeyButton("8", () => Append("8")),
         KeyButton("9", () => Append("9")),
-        KeyButton("/", () => Append("/")),
+        KeyButton("÷", () => Append("/"), Kind.Operator),
 
         KeyButton("4", () => Append("4")),
         KeyButton("5", () => Append("5")),
         KeyButton("6", () => Append("6")),
-        KeyButton("*", () => Append("*")),
+        KeyButton("×", () => Append("*"), Kind.Operator),
 
         KeyButton("1", () => Append("1")),
         KeyButton("2", () => Append("2")),
         KeyButton("3", () => Append("3")),
-        KeyButton("-", () => Append("-")),
+        KeyButton("-", () => Append("-"), Kind.Operator),
 
         KeyButton(".", () => Append(".")),
         KeyButton("0", () => Append("0")),
-        KeyButton("=", CommitEquals, true),
-        KeyButton("+", () => Append("+"))
+        KeyButton("=", CommitEquals, Kind.Commit),
+        KeyButton("+", () => Append("+"), Kind.Operator)
     );
 
 var window = new Window()
     .Padding(8)
     .Title("MewUI FBA Calculator")
-    .Size(360, 520)
+    .Fixed(360, 520)
     .Content(
         new DockPanel()
             .Children(
@@ -79,7 +78,7 @@ var window = new Window()
 
                         new Label()
                             .BindText(result)
-                            .FontSize(28)
+                            .FontSize(38)
                             .Bold()
                             .TextAlignment(TextAlignment.Right),
 
@@ -200,7 +199,7 @@ bool TryAppendFromText(string text)
     return appended;
 }
 
-Button KeyButton(string text, Action onClick, bool isPrimary = false)
+Button KeyButton(string text, Action onClick, Kind kind = Kind.Number)
 {
     var b = new Button()
         .Content(text)
@@ -210,8 +209,17 @@ Button KeyButton(string text, Action onClick, bool isPrimary = false)
         .MinWidth(56)
         .MinHeight(44);
 
-    if (isPrimary)
-        b.WithTheme((t, c) => c.BorderBrush(t.Palette.Accent));
+
+    if (kind == Kind.Commit)
+    {
+        b.WithTheme((t, c) => c
+            .Background(t.Palette.Accent)
+            .Foreground(t.Palette.AccentText));
+    }
+    else if (kind == Kind.Number)
+    {
+        b.WithTheme((t, c) => c.Background(t.Palette.ButtonFace.Lerp(t.Palette.Accent,0.1)));
+    }
 
     return b;
 }
@@ -397,4 +405,11 @@ static class ExpressionEvaluator
 
         return values.Pop();
     }
+}
+
+enum Kind
+{
+    Number,
+    Operator,
+    Commit
 }

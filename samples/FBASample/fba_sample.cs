@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.9.0
+#:package Aprillz.MewUI@0.11.1
 
 using System.Diagnostics;
 
@@ -71,21 +71,21 @@ window = new Window()
                                         NormalControls()
                                     ),
 
-                                new TabItem()
-                                    .Header("Binding")
-                                    .Content(
-                                        BindSamples()
-                                    ),
+		                        new TabItem()
+		                            .Header("Commanding")
+		                            .Content(
+		                                CommandingSamples()
+		                            ),
 
-                                new TabItem()
-                                    .Header("Commanding")
-                                    .Content(
-                                        CommandingSamples()
-                                    )
-                            )
-                    )
-            )
-    )
+		                        new TabItem()
+		                            .Header("Binding")
+		                            .Content(
+		                                BindSamples()
+		                            )
+                                )
+                        )
+                )
+        )
     .OnThemeChanged((_, _) => UpdateAccentSwatches())
     .OnFirstFrameRendered(() =>
     {
@@ -247,6 +247,7 @@ Element NormalControls()
 {
     MultiLineTextBox notesTextBox = null!;
     CheckBox wrapCheck = null!;
+    int appendCount = 0;
     var demoMenu = new ContextMenu();
     var nestedMenu = new ContextMenu()
         .Item("Option 1", () => MessageBox.Show("Option 1", "Nested ContextMenu"))
@@ -517,6 +518,22 @@ Element NormalControls()
                             new DockPanel()
                                 .Spacing(8)
                                 .Children(
+                                    new StackPanel()
+                                        .DockBottom()
+                                        .Horizontal()
+                                        .Spacing(8)
+                                        .Children(
+                                            new Button()
+                                                .Content("Append + ScrollToCaret")
+                                                .OnClick(() =>
+                                                {
+                                                    // Demo: append text then scroll so the caret becomes visible.
+                                                    appendCount++;
+                                                    var line = $"Appended {appendCount} at {DateTime.Now:HH:mm:ss.fff}";
+                                                    notesTextBox.AppendText(line + "\n", scrollToCaret: true);
+                                                })
+                                        ),
+
                                     new CheckBox()
                                         .DockBottom()
                                         .Ref(out wrapCheck)
@@ -695,6 +712,8 @@ FrameworkElement CommandingSamples()
 
 FrameworkElement BindSamples()
 {
+    var selectionItems = new List<string> { "Alpha", "Beta", "Gamma", "Delta" };
+
     return new StackPanel()
         .Vertical()
         .Children(
@@ -769,7 +788,7 @@ FrameworkElement BindSamples()
                         new ListBox()
                             .Ref(out var selectionListBox)
                             .Height(120)
-                            .Items("Alpha", "Beta", "Gamma", "Delta")
+                            .ItemsSource(ItemsSource.Create(selectionItems))
                             .BindSelectedIndex(vm.SelectedIndex),
 
                         new StackPanel()
@@ -777,30 +796,25 @@ FrameworkElement BindSamples()
                             .Spacing(8)
                             .Children(
                                 new Label()
-                                    .BindText(vm.SelectedIndex, i => $@"SelectedIndex = {i}{Environment.NewLine}Item = {selectionListBox.SelectedItem ?? string.Empty}"),
+                                    .BindText(vm.SelectedIndex, i => $@"SelectedIndex = {i}{Environment.NewLine}Item = {selectionListBox.SelectedText ?? string.Empty}"),
 
                                 new Button()
                                     .Content("Add 40,000 ")
                                     .OnClick(() =>
                                     {
                                         const int repeat = 10_000;
-                                        var items = selectionListBox.Items;
-
-                                        if (items is List<string> list)
-                                        {
-                                            list.EnsureCapacity(list.Count + repeat * 4);
-                                        }
+                                        selectionItems.EnsureCapacity(selectionItems.Count + repeat * 4);
 
                                         for (int i = 0; i < repeat; i++)
                                         {
-                                            items.Add("Alpha");
-                                            items.Add("Beta");
-                                            items.Add("Gamma");
-                                            items.Add("Delta");
+                                            selectionItems.Add("Alpha");
+                                            selectionItems.Add("Beta");
+                                            selectionItems.Add("Gamma");
+                                            selectionItems.Add("Delta");
                                         }
 
                                         selectionListBox.InvalidateMeasure();
-                                        vm.SelectionItemCount.Value = items.Count;
+                                        vm.SelectionItemCount.Value = selectionItems.Count;
                                     }),
 
                                 new Label()
