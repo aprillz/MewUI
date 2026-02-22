@@ -10,16 +10,14 @@ namespace Aprillz.MewUI.Controls;
 public sealed class ItemsControl : Control, IVisualTreeHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
-    private readonly TemplatedItemsHost _itemsHost;
+    private readonly FixedHeightItemsPresenter _presenter;
+    private readonly ScrollViewer _scrollViewer;
+
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _rebindVisibleOnNextRender = true;
+
     private IItemsView _itemsSource = ItemsView.Empty;
-    private readonly ScrollBar _vBar;
-    private readonly ScrollController _scroll = new();
-    private double _extentHeight;
-    private double _viewportHeight;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
 
     /// <summary>
@@ -40,9 +38,9 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             _itemsSource = value;
             _itemsSource.Changed += OnItemsChanged;
 
-            _hoverIndex = -1;
-            _rebindVisibleOnNextRender = true;
+            _presenter.ItemsSource = _itemsSource;
 
+            _hoverIndex = -1;
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -59,7 +57,6 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             if (Set(ref field, value))
             {
                 InvalidateMeasure();
-                InvalidateArrange();
                 InvalidateVisual();
             }
         }
@@ -86,104 +83,61 @@ public sealed class ItemsControl : Control, IVisualTreeHost
     /// </summary>
     public IDataTemplate ItemTemplate
     {
-        get => _itemsHost.ItemTemplate;
+        get => _presenter.ItemTemplate;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            _itemsHost.ItemTemplate = value;
-            _rebindVisibleOnNextRender = true;
+            _presenter.ItemTemplate = value;
             InvalidateMeasure();
-            InvalidateArrange();
             InvalidateVisual();
         }
     }
 
     public ItemsControl()
     {
-        var template = CreateDefaultItemTemplate();
-
-        _itemsHost = new TemplatedItemsHost(
-            owner: this,
-            getItem: index => index >= 0 && index < ItemsSource.Count ? ItemsSource.GetItem(index) : null,
-            invalidateMeasureAndVisual: () => { InvalidateMeasure(); InvalidateArrange(); InvalidateVisual(); },
-            template: template);
-
-        _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
-        {
-            BeforeItemRender = OnBeforeItemRender
-        };
-
         _itemsSource.Changed += OnItemsChanged;
 
-        _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
-        _vBar.Parent = this;
-        _vBar.ValueChanged += v =>
+        _presenter = new FixedHeightItemsPresenter
         {
-            _scroll.DpiScale = GetDpi() / 96.0;
-            _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
-            _scroll.SetOffsetDip(1, v);
-            _hoverIndex = -1;
-            _hasLastMousePosition = false;
-            InvalidateVisual();
-            ReevaluateMouseOverAfterScroll();
+            ItemsSource = _itemsSource,
+            ItemTemplate = CreateDefaultItemTemplate(),
+            BeforeItemRender = OnBeforeItemRender,
+            ItemHeight = ResolveItemHeight(),
         };
-    }
 
-    private void OnItemsChanged(ItemsChange _)
-    {
-        _rebindVisibleOnNextRender = true;
-        InvalidateMeasure();
-        InvalidateArrange();
-        InvalidateVisual();
-    }
-
-    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
-    {
-        double radius = _itemsHost.Layout.ItemRadius;
-
-        if (i == _hoverIndex && IsEffectivelyEnabled)
+        _scrollViewer = new ScrollViewer
         {
-            var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.10);
-            if (radius > 0)
-            {
-                context.FillRoundedRectangle(itemRect, radius, radius, hoverBg);
-            }
-            else
-            {
-                context.FillRectangle(itemRect, hoverBg);
-            }
+            VerticalScroll = ScrollMode.Auto,
+            HorizontalScroll = ScrollMode.Disabled,
+            BorderThickness = 0,
+            Background = default,
+            Padding = Padding,
+            Content = _presenter,
+        };
+        _scrollViewer.Parent = this;
+        _scrollViewer.ScrollChanged += OnScrollViewerChanged;
+    }
+
+    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+    {
+        base.OnThemeChanged(oldTheme, newTheme);
+
+        if (ItemPadding == oldTheme.Metrics.ItemPadding)
+        {
+            ItemPadding = newTheme.Metrics.ItemPadding;
         }
     }
 
-    private IDataTemplate CreateDefaultItemTemplate()
-        => new DelegateTemplate<object?>(
-            build: _ =>
-            {
-                var label = new Label();
-                return label;
-            },
-            bind: (view, item, index, _) =>
-            {
-                if (view is not Label label)
-                {
-                    return;
-                }
-
-                label.Text = ItemsSource.GetText(index);
-                label.Padding = ItemPadding;
-                label.VerticalTextAlignment = TextAlignment.Center;
-            });
-
     void IVisualTreeHost.VisitChildren(Action<Element> visitor)
     {
-        visitor(_vBar);
-        _itemsHost.VisitRealized(visitor);
+        visitor(_scrollViewer);
     }
 
     protected override Size MeasureContent(Size availableSize)
     {
         var borderInset = GetBorderVisualInset();
         var dpi = GetDpi();
+
         double widthLimit = double.IsPositiveInfinity(availableSize.Width)
             ? double.PositiveInfinity
             : Math.Max(0, availableSize.Width - Padding.HorizontalThickness - borderInset * 2);
@@ -198,13 +152,12 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         else
         {
             using var measure = BeginTextMeasurement();
-
             maxWidth = 0;
+
             if (count > 0 && widthLimit > 0)
             {
                 double itemPadW = ItemPadding.HorizontalThickness;
 
-                // Reuse the same cheap estimation approach as ListBox.
                 if (count > 4096)
                 {
                     double itemHeightEstimate = ResolveItemHeight();
@@ -258,7 +211,15 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         }
 
         double itemHeight = ResolveItemHeight();
-        _extentHeight = count == 0 || itemHeight <= 0 ? 0 : count * itemHeight;
+        _presenter.ItemHeight = itemHeight;
+        _presenter.ExtentWidth = maxWidth;
+        _scrollViewer.Padding = Padding;
+
+        // Let ScrollViewer update bar visibility/metrics for the current slot.
+        var childAvailable = new Size(
+            double.IsPositiveInfinity(availableSize.Width) ? double.PositiveInfinity : Math.Max(0, availableSize.Width - borderInset * 2),
+            double.IsPositiveInfinity(availableSize.Height) ? double.PositiveInfinity : Math.Max(0, availableSize.Height - borderInset * 2));
+        _scrollViewer.Measure(childAvailable);
 
         double desiredHeight;
         if (double.IsPositiveInfinity(availableSize.Height))
@@ -282,34 +243,7 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
-
-        var dpiScale = GetDpi() / 96.0;
-        _viewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Height - Padding.VerticalThickness), dpiScale);
-        _scroll.DpiScale = dpiScale;
-        _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
-        _scroll.SetOffsetPx(1, _scroll.GetOffsetPx(1));
-
-        bool needV = _extentHeight > _viewportHeight + 0.5;
-        _vBar.IsVisible = needV;
-
-        if (_vBar.IsVisible)
-        {
-            double t = Theme.Metrics.ScrollBarHitThickness;
-            const double inset = 0;
-
-            _vBar.Minimum = 0;
-            _vBar.Maximum = Math.Max(0, _extentHeight - _viewportHeight);
-            _vBar.ViewportSize = _viewportHeight;
-            _vBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
-            _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
-            _vBar.Value = _scroll.GetOffsetDip(1);
-
-            _vBar.Arrange(new Rect(
-                innerBounds.Right - t - inset,
-                innerBounds.Y + inset,
-                t,
-                Math.Max(0, innerBounds.Height - inset * 2)));
-        }
+        _scrollViewer.Arrange(innerBounds);
 
         if (!_scrollIntoViewRequest.IsNone)
         {
@@ -326,124 +260,32 @@ public sealed class ItemsControl : Control, IVisualTreeHost
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        var dpiScale = GetDpi() / 96.0;
         double radius = Theme.Metrics.ControlCornerRadius;
         var borderInset = GetBorderVisualInset();
-        double itemRadius = Math.Max(0, radius - borderInset);
 
         var state = GetVisualState();
         var bg = PickControlBackground(state);
         var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
-        if (ItemsSource.Count == 0)
-        {
-            return;
-        }
-
-        var innerBounds = bounds.Deflate(new Thickness(borderInset));
-        var viewportBounds = innerBounds;
-
-        var contentBounds = LayoutRounding.SnapViewportRectToPixels(viewportBounds.Deflate(Padding), dpiScale);
-
-        context.Save();
-        var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
-        var clipRadius = Math.Max(0, radius - borderInset);
-        clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
-        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
-        if (clipRadius > 0)
-        {
-            context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
-        }
-        else
-        {
-            context.SetClip(clipRect);
-        }
-
-        double itemHeight = ResolveItemHeight();
-        double verticalOffset = _scroll.GetOffsetDip(1);
-
-        ItemsViewportMath.ComputeVisibleRange(
-            ItemsSource.Count,
-            itemHeight,
-            contentBounds.Height,
-            contentBounds.Y,
-            verticalOffset,
-            out int first,
-            out int lastExclusive,
-            out double yStart,
-            out _);
-
-        bool rebind = _rebindVisibleOnNextRender;
-        _rebindVisibleOnNextRender = false;
-
-        _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
-        {
-            ContentBounds = contentBounds,
-            First = first,
-            LastExclusive = lastExclusive,
-            ItemHeight = itemHeight,
-            YStart = yStart,
-            ItemRadius = itemRadius,
-            RebindExisting = rebind,
-        };
-
-        _itemsHost.Render(context);
-        context.Restore();
-
-        if (_vBar.IsVisible)
-        {
-            _vBar.Render(context);
-        }
+        _scrollViewer.ViewportCornerRadius = Math.Max(0, radius - borderInset);
+        _scrollViewer.Render(context);
     }
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        if (!IsVisible || !IsHitTestVisible)
         {
             return null;
         }
 
-        if (_vBar.IsVisible && _vBar.Bounds.Contains(point))
+        var hit = _scrollViewer.HitTest(point);
+        if (hit != null)
         {
-            return _vBar;
+            return hit;
         }
 
         return base.OnHitTest(point);
-    }
-
-    protected override void OnMouseWheel(MouseWheelEventArgs e)
-    {
-        base.OnMouseWheel(e);
-
-        if (e.Handled || !_vBar.IsVisible)
-        {
-            return;
-        }
-
-        int notches = Math.Sign(e.Delta);
-        if (notches == 0)
-        {
-            return;
-        }
-
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
-        _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
-        _vBar.Value = _scroll.GetOffsetDip(1);
-
-        if (_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int hover))
-        {
-            _hoverIndex = hover;
-        }
-        else
-        {
-            _hoverIndex = -1;
-        }
-
-        InvalidateVisual();
-        ReevaluateMouseOverAfterScroll();
-        e.Handled = true;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -475,42 +317,16 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         }
     }
 
-    private bool TryGetItemIndexAtCore(Point position, out int index)
+    protected override void OnMouseLeave()
     {
-        index = -1;
+        base.OnMouseLeave();
 
-        int count = ItemsSource.Count;
-        if (count <= 0)
+        _hasLastMousePosition = false;
+        if (_hoverIndex != -1)
         {
-            return false;
+            _hoverIndex = -1;
+            InvalidateVisual();
         }
-
-        var bounds = GetSnappedBorderBounds(Bounds);
-        var dpiScale = GetDpi() / 96.0;
-        var borderInset = GetBorderVisualInset();
-        var innerBounds = bounds.Deflate(new Thickness(borderInset));
-        var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
-
-        if (!contentBounds.Contains(position))
-        {
-            return false;
-        }
-
-        double itemHeight = ResolveItemHeight();
-        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
-        {
-            return false;
-        }
-
-        double y = position.Y - contentBounds.Y + _scroll.GetOffsetDip(1);
-        int i = (int)Math.Floor(y / itemHeight);
-        if (i < 0 || i >= count)
-        {
-            return false;
-        }
-
-        index = i;
-        return true;
     }
 
     public void ScrollIntoView(int index)
@@ -534,27 +350,98 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             return;
         }
 
-        _extentHeight = count * itemHeight;
-
-        double oldOffset = _scroll.GetOffsetDip(1);
+        double extent = count * itemHeight;
+        double oldOffset = _scrollViewer.VerticalOffset;
         double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, itemHeight, viewport, oldOffset);
-
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(1, _extentHeight, viewport);
-        _scroll.SetOffsetDip(1, newOffset);
-        double applied = _scroll.GetOffsetDip(1);
-        if (applied.Equals(oldOffset))
+        if (newOffset.Equals(oldOffset))
         {
             return;
         }
 
-        if (_vBar.IsVisible)
+        _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
+        InvalidateVisual();
+    }
+
+    private void OnItemsChanged(ItemsChange _)
+    {
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    private void OnScrollViewerChanged()
+    {
+        if (_hasLastMousePosition && TryGetItemIndexAtCore(_lastMousePosition, out int idx))
         {
-            _vBar.Value = applied;
+            _hoverIndex = idx;
+        }
+        else
+        {
+            _hoverIndex = -1;
         }
 
         InvalidateVisual();
-        ReevaluateMouseOverAfterScroll();
+    }
+
+    private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
+    {
+        if (i == _hoverIndex && IsEffectivelyEnabled)
+        {
+            var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.10);
+            context.FillRectangle(itemRect, hoverBg);
+        }
+    }
+
+    private IDataTemplate CreateDefaultItemTemplate()
+        => new DelegateTemplate<object?>(
+            build: _ => new Label(),
+            bind: (view, _, index, _) =>
+            {
+                if (view is not Label label)
+                {
+                    return;
+                }
+
+                label.Text = ItemsSource.GetText(index);
+                label.Padding = ItemPadding;
+                label.VerticalTextAlignment = TextAlignment.Center;
+            });
+
+    private bool TryGetItemIndexAtCore(Point position, out int index)
+    {
+        index = -1;
+
+        int count = ItemsSource.Count;
+        if (count <= 0)
+        {
+            return false;
+        }
+
+        var bounds = GetSnappedBorderBounds(Bounds);
+        var borderInset = GetBorderVisualInset();
+        var dpiScale = GetDpi() / 96.0;
+        var innerBounds = bounds.Deflate(new Thickness(borderInset));
+        var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
+
+        if (!contentBounds.Contains(position))
+        {
+            return false;
+        }
+
+        double itemHeight = ResolveItemHeight();
+        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        {
+            return false;
+        }
+
+        double y = position.Y - contentBounds.Y + _scrollViewer.VerticalOffset;
+        int i = (int)Math.Floor(y / itemHeight);
+        if (i < 0 || i >= count)
+        {
+            return false;
+        }
+
+        index = i;
+        return true;
     }
 
     private double ResolveItemHeight()
@@ -578,13 +465,16 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         return 0;
     }
 
-    private void ReevaluateMouseOverAfterScroll()
+    protected override void OnDispose()
     {
-        if (FindVisualRoot() is Window window)
+        if (_scrollViewer is IDisposable dsv)
         {
-            Application.Current.Dispatcher?.Post(
-                () => window.ReevaluateMouseOver(),
-                UiDispatcherPriority.Render);
+            dsv.Dispose();
+        }
+
+        if (_presenter is IDisposable dp)
+        {
+            dp.Dispose();
         }
     }
 }

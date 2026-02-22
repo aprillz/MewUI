@@ -8,17 +8,15 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
 
-    private readonly ScrollBar _vBar;
-    private readonly ScrollBar _hBar;
-    private readonly ScrollController _scroll = new();
     private readonly HeaderRow _header;
-    private readonly TemplatedItemsHost _itemsHost;
+    private readonly FixedHeightItemsPresenter _presenter;
+    private readonly ScrollViewer _scrollViewer;
 
     private bool _rebindVisibleOnNextRender = true;
     private double _rowsExtentHeight;
     private double _columnsExtentWidth;
-    private double _viewportHeight;
-    private double _viewportWidth;
+    private double _rowsViewportHeight;
+    private double _rowsViewportWidth;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
     private int _pendingTabFocusIndex = -1;
     private int _pendingTabFocusAttempts;
@@ -30,52 +28,42 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         Padding = new Thickness(1);
 
         _header = new HeaderRow(this) { Parent = this };
-        _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false, Parent = this };
-        _hBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false, Parent = this };
-        _vBar.ValueChanged += v =>
+        _presenter = new FixedHeightItemsPresenter
         {
-            var dpiScale = GetDpi() / 96.0;
-            _scroll.DpiScale = dpiScale;
-            _scroll.SetMetricsDip(1, _rowsExtentHeight, _viewportHeight);
-            if (_scroll.SetOffsetDip(1, v))
-            {
-                InvalidateArrange();
-                InvalidateVisual();
-                ReevaluateMouseOverAfterScroll();
-            }
-        };
-        _hBar.ValueChanged += v =>
-        {
-            var dpiScale = GetDpi() / 96.0;
-            _scroll.DpiScale = dpiScale;
-            _columnsExtentWidth = ComputeColumnsExtentWidth();
-            _scroll.SetMetricsDip(0, _columnsExtentWidth, _viewportWidth);
-            if (_scroll.SetOffsetDip(0, v))
-            {
-                InvalidateHorizontalScrollLayout();
-                InvalidateArrange();
-                InvalidateVisual();
-                ReevaluateMouseOverAfterScroll();
-            }
+            BorderThickness = 0,
+            Padding = new Thickness(0),
         };
 
         var rowTemplate = new DelegateTemplate<object?>(
             build: _ => new Row(this),
             bind: BindRowTemplate);
 
-        _itemsHost = new TemplatedItemsHost(
-            owner: this,
-            getItem: index => index >= 0 && index < _core.ItemsSource.Count ? _core.ItemsSource.GetItem(index) : null,
-            invalidateMeasureAndVisual: () => { InvalidateMeasure(); InvalidateArrange(); InvalidateVisual(); },
-            template: rowTemplate,
-            recycle: e => ((Row)e).Recycle());
+        _presenter.ItemTemplate = rowTemplate;
+        _presenter.ItemsSource = _core.ItemsSource;
+        _presenter.BeforeItemRender = BeforeRowRender;
+
+        _scrollViewer = new ScrollViewer
+        {
+            BorderThickness = 0,
+            Padding = new Thickness(0),
+            HorizontalScroll = ScrollMode.Auto,
+            VerticalScroll = ScrollMode.Auto,
+            Content = _presenter,
+            ViewportCornerRadius = 0,
+        };
+        _scrollViewer.Parent = this;
+
+        _scrollViewer.ScrollChanged += () =>
+        {
+            _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
+        };
 
         _core.ItemsChanged += OnItemsChanged;
         _core.SelectionChanged += _ => OnItemsSelectionChanged();
         _core.ColumnsChanged += () =>
         {
             _header.SetColumns(_core.Columns);
-            _itemsHost.RecycleAll();
+            _presenter.RecycleAll();
             _rebindVisibleOnNextRender = true;
             InvalidateMeasure();
             InvalidateArrange();
@@ -234,7 +222,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return 1;
         }
 
-        double viewport = _viewportHeight;
+        double viewport = _rowsViewportHeight;
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
             return 1;
@@ -254,7 +242,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         EnsureHorizontalIntoView(focusedElement);
 
         int found = -1;
-        _itemsHost.VisitRealized((i, element) =>
+        _presenter.VisitRealized((i, element) =>
         {
             if (found != -1)
             {
@@ -330,7 +318,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         double viewportLeft = contentLocal.X;
         double viewportRight = viewportLeft + viewportW;
 
-        double oldOffset = _scroll.GetOffsetDip(0);
+        double oldOffset = _scrollViewer.HorizontalOffset;
         double newOffset = oldOffset;
 
         if (rectInGrid.Left < viewportLeft)
@@ -348,14 +336,9 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         newOffset = Math.Clamp(newOffset, 0, Math.Max(0, extentW - viewportW));
 
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(0, extentW, viewportW);
-        if (_scroll.SetOffsetDip(0, newOffset))
+        if (!newOffset.Equals(oldOffset))
         {
-            _hBar.Value = _scroll.GetOffsetDip(0);
-            InvalidateHorizontalScrollLayout();
-            InvalidateArrange();
-            InvalidateVisual();
+            _scrollViewer.SetScrollOffsets(newOffset, _scrollViewer.VerticalOffset);
         }
     }
 
@@ -367,7 +350,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int found = -1;
-        _itemsHost.VisitRealized((i, element) =>
+        _presenter.VisitRealized((i, element) =>
         {
             if (found != -1)
             {
@@ -428,7 +411,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         FrameworkElement? container = null;
-        _itemsHost.VisitRealized((i, element) =>
+        _presenter.VisitRealized((i, element) =>
         {
             if (i == _pendingTabFocusIndex)
             {
@@ -480,84 +463,21 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return;
         }
 
-        if (e.IsHorizontal)
+        bool canVScroll = _rowsExtentHeight > _rowsViewportHeight + 0.5;
+        bool canHScroll = _columnsExtentWidth > _rowsViewportWidth + 0.5;
+
+        // Prefer vertical scroll unless a horizontal wheel event is explicit.
+        if (!e.IsHorizontal && canVScroll)
         {
-            int hNotches = Math.Sign(e.Delta);
-            if (hNotches == 0)
-            {
-                return;
-            }
-
-            double hViewport = _viewportWidth;
-            if (hViewport <= 0 || double.IsNaN(hViewport) || double.IsInfinity(hViewport))
-            {
-                return;
-            }
-
-            _columnsExtentWidth = 0;
-            for (int i = 0; i < _core.Columns.Count; i++)
-            {
-                _columnsExtentWidth += Math.Max(0, _core.Columns[i].Width);
-            }
-
-            if (_columnsExtentWidth <= hViewport + 0.5)
-            {
-                return;
-            }
-
-            _scroll.DpiScale = GetDpi() / 96.0;
-            _scroll.SetMetricsDip(0, _columnsExtentWidth, hViewport);
-            _scroll.ScrollByNotches(0, -hNotches, Theme.Metrics.ScrollWheelStep);
-            _hBar.Value = _scroll.GetOffsetDip(0);
-
-            InvalidateHorizontalScrollLayout();
-            InvalidateArrange();
-            InvalidateVisual();
-            ReevaluateMouseOverAfterScroll();
+            _scrollViewer.ScrollBy(-e.Delta);
             e.Handled = true;
+            return;
         }
-        else
+
+        if (e.IsHorizontal && canHScroll)
         {
-            int notches = Math.Sign(e.Delta);
-            if (notches == 0)
-            {
-                return;
-            }
-
-            double viewport = _viewportHeight;
-            if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
-            {
-                return;
-            }
-
-            int count = _core.ItemsSource.Count;
-            double rowH = ResolveRowHeight();
-            _rowsExtentHeight = count > 0 && rowH > 0 ? count * rowH : 0;
-
-            if (_rowsExtentHeight <= viewport + 0.5)
-            {
-                return;
-            }
-
-            _scroll.DpiScale = GetDpi() / 96.0;
-            _scroll.SetMetricsDip(1, _rowsExtentHeight, viewport);
-            _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
-            _vBar.Value = _scroll.GetOffsetDip(1);
-
-            InvalidateArrange();
-            InvalidateVisual();
-
-            ReevaluateMouseOverAfterScroll();
-
+            _scrollViewer.ScrollByHorizontal(-e.Delta);
             e.Handled = true;
-        }
-    }
-
-    private void ReevaluateMouseOverAfterScroll()
-    {
-        if (FindVisualRoot() is Window window)
-        {
-            window.ReevaluateMouseOver();
         }
     }
 
@@ -602,7 +522,8 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         index = -1;
 
         // Don't treat scrollbar interaction as item hit/activation.
-        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
+        var windowPoint = new Point(Bounds.X + position.X, Bounds.Y + position.Y);
+        if (_scrollViewer.HitTest(windowPoint) is ScrollBar)
         {
             return false;
         }
@@ -633,7 +554,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         return ItemsViewportMath.TryGetItemIndexAtY(
             position.Y,
             rowsY,
-            _scroll.GetOffsetDip(1),
+            _scrollViewer.VerticalOffset,
             rowH,
             _core.ItemsSource.Count,
             out index);
@@ -660,12 +581,8 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         columnIndex = -1;
 
         // Don't treat scrollbar interaction as column hit.
-        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
-        {
-            return false;
-        }
-
-        if (_hBar.IsVisible && GetLocalBounds(_hBar).Contains(position))
+        var windowPoint = new Point(Bounds.X + position.X, Bounds.Y + position.Y);
+        if (_scrollViewer.HitTest(windowPoint) is ScrollBar)
         {
             return false;
         }
@@ -709,12 +626,8 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         isHeader = false;
 
         // Don't treat scrollbar interaction as cell hit.
-        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
-        {
-            return false;
-        }
-
-        if (_hBar.IsVisible && GetLocalBounds(_hBar).Contains(position))
+        var windowPoint = new Point(Bounds.X + position.X, Bounds.Y + position.Y);
+        if (_scrollViewer.HitTest(windowPoint) is ScrollBar)
         {
             return false;
         }
@@ -792,7 +705,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         // Account for horizontal scroll: columns are laid out starting at (contentX - offset).
-        x += _scroll.GetOffsetDip(0);
+        x += _scrollViewer.HorizontalOffset;
 
         // Hit-test column by accumulated widths.
         double cur = contentX;
@@ -852,56 +765,62 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     void IVisualTreeHost.VisitChildren(Action<Element> visitor)
     {
         visitor(_header);
-        visitor(_vBar);
-        visitor(_hBar);
-        _itemsHost.VisitRealized(visitor);
+        visitor(_scrollViewer);
     }
 
     protected override Size MeasureContent(Size availableSize)
     {
+        var dpiScale = GetDpi() / 96.0;
         var borderInset = GetBorderVisualInset();
+
         double widthLimit = double.IsPositiveInfinity(availableSize.Width)
             ? double.PositiveInfinity
             : Math.Max(0, availableSize.Width - Padding.HorizontalThickness - borderInset * 2);
 
-        double totalColumnsWidth = 0;
+        _columnsExtentWidth = 0;
         for (int i = 0; i < _core.Columns.Count; i++)
         {
-            totalColumnsWidth += Math.Max(0, _core.Columns[i].Width);
-            if (totalColumnsWidth >= widthLimit)
-            {
-                totalColumnsWidth = widthLimit;
-                break;
-            }
+            _columnsExtentWidth += Math.Max(0, _core.Columns[i].Width);
         }
+
+        double contentWidth = double.IsPositiveInfinity(widthLimit)
+            ? _columnsExtentWidth
+            : Math.Min(_columnsExtentWidth, widthLimit);
 
         double headerH = ResolveHeaderHeight();
         double rowH = ResolveRowHeight();
 
         int count = _core.ItemsSource.Count;
+        _rowsExtentHeight = count > 0 && rowH > 0 ? count * rowH : 0;
+
         double desiredRowsHeight;
         if (double.IsPositiveInfinity(availableSize.Height))
         {
-            desiredRowsHeight = count == 0 || rowH <= 0 ? 0 : Math.Min(count * rowH, MaxAutoViewportHeight);
+            desiredRowsHeight = _rowsExtentHeight <= 0 ? 0 : Math.Min(_rowsExtentHeight, MaxAutoViewportHeight);
         }
         else
         {
             desiredRowsHeight = Math.Max(0, availableSize.Height - headerH - Padding.VerticalThickness - borderInset * 2);
         }
 
-        double desiredHeight = headerH + desiredRowsHeight;
+        _presenter.ItemHeight = rowH;
+        _presenter.ExtentWidth = _columnsExtentWidth;
 
-        _header.Measure(new Size(Math.Max(0, totalColumnsWidth), headerH));
+        _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
+        _header.Measure(new Size(Math.Max(0, contentWidth), headerH));
 
-        double width = totalColumnsWidth + Padding.HorizontalThickness + borderInset * 2;
-        double height = desiredHeight + Padding.VerticalThickness + borderInset * 2;
+        _scrollViewer.Measure(new Size(
+            double.IsPositiveInfinity(contentWidth) ? double.PositiveInfinity : Math.Max(0, contentWidth),
+            double.IsPositiveInfinity(desiredRowsHeight) ? double.PositiveInfinity : Math.Max(0, desiredRowsHeight)));
 
-        return new Size(width, height);
+        var desired = new Size(Math.Max(0, contentWidth), Math.Max(0, headerH + desiredRowsHeight));
+        return desired
+            .Inflate(Padding)
+            .Inflate(new Thickness(borderInset));
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
-        var theme = Theme;
         var dpiScale = GetDpi() / 96.0;
         var borderInset = GetBorderVisualInset();
 
@@ -911,70 +830,18 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         double headerH = ResolveHeaderHeight();
 
-        // Compute extents (independent of viewport). Scrollbars are overlay-style (do not shrink viewport).
-        _columnsExtentWidth = 0;
-        for (int i = 0; i < _core.Columns.Count; i++)
-        {
-            _columnsExtentWidth += Math.Max(0, _core.Columns[i].Width);
-        }
+        _rowsViewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Width), dpiScale);
+        _rowsViewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Height - headerH), dpiScale);
 
-        int count = _core.ItemsSource.Count;
-        double rowH = ResolveRowHeight();
-        _rowsExtentHeight = count > 0 && rowH > 0 ? count * rowH : 0;
-
-        _viewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Width), dpiScale);
-        _viewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Height - headerH), dpiScale);
-
+        _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
         _header.Arrange(new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width), headerH));
 
-        _scroll.DpiScale = dpiScale;
-        _scroll.SetMetricsDip(0, _columnsExtentWidth, _viewportWidth);
-        _scroll.SetMetricsDip(1, _rowsExtentHeight, _viewportHeight);
-        _scroll.SetOffsetPx(0, _scroll.GetOffsetPx(0));
-        _scroll.SetOffsetPx(1, _scroll.GetOffsetPx(1));
-
-        bool needH = _columnsExtentWidth > _viewportWidth + 0.5;
-        bool needV = _rowsExtentHeight > _viewportHeight + 0.5;
-        _vBar.IsVisible = needV;
-        _hBar.IsVisible = needH;
-
-        if (_vBar.IsVisible)
-        {
-            double t = theme.Metrics.ScrollBarHitThickness;
-            const double inset = 0;
-
-            _vBar.Minimum = 0;
-            _vBar.Maximum = Math.Max(0, _rowsExtentHeight - _viewportHeight);
-            _vBar.ViewportSize = _viewportHeight;
-            _vBar.SmallChange = theme.Metrics.ScrollBarSmallChange;
-            _vBar.LargeChange = theme.Metrics.ScrollBarLargeChange;
-            _vBar.Value = _scroll.GetOffsetDip(1);
-
-            _vBar.Arrange(new Rect(
-                innerBounds.Right - t - inset,
-                innerBounds.Y + inset + Padding.Top + headerH,
-                t,
-                Math.Max(0, innerBounds.Height - Padding.VerticalThickness - headerH - (needH ? t : 0) - inset * 2)));
-        }
-
-        if (_hBar.IsVisible)
-        {
-            double t = theme.Metrics.ScrollBarHitThickness;
-            const double inset = 0;
-
-            _hBar.Minimum = 0;
-            _hBar.Maximum = Math.Max(0, _columnsExtentWidth - _viewportWidth);
-            _hBar.ViewportSize = _viewportWidth;
-            _hBar.SmallChange = theme.Metrics.ScrollBarSmallChange;
-            _hBar.LargeChange = theme.Metrics.ScrollBarLargeChange;
-            _hBar.Value = _scroll.GetOffsetDip(0);
-
-            _hBar.Arrange(new Rect(
-                innerBounds.X + inset + Padding.Left,
-                innerBounds.Bottom - t - inset - Padding.Bottom,
-                Math.Max(0, innerBounds.Width - Padding.HorizontalThickness - (needV ? t : 0) - inset * 2),
-                t));
-        }
+        var rowsViewport = new Rect(
+            contentBounds.X,
+            contentBounds.Y + headerH,
+            Math.Max(0, contentBounds.Width),
+            Math.Max(0, contentBounds.Height - headerH));
+        _scrollViewer.Arrange(rowsViewport);
 
         if (!_scrollIntoViewRequest.IsNone)
         {
@@ -991,50 +858,9 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             }
         }
 
-        // Virtualization/layout belongs to Arrange, not Render. Realize+arrange the visible range now so hit testing,
-        // focus navigation, and mouse-over reevaluation see up-to-date arranged bounds.
-        var rowsViewport = new Rect(
-            contentBounds.X,
-            contentBounds.Y + headerH,
-            Math.Max(0, _viewportWidth),
-            Math.Max(0, _viewportHeight));
-
-        if (count > 0 && rowH > 0 && rowsViewport.Height > 0)
-        {
-            if (TryComputeVisibleRows(rowsViewport, rowH, out int first, out int lastExclusive, out double yStart))
-            {
-                bool rebind = _rebindVisibleOnNextRender;
-                _rebindVisibleOnNextRender = false;
-
-                _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
-                {
-                    ContentBounds = rowsViewport,
-                    First = first,
-                    LastExclusive = lastExclusive,
-                    // Ensure pixel-aligned item geometry at fractional DPI (e.g. 150%) so row backgrounds/borders
-                    // don't accumulate rounding gaps between adjacent containers.
-                    ItemHeight = LayoutRounding.RoundToPixel(rowH, dpiScale),
-                    YStart = LayoutRounding.RoundToPixel(yStart, dpiScale),
-                    RebindExisting = rebind,
-                };
-
-                _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
-                {
-                    BeforeItemRender = BeforeRowRender,
-                    GetContainerRect = GetRowContainerRect,
-                };
-
-                _itemsHost.Arrange();
-            }
-            else
-            {
-                _itemsHost.RecycleAll();
-            }
-        }
-        else
-        {
-            _itemsHost.RecycleAll();
-        }
+        // Ensure newly realized items bind against the latest state.
+        _presenter.RebindExisting = _rebindVisibleOnNextRender;
+        _rebindVisibleOnNextRender = false;
     }
 
     public override void Render(IGraphicsContext context)
@@ -1058,13 +884,6 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
         clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
 
-        double headerH = ResolveHeaderHeight();
-        var rowsViewport = new Rect(
-            contentBounds.X,
-            contentBounds.Y + headerH,
-            Math.Max(0, _viewportWidth),
-            Math.Max(0, _viewportHeight));
-
         context.Save();
         if (clipRadius > 0)
         {
@@ -1075,28 +894,14 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             context.SetClip(clipRect);
         }
 
-        _header.Render(context);
-
-        context.Save();
-        context.SetClip(LayoutRounding.ExpandClipByDevicePixels(rowsViewport, dpiScale));
         try
         {
-            _itemsHost.RenderArranged(context);
+            _header.Render(context);
+            _scrollViewer.Render(context);
         }
         finally
         {
             context.Restore();
-            context.Restore();
-        }
-
-        if (_vBar.IsVisible)
-        {
-            _vBar.Render(context);
-        }
-
-        if (_hBar.IsVisible)
-        {
-            _hBar.Render(context);
         }
     }
 
@@ -1136,51 +941,10 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return null;
         }
 
-        var vbarHit = _vBar.HitTest(point);
-        if (vbarHit != null)
+        var scrollHit = _scrollViewer.HitTest(point);
+        if (scrollHit != null)
         {
-            return vbarHit;
-        }
-
-        var hbarHit = _hBar.HitTest(point);
-        if (hbarHit != null)
-        {
-            return hbarHit;
-        }
-
-        bool hitTestRows = true;
-        if (TryGetContentBounds(out var contentLocal, out double headerH))
-        {
-            var localPoint = new Point(point.X - Bounds.X, point.Y - Bounds.Y);
-            var rowsViewportLocal = new Rect(
-                contentLocal.X,
-                contentLocal.Y + headerH,
-                Math.Max(0, contentLocal.Width),
-                Math.Max(0, contentLocal.Height - headerH));
-
-            hitTestRows = rowsViewportLocal.Contains(localPoint);
-        }
-
-        UIElement? rowHit = null;
-        if (hitTestRows)
-        {
-            _itemsHost.VisitRealized(element =>
-            {
-                if (rowHit != null)
-                {
-                    return;
-                }
-
-                if (element is UIElement ui)
-                {
-                    rowHit = ui.HitTest(point);
-                }
-            });
-        }
-
-        if (rowHit != null)
-        {
-            return rowHit;
+            return scrollHit;
         }
 
         var headerHit = _header.HitTest(point);
@@ -1217,22 +981,6 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         return total;
     }
 
-    private void InvalidateHorizontalScrollLayout()
-    {
-        // Header/rows lay out their cells based on _scroll.GetOffsetDip(0).
-        // Their Arrange pass can be skipped when their container bounds don't change,
-        // so we must mark them dirty when horizontal offset changes.
-        _header.InvalidateArrange();
-
-        _itemsHost.VisitRealized(static (_, element) => element.InvalidateArrange());
-    }
-
-    private Rect GetRowContainerRect(int index, Rect itemRect)
-    {
-        var snapped = LayoutRounding.SnapViewportRectToPixels(itemRect, GetDpi() / 96.0);
-        return snapped;
-    }
-
     private void BindRowTemplate(FrameworkElement element, object? item, int index, TemplateContext _)
     {
         var row = (Row)element;
@@ -1244,7 +992,8 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     private void OnItemsChanged(ItemsChange _)
     {
-        _itemsHost.RecycleAll();
+        _presenter.ItemsSource = _core.ItemsSource;
+        _presenter.RecycleAll();
         _rebindVisibleOnNextRender = true;
         InvalidateMeasure();
         InvalidateArrange();
@@ -1268,7 +1017,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return;
         }
 
-        double viewport = _viewportHeight;
+        double viewport = _rowsViewportHeight;
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
             _scrollIntoViewRequest = ScrollIntoViewRequest.Selected();
@@ -1283,26 +1032,12 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         _rowsExtentHeight = count * rowH;
 
-        double oldOffset = _scroll.GetOffsetDip(1);
+        double oldOffset = _scrollViewer.VerticalOffset;
         double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, rowH, viewport, oldOffset);
-
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(1, _rowsExtentHeight, viewport);
-        _scroll.SetOffsetDip(1, newOffset);
-
-        double applied = _scroll.GetOffsetDip(1);
-        if (applied.Equals(oldOffset))
+        if (!newOffset.Equals(oldOffset))
         {
-            return;
+            _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
         }
-
-        if (_vBar.IsVisible)
-        {
-            _vBar.Value = applied;
-        }
-
-        InvalidateArrange();
-        InvalidateVisual();
     }
 
     public void ScrollIntoView(int index)
@@ -1313,7 +1048,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return;
         }
 
-        double viewport = _viewportHeight;
+        double viewport = _rowsViewportHeight;
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
             _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
@@ -1328,50 +1063,12 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         _rowsExtentHeight = count * rowH;
 
-        double oldOffset = _scroll.GetOffsetDip(1);
+        double oldOffset = _scrollViewer.VerticalOffset;
         double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, rowH, viewport, oldOffset);
-
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(1, _rowsExtentHeight, viewport);
-        _scroll.SetOffsetDip(1, newOffset);
-
-        double applied = _scroll.GetOffsetDip(1);
-        if (applied.Equals(oldOffset))
+        if (!newOffset.Equals(oldOffset))
         {
-            return;
+            _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
         }
-
-        if (_vBar.IsVisible)
-        {
-            _vBar.Value = applied;
-        }
-
-        InvalidateArrange();
-        InvalidateVisual();
-    }
-
-    private bool TryComputeVisibleRows(Rect rowsRect, double rowH, out int first, out int lastExclusive, out double yStart)
-    {
-        first = 0;
-        lastExclusive = 0;
-        yStart = rowsRect.Y;
-
-        int itemCount = _core.ItemsSource.Count;
-        if (itemCount == 0 || rowH <= 0 || rowsRect.Height <= 0)
-        {
-            return false;
-        }
-
-        double verticalOffset = _scroll.GetOffsetDip(1);
-        first = (int)Math.Floor(verticalOffset / rowH);
-        first = Math.Clamp(first, 0, Math.Max(0, itemCount - 1));
-
-        int visible = (int)Math.Ceiling(rowsRect.Height / rowH) + 1;
-        int last = Math.Min(itemCount - 1, first + visible);
-        lastExclusive = last + 1;
-
-        yStart = rowsRect.Y + (first * rowH - verticalOffset);
-        return lastExclusive > first;
     }
 
     private double ResolveRowHeight()
@@ -1398,8 +1095,22 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     {
         private readonly GridView _owner;
         private readonly List<Label> _cells = new();
+        private double _horizontalOffset;
 
         public HeaderRow(GridView owner) => _owner = owner;
+
+        public double HorizontalOffset
+        {
+            get => _horizontalOffset;
+            set
+            {
+                if (SetDouble(ref _horizontalOffset, value))
+                {
+                    InvalidateArrange();
+                    InvalidateVisual();
+                }
+            }
+        }
 
         public void SetColumns(IReadOnlyList<GridViewCore.ColumnDefinition> columns)
         {
@@ -1435,7 +1146,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         protected override void ArrangeContent(Rect bounds)
         {
-            double x = bounds.X - _owner._scroll.GetOffsetDip(0);
+            double x = bounds.X - HorizontalOffset;
             for (int i = 0; i < _cells.Count; i++)
             {
                 double w = Math.Max(0, _owner._core.Columns[i].Width);
@@ -1462,7 +1173,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 dpiScale);
             context.FillRectangle(rect, Theme.Palette.ControlBorder);
 
-            double x = bounds.X - _owner._scroll.GetOffsetDip(0);
+            double x = bounds.X - HorizontalOffset;
             double inset = Math.Min(6, Math.Max(0, (bounds.Height - 2) / 2));
             for (int i = 0; i < _owner._core.Columns.Count; i++)
             {
@@ -1619,7 +1330,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         protected override void ArrangeContent(Rect bounds)
         {
-            double x = bounds.X - _owner._scroll.GetOffsetDip(0);
+            double x = bounds.X;
             for (int i = 0; i < _cells.Count; i++)
             {
                 double w = Math.Max(0, _owner._core.Columns[i].Width);
@@ -1665,7 +1376,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 var stroke = theme.Palette.ControlBorder;
                 context.DrawLine(new Point(snapped.X, snapped.Bottom - 1), new Point(snapped.Right, snapped.Bottom - 1), stroke, 1);
 
-                double x = snapped.X - _owner._scroll.GetOffsetDip(0);
+                double x = snapped.X;
                 for (int i = 0; i < _owner._core.Columns.Count; i++)
                 {
                     x += Math.Max(0, _owner._core.Columns[i].Width);

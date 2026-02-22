@@ -31,21 +31,14 @@ public enum TreeViewExpandTrigger
 public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
-    private readonly ScrollBar _vBar;
-    private readonly ScrollBar _hBar;
-    private readonly ScrollController _scroll = new();
-    private readonly TemplatedItemsHost _itemsHost;
+    private readonly FixedHeightItemsPresenter _presenter;
+    private readonly ScrollViewer _scrollViewer;
     private bool _rebindVisibleOnNextRender = true;
     private ITreeItemsView _itemsSource = TreeItemsView.Empty;
     private TreeViewNode? _selectedNode;
     private int _hoverVisibleIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-
-    private double _extentHeight;
-    private double _extentWidth;
-    private double _viewportHeight;
-    private double _viewportWidth;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
     private int _pendingTabFocusIndex = -1;
     private int _pendingTabFocusAttempts;
@@ -72,6 +65,10 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             _itemsSource = value as ITreeItemsView ?? new TreeViewNodeItemsView(value);
             _itemsSource.Changed += OnItemsChanged;
             _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+
+            _presenter.ItemsSource = _itemsSource;
+            _presenter.RecycleAll();
+            _rebindVisibleOnNextRender = true;
 
             InvalidateMeasure();
             InvalidateVisual();
@@ -151,8 +148,15 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     /// </summary>
     public IDataTemplate ItemTemplate
     {
-        get => _itemsHost.ItemTemplate;
-        set { _itemsHost.ItemTemplate = value; _rebindVisibleOnNextRender = true; }
+        get => _presenter.ItemTemplate;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _presenter.ItemTemplate = value;
+            _rebindVisibleOnNextRender = true;
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
     }
 
     /// <summary>
@@ -184,53 +188,30 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         Padding = new Thickness(1);
         ItemPadding = Theme.Metrics.ItemPadding;
 
-        var template = CreateDefaultItemTemplate();
-        _itemsHost = new TemplatedItemsHost(
-            owner: this,
-            getItem: index =>
-            {
-                return index >= 0 && index < _itemsSource.Count ? _itemsSource.GetItem(index) : null;
-            },
-            invalidateMeasureAndVisual: () => { InvalidateMeasure(); InvalidateVisual(); },
-            template: template);
-
-        _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
-        {
-            BeforeItemRender = OnBeforeItemRender,
-            GetContainerRect = OnGetContainerRect,
-        };
-
         _itemsSource.Changed += OnItemsChanged;
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
 
-        _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
-        _vBar.Parent = this;
-        _vBar.ValueChanged += v =>
+        _presenter = new FixedHeightItemsPresenter
         {
-            _scroll.DpiScale = GetDpi() / 96.0;
-            _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
-            _scroll.SetOffsetDip(1, v);
-            _hoverVisibleIndex = -1;
-            _hasLastMousePosition = false;
-            InvalidateVisual();
-            ReevaluateMouseOverAfterScroll();
+            ItemsSource = _itemsSource,
+            ItemTemplate = CreateDefaultItemTemplate(),
+            BeforeItemRender = OnBeforeItemRender,
+            GetContainerRect = OnGetContainerRect,
+            ItemHeight = ResolveItemHeight(),
+            RebindExisting = true,
         };
 
-        _hBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
-        _hBar.Parent = this;
-        _hBar.ValueChanged += v =>
+        _scrollViewer = new ScrollViewer
         {
-            _scroll.DpiScale = GetDpi() / 96.0;
-            _scroll.SetMetricsDip(0, _extentWidth, GetViewportWidthDip());
-            if (_scroll.SetOffsetDip(0, v))
-            {
-                _hoverVisibleIndex = -1;
-                _hasLastMousePosition = false;
-                InvalidateArrange();
-                InvalidateVisual();
-                ReevaluateMouseOverAfterScroll();
-            }
+            VerticalScroll = ScrollMode.Auto,
+            HorizontalScroll = ScrollMode.Auto,
+            BorderThickness = 0,
+            Background = default,
+            Padding = Padding,
+            Content = _presenter,
         };
+        _scrollViewer.Parent = this;
+        _scrollViewer.ScrollChanged += OnScrollViewerChanged;
     }
 
     private Rect OnGetContainerRect(int i, Rect rowRect)
@@ -248,7 +229,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
     {
-        double itemRadius = _itemsHost.Layout.ItemRadius;
+        double itemRadius = _presenter.ItemRadius;
 
         bool selected = i == _itemsSource.SelectedIndex;
         if (selected)
@@ -277,7 +258,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int depth = _itemsSource.GetDepth(i);
-        double indentX = itemRect.X + depth * Indent;
+        double indentX = itemRect.X + depth * Indent + ItemPadding.Left;
         var glyphRect = new Rect(indentX, itemRect.Y, Indent, itemRect.Height);
         var textColor = selected ? Theme.Palette.SelectionText : (IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText);
         if (_itemsSource.GetHasChildren(i))
@@ -288,7 +269,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     private void OnItemsChanged(ItemsChange change)
     {
-        _itemsHost.RecycleAll();
+        _presenter.RecycleAll();
         _rebindVisibleOnNextRender = true;
         _hoverVisibleIndex = -1;
         InvalidateMeasure();
@@ -341,27 +322,13 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         {
             return;
         }
-
-        _extentHeight = count * itemHeight;
-
-        double oldOffset = _scroll.GetOffsetDip(1);
+        double oldOffset = _scrollViewer.VerticalOffset;
         double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, itemHeight, viewport, oldOffset);
-
-        _scroll.DpiScale = GetDpi() / 96.0;
-        _scroll.SetMetricsDip(1, _extentHeight, viewport);
-        _scroll.SetOffsetDip(1, newOffset);
-
-        double applied = _scroll.GetOffsetDip(1);
-        if (applied.Equals(oldOffset))
+        if (newOffset.Equals(oldOffset))
         {
             return;
         }
-
-        if (_vBar.IsVisible)
-        {
-            _vBar.Value = applied;
-        }
-
+        _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
         InvalidateVisual();
     }
 
@@ -399,26 +366,8 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     {
         index = -1;
 
-        // Don't treat scrollbar interaction as item hit/activation.
-        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
-        {
-            return false;
-        }
-
-        if (_hBar.IsVisible && GetLocalBounds(_hBar).Contains(position))
-        {
-            return false;
-        }
-
         return TryHitRow(position, out index, out _);
     }
-
-    private Rect GetLocalBounds(UIElement element)
-        => new(
-            element.Bounds.X - Bounds.X,
-            element.Bounds.Y - Bounds.Y,
-            element.Bounds.Width,
-            element.Bounds.Height);
 
     /// <summary>
     /// Called when the theme changes.
@@ -439,9 +388,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     void IVisualTreeHost.VisitChildren(Action<Element> visitor)
     {
-        visitor(_vBar);
-        visitor(_hBar);
-        _itemsHost.VisitRealized(visitor);
+        visitor(_scrollViewer);
     }
 
     /// <summary>
@@ -569,24 +516,18 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         double itemHeight = ResolveItemHeight();
         double height = _itemsSource.Count * itemHeight;
 
-        _extentHeight = height;
-        _extentWidth = extentWidth;
+        _presenter.ItemHeight = itemHeight;
+        _presenter.ExtentWidth = extentWidth;
+        _scrollViewer.Padding = Padding;
 
-        _viewportWidth = double.IsPositiveInfinity(availableSize.Width)
-            ? desiredWidth
-            : LayoutRounding.RoundToPixel(widthLimit, dpiScale);
-
-        _viewportHeight = double.IsPositiveInfinity(availableSize.Height)
-            ? height
-            : LayoutRounding.RoundToPixel(Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2), dpiScale);
-
-        _scroll.DpiScale = dpiScale;
-        _scroll.SetMetricsDip(0, _extentWidth, _viewportWidth);
-        _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
+        // Let ScrollViewer compute bar visibility/metrics for the current slot.
+        _scrollViewer.Measure(new Size(
+            double.IsPositiveInfinity(availableSize.Width) ? double.PositiveInfinity : Math.Max(0, availableSize.Width - borderInset * 2),
+            double.IsPositiveInfinity(availableSize.Height) ? double.PositiveInfinity : Math.Max(0, availableSize.Height - borderInset * 2)));
 
         double desiredHeight = double.IsPositiveInfinity(availableSize.Height)
             ? height
-            : Math.Min(height, _viewportHeight);
+            : Math.Min(height, LayoutRounding.RoundToPixel(Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2), dpiScale));
 
         return new Size(desiredWidth, desiredHeight)
             .Inflate(Padding)
@@ -597,63 +538,10 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     {
         base.ArrangeContent(bounds);
 
-
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
-        var dpiScale = GetDpi() / 96.0;
-
-        _viewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Width - Padding.HorizontalThickness), dpiScale);
-        _viewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Height - Padding.VerticalThickness), dpiScale);
-
-        _scroll.DpiScale = dpiScale;
-        _scroll.SetMetricsDip(0, _extentWidth, _viewportWidth);
-        _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
-        _scroll.SetOffsetPx(0, _scroll.GetOffsetPx(0));
-        _scroll.SetOffsetPx(1, _scroll.GetOffsetPx(1));
-
-        bool needH = _extentWidth > _viewportWidth + 0.5;
-        bool needV = _extentHeight > _viewportHeight + 0.5;
-        _vBar.IsVisible = needV;
-        _hBar.IsVisible = needH;
-
-        if (_vBar.IsVisible)
-        {
-            double t = Theme.Metrics.ScrollBarHitThickness;
-            const double inset = 0;
-
-            _vBar.Minimum = 0;
-            _vBar.Maximum = Math.Max(0, _extentHeight - _viewportHeight);
-            _vBar.ViewportSize = _viewportHeight;
-            _vBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
-            _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
-            _vBar.Value = _scroll.GetOffsetDip(1);
-
-            _vBar.Arrange(new Rect(
-                innerBounds.Right - t - inset,
-                innerBounds.Y + inset,
-                t,
-                Math.Max(0, innerBounds.Height - (needH ? t : 0) - inset * 2)));
-        }
-
-        if (_hBar.IsVisible)
-        {
-            double t = Theme.Metrics.ScrollBarHitThickness;
-            const double inset = 0;
-
-            _hBar.Minimum = 0;
-            _hBar.Maximum = Math.Max(0, _extentWidth - _viewportWidth);
-            _hBar.ViewportSize = _viewportWidth;
-            _hBar.SmallChange = Theme.Metrics.ScrollBarSmallChange;
-            _hBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
-            _hBar.Value = _scroll.GetOffsetDip(0);
-
-            _hBar.Arrange(new Rect(
-                innerBounds.X + inset,
-                innerBounds.Bottom - t - inset,
-                Math.Max(0, innerBounds.Width - (needV ? t : 0) - inset * 2),
-                t));
-        }
+        _scrollViewer.Arrange(innerBounds);
 
         if (!_scrollIntoViewRequest.IsNone)
         {
@@ -674,10 +562,8 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        var dpiScale = GetDpi() / 96.0;
         double radius = Theme.Metrics.ControlCornerRadius;
         var borderInset = GetBorderVisualInset();
-        double itemRadius = Math.Max(0, radius - borderInset);
 
         var state = GetVisualState();
         var bg = PickControlBackground(state);
@@ -689,74 +575,13 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return;
         }
 
-        var innerBounds = bounds.Deflate(new Thickness(borderInset));
-        var viewportBounds = innerBounds;
-        var contentBounds = LayoutRounding.SnapViewportRectToPixels(viewportBounds.Deflate(Padding), dpiScale);
+        _scrollViewer.ViewportCornerRadius = Math.Max(0, radius - borderInset);
+        _presenter.ItemRadius = Math.Max(0, radius - borderInset);
 
-        context.Save();
-        var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
-        var clipRadius = Math.Max(0, radius - borderInset);
-        clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
-        clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
-        if (clipRadius > 0)
-        {
-            context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
-        }
-        else
-        {
-            context.SetClip(clipRect);
-        }
-
-        double itemHeight = ResolveItemHeight();
-        double horizontalOffset = _scroll.GetOffsetDip(0);
-        double verticalOffset = _scroll.GetOffsetDip(1);
-
-        ItemsViewportMath.ComputeVisibleRange(
-            _itemsSource.Count,
-            itemHeight,
-            contentBounds.Height,
-            contentBounds.Y,
-            verticalOffset,
-            out int first,
-            out int lastExclusive,
-            out double yStart,
-            out _);
-
-        bool rebind = _rebindVisibleOnNextRender;
+        _presenter.RebindExisting = _rebindVisibleOnNextRender;
         _rebindVisibleOnNextRender = false;
 
-        // Shift the realized containers by horizontal scroll. Keep the clip in viewport space so content is clipped
-        // correctly, but move the content origin so templates get arranged with the updated X.
-        var scrollContentBounds = new Rect(
-            contentBounds.X - horizontalOffset,
-            contentBounds.Y,
-            Math.Max(contentBounds.Width, _extentWidth),
-            contentBounds.Height);
-
-        _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
-        {
-            ContentBounds = scrollContentBounds,
-            First = first,
-            LastExclusive = lastExclusive,
-            ItemHeight = itemHeight,
-            YStart = yStart,
-            ItemRadius = itemRadius,
-            RebindExisting = rebind,
-        };
-
-        _itemsHost.Render(context);
-
-        context.Restore();
-
-        if (_vBar.IsVisible)
-        {
-            _vBar.Render(context);
-        }
-
-        if (_hBar.IsVisible)
-        {
-            _hBar.Render(context);
-        }
+        _scrollViewer.Render(context);
     }
 
     private IDataTemplate CreateDefaultItemTemplate()
@@ -818,15 +643,10 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         {
             return null;
         }
-
-        if (_vBar.IsVisible && _vBar.Bounds.Contains(point))
+        var hit = _scrollViewer.HitTest(point);
+        if (hit != null)
         {
-            return _vBar;
-        }
-
-        if (_hBar.IsVisible && _hBar.Bounds.Contains(point))
-        {
-            return _hBar;
+            return hit;
         }
 
         return base.OnHitTest(point);
@@ -895,62 +715,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-
-        if (e.Handled)
-        {
-            return;
-        }
-
-        int notches = Math.Sign(e.Delta);
-        if (notches == 0)
-        {
-            return;
-        }
-
-        _scroll.DpiScale = GetDpi() / 96.0;
-
-        int axis = e.IsHorizontal ? 0 : 1;
-        if (axis == 0)
-        {
-            if (_extentWidth <= GetViewportWidthDip() + 0.5)
-            {
-                return;
-            }
-
-            _scroll.SetMetricsDip(0, _extentWidth, GetViewportWidthDip());
-            _scroll.ScrollByNotches(0, -notches, Theme.Metrics.ScrollWheelStep);
-            if (_hBar.IsVisible)
-            {
-                _hBar.Value = _scroll.GetOffsetDip(0);
-            }
-        }
-        else
-        {
-            if (_extentHeight <= GetViewportHeightDip() + 0.5)
-            {
-                return;
-            }
-
-            _scroll.SetMetricsDip(1, _extentHeight, GetViewportHeightDip());
-            _scroll.ScrollByNotches(1, -notches, Theme.Metrics.ScrollWheelStep);
-            if (_vBar.IsVisible)
-            {
-                _vBar.Value = _scroll.GetOffsetDip(1);
-            }
-
-            if (_hasLastMousePosition && TryHitRow(_lastMousePosition, out int hover, out _))
-            {
-                _hoverVisibleIndex = hover;
-            }
-            else
-            {
-                _hoverVisibleIndex = -1;
-            }
-        }
-
-        InvalidateVisual();
-        ReevaluateMouseOverAfterScroll();
-        e.Handled = true;
     }
 
     private void ReevaluateMouseOverAfterScroll()
@@ -959,6 +723,20 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         {
             window.ReevaluateMouseOver();
         }
+    }
+
+    private void OnScrollViewerChanged()
+    {
+        if (_hasLastMousePosition && TryHitRow(_lastMousePosition, out int hover, out _))
+        {
+            _hoverVisibleIndex = hover;
+        }
+        else
+        {
+            _hoverVisibleIndex = -1;
+        }
+
+        InvalidateVisual();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -1105,7 +883,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int found = -1;
-        _itemsHost.VisitRealized((i, element) =>
+        _presenter.VisitRealized((i, element) =>
         {
             if (found != -1)
             {
@@ -1143,7 +921,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int found = -1;
-        _itemsHost.VisitRealized((i, element) =>
+        _presenter.VisitRealized((i, element) =>
         {
             if (found != -1)
             {
@@ -1204,7 +982,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         FrameworkElement? container = null;
-        _itemsHost.VisitRealized((i, element) =>
+        _presenter.VisitRealized((i, element) =>
         {
             if (i == _pendingTabFocusIndex)
             {
@@ -1252,17 +1030,13 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         index = -1;
         onGlyph = false;
 
-        if (_vBar.IsVisible && GetLocalBounds(_vBar).Contains(position))
-        {
-            return false;
-        }
-
-        if (_hBar.IsVisible && GetLocalBounds(_hBar).Contains(position))
-        {
-            return false;
-        }
-
         if (_itemsSource.Count == 0)
+        {
+            return false;
+        }
+
+        // Don't treat scrollbar interaction as row hit/activation.
+        if (_scrollViewer.HitTest(position) is ScrollBar)
         {
             return false;
         }
@@ -1281,7 +1055,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         if (!ItemsViewportMath.TryGetItemIndexAtY(
                 position.Y,
                 contentBounds.Y,
-                _scroll.GetOffsetDip(1),
+                _scrollViewer.VerticalOffset,
                 itemHeight,
                 _itemsSource.Count,
                 out index))
@@ -1289,17 +1063,41 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return false;
         }
 
-        double rowY = contentBounds.Y + index * itemHeight - _scroll.GetOffsetDip(1);
-        double horizontalOffset = _scroll.GetOffsetDip(0);
+        double rowY = contentBounds.Y + index * itemHeight - _scrollViewer.VerticalOffset;
+        double horizontalOffset = _scrollViewer.HorizontalOffset;
         int depth = _itemsSource.GetDepth(index);
         var glyphRect = new Rect(contentBounds.X - horizontalOffset + depth * Indent, rowY, Indent, itemHeight);
         onGlyph = glyphRect.Contains(position);
         return true;
     }
 
-    private double GetViewportHeightDip() => _viewportHeight <= 0 ? 0 : _viewportHeight;
+    private double GetViewportHeightDip()
+    {
+        if (Bounds.Width > 0 && Bounds.Height > 0)
+        {
+            var snapped = GetSnappedBorderBounds(Bounds);
+            var borderInset = GetBorderVisualInset();
+            var innerBounds = snapped.Deflate(new Thickness(borderInset));
+            var dpiScale = GetDpi() / 96.0;
+            return LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Height - Padding.VerticalThickness), dpiScale);
+        }
 
-    private double GetViewportWidthDip() => _viewportWidth <= 0 ? 0 : _viewportWidth;
+        return 0;
+    }
+
+    private double GetViewportWidthDip()
+    {
+        if (Bounds.Width > 0 && Bounds.Height > 0)
+        {
+            var snapped = GetSnappedBorderBounds(Bounds);
+            var borderInset = GetBorderVisualInset();
+            var innerBounds = snapped.Deflate(new Thickness(borderInset));
+            var dpiScale = GetDpi() / 96.0;
+            return LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Width - Padding.HorizontalThickness), dpiScale);
+        }
+
+        return 0;
+    }
 
     private double ResolveItemHeight()
     {
