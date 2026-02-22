@@ -224,7 +224,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (buttonRect.Width > 0)
         {
-            var chevronSize = Theme.Metrics.BaseControlHeight / 3;
+            var chevronSize = Theme.Metrics.BaseControlHeight / 8;
             Glyph.Draw(context, decRect.Center, chevronSize, textColor, GlyphKind.ChevronDown);
             Glyph.Draw(context, incRect.Center, chevronSize, textColor, GlyphKind.ChevronUp);
         }
