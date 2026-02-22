@@ -205,7 +205,7 @@ public sealed class Palette
         var isDark = IsDarkBackground(baseColor);
         byte c = isDark ? (byte)255 : (byte)0;
         return (
-            Color.FromArgb(0x44, c, c, c),
+            Color.FromArgb(0x33, c, c, c),
             Color.FromArgb(0x66, c, c, c),
             Color.FromArgb(0x88, c, c, c)
         );
