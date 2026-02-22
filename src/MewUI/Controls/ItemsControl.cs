@@ -172,7 +172,12 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         double maxWidth;
         int count = ItemsSource.Count;
 
-        if (HorizontalAlignment == HorizontalAlignment.Stretch && !double.IsPositiveInfinity(widthLimit))
+        // Variable-height presenter is used for wrapping content (chat/messages): always fill width.
+        // Stretch alignment also fills available width without measuring individual items.
+        bool useFullWidth = !double.IsPositiveInfinity(widthLimit) &&
+            (HorizontalAlignment == HorizontalAlignment.Stretch || PresenterMode == ItemsPresenterMode.Variable);
+
+        if (useFullWidth)
         {
             maxWidth = widthLimit;
         }
@@ -235,15 +240,6 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             }
 
             maxWidth = Math.Min(maxWidth, widthLimit);
-
-            // Variable-height presenter is usually used with wrapping content (chat/messages).
-            // In that case, using the max measured text width as horizontal extent causes
-            // the presenter to lay out against an oversized width, pushing right-aligned
-            // content outside the actual viewport.
-            if (PresenterMode == ItemsPresenterMode.Variable && !double.IsPositiveInfinity(widthLimit))
-            {
-                maxWidth = widthLimit;
-            }
         }
 
         double itemHeight = ResolveItemHeight();
@@ -514,7 +510,6 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = _itemTemplate;
         presenter.BeforeItemRender = OnBeforeItemRender;
-        presenter.GetContainerRect = null;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
 

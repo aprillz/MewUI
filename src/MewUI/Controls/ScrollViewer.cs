@@ -559,9 +559,25 @@ public sealed class ScrollViewer : ContentControl
         //
         // Expand the clip by 1 device pixel horizontally into the ScrollViewer padding so borders/glyph overhang
         // don't get cut, while still keeping the clip strict against the chrome/border areas.
-        var onePx = 1.0 / DpiScale;
-        var expanded = new Rect(viewport.X - onePx, viewport.Y, viewport.Width + onePx * 2, viewport.Height);
-        return LayoutRounding.MakeClipRect(expanded, DpiScale, rightPx: 0, bottomPx: 0);
+        var dpiScale = DpiScale;
+        var onePx = 1.0 / dpiScale;
+
+        // Avoid expanding past the scroll chrome (or into negative coordinates). Some backends clamp
+        // negative clip origins, which effectively shifts the clip right and can "eat" the leftmost pixel.
+        var borderInset = GetBorderVisualInset();
+        var chrome = GetChromeBounds(Bounds, borderInset);
+        double leftRoom = Math.Max(0, viewport.X - chrome.X);
+        double rightRoom = Math.Max(0, chrome.Right - viewport.Right);
+
+        double expandL = Math.Min(onePx, leftRoom);
+        double expandR = Math.Min(onePx, rightRoom);
+
+        var expanded = new Rect(
+            viewport.X - expandL,
+            viewport.Y,
+            viewport.Width + expandL + expandR,
+            viewport.Height);
+        return LayoutRounding.MakeClipRect(expanded, dpiScale, rightPx: 0, bottomPx: 0);
     }
 
     private static bool IsBarVisible(ScrollMode visibility, bool needed)

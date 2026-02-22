@@ -7,24 +7,19 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollable list control with item selection.
 /// </summary>
-public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigationHost
+public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private IItemsPresenter _presenter;
-    private readonly ScrollViewer _scrollViewer;
     private IDataTemplate _itemTemplate;
     private ItemsPresenterMode _presenterMode = ItemsPresenterMode.Fixed;
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _rebindVisibleOnNextRender = true;
     private bool _updatingFromSource;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
-    private ScrollIntoViewRequest _scrollIntoViewRequest;
-    private int _pendingTabFocusIndex = -1;
-    private int _pendingTabFocusAttempts;
 
     /// <summary>
     /// Gets or sets the items data source.
@@ -204,28 +199,12 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
     }
 
     /// <summary>
-    /// Gets whether the listbox can receive keyboard focus.
-    /// </summary>
-    public override bool Focusable => true;
-
-    /// <summary>
-    /// Gets the default background color.
-    /// </summary>
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    /// <summary>
     /// Initializes a new instance of the ListBox class.
     /// </summary>
     public ListBox()
     {
-        Padding = new Thickness(1);
+        _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
+
         ItemPadding = Theme.Metrics.ItemPadding;
 
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
@@ -233,17 +212,17 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
 
         _itemTemplate = CreateDefaultItemTemplate();
         _presenter = CreatePresenter(PresenterMode);
+        _tabFocusHelper = new PendingTabFocusHelper(
+            getWindow: () => FindVisualRoot() as Window,
+            getContainer: idx =>
+            {
+                FrameworkElement? container = null;
+                _presenter.VisitRealized((i, el) => { if (i == idx) container = el; });
+                return container;
+            });
 
-        _scrollViewer = new ScrollViewer
-        {
-            VerticalScroll = ScrollMode.Auto,
-            HorizontalScroll = ScrollMode.Disabled,
-            BorderThickness = 0,
-            Background = default,
-            Padding = Padding,
-            Content = (UIElement)_presenter,
-        };
-        _scrollViewer.Parent = this;
+        _scrollViewer.Padding = Padding;
+        _scrollViewer.Content = (UIElement)_presenter;
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
     }
 
@@ -256,7 +235,6 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = _itemTemplate;
         presenter.BeforeItemRender = OnBeforeItemRender;
-        presenter.GetContainerRect = null;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.ExtentWidth = double.NaN;
         presenter.ItemRadius = 0;
@@ -300,9 +278,6 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
             ItemPadding = newTheme.Metrics.ItemPadding;
         }
     }
-
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-        => visitor(_scrollViewer);
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -395,11 +370,6 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
             double.IsPositiveInfinity(availableSize.Width) ? double.PositiveInfinity : Math.Max(0, availableSize.Width - borderInset * 2),
             double.IsPositiveInfinity(availableSize.Height) ? double.PositiveInfinity : Math.Max(0, availableSize.Height - borderInset * 2)));
 
-        if (!_scrollIntoViewRequest.IsNone)
-        {
-            // Keep request; Arrange will fulfill it.
-        }
-
         // Desired height is governed by availableSize (viewport). Extent is used by ScrollViewer.
         if (double.IsPositiveInfinity(availableSize.Height))
         {
@@ -455,32 +425,6 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         _rebindVisibleOnNextRender = false;
 
         _scrollViewer.Render(context);
-    }
-
-    public override void Render(IGraphicsContext context)
-    {
-        if (!IsVisible)
-        {
-            return;
-        }
-
-        OnRender(context);
-    }
-
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible)
-        {
-            return null;
-        }
-
-        var hit = _scrollViewer.HitTest(point);
-        if (hit != null)
-        {
-            return hit;
-        }
-
-        return base.OnHitTest(point);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -745,9 +689,15 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
                 }
             });
 
-    private void OnItemsChanged(ItemsChange _)
+    private void OnItemsChanged(ItemsChange change)
     {
-        _presenter.RecycleAll();
+        // VariableHeightItemsPresenter handles Add/Remove/Replace internally:
+        // it remaps realized indices and preserves the scroll anchor.
+        // Force a full recycle only for Reset/Move where the presenter itself resets.
+        if (change.Kind is ItemsChangeKind.Reset or ItemsChangeKind.Move)
+        {
+            _presenter.RecycleAll();
+        }
         _hoverIndex = -1;
         _rebindVisibleOnNextRender = true;
         InvalidateMeasure();
@@ -799,20 +749,6 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
         return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
-    private double GetViewportHeightDip()
-    {
-        if (Bounds.Width > 0 && Bounds.Height > 0)
-        {
-            var snapped = GetSnappedBorderBounds(Bounds);
-            var borderInset = GetBorderVisualInset();
-            var innerBounds = snapped.Deflate(new Thickness(borderInset));
-            var dpiScale = GetDpi() / 96.0;
-            return LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Height - Padding.VerticalThickness), dpiScale);
-        }
-
-        return 0;
-    }
-
     /// <summary>
     /// Sets a two-way binding for the SelectedIndex property.
     /// </summary>
@@ -844,7 +780,7 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
                 return;
             }
 
-            if (IsInSubtreeOf(focusedElement, element))
+            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -863,82 +799,8 @@ public partial class ListBox : Control, IVisualTreeHost, IVirtualizedTabNavigati
 
         SelectedIndex = target;
         ScrollIntoView(target);
-        _pendingTabFocusIndex = target;
-        _pendingTabFocusAttempts = 0;
-        SchedulePendingTabFocus();
+        _tabFocusHelper.Schedule(target);
         return true;
-    }
-
-    private void SchedulePendingTabFocus()
-    {
-        if (_pendingTabFocusIndex < 0)
-        {
-            return;
-        }
-
-        if (FindVisualRoot() is not Window window)
-        {
-            return;
-        }
-
-        window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
-    }
-
-    private void ApplyPendingTabFocus()
-    {
-        if (_pendingTabFocusIndex < 0)
-        {
-            return;
-        }
-
-        if (FindVisualRoot() is not Window window)
-        {
-            _pendingTabFocusIndex = -1;
-            return;
-        }
-
-        FrameworkElement? container = null;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (i == _pendingTabFocusIndex)
-            {
-                container = element;
-            }
-        });
-
-        if (container == null)
-        {
-            if (_pendingTabFocusAttempts++ < 4)
-            {
-                window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
-            }
-            else
-            {
-                _pendingTabFocusIndex = -1;
-            }
-            return;
-        }
-
-        var target = FocusManager.FindFirstFocusable(container);
-        if (target != null)
-        {
-            window.FocusManager.SetFocus(target);
-        }
-
-        _pendingTabFocusIndex = -1;
-    }
-
-    private static bool IsInSubtreeOf(UIElement element, UIElement root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected override void OnDispose()

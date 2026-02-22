@@ -23,6 +23,12 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
     /// </summary>
     double ItemHeightHint { get; set; }
 
+    /// <summary>
+    /// When true, the presenter may lay out realized containers using the horizontal extent width
+    /// (for horizontal scrolling). When false, it should keep layout width constrained to the viewport.
+    /// </summary>
+    bool UseHorizontalExtentForLayout { get; set; }
+
     bool TryGetItemIndexAtY(double yContent, out int index);
 
     /// <summary>

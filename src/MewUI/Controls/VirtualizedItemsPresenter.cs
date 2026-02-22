@@ -284,7 +284,7 @@ internal sealed class VirtualizedItemsPresenter
         if (element is UIElement uiElement && _owner.FindVisualRoot() is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            if (focused != null && IsInSubtreeOf(focused, uiElement))
+            if (focused != null && VisualTreeHelper.IsInSubtreeOf(focused, uiElement))
             {
                 _deferredFocusedElement = focused;
                 _deferredFocusedIndex = index;
@@ -363,7 +363,7 @@ internal sealed class VirtualizedItemsPresenter
             }
         }
 
-        if (container is not Element root || !IsInSubtreeOf(deferred, root))
+        if (container is not Element root || !VisualTreeHelper.IsInSubtreeOf(deferred, root))
         {
             return;
         }
@@ -381,16 +381,4 @@ internal sealed class VirtualizedItemsPresenter
         _deferredFocusedIndex = null;
     }
 
-    private static bool IsInSubtreeOf(UIElement element, Element root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

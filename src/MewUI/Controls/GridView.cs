@@ -3,29 +3,23 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
+public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtualizedTabNavigationHost
 {
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
 
     private readonly HeaderRow _header;
     private readonly FixedHeightItemsPresenter _presenter;
-    private readonly ScrollViewer _scrollViewer;
 
-    private bool _rebindVisibleOnNextRender = true;
     private double _rowsExtentHeight;
     private double _columnsExtentWidth;
     private double _rowsViewportHeight;
     private double _rowsViewportWidth;
-    private ScrollIntoViewRequest _scrollIntoViewRequest;
-    private int _pendingTabFocusIndex = -1;
-    private int _pendingTabFocusAttempts;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     public GridView()
     {
-        Padding = new Thickness(1);
+        _scrollViewer.Padding = new Thickness(0);
+        _scrollViewer.ViewportCornerRadius = 0;
 
         _header = new HeaderRow(this) { Parent = this };
         _presenter = new FixedHeightItemsPresenter
@@ -42,17 +36,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         _presenter.ItemsSource = _core.ItemsSource;
         _presenter.BeforeItemRender = BeforeRowRender;
 
-        _scrollViewer = new ScrollViewer
-        {
-            BorderThickness = 0,
-            Padding = new Thickness(0),
-            HorizontalScroll = ScrollMode.Auto,
-            VerticalScroll = ScrollMode.Auto,
-            Content = _presenter,
-            ViewportCornerRadius = 0,
-        };
-        _scrollViewer.Parent = this;
-
+        _scrollViewer.Content = _presenter;
         _scrollViewer.ScrollChanged += () =>
         {
             _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
@@ -69,6 +53,15 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             InvalidateArrange();
             InvalidateVisual();
         };
+
+        _tabFocusHelper = new PendingTabFocusHelper(
+            getWindow: () => FindVisualRoot() as Window,
+            getContainer: idx =>
+            {
+                FrameworkElement? container = null;
+                _presenter.VisitRealized((i, el) => { if (i == idx) container = el; });
+                return container;
+            });
     }
 
     public event Action<object?>? SelectionChanged;
@@ -143,12 +136,6 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     }
 
     public object? SelectedItem => _core.SelectedItem;
-
-    public override bool Focusable => true;
-
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
@@ -249,7 +236,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            if (IsInSubtreeOf(focusedElement, element))
+            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -357,7 +344,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            if (IsInSubtreeOf(focusedElement, element))
+            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -376,82 +363,8 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         SelectedIndex = targetIndex;
         ScrollIntoView(targetIndex);
-        _pendingTabFocusIndex = targetIndex;
-        _pendingTabFocusAttempts = 0;
-        SchedulePendingTabFocus();
+        _tabFocusHelper.Schedule(targetIndex);
         return true;
-    }
-
-    private void SchedulePendingTabFocus()
-    {
-        if (_pendingTabFocusIndex < 0)
-        {
-            return;
-        }
-
-        if (FindVisualRoot() is not Window window)
-        {
-            return;
-        }
-
-        window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
-    }
-
-    private void ApplyPendingTabFocus()
-    {
-        if (_pendingTabFocusIndex < 0)
-        {
-            return;
-        }
-
-        if (FindVisualRoot() is not Window window)
-        {
-            _pendingTabFocusIndex = -1;
-            return;
-        }
-
-        FrameworkElement? container = null;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (i == _pendingTabFocusIndex)
-            {
-                container = element;
-            }
-        });
-
-        if (container == null)
-        {
-            if (_pendingTabFocusAttempts++ < 4)
-            {
-                window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
-            }
-            else
-            {
-                _pendingTabFocusIndex = -1;
-            }
-            return;
-        }
-
-        var target = FocusManager.FindFirstFocusable(container);
-        if (target != null)
-        {
-            window.FocusManager.SetFocus(target);
-        }
-
-        _pendingTabFocusIndex = -1;
-    }
-
-    private static bool IsInSubtreeOf(UIElement element, UIElement root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -663,14 +576,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         isHeader = false;
         return true;
-    }
-
-    private Rect GetLocalBounds(UIElement element)
-        => new(
-            element.Bounds.X - Bounds.X,
-            element.Bounds.Y - Bounds.Y,
-            element.Bounds.Width,
-            element.Bounds.Height);
+    } 
 
     private bool TryGetContentBounds(out Rect contentBounds, out double headerHeight)
     {
@@ -762,7 +668,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         return list;
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    protected override void VisitScrollChildren(Action<Element> visitor)
     {
         visitor(_header);
         visitor(_scrollViewer);
@@ -881,7 +787,7 @@ public sealed class GridView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
         var clipRadius = Math.Max(0, Theme.Metrics.ControlCornerRadius - borderInset);
-        clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
+        //clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
         clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
 
         context.Save();

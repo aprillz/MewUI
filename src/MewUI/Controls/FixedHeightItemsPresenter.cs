@@ -106,6 +106,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
         set => ItemHeight = value;
     }
 
+    public bool UseHorizontalExtentForLayout { get; set; }
+
     public event Action<Point>? OffsetCorrectionRequested;
 
     public void RecycleAll() => _itemsHost.RecycleAll();
@@ -242,13 +244,14 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
             out _);
 
         // Shift the realized containers by horizontal scroll. Keep Y in viewport space.
+        double layoutWidth = UseHorizontalExtentForLayout
+            ? Math.Max(contentBounds.Width, Extent.Width)
+            : contentBounds.Width;
+
         var scrollContentBounds = new Rect(
             contentBounds.X - alignedOffsetX,
             contentBounds.Y,
-            // See VariableHeightItemsPresenter: do not expand layout width beyond the current viewport
-            // unless the host explicitly enables horizontal scrolling. Using Extent.Width here can
-            // push right-aligned content outside the visible viewport due to rounding differences.
-            contentBounds.Width,
+            layoutWidth,
             contentBounds.Height);
 
         _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout

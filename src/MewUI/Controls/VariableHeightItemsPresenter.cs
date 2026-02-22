@@ -1,6 +1,5 @@
 using Aprillz.MewUI.Rendering;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -16,7 +15,7 @@ namespace Aprillz.MewUI.Controls;
 internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, IScrollContent
     , IItemsPresenter
 {
-    private readonly ConditionalWeakTable<FrameworkElement, TemplateContext> _contexts = new();
+    private readonly Dictionary<FrameworkElement, TemplateContext> _contexts = new();
 
     private readonly Dictionary<int, FrameworkElement> _realized = new();
     private readonly Stack<FrameworkElement> _pool = new();
@@ -70,6 +69,8 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     }
     private IItemsView _itemsSource = ItemsView.Empty;
 
+    public bool UseHorizontalExtentForLayout { get; set; }
+
     public IDataTemplate ItemTemplate
     {
         get => _itemTemplate;
@@ -84,6 +85,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
             _itemTemplate = value;
             RecycleAll();
             _pool.Clear();
+            _contexts.Clear();
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -286,13 +288,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         bool anyHeightChanged = false;
 
         // Layout realized containers at absolute positions (window coordinates).
-        //
-        // NOTE: This presenter is hosted in ScrollViewer as scroll-driven content (IScrollContent).
-        // When horizontal scrolling is disabled, using Extent.Width here can make the arranged width
-        // larger than the actual viewport (due to measurement/rounding differences), which in turn
-        // pushes right-aligned content outside the visible area. Always use the current viewport
-        // width for layout; the ScrollViewer will enable horizontal scrolling explicitly if/when needed.
-        double width = contentBounds.Width;
+        double width = UseHorizontalExtentForLayout
+            ? Math.Max(contentBounds.Width, Extent.Width)
+            : contentBounds.Width;
         double x = contentBounds.X - alignedOffsetX;
 
         double yContent = _prefix![first];
@@ -756,7 +754,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         if (element is UIElement uiElement && FindVisualRoot() is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            if (focused != null && IsInSubtreeOf(focused, uiElement))
+            if (focused != null && VisualTreeHelper.IsInSubtreeOf(focused, uiElement))
             {
                 _deferredFocusedElement = focused;
                 _deferredFocusedIndex = index;
@@ -963,7 +961,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
             }
         }
 
-        if (container is not Element root || !IsInSubtreeOf(deferred, root))
+        if (container is not Element root || !VisualTreeHelper.IsInSubtreeOf(deferred, root))
         {
             return;
         }
@@ -979,19 +977,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         _deferredFocusedElement = null;
         _deferredFocusOwner = null;
         _deferredFocusedIndex = null;
-    }
-
-    private static bool IsInSubtreeOf(UIElement element, Element root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void RequestOffsetCorrection(Point correctedOffset)
@@ -1189,11 +1174,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         }
 
         return lo;
-    }
-
-    protected override void OnDispose()
-    {
-        base.OnDispose();
     }
 
     private static bool HeightsEqual(double a, double b)

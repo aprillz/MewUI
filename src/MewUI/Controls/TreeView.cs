@@ -40,20 +40,20 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
-    private int _pendingTabFocusIndex = -1;
-    private int _pendingTabFocusAttempts;
+    private readonly PendingTabFocusHelper _tabFocusHelper;
+    private double _observedExtentWidth;
 
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     /// <summary>
     /// Gets or sets the root nodes collection.
     /// </summary>
-    public IItemsView ItemsSource
+    public ITreeItemsView ItemsSource
     {
         get => _itemsSource;
         set
         {
-            value ??= ItemsView.Empty;
+            value ??= TreeItemsView.Empty;
             if (ReferenceEquals(_itemsSource, value))
             {
                 return;
@@ -62,7 +62,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             _itemsSource.Changed -= OnItemsChanged;
             _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
 
-            _itemsSource = value as ITreeItemsView ?? new TreeViewNodeItemsView(value);
+            _itemsSource = value;
             _itemsSource.Changed += OnItemsChanged;
             _itemsSource.SelectionChanged += OnItemsSelectionChanged;
 
@@ -185,7 +185,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     /// </summary>
     public TreeView()
     {
-        Padding = new Thickness(1);
         ItemPadding = Theme.Metrics.ItemPadding;
 
         _itemsSource.Changed += OnItemsChanged;
@@ -199,6 +198,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             GetContainerRect = OnGetContainerRect,
             ItemHeight = ResolveItemHeight(),
             RebindExisting = true,
+            UseHorizontalExtentForLayout = true,
         };
 
         _scrollViewer = new ScrollViewer
@@ -212,6 +212,15 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         };
         _scrollViewer.Parent = this;
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
+
+        _tabFocusHelper = new PendingTabFocusHelper(
+            getWindow: () => FindVisualRoot() as Window,
+            getContainer: idx =>
+            {
+                FrameworkElement? container = null;
+                _presenter.VisitRealized((i, el) => { if (i == idx) container = el; });
+                return container;
+            });
     }
 
     private Rect OnGetContainerRect(int i, Rect rowRect)
@@ -484,20 +493,29 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             _textWidthCache.SetCapacity(Math.Clamp(sampleCount * 4, 256, 4096));
             double padW = ItemPadding.HorizontalThickness;
 
+            // Sample across the whole flattened list (not just the first N items) to avoid
+            // under-estimating horizontal extent when wide items appear later in the tree.
             for (int i = 0; i < sampleCount; i++)
             {
-                var text = _itemsSource.GetText(i);
+                int idx = count <= sampleCount
+                    ? i
+                    : (int)Math.Floor(i * (count - 1.0) / (sampleCount - 1.0));
+
+                var text = _itemsSource.GetText(idx);
                 if (string.IsNullOrEmpty(text))
                 {
                     continue;
                 }
 
-                int depth = _itemsSource.GetDepth(i);
+                int depth = _itemsSource.GetDepth(idx);
                 double indentW = depth * Indent + Indent; // includes glyph column
                 double itemW = indentW + _textWidthCache.GetOrMeasure(measure.Context, measure.Font, dpi, text) + padW;
                 extentWidth = Math.Max(extentWidth, itemW);
             }
         }
+
+        // Allow the extent to expand based on realized (templated) content width.
+        extentWidth = Math.Max(extentWidth, _observedExtentWidth);
 
         double desiredWidth;
         if (HorizontalAlignment == HorizontalAlignment.Stretch && !double.IsPositiveInfinity(widthLimit))
@@ -582,6 +600,47 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         _rebindVisibleOnNextRender = false;
 
         _scrollViewer.Render(context);
+
+        UpdateObservedHorizontalExtentFromRealized();
+    }
+
+    private void UpdateObservedHorizontalExtentFromRealized()
+    {
+        if (_itemsSource.Count <= 0)
+        {
+            return;
+        }
+
+        double dpiScale = GetDpi() / 96.0;
+        double onePx = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+
+        double max = _observedExtentWidth;
+        _presenter.VisitRealized((index, element) =>
+        {
+            if (index < 0 || index >= _itemsSource.Count)
+            {
+                return;
+            }
+
+            int depth = _itemsSource.GetDepth(index);
+            double indentW = depth * Indent + Indent; // includes glyph column
+
+            // Measure with unbounded width to approximate the templated natural width.
+            element.Measure(new Size(double.PositiveInfinity, Math.Max(0, element.RenderSize.Height)));
+            double w = Math.Max(0, element.DesiredSize.Width);
+
+            double rowW = indentW + w;
+            if (rowW > max)
+            {
+                max = rowW;
+            }
+        });
+
+        if (max > _observedExtentWidth + onePx * 0.99)
+        {
+            _observedExtentWidth = max;
+            InvalidateMeasure();
+        }
     }
 
     private IDataTemplate CreateDefaultItemTemplate()
@@ -670,11 +729,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         _itemsSource.SelectedIndex = index;
         bool hasChildren = _itemsSource.GetHasChildren(index);
-        if (onGlyph && hasChildren)
-        {
-            _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
-        }
-        else if (!onGlyph && hasChildren && ExpandTrigger == TreeViewExpandTrigger.ClickNode)
+        if (hasChildren && (onGlyph || ExpandTrigger == TreeViewExpandTrigger.ClickNode))
         {
             _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
         }
@@ -710,11 +765,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         _itemsSource.SelectedIndex = index;
         _itemsSource.SetIsExpanded(index, !_itemsSource.GetIsExpanded(index));
         e.Handled = true;
-    }
-
-    protected override void OnMouseWheel(MouseWheelEventArgs e)
-    {
-        base.OnMouseWheel(e);
     }
 
     private void ReevaluateMouseOverAfterScroll()
@@ -890,7 +940,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            if (IsInSubtreeOf(focusedElement, element))
+            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -928,7 +978,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            if (IsInSubtreeOf(focusedElement, element))
+            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -947,82 +997,8 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         _itemsSource.SelectedIndex = target;
         ScrollIntoView(target);
-        _pendingTabFocusIndex = target;
-        _pendingTabFocusAttempts = 0;
-        SchedulePendingTabFocus();
+        _tabFocusHelper.Schedule(target);
         return true;
-    }
-
-    private void SchedulePendingTabFocus()
-    {
-        if (_pendingTabFocusIndex < 0)
-        {
-            return;
-        }
-
-        if (FindVisualRoot() is not Window window)
-        {
-            return;
-        }
-
-        window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
-    }
-
-    private void ApplyPendingTabFocus()
-    {
-        if (_pendingTabFocusIndex < 0)
-        {
-            return;
-        }
-
-        if (FindVisualRoot() is not Window window)
-        {
-            _pendingTabFocusIndex = -1;
-            return;
-        }
-
-        FrameworkElement? container = null;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (i == _pendingTabFocusIndex)
-            {
-                container = element;
-            }
-        });
-
-        if (container == null)
-        {
-            if (_pendingTabFocusAttempts++ < 4)
-            {
-                window.ApplicationDispatcher?.Post(ApplyPendingTabFocus, UiDispatcherPriority.Render);
-            }
-            else
-            {
-                _pendingTabFocusIndex = -1;
-            }
-            return;
-        }
-
-        var target = FocusManager.FindFirstFocusable(container);
-        if (target != null)
-        {
-            window.FocusManager.SetFocus(target);
-        }
-
-        _pendingTabFocusIndex = -1;
-    }
-
-    private static bool IsInSubtreeOf(UIElement element, UIElement root)
-    {
-        for (Element? current = element; current != null; current = current.Parent)
-        {
-            if (ReferenceEquals(current, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private bool TryHitRow(Point position, out int index, out bool onGlyph)
@@ -1080,20 +1056,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             var innerBounds = snapped.Deflate(new Thickness(borderInset));
             var dpiScale = GetDpi() / 96.0;
             return LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Height - Padding.VerticalThickness), dpiScale);
-        }
-
-        return 0;
-    }
-
-    private double GetViewportWidthDip()
-    {
-        if (Bounds.Width > 0 && Bounds.Height > 0)
-        {
-            var snapped = GetSnappedBorderBounds(Bounds);
-            var borderInset = GetBorderVisualInset();
-            var innerBounds = snapped.Deflate(new Thickness(borderInset));
-            var dpiScale = GetDpi() / 96.0;
-            return LayoutRounding.RoundToPixel(Math.Max(0, innerBounds.Width - Padding.HorizontalThickness), dpiScale);
         }
 
         return 0;
