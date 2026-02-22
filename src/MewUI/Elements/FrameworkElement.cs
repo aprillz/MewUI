@@ -320,6 +320,26 @@ public abstract class FrameworkElement : UIElement, IDisposable
     protected virtual void OnSizeChanged(SizeChangedEventArgs e)
     { }
 
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        // Theme changes are broadcast only to elements currently in the visual tree.
+        // Elements that were detached (e.g. recycled/pooled item containers) may retain a stale ThemeInternal.
+        // When re-attached, refresh theme so controls render with the current theme without requiring re-binding.
+        if (!Application.IsRunning || newRoot == null)
+        {
+            return;
+        }
+
+        var newTheme = Application.Current.Theme;
+        var oldTheme = ThemeInternal;
+        if (oldTheme != newTheme)
+        {
+            NotifyThemeChanged(oldTheme, newTheme);
+        }
+    }
+
     protected override void ArrangeCore(Rect finalRect)
     {
         var oldSize = _lastArrangedSize;
