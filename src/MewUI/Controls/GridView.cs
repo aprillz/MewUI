@@ -26,6 +26,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             BorderThickness = 0,
             Padding = new Thickness(0),
+            UseHorizontalExtentForLayout = true,
         };
 
         var rowTemplate = new DelegateTemplate<object?>(
