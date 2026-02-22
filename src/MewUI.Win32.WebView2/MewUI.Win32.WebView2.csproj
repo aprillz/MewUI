@@ -1,0 +1,109 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-windows</TargetFrameworks>
+    <AssemblyName>$(MewUITitle).Win32.WebView2</AssemblyName>
+    <PackageId>$(MewUITitle).Win32.WebView2</PackageId>
+    <Description>Win32 WebView2 control for $(MewUITitle). Requires Microsoft Edge WebView2 Runtime (Evergreen).</Description>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- NuGet 패키지 메타데이터 -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>logo.png</PackageIcon>
+    <PackageTags>webview2;win32;native;aot;gui;browser</PackageTags>
+  </PropertyGroup>
+  
+ 
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+ 
+  <ItemGroup>
+    <Reference Include="DirectN">
+      <HintPath>External\DirectN.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DirectN.Extensions">
+      <HintPath>External\DirectN.Extensions.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="WebView2">
+      <HintPath>External\WebView2.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- 외부 DLL을 NuGet 패키지에 포함 -->
+  <PropertyGroup>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeExternalDlls</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+  <Target Name="IncludeExternalDlls">
+    <ItemGroup>
+      <BuildOutputInPackage Include="External\DirectN.dll" />
+      <BuildOutputInPackage Include="External\DirectN.Extensions.dll" />
+      <BuildOutputInPackage Include="External\WebView2.dll" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <Folder Include="External\" />
+  </ItemGroup>
+
+  <!-- 네이티브 런타임 파일 (WebView2Loader.dll) - NuGet 패키지에 포함 -->
+  <ItemGroup>
+    <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes\" />
+  </ItemGroup>
+
+  <!-- 소스 빌드 시 아키텍처별 런타임 DLL 복사 -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(Platform)' != 'x86' And '$(Platform)' != 'ARM64')">
+    <ContentWithTargetPath Include="runtimes\win-x64\native\WebView2Loader.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>WebView2Loader.dll</TargetPath>
+    </ContentWithTargetPath>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x86' Or '$(Platform)' == 'x86'">
+    <ContentWithTargetPath Include="runtimes\win-x86\native\WebView2Loader.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>WebView2Loader.dll</TargetPath>
+    </ContentWithTargetPath>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-arm64' Or '$(Platform)' == 'ARM64'">
+    <ContentWithTargetPath Include="runtimes\win-arm64\native\WebView2Loader.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>WebView2Loader.dll</TargetPath>
+    </ContentWithTargetPath>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Using Include="DirectN" />
+    <Using Include="DirectN.Extensions" />
+    <Using Include="DirectN.Extensions.Com" />
+    <Using Include="DirectN.Extensions.Utilities" />
+    <Using Include="WebView2" />
+    <Using Include="WebView2.Utilities" />
+    <Using Include="System" />
+    <Using Include="System.Collections.Concurrent" />
+    <Using Include="System.ComponentModel" />
+    <Using Include="System.Diagnostics.CodeAnalysis" />
+    <Using Include="System.Globalization" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Numerics" />
+    <Using Include="System.Reflection" />
+    <Using Include="System.Runtime.Versioning" />
+    <Using Include="System.Runtime.CompilerServices" />
+    <Using Include="System.Runtime.InteropServices" />
+  </ItemGroup>
+  
+
+  <!-- MSBuild targets, README, 로고 -->
+  <ItemGroup>
+    <None Include="build\$(PackageId).targets" Pack="true" PackagePath="build\" />
+    <None Include="build\$(PackageId).targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\assets\logo\logo-256.png" Pack="true" PackagePath="logo.png" Visible="false" />
+  </ItemGroup>
+</Project>

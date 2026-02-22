@@ -5,12 +5,14 @@
   <Folder Name="/samples/">
     <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
+    <Project Path="samples/MewUI.Win32.WebView2.Sample/MewUI.Win32.WebView2.Sample.csproj" />
   </Folder>
   <Folder Name="/samples/FBA/">
     <File Path="samples/FBASample/fba_calculator.cs" />
     <File Path="samples/FBASample/fba_sample.cs" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/MewUI.Win32.WebView2/MewUI.Win32.WebView2.csproj" />
     <Project Path="src/MewUI/MewUI.csproj" />
   </Folder>
   <Folder Name="/tests/">
