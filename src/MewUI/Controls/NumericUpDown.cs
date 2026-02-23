@@ -49,6 +49,8 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
 
+    public bool ChangeOnWheel { get; set; } = true;
+
     public override bool Focusable => true;
 
     public bool EditMode
@@ -243,13 +245,15 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!IsEffectivelyEnabled)
+        if (!IsEffectivelyEnabled || !ChangeOnWheel)
         {
             return;
         }
 
+
         double delta = e.Delta > 0 ? _step : -_step;
         Value += delta;
+        e.Handled = true;
         UpdateTextBoxFromValue();
         InvalidateVisual();
     }

@@ -21,6 +21,8 @@ public sealed partial class Slider : RangeBase
 
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
+    public bool ChangeOnWheel { get; set; } = true;
+
     /// <summary>
     /// Gets whether the slider can receive keyboard focus.
     /// </summary>
@@ -164,6 +166,19 @@ public sealed partial class Slider : RangeBase
             window.ReleaseMouseCapture();
         }
 
+        e.Handled = true;
+    }
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (!IsEffectivelyEnabled || !ChangeOnWheel)
+        {
+            return;
+        }
+
+        double step = GetKeyboardSmallStep();
+        SetValueInternal(Value + (e.Delta > 0 ? step : -step), true);
         e.Handled = true;
     }
 

@@ -2112,6 +2112,18 @@ public static class ControlExtensions
         return comboBox;
     }
 
+    /// <summary>
+    /// Sets whether mouse wheel input changes the selected item.
+    /// </summary>
+    /// <param name="comboBox">Target combo box.</param>
+    /// <param name="value">Whether mouse wheel changes the selection.</param>
+    /// <returns>The combo box for chaining.</returns>
+    public static ComboBox ChangeOnWheel(this ComboBox comboBox, bool value = true)
+    {
+        comboBox.ChangeOnWheel = value;
+        return comboBox;
+    }
+
     #endregion
 
     #region TabItem
@@ -2406,6 +2418,18 @@ public static class ControlExtensions
         return slider;
     }
 
+    /// <summary>
+    /// Sets whether mouse wheel input changes the value.
+    /// </summary>
+    /// <param name="slider">Target slider.</param>
+    /// <param name="value">Whether mouse wheel changes the value.</param>
+    /// <returns>The slider for chaining.</returns>
+    public static Slider ChangeOnWheel(this Slider slider, bool value = true)
+    {
+        slider.ChangeOnWheel = value;
+        return slider;
+    }
+
     #endregion
 
     #region NumericUpDown
@@ -2493,6 +2517,18 @@ public static class ControlExtensions
             v => source.Value = (int)Math.Round(v),
             h => source.Changed += h,
             h => source.Changed -= h);
+        return numericUpDown;
+    }
+
+    /// <summary>
+    /// Sets whether mouse wheel input changes the value.
+    /// </summary>
+    /// <param name="numericUpDown">Target numeric up-down.</param>
+    /// <param name="value">Whether mouse wheel changes the value.</param>
+    /// <returns>The numeric up-down for chaining.</returns>
+    public static NumericUpDown ChangeOnWheel(this NumericUpDown numericUpDown, bool value = true)
+    {
+        numericUpDown.ChangeOnWheel = value;
         return numericUpDown;
     }
 

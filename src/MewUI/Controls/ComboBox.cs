@@ -85,6 +85,8 @@ public sealed partial class ComboBox : DropDownBase
     /// </summary>
     public string? SelectedText => SelectedIndex >= 0 && SelectedIndex < ItemsSource.Count ? ItemsSource.GetText(SelectedIndex) : null;
 
+    public bool ChangeOnWheel { get; set; } = true;
+
     /// <summary>
     /// Gets or sets the placeholder text shown when no item is selected.
     /// </summary>
@@ -427,6 +429,29 @@ public sealed partial class ComboBox : DropDownBase
         }
 
         base.OnKeyDown(e);
+    }
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (!IsEffectivelyEnabled || !ChangeOnWheel /*|| IsDropDownOpen*/)
+        {
+            return;
+        }
+
+        int count = ItemsSource.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        int next = Math.Clamp(SelectedIndex + (e.Delta > 0 ? -1 : 1), 0, count - 1);
+        if (next != SelectedIndex)
+        {
+            SelectedIndex = next;
+        }
+
+        e.Handled = true;
     }
 
     /// <summary>
