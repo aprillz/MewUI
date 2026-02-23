@@ -101,7 +101,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
         }
 
         var path = Path.GetFullPath(familyOrPath);
-        if (Win32Fonts.EnsurePrivateFont(path))
+        if (Win32Fonts.EnsurePrivateFontFamily(path))
         {
             RefreshSystemFontCollection();
         }
@@ -227,7 +227,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
     public bool Present(Window window, IWindowSurface surface, double opacity)
     {
         if (surface is not IWin32LayeredWindowSurface win32Surface ||
-            surface.Kind != Aprillz.MewUI.Platform.WindowSurfaceKind.Layered ||
+            surface.Kind != WindowSurfaceKind.Layered ||
             win32Surface.Hwnd == 0)
         {
             return false;
@@ -360,7 +360,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
 
     private static D2D1_PRESENT_OPTIONS GetPresentOptions()
     {
-        if (global::Aprillz.MewUI.Application.IsRunning && !global::Aprillz.MewUI.Application.Current.RenderLoopSettings.VSyncEnabled)
+        if (Application.IsRunning && !Application.Current.RenderLoopSettings.VSyncEnabled)
         {
             return D2D1_PRESENT_OPTIONS.IMMEDIATELY;
         }
