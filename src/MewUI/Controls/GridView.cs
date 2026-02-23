@@ -871,7 +871,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             var theme = Theme;
             var snapped = LayoutRounding.SnapViewportRectToPixels(itemRect, GetDpi() / 96.0);
-            context.FillRectangle(snapped, theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.6 : 0.33));
+            context.FillRectangle(snapped, theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33));
         }
     }
 
