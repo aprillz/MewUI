@@ -143,7 +143,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
         _viewport = viewport;
         RecomputeExtent();
-        InvalidateMeasure();
+        // Scroll-driven content: viewport changes should not trigger re-measurement loops.
+        // The ScrollViewer already owns measuring and will read the updated Extent in the same pass.
         InvalidateVisual();
     }
 
