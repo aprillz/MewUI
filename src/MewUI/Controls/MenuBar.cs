@@ -227,7 +227,7 @@ public sealed class MenuBar : Control, IPopupOwner
         _openPopup = popup;
 
         var b = _itemBounds.Count > index ? _itemBounds[index] : Rect.Empty;
-        popup.ShowAt(this, new Point(b.X, b.Bottom + 1));
+        popup.ShowAt(this, new Point(b.X, b.Bottom + 1), anchorTopY: b.Y - 1);
     }
 
     private void CloseOpenMenu()
@@ -274,7 +274,7 @@ public sealed class MenuBar : Control, IPopupOwner
     protected override void OnRender(IGraphicsContext context)
     {
         base.OnRender(context);
-                
+
         var bounds = GetSnappedBorderBounds(Bounds);
         context.FillRectangle(bounds, Background);
 

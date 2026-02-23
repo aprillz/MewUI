@@ -167,7 +167,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         InvalidateVisual();
     }
 
-    internal void ShowAt(UIElement owner, Point positionInWindow)
+    internal void ShowAt(UIElement owner, Point positionInWindow, double? anchorTopY = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
 
@@ -204,7 +204,10 @@ public sealed class ContextMenu : Control, IPopupOwner
 
         if (y + height > client.Height)
         {
-            y = Math.Max(0, client.Height - height);
+            // Flip above the anchor point (anchorTopY for MenuBar items, or the click Y for context menus).
+            double flipAnchor = anchorTopY ?? positionInWindow.Y;
+            double flippedY = flipAnchor - height;
+            y = flippedY >= 0 ? flippedY : Math.Max(0, client.Height - height);
         }
 
         window.ShowPopup(owner, this, new Rect(x, y, width, height));
