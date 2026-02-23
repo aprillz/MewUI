@@ -577,7 +577,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         isHeader = false;
         return true;
-    } 
+    }
 
     private bool TryGetContentBounds(out Rect contentBounds, out double headerHeight)
     {
@@ -871,7 +871,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             var theme = Theme;
             var snapped = LayoutRounding.SnapViewportRectToPixels(itemRect, GetDpi() / 96.0);
-            context.FillRectangle(snapped, theme.Palette.ControlBackground.Lerp(theme.Palette.Accent, 0.06));
+            context.FillRectangle(snapped, theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.6 : 0.33));
         }
     }
 
