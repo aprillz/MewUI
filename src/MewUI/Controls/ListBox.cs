@@ -276,7 +276,9 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         if (ItemPadding == oldTheme.Metrics.ItemPadding)
         {
             ItemPadding = newTheme.Metrics.ItemPadding;
-        }
+        } 
+
+        _rebindVisibleOnNextRender = true;
     }
 
     protected override Size MeasureContent(Size availableSize)
