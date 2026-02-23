@@ -111,11 +111,6 @@ public sealed class Border : Control, IVisualTreeHost
         }
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        if (Child != null)
-        {
-            visitor(Child);
-        }
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => Child == null || visitor(Child);
 }

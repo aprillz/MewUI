@@ -275,11 +275,8 @@ public sealed class TabControl : Control
         InvalidateVisual();
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        visitor(_headerStrip);
-        visitor(_contentHost);
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => visitor(_headerStrip) && visitor(_contentHost);
 
     public void AddTabs(params TabItem[] tabs)
     {

@@ -137,7 +137,7 @@ public sealed class ScrollViewer : ContentControl
     {
         BorderThickness = 0;
 
-        Padding = new Thickness(16);
+        Padding = new Thickness(8);
 
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _hBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
@@ -453,15 +453,11 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        if (Content != null)
-        {
-            visitor(Content);
-        }
-
-        visitor(_vBar);
-        visitor(_hBar);
+        if (Content != null && !visitor(Content)) return false;
+        if (!visitor(_vBar)) return false;
+        return visitor(_hBar);
     }
 
     public void ScrollBy(double delta)

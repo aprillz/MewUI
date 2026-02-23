@@ -154,11 +154,12 @@ public abstract class Panel : FrameworkElement
         return null;
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         for (int i = 0; i < _children.Count; i++)
         {
-            visitor(_children[i]);
+            if (!visitor(_children[i])) return false;
         }
+        return true;
     }
 }

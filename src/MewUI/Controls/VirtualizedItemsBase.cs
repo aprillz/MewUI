@@ -36,12 +36,12 @@ public abstract class VirtualizedItemsBase : Control, IVisualTreeHost
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor) => VisitScrollChildren(visitor);
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => VisitScrollChildren(visitor);
 
     /// <summary>
     /// Override to visit additional children (e.g. a header row) before or after the scroll viewer.
     /// </summary>
-    protected virtual void VisitScrollChildren(Action<Element> visitor) => visitor(_scrollViewer);
+    protected virtual bool VisitScrollChildren(Func<Element, bool> visitor) => visitor(_scrollViewer);
 
     protected override UIElement? OnHitTest(Point point)
     {

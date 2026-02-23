@@ -284,7 +284,7 @@ internal sealed class VirtualizedItemsPresenter
         if (element is UIElement uiElement && _owner.FindVisualRoot() is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            if (focused != null && VisualTreeHelper.IsInSubtreeOf(focused, uiElement))
+            if (focused != null && VisualTree.IsInSubtreeOf(focused, uiElement))
             {
                 _deferredFocusedElement = focused;
                 _deferredFocusedIndex = index;
@@ -363,7 +363,7 @@ internal sealed class VirtualizedItemsPresenter
             }
         }
 
-        if (container is not Element root || !VisualTreeHelper.IsInSubtreeOf(deferred, root))
+        if (container is not Element root || !VisualTree.IsInSubtreeOf(deferred, root))
         {
             return;
         }

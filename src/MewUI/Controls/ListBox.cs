@@ -780,7 +780,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
                 return;
             }
 
-            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
+            if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }

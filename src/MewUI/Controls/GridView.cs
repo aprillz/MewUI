@@ -237,7 +237,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
                 return;
             }
 
-            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
+            if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -345,7 +345,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
                 return;
             }
 
-            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
+            if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -669,11 +669,8 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         return list;
     }
 
-    protected override void VisitScrollChildren(Action<Element> visitor)
-    {
-        visitor(_header);
-        visitor(_scrollViewer);
-    }
+    protected override bool VisitScrollChildren(Func<Element, bool> visitor)
+        => visitor(_header) && visitor(_scrollViewer);
 
     protected override Size MeasureContent(Size availableSize)
     {

@@ -163,8 +163,16 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
         InvalidateVisual();
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-        => _itemsHost.VisitRealized(visitor);
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        bool stopped = false;
+        _itemsHost.VisitRealized(e =>
+        {
+            if (!stopped && !visitor(e))
+                stopped = true;
+        });
+        return !stopped;
+    }
 
     protected override Size MeasureContent(Size availableSize)
     {

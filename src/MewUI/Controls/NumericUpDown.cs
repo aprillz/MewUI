@@ -610,10 +610,8 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         }
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        visitor(_textBox);
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => visitor(_textBox);
 
     protected override void OnDispose()
     {

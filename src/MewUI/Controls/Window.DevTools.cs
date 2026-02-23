@@ -312,7 +312,7 @@ public partial class Window
                 build: ctx => new Label().CenterVertical().Padding(8, 0),
                 bind: (view, item, _, ctx) =>
                 {
-                    ((Label)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold: FontWeight.Normal));
+                    ((Label)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold : FontWeight.Normal));
                 });
 
             var refreshBtn = new Button { Content = "Refresh" };
@@ -561,7 +561,11 @@ public partial class Window
             var children = new List<VisualTreeNodeModel>();
             if (element is IVisualTreeHost host)
             {
-                host.VisitChildren(child => children.Add(BuildModel(child, parentKey: element)));
+                host.VisitChildren(child =>
+                {
+                    children.Add(BuildModel(child, parentKey: element));
+                    return true;
+                });
             }
 
             string text = element.GetType().Name;

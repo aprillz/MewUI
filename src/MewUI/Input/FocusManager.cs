@@ -125,12 +125,8 @@ public sealed class FocusManager
             UIElement? found = null;
             host.VisitChildren(child =>
             {
-                if (found != null)
-                {
-                    return;
-                }
-
                 found = FindFirstFocusable(child);
+                return found == null;
             });
             return found;
         }
@@ -226,6 +222,7 @@ public sealed class FocusManager
         // Focus may be inside a popup. For tab navigation, anchor to the popup owner
         // so we move to the next element after the owning control (WPF-like behavior).
         var visited = new HashSet<UIElement>();
+
         Element? current = focusedElement;
         for (int i = 0; i < 32 && current != null; i++)
         {
@@ -341,7 +338,11 @@ public sealed class FocusManager
 
         if (element is IVisualTreeHost host)
         {
-            host.VisitChildren(child => CollectFocusableElementsCore(child, result));
+            host.VisitChildren(child =>
+            {
+                CollectFocusableElementsCore(child, result);
+                return true;
+            });
         }
     }
 

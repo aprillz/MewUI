@@ -93,11 +93,6 @@ public class ContentControl : Control
         return null;
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        if (Content != null)
-        {
-            visitor(Content);
-        }
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => Content == null || visitor(Content);
 }

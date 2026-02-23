@@ -395,10 +395,8 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         _rebindVisibleOnNextRender = true;
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        visitor(_scrollViewer);
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => visitor(_scrollViewer);
 
     /// <summary>
     /// Checks whether the specified node is expanded.
@@ -940,7 +938,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
+            if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }
@@ -978,7 +976,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 return;
             }
 
-            if (VisualTreeHelper.IsInSubtreeOf(focusedElement, element))
+            if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
             }

@@ -260,7 +260,7 @@ internal sealed class PopupManager
 
                 var entry = _popups[i];
 
-                if (focused != null && (focused == entry.Element || VisualTreeHelper.IsInSubtreeOf(focused, entry.Element)))
+                if (focused != null && (focused == entry.Element || VisualTree.IsInSubtreeOf(focused, entry.Element)))
                 {
                     restoreFocusTo = entry.Owner;
                 }
@@ -358,7 +358,7 @@ internal sealed class PopupManager
                 // They are not user-interactive and should not block normal click behavior.
                 if (!entry.Element.IsHitTestVisible)
                 {
-                    if (focused != null && (focused == entry.Element || VisualTreeHelper.IsInSubtreeOf(focused, entry.Element)))
+                    if (focused != null && (focused == entry.Element || VisualTree.IsInSubtreeOf(focused, entry.Element)))
                     {
                         restoreFocusTo = entry.Owner;
                     }
@@ -389,7 +389,7 @@ internal sealed class PopupManager
                 }
 
                 // Close any non-related popup.
-                if (focused != null && (focused == entry.Element || VisualTreeHelper.IsInSubtreeOf(focused, entry.Element)))
+                if (focused != null && (focused == entry.Element || VisualTree.IsInSubtreeOf(focused, entry.Element)))
                 {
                     restoreFocusTo = entry.Owner;
                 }
@@ -464,18 +464,18 @@ internal sealed class PopupManager
 
                 if (newFocusedElement != null)
                 {
-                    if (ReferenceEquals(newFocusedElement, entry.Element) || VisualTreeHelper.IsInSubtreeOf(newFocusedElement, entry.Element))
+                    if (ReferenceEquals(newFocusedElement, entry.Element) || VisualTree.IsInSubtreeOf(newFocusedElement, entry.Element))
                     {
                         continue;
                     }
 
-                    if (ReferenceEquals(newFocusedElement, entry.Owner) || VisualTreeHelper.IsInSubtreeOf(newFocusedElement, entry.Owner))
+                    if (ReferenceEquals(newFocusedElement, entry.Owner) || VisualTree.IsInSubtreeOf(newFocusedElement, entry.Owner))
                     {
                         continue;
                     }
                 }
 
-                if (focused != null && (focused == entry.Element || VisualTreeHelper.IsInSubtreeOf(focused, entry.Element)))
+                if (focused != null && (focused == entry.Element || VisualTree.IsInSubtreeOf(focused, entry.Element)))
                 {
                     restoreFocusTo = entry.Owner;
                 }
@@ -598,7 +598,7 @@ internal sealed class PopupManager
             return;
         }
 
-        if (focused != popup && !VisualTreeHelper.IsInSubtreeOf(focused, popup))
+        if (focused != popup && !VisualTree.IsInSubtreeOf(focused, popup))
         {
             return;
         }

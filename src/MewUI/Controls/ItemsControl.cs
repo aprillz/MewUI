@@ -155,10 +155,8 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         }
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        visitor(_scrollViewer);
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => visitor(_scrollViewer);
 
     protected override Size MeasureContent(Size availableSize)
     {

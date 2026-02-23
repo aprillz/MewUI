@@ -341,7 +341,7 @@ public abstract class DropDownBase : Control, IPopupOwner
             // If focus currently lives inside the popup subtree, clear it to avoid leaving focus
             // pointing at a soon-to-be-detached element.
             var focused = oldWindow.FocusManager.FocusedElement;
-            if (focused != null && (ReferenceEquals(focused, _popup) || VisualTreeHelper.IsInSubtreeOf(focused, _popup)))
+            if (focused != null && (ReferenceEquals(focused, _popup) || VisualTree.IsInSubtreeOf(focused, _popup)))
             {
                 oldWindow.FocusManager.ClearFocus();
             }
@@ -465,7 +465,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         if (root is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            bool focusWasInPopup = focused != null && (ReferenceEquals(focused, popup) || VisualTreeHelper.IsInSubtreeOf(focused, popup));
+            bool focusWasInPopup = focused != null && (ReferenceEquals(focused, popup) || VisualTree.IsInSubtreeOf(focused, popup));
 
             if (kind == PopupCloseKind.UserInitiated)
             {

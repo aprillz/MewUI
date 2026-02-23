@@ -131,16 +131,10 @@ public class HeaderedContentControl : ContentControl
         return base.OnHitTest(point);
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        if (Header != null)
-        {
-            visitor(Header);
-        }
-
-        if (Content != null)
-        {
-            visitor(Content);
-        }
+        if (Header != null && !visitor(Header)) return false;
+        if (Content != null && !visitor(Content)) return false;
+        return true;
     }
 }

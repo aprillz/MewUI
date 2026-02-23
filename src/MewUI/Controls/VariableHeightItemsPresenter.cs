@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Rendering;
-using System.Linq;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -187,12 +186,16 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         InvalidateVisual();
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         foreach (var element in _realized.Values)
         {
-            visitor(element);
+            if (!visitor(element))
+            {
+                return false;
+            }
         }
+        return true;
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -754,7 +757,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         if (element is UIElement uiElement && FindVisualRoot() is Window window)
         {
             var focused = window.FocusManager.FocusedElement;
-            if (focused != null && VisualTreeHelper.IsInSubtreeOf(focused, uiElement))
+            if (focused != null && VisualTree.IsInSubtreeOf(focused, uiElement))
             {
                 _deferredFocusedElement = focused;
                 _deferredFocusedIndex = index;
@@ -961,7 +964,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
             }
         }
 
-        if (container is not Element root || !VisualTreeHelper.IsInSubtreeOf(deferred, root))
+        if (container is not Element root || !VisualTree.IsInSubtreeOf(deferred, root))
         {
             return;
         }

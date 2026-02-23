@@ -293,11 +293,8 @@ public sealed class MultiLineTextBox : TextBase
         ApplyViewAnchorIfPending();
     }
 
-    void IVisualTreeHost.VisitChildren(Action<Element> visitor)
-    {
-        visitor(_vBar);
-        visitor(_hBar);
-    }
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => visitor(_vBar) && visitor(_hBar);
 
     protected override void RenderTextContent(IGraphicsContext context, Rect contentBounds, IFont font, Theme theme, in VisualState state)
     {

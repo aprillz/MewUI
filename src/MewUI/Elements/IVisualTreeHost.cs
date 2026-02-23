@@ -10,5 +10,5 @@ public interface IVisualTreeHost
     /// <summary>
     /// Visits visual children of the current element.
     /// </summary>
-    void VisitChildren(Action<Element> visitor);
+    bool VisitChildren(Func<Element, bool> visitor);
 }
