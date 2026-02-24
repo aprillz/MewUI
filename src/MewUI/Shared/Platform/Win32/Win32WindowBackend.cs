@@ -48,6 +48,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         ApplyResizeMode();
+
+        // Clamp the current window size if it violates the new constraints.
+        var ws = Window.WindowSize;
+        double curW = Window.Width;
+        double curH = Window.Height;
+        double clampedW = Math.Clamp(curW, ws.MinWidth, ws.MaxWidth);
+        double clampedH = Math.Clamp(curH, ws.MinHeight, ws.MaxHeight);
+        if (clampedW != curW || clampedH != curH)
+        {
+            SetClientSize(clampedW, clampedH);
+        }
     }
 
     public void Show()
@@ -275,6 +286,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             case WindowMessages.WM_ERASEBKGND:
                 return HandleEraseBackground(wParam);
+
+            case WindowMessages.WM_GETMINMAXINFO:
+                return HandleGetMinMaxInfo(lParam);
 
             case WindowMessages.WM_SIZE:
                 return HandleSize(lParam);
@@ -830,6 +844,47 @@ internal sealed class Win32WindowBackend : IWindowBackend
             PixelHeight = pixelHeight;
             DpiScale = dpiScale;
         }
+    }
+
+    private unsafe nint HandleGetMinMaxInfo(nint lParam)
+    {
+        var info = (MINMAXINFO*)lParam;
+
+        uint dpi = Window.Dpi == 0 ? User32.GetDpiForWindow(Handle) : Window.Dpi;
+        double dpiScale = dpi / 96.0;
+        if (dpiScale <= 0) dpiScale = 1.0;
+
+        uint style = GetWindowStyle();
+
+        var ws = Window.WindowSize;
+        double minW = ws.MinWidth;
+        double minH = ws.MinHeight;
+        double maxW = ws.MaxWidth;
+        double maxH = ws.MaxHeight;
+
+        if (minW > 0 || minH > 0)
+        {
+            var minRect = new RECT(0, 0,
+                minW > 0 ? (int)Math.Ceiling(minW * dpiScale) : 0,
+                minH > 0 ? (int)Math.Ceiling(minH * dpiScale) : 0);
+            User32.AdjustWindowRectEx(ref minRect, style, false, 0);
+
+            if (minW > 0) info->ptMinTrackSize.x = minRect.Width;
+            if (minH > 0) info->ptMinTrackSize.y = minRect.Height;
+        }
+
+        if (!double.IsPositiveInfinity(maxW) || !double.IsPositiveInfinity(maxH))
+        {
+            var maxRect = new RECT(0, 0,
+                !double.IsPositiveInfinity(maxW) ? (int)Math.Ceiling(maxW * dpiScale) : 0,
+                !double.IsPositiveInfinity(maxH) ? (int)Math.Ceiling(maxH * dpiScale) : 0);
+            User32.AdjustWindowRectEx(ref maxRect, style, false, 0);
+
+            if (!double.IsPositiveInfinity(maxW)) info->ptMaxTrackSize.x = maxRect.Width;
+            if (!double.IsPositiveInfinity(maxH)) info->ptMaxTrackSize.y = maxRect.Height;
+        }
+
+        return 0;
     }
 
     private nint HandleSize(nint lParam)

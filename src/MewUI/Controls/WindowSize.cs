@@ -64,18 +64,6 @@ public readonly struct WindowSize
         => new(WindowSizeMode.Resizable, width, height, minWidth, minHeight, maxWidth, maxHeight);
 
     /// <summary>
-    /// Creates a resizable window with minimum size constraints.
-    /// </summary>
-    public static WindowSize ResizableWithMin(double width, double height, double minWidth, double minHeight)
-        => new(WindowSizeMode.Resizable, width, height, minWidth, minHeight, double.PositiveInfinity, double.PositiveInfinity);
-
-    /// <summary>
-    /// Creates a resizable window with maximum size constraints.
-    /// </summary>
-    public static WindowSize ResizableWithMax(double width, double height, double maxWidth, double maxHeight)
-        => new(WindowSizeMode.Resizable, width, height, 0, 0, maxWidth, maxHeight);
-
-    /// <summary>
     /// Creates a fixed-size window configuration with the specified client size.
     /// </summary>
     public static WindowSize Fixed(double width, double height)
