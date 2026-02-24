@@ -719,10 +719,56 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
         else
         {
-            hints.flags = 0;
+            double dpiScale = Window.DpiScale > 0 ? Window.DpiScale : 1.0;
+            var ws = Window.WindowSize;
+            double minW = ws.MinWidth;
+            double minH = ws.MinHeight;
+            double maxW = ws.MaxWidth;
+            double maxH = ws.MaxHeight;
+
+            if (minW > 0 || minH > 0)
+            {
+                hints.flags |= XSizeHintsFlags.PMinSize;
+                hints.min_width = minW > 0 ? (int)Math.Ceiling(minW * dpiScale) : 1;
+                hints.min_height = minH > 0 ? (int)Math.Ceiling(minH * dpiScale) : 1;
+            }
+
+            if (!double.IsPositiveInfinity(maxW) || !double.IsPositiveInfinity(maxH))
+            {
+                hints.flags |= XSizeHintsFlags.PMaxSize;
+                hints.max_width = !double.IsPositiveInfinity(maxW) ? (int)Math.Ceiling(maxW * dpiScale) : 32767;
+                hints.max_height = !double.IsPositiveInfinity(maxH) ? (int)Math.Ceiling(maxH * dpiScale) : 32767;
+            }
         }
 
         NativeX11.XSetWMNormalHints(Display, Handle, ref hints);
+
+        // Clamp the current window size if it violates the new constraints.
+        if (hints.flags != 0)
+        {
+            double dpiScale = Window.DpiScale > 0 ? Window.DpiScale : 1.0;
+            int curW = (int)Math.Round(Window.Width * dpiScale);
+            int curH = (int)Math.Round(Window.Height * dpiScale);
+            int clampedW = curW;
+            int clampedH = curH;
+
+            if ((hints.flags & XSizeHintsFlags.PMinSize) != 0)
+            {
+                clampedW = Math.Max(clampedW, hints.min_width);
+                clampedH = Math.Max(clampedH, hints.min_height);
+            }
+            if ((hints.flags & XSizeHintsFlags.PMaxSize) != 0)
+            {
+                clampedW = Math.Min(clampedW, hints.max_width);
+                clampedH = Math.Min(clampedH, hints.max_height);
+            }
+
+            if (clampedW != curW || clampedH != curH)
+            {
+                NativeX11.XResizeWindow(Display, Handle, (uint)Math.Max(1, clampedW), (uint)Math.Max(1, clampedH));
+            }
+        }
+
         NativeX11.XFlush(Display);
     }
 
@@ -1117,7 +1163,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             if (isDown)
             {
                 const uint defaultMaxDelayMs = 500;
-                int maxDist = (int)System.Math.Round(4 * Window.DpiScale);
+                int maxDist = (int)Math.Round(4 * Window.DpiScale);
                 clickCount = _clickCountTracker.Update(btn, xPx, yPx, unchecked((uint)e.time), defaultMaxDelayMs, maxDist, maxDist);
                 _lastPressClickCounts[buttonIndex] = clickCount;
             }

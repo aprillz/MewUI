@@ -53,6 +53,9 @@ internal static partial class X11
     public static partial int XMoveWindow(nint display, nint window, int x, int y);
 
     [LibraryImport(LibraryName)]
+    public static partial int XResizeWindow(nint display, nint window, uint width, uint height);
+
+    [LibraryImport(LibraryName)]
     public static partial int XSetInputFocus(nint display, nint focus, int revert_to, nint time);
 
     [LibraryImport(LibraryName)]
