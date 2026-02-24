@@ -397,6 +397,26 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     } = WindowSize.Resizable(800, 600).Height;
 
     /// <summary>
+    /// Gets the minimum width from <see cref="WindowSize"/>. Use <see cref="WindowSize"/> to configure constraints.
+    /// </summary>
+    public new double MinWidth => WindowSize.MinWidth;
+
+    /// <summary>
+    /// Gets the minimum height from <see cref="WindowSize"/>. Use <see cref="WindowSize"/> to configure constraints.
+    /// </summary>
+    public new double MinHeight => WindowSize.MinHeight;
+
+    /// <summary>
+    /// Gets the maximum width from <see cref="WindowSize"/>. Use <see cref="WindowSize"/> to configure constraints.
+    /// </summary>
+    public new double MaxWidth => WindowSize.MaxWidth;
+
+    /// <summary>
+    /// Gets the maximum height from <see cref="WindowSize"/>. Use <see cref="WindowSize"/> to configure constraints.
+    /// </summary>
+    public new double MaxHeight => WindowSize.MaxHeight;
+
+    /// <summary>
     /// Gets whether the window is currently active.
     /// </summary>
     public bool IsActive { get; private set; }
