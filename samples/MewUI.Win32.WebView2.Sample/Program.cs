@@ -374,7 +374,7 @@ try
                                     }),
                                 info.AddressBox
                                     .OnTextChanged(text => info.Address = text)
-                                    .OnGotFocus(() => Application.Current.Dispatcher!.Post(() => info.AddressBox.SelectAll()))
+                                    .OnGotFocus(() => Application.Current.Dispatcher!.BeginInvoke(() => info.AddressBox.SelectAll()))
                                     .OnKeyDown(e =>
                                     {
                                         if (e.Key == Key.Enter)
