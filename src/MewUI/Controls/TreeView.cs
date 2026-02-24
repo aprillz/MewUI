@@ -36,6 +36,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     private bool _rebindVisibleOnNextRender = true;
     private ITreeItemsView _itemsSource = TreeItemsView.Empty;
     private TreeViewNode? _selectedNode;
+    private object? _selectedItem;
     private int _hoverVisibleIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
@@ -93,12 +94,24 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     }
 
     /// <summary>
-    /// Gets or sets the selected node as an object for consistency with selector-style controls.
+    /// Gets or sets the selected item as an object for consistency with selector-style controls.
+    /// When using <see cref="TreeViewNode"/>-based items, this is equivalent to <see cref="SelectedNode"/>.
+    /// When using <see cref="TreeItemsView{T}"/>, this returns the actual typed item.
     /// </summary>
     public object? SelectedItem
     {
-        get => SelectedNode;
-        set => SelectedNode = value as TreeViewNode;
+        get => _selectedItem ?? _selectedNode;
+        set
+        {
+            if (value is TreeViewNode node)
+            {
+                SelectedNode = node;
+            }
+            else
+            {
+                _itemsSource.SelectedItem = value;
+            }
+        }
     }
 
     /// <summary>
@@ -136,6 +149,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         {
             if (Set(ref field, value))
             {
+                _presenter?.ItemPadding = value;
                 _rebindVisibleOnNextRender = true;
                 InvalidateMeasure();
                 InvalidateVisual();
@@ -196,6 +210,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             ItemTemplate = CreateDefaultItemTemplate(),
             BeforeItemRender = OnBeforeItemRender,
             GetContainerRect = OnGetContainerRect,
+            ItemPadding = ItemPadding,
             ItemHeight = ResolveItemHeight(),
             RebindExisting = true,
             UseHorizontalExtentForLayout = true,
@@ -267,7 +282,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int depth = _itemsSource.GetDepth(i);
-        double indentX = itemRect.X + depth * Indent + ItemPadding.Left / 2;
+        double indentX = itemRect.X + depth * Indent;
         var glyphRect = new Rect(indentX, itemRect.Y, Indent, itemRect.Height);
         var textColor = selected ? Theme.Palette.SelectionText : (IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText);
         if (_itemsSource.GetHasChildren(i))
@@ -288,17 +303,19 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     private void OnItemsSelectionChanged(int index)
     {
-        var node = _itemsSource.SelectedItem as TreeViewNode;
-        if (ReferenceEquals(_selectedNode, node))
+        var item = _itemsSource.SelectedItem;
+        var node = item as TreeViewNode;
+        if (ReferenceEquals(_selectedNode, node) && ReferenceEquals(_selectedItem, item))
         {
             return;
         }
 
         _selectedNode = node;
+        _selectedItem = item;
         _rebindVisibleOnNextRender = true;
 
         SelectedNodeChanged?.Invoke(node);
-        SelectionChanged?.Invoke(node);
+        SelectionChanged?.Invoke(item);
         ScrollIntoView(index);
         InvalidateVisual();
     }
@@ -660,11 +677,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                     tb.Text = text;
                 }
 
-                if (!tb.Padding.Equals(ItemPadding))
-                {
-                    tb.Padding = ItemPadding;
-                }
-
                 if (tb.FontFamily != FontFamily)
                 {
                     tb.FontFamily = FontFamily;
@@ -797,7 +809,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         _hasLastMousePosition = true;
-        _lastMousePosition = e.Position;
+        _lastMousePosition = e.GetPosition(this);
 
         int newHover = -1;
         if (TryHitRow(e.GetPosition(this), out int index, out _))
@@ -1090,7 +1102,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     private static void DrawExpanderGlyph(IGraphicsContext context, Rect glyphRect, bool expanded, Color color)
     {
-        // Match the ComboBox drop-down chevron style for visual consistency.
         var center = new Point(glyphRect.X + glyphRect.Width / 2, glyphRect.Y + glyphRect.Height / 2);
         double size = 4;
         Glyph.Draw(context, center, size, color, expanded ? GlyphKind.ChevronDown : GlyphKind.ChevronRight);

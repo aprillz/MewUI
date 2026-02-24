@@ -131,6 +131,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         {
             if (Set(ref field, value))
             {
+                _presenter?.ItemPadding = value;
                 _rebindVisibleOnNextRender = true;
                 InvalidateMeasure();
                 InvalidateVisual();
@@ -235,6 +236,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = _itemTemplate;
         presenter.BeforeItemRender = OnBeforeItemRender;
+        presenter.ItemPadding = ItemPadding;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.ExtentWidth = double.NaN;
         presenter.ItemRadius = 0;
@@ -653,11 +655,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
                 if (tb.Text != text)
                 {
                     tb.Text = text;
-                }
-
-                if (!tb.Padding.Equals(ItemPadding))
-                {
-                    tb.Padding = ItemPadding;
                 }
 
                 if (tb.FontFamily != FontFamily)

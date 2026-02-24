@@ -16,6 +16,8 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
 
     double ItemRadius { get; set; }
 
+    Thickness ItemPadding { get; set; }
+
     bool RebindExisting { get; set; }
 
     /// <summary>

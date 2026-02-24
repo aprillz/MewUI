@@ -124,6 +124,8 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
 
+    public Thickness ItemPadding { get; set; }
+
     public bool RebindExisting { get; set; } = false;
 
     public double ItemRadius
@@ -322,6 +324,10 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
             var itemRect = new Rect(x, y, width, alignedH);
             var containerRect = GetContainerRect != null ? GetContainerRect(i, itemRect) : itemRect;
+            if (ItemPadding != default)
+            {
+                containerRect = containerRect.Deflate(ItemPadding);
+            }
             containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
 
             element.Arrange(containerRect);

@@ -98,6 +98,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
 
+    public Thickness ItemPadding { get; set; }
+
     public bool RebindExisting { get; set; } = true;
 
     public double ItemHeightHint
@@ -274,10 +276,26 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
             RebindExisting = RebindExisting,
         };
 
+        var userGetContainerRect = GetContainerRect;
+        var pad = ItemPadding;
+        Func<int, Rect, Rect>? effectiveGetContainerRect;
+        if (pad == default)
+        {
+            effectiveGetContainerRect = userGetContainerRect;
+        }
+        else if (userGetContainerRect != null)
+        {
+            effectiveGetContainerRect = (i, r) => userGetContainerRect(i, r).Deflate(pad);
+        }
+        else
+        {
+            effectiveGetContainerRect = (_, r) => r.Deflate(pad);
+        }
+
         _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
         {
             BeforeItemRender = BeforeItemRender,
-            GetContainerRect = GetContainerRect,
+            GetContainerRect = effectiveGetContainerRect,
         };
 
         _itemsHost.Render(context);
