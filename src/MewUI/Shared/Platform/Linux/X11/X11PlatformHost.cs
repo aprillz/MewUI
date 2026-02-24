@@ -23,7 +23,7 @@ public sealed class X11PlatformHost : IPlatformHost
     private long _lastThemePollTick;
     private int _systemThemeDirty;
     private LinuxGSettingsMonitor? _gsettingsThemeMonitor;
-    private LinuxUiDispatcher? _dispatcher;
+    private LinuxDispatcher? _dispatcher;
     private long _lastDpiPollTick;
     private nint _resourceManagerAtom;
     private nint _xsettingsAtom;
@@ -44,7 +44,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public IWindowBackend CreateWindowBackend(Window window) => new X11WindowBackend(this, window);
 
-    public IUiDispatcher CreateDispatcher(nint windowHandle) => new LinuxUiDispatcher();
+    public IDispatcher CreateDispatcher(nint windowHandle) => new LinuxDispatcher();
 
     public uint GetSystemDpi()
     {
@@ -84,7 +84,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
         var previousContext = SynchronizationContext.Current;
         var dispatcher = CreateDispatcher(0);
-        _dispatcher = dispatcher as LinuxUiDispatcher;
+        _dispatcher = dispatcher as LinuxDispatcher;
         app.Dispatcher = dispatcher;
         SynchronizationContext.SetSynchronizationContext(dispatcher as SynchronizationContext);
         _dispatcher?.SetWake(SignalWake);

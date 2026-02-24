@@ -24,7 +24,7 @@ public sealed class Win32PlatformHost : IPlatformHost
     private nint _moduleHandle;
     private SynchronizationContext? _previousSynchronizationContext;
     private nint _dispatcherHwnd;
-    private Win32UiDispatcher? _dispatcher;
+    private Win32Dispatcher? _dispatcher;
     private Application? _app;
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
     private int _renderRequested;
@@ -38,7 +38,7 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     public IWindowBackend CreateWindowBackend(Window window) => new Win32WindowBackend(this, window);
 
-    public IUiDispatcher CreateDispatcher(nint windowHandle) => new Win32UiDispatcher(windowHandle);
+    public IDispatcher CreateDispatcher(nint windowHandle) => new Win32Dispatcher(windowHandle);
 
     public uint GetSystemDpi() => User32.GetDpiForSystem();
 
@@ -261,12 +261,12 @@ public sealed class Win32PlatformHost : IPlatformHost
         {
             switch (msg)
             {
-                case Win32UiDispatcher.WM_INVOKE:
+                case Win32Dispatcher.WM_INVOKE:
                     _dispatcher?.ClearInvokeRequest();
                     _dispatcher?.ProcessWorkItems();
                     if (_dispatcher?.HasPendingWork == true)
                     {
-                        _dispatcher?.Post(() => { }, UiDispatcherPriority.Background);
+                        _dispatcher?.BeginInvoke(() => { }, DispatcherPriority.Background);
                     }
                     return 0;
 
@@ -490,7 +490,7 @@ public sealed class Win32PlatformHost : IPlatformHost
             throw new InvalidOperationException($"Failed to create dispatcher window. Error: {Marshal.GetLastWin32Error()}");
         }
 
-        _dispatcher = new Win32UiDispatcher(_dispatcherHwnd);
+        _dispatcher = new Win32Dispatcher(_dispatcherHwnd);
         app.Dispatcher = _dispatcher;
         SynchronizationContext.SetSynchronizationContext(_dispatcher);
     }

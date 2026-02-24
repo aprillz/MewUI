@@ -353,12 +353,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 User32.DestroyCaret();
                 return 0;
 
-            case Win32UiDispatcher.WM_INVOKE:
-                (Window.ApplicationDispatcher as Win32UiDispatcher)?.ProcessWorkItems();
+            case Win32Dispatcher.WM_INVOKE:
+                (Window.ApplicationDispatcher as Win32Dispatcher)?.ProcessWorkItems();
                 return 0;
 
             case WindowMessages.WM_TIMER:
-                if ((Window.ApplicationDispatcher as Win32UiDispatcher)?.ProcessTimer((nuint)wParam) == true)
+                if ((Window.ApplicationDispatcher as Win32Dispatcher)?.ProcessTimer((nuint)wParam) == true)
                 {
                     return 0;
                 }

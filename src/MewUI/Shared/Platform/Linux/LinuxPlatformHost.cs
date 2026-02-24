@@ -14,7 +14,7 @@ public sealed class LinuxPlatformHost : IPlatformHost
 
     public IWindowBackend CreateWindowBackend(Window window) => new LinuxWindowBackend(window);
 
-    public IUiDispatcher CreateDispatcher(nint windowHandle) => new LinuxUiDispatcher();
+    public IDispatcher CreateDispatcher(nint windowHandle) => new LinuxDispatcher();
 
     public uint GetSystemDpi() => 96u;
 

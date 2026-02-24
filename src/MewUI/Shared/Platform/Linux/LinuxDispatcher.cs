@@ -2,10 +2,10 @@ using System.Diagnostics;
 
 namespace Aprillz.MewUI.Platform.Linux;
 
-internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
+internal sealed class LinuxDispatcher : SynchronizationContext, IDispatcher, IDispatcherCore
 {
     private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
-    private readonly UiDispatcherQueue _queue = new();
+    private readonly DispatcherQueue _queue = new();
     private readonly object _timersGate = new();
     private readonly List<ScheduledTimer> _timers = new();
     private long _nextTimerId;
@@ -14,22 +14,18 @@ internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
 
     public bool IsOnUIThread => Environment.CurrentManagedThreadId == _uiThreadId;
 
-    public void Post(Action action)
-    {
-        if (action != null)
-        {
-            Post(action, UiDispatcherPriority.Background);
-        }
-    }
+    public DispatcherOperation BeginInvoke(Action action)
+        => BeginInvoke(action, DispatcherPriority.Background);
 
-    public void Post(Action action, UiDispatcherPriority priority)
+    public DispatcherOperation BeginInvoke(Action action, DispatcherPriority priority)
     {
         ArgumentNullException.ThrowIfNull(action);
-        _queue.Enqueue(priority, action);
+        var op = _queue.EnqueueWithOperation(priority, action);
         RequestWake();
+        return op;
     }
 
-    public bool PostMerged(DispatcherMergeKey mergeKey, Action action, UiDispatcherPriority priority)
+    public bool PostMerged(DispatcherMergeKey mergeKey, Action action, DispatcherPriority priority)
     {
         var enqueued = _queue.EnqueueMerged(priority, mergeKey, action);
         if (enqueued)
@@ -39,7 +35,7 @@ internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
         return enqueued;
     }
 
-    public void Send(Action action)
+    public void Invoke(Action action)
     {
         if (action == null)
         {
@@ -54,12 +50,13 @@ internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
 
         using var gate = new ManualResetEventSlim(false);
         Exception? error = null;
-        Post(() =>
+        _queue.Enqueue(DispatcherPriority.Input, () =>
         {
             try { action(); }
             catch (Exception ex) { error = ex; }
             finally { gate.Set(); }
-        }, UiDispatcherPriority.Input);
+        });
+        RequestWake();
 
         gate.Wait();
         if (error != null)
@@ -299,19 +296,19 @@ internal sealed class LinuxUiDispatcher : SynchronizationContext, IUiDispatcher
     }
 
     public override void Post(SendOrPostCallback d, object? state)
-        => Post(() => d(state));
+        => BeginInvoke(() => d(state));
 
     public override void Send(SendOrPostCallback d, object? state)
-        => Send(() => d(state));
+        => Invoke(() => d(state));
 
     private readonly record struct ScheduledTimer(long Id, long DueAtTicks, Action Action, bool Canceled = false);
 
     private sealed class TimerHandle : IDisposable
     {
-        private LinuxUiDispatcher? _dispatcher;
+        private LinuxDispatcher? _dispatcher;
         private long _id;
 
-        public TimerHandle(LinuxUiDispatcher dispatcher, long id)
+        public TimerHandle(LinuxDispatcher dispatcher, long id)
         {
             _dispatcher = dispatcher;
             _id = id;
