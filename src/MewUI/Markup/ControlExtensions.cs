@@ -99,6 +99,18 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the font weight to semi-bold.
+    /// </summary>
+    /// <typeparam name="T">Control type.</typeparam>
+    /// <param name="control">Target control.</param>
+    /// <returns>The control for chaining.</returns>
+    public static T SemiBold<T>(this T control) where T : Control
+    {
+        control.FontWeight = MewUI.FontWeight.SemiBold;
+        return control;
+    }
+
+    /// <summary>
     /// Sets the font weight to bold.
     /// </summary>
     /// <typeparam name="T">Control type.</typeparam>
@@ -1535,6 +1547,19 @@ public static class ControlExtensions
         treeView.ItemsSource = items == null
             ? TreeItemsView.Empty
             : TreeItemsView.Create(items, n => n.Children, textSelector: n => n.Text, keySelector: n => n);
+        return treeView;
+    }
+
+    /// <summary>
+    /// Sets the items source directly from an <see cref="ITreeItemsView"/>.
+    /// </summary>
+    /// <param name="treeView">Target tree view.</param>
+    /// <param name="itemsView">The tree items view.</param>
+    /// <returns>The tree view for chaining.</returns>
+    public static TreeView ItemsSource(this TreeView treeView, ITreeItemsView itemsView)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+        treeView.ItemsSource = itemsView ?? TreeItemsView.Empty;
         return treeView;
     }
 
