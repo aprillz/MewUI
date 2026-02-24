@@ -2,13 +2,14 @@ using System.Collections.Concurrent;
 
 namespace Aprillz.MewUI.Platform;
 
-internal sealed class UiDispatcherQueue
+internal sealed class DispatcherQueue
 {
     internal readonly struct WorkItem
     {
         public required Action Action { get; init; }
         public DispatcherMergeKey? MergeKey { get; init; }
         public ManualResetEventSlim? Signal { get; init; }
+        public DispatcherOperation? Operation { get; init; }
     }
 
     private readonly ConcurrentQueue<WorkItem>[] _queues;
@@ -30,22 +31,30 @@ internal sealed class UiDispatcherQueue
         }
     }
 
-    public UiDispatcherQueue()
+    public DispatcherQueue()
     {
-        _queues = new ConcurrentQueue<WorkItem>[Enum.GetValues<UiDispatcherPriority>().Length];
+        _queues = new ConcurrentQueue<WorkItem>[Enum.GetValues<DispatcherPriority>().Length];
         for (int i = 0; i < _queues.Length; i++)
         {
             _queues[i] = new ConcurrentQueue<WorkItem>();
         }
     }
 
-    public void Enqueue(UiDispatcherPriority priority, Action action)
+    public void Enqueue(DispatcherPriority priority, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         EnqueueInternal(priority, new WorkItem { Action = action });
     }
 
-    public bool EnqueueMerged(UiDispatcherPriority priority, DispatcherMergeKey mergeKey, Action action)
+    public DispatcherOperation EnqueueWithOperation(DispatcherPriority priority, Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        var op = new DispatcherOperation(action);
+        EnqueueInternal(priority, new WorkItem { Action = action, Operation = op });
+        return op;
+    }
+
+    public bool EnqueueMerged(DispatcherPriority priority, DispatcherMergeKey mergeKey, Action action)
     {
         ArgumentNullException.ThrowIfNull(mergeKey);
         ArgumentNullException.ThrowIfNull(action);
@@ -59,7 +68,7 @@ internal sealed class UiDispatcherQueue
         return true;
     }
 
-    public void EnqueueWithSignal(UiDispatcherPriority priority, Action action, ManualResetEventSlim signal)
+    public void EnqueueWithSignal(DispatcherPriority priority, Action action, ManualResetEventSlim signal)
     {
         ArgumentNullException.ThrowIfNull(action);
         ArgumentNullException.ThrowIfNull(signal);
@@ -76,7 +85,15 @@ internal sealed class UiDispatcherQueue
             {
                 try
                 {
+                    var op = item.Operation;
+                    if (op != null && op.Status == DispatcherOperationStatus.Aborted)
+                    {
+                        continue;
+                    }
+
+                    op?.MarkExecuting();
                     item.Action();
+                    op?.MarkCompleted();
                 }
                 catch (Exception ex)
                 {
@@ -109,12 +126,12 @@ internal sealed class UiDispatcherQueue
         }
     }
 
-    private void EnqueueInternal(UiDispatcherPriority priority, in WorkItem item)
+    private void EnqueueInternal(DispatcherPriority priority, in WorkItem item)
     {
         int idx = (int)priority;
         if ((uint)idx >= (uint)_queues.Length)
         {
-            idx = (int)UiDispatcherPriority.Background;
+            idx = (int)DispatcherPriority.Background;
         }
 
         _queues[idx].Enqueue(item);

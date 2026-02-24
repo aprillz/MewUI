@@ -30,7 +30,7 @@ public interface IPlatformHost : IDisposable
     /// Creates a UI dispatcher associated with a native window handle.
     /// </summary>
     /// <param name="windowHandle">Native window handle.</param>
-    IUiDispatcher CreateDispatcher(nint windowHandle);
+    IDispatcher CreateDispatcher(nint windowHandle);
 
     /// <summary>
     /// Gets the system DPI used when no window handle is available.

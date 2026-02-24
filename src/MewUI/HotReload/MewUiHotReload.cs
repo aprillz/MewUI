@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Platform;
-
 namespace Aprillz.MewUI.HotReload;
 
 /// <summary>
@@ -8,7 +6,7 @@ namespace Aprillz.MewUI.HotReload;
 /// </summary>
 public static class MewUiHotReload
 {
-    private static readonly DispatcherMergeKey mergeKey = new(UiDispatcherPriority.Background);
+    private static readonly DispatcherMergeKey mergeKey = new(DispatcherPriority.Background);
     private static bool reloading;
 
     public static bool IsEnabled
@@ -30,7 +28,7 @@ public static class MewUiHotReload
             return;
         }
 
-        dispatcher.PostMerged(mergeKey, ReloadOnUiThread, UiDispatcherPriority.Input);
+        (dispatcher as IDispatcherCore)?.PostMerged(mergeKey, ReloadOnUiThread, DispatcherPriority.Input);
     }
 
     private static void ReloadOnUiThread()

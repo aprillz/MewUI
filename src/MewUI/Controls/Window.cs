@@ -12,8 +12,8 @@ namespace Aprillz.MewUI;
 /// </summary>
 public partial class Window : ContentControl, ILayoutRoundingHost
 {
-    private readonly DispatcherMergeKey _layoutMergeKey = new(UiDispatcherPriority.Layout);
-    private readonly DispatcherMergeKey _renderMergeKey = new(UiDispatcherPriority.Render);
+    private readonly DispatcherMergeKey _layoutMergeKey = new(DispatcherPriority.Layout);
+    private readonly DispatcherMergeKey _renderMergeKey = new(DispatcherPriority.Render);
 
     private enum WindowLifetimeState
     {
@@ -88,14 +88,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void ReevaluateMouseOver()
     {
-        ApplicationDispatcher?.Post(() =>
+        ApplicationDispatcher?.BeginInvoke(() =>
         {
             // When layout/scroll offsets change without an actual mouse move, the element under the cursor can change.
             // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
             var leaf = WindowInputRouter.HitTest(this, _lastMousePositionDip);
             WindowInputRouter.UpdateMouseOver(this, leaf);
 
-        },UiDispatcherPriority.Layout);
+        }, DispatcherPriority.Layout);
     }
 
     internal void UpdateMouseOverChain(UIElement? oldLeaf, UIElement? newLeaf)
@@ -489,7 +489,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public IGraphicsFactory GraphicsFactory => Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
 
-    internal IUiDispatcher? ApplicationDispatcher => Application.IsRunning ? Application.Current.Dispatcher : null;
+    internal IDispatcher? ApplicationDispatcher => Application.IsRunning ? Application.Current.Dispatcher : null;
 
     #region Events
 
@@ -1051,11 +1051,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        dispatcher.PostMerged(_layoutMergeKey, () =>
+        (dispatcher as IDispatcherCore)?.PostMerged(_layoutMergeKey, () =>
         {
             PerformLayout();
             RequestRender();
-        }, UiDispatcherPriority.Layout);
+        }, DispatcherPriority.Layout);
     }
 
     private void RequestRender()
@@ -1067,7 +1067,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        dispatcher.PostMerged(_renderMergeKey, InvalidateBackend, UiDispatcherPriority.Render);
+        (dispatcher as IDispatcherCore)?.PostMerged(_renderMergeKey, InvalidateBackend, DispatcherPriority.Render);
     }
 
     internal bool SetFocusedElement(UIElement element) => FocusManager.SetFocus(element);
@@ -1329,7 +1329,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         Application.DispatcherChanged -= OnDispatcherChanged;
     }
 
-    private void OnDispatcherChanged(IUiDispatcher? dispatcher)
+    private void OnDispatcherChanged(IDispatcher? dispatcher)
     {
         if (dispatcher == null)
         {
@@ -1337,7 +1337,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         // Ensure Loaded is raised on the UI thread.
-        dispatcher.Send(() =>
+        dispatcher.Invoke(() =>
         {
             UnsubscribeFromDispatcherChanged();
             RaiseLoaded();

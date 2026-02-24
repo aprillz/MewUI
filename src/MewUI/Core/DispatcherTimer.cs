@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Platform;
-
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -91,7 +89,7 @@ public sealed class DispatcherTimer : IDisposable
             return;
         }
 
-        dispatcher.Send(() =>
+        dispatcher.Invoke(() =>
         {
             lock (_gate)
             {
@@ -103,7 +101,7 @@ public sealed class DispatcherTimer : IDisposable
                 _isEnabled = true;
                 UnsubscribeFromDispatcherChanged_NoLock();
                 _scheduled?.Dispose();
-                _scheduled = dispatcher.Schedule(_interval, OnTick);
+                _scheduled = (dispatcher as IDispatcherCore)!.Schedule(_interval, OnTick);
             }
         });
     }
@@ -126,7 +124,7 @@ public sealed class DispatcherTimer : IDisposable
             return;
         }
 
-        dispatcher.Send(() =>
+        dispatcher.Invoke(() =>
         {
             lock (_gate)
             {
@@ -173,7 +171,7 @@ public sealed class DispatcherTimer : IDisposable
                 return;
             }
 
-            _scheduled = dispatcher.Schedule(_interval, OnTick);
+            _scheduled = (dispatcher as IDispatcherCore)!.Schedule(_interval, OnTick);
         }
     }
 
@@ -185,7 +183,7 @@ public sealed class DispatcherTimer : IDisposable
             return;
         }
 
-        dispatcher.Send(() =>
+        dispatcher.Invoke(() =>
         {
             lock (_gate)
             {
@@ -195,7 +193,7 @@ public sealed class DispatcherTimer : IDisposable
                 }
 
                 _scheduled?.Dispose();
-                _scheduled = dispatcher.Schedule(_interval, OnTick);
+                _scheduled = (dispatcher as IDispatcherCore)!.Schedule(_interval, OnTick);
             }
         });
     }
@@ -222,14 +220,14 @@ public sealed class DispatcherTimer : IDisposable
         Application.DispatcherChanged -= OnDispatcherChanged;
     }
 
-    private void OnDispatcherChanged(IUiDispatcher? dispatcher)
+    private void OnDispatcherChanged(IDispatcher? dispatcher)
     {
         if (dispatcher == null)
         {
             return;
         }
 
-        dispatcher.Send(() =>
+        dispatcher.Invoke(() =>
         {
             lock (_gate)
             {
@@ -239,12 +237,12 @@ public sealed class DispatcherTimer : IDisposable
                 }
 
                 UnsubscribeFromDispatcherChanged_NoLock();
-                _scheduled = dispatcher.Schedule(_interval, OnTick);
+                _scheduled = (dispatcher as IDispatcherCore)!.Schedule(_interval, OnTick);
             }
         });
     }
 
-    private static IUiDispatcher? TryGetDispatcher()
+    private static IDispatcher? TryGetDispatcher()
     {
         if (!Application.IsRunning)
         {

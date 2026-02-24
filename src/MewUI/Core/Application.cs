@@ -90,11 +90,14 @@ public sealed class Application
     /// </summary>
     public static bool IsRunning => _current != null;
 
+    /// <summary>
+    /// Gets the active platform host responsible for windowing and input.
+    /// </summary>
     public IPlatformHost PlatformHost { get; }
 
-    internal static event Action<IUiDispatcher?>? DispatcherChanged;
+    internal static event Action<IDispatcher?>? DispatcherChanged;
 
-    public IUiDispatcher? Dispatcher
+    public IDispatcher? Dispatcher
     {
         get; internal set
         {
