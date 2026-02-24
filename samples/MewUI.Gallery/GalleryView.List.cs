@@ -191,7 +191,7 @@ partial class GalleryView
 
                 messages.Add(new ChatMessage(nextId++, "You", text, Mine: true, DateTimeOffset.Now));
                 input.Value = string.Empty;
-                Application.Current.Dispatcher.Post(() => ScrollToBottom(), UiDispatcherPriority.Render);
+                Application.Current.Dispatcher?.BeginInvoke(() => ScrollToBottom(), DispatcherPriority.Render);
             }
 
             var status = new ObservableValue<string>(string.Empty);
