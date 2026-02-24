@@ -18,6 +18,8 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
     public GridView()
     {
+        CellPadding = Theme.Metrics.ItemPadding;
+
         _scrollViewer.Padding = new Thickness(0);
         _scrollViewer.ViewportCornerRadius = 0;
 
@@ -116,6 +118,20 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             }
         }
     } = double.NaN;
+
+    public Thickness CellPadding
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                _rebindVisibleOnNextRender = true;
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
+        }
+    }
 
     public double MaxAutoViewportHeight
     {
@@ -1224,9 +1240,14 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         protected override Size MeasureContent(Size availableSize)
         {
+            var pad = _owner.CellPadding;
+            double padH = pad.HorizontalThickness;
+            double padV = pad.VerticalThickness;
             for (int i = 0; i < _cells.Count; i++)
             {
-                _cells[i].View.Measure(new Size(Math.Max(0, _owner._core.Columns[i].Width), availableSize.Height));
+                double w = Math.Max(0, _owner._core.Columns[i].Width - padH);
+                double h = Math.Max(0, availableSize.Height - padV);
+                _cells[i].View.Measure(new Size(w, h));
             }
 
             return new Size(availableSize.Width, availableSize.Height);
@@ -1235,10 +1256,16 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         protected override void ArrangeContent(Rect bounds)
         {
             double x = bounds.X;
+            var pad = _owner.CellPadding;
             for (int i = 0; i < _cells.Count; i++)
             {
                 double w = Math.Max(0, _owner._core.Columns[i].Width);
-                _cells[i].View.Arrange(new Rect(x, bounds.Y, w, bounds.Height));
+                var cellRect = new Rect(
+                    x + pad.Left,
+                    bounds.Y + pad.Top,
+                    Math.Max(0, w - pad.HorizontalThickness),
+                    Math.Max(0, bounds.Height - pad.VerticalThickness));
+                _cells[i].View.Arrange(cellRect);
                 x += w;
             }
         }

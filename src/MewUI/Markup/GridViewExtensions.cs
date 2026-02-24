@@ -32,6 +32,19 @@ public static class GridViewExtensions
     }
 
     /// <summary>
+    /// Sets the cell padding applied to each cell in a row.
+    /// </summary>
+    /// <param name="gridView">Target grid view.</param>
+    /// <param name="cellPadding">Cell padding in DIPs.</param>
+    /// <returns>The grid view for chaining.</returns>
+    public static GridView CellPadding(this GridView gridView, Thickness cellPadding)
+    {
+        ArgumentNullException.ThrowIfNull(gridView);
+        gridView.CellPadding = cellPadding;
+        return gridView;
+    }
+
+    /// <summary>
     /// Enables or disables zebra striping.
     /// </summary>
     /// <param name="gridView">Target grid view.</param>
