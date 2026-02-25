@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI.Diagnostics;
@@ -47,7 +48,9 @@ public static class EnvDebugLog
 
         try
         {
-            Console.WriteLine($"{tag} {DateTime.Now:HH:mm:ss.fff} {message}");
+            var line = $"{tag} {DateTime.Now:HH:mm:ss.fff} {message}";
+            Console.WriteLine(line);
+            Debug.WriteLine(line);
         }
         catch
         {
@@ -63,7 +66,9 @@ public static class EnvDebugLog
 
         try
         {
-            Console.WriteLine($"{tag} {DateTime.Now:HH:mm:ss.fff} {message.ToStringAndClear()}");
+            var line = $"{tag} {DateTime.Now:HH:mm:ss.fff} {message.ToStringAndClear()}";
+            Console.WriteLine(line);
+            Debug.WriteLine(line);
         }
         catch
         {
