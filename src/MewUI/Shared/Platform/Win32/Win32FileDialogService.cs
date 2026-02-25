@@ -64,98 +64,99 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        // SHBrowseForFolder can hang when invoked from WndProc-driven callbacks (which can happen in this UI stack).
-        // Run it on an STA thread, and do not pass a cross-thread owner HWND (it can also hang).
-        var staOptions = new FolderDialogOptions
-        {
-            Owner = 0,
-            Title = options.Title,
-            InitialDirectory = options.InitialDirectory
-        };
-
+        // Run on an STA thread to avoid MTA/UI-thread hangs with COM-based dialogs.
         Action? pump = Application.IsRunning ? Application.DoEvents : null;
-        return StaHelper.Run(() => SelectFolderCore(staOptions), pump);
+        return StaHelper.Run(() => SelectFolderCore(options), pump);
     }
 
     private static string? SelectFolderCore(FolderDialogOptions options)
     {
-        const uint BIF_RETURNONLYFSDIRS = 0x0001;
-        const uint BIF_NEWDIALOGSTYLE = 0x0040;
-        const uint BIF_EDITBOX = 0x0010;
-        const uint BIF_VALIDATE = 0x0020;
-
-        const uint BFFM_INITIALIZED = 1;
-        const uint BFFM_SETSELECTIONW = 0x467;
-
-        string title = options.Title ?? string.Empty;
+        string title = options.Title ?? "Select folder";
         string? initialDirectory = options.InitialDirectory;
-
-        char[] displayName = new char[260];
-        char[] selectedPath = new char[260];
-
-        BrowseCallbackProc? callback = null;
-        callback = (hwnd, uMsg, lParam, lpData) =>
-        {
-            if (uMsg == BFFM_INITIALIZED && lpData != 0)
-            {
-                User32.SendMessage(hwnd, BFFM_SETSELECTIONW, new nint(1), lpData);
-            }
-            return 0;
-        };
-
-        var callbackPtr = Marshal.GetFunctionPointerForDelegate(callback);
 
         int hr = Ole32.CoInitializeEx(0, Ole32.COINIT_APARTMENTTHREADED);
         bool uninitialize = hr is >= 0 and not Ole32.RPC_E_CHANGED_MODE;
 
-        unsafe
+        IFileOpenDialog? dialog = null;
+        IShellItem? folderItem = null;
+        IShellItem? resultItem = null;
+        try
         {
-            fixed (char* pTitle = title)
-            fixed (char* pDisplayName = displayName)
-            fixed (char* pSelectedPath = selectedPath)
-            fixed (char* pInitialDirectory = initialDirectory)
+            var iidFileOpenDialog = typeof(IFileOpenDialog).GUID;
+            var clsidFileOpenDialog = CLSID.FileOpenDialog;
+            int hrCreate = Ole32.CoCreateInstance(
+                ref clsidFileOpenDialog,
+                0,
+                Ole32.CLSCTX_INPROC_SERVER,
+                ref iidFileOpenDialog,
+                out var dialogPtr);
+            if (hrCreate < 0 || dialogPtr == 0)
             {
-                var bi = new BROWSEINFOW
-                {
-                    hwndOwner = options.Owner,
-                    pidlRoot = 0,
-                    pszDisplayName = (nint)pDisplayName,
-                    lpszTitle = (nint)pTitle,
-                    ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_EDITBOX | BIF_VALIDATE,
-                    lpfn = callbackPtr,
-                    lParam = initialDirectory != null ? (nint)pInitialDirectory : 0,
-                    iImage = 0
-                };
+                Marshal.ThrowExceptionForHR(hrCreate);
+            }
 
-                nint pidl = Shell32.SHBrowseForFolder(ref bi);
-                if (pidl == 0)
+            dialog = (IFileOpenDialog)Marshal.GetTypedObjectForIUnknown(dialogPtr, typeof(IFileOpenDialog));
+            Marshal.Release(dialogPtr);
+            dialog.GetOptions(out uint currentOptions);
+            uint optionsFlags = currentOptions
+                | (uint)FILEOPENDIALOGOPTIONS.FOS_PICKFOLDERS
+                | (uint)FILEOPENDIALOGOPTIONS.FOS_FORCEFILESYSTEM
+                | (uint)FILEOPENDIALOGOPTIONS.FOS_PATHMUSTEXIST
+                | (uint)FILEOPENDIALOGOPTIONS.FOS_NOCHANGEDIR;
+            dialog.SetOptions(optionsFlags);
+            dialog.SetTitle(title);
+
+            if (!string.IsNullOrWhiteSpace(initialDirectory))
+            {
+                Guid shellItemGuid = typeof(IShellItem).GUID;
+                if (Shell32.SHCreateItemFromParsingName(initialDirectory!, 0, ref shellItemGuid, out var itemPtr) == 0 && itemPtr != 0)
                 {
-                    if (uninitialize)
+                    try
                     {
-                        Ole32.CoUninitialize();
+                        folderItem = (IShellItem)Marshal.GetTypedObjectForIUnknown(itemPtr, typeof(IShellItem));
+                        dialog.SetFolder(folderItem);
                     }
-                    return null;
-                }
-
-                try
-                {
-                    if (!Shell32.SHGetPathFromIDList(pidl, (nint)pSelectedPath))
+                    finally
                     {
-                        return null;
-                    }
-
-                    var path = new string(pSelectedPath);
-                    path = path.TrimEnd('\0');
-                    return string.IsNullOrWhiteSpace(path) ? null : path;
-                }
-                finally
-                {
-                    Ole32.CoTaskMemFree(pidl);
-                    if (uninitialize)
-                    {
-                        Ole32.CoUninitialize();
+                        Marshal.Release(itemPtr);
                     }
                 }
+            }
+
+            hr = dialog.Show(options.Owner);
+            if (hr == unchecked((int)0x800704C7)) // ERROR_CANCELLED
+            {
+                return null;
+            }
+
+            if (hr < 0)
+            {
+                Marshal.ThrowExceptionForHR(hr);
+            }
+
+            dialog.GetResult(out resultItem);
+            resultItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out nint pszPath);
+            try
+            {
+                var path = Marshal.PtrToStringUni(pszPath);
+                return string.IsNullOrWhiteSpace(path) ? null : path;
+            }
+            finally
+            {
+                if (pszPath != 0)
+                {
+                    Ole32.CoTaskMemFree(pszPath);
+                }
+            }
+        }
+        finally
+        {
+            if (resultItem != null) Marshal.ReleaseComObject(resultItem);
+            if (folderItem != null) Marshal.ReleaseComObject(folderItem);
+            if (dialog != null) Marshal.ReleaseComObject(dialog);
+            if (uninitialize)
+            {
+                Ole32.CoUninitialize();
             }
         }
     }
@@ -381,21 +382,65 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         public uint FlagsEx;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BROWSEINFOW
+    [ComImport]
+    [Guid("D57C7288-D4AD-4768-BE02-9D969532D960")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IFileOpenDialog
     {
-        public nint hwndOwner;
-        public nint pidlRoot;
-        public nint pszDisplayName;
-        public nint lpszTitle;
-        public uint ulFlags;
-        public nint lpfn;
-        public nint lParam;
-        public int iImage;
+        [PreserveSig] int Show(nint parent);
+        void SetFileTypes(uint cFileTypes, nint rgFilterSpec);
+        void SetFileTypeIndex(uint iFileType);
+        void GetFileTypeIndex(out uint piFileType);
+        void Advise(nint pfde, out uint pdwCookie);
+        void Unadvise(uint dwCookie);
+        void SetOptions(uint fos);
+        void GetOptions(out uint pfos);
+        void SetDefaultFolder(IShellItem psi);
+        void SetFolder(IShellItem psi);
+        void GetFolder(out IShellItem ppsi);
+        void GetCurrentSelection(out IShellItem ppsi);
+        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
+        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
+        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
+        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
+        void GetResult(out IShellItem ppsi);
+        void AddPlace(IShellItem psi, int fdap);
+        void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
+        void Close(int hr);
+        void SetClientGuid(ref Guid guid);
+        void ClearClientData();
+        void SetFilter(nint pFilter);
+        void GetResults(out nint ppenum);
+        void GetSelectedItems(out nint ppsai);
     }
 
-    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-    private delegate int BrowseCallbackProc(nint hwnd, uint uMsg, nint lParam, nint lpData);
+    [ComImport]
+    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItem
+    {
+        void BindToHandler(nint pbc, ref Guid bhid, ref Guid riid, out nint ppv);
+        void GetParent(out IShellItem ppsi);
+        void GetDisplayName(SIGDN sigdnName, out nint ppszName);
+        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        void Compare(IShellItem psi, uint hint, out int piOrder);
+    }
+
+    [Flags]
+    private enum FILEOPENDIALOGOPTIONS : uint
+    {
+        FOS_NOCHANGEDIR = 0x00000008,
+        FOS_PICKFOLDERS = 0x00000020,
+        FOS_FORCEFILESYSTEM = 0x00000040,
+        FOS_PATHMUSTEXIST = 0x00000800,
+        FOS_FILEMUSTEXIST = 0x00001000
+    }
+
+    private enum SIGDN : uint
+    {
+        SIGDN_FILESYSPATH = 0x80058000
+    }
 
     private static partial class Comdlg32
     {
@@ -417,12 +462,12 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
     {
         private const string LibraryName = "shell32.dll";
 
-        [LibraryImport(LibraryName, EntryPoint = "SHBrowseForFolderW", SetLastError = true)]
-        public static partial nint SHBrowseForFolder(ref BROWSEINFOW bi);
-
-        [LibraryImport(LibraryName, EntryPoint = "SHGetPathFromIDListW", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static partial bool SHGetPathFromIDList(nint pidl, nint pszPath);
+        [LibraryImport(LibraryName, EntryPoint = "SHCreateItemFromParsingName", StringMarshalling = StringMarshalling.Utf16)]
+        public static partial int SHCreateItemFromParsingName(
+            string pszPath,
+            nint pbc,
+            ref Guid riid,
+            out nint ppv);
     }
 
     private static partial class Ole32
@@ -430,6 +475,7 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         private const string LibraryName = "ole32.dll";
 
         public const uint COINIT_APARTMENTTHREADED = 0x2;
+        public const uint CLSCTX_INPROC_SERVER = 0x1;
         public const int RPC_E_CHANGED_MODE = unchecked((int)0x80010106);
 
         [LibraryImport(LibraryName)]
@@ -439,6 +485,19 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         public static partial void CoUninitialize();
 
         [LibraryImport(LibraryName)]
+        public static partial int CoCreateInstance(
+            ref Guid rclsid,
+            nint pUnkOuter,
+            uint dwClsContext,
+            ref Guid riid,
+            out nint ppv);
+
+        [LibraryImport(LibraryName)]
         public static partial void CoTaskMemFree(nint pv);
+    }
+
+    private static class CLSID
+    {
+        public static readonly Guid FileOpenDialog = new("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
     }
 }

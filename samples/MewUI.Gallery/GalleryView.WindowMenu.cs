@@ -1,3 +1,4 @@
+using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Gallery;
@@ -16,6 +17,10 @@ partial class GalleryView
     {
         var dialogStatus = new ObservableValue<string>("Dialog: -");
         var transparentStatus = new ObservableValue<string>("Transparent: -");
+        var openFileStatus = new ObservableValue<string>("Open File: -");
+        var openFilesStatus = new ObservableValue<string>("Open Files: -");
+        var saveFileStatus = new ObservableValue<string>("Save File: -");
+        var folderStatus = new ObservableValue<string>("Select Folder: -");
 
         async void ShowDialogSample()
         {
@@ -153,6 +158,92 @@ partial class GalleryView
                             .BindText(transparentStatus)
                             .FontSize(11)
                     )
+            ),
+
+            Card(
+                "File Dialogs",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new WrapPanel()
+                            .Spacing(6)
+                            .Children(
+                                new Button()
+                                    .Content("Open File...")
+                                    .OnClick(() =>
+                                    {
+                                        var file = FileDialog.OpenFile(new OpenFileDialogOptions
+                                        {
+                                            Owner = window.Handle,
+                                            Filter = "All Files (*.*)|*.*"
+                                        });
+                                        openFileStatus.Value = file is null ? "Open File: canceled" : $"Open File: {file}";
+                                    }),
+                                new Button()
+                                    .Content("Open Files...")
+                                    .OnClick(() =>
+                                    {
+                                        var files = FileDialog.OpenFiles(new OpenFileDialogOptions
+                                        {
+                                            Owner = window.Handle,
+                                            Filter = "All Files (*.*)|*.*"
+                                        });
+
+                                        if (files is null || files.Length == 0)
+                                        {
+                                            openFilesStatus.Value = "Open Files: canceled";
+                                        }
+                                        else if (files.Length == 1)
+                                        {
+                                            openFilesStatus.Value = $"Open Files: {files[0]}";
+                                        }
+                                        else
+                                        {
+                                            openFilesStatus.Value = $"Open Files: {files.Length} files";
+                                        }
+                                    }),
+                                new Button()
+                                    .Content("Save File...")
+                                    .OnClick(() =>
+                                    {
+                                        var file = FileDialog.SaveFile(new SaveFileDialogOptions
+                                        {
+                                            Owner = window.Handle,
+                                            Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                                            FileName = "demo.txt"
+                                        });
+                                        saveFileStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
+                                    }),
+                                new Button()
+                                    .Content("Select Folder...")
+                                    .OnClick(() =>
+                                    {
+                                        var folder = FileDialog.SelectFolder(new FolderDialogOptions
+                                        {
+                                            Owner = window.Handle
+                                        });
+                                        folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
+                                    })
+                            ),
+                        new Label()
+                            .BindText(openFileStatus)
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap),
+                        new Label()
+                            .BindText(openFilesStatus)
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap),
+                        new Label()
+                            .BindText(saveFileStatus)
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap),
+                        new Label()
+                            .BindText(folderStatus)
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap)
+                    ),
+                minWidth: 520
             )
         );
     }
