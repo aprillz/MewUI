@@ -735,7 +735,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         var dpiScale = GetDpi() / 96.0;
         double radius = Theme.Metrics.ControlCornerRadius;
         var borderInset = GetBorderVisualInset();
-        double itemRadius = Math.Max(0, radius - borderInset);
+        double itemRadius = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), dpiScale);
 
         DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, radius);
 
