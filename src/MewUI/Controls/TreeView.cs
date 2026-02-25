@@ -608,8 +608,9 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return;
         }
 
-        _scrollViewer.ViewportCornerRadius = Math.Max(0, radius - borderInset);
-        _presenter.ItemRadius = Math.Max(0, radius - borderInset);
+        var clipR = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), GetDpi() / 96.0);
+        _scrollViewer.ViewportCornerRadius = clipR;
+        _presenter.ItemRadius = clipR;
 
         _presenter.RebindExisting = _rebindVisibleOnNextRender;
         _rebindVisibleOnNextRender = false;

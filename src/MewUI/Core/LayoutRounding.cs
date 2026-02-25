@@ -22,7 +22,7 @@ public static class LayoutRounding
     /// <summary>
     /// Produces a clip rectangle that won't shrink due to rounding and can optionally be expanded by whole device pixels.
     /// </summary>
-    public static Rect MakeClipRect(Rect rect, double dpiScale, int rightPx = 1, int bottomPx = 1) =>
+    public static Rect MakeClipRect(Rect rect, double dpiScale, int rightPx = 0, int bottomPx = 0) =>
         ExpandClipByDevicePixels(rect, dpiScale, rightPx, bottomPx);
 
     /// <summary>
@@ -104,6 +104,9 @@ public static class LayoutRounding
 
     /// <summary>
     /// Snaps a rectangle outward (floor left/top, ceil right/bottom) so it never shrinks.
+    /// A small epsilon tolerance prevents floating-point round-trip errors
+    /// (e.g. <c>Floor((16/1.5 + 2/1.5) * 1.5)</c> yielding 17 instead of 18) from
+    /// shifting edges by an extra device pixel.
     /// </summary>
     public static Rect SnapRectEdgesToPixelsOutward(Rect rect, double dpiScale)
     {
@@ -117,10 +120,11 @@ public static class LayoutRounding
             return rect;
         }
 
-        int leftPx = (int)Math.Floor(rect.X * dpiScale);
-        int topPx = (int)Math.Floor(rect.Y * dpiScale);
-        int rightPx = (int)Math.Ceiling((rect.X + rect.Width) * dpiScale);
-        int bottomPx = (int)Math.Ceiling((rect.Y + rect.Height) * dpiScale);
+        const double eps = 1e-6;
+        int leftPx = (int)Math.Floor(rect.X * dpiScale + eps);
+        int topPx = (int)Math.Floor(rect.Y * dpiScale + eps);
+        int rightPx = (int)Math.Ceiling((rect.X + rect.Width) * dpiScale - eps);
+        int bottomPx = (int)Math.Ceiling((rect.Y + rect.Height) * dpiScale - eps);
 
         int widthPx = Math.Max(0, rightPx - leftPx);
         int heightPx = Math.Max(0, bottomPx - topPx);
@@ -212,6 +216,8 @@ public static class LayoutRounding
 
     /// <summary>
     /// Ceils a DIP value to a pixel-aligned integer coordinate.
+    /// A small epsilon tolerance prevents floating-point round-trip errors from
+    /// expanding by an extra device pixel.
     /// </summary>
     public static int CeilToPixelInt(double value, double dpiScale)
     {
@@ -225,7 +231,8 @@ public static class LayoutRounding
             return 0;
         }
 
-        return (int)Math.Ceiling(value * dpiScale);
+        const double eps = 1e-6;
+        return (int)Math.Ceiling(value * dpiScale - eps);
     }
 
     /// <summary>

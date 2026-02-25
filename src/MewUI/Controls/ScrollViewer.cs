@@ -351,7 +351,7 @@ public sealed class ScrollViewer : ContentControl
 
         // Render content clipped to viewport.
         context.Save();
-        double r = ViewportCornerRadius;
+        double r = Math.Max(0, ViewportCornerRadius - Math.Min(Padding.Left, Math.Min(Padding.Right, Math.Min(Padding.Top, Padding.Bottom))));
         if (r > 0)
         {
             r = Math.Min(r, Math.Min(clip.Width, clip.Height) / 2);

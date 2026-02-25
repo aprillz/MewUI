@@ -38,6 +38,8 @@ public sealed partial class Slider : RangeBase
         Height = 24;
     }
 
+    private double ThumbSize => 14;
+
     /// <summary>
     /// Sets a two-way binding for the Value property.
     /// </summary>
@@ -54,7 +56,7 @@ public sealed partial class Slider : RangeBase
         SetValueBindingCore(get, set, subscribe, unsubscribe);
     }
 
-    protected override Size MeasureContent(Size availableSize) => new Size(160, Height);
+    protected override Size MeasureContent(Size availableSize) => new Size(ThumbSize * 3, ThumbSize);
 
     protected override void OnRender(IGraphicsContext context)
     {
@@ -94,12 +96,11 @@ public sealed partial class Slider : RangeBase
         }
 
         // Thumb
-        double thumbSize = 14;
-        double thumbX = trackRect.X + trackRect.Width * t - thumbSize / 2;
-        thumbX = Math.Clamp(thumbX, contentBounds.X - thumbSize / 2, contentBounds.Right - thumbSize / 2);
+        double thumbX = trackRect.X + trackRect.Width * t - ThumbSize / 2;
+        thumbX = Math.Clamp(thumbX, contentBounds.X - ThumbSize / 2, contentBounds.Right - ThumbSize / 2);
 
-        double thumbY = contentBounds.Y + (contentBounds.Height - thumbSize) / 2;
-        var thumbRect = new Rect(thumbX, thumbY, thumbSize, thumbSize);
+        double thumbY = contentBounds.Y + (contentBounds.Height - ThumbSize) / 2;
+        var thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
 
         var thumbFill = PickControlBackground(GetVisualState(), Theme.Palette.ControlBackground);
 

@@ -800,8 +800,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             .Deflate(Padding);
 
         var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
-        var clipRadius = Math.Max(0, Theme.Metrics.ControlCornerRadius - borderInset);
-        //clipRadius = LayoutRounding.RoundToPixel(clipRadius, dpiScale);
+        var clipRadius = LayoutRounding.RoundToPixel(Math.Max(0, Theme.Metrics.ControlCornerRadius - BorderThickness), dpiScale);
         clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
 
         context.Save();

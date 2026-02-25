@@ -7,12 +7,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollable items host without built-in selection semantics.
 /// </summary>
-public sealed class ItemsControl : Control, IVisualTreeHost
+public sealed class ItemsControl : VirtualizedItemsBase
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private IItemsPresenter _presenter;
     private IDataTemplate _itemTemplate;
-    private readonly ScrollViewer _scrollViewer;
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
@@ -128,16 +127,11 @@ public sealed class ItemsControl : Control, IVisualTreeHost
     {
         _itemsSource.Changed += OnItemsChanged;
 
-        _scrollViewer = new ScrollViewer
-        {
-            VerticalScroll = ScrollMode.Auto,
-            HorizontalScroll = ScrollMode.Disabled,
-            BorderThickness = 0,
-            Background = default,
-            Padding = Padding,
-            Content = null,
-        };
-        _scrollViewer.Parent = this;
+        ItemPadding = Theme.Metrics.ItemPadding;
+
+        _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
+        _scrollViewer.VerticalScroll = ScrollMode.Auto;
+        _scrollViewer.Padding = Padding;
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
 
         _itemTemplate = CreateDefaultItemTemplate();
@@ -154,9 +148,6 @@ public sealed class ItemsControl : Control, IVisualTreeHost
             ItemPadding = newTheme.Metrics.ItemPadding;
         }
     }
-
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_scrollViewer);
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -291,31 +282,16 @@ public sealed class ItemsControl : Control, IVisualTreeHost
     {
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = Theme.Metrics.ControlCornerRadius;
-        var borderInset = GetBorderVisualInset();
 
         var state = GetVisualState();
         var bg = PickControlBackground(state);
         var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
-        _scrollViewer.ViewportCornerRadius = Math.Max(0, radius - borderInset);
+        var clipR = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), GetDpi() / 96.0);
+        _scrollViewer.ViewportCornerRadius = clipR;
+        _presenter.ItemRadius = clipR;
         _scrollViewer.Render(context);
-    }
-
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible)
-        {
-            return null;
-        }
-
-        var hit = _scrollViewer.HitTest(point);
-        if (hit != null)
-        {
-            return hit;
-        }
-
-        return base.OnHitTest(point);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -474,24 +450,8 @@ public sealed class ItemsControl : Control, IVisualTreeHost
         return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
-    private double GetViewportHeightDip()
-    {
-        if (Bounds.Width > 0 && Bounds.Height > 0)
-        {
-            var borderInset = GetBorderVisualInset();
-            return Math.Max(0, Bounds.Height - Padding.VerticalThickness - borderInset * 2);
-        }
-
-        return 0;
-    }
-
     protected override void OnDispose()
     {
-        if (_scrollViewer is IDisposable dsv)
-        {
-            dsv.Dispose();
-        }
-
         _presenter.OffsetCorrectionRequested -= OnPresenterOffsetCorrectionRequested;
         if (_presenter is IDisposable dp)
         {

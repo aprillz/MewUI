@@ -83,21 +83,22 @@ public sealed class Border : Control, IVisualTreeHost
 
     protected override void ArrangeContent(Rect bounds)
     {
+        var snapped = GetSnappedBorderBounds(bounds);
         var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
-        var inner = bounds.Deflate(border).Deflate(Padding);
+        var inner = snapped.Deflate(border).Deflate(Padding);
         Child?.Arrange(inner);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
-        
         var radius = Math.Max(0, CornerRadius);
+
         DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, radius);
 
         if (Child != null)
         {
             var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
-            var inner = Bounds.Deflate(border).Deflate(Padding);
+            var inner = GetSnappedBorderBounds(Bounds).Deflate(border).Deflate(Padding);
             var dpiScale = GetDpi() / 96.0;
             if (dpiScale <= 0)
             {
@@ -105,6 +106,7 @@ public sealed class Border : Control, IVisualTreeHost
             }
 
             context.Save();
+
             context.SetClip(LayoutRounding.MakeClipRect(inner, dpiScale));
             Child.Render(context);
             context.Restore();

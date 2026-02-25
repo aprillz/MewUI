@@ -197,9 +197,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (buttonRect.Width > 0)
         {
-            var innerRadius = Math.Max(0, cornerRadius - borderInset);
-            // Keep radius stable across DPI scaling; clip rect alignment is handled by the graphics context.
-            innerRadius = LayoutRounding.RoundToPixel(innerRadius, context.DpiScale);
+            var innerRadius = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), context.DpiScale);
             context.Save();
             context.SetClipRoundedRect(
                 inner,

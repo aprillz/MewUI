@@ -20,7 +20,7 @@ public class TextBox : TextBase
 
     public TextBox()
     {
-        Padding = new Thickness(4);
+        Padding = new Thickness(4,2);
     }
 
     protected override Rect GetInteractionContentBounds()

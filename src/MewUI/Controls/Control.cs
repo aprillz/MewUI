@@ -439,7 +439,9 @@ public abstract class Control : FrameworkElement
             }
 
             var inner = bounds.Deflate(new Thickness(borderThickness));
-            var innerRadius = Math.Max(0, radius - borderThickness);
+            var innerRadius = cornerRadiusDip > 0 && BorderThickness > 0
+                ? LayoutRounding.RoundToPixel(Math.Max(0, cornerRadiusDip - BorderThickness), metrics.DpiScale)
+                : Math.Max(0, radius - borderThickness);
 
             if (inner.Width > 0 && inner.Height > 0)
             {
