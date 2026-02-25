@@ -394,15 +394,10 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
         _scrollViewer.Arrange(innerBounds);
 
-        if (!_scrollIntoViewRequest.IsNone)
+        if (TryConsumeScrollIntoViewRequest(out var request) &&
+            request.Kind == ScrollIntoViewRequestKind.Index)
         {
-            var request = _scrollIntoViewRequest;
-            _scrollIntoViewRequest.Clear();
-
-            if (request.Kind == ScrollIntoViewRequestKind.Index)
-            {
-                ScrollIntoView(request.Index);
-            }
+            ScrollIntoView(request.Index);
         }
     }
 
@@ -566,7 +561,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         double viewport = GetViewportHeightDip();
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
-            _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
+            RequestScrollIntoView(ScrollIntoViewRequest.IndexRequest(index));
             return;
         }
 

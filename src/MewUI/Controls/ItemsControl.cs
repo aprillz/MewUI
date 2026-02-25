@@ -18,7 +18,6 @@ public sealed class ItemsControl : VirtualizedItemsBase
     private Point _lastMousePosition;
 
     private IItemsView _itemsSource = ItemsView.Empty;
-    private ScrollIntoViewRequest _scrollIntoViewRequest;
     private ItemsPresenterMode _presenterMode = ItemsPresenterMode.Fixed;
 
     /// <summary>
@@ -266,15 +265,10 @@ public sealed class ItemsControl : VirtualizedItemsBase
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
         _scrollViewer.Arrange(innerBounds);
 
-        if (!_scrollIntoViewRequest.IsNone)
+        if (TryConsumeScrollIntoViewRequest(out var request) &&
+            request.Kind == ScrollIntoViewRequestKind.Index)
         {
-            var request = _scrollIntoViewRequest;
-            _scrollIntoViewRequest.Clear();
-
-            if (request.Kind == ScrollIntoViewRequestKind.Index)
-            {
-                ScrollIntoView(request.Index);
-            }
+            ScrollIntoView(request.Index);
         }
     }
 
@@ -346,7 +340,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
         double viewport = GetViewportHeightDip();
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
-            _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
+            RequestScrollIntoView(ScrollIntoViewRequest.IndexRequest(index));
             return;
         }
 

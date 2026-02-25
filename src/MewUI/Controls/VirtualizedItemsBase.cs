@@ -17,7 +17,7 @@ public abstract class VirtualizedItemsBase : Control, IVisualTreeHost
     private protected PendingTabFocusHelper _tabFocusHelper = null!;
 
     private protected bool _rebindVisibleOnNextRender = true;
-    private protected ScrollIntoViewRequest _scrollIntoViewRequest;
+    private ScrollIntoViewRequest _scrollIntoViewRequest;
 
     protected VirtualizedItemsBase()
     {
@@ -37,6 +37,22 @@ public abstract class VirtualizedItemsBase : Control, IVisualTreeHost
     protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => VisitScrollChildren(visitor);
+
+    private protected void RequestScrollIntoView(ScrollIntoViewRequest request)
+        => _scrollIntoViewRequest = request;
+
+    private protected bool TryConsumeScrollIntoViewRequest(out ScrollIntoViewRequest request)
+    {
+        if (_scrollIntoViewRequest.IsNone)
+        {
+            request = default;
+            return false;
+        }
+
+        request = _scrollIntoViewRequest;
+        _scrollIntoViewRequest.Clear();
+        return true;
+    }
 
     /// <summary>
     /// Override to visit additional children (e.g. a header row) before or after the scroll viewer.

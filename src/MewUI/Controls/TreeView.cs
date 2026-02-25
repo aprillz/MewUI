@@ -339,7 +339,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         double viewport = GetViewportHeightDip();
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
-            _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
+            RequestScrollIntoView(ScrollIntoViewRequest.IndexRequest(index));
             return;
         }
 
@@ -576,11 +576,8 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
         _scrollViewer.Arrange(innerBounds);
 
-        if (!_scrollIntoViewRequest.IsNone)
+        if (TryConsumeScrollIntoViewRequest(out var request))
         {
-            var request = _scrollIntoViewRequest;
-            _scrollIntoViewRequest.Clear();
-
             if (request.Kind == ScrollIntoViewRequestKind.Index)
             {
                 ScrollIntoView(request.Index);
@@ -1085,6 +1082,22 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     private void SetSelectedNodeCore(TreeViewNode? node)
     {
         _itemsSource.SelectedItem = node;
+    }
+
+    private void RequestScrollIntoView(ScrollIntoViewRequest request)
+        => _scrollIntoViewRequest = request;
+
+    private bool TryConsumeScrollIntoViewRequest(out ScrollIntoViewRequest request)
+    {
+        if (_scrollIntoViewRequest.IsNone)
+        {
+            request = default;
+            return false;
+        }
+
+        request = _scrollIntoViewRequest;
+        _scrollIntoViewRequest.Clear();
+        return true;
     }
 
     private int IndexOfNode(TreeViewNode node)

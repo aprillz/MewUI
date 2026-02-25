@@ -22,4 +22,3 @@ internal struct ScrollIntoViewRequest
 
     public void Clear() => this = default;
 }
-

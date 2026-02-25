@@ -763,11 +763,8 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             Math.Max(0, contentBounds.Height - headerH));
         _scrollViewer.Arrange(rowsViewport);
 
-        if (!_scrollIntoViewRequest.IsNone)
+        if (TryConsumeScrollIntoViewRequest(out var request))
         {
-            var request = _scrollIntoViewRequest;
-            _scrollIntoViewRequest.Clear();
-
             if (request.Kind == ScrollIntoViewRequestKind.Selected)
             {
                 ScrollSelectedIntoView();
@@ -939,7 +936,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         double viewport = _rowsViewportHeight;
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
-            _scrollIntoViewRequest = ScrollIntoViewRequest.Selected();
+            RequestScrollIntoView(ScrollIntoViewRequest.Selected());
             return;
         }
 
@@ -970,7 +967,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         double viewport = _rowsViewportHeight;
         if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
         {
-            _scrollIntoViewRequest = ScrollIntoViewRequest.IndexRequest(index);
+            RequestScrollIntoView(ScrollIntoViewRequest.IndexRequest(index));
             return;
         }
 
