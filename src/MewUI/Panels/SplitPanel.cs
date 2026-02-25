@@ -56,7 +56,7 @@ public sealed class SplitPanel : Panel
                 InvalidateMeasure();
             }
         }
-    } = 6;
+    } = 8;
 
     /// <summary>
     /// Gets or sets the first pane length.
@@ -600,15 +600,21 @@ public sealed class SplitPanel : Panel
             double t = pressed ? 0.65 : IsMouseOver ? 0.35 : 0.15;
             var color = theme.Palette.ControlBorder.Lerp(theme.Palette.Accent, t);
 
+            var length = Theme.Metrics.BaseControlHeight;
+
             if (_owner.Orientation == Orientation.Horizontal)
             {
                 double x = bounds.X + bounds.Width / 2;
-                context.DrawLine(new Point(x, bounds.Y + 4), new Point(x, bounds.Bottom - 4), color, thickness: pressed ? 2 : 1);
+                length = Math.Min(length, bounds.Height - 8);
+                var y = bounds.Y + bounds.Height / 2;
+                context.DrawLine(new Point(x, y), new Point(x, y + length), color, theme.Metrics.ControlBorderThickness);
             }
             else
             {
                 double y = bounds.Y + bounds.Height / 2;
-                context.DrawLine(new Point(bounds.X + 4, y), new Point(bounds.Right - 4, y), color, thickness: pressed ? 2 : 1);
+                length = Math.Min(length, bounds.Width - 8);
+                var x = bounds.X + bounds.Width / 2;
+                context.DrawLine(new Point(x - length / 2, y), new Point(x + length / 2 , y), color, theme.Metrics.ControlBorderThickness);
             }
         }
     }
