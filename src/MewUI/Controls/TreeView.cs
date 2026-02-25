@@ -641,8 +641,21 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             // Measure with unbounded width to approximate the templated natural width.
             element.Measure(new Size(double.PositiveInfinity, Math.Max(0, element.RenderSize.Height)));
             double w = Math.Max(0, element.DesiredSize.Width);
+            if (w <= 0 && element.Bounds.IsEmpty)
+            {
+                return;
+            }
 
-            double rowW = indentW + w;
+            double padW = ItemPadding.HorizontalThickness;
+            double rowW = indentW + w + padW;
+
+            // Guard: if the element renders beyond its desired width, allow bounds to expand it.
+            double boundsW = Math.Max(0, element.Bounds.Width);
+            if (boundsW > 0)
+            {
+                rowW = Math.Max(rowW, indentW + boundsW + padW);
+            }
+
             if (rowW > max)
             {
                 max = rowW;
