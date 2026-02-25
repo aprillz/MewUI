@@ -148,7 +148,6 @@ partial class GalleryView
                     .First(
                         new Border()
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
-                            .BorderThickness(1)
                             .CornerRadius(8)
                             .Padding(8)
                             .Child(new Label().Text("First"))
@@ -156,7 +155,6 @@ partial class GalleryView
                     .Second(
                         new Border()
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
-                            .BorderThickness(1)
                             .CornerRadius(8)
                             .Padding(8)
                             .Child(new Label().Text("Second"))
@@ -183,7 +181,6 @@ partial class GalleryView
                     .Second(
                         new Border()
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
-                            .BorderThickness(1)
                             .CornerRadius(8)
                             .Padding(8)
                             .Child(new Label().Text("Bottom"))
