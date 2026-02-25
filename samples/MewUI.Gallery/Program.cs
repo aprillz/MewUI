@@ -13,11 +13,8 @@ Startup();
 
 Window window = null!;
 Label backendText = null!;
-Label colorHexLabel = null!;
 Label themeText = null!;
-Image peekImage = null!;
 var fpsText = new ObservableValue<string>("FPS: -");
-var imagePeekText = new ObservableValue<string>("Color: -");
 var fpsStopwatch = new Stopwatch();
 var fpsFrames = 0;
 var maxFpsEnabled = new ObservableValue<bool>(false);
@@ -44,6 +41,7 @@ var root = new Window()
                 .Children(
                     TopBar()
                         .DockTop(),
+
                     new GalleryView(window)
                 )
         )
@@ -107,7 +105,7 @@ FrameworkElement TopBar() => new Border()
                                     .Text("Aprillz.MewUI Gallery")
                                     .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
                                     .FontSize(18)
-                                    .Bold(),
+                                    .SemiBold(),
 
                                 new Label()
                                     .Ref(out backendText)

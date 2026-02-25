@@ -9,16 +9,16 @@ partial class GalleryView : ContentControl
     public GalleryView(Window window)
     {
         this.window = window;
+        
         this.Content(new ScrollViewer()
-        .VerticalScroll(ScrollMode.Auto)
-        .Padding(8)
-        .Content(BuildGalleryContent()));
+            .VerticalScroll(ScrollMode.Auto)
+            .Padding(8)
+            .Content(BuildGalleryContent()));
     }
 
     private FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320) => new Border()
             .MinWidth(minWidth)
             .Padding(14)
-            .BorderThickness(1)
             .CornerRadius(10)
             .Child(
                 new StackPanel()

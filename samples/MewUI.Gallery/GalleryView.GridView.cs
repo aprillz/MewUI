@@ -455,4 +455,5 @@ sealed class TemplateComplexPersonRow
 
     public ObservableValue<double> Score { get; }
 }
+
 sealed record SimpleGridRow(int Id, string Name, string Status);
