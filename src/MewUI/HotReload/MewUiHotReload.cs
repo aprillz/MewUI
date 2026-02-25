@@ -20,7 +20,7 @@ public static class MewUiHotReload
     /// <summary>
     /// Requests a rebuild of the registered window's content, if enabled.
     /// </summary>
-    public static void RequestReload()
+    public static void RequestReload(HashSet<Type> types)
     {
         var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
         if (dispatcher == null)
@@ -28,10 +28,10 @@ public static class MewUiHotReload
             return;
         }
 
-        (dispatcher as IDispatcherCore)?.PostMerged(mergeKey, ReloadOnUiThread, DispatcherPriority.Input);
+        (dispatcher as IDispatcherCore)?.PostMerged(mergeKey, () => ReloadOnUiThread(types), DispatcherPriority.Input);
     }
 
-    private static void ReloadOnUiThread()
+    private static void ReloadOnUiThread(HashSet<Type> types)
     {
         if (reloading)
         {
@@ -49,7 +49,7 @@ public static class MewUiHotReload
             var windows = Application.Current.AllWindows;
             for (int i = 0; i < windows.Count; i++)
             {
-                ReloadWindowIfEnabled(windows[i]);
+                ReloadWindowIfEnabled(windows[i], types);
             }
         }
         finally
@@ -58,15 +58,19 @@ public static class MewUiHotReload
         }
     }
 
-    private static void ReloadWindowIfEnabled(Window window)
+    private static void ReloadWindowIfEnabled(Window window, HashSet<Type> types)
     {
         var build = window.BuildCallback;
         if (build == null)
         {
             return;
         }
+        if (!types.Contains(window.GetType()))
+        {
+            return;
+        }
 
-        build(window); 
+        build(window);
     }
 }
 
@@ -88,6 +92,6 @@ public static class MewUiMetadataUpdateHandler
     public static void UpdateApplication(Type[]? updatedTypes)
     {
         // Hot Reload is not supported on NativeAOT, but in normal debug sessions this will be invoked.
-        MewUiHotReload.RequestReload();
+        MewUiHotReload.RequestReload(updatedTypes?.ToHashSet() ?? []);
     }
 }

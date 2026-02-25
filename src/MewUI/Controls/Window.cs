@@ -94,7 +94,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
             var leaf = WindowInputRouter.HitTest(this, _lastMousePositionDip);
             WindowInputRouter.UpdateMouseOver(this, leaf);
-
         }, DispatcherPriority.Layout);
     }
 
