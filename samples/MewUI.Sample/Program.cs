@@ -8,9 +8,7 @@ using Aprillz.MewUI.Controls;
 #endif
 
 var stopwatch = Stopwatch.StartNew();
-
-Startup(Environment.GetCommandLineArgs(), out var isBench, out var isSmoke);
-
+Startup(out var isBench, out var isSmoke);
 double loadedMs = -1;
 double firstFrameMs = -1;
 var metricsText = new ObservableValue<string>("Metrics:");
@@ -790,7 +788,7 @@ FrameworkElement CommandingSamples() => new StackPanel()
                     new Label()
                         .BindText(vm.CommandLog)
                         .FontFamily("Consolas")
-            )
+        )
     );
 
 FrameworkElement BindSamples()
@@ -974,12 +972,14 @@ void ProcessMetric()
 
         Log($"Smoke output: {outDir}");
         File.AppendAllText(Path.Combine(outDir, "smoke_report.txt"),
-            $"Backend={Application.DefaultGraphicsBackend}{Environment.NewLine}" +
+            $"Backend={Application.SelectedGraphicsBackend}{Environment.NewLine}" +
             $"LoadedMs={loadedMs:F3}{Environment.NewLine}" +
             $"FirstFrameMs={stopwatch.Elapsed.TotalMilliseconds:F3}{Environment.NewLine}");
 
-        if (Application.DefaultGraphicsBackend == GraphicsBackend.OpenGL)
+        if (Application.SelectedGraphicsBackend == GraphicsBackend.OpenGL)
+        {
             SmokeCapture.Request(Path.Combine(outDir, "frame.ppm"));
+        }
     }
     finally
     {
@@ -999,18 +999,40 @@ static void Log(string message)
     }
 }
 
-static void Startup(string[] args, out bool isBench, out bool isSmoke)
+static void Startup(out bool isBench, out bool isSmoke)
 {
-    isBench = args.Any(a => a.Equals("--bench", StringComparison.OrdinalIgnoreCase));
-    isSmoke = args.Any(a => a.Equals("--smoke", StringComparison.OrdinalIgnoreCase));
+    var args = Environment.GetCommandLineArgs();
 
-    var useGdi = args.Any(a => a.Equals("--gdi", StringComparison.OrdinalIgnoreCase));
-    var useOpenGl = args.Any(a => a.Equals("--gl", StringComparison.OrdinalIgnoreCase));
+    isBench = args.Any(a => a is "--bench");
+    isSmoke = args.Any(a => a is "--smoke");
 
-    Application.DefaultGraphicsBackend =
-        useGdi ? GraphicsBackend.Gdi :
-        useOpenGl ? GraphicsBackend.OpenGL :
-        OperatingSystem.IsWindows() ? GraphicsBackend.Direct2D : GraphicsBackend.OpenGL;
+    if (OperatingSystem.IsWindows())
+    {
+        Win32Platform.Register();
+
+        if (args.Any(a => a is "--gdi"))
+        {
+            GdiBackend.Register();
+        }
+        else if (args.Any(a => a is "--vg"))
+        {
+            MewVGWin32Backend.Register();
+        }
+        else
+        {
+            Direct2DBackend.Register();
+        }
+    }
+    else if (OperatingSystem.IsMacOS())
+    {
+        MacOSPlatform.Register();
+        MewVGMacOSBackend.Register();
+    }
+    else
+    {
+        X11Platform.Register();
+        MewVGX11Backend.Register();
+    }
 
     Application.DispatcherUnhandledException += e =>
     {
@@ -1020,7 +1042,7 @@ static void Startup(string[] args, out bool isBench, out bool isSmoke)
     };
 
     Log($"Args: {string.Join(' ', Environment.GetCommandLineArgs())}");
-    Log($"Backend: {Application.DefaultGraphicsBackend}");
+    Log($"Backend: {Application.SelectedGraphicsBackend}");
     Log($"Bench: {isBench}, Smoke: {isSmoke}");
 }
 

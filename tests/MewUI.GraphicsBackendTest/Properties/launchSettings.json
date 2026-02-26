@@ -1,15 +1,19 @@
 {
   "profiles": {
-    "DirectX": {
+    "Direct2D": {
       "commandName": "Project"
+    },
+    "GDI": {
+      "commandName": "Project",
+      "commandLineArgs": "--gdi"
     },
     "OpenGL": {
       "commandName": "Project",
       "commandLineArgs": "--gl"
     },
-    "GDI": {
+    "VG": {
       "commandName": "Project",
-      "commandLineArgs": "--gdi"
+      "commandLineArgs": "--vg"
     }
   }
 }

@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.GDi.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Win32.WebView2\MewUI.Win32.WebView2.csproj" />
   </ItemGroup>
 

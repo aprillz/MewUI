@@ -6,6 +6,9 @@ Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
 
 try
 {
+    Win32Platform.Register();
+    GdiBackend.Register();
+
     AppDomain.CurrentDomain.UnhandledException += (_, e) => HandleDomainException(e);
     Application.DispatcherUnhandledException += e => HandleUIException(e);
 
@@ -39,10 +42,9 @@ try
                                     .Content("Reload")
                                     .OnClick(() => GetSelectedWebView()?.Reload()),
                                 new Button()
-                                    .Content("New Tab")
-                                    //.Content("➕")
-                                    //.Apply(c => c.Width = c.MinHeight)
-                                    //.Padding(0)
+                                    .Content("➕")
+                                    .Padding(0)
+                                    .Apply(c => c.Width = c.MinHeight)
                                     .OnClick(() => AddTab(null)),
 
                                 new StackPanel()
@@ -332,7 +334,6 @@ try
                         new Button()
                             .Margin(8, 0, 0, 0)
                             .Content("❌")
-                            .FontSize(10)
                             .MinHeight(0)
                             .Size(16, 16)
                             .Padding(new Thickness(0))

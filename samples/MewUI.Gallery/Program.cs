@@ -73,7 +73,7 @@ void CheckFPS(ref int fpsFrames)
     double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
     if (elapsed >= 1.0)
     {
-        fpsText.Value = $"FPS: {Math.Max(fpsFrames - 1, 0) / elapsed:0.0}";
+        fpsText.Value = $"FPS: {(fpsFrames <= 1 ? 0 : fpsFrames) / elapsed:0.0}";
         fpsFrames = 0;
         fpsStopwatch.Restart();
     }
@@ -211,25 +211,58 @@ static void Startup()
 {
     var args = Environment.GetCommandLineArgs();
 
-    if (OperatingSystem.IsWindows())
+#if MEWUI_GALLERY_WIN
+#pragma warning disable CA1416
+    Win32Platform.Register();
+
+    if (args.Any(a => a is "--gdi"))
     {
-        if (args.Any(a => a is "--gdi"))
-        {
-            Application.DefaultGraphicsBackend = GraphicsBackend.Gdi;
-        }
-        else if (args.Any(a => a is "--gl"))
-        {
-            Application.DefaultGraphicsBackend = GraphicsBackend.OpenGL;
-        }
-        else
-        {
-            Application.DefaultGraphicsBackend = GraphicsBackend.Direct2D;
-        }
+        GdiBackend.Register();
+    }
+    else if (args.Any(a => a is "--vg"))
+    {
+        MewVGWin32Backend.Register();
     }
     else
     {
-        Application.DefaultGraphicsBackend = GraphicsBackend.OpenGL;
+        Direct2DBackend.Register();
     }
+#pragma warning restore CA1416
+#elif MEWUI_GALLERY_OSX
+    MacOSPlatform.Register();
+    MewVGMetalMacOSBackend.Register();
+#elif MEWUI_GALLERY_LINUX
+    X11Platform.Register();
+    MewVGX11Backend.Register();
+#else
+    if (OperatingSystem.IsWindows())
+    {
+        Win32Platform.Register();
+
+        if (args.Any(a => a is "--gdi"))
+        {
+            GdiBackend.Register();
+        }
+        else if (args.Any(a => a is "--vg"))
+        {
+            MewVGWin32Backend.Register();
+        }
+        else
+        {
+            Direct2DBackend.Register();
+        }
+    }
+    else if (OperatingSystem.IsMacOS())
+    {
+        MacOSPlatform.Register();
+        MewVGMacOSBackend.Register();
+    }
+    else if (OperatingSystem.IsLinux())
+    {
+        X11Platform.Register();
+        MewVGX11Backend.Register();
+    }
+#endif
 
     Application.DispatcherUnhandledException += e =>
     {

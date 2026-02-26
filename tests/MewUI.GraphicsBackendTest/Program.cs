@@ -8,22 +8,30 @@ static void Startup()
 
     if (OperatingSystem.IsWindows())
     {
+        Win32Platform.Register();
+
         if (args.Any(a => a is "--gdi"))
         {
-            Application.DefaultGraphicsBackend = GraphicsBackend.Gdi;
+            GdiBackend.Register();
         }
-        else if (args.Any(a => a is "--gl"))
+        else if (args.Any(a => a is "--vg"))
         {
-            Application.DefaultGraphicsBackend = GraphicsBackend.OpenGL;
+            MewVGWin32Backend.Register();
         }
         else
         {
-            Application.DefaultGraphicsBackend = GraphicsBackend.Direct2D;
+            Direct2DBackend.Register();
         }
     }
-    else
+    else if (OperatingSystem.IsMacOS())
     {
-        Application.DefaultGraphicsBackend = GraphicsBackend.OpenGL;
+        MacOSPlatform.Register();
+        MewVGMacOSBackend.Register();
+    }
+    else if (OperatingSystem.IsLinux())
+    {
+        X11Platform.Register();
+        MewVGX11Backend.Register();
     }
 }
 

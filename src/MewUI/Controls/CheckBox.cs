@@ -133,8 +133,13 @@ public partial class CheckBox : Control
             var p1 = new Point(boxRect.X + 3, boxRect.Y + boxRect.Height * 0.55);
             var p2 = new Point(boxRect.X + boxRect.Width * 0.45, boxRect.Bottom - 3);
             var p3 = new Point(boxRect.Right - 3, boxRect.Y + 3);
-            context.DrawLine(p1, p2, markColor, 2);
-            context.DrawLine(p2, p3, markColor, 2);
+
+            var g = new PathGeometry();
+            g.MoveTo(p1);
+            g.LineTo(p2);
+            g.LineTo(p3); 
+            context.DrawPath(g, markColor, 2);
+
         }
         else if (_isChecked == null)
         {
