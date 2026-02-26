@@ -13,8 +13,16 @@ A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeA
 
 ## Install
 
+`Aprillz.MewUI` is a metapackage that includes Core, all platform hosts (Win32, X11, macOS), and all rendering backends (Direct2D, GDI, MewVG).
+
 ```sh
+# Cross-platform (all-in-one)
 dotnet add package Aprillz.MewUI
+
+# Or platform-specific
+dotnet add package Aprillz.MewUI.Windows
+dotnet add package Aprillz.MewUI.Linux
+dotnet add package Aprillz.MewUI.MacOS
 ```
 
 ## Quick start

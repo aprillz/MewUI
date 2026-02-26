@@ -92,6 +92,7 @@ bench_report*.md
 
 # User-specific
 *.csproj.user
+build/MewUI.Local.props
 
 
 # OS-specific files

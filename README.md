@@ -52,13 +52,16 @@ https://github.com/user-attachments/assets/2e0c1e0e-3dcd-4b5a-8480-fa060475249a
 ## ✨ Highlights
 
 - 📦 **NativeAOT + trimming** first
-- 🪶 **Lightweight** by design (small EXE, low memory footprint, fast first frame — see benchmark below)
+- 🪶 **Lightweight** by design (small EXE, low memory footprint, fast first frame)
 - 🧩 Fluent **C# markup** (no XAML)
 
 ## 🚀 Quickstart
 
 - NuGet: https://www.nuget.org/packages/Aprillz.MewUI/
+  - `Aprillz.MewUI` is a **metapackage** that bundles Core, all platform hosts, and all rendering backends.
+  - Platform-specific packages are also available: `Aprillz.MewUI.Windows`, `.Linux`, `.MacOS`
   - Install: `dotnet add package Aprillz.MewUI`
+  - See: [Installation & Packages](docs/Installation.md)
 
 - Single-file app (VS Code friendly)
   - See: [samples/FBASample/fba_calculator.cs](samples/FBASample/fba_calculator.cs)
@@ -69,7 +72,7 @@ https://github.com/user-attachments/assets/2e0c1e0e-3dcd-4b5a-8480-fa060475249a
     #:property OutputType=Exe
     #:property TargetFramework=net10.0
 
-    #:package Aprillz.MewUI@0.9.0
+    #:package Aprillz.MewUI@0.10.3
 
     // ...
     ```
@@ -105,7 +108,7 @@ https://github.com/user-attachments/assets/2e0c1e0e-3dcd-4b5a-8480-fa060475249a
 ---
 ## 🎯 Concept
 
-### MewUI is a code-first GUI framework with three priorities:
+### MewUI is a code-first GUI framework with four priorities:
 - **NativeAOT + trimming friendliness**
 - **Small footprint, fast startup, low memory usage**
 - **Fluent C# markup** for building UI trees (no XAML)
@@ -161,17 +164,21 @@ Controls (Implemented):
 - `TextBox`, `MultiLineTextBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`, `TreeView`, `GridView`
-- `Slider`, `ProgressBar`
+- `Slider`, `ProgressBar`, `NumericUpDown`
 - `TabControl`, `GroupBox`
 - `MenuBar`, `ContextMenu`, `ToolTip` (in-window popups)
+- `ScrollViewer`
 - `Window`, `DispatcherTimer`
 
-Panels: (Spacing supported)
+Panels:
 - `Grid` (rows/columns with `Auto`, `*`, pixel)
 - `StackPanel` (horizontal/vertical)
 - `DockPanel` (dock edges + last-child fill)
 - `UniformGrid` (equal cells)
 - `WrapPanel` (wrap + item size)
+- `SplitPanel` (drag splitter)
+
+> All panels except `SplitPanel` support `Spacing`.
 ---
 ## 🎨 Theme
 
@@ -189,15 +196,22 @@ Rendering is abstracted through:
 - `IGraphicsFactory` / `IGraphicsContext`
 
 Backends:
-- `Direct2D` (Windows): `Aprillz.MewUI.Backend.Direct2D`
-- `GDI` (Windows): `Aprillz.MewUI.Backend.Gdi`
-- `OpenGL` (Windows): `Aprillz.MewUI.Backend.OpenGL.Win32`
-- `OpenGL` (Linux/X11): `Aprillz.MewUI.Backend.OpenGL.X11`
-- `OpenGL` (macOS): `Aprillz.MewUI.Backend.OpenGL.MacOS`
+
+| Backend | Platform | Package |
+|---------|----------|---------|
+| **Direct2D** | Windows | `Aprillz.MewUI.Backend.Direct2D` |
+| **GDI** | Windows | `Aprillz.MewUI.Backend.Gdi` |
+| **MewVG** | Windows | `Aprillz.MewUI.Backend.MewVG.Win32` |
+| **MewVG** | Linux/X11 | `Aprillz.MewUI.Backend.MewVG.X11` |
+| **MewVG** | macOS | `Aprillz.MewUI.Backend.MewVG.MacOS` |
+
+> **MewVG** is a managed port of [NanoVG](https://github.com/memononen/nanovg), using OpenGL on Windows/Linux and Metal on macOS.
 
 Backends are registered by the referenced backend packages (Trim/AOT-friendly). In app code you typically either:
 - call `*Backend.Register()` before `Application.Run(...)`, or
 - use the builder chain: `Application.Create().Use...().Run(...)`
+
+When using a metapackage (e.g., `Aprillz.MewUI.Windows`), you can select a single backend at publish time with `-p:MewUIBackend=Direct2D`. See [Installation & Packages](docs/Installation.md) for details.
 ---
 ## 🪟 Platform Abstraction
 
@@ -219,6 +233,7 @@ If neither is available in `PATH`, MewUI throws:
 ---
 ## 📄Docs
 
+- [Installation & Packages](docs/Installation.md)
 - [C# Markup](docs/CSharpMarkup.md)
 - [Binding](docs/Binding.md)
 - [Items and Templates](docs/ItemsAndTemplates.md)
@@ -231,11 +246,11 @@ If neither is available in `PATH`, MewUI throws:
 
 ---
 ## 🧭 Roadmap (TODO)
- 
+
 **Platforms**
 - [ ] Linux/Wayland
-- [ ] macOS
+- [x] macOS
 
 **Tooling**
-- [x] Hot Reload 
+- [x] Hot Reload
 - [ ] Design-time preview

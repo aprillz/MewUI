@@ -61,7 +61,10 @@ https://github.com/user-attachments/assets/2e0c1e0e-3dcd-4b5a-8480-fa060475249a
 ## 🚀 빠른 시작
 
 - NuGet: https://www.nuget.org/packages/Aprillz.MewUI/
+  - `Aprillz.MewUI`는 Core, 전 플랫폼 호스트, 전 렌더링 백엔드를 포함하는 **메타패키지**입니다.
+  - 플랫폼별 패키지도 제공됩니다: `Aprillz.MewUI.Windows`, `.Linux`, `.MacOS`
   - 설치: `dotnet add package Aprillz.MewUI`
+  - 참고: [설치 및 패키지 구성](docs/Installation.md)
 
 - 단일 파일로 빠르게 시작(VS Code 친화)
   - 참고: `samples/FBASample/fba_calculator.cs`
@@ -72,8 +75,8 @@ https://github.com/user-attachments/assets/2e0c1e0e-3dcd-4b5a-8480-fa060475249a
     #:property OutputType=Exe
     #:property TargetFramework=net10.0
 
-    #:package Aprillz.MewUI@0.9.0
-   
+    #:package Aprillz.MewUI@0.10.3
+
     //...
     ```
 
@@ -164,17 +167,21 @@ var label  = new Label()
 - `TextBox`, `MultiLineTextBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`, `TreeView`, `GridView`
-- `Slider`, `ProgressBar`
+- `Slider`, `ProgressBar`, `NumericUpDown`
 - `TabControl`, `GroupBox`
-- `MenuBar`, `ContextMenu`, `ToolTip`
+- `MenuBar`, `ContextMenu`, `ToolTip` (창 내 팝업)
+- `ScrollViewer`
 - `Window`, `DispatcherTimer`
 
-패널: (`Spaging` 지원)
+패널:
 - `Grid` (row/column: `Auto`, `*`, 픽셀)
 - `StackPanel` (가로/세로)
 - `DockPanel` (도킹 + 마지막 채우기)
 - `UniformGrid` (균등 셀)
 - `WrapPanel` (줄바꿈 + Item size)
+- `SplitPanel` (드래그 분할)
+
+> `SplitPanel`을 제외한 모든 패널은 `Spacing`을 지원합니다.
 ---
 ## 🎨 테마(Theme)
 MewUI는 `Theme` 객체(색상 + 메트릭)와 `ThemeManager`를 사용하여 기본값 설정과 런타임 변경을 제어합니다.
@@ -187,29 +194,32 @@ MewUI는 `Theme` 객체(색상 + 메트릭)와 `ThemeManager`를 사용하여 �
 
 ---
 ## 🖌️ 렌더링 백엔드
-다음은 **의미를 유지한 정확한 번역**입니다.
 
 렌더링은 다음 인터페이스를 통해 추상화되어 있습니다.
 - `IGraphicsFactory` / `IGraphicsContext`
 
 백엔드:
-- `Direct2D` (Windows): `Aprillz.MewUI.Backend.Direct2D`
-- `GDI` (Windows): `Aprillz.MewUI.Backend.Gdi`
-- `OpenGL` (Windows): `Aprillz.MewUI.Backend.OpenGL.Win32`
-- `OpenGL` (Linux/X11): `Aprillz.MewUI.Backend.OpenGL.X11`
-- `OpenGL` (macOS): `Aprillz.MewUI.Backend.OpenGL.MacOS`
 
-백엔드는 참조된 백엔드 패키지에 의해 등록됩니다
-(Trim/AOT 친화적 구조).
+| 백엔드 | 플랫폼 | 패키지 |
+|--------|--------|--------|
+| **Direct2D** | Windows | `Aprillz.MewUI.Backend.Direct2D` |
+| **GDI** | Windows | `Aprillz.MewUI.Backend.Gdi` |
+| **MewVG** | Windows | `Aprillz.MewUI.Backend.MewVG.Win32` |
+| **MewVG** | Linux/X11 | `Aprillz.MewUI.Backend.MewVG.X11` |
+| **MewVG** | macOS | `Aprillz.MewUI.Backend.MewVG.MacOS` |
+
+> **MewVG**는 [NanoVG](https://github.com/memononen/nanovg)의 Managed 포트로, Windows/Linux에서는 OpenGL, macOS에서는 Metal을 사용합니다.
+
+백엔드는 참조된 백엔드 패키지에 의해 등록됩니다 (Trim/AOT 친화적 구조).
 
 애플리케이션 코드에서는 일반적으로 다음 중 하나를 사용합니다.
 - `Application.Run(...)` 이전에 `*Backend.Register()`를 호출하거나
-- 빌더 체인 방식인  
-  `Application.Create().Use...().Run(...)`을 사용합니다.
+- 빌더 체인 방식인 `Application.Create().Use...().Run(...)`을 사용합니다.
+
+메타패키지 사용 시 publish 단계에서 `-p:MewUIBackend=Direct2D`로 백엔드를 선택할 수 있습니다. 상세는 [설치 및 패키지 구성](docs/Installation.md)을 참고하세요.
 
 ---
 ## 🪟 플랫폼 추상화
-다음은 **의미를 유지한 정확한 번역**입니다.
 
 윈도우 관리와 메시지 루프는 플랫폼 계층 뒤에서 추상화되어 있습니다.
 
@@ -229,6 +239,7 @@ Linux에서는 `MessageBox`와 파일 대화상자가 현재 외부 도구를 �
 ---
 ## 📄 문서
 
+- [설치 및 패키지 구성](docs/Installation.md)
 - [C# Markup](docs/CSharpMarkup.md)
 - [Binding](docs/Binding.md)
 - [Items and Templates](docs/ItemsAndTemplates.md)
@@ -241,11 +252,11 @@ Linux에서는 `MessageBox`와 파일 대화상자가 현재 외부 도구를 �
 
 ---
 ## 🧭 로드맵 (TODO)
-+
+
 **플랫폼**
 - [ ] Linux/Wayland
-- [ ] macOS
+- [x] macOS
 
 **툴링**
-- [x] Hot Reload 
+- [x] Hot Reload
 - [ ] 디자인 타임 미리보기

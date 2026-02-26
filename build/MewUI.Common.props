@@ -1,18 +1,24 @@
 <Project>
+
   <PropertyGroup>
     <MewUITitle>Aprillz.MewUI</MewUITitle>
-    <MewUIVersion>0.11.2</MewUIVersion>
+    <MewUIVersion>0.12.0</MewUIVersion>
     <MewUIAuthor>Aprillz</MewUIAuthor>
     <MewUIDescription>A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT</MewUIDescription>
 
     <MewUIRootNamespace>Aprillz.MewUI</MewUIRootNamespace>
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
+    <MewVGVersion>0.2.0</MewVGVersion>
   </PropertyGroup>
+
+  <!-- Local development override (gitignored) — MewVGProjectPath, etc. -->
+  <Import Project="MewUI.Local.props" Condition="Exists('MewUI.Local.props')" />
 
   <PropertyGroup>
     <TargetFrameworks>$(MewUITargetFrameworks)</TargetFrameworks>
     <Version>$(MewUIVersion)</Version>
+    <Authors>$(MewUIAuthor)</Authors>
     <RootNamespace>$(MewUIRootNamespace)</RootNamespace>
     <PackageLicenseExpression>$(MewUIPackageLicenseExpression)</PackageLicenseExpression>
 
@@ -20,6 +26,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsTrimmable>true</IsTrimmable>
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
 
     <PublishRepositoryUrl>false</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
@@ -29,4 +37,5 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
+
 </Project>
