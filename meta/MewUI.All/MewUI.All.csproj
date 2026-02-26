@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle)</PackageId>
+    <Description>MewUI all-in-one metapackage — includes Core, all platforms, and all rendering backends. Use RuntimeIdentifier and MewUIBackend properties at publish to filter.</Description>
+    <PackageTags>mewui;windows;linux;macos;cross-platform;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- core -->
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+
+    <!-- platforms -->
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
+
+    <!-- backends: all -->
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- RID-based publish filtering: exclude non-target-platform assemblies -->
+    <None Include="buildTransitive\$(MewUITitle).targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+
+</Project>

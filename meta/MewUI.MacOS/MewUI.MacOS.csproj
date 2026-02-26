@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle).MacOS</PackageId>
+    <Description>MewUI metapackage for macOS — includes Core, macOS platform host, and MewVG (NanoVG/Metal) rendering backend.</Description>
+    <PackageTags>mewui;macos;metal;mewvg;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle).Linux</PackageId>
+    <Description>MewUI metapackage for Linux — includes Core, X11 platform host, and MewVG (NanoVG/GL) rendering backend.</Description>
+    <PackageTags>mewui;linux;x11;mewvg;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+  </ItemGroup>
+
+</Project>

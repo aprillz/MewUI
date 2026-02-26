@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle).Windows</PackageId>
+    <Description>MewUI metapackage for Windows — includes Core, Win32 platform host, and all Windows rendering backends (Direct2D, GDI, MewVG). Use MewUIBackend property at publish to select one.</Description>
+    <PackageTags>mewui;windows;win32;direct2d;gdi;mewvg;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="buildTransitive\$(MewUITitle).Windows.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+
+</Project>

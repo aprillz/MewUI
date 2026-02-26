@@ -1,0 +1,105 @@
+<Project>
+
+  <!--
+    Two-stage publish filtering for Aprillz.MewUI (all-in-one) metapackage.
+
+    Stage 1: RID-based platform filtering
+      Removes non-target-platform assemblies (platforms + backends).
+      Triggered by RuntimeIdentifier (e.g., dotnet publish -r win-x64).
+
+    Stage 2: Backend selection filtering (Windows only, since Linux/macOS have 1 backend each)
+      Removes non-selected Windows backends.
+      Triggered by MewUIBackend property.
+
+    Usage:
+      dotnet publish -r win-x64                              (all Windows backends)
+      dotnet publish -r win-x64 -p:MewUIBackend=Direct2D    (Direct2D only)
+      dotnet publish -r win-x64 -p:MewUIBackend=Gdi         (GDI only)
+      dotnet publish -r win-x64 -p:MewUIBackend=MewVG       (MewVG only)
+      dotnet publish -r linux-x64                            (MewVG.X11, no backend choice)
+      dotnet publish -r osx-arm64                            (MewVG.MacOS, no backend choice)
+  -->
+
+  <!-- Stage 1: Platform filtering by RID -->
+  <Target Name="_MewUIExcludeNonTargetPlatformFromPublish"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(RuntimeIdentifier)' != ''">
+
+    <!-- Windows: remove Linux/macOS platforms and backends -->
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Platform.X11'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Platform.MacOS'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.X11'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.MacOS'" />
+    </ItemGroup>
+
+    <!-- Linux: remove Windows/macOS platforms and backends -->
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Platform.Win32'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Platform.MacOS'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Direct2D'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Gdi'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.Win32'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.MacOS'" />
+    </ItemGroup>
+
+    <!-- macOS: remove Windows/Linux platforms and backends -->
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Platform.Win32'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Platform.X11'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Direct2D'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Gdi'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.Win32'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.X11'" />
+    </ItemGroup>
+
+  </Target>
+
+  <!-- Stage 2: Backend filtering by MewUIBackend property (Windows only) -->
+  <Target Name="_MewUIFilterBackendOnPublish"
+          AfterTargets="_MewUIExcludeNonTargetPlatformFromPublish"
+          Condition="'$(MewUIBackend)' != ''">
+
+    <!-- Direct2D: remove Gdi, MewVG.Win32 -->
+    <ItemGroup Condition="'$(MewUIBackend)' == 'Direct2D'">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Gdi'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.Win32'" />
+    </ItemGroup>
+
+    <!-- Gdi: remove Direct2D, MewVG.Win32 -->
+    <ItemGroup Condition="'$(MewUIBackend)' == 'Gdi'">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Direct2D'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.Win32'" />
+    </ItemGroup>
+
+    <!-- MewVG: remove Direct2D, Gdi -->
+    <ItemGroup Condition="'$(MewUIBackend)' == 'MewVG'">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Direct2D'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Gdi'" />
+    </ItemGroup>
+
+  </Target>
+
+</Project>

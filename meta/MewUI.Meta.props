@@ -1,0 +1,23 @@
+<Project>
+
+  <Import Project="..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <!-- metapackage: dependencies only, no code output -->
+    <PackageIcon>logo_c-256.png</PackageIcon>
+    <PackageReadmeFile>NUGET_README.md</PackageReadmeFile>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>false</SuppressDependenciesWhenPacking>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsTrimmable>false</IsTrimmable>
+    <IncludeSymbols>false</IncludeSymbols>
+    <IncludeSource>false</IncludeSource>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\assets\logo\logo_c-256.png" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)..\NUGET_README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

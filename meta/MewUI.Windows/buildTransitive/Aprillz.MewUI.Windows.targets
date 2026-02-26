@@ -1,0 +1,47 @@
+<Project>
+
+  <!--
+    Backend filtering for Aprillz.MewUI.Windows metapackage.
+
+    Usage:
+      dotnet publish -r win-x64 -p:MewUIBackend=Direct2D   (Direct2D only)
+      dotnet publish -r win-x64 -p:MewUIBackend=Gdi         (GDI only)
+      dotnet publish -r win-x64 -p:MewUIBackend=MewVG       (MewVG only)
+      dotnet publish -r win-x64                              (all backends)
+
+    Also settable in csproj:
+      <PropertyGroup>
+        <MewUIBackend>Direct2D</MewUIBackend>
+      </PropertyGroup>
+  -->
+  <Target Name="_MewUIWindowsFilterBackendOnPublish"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(MewUIBackend)' != ''">
+
+    <!-- Direct2D: remove Gdi, MewVG.Win32 -->
+    <ItemGroup Condition="'$(MewUIBackend)' == 'Direct2D'">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Gdi'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.Win32'" />
+    </ItemGroup>
+
+    <!-- Gdi: remove Direct2D, MewVG.Win32 -->
+    <ItemGroup Condition="'$(MewUIBackend)' == 'Gdi'">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Direct2D'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.MewVG.Win32'" />
+    </ItemGroup>
+
+    <!-- MewVG: remove Direct2D, Gdi -->
+    <ItemGroup Condition="'$(MewUIBackend)' == 'MewVG'">
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Direct2D'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="%(Filename) == 'Aprillz.MewUI.Backend.Gdi'" />
+    </ItemGroup>
+
+  </Target>
+
+</Project>
