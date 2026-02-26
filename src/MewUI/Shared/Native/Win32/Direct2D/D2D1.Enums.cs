@@ -62,3 +62,67 @@ internal enum D2D1_LAYER_OPTIONS : uint
     NONE = 0,
     INITIALIZE_FOR_CLEARTYPE = 1
 }
+
+internal enum D2D1_FILL_MODE : uint
+{
+    ALTERNATE = 0,
+    WINDING = 1,
+}
+
+internal enum D2D1_FIGURE_BEGIN : uint
+{
+    FILLED = 0,
+    HOLLOW = 1,
+}
+
+internal enum D2D1_FIGURE_END : uint
+{
+    OPEN = 0,
+    CLOSED = 1,
+}
+
+internal enum D2D1_EXTEND_MODE : uint
+{
+    CLAMP = 0,
+    WRAP = 1,
+    MIRROR = 2,
+}
+
+internal enum D2D1_GAMMA : uint
+{
+    GAMMA_2_2 = 0,
+    GAMMA_1_0 = 1,
+}
+
+internal enum D2D1_CAP_STYLE : uint
+{
+    FLAT = 0,
+    SQUARE = 1,
+    ROUND = 2,
+    TRIANGLE = 3,
+}
+
+internal enum D2D1_LINE_JOIN : uint
+{
+    MITER = 0,
+    BEVEL = 1,
+    ROUND = 2,
+    MITER_OR_BEVEL = 3,
+}
+
+internal enum D2D1_DASH_STYLE : uint
+{
+    SOLID = 0,
+    DASH = 1,
+    DOT = 2,
+    DASH_DOT = 3,
+    DASH_DOT_DOT = 4,
+    CUSTOM = 5,
+}
+
+internal enum D2D1_STROKE_TRANSFORM_TYPE : uint
+{
+    NORMAL = 0,
+    FIXED = 1,
+    HAIRLINE = 2,
+}

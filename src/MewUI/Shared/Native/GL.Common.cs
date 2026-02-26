@@ -1,7 +1,4 @@
-using System;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace Aprillz.MewUI.Native;
 
@@ -74,294 +71,44 @@ internal static class GL
 
     internal const uint GL_NO_ERROR = 0;
 
-    public static void Viewport(int x, int y, int width, int height)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Viewport(x, y, width, height);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Viewport(x, y, width, height);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void MatrixMode(uint mode)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.MatrixMode(mode);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.MatrixMode(mode);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void LoadIdentity()
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.LoadIdentity();
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.LoadIdentity();
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Ortho(double left, double right, double bottom, double top, double zNear, double zFar)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Ortho(left, right, bottom, top, zNear, zFar);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Ortho(left, right, bottom, top, zNear, zFar);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Scissor(int x, int y, int width, int height)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Scissor(x, y, width, height);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Scissor(x, y, width, height);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Enable(uint cap)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Enable(cap);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Enable(cap);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Disable(uint cap)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Disable(cap);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Disable(cap);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void BlendFunc(uint sfactor, uint dfactor)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.BlendFunc(sfactor, dfactor);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.BlendFunc(sfactor, dfactor);
-        else throw new PlatformNotSupportedException();
-    }
-
+    public static void Viewport(int x, int y, int width, int height) => GLNative.Viewport(x, y, width, height);
+    public static void MatrixMode(uint mode) => GLNative.MatrixMode(mode);
+    public static void LoadIdentity() => GLNative.LoadIdentity();
+    public static void Ortho(double left, double right, double bottom, double top, double zNear, double zFar) => GLNative.Ortho(left, right, bottom, top, zNear, zFar);
+    public static void Scissor(int x, int y, int width, int height) => GLNative.Scissor(x, y, width, height);
+    public static void Enable(uint cap) => GLNative.Enable(cap);
+    public static void Disable(uint cap) => GLNative.Disable(cap);
+    public static void BlendFunc(uint sfactor, uint dfactor) => GLNative.BlendFunc(sfactor, dfactor);
     public static void BlendFuncSeparate(uint srcRgb, uint dstRgb, uint srcAlpha, uint dstAlpha)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.BlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.BlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void StencilFunc(uint func, int @ref, uint mask)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.StencilFunc(func, @ref, mask);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.StencilFunc(func, @ref, mask);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void StencilOp(uint sfail, uint dpfail, uint dppass)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.StencilOp(sfail, dpfail, dppass);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.StencilOp(sfail, dpfail, dppass);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void StencilMask(uint mask)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.StencilMask(mask);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.StencilMask(mask);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void ColorMask(bool red, bool green, bool blue, bool alpha)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.ColorMask(red, green, blue, alpha);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.ColorMask(red, green, blue, alpha);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void ClearStencil(int s)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.ClearStencil(s);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.ClearStencil(s);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Hint(uint target, uint mode)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Hint(target, mode);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Hint(target, mode);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void ClearColor(float red, float green, float blue, float alpha)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.ClearColor(red, green, blue, alpha);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.ClearColor(red, green, blue, alpha);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Clear(uint mask)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Clear(mask);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Clear(mask);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void LineWidth(float width)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.LineWidth(width);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.LineWidth(width);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Begin(uint mode)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Begin(mode);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Begin(mode);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void End()
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.End();
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.End();
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Vertex2f(float x, float y)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Vertex2f(x, y);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Vertex2f(x, y);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void TexCoord2f(float s, float t)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.TexCoord2f(s, t);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.TexCoord2f(s, t);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void Color4ub(byte red, byte green, byte blue, byte alpha)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.Color4ub(red, green, blue, alpha);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.Color4ub(red, green, blue, alpha);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void BindTexture(uint target, uint texture)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.BindTexture(target, texture);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.BindTexture(target, texture);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void GenTextures(int n, out uint textures)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.GenTextures(n, out textures);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.GenTextures(n, out textures);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void DeleteTextures(int n, ref uint textures)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.DeleteTextures(n, ref textures);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.DeleteTextures(n, ref textures);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static void TexParameteri(uint target, uint pname, int param)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.TexParameteri(target, pname, param);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.TexParameteri(target, pname, param);
-        else throw new PlatformNotSupportedException();
-    }
-
+        => GLNative.BlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+    public static void StencilFunc(uint func, int @ref, uint mask) => GLNative.StencilFunc(func, @ref, mask);
+    public static void StencilOp(uint sfail, uint dpfail, uint dppass) => GLNative.StencilOp(sfail, dpfail, dppass);
+    public static void StencilMask(uint mask) => GLNative.StencilMask(mask);
+    public static void ColorMask(bool red, bool green, bool blue, bool alpha) => GLNative.ColorMask(red, green, blue, alpha);
+    public static void ClearStencil(int s) => GLNative.ClearStencil(s);
+    public static void Hint(uint target, uint mode) => GLNative.Hint(target, mode);
+    public static void ClearColor(float red, float green, float blue, float alpha) => GLNative.ClearColor(red, green, blue, alpha);
+    public static void Clear(uint mask) => GLNative.Clear(mask);
+    public static void LineWidth(float width) => GLNative.LineWidth(width);
+    public static void Begin(uint mode) => GLNative.Begin(mode);
+    public static void End() => GLNative.End();
+    public static void Vertex2f(float x, float y) => GLNative.Vertex2f(x, y);
+    public static void TexCoord2f(float s, float t) => GLNative.TexCoord2f(s, t);
+    public static void Color4ub(byte red, byte green, byte blue, byte alpha) => GLNative.Color4ub(red, green, blue, alpha);
+    public static void BindTexture(uint target, uint texture) => GLNative.BindTexture(target, texture);
+    public static void GenTextures(int n, out uint textures) => GLNative.GenTextures(n, out textures);
+    public static void DeleteTextures(int n, ref uint textures) => GLNative.DeleteTextures(n, ref textures);
+    public static void TexParameteri(uint target, uint pname, int param) => GLNative.TexParameteri(target, pname, param);
     public static void TexImage2D(uint target, int level, int internalformat, int width, int height, int border, uint format, uint type, nint pixels)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.TexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.TexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
-        else throw new PlatformNotSupportedException();
-    }
-
+        => GLNative.TexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
     public static void ReadPixels(int x, int y, int width, int height, uint format, uint type, nint pixels)
-    {
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.ReadPixels(x, y, width, height, format, type, pixels);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.ReadPixels(x, y, width, height, format, type, pixels);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static nint GetString(uint name)
-    {
-        if (OperatingSystem.IsWindows())
-            return GLNativeWin32.GetString(name);
-        else if (OperatingSystem.IsLinux())
-            return GLNativeX11.GetString(name);
-        else throw new PlatformNotSupportedException();
-    }
-
-    public static uint GetError()
-    {
-        if (OperatingSystem.IsWindows())
-            return GLNativeWin32.GetError();
-        else if (OperatingSystem.IsLinux())
-            return GLNativeX11.GetError();
-        else throw new PlatformNotSupportedException();
-    }
+        => GLNative.ReadPixels(x, y, width, height, format, type, pixels);
+    public static nint GetString(uint name) => GLNative.GetString(name);
+    public static uint GetError() => GLNative.GetError();
 
     public static int GetInteger(uint pname)
     {
-        int value;
-        if (OperatingSystem.IsWindows())
-            GLNativeWin32.GetIntegerv(pname, out value);
-        else if (OperatingSystem.IsLinux())
-            GLNativeX11.GetIntegerv(pname, out value);
-        else throw new PlatformNotSupportedException();
-
+        GLNative.GetIntegerv(pname, out int value);
         return value;
     }
 

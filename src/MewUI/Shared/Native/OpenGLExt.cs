@@ -34,6 +34,7 @@ internal static unsafe partial class OpenGLExt
     private static bool _supported;
     private static readonly object _lock = new();
 
+    private static partial void LoadFunctionPointers();
 
     public static bool IsSupported
     {
@@ -60,18 +61,7 @@ internal static unsafe partial class OpenGLExt
 
             _initialized = true;
 
-            if (OperatingSystem.IsWindows())
-            {
-                LoadFunctionPointersWin32();
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                LoadFunctionPointersX11();
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            LoadFunctionPointers();
 
             _supported = _glGenFramebuffers != null &&
                          _glDeleteFramebuffers != null &&

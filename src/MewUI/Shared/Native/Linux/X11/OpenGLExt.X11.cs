@@ -2,7 +2,7 @@ namespace Aprillz.MewUI.Native;
 
 internal static unsafe partial class OpenGLExt
 {
-    private static void LoadFunctionPointersX11()
+    private static partial void LoadFunctionPointers()
     {
         _glGenFramebuffers = (delegate* unmanaged<int, uint*, void>)LibGL.glXGetProcAddress("glGenFramebuffers");
         _glDeleteFramebuffers = (delegate* unmanaged<int, uint*, void>)LibGL.glXGetProcAddress("glDeleteFramebuffers");
@@ -16,4 +16,3 @@ internal static unsafe partial class OpenGLExt
         _glCheckFramebufferStatus = (delegate* unmanaged<uint, uint>)LibGL.glXGetProcAddress("glCheckFramebufferStatus");
     }
 }
-

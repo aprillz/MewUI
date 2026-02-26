@@ -1,10 +1,5 @@
 using Aprillz.MewUI.Platform;
-using Aprillz.MewUI.Platform.Linux.X11;
-using Aprillz.MewUI.Platform.Win32;
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Rendering.Direct2D;
-using Aprillz.MewUI.Rendering.Gdi;
-using Aprillz.MewUI.Rendering.OpenGL;
 
 namespace Aprillz.MewUI;
 
@@ -15,12 +10,13 @@ public sealed class Application
 {
     private static Application? _current;
     private static readonly object _syncLock = new();
-
-    private static GraphicsBackend _defaultGraphicsBackend = OperatingSystem.IsWindows()
-        ? GraphicsBackend.Direct2D
-        : GraphicsBackend.OpenGL;
-
     private static IGraphicsFactory? _defaultGraphicsFactoryOverride;
+    private static string? _defaultGraphicsFactoryId;
+    private static readonly Dictionary<string, Func<IGraphicsFactory>> _graphicsFactoriesById = new(StringComparer.OrdinalIgnoreCase);
+    private static string? _defaultPlatformHostId;
+    private static readonly Dictionary<string, Func<IPlatformHost>> _platformHostsById = new(StringComparer.OrdinalIgnoreCase);
+    private static IPlatformHost? _defaultPlatformHostOverride;
+
     private Exception? _pendingFatalException;
 
     private readonly List<Window> _windows = new();
@@ -118,55 +114,93 @@ public sealed class Application
 
     /// <summary>
     /// Gets the selected graphics backend used by windows/controls.
+    /// This is derived from <see cref="DefaultGraphicsFactory"/> and exists mainly for diagnostics.
     /// </summary>
-    public static GraphicsBackend DefaultGraphicsBackend
+    public static GraphicsBackend SelectedGraphicsBackend
     {
-        get => _defaultGraphicsBackend;
-        set
+        get
         {
-            _defaultGraphicsBackend = value;
-            _defaultGraphicsFactoryOverride = null;
+            try
+            {
+                return DefaultGraphicsFactory.Backend;
+            }
+            catch
+            {
+                return GraphicsBackend.Custom;
+            }
         }
     }
 
     /// <summary>
     /// Gets or sets the default graphics factory used by windows/controls.
-    /// Prefer <see cref="DefaultGraphicsBackend"/> for built-in backends.
+    /// In trim/AOT-friendly setups, backend packages register factories via <see cref="RegisterGraphicsFactory"/>.
     /// </summary>
     public static IGraphicsFactory DefaultGraphicsFactory
     {
-        get => _defaultGraphicsFactoryOverride ?? GetFactoryForBackend(_defaultGraphicsBackend);
+        get => _defaultGraphicsFactoryOverride ?? CreateDefaultGraphicsFactory();
         set
         {
-            if (value == null)
-            {
-                throw new ArgumentNullException(nameof(value));
-            }
-
-            // Keep existing code working, but prefer enum configuration.
-            if (value == Direct2DGraphicsFactory.Instance)
-            {
-                DefaultGraphicsBackend = GraphicsBackend.Direct2D;
-                return;
-            }
-
-            if (value == GdiGraphicsFactory.Instance)
-            {
-                DefaultGraphicsBackend = GraphicsBackend.Gdi;
-                return;
-            }
+            ArgumentNullException.ThrowIfNull(value);
 
             _defaultGraphicsFactoryOverride = value;
         }
     }
 
+    /// <summary>
+    /// Sets the default graphics factory by id. The id must have been registered with <see cref="RegisterGraphicsFactory"/>.
+    /// </summary>
+    public static void SetDefaultGraphicsFactory(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+
+        if (_current != null)
+        {
+            throw new InvalidOperationException("Cannot change graphics backend while the application is running.");
+        }
+
+        lock (_syncLock)
+        {
+            if (!_graphicsFactoriesById.ContainsKey(id))
+            {
+                throw new InvalidOperationException($"Graphics factory '{id}' is not registered.");
+            }
+
+            _defaultGraphicsFactoryId = id;
+            _defaultGraphicsFactoryOverride = null;
+        }
+    }
+
+    /// <summary>
+    /// Sets the default platform host by id. The id must have been registered with <see cref="RegisterPlatformHost"/>.
+    /// </summary>
+    public static void SetDefaultPlatformHost(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+
+        if (_current != null)
+        {
+            throw new InvalidOperationException("Cannot change platform host while the application is running.");
+        }
+
+        lock (_syncLock)
+        {
+            if (!_platformHostsById.ContainsKey(id))
+            {
+                throw new InvalidOperationException($"Platform host '{id}' is not registered.");
+            }
+
+            _defaultPlatformHostId = id;
+            _defaultPlatformHostOverride = null; // reset lazy cache
+        }
+    }
+
     public static IPlatformHost DefaultPlatformHost
     {
-        get => field ??= CreateDefaultPlatformHost();
+        get => _defaultPlatformHostOverride ??= CreateDefaultPlatformHost();
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            field = value;
+            _defaultPlatformHostOverride = value;
         }
     }
 
@@ -282,17 +316,106 @@ public sealed class Application
         _current.PlatformHost.DoEvents();
     }
 
-    private static IGraphicsFactory GetFactoryForBackend(GraphicsBackend backend) => backend switch
+    private static IGraphicsFactory CreateDefaultGraphicsFactory()
     {
-        GraphicsBackend.OpenGL => OpenGLGraphicsFactory.Instance,
-        GraphicsBackend.Direct2D => OperatingSystem.IsWindows()
-            ? Direct2DGraphicsFactory.Instance
-            : throw new PlatformNotSupportedException("Direct2D backend is Windows-only. Use OpenGL on Linux."),
-        GraphicsBackend.Gdi => OperatingSystem.IsWindows()
-            ? GdiGraphicsFactory.Instance
-            : throw new PlatformNotSupportedException("GDI backend is Windows-only. Use OpenGL on Linux."),
-        _ => OperatingSystem.IsWindows() ? Direct2DGraphicsFactory.Instance : OpenGLGraphicsFactory.Instance,
-    };
+        if (_defaultGraphicsFactoryOverride != null)
+        {
+            return _defaultGraphicsFactoryOverride;
+        }
+
+        if (_defaultGraphicsFactoryId != null)
+        {
+            return CreateRegisteredGraphicsFactory(_defaultGraphicsFactoryId);
+        }
+
+        if (TryGetSingleRegisteredGraphicsFactory(out var singleFactory))
+        {
+            return singleFactory;
+        }
+
+        throw new InvalidOperationException(
+            "No graphics backend selected. Register a backend package (e.g. Aprillz.MewUI.Backend.OpenGL / Direct2D / Gdi) " +
+            "and call Application.SetDefaultGraphicsFactory(...) if multiple backends are referenced.");
+    }
+
+    /// <summary>
+    /// Registers a graphics factory by id. Backend packages should call this at startup.
+    /// </summary>
+    public static void RegisterGraphicsFactory(string id, Func<IGraphicsFactory> factory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        if (_current != null)
+        {
+            throw new InvalidOperationException("Cannot register a graphics backend while the application is running.");
+        }
+
+        lock (_syncLock)
+        {
+            // Project policy: a process should register exactly one graphics backend. This keeps the core trim-friendly.
+            // Tools/tests can still choose a backend by registering only one in their entry point.
+            if (_graphicsFactoriesById.Count > 0 && !_graphicsFactoriesById.ContainsKey(id))
+            {
+                var existingIds = string.Join(", ", _graphicsFactoriesById.Keys.OrderBy(static s => s, StringComparer.OrdinalIgnoreCase));
+                throw new InvalidOperationException($"A graphics backend is already registered ({existingIds}). Register only one backend per process.");
+            }
+
+            if (_graphicsFactoriesById.TryGetValue(id, out var existing) && existing != factory)
+            {
+                throw new InvalidOperationException($"Graphics factory '{id}' is already registered.");
+            }
+
+            _graphicsFactoriesById[id] = factory;
+        }
+    }
+
+    /// <summary>
+    /// Registers a platform host by id. Platform packages should call this at startup.
+    /// </summary>
+    public static void RegisterPlatformHost(string id, Func<IPlatformHost> factory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        if (_current != null)
+        {
+            throw new InvalidOperationException("Cannot register a platform host while the application is running.");
+        }
+
+        lock (_syncLock)
+        {
+            // Project policy: a process should register exactly one platform host.
+            if (_platformHostsById.Count > 0 && !_platformHostsById.ContainsKey(id))
+            {
+                var existingIds = string.Join(", ", _platformHostsById.Keys.OrderBy(static s => s, StringComparer.OrdinalIgnoreCase));
+                throw new InvalidOperationException($"A platform host is already registered ({existingIds}). Register only one platform host per process.");
+            }
+
+            if (_platformHostsById.TryGetValue(id, out var existing) && existing != factory)
+            {
+                throw new InvalidOperationException($"Platform host '{id}' is already registered.");
+            }
+
+            _platformHostsById[id] = factory;
+        }
+    }
+
+    private static bool TryGetSingleRegisteredGraphicsFactory(out IGraphicsFactory factory)
+    {
+        lock (_syncLock)
+        {
+            if (_graphicsFactoriesById.Count == 1)
+            {
+                var single = _graphicsFactoriesById.Values.First();
+                factory = single();
+                return true;
+            }
+
+            factory = null!;
+            return false;
+        }
+    }
 
     public bool TryHandleDispatcherException(Exception ex)
     {
@@ -314,16 +437,63 @@ public sealed class Application
 
     private static IPlatformHost CreateDefaultPlatformHost()
     {
-        if (OperatingSystem.IsWindows())
+        if (_defaultPlatformHostId != null)
         {
-            return new Win32PlatformHost();
+            return MaybeTracePlatformHost(CreateRegisteredPlatformHost(_defaultPlatformHostId));
         }
 
-        if (OperatingSystem.IsLinux())
+        lock (_syncLock)
         {
-            return new X11PlatformHost();
+            if (_platformHostsById.Count == 1)
+            {
+                return MaybeTracePlatformHost(_platformHostsById.Values.First()());
+            }
+
+            if (_platformHostsById.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No platform host registered. Add a platform package such as Aprillz.MewUI.Platform.Win32 or Aprillz.MewUI.Platform.X11.");
+            }
+
+            var ids = string.Join(", ", _platformHostsById.Keys.OrderBy(static s => s, StringComparer.OrdinalIgnoreCase));
+            throw new InvalidOperationException(
+                $"Multiple platform hosts are registered ({ids}). Call Application.SetDefaultPlatformHost(\"...\") or assign Application.DefaultPlatformHost explicitly.");
+        }
+    }
+
+    private static IPlatformHost CreateRegisteredPlatformHost(string id)
+    {
+        lock (_syncLock)
+        {
+            if (!_platformHostsById.TryGetValue(id, out var factory))
+            {
+                throw new InvalidOperationException($"No platform host registered for '{id}'.");
+            }
+
+            return factory();
+        }
+    }
+
+    private static IPlatformHost MaybeTracePlatformHost(IPlatformHost host)
+    {
+        if (!DiagLog.Enabled)
+        {
+            return host;
         }
 
-        throw new PlatformNotSupportedException("MewUI currently supports Windows and (experimental) Linux hosts only.");
+        return host is TracingPlatformHost ? host : new TracingPlatformHost(host);
+    }
+
+    private static IGraphicsFactory CreateRegisteredGraphicsFactory(string id)
+    {
+        lock (_syncLock)
+        {
+            if (!_graphicsFactoriesById.TryGetValue(id, out var factory))
+            {
+                throw new InvalidOperationException($"No graphics factory registered for '{id}'.");
+            }
+
+            return factory();
+        }
     }
 }

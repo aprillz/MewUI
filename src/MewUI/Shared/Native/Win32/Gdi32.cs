@@ -167,6 +167,37 @@ internal static partial class Gdi32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool LineTo(nint hdc, int x, int y);
 
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PolyBezierTo(nint hdc, POINT[] apt, int cpt);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CloseFigure(nint hdc);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool BeginPath(nint hdc);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EndPath(nint hdc);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool StrokePath(nint hdc);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool FillPath(nint hdc);
+
+    /// <summary>
+    /// Sets the polygon fill mode for functions that fill polygons.
+    /// Returns the previous fill mode, or 0 on failure.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    public static partial int SetPolyFillMode(nint hdc, int iPolyFillMode);
+
     #endregion
 
     #region Drawing - Fill
@@ -271,10 +302,17 @@ internal static partial class Gdi32
     public static partial int SelectClipRgn(nint hdc, nint hrgn);
 
     [LibraryImport(LibraryName)]
+    public static partial int ExtSelectClipRgn(nint hdc, nint hrgn, int mode);
+
+    [LibraryImport(LibraryName)]
     public static partial int IntersectClipRect(nint hdc, int left, int top, int right, int bottom);
 
     [LibraryImport(LibraryName)]
     public static partial int ExcludeClipRect(nint hdc, int left, int top, int right, int bottom);
+
+    /// <summary>Returns non-zero if any part of the rect lies within the current clip region.</summary>
+    [LibraryImport(LibraryName)]
+    public static partial int RectVisible(nint hdc, ref RECT lprc);
 
     #endregion
 

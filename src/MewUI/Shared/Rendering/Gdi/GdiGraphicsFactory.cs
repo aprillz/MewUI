@@ -2,6 +2,7 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Win32;
+using Aprillz.MewUI.Rendering.Gdi.Core;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
@@ -26,6 +27,15 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
 
     // Keep backend default aligned with other backends: Default => Linear unless the app explicitly overrides.
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Normal;
+
+    public ISolidColorBrush CreateSolidColorBrush(Color color) =>
+        new GdiSolidColorBrush(color);
+
+    public IPen CreatePen(Color color, double thickness = 1.0, StrokeStyle? strokeStyle = null) =>
+        new GdiPen(color, thickness, strokeStyle ?? StrokeStyle.Default);
+
+    public IPen CreatePen(IBrush brush, double thickness = 1.0, StrokeStyle? strokeStyle = null) =>
+        new GdiPen(brush, thickness, strokeStyle ?? StrokeStyle.Default);
 
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)

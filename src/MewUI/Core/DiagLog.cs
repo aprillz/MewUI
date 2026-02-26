@@ -13,7 +13,7 @@ public static class DiagLog
     /// <summary>
     /// Gets whether diagnostics logging is enabled.
     /// </summary>
-    public static bool Enabled { get; set; }
+    public static bool Enabled => GraphicsRuntimeOptions.DiagnosticsEnabled;
 
     /// <summary>
     /// Writes a diagnostic message in DEBUG builds only.

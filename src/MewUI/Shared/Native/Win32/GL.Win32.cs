@@ -3,11 +3,11 @@ namespace Aprillz.MewUI.Native;
 /// <summary>
 /// OpenGL entrypoints for Windows (WGL / opengl32.dll).
 /// </summary>
-internal static class GLNativeWin32
+internal static class GLNative
 {
     private static readonly unsafe delegate* unmanaged<uint, uint, uint, uint, void> s_blendFuncSeparate;
 
-    static unsafe GLNativeWin32()
+    static unsafe GLNative()
     {
         nint proc = OpenGL32.wglGetProcAddress("glBlendFuncSeparate");
         if (proc == 0)

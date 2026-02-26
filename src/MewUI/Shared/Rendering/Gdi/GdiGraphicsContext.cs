@@ -31,6 +31,8 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     private readonly AaSurfacePool _surfacePool;
     private readonly AaSurface _alphaPixelSurface;
     private uint _alphaPixel;
+
+
     private bool _disposed;
 
     public double DpiScale => _stateManager.DpiScale;
@@ -277,6 +279,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     {
         if (!_disposed)
         {
+
             if (_ownsDc && Hdc != 0)
             {
                 User32.ReleaseDC(_hwnd, Hdc);
@@ -314,6 +317,12 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
     }
 
     public void Translate(double dx, double dy) => _stateManager.Translate(dx, dy);
+    public void Rotate(double angleRadians) => _stateManager.Rotate(angleRadians);
+    public void Scale(double sx, double sy) => _stateManager.Scale(sx, sy);
+    public void SetTransform(System.Numerics.Matrix3x2 matrix) => _stateManager.SetTransform(matrix);
+    public System.Numerics.Matrix3x2 GetTransform() => _stateManager.Transform;
+    public void ResetTransform() => _stateManager.ResetTransform();
+    public void ResetClip() => _stateManager.ResetClip();
 
     #endregion
 
@@ -551,7 +560,170 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             color.B, color.G, color.R, color.A);
     }
 
+    public void DrawPath(PathGeometry path, Color color, double thickness = 1)
+    {
+        if (path == null || color.A == 0 || thickness <= 0)
+        {
+            return;
+        }
+
+        int penWidthPx = Math.Max(1, _stateManager.QuantizePenWidthPx(thickness));
+        nint pen = Gdi32.CreatePen(GdiConstants.PS_SOLID, penWidthPx, color.ToCOLORREF());
+        if (pen == 0)
+        {
+            return;
+        }
+
+        nint oldPen = Gdi32.SelectObject(Hdc, pen);
+        nint oldBrush = Gdi32.SelectObject(Hdc, Gdi32.GetStockObject(GdiConstants.NULL_BRUSH));
+        try
+        {
+            Gdi32.BeginPath(Hdc);
+            ReplayPathCommandsGdi(path);
+            Gdi32.EndPath(Hdc);
+            Gdi32.StrokePath(Hdc);
+        }
+        finally
+        {
+            Gdi32.SelectObject(Hdc, oldBrush);
+            Gdi32.SelectObject(Hdc, oldPen);
+            Gdi32.DeleteObject(pen);
+        }
+    }
+
+    public void FillPath(PathGeometry path, Color color)
+    {
+        FillPath(path, color, FillRule.NonZero);
+    }
+
+    public void FillPath(PathGeometry path, Color color, FillRule fillRule)
+    {
+        if (path == null || color.A == 0)
+        {
+            return;
+        }
+
+        nint brush = Gdi32.CreateSolidBrush(color.ToCOLORREF());
+        if (brush == 0)
+        {
+            return;
+        }
+
+        int gdiMode = fillRule == FillRule.EvenOdd ? GdiConstants.ALTERNATE : GdiConstants.WINDING;
+        int prevMode = Gdi32.SetPolyFillMode(Hdc, gdiMode);
+        nint oldBrush = Gdi32.SelectObject(Hdc, brush);
+        nint oldPen = Gdi32.SelectObject(Hdc, Gdi32.GetStockObject(GdiConstants.NULL_PEN));
+        try
+        {
+            Gdi32.BeginPath(Hdc);
+            ReplayPathCommandsGdi(path);
+            Gdi32.EndPath(Hdc);
+            Gdi32.FillPath(Hdc);
+        }
+        finally
+        {
+            Gdi32.SelectObject(Hdc, oldPen);
+            Gdi32.SelectObject(Hdc, oldBrush);
+            Gdi32.DeleteObject(brush);
+            if (prevMode != 0)
+                Gdi32.SetPolyFillMode(Hdc, prevMode);
+        }
+    }
+
+    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    {
+        Color color = brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+        FillPath(path, color, fillRule);
+    }
+
+    public void DrawPath(PathGeometry path, IPen pen)
+    {
+        if (path == null || pen.Thickness <= 0) return;
+        Color color = pen.Brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+        if (color.A == 0) return;
+
+        int penWidthPx = Math.Max(1, _stateManager.QuantizePenWidthPx(pen.Thickness));
+        nint hpen = CreateGeometricPen(color.ToCOLORREF(), penWidthPx, pen.StrokeStyle);
+        if (hpen == 0) return;
+
+        nint oldPen   = Gdi32.SelectObject(Hdc, hpen);
+        nint oldBrush = Gdi32.SelectObject(Hdc, Gdi32.GetStockObject(GdiConstants.NULL_BRUSH));
+        try
+        {
+            Gdi32.BeginPath(Hdc);
+            ReplayPathCommandsGdi(path);
+            Gdi32.EndPath(Hdc);
+            Gdi32.StrokePath(Hdc);
+        }
+        finally
+        {
+            Gdi32.SelectObject(Hdc, oldBrush);
+            Gdi32.SelectObject(Hdc, oldPen);
+            Gdi32.DeleteObject(hpen);
+        }
+    }
+
+    private nint CreateGeometricPen(uint colorRef, int widthPx, StrokeStyle style)
+    {
+        uint ps = GdiConstants.PS_GEOMETRIC | (uint)GdiConstants.PS_SOLID;
+
+        ps |= style.LineCap switch
+        {
+            StrokeLineCap.Round  => GdiConstants.PS_ENDCAP_ROUND,
+            StrokeLineCap.Square => GdiConstants.PS_ENDCAP_SQUARE,
+            _                    => GdiConstants.PS_ENDCAP_FLAT,
+        };
+
+        ps |= style.LineJoin switch
+        {
+            StrokeLineJoin.Round => GdiConstants.PS_JOIN_ROUND,
+            StrokeLineJoin.Bevel => GdiConstants.PS_JOIN_BEVEL,
+            _                    => GdiConstants.PS_JOIN_MITER,
+        };
+
+        var lb = new LOGBRUSH { lbStyle = (uint)GdiConstants.BS_SOLID, lbColor = colorRef };
+        return Gdi32.ExtCreatePen(ps, (uint)widthPx, ref lb, 0, 0);
+    }
+
+    private void ReplayPathCommandsGdi(PathGeometry path)
+    {
+        foreach (var cmd in path.Commands)
+        {
+            switch (cmd.Type)
+            {
+                case PathCommandType.MoveTo:
+                {
+                    var pt = _stateManager.ToDevicePoint(new Point(cmd.X0, cmd.Y0));
+                    Gdi32.MoveToEx(Hdc, pt.x, pt.y, out _);
+                    break;
+                }
+                case PathCommandType.LineTo:
+                {
+                    var pt = _stateManager.ToDevicePoint(new Point(cmd.X0, cmd.Y0));
+                    Gdi32.LineTo(Hdc, pt.x, pt.y);
+                    break;
+                }
+                case PathCommandType.BezierTo:
+                {
+                    var c1 = _stateManager.ToDevicePoint(new Point(cmd.X0, cmd.Y0));
+                    var c2 = _stateManager.ToDevicePoint(new Point(cmd.X1, cmd.Y1));
+                    var ep = _stateManager.ToDevicePoint(new Point(cmd.X2, cmd.Y2));
+                    Gdi32.PolyBezierTo(Hdc, [
+                        new POINT(c1.x, c1.y),
+                        new POINT(c2.x, c2.y),
+                        new POINT(ep.x, ep.y)
+                    ], 3);
+                    break;
+                }
+                case PathCommandType.Close:
+                    Gdi32.CloseFigure(Hdc);
+                    break;
+            }
+        }
+    }
+
     #endregion
+
 
     #region Text Rendering
 
@@ -824,6 +996,7 @@ internal sealed class GdiGraphicsContext : IGraphicsContext
             rect.bottom = rect.top + textHeightPx;
         }
     }
+
 
     public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {

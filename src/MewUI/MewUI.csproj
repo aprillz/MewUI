@@ -8,7 +8,7 @@
     <Description>$(MewUIDescription)</Description>
 
     <!-- NuGet -->
-    <PackageId>$(MewUITitle)</PackageId>
+    <PackageId>$(MewUITitle).Core</PackageId>
     <PackageReadmeFile>NUGET_README.md</PackageReadmeFile>
     <PackageIcon>logo_c-256.png</PackageIcon>
   </PropertyGroup>
@@ -19,4 +19,8 @@
     <None Include="..\..\assets\logo\logo_c-256.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Split platform hosts and rendering backends into separate assemblies -->
+  <ItemGroup>
+    <Compile Remove="Shared\**" />
+  </ItemGroup>  
 </Project>

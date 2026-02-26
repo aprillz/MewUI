@@ -1,9 +1,9 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
-using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Rendering.Gdi.Core;
-using Aprillz.MewUI.Rendering.Gdi.Rendering;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
@@ -28,8 +28,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
     private readonly Stack<GraphicsStateSnapshot> _states = new();
     private bool _disposed;
     private readonly double _dpiScale;
-    private double _translateX;
-    private double _translateY;
+    private Matrix3x2 _transform = Matrix3x2.Identity;
 
     public double DpiScale => _dpiScale;
 
@@ -111,8 +110,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         _states.Push(new GraphicsStateSnapshot
         {
             GdiPlusState = state,
-            TranslateX = _translateX,
-            TranslateY = _translateY,
+            Transform = _transform,
         });
     }
 
@@ -126,8 +124,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
 
         var state = _states.Pop();
-        _translateX = state.TranslateX;
-        _translateY = state.TranslateY;
+        _transform = state.Transform;
 
         if (_graphics != 0 && state.GdiPlusState != 0)
         {
@@ -145,8 +142,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             return;
         }
 
-        var clip = LayoutRounding.SnapViewportRectToPixels(rect, _dpiScale);
-        var r = ToDeviceRect(clip);
+        var r = ToDeviceRect(rect);
         GdiPlusInterop.GdipSetClipRectI(_graphics, r.left, r.top, r.Width, r.Height, GdiPlusInterop.CombineMode.Intersect);
     }
 
@@ -166,8 +162,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             return;
         }
 
-        var clip = LayoutRounding.SnapViewportRectToPixels(rect, _dpiScale);
-        var r = ToDeviceRect(clip);
+        var r = ToDeviceRect(rect);
         int ellipseW = Math.Max(1, QuantizeLengthPx(radiusX * 2));
         int ellipseH = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
@@ -190,9 +185,62 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
     public void Translate(double dx, double dy)
     {
-        _translateX += dx;
-        _translateY += dy;
+        _transform = Matrix3x2.CreateTranslation((float)dx, (float)dy) * _transform;
         _textStateManager.Translate(dx, dy);
+        SyncWorldTransform();
+    }
+
+    public void Rotate(double angleRadians)
+    {
+        _transform = Matrix3x2.CreateRotation((float)angleRadians) * _transform;
+        SyncWorldTransform();
+    }
+
+    public void Scale(double sx, double sy)
+    {
+        _transform = Matrix3x2.CreateScale((float)sx, (float)sy) * _transform;
+        SyncWorldTransform();
+    }
+
+    public void SetTransform(Matrix3x2 matrix)
+    {
+        _transform = matrix;
+        SyncWorldTransform();
+    }
+
+    public Matrix3x2 GetTransform() => _transform;
+
+    public void ResetTransform()
+    {
+        _transform = Matrix3x2.Identity;
+        SyncWorldTransform();
+    }
+
+    private void SyncWorldTransform()
+    {
+        if (!EnsureGraphics()) return;
+        // Drawing coordinates are already in device pixels (via ToDevice*), so the world transform's
+        // scale/rotation components (M11-M22) are dimensionless and work as-is. But translation
+        // components (M31, M32) are in logical units and must be converted to device pixels.
+        var m = _transform;
+        float dpi = (float)_dpiScale;
+        if (GdiPlusInterop.GdipCreateMatrix2(
+                m.M11, m.M12,
+                m.M21, m.M22,
+                m.M31 * dpi, m.M32 * dpi,
+                out nint matrix) == 0 && matrix != 0)
+        {
+            GdiPlusInterop.GdipSetWorldTransform(_graphics, matrix);
+            GdiPlusInterop.GdipDeleteMatrix(matrix);
+        }
+    }
+
+    public void ResetClip()
+    {
+        if (EnsureGraphics())
+        {
+            GdiPlusInterop.GdipResetClip(_graphics);
+        }
     }
 
     #endregion
@@ -222,7 +270,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             return;
         }
 
-        float widthPx = (float)ToDevicePx(thickness);
+        float widthPx = (int)Math.Round(ToDevicePx(thickness));
         if (widthPx <= 0)
         {
             return;
@@ -446,6 +494,373 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
+    public void DrawPath(PathGeometry path, Color color, double thickness = 1)
+    {
+        if (path == null || color.A == 0 || thickness <= 0 || !EnsureGraphics())
+        {
+            return;
+        }
+
+        float widthPx = (float)ToDevicePx(thickness);
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        {
+            return;
+        }
+
+        if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var gdipPath) != 0 || gdipPath == 0)
+        {
+            GdiPlusInterop.GdipDeletePen(pen);
+            return;
+        }
+
+        try
+        {
+            BuildGdipPath(gdipPath, path);
+            GdiPlusInterop.GdipDrawPath(_graphics, pen, gdipPath);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(gdipPath);
+            GdiPlusInterop.GdipDeletePen(pen);
+        }
+    }
+
+    public void FillPath(PathGeometry path, Color color)
+        => FillPath(path, color, path?.FillRule ?? FillRule.NonZero);
+
+    public void FillPath(PathGeometry path, Color color, FillRule fillRule)
+    {
+        if (path == null || color.A == 0 || !EnsureGraphics())
+        {
+            return;
+        }
+
+        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        {
+            return;
+        }
+
+        var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
+        if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0)
+        {
+            GdiPlusInterop.GdipDeleteBrush(brush);
+            return;
+        }
+
+        try
+        {
+            BuildGdipPath(gdipPath, path);
+            GdiPlusInterop.GdipFillPath(_graphics, brush, gdipPath);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(gdipPath);
+            GdiPlusInterop.GdipDeleteBrush(brush);
+        }
+    }
+
+    public void FillRectangle(Rect rect, IBrush brush)
+    {
+        if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
+        if (brush is IGradientBrush gradient && EnsureGraphics())
+        {
+            var (x, y) = ToDeviceCoords(rect.X, rect.Y);
+            float w = (float)(rect.Width * _dpiScale);
+            float h = (float)(rect.Height * _dpiScale);
+            if (w <= 0 || h <= 0) return;
+            // Use float path for proper anti-aliasing with gradient brush.
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0) return;
+            try
+            {
+                GdiPlusInterop.GdipAddPathRectangle(path, (float)x, (float)y, w, h);
+                FillWithGradient(gradient, rect, b => GdiPlusInterop.GdipFillPath(_graphics, b, path), rect);
+            }
+            finally { GdiPlusInterop.GdipDeletePath(path); }
+        }
+    }
+
+    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    {
+        if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
+        if (brush is IGradientBrush gradient && EnsureGraphics())
+        {
+            var (x, y) = ToDeviceCoords(rect.X, rect.Y);
+            float w = (float)(rect.Width * _dpiScale);
+            float h = (float)(rect.Height * _dpiScale);
+            if (w <= 0 || h <= 0) return;
+            float ew = Math.Max(1f, (float)(radiusX * 2 * _dpiScale));
+            float eh = Math.Max(1f, (float)(radiusY * 2 * _dpiScale));
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0) return;
+            try
+            {
+                AddRoundedRectPathF(path, (float)x, (float)y, w, h, ew, eh);
+                GdiPlusInterop.GdipClosePathFigure(path);
+                FillWithGradient(gradient, rect, b => GdiPlusInterop.GdipFillPath(_graphics, b, path), rect);
+            }
+            finally { GdiPlusInterop.GdipDeletePath(path); }
+        }
+    }
+
+    public void FillEllipse(Rect bounds, IBrush brush)
+    {
+        if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
+        if (brush is IGradientBrush gradient && EnsureGraphics())
+        {
+            var (x, y) = ToDeviceCoords(bounds.X, bounds.Y);
+            float w = (float)(bounds.Width * _dpiScale);
+            float h = (float)(bounds.Height * _dpiScale);
+            if (w <= 0 || h <= 0) return;
+            // Use float path for proper anti-aliasing with gradient brush.
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0) return;
+            try
+            {
+                GdiPlusInterop.GdipAddPathEllipse(path, (float)x, (float)y, w, h);
+                FillWithGradient(gradient, bounds, b => GdiPlusInterop.GdipFillPath(_graphics, b, path), bounds);
+            }
+            finally { GdiPlusInterop.GdipDeletePath(path); }
+        }
+    }
+
+    public void FillPath(PathGeometry path, IBrush brush)
+        => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
+
+    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    {
+        if (path == null) return;
+        if (brush is ISolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
+        if (brush is IGradientBrush gradient && EnsureGraphics())
+        {
+            var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
+            if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0) return;
+            try
+            {
+                BuildGdipPath(gdipPath, path);
+                // OBB requires path bounds; fall back to representative color for path+OBB.
+                if (gradient.GradientUnits == GradientUnits.ObjectBoundingBox)
+                { FillPath(path, gradient.GetRepresentativeColor()); return; }
+                var pathBounds = ComputeApproximateBounds(path);
+                FillWithGradient(gradient, default, b => GdiPlusInterop.GdipFillPath(_graphics, b, gdipPath), pathBounds);
+            }
+            finally { GdiPlusInterop.GdipDeletePath(gdipPath); }
+        }
+    }
+
+    public void DrawLine(Point start, Point end, IPen pen)
+    {
+        if (pen.Thickness <= 0 || !EnsureGraphics()) return;
+
+        float widthPx = (float)ToDevicePx(pen.Thickness);
+        if (widthPx <= 0) return;
+
+        var (ax, ay) = ToDeviceCoords(start.X, start.Y);
+        var (bx, by) = ToDeviceCoords(end.X, end.Y);
+
+        if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
+        try
+        {
+            GdiPlusInterop.GdipDrawLineI(_graphics, gdipPen, (int)Math.Round(ax), (int)Math.Round(ay), (int)Math.Round(bx), (int)Math.Round(by));
+        }
+        finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
+    }
+
+    public void DrawRectangle(Rect rect, IPen pen)
+    {
+        if (pen.Thickness <= 0 || !EnsureGraphics()) return;
+
+        var r = ToDeviceRect(rect);
+        if (r.Width <= 0 || r.Height <= 0) return;
+
+        float widthPx = (float)ToDevicePx(pen.Thickness);
+        if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
+        try
+        {
+            GdiPlusInterop.GdipDrawRectangleI(_graphics, gdipPen, r.left, r.top, r.Width, r.Height);
+        }
+        finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
+    }
+
+    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    {
+        if (pen.Thickness <= 0 || !EnsureGraphics()) return;
+
+        var r = ToDeviceRect(rect);
+        if (r.Width <= 0 || r.Height <= 0) return;
+
+        float widthPx = (float)ToDevicePx(pen.Thickness);
+        int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
+        int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
+
+        if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
+        if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0)
+        {
+            GdiPlusInterop.GdipDeletePen(gdipPen);
+            return;
+        }
+
+        try
+        {
+            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
+            GdiPlusInterop.GdipClosePathFigure(path);
+            GdiPlusInterop.GdipDrawPath(_graphics, gdipPen, path);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(path);
+            GdiPlusInterop.GdipDeletePen(gdipPen);
+        }
+    }
+
+    public void DrawEllipse(Rect bounds, IPen pen)
+    {
+        if (pen.Thickness <= 0 || !EnsureGraphics()) return;
+
+        var r = ToDeviceRect(bounds);
+        if (r.Width <= 0 || r.Height <= 0) return;
+
+        float widthPx = (float)ToDevicePx(pen.Thickness);
+        if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
+        try
+        {
+            GdiPlusInterop.GdipDrawEllipseI(_graphics, gdipPen, r.left, r.top, r.Width, r.Height);
+        }
+        finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
+    }
+
+    public void DrawPath(PathGeometry path, IPen pen)
+    {
+        if (path == null || pen.Thickness <= 0 || !EnsureGraphics()) return;
+
+        float widthPx = (float)ToDevicePx(pen.Thickness);
+        if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
+
+        if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var gdipPath) != 0 || gdipPath == 0)
+        {
+            GdiPlusInterop.GdipDeletePen(gdipPen);
+            return;
+        }
+
+        try
+        {
+            BuildGdipPath(gdipPath, path);
+            GdiPlusInterop.GdipDrawPath(_graphics, gdipPen, gdipPath);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(gdipPath);
+            GdiPlusInterop.GdipDeletePen(gdipPen);
+        }
+    }
+
+    private bool TryCreateStyledPen(IPen pen, float widthPx, out nint gdipPen)
+    {
+        gdipPen = 0;
+
+        if (pen.Brush is IGradientBrush gradient)
+        {
+            // Create a temporary GDI+ gradient brush, then create pen from it.
+            // GDI+ pen copies the brush state, so we can release the brush immediately.
+            nint tempBrush = CreateGdipGradientBrush(gradient, default);
+            if (tempBrush == 0)
+                return false;
+            int hr = GdiPlusInterop.GdipCreatePen2(tempBrush, widthPx, GdiPlusInterop.Unit.Pixel, out gdipPen);
+            GdiPlusInterop.GdipDeleteBrush(tempBrush);
+            if (hr != 0 || gdipPen == 0)
+                return false;
+        }
+        else
+        {
+            uint argb = pen.Brush is ISolidColorBrush solid ? ToArgb(solid.Color) : 0xFF000000;
+            if (GdiPlusInterop.GdipCreatePen1(argb, widthPx, GdiPlusInterop.Unit.Pixel, out gdipPen) != 0 || gdipPen == 0)
+                return false;
+        }
+
+        var style = pen.StrokeStyle;
+
+        var cap = style.LineCap switch
+        {
+            StrokeLineCap.Round => GdiPlusInterop.GpLineCap.Round,
+            StrokeLineCap.Square => GdiPlusInterop.GpLineCap.Square,
+            _ => GdiPlusInterop.GpLineCap.Flat,
+        };
+        var dashCap = style.LineCap == StrokeLineCap.Round
+            ? GdiPlusInterop.GpDashCap.Round
+            : GdiPlusInterop.GpDashCap.Flat;
+        GdiPlusInterop.GdipSetPenLineCap197819(gdipPen, cap, cap, dashCap);
+
+        GdiPlusInterop.GdipSetPenLineJoin(gdipPen, style.LineJoin switch
+        {
+            StrokeLineJoin.Round => GdiPlusInterop.GpLineJoin.Round,
+            StrokeLineJoin.Bevel => GdiPlusInterop.GpLineJoin.Bevel,
+            _ => GdiPlusInterop.GpLineJoin.Miter,
+        });
+
+        if (style.MiterLimit > 0)
+            GdiPlusInterop.GdipSetPenMiterLimit(gdipPen, (float)style.MiterLimit);
+
+        if (style.IsDashed && style.DashArray is { Count: > 0 } dashes)
+        {
+            GdiPlusInterop.GdipSetPenDashStyle(gdipPen, GdiPlusInterop.GpDashStyle.Custom);
+            var arr = new float[dashes.Count];
+            for (int i = 0; i < dashes.Count; i++)
+                arr[i] = (float)dashes[i];
+            GdiPlusInterop.SetPenDashArray(gdipPen, arr);
+            if (style.DashOffset != 0)
+                GdiPlusInterop.GdipSetPenDashOffset(gdipPen, (float)style.DashOffset);
+        }
+
+        return true;
+    }
+
+    private void BuildGdipPath(nint gdipPath, PathGeometry path)
+    {
+        float currentX = 0, currentY = 0;
+        bool hasCurrent = false;
+
+        foreach (var cmd in path.Commands)
+        {
+            switch (cmd.Type)
+            {
+                case PathCommandType.MoveTo:
+                {
+                    var (px, py) = ToDeviceCoords(cmd.X0, cmd.Y0);
+                    GdiPlusInterop.GdipStartPathFigure(gdipPath);
+                    currentX = (float)px;
+                    currentY = (float)py;
+                    hasCurrent = true;
+                    break;
+                }
+                case PathCommandType.LineTo:
+                {
+                    if (!hasCurrent) break;
+                    var (px, py) = ToDeviceCoords(cmd.X0, cmd.Y0);
+                    GdiPlusInterop.GdipAddPathLine(gdipPath, currentX, currentY, (float)px, (float)py);
+                    currentX = (float)px;
+                    currentY = (float)py;
+                    break;
+                }
+                case PathCommandType.BezierTo:
+                {
+                    if (!hasCurrent) break;
+                    var (c1x, c1y) = ToDeviceCoords(cmd.X0, cmd.Y0);
+                    var (c2x, c2y) = ToDeviceCoords(cmd.X1, cmd.Y1);
+                    var (epx, epy) = ToDeviceCoords(cmd.X2, cmd.Y2);
+                    GdiPlusInterop.GdipAddPathBezier(gdipPath,
+                        currentX, currentY,
+                        (float)c1x, (float)c1y,
+                        (float)c2x, (float)c2y,
+                        (float)epx, (float)epy);
+                    currentX = (float)epx;
+                    currentY = (float)epy;
+                    break;
+                }
+                case PathCommandType.Close:
+                    GdiPlusInterop.GdipClosePathFigure(gdipPath);
+                    hasCurrent = false;
+                    break;
+            }
+        }
+    }
+
     #endregion
 
     #region Text Rendering (GDI)
@@ -458,6 +873,16 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
 
         if (text.IsEmpty || color.A == 0)
+        {
+            return;
+        }
+
+        // Early cull: skip if the text row is entirely outside the current clip region.
+        // Use font size as an estimated height; a bit generous to avoid false culling.
+        var cullPt = ToDevicePoint(location);
+        int cullH = Math.Max(4, (int)Math.Ceiling(font.Size * _dpiScale) * 2);
+        var cullRect = RECT.FromLTRB(cullPt.x, cullPt.y, 32767, cullPt.y + cullH);
+        if (Gdi32.RectVisible(Hdc, ref cullRect) == 0)
         {
             return;
         }
@@ -509,6 +934,13 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
 
         if (text.IsEmpty || color.A == 0)
+        {
+            return;
+        }
+
+        // Early cull: skip if the bounds rect is entirely outside the current clip region.
+        var cullR = ToDeviceRect(bounds);
+        if (Gdi32.RectVisible(Hdc, ref cullR) == 0)
         {
             return;
         }
@@ -1000,6 +1432,23 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
     private static uint ToArgb(Color color)
         => (uint)(color.A << 24 | color.R << 16 | color.G << 8 | color.B);
 
+    private static void AddRoundedRectPathF(nint path, float x, float y, float width, float height, float ellipseW, float ellipseH)
+    {
+        float w = Math.Max(0, width);
+        float h = Math.Max(0, height);
+        if (w == 0 || h == 0) return;
+
+        float ew = Math.Min(ellipseW, w);
+        float eh = Math.Min(ellipseH, h);
+        float right = x + w;
+        float bottom = y + h;
+
+        GdiPlusInterop.GdipAddPathArc(path, x, y, ew, eh, 180, 90);
+        GdiPlusInterop.GdipAddPathArc(path, right - ew, y, ew, eh, 270, 90);
+        GdiPlusInterop.GdipAddPathArc(path, right - ew, bottom - eh, ew, eh, 0, 90);
+        GdiPlusInterop.GdipAddPathArc(path, x, bottom - eh, ew, eh, 90, 90);
+    }
+
     private static void AddRoundedRectPathI(nint path, int x, int y, int width, int height, int ellipseW, int ellipseH)
     {
         int w = Math.Max(0, width);
@@ -1023,13 +1472,16 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
     private POINT ToDevicePoint(Point pt)
     {
-        var (x, y) = RenderingUtil.ToDevicePoint(pt, _translateX, _translateY, _dpiScale);
-        return new POINT(x, y);
+        // _transform is applied by GDI+ World Transform; only DPI scale here.
+        return new POINT(
+            (int)Math.Round(pt.X * _dpiScale),
+            (int)Math.Round(pt.Y * _dpiScale));
     }
 
     private RECT ToDeviceRect(Rect rect)
     {
-        var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, _translateX, _translateY, _dpiScale);
+        // _transform is applied by GDI+ World Transform; only DPI scale here.
+        var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, 0, 0, _dpiScale);
         return new RECT(left, top, right, bottom);
     }
 
@@ -1044,14 +1496,264 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
     }
 
     private (double x, double y) ToDeviceCoords(double x, double y)
-        => ((x + _translateX) * _dpiScale, (y + _translateY) * _dpiScale);
+    {
+        // _transform is applied by GDI+ World Transform; only DPI scale here.
+        return (x * _dpiScale, y * _dpiScale);
+    }
 
     private double ToDevicePx(double logicalValue) => logicalValue * _dpiScale;
+
+    /// <summary>
+    /// Creates a GDI+ gradient brush for use with pen creation.
+    /// Caller must release the returned handle. Returns 0 on failure.
+    /// </summary>
+    private nint CreateGdipGradientBrush(IGradientBrush brush, Rect objectBounds)
+    {
+        var stops = brush.Stops;
+        if (stops == null || stops.Count == 0) return 0;
+
+        var (colors, positions) = EnsureEndpointStops(stops);
+        var wrapMode = brush.SpreadMethod switch
+        {
+            SpreadMethod.Reflect => GdiPlusInterop.WrapMode.TileFlipXY,
+            SpreadMethod.Repeat  => GdiPlusInterop.WrapMode.Tile,
+            _                    => GdiPlusInterop.WrapMode.TileFlipXY,
+        };
+
+        if (brush is ILinearGradientBrush linear)
+        {
+            var p1 = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
+            var p2 = ResolveGradientPoint(linear.EndPoint,   brush.GradientUnits, objectBounds);
+            var (ax, ay) = ToDeviceCoords(p1.X, p1.Y);
+            var (bx, by) = ToDeviceCoords(p2.X, p2.Y);
+            var gp1 = new GdiPlusInterop.PointF((float)ax, (float)ay);
+            var gp2 = new GdiPlusInterop.PointF((float)bx, (float)by);
+
+            if (GdiPlusInterop.GdipCreateLineBrush(ref gp1, ref gp2,
+                    colors[0], colors[^1], wrapMode, out nint gradBrush) != 0 || gradBrush == 0) return 0;
+            GdiPlusInterop.SetLinePresetBlend(gradBrush, colors, positions);
+            return gradBrush;
+        }
+
+        if (brush is IRadialGradientBrush radial)
+        {
+            var center = ResolveGradientPoint(radial.Center, brush.GradientUnits, objectBounds);
+            var (cx, cy) = ToDeviceCoords(center.X, center.Y);
+            double rx = radial.RadiusX * (brush.GradientUnits == GradientUnits.ObjectBoundingBox ? objectBounds.Width : 1.0) * _dpiScale;
+            double ry = radial.RadiusY * (brush.GradientUnits == GradientUnits.ObjectBoundingBox ? objectBounds.Height : 1.0) * _dpiScale;
+            if (rx <= 0 || ry <= 0) return 0;
+
+            const float pad = 3f;
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out nint ellipsePath) != 0 || ellipsePath == 0) return 0;
+            GdiPlusInterop.GdipAddPathEllipse(ellipsePath,
+                (float)(cx - rx - pad), (float)(cy - ry - pad), (float)(rx * 2 + pad * 2), (float)(ry * 2 + pad * 2));
+
+            if (GdiPlusInterop.GdipCreatePathGradientFromPath(ellipsePath, out nint gradBrush) != 0 || gradBrush == 0)
+            {
+                GdiPlusInterop.GdipDeletePath(ellipsePath);
+                return 0;
+            }
+            GdiPlusInterop.GdipDeletePath(ellipsePath);
+
+            var origin = ResolveGradientPoint(radial.GradientOrigin, brush.GradientUnits, objectBounds);
+            var (ox, oy) = ToDeviceCoords(origin.X, origin.Y);
+            var centerPt = new GdiPlusInterop.PointF((float)ox, (float)oy);
+            GdiPlusInterop.GdipSetPathGradientCenterPoint(gradBrush, ref centerPt);
+            // GDI+ PathGradient preset blend: position 0 = boundary, 1 = center (opposite of D2D/SVG).
+            ReverseStops(colors, positions);
+            GdiPlusInterop.SetPathGradientPresetBlend(gradBrush, colors, positions);
+            GdiPlusInterop.GdipSetPathGradientWrapMode(gradBrush, wrapMode);
+            return gradBrush;
+        }
+
+        return 0;
+    }
+
+    private static void ReverseStops(uint[] colors, float[] positions)
+    {
+        Array.Reverse(colors);
+        Array.Reverse(positions);
+        for (int i = 0; i < positions.Length; i++)
+            positions[i] = 1f - positions[i];
+    }
+
+    private void FillWithGradient(IGradientBrush brush, Rect objectBounds, Action<nint> fillAction, Rect fillBounds = default)
+    {
+        var stops = brush.Stops;
+        if (stops == null || stops.Count == 0) return;
+
+        var (colors, positions) = EnsureEndpointStops(stops);
+
+        // GDI+ LinearGradientBrush does NOT support WrapMode.Clamp;
+        // use TileFlipXY as the closest approximation for SpreadMethod.Pad.
+        var wrapMode = brush.SpreadMethod switch
+        {
+            SpreadMethod.Reflect => GdiPlusInterop.WrapMode.TileFlipXY,
+            SpreadMethod.Repeat  => GdiPlusInterop.WrapMode.Tile,
+            _                    => GdiPlusInterop.WrapMode.TileFlipXY,
+        };
+
+        if (brush is ILinearGradientBrush linear)
+        {
+            var p1 = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
+            var p2 = ResolveGradientPoint(linear.EndPoint,   brush.GradientUnits, objectBounds);
+            var (ax, ay) = ToDeviceCoords(p1.X, p1.Y);
+            var (bx, by) = ToDeviceCoords(p2.X, p2.Y);
+            var gp1 = new GdiPlusInterop.PointF((float)ax, (float)ay);
+            var gp2 = new GdiPlusInterop.PointF((float)bx, (float)by);
+
+            if (GdiPlusInterop.GdipCreateLineBrush(ref gp1, ref gp2,
+                    colors[0], colors[^1], wrapMode, out nint gradBrush) != 0 || gradBrush == 0) return;
+            try
+            {
+                GdiPlusInterop.SetLinePresetBlend(gradBrush, colors, positions);
+                fillAction(gradBrush);
+            }
+            finally { GdiPlusInterop.GdipDeleteBrush(gradBrush); }
+        }
+        else if (brush is IRadialGradientBrush radial)
+        {
+            var center = ResolveGradientPoint(radial.Center, brush.GradientUnits, objectBounds);
+            var (cx, cy) = ToDeviceCoords(center.X, center.Y);
+            double rx = radial.RadiusX * (brush.GradientUnits == GradientUnits.ObjectBoundingBox ? objectBounds.Width : 1.0) * _dpiScale;
+            double ry = radial.RadiusY * (brush.GradientUnits == GradientUnits.ObjectBoundingBox ? objectBounds.Height : 1.0) * _dpiScale;
+            if (rx <= 0 || ry <= 0) return;
+
+            // PathGradientBrush is transparent outside its boundary ellipse.
+            // If the fill shape extends beyond the gradient ellipse, edge pixels get
+            // transparent brush values → no AA.  Compute the expansion factor needed
+            // so the boundary fully encloses the fill shape, then remap stops to
+            // preserve the gradient appearance within the original radius.
+            double expansion = 1.0;
+            if (fillBounds.Width > 0 && fillBounds.Height > 0)
+            {
+                var (fL, fT) = ToDeviceCoords(fillBounds.X, fillBounds.Y);
+                var (fR, fB) = ToDeviceCoords(fillBounds.Right, fillBounds.Bottom);
+                double maxT = 0;
+                foreach (var (fx, fy) in new[] { (fL, fT), (fR, fT), (fR, fB), (fL, fB) })
+                {
+                    double dx = (fx - cx) / rx;
+                    double dy = (fy - cy) / ry;
+                    double t = dx * dx + dy * dy;
+                    if (t > maxT) maxT = t;
+                }
+                if (maxT > 1.0)
+                    expansion = Math.Sqrt(maxT) + 0.05; // small extra margin
+            }
+
+            const float pad = 3f;
+            double effRx = rx * expansion + pad;
+            double effRy = ry * expansion + pad;
+
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out nint ellipsePath) != 0 || ellipsePath == 0) return;
+            try
+            {
+                GdiPlusInterop.GdipAddPathEllipse(ellipsePath,
+                    (float)(cx - effRx), (float)(cy - effRy), (float)(effRx * 2), (float)(effRy * 2));
+
+                if (GdiPlusInterop.GdipCreatePathGradientFromPath(ellipsePath, out nint gradBrush) != 0 || gradBrush == 0) return;
+                try
+                {
+                    var origin = ResolveGradientPoint(radial.GradientOrigin, brush.GradientUnits, objectBounds);
+                    var (ox, oy) = ToDeviceCoords(origin.X, origin.Y);
+                    var centerPt = new GdiPlusInterop.PointF((float)ox, (float)oy);
+                    GdiPlusInterop.GdipSetPathGradientCenterPoint(gradBrush, ref centerPt);
+
+                    // GDI+ PathGradient preset blend: position 0 = boundary, 1 = center.
+                    var revColors = (uint[])colors.Clone();
+                    var revPositions = (float[])positions.Clone();
+                    ReverseStops(revColors, revPositions);
+
+                    // When expanded, remap stops so the gradient looks the same within
+                    // the original radius; fill the expanded zone with the boundary color.
+                    if (expansion > 1.0)
+                    {
+                        double totalF = expansion + pad / Math.Max(rx, 1.0);
+                        var newColors = new uint[revColors.Length + 1];
+                        var newPositions = new float[revPositions.Length + 1];
+                        newColors[0] = revColors[0]; // boundary color fills expanded zone
+                        newPositions[0] = 0f;
+                        for (int i = 0; i < revColors.Length; i++)
+                        {
+                            newColors[i + 1] = revColors[i];
+                            newPositions[i + 1] = (float)(1.0 - (1.0 - revPositions[i]) / totalF);
+                        }
+                        revColors = newColors;
+                        revPositions = newPositions;
+                    }
+
+                    GdiPlusInterop.SetPathGradientPresetBlend(gradBrush, revColors, revPositions);
+                    GdiPlusInterop.GdipSetPathGradientWrapMode(gradBrush, wrapMode);
+                    fillAction(gradBrush);
+                }
+                finally { GdiPlusInterop.GdipDeleteBrush(gradBrush); }
+            }
+            finally { GdiPlusInterop.GdipDeletePath(ellipsePath); }
+        }
+    }
+
+    private static Rect ComputeApproximateBounds(PathGeometry path)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        foreach (var cmd in path.Commands)
+        {
+            if (cmd.Type == PathCommandType.Close) continue;
+            Expand(cmd.X0, cmd.Y0);
+            if (cmd.Type == PathCommandType.BezierTo)
+            {
+                Expand(cmd.X1, cmd.Y1);
+                Expand(cmd.X2, cmd.Y2);
+            }
+        }
+
+        if (minX > maxX) return default;
+        return new Rect(minX, minY, maxX - minX, maxY - minY);
+
+        void Expand(double x, double y)
+        {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the stop list has an entry at offset 0.0 (first) and 1.0 (last),
+    /// as required by GDI+ preset blend APIs.
+    /// Returns parallel color (ARGB uint) and position (float) arrays.
+    /// </summary>
+    private static (uint[] colors, float[] positions) EnsureEndpointStops(IReadOnlyList<GradientStop> stops)
+    {
+        var list = new List<GradientStop>(stops);
+        list.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+
+        if (list[0].Offset > 0.0)
+            list.Insert(0, new GradientStop(0.0, list[0].Color));
+        if (list[^1].Offset < 1.0)
+            list.Add(new GradientStop(1.0, list[^1].Color));
+
+        var colors    = new uint[list.Count];
+        var positions = new float[list.Count];
+        for (int i = 0; i < list.Count; i++)
+        {
+            var s = list[i];
+            colors[i]    = (uint)(s.Color.A << 24 | s.Color.R << 16 | s.Color.G << 8 | s.Color.B);
+            positions[i] = (float)Math.Clamp(s.Offset, 0f, 1f);
+        }
+        return (colors, positions);
+    }
+
+    private static Point ResolveGradientPoint(Point p, GradientUnits units, Rect objectBounds)
+        => units == GradientUnits.ObjectBoundingBox
+            ? new Point(objectBounds.X + p.X * objectBounds.Width, objectBounds.Y + p.Y * objectBounds.Height)
+            : p;
 
     private readonly struct GraphicsStateSnapshot
     {
         public required uint GdiPlusState { get; init; }
-        public required double TranslateX { get; init; }
-        public required double TranslateY { get; init; }
+        public required Matrix3x2 Transform { get; init; }
     }
 }

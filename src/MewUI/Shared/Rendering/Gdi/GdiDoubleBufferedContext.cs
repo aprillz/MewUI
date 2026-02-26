@@ -1,3 +1,4 @@
+using System.Numerics;
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
 
@@ -166,25 +167,58 @@ internal sealed class GdiDoubleBufferedContext : IGraphicsContext
     }
 
     // Delegate all methods to the inner context
+
+    // ── State Management ───────────────────────────────────────────────
     public void Save() => _context.Save();
     public void Restore() => _context.Restore();
     public void SetClip(Rect rect) => _context.SetClip(rect);
-
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
-        => _context.SetClipRoundedRect(rect, radiusX, radiusY);
+    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY) => _context.SetClipRoundedRect(rect, radiusX, radiusY);
+    public void ResetClip() => _context.ResetClip();
     public void Translate(double dx, double dy) => _context.Translate(dx, dy);
+    public void Rotate(double angleRadians) => _context.Rotate(angleRadians);
+    public void Scale(double sx, double sy) => _context.Scale(sx, sy);
+    public void SetTransform(Matrix3x2 matrix) => _context.SetTransform(matrix);
+    public Matrix3x2 GetTransform() => _context.GetTransform();
+    public void ResetTransform() => _context.ResetTransform();
+
+    // ── Clear ──────────────────────────────────────────────────────────
     public void Clear(Color color) => _context.Clear(color);
+
+    // ── Draw (Color) ───────────────────────────────────────────────────
     public void DrawLine(Point start, Point end, Color color, double thickness = 1) => _context.DrawLine(start, end, color, thickness);
     public void DrawRectangle(Rect rect, Color color, double thickness = 1) => _context.DrawRectangle(rect, color, thickness);
-    public void FillRectangle(Rect rect, Color color) => _context.FillRectangle(rect, color);
     public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1) => _context.DrawRoundedRectangle(rect, radiusX, radiusY, color, thickness);
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) => _context.FillRoundedRectangle(rect, radiusX, radiusY, color);
     public void DrawEllipse(Rect bounds, Color color, double thickness = 1) => _context.DrawEllipse(bounds, color, thickness);
+    public void DrawPath(PathGeometry path, Color color, double thickness = 1) => _context.DrawPath(path, color, thickness);
+
+    // ── Draw (IPen) ────────────────────────────────────────────────────
+    public void DrawLine(Point start, Point end, IPen pen) => _context.DrawLine(start, end, pen);
+    public void DrawRectangle(Rect rect, IPen pen) => _context.DrawRectangle(rect, pen);
+    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen) => _context.DrawRoundedRectangle(rect, radiusX, radiusY, pen);
+    public void DrawEllipse(Rect bounds, IPen pen) => _context.DrawEllipse(bounds, pen);
+    public void DrawPath(PathGeometry path, IPen pen) => _context.DrawPath(path, pen);
+
+    // ── Fill (Color) ───────────────────────────────────────────────────
+    public void FillRectangle(Rect rect, Color color) => _context.FillRectangle(rect, color);
+    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) => _context.FillRoundedRectangle(rect, radiusX, radiusY, color);
     public void FillEllipse(Rect bounds, Color color) => _context.FillEllipse(bounds, color);
+    public void FillPath(PathGeometry path, Color color) => _context.FillPath(path, color);
+    public void FillPath(PathGeometry path, Color color, FillRule fillRule) => _context.FillPath(path, color, fillRule);
+
+    // ── Fill (IBrush) ──────────────────────────────────────────────────
+    public void FillRectangle(Rect rect, IBrush brush) => _context.FillRectangle(rect, brush);
+    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush) => _context.FillRoundedRectangle(rect, radiusX, radiusY, brush);
+    public void FillEllipse(Rect bounds, IBrush brush) => _context.FillEllipse(bounds, brush);
+    public void FillPath(PathGeometry path, IBrush brush) => _context.FillPath(path, brush);
+    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule) => _context.FillPath(path, brush, fillRule);
+
+    // ── Text ───────────────────────────────────────────────────────────
     public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color) => _context.DrawText(text, location, font, color);
     public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap) => _context.DrawText(text, bounds, font, color, horizontalAlignment, verticalAlignment, wrapping);
     public Size MeasureText(ReadOnlySpan<char> text, IFont font) => _context.MeasureText(text, font);
     public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth) => _context.MeasureText(text, font, maxWidth);
+
+    // ── Image ──────────────────────────────────────────────────────────
     public void DrawImage(IImage image, Point location) => _context.DrawImage(image, location);
     public void DrawImage(IImage image, Rect destRect) => _context.DrawImage(image, destRect);
     public void DrawImage(IImage image, Rect destRect, Rect sourceRect) => _context.DrawImage(image, destRect, sourceRect);

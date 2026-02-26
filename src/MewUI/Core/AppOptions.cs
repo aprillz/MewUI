@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Platform;
-
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -7,10 +5,6 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class AppOptions
 {
-    public PlatformHostKind? Platform { get; set; }
-
-    public GraphicsBackend? GraphicsBackend { get; set; }
-
     /// <summary>
     /// Gets or sets the default theme mode.
     /// </summary>

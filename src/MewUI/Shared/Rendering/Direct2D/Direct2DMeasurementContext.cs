@@ -86,6 +86,8 @@ internal sealed unsafe class Direct2DMeasurementContext : IGraphicsContext
     public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) { }
     public void DrawEllipse(Rect bounds, Color color, double thickness = 1) { }
     public void FillEllipse(Rect bounds, Color color) { }
+    public void DrawPath(PathGeometry path, Color color, double thickness = 1) { }
+    public void FillPath(PathGeometry path, Color color) { }
     public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color) { }
     public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap) { }
     public void DrawImage(IImage image, Point location) { }

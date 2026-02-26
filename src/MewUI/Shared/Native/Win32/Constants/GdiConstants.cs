@@ -31,7 +31,7 @@ internal static class GdiConstants
     public const int DC_BRUSH = 18;
     public const int DC_PEN = 19;
 
-    // Pen styles
+    // Pen styles (cosmetic)
     public const int PS_SOLID = 0;
     public const int PS_DASH = 1;
     public const int PS_DOT = 2;
@@ -39,6 +39,24 @@ internal static class GdiConstants
     public const int PS_DASHDOTDOT = 4;
     public const int PS_NULL = 5;
     public const int PS_INSIDEFRAME = 6;
+
+    // Geometric pen type (used with ExtCreatePen)
+    public const uint PS_GEOMETRIC = 0x00010000;
+    public const uint PS_COSMETIC  = 0x00000000;
+
+    // End-cap styles (combined into PS_GEOMETRIC pen style)
+    public const uint PS_ENDCAP_ROUND  = 0x00000100;
+    public const uint PS_ENDCAP_SQUARE = 0x00000200;
+    public const uint PS_ENDCAP_FLAT   = 0x00000000;
+
+    // Join styles (combined into PS_GEOMETRIC pen style)
+    public const uint PS_JOIN_ROUND = 0x00001000;
+    public const uint PS_JOIN_BEVEL = 0x00002000;
+    public const uint PS_JOIN_MITER = 0x00000000;
+
+    // Polygon fill modes (SetPolyFillMode)
+    public const int ALTERNATE = 1;
+    public const int WINDING   = 2;
 
     // Brush styles
     public const int BS_SOLID = 0;

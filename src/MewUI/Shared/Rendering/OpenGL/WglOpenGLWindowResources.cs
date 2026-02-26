@@ -48,7 +48,7 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
 
     public static WglOpenGLWindowResources Create(nint hwnd, nint hdc)
         => Create(hwnd, hdc, new WglPixelFormatOptions(
-            PreferredMsaaSamples: Math.Max(0, 4),
+            PreferredMsaaSamples: Math.Max(0, GraphicsRuntimeOptions.PreferredMsaaSamples),
             DepthBits: 0,
             StencilBits: 0));
 

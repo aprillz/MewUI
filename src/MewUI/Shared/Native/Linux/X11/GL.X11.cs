@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Native;
 /// <summary>
 /// OpenGL entrypoints for X11/Linux (GLX / libGL).
 /// </summary>
-internal static class GLNativeX11
+internal static class GLNative
 {
     public static void Viewport(int x, int y, int width, int height) => LibGL.glViewport(x, y, width, height);
 

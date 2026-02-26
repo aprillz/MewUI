@@ -128,3 +128,88 @@ internal readonly struct D2D1_ELLIPSE(D2D1_POINT_2F point, float radiusX, float 
     public readonly float radiusX = radiusX;
     public readonly float radiusY = radiusY;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_BEZIER_SEGMENT(D2D1_POINT_2F point1, D2D1_POINT_2F point2, D2D1_POINT_2F point3)
+{
+    // point1 and point2 are control points; point3 is the end point.
+    public readonly D2D1_POINT_2F point1 = point1;
+    public readonly D2D1_POINT_2F point2 = point2;
+    public readonly D2D1_POINT_2F point3 = point3;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_GRADIENT_STOP(float position, D2D1_COLOR_F color)
+{
+    public readonly float position = position;
+    public readonly D2D1_COLOR_F color = color;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES(D2D1_POINT_2F startPoint, D2D1_POINT_2F endPoint)
+{
+    public readonly D2D1_POINT_2F startPoint = startPoint;
+    public readonly D2D1_POINT_2F endPoint = endPoint;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_RADIAL_GRADIENT_BRUSH_PROPERTIES(
+    D2D1_POINT_2F center,
+    D2D1_POINT_2F gradientOriginOffset,
+    float radiusX,
+    float radiusY)
+{
+    public readonly D2D1_POINT_2F center = center;
+    public readonly D2D1_POINT_2F gradientOriginOffset = gradientOriginOffset;
+    public readonly float radiusX = radiusX;
+    public readonly float radiusY = radiusY;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_BRUSH_PROPERTIES(float opacity, D2D1_MATRIX_3X2_F transform)
+{
+    public readonly float opacity = opacity;
+    public readonly D2D1_MATRIX_3X2_F transform = transform;
+
+    public static D2D1_BRUSH_PROPERTIES Default => new(1.0f, D2D1_MATRIX_3X2_F.Identity);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_STROKE_STYLE_PROPERTIES(
+    D2D1_CAP_STYLE startCap,
+    D2D1_CAP_STYLE endCap,
+    D2D1_CAP_STYLE dashCap,
+    D2D1_LINE_JOIN lineJoin,
+    float miterLimit,
+    D2D1_DASH_STYLE dashStyle,
+    float dashOffset)
+{
+    public readonly D2D1_CAP_STYLE startCap = startCap;
+    public readonly D2D1_CAP_STYLE endCap = endCap;
+    public readonly D2D1_CAP_STYLE dashCap = dashCap;
+    public readonly D2D1_LINE_JOIN lineJoin = lineJoin;
+    public readonly float miterLimit = miterLimit;
+    public readonly D2D1_DASH_STYLE dashStyle = dashStyle;
+    public readonly float dashOffset = dashOffset;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_STROKE_STYLE_PROPERTIES1(
+    D2D1_CAP_STYLE startCap,
+    D2D1_CAP_STYLE endCap,
+    D2D1_CAP_STYLE dashCap,
+    D2D1_LINE_JOIN lineJoin,
+    float miterLimit,
+    D2D1_DASH_STYLE dashStyle,
+    float dashOffset,
+    D2D1_STROKE_TRANSFORM_TYPE transformType)
+{
+    public readonly D2D1_CAP_STYLE startCap = startCap;
+    public readonly D2D1_CAP_STYLE endCap = endCap;
+    public readonly D2D1_CAP_STYLE dashCap = dashCap;
+    public readonly D2D1_LINE_JOIN lineJoin = lineJoin;
+    public readonly float miterLimit = miterLimit;
+    public readonly D2D1_DASH_STYLE dashStyle = dashStyle;
+    public readonly float dashOffset = dashOffset;
+    public readonly D2D1_STROKE_TRANSFORM_TYPE transformType = transformType;
+}

@@ -64,6 +64,19 @@ internal static partial class GdiPlusInterop
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipResetClip(nint graphics);
 
+    // ── World Transform ─────────────────────────────────────────────────────
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipCreateMatrix2(float m11, float m12, float m21, float m22, float dx, float dy, out nint matrix);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipDeleteMatrix(nint matrix);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetWorldTransform(nint graphics, nint matrix);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipResetWorldTransform(nint graphics);
+
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipCreatePath(FillMode fillMode, out nint path);
 
@@ -74,7 +87,22 @@ internal static partial class GdiPlusInterop
     public static partial int GdipAddPathArcI(nint path, int x, int y, int width, int height, float startAngle, float sweepAngle);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipAddPathArc(nint path, float x, float y, float width, float height, float startAngle, float sweepAngle);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipAddPathRectangleI(nint path, int x, int y, int width, int height);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipAddPathRectangle(nint path, float x, float y, float width, float height);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipStartPathFigure(nint path);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipAddPathLine(nint path, float x1, float y1, float x2, float y2);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipAddPathBezier(nint path, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipClosePathFigure(nint path);
@@ -95,10 +123,37 @@ internal static partial class GdiPlusInterop
     public static partial int GdipCreatePen1(uint color, float width, Unit unit, out nint pen);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipCreatePen2(nint brush, float width, Unit unit, out nint pen);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipDeletePen(nint pen);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipSetPenMode(nint pen, PenAlignment mode);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPenLineCap197819(nint pen, GpLineCap startCap, GpLineCap endCap, GpDashCap dashCap);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPenLineJoin(nint pen, GpLineJoin lineJoin);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPenMiterLimit(nint pen, float miterLimit);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPenDashStyle(nint pen, GpDashStyle dashStyle);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPenDashOffset(nint pen, float offset);
+
+    [LibraryImport("gdiplus.dll")]
+    private static unsafe partial int GdipSetPenDashArray(nint pen, float* dash, int count);
+
+    public static unsafe int SetPenDashArray(nint pen, float[] dashes)
+    {
+        fixed (float* p = dashes)
+            return GdipSetPenDashArray(pen, p, dashes.Length);
+    }
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipDrawRectangleI(nint graphics, nint pen, int x, int y, int width, int height);
@@ -123,6 +178,54 @@ internal static partial class GdiPlusInterop
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipFillEllipseI(nint graphics, nint brush, int x, int y, int width, int height);
+
+    // ── Linear gradient brush ───────────────────────────────────────────────
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipCreateLineBrush(
+        ref PointF point1, ref PointF point2,
+        uint color1, uint color2,
+        WrapMode wrapMode,
+        out nint brush);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetLineWrapMode(nint brush, WrapMode wrapMode);
+
+    [LibraryImport("gdiplus.dll")]
+    private static unsafe partial int GdipSetLinePresetBlend(
+        nint brush, uint* blend, float* positions, int count);
+
+    public static unsafe int SetLinePresetBlend(nint brush, uint[] colors, float[] positions)
+    {
+        fixed (uint* pc = colors)
+        fixed (float* pp = positions)
+            return GdipSetLinePresetBlend(brush, pc, pp, colors.Length);
+    }
+
+    // ── Path (radial) gradient brush ────────────────────────────────────────
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipAddPathEllipse(nint path, float x, float y, float width, float height);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipCreatePathGradientFromPath(nint path, out nint brush);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPathGradientCenterPoint(nint brush, ref PointF point);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetPathGradientWrapMode(nint brush, WrapMode wrapMode);
+
+    [LibraryImport("gdiplus.dll")]
+    private static unsafe partial int GdipSetPathGradientPresetBlend(
+        nint brush, uint* blend, float* positions, int count);
+
+    public static unsafe int SetPathGradientPresetBlend(nint brush, uint[] colors, float[] positions)
+    {
+        fixed (uint* pc = colors)
+        fixed (float* pp = positions)
+            return GdipSetPathGradientPresetBlend(brush, pc, pp, colors.Length);
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct GdiplusStartupInput
@@ -188,5 +291,52 @@ internal static partial class GdiPlusInterop
     {
         Prepend = 0,
         Append = 1
+    }
+
+    public enum WrapMode
+    {
+        Tile = 0,
+        TileFlipX = 1,
+        TileFlipY = 2,
+        TileFlipXY = 3,
+        Clamp = 4,
+    }
+
+    public enum GpLineCap
+    {
+        Flat = 0,
+        Square = 1,
+        Round = 2,
+    }
+
+    public enum GpDashCap
+    {
+        Flat = 0,
+        Round = 2,
+    }
+
+    public enum GpLineJoin
+    {
+        Miter = 0,
+        Bevel = 1,
+        Round = 2,
+    }
+
+    public enum GpDashStyle
+    {
+        Solid = 0,
+        Dash = 1,
+        Dot = 2,
+        DashDot = 3,
+        DashDotDot = 4,
+        Custom = 5,
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PointF
+    {
+        public float X;
+        public float Y;
+        public PointF(float x, float y) { X = x; Y = y; }
     }
 }

@@ -73,11 +73,17 @@ public sealed class DispatcherOperation
     private volatile DispatcherOperationStatus _status;
     internal Action? Action;
 
-    internal DispatcherOperation(Action action)
+
+    internal DispatcherOperation(DispatcherPriority priority, Action action)
     {
+        Priority = priority;
         Action = action;
+
         _status = DispatcherOperationStatus.Pending;
     }
+
+
+    public DispatcherPriority Priority { get; }
 
     /// <summary>
     /// Gets the current status of this operation.

@@ -49,7 +49,7 @@ internal sealed class DispatcherQueue
     public DispatcherOperation EnqueueWithOperation(DispatcherPriority priority, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        var op = new DispatcherOperation(action);
+        var op = new DispatcherOperation(priority, action);
         EnqueueInternal(priority, new WorkItem { Action = action, Operation = op });
         return op;
     }

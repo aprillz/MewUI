@@ -18,10 +18,13 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
     private nint _d2dFactory;
     private nint _dwriteFactory;
     private bool _initialized;
+    private bool _hasFactory1;
+    private nint _defaultFixedStrokeStyle;
 
     private readonly object _rtLock = new();
     private readonly Dictionary<nint, CachedWindowTarget> _windowTargets = new();
     private readonly Dictionary<nint, Direct2DBitmapRenderTarget> _layeredTargets = new();
+    private readonly Dictionary<StrokeStyle, nint> _strokeStyles = new();
     private int _dcRenderTargetGeneration;
 
     private Direct2DGraphicsFactory() { }
@@ -45,10 +48,20 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             _layeredTargets.Clear();
         }
 
+        lock (_rtLock)
+        {
+            foreach (var (_, ss) in _strokeStyles)
+                ComHelpers.Release(ss);
+            _strokeStyles.Clear();
+        }
+
+        ComHelpers.Release(_defaultFixedStrokeStyle);
+        _defaultFixedStrokeStyle = 0;
         ComHelpers.Release(_dwriteFactory);
         _dwriteFactory = 0;
         ComHelpers.Release(_d2dFactory);
         _d2dFactory = 0;
+        _hasFactory1 = false;
         _initialized = false;
     }
 
@@ -61,10 +74,19 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
 
         Ole32.CoInitializeEx(0, Ole32.COINIT_APARTMENTTHREADED);
 
-        int hr = D2D1.D2D1CreateFactory(D2D1_FACTORY_TYPE.SINGLE_THREADED, D2D1.IID_ID2D1Factory, 0, out _d2dFactory);
-        if (hr < 0 || _d2dFactory == 0)
+        // Try ID2D1Factory1 (Windows 8+, guaranteed on .NET 8+ targets) for D2D1_STROKE_TRANSFORM_TYPE_FIXED support.
+        int hr = D2D1.D2D1CreateFactory(D2D1_FACTORY_TYPE.SINGLE_THREADED, D2D1.IID_ID2D1Factory1, 0, out _d2dFactory);
+        if (hr >= 0 && _d2dFactory != 0)
         {
-            throw new InvalidOperationException($"D2D1CreateFactory failed: 0x{hr:X8}");
+            _hasFactory1 = true;
+        }
+        else
+        {
+            hr = D2D1.D2D1CreateFactory(D2D1_FACTORY_TYPE.SINGLE_THREADED, D2D1.IID_ID2D1Factory, 0, out _d2dFactory);
+            if (hr < 0 || _d2dFactory == 0)
+            {
+                throw new InvalidOperationException($"D2D1CreateFactory failed: 0x{hr:X8}");
+            }
         }
 
         hr = DWrite.DWriteCreateFactory(DWRITE_FACTORY_TYPE.SHARED, DWrite.IID_IDWriteFactory, out _dwriteFactory);
@@ -73,8 +95,108 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             throw new InvalidOperationException($"DWriteCreateFactory failed: 0x{hr:X8}");
         }
 
+        if (_hasFactory1)
+        {
+            var defaultProps = new D2D1_STROKE_STYLE_PROPERTIES1(
+                startCap: D2D1_CAP_STYLE.FLAT,
+                endCap: D2D1_CAP_STYLE.FLAT,
+                dashCap: D2D1_CAP_STYLE.FLAT,
+                lineJoin: D2D1_LINE_JOIN.MITER,
+                miterLimit: 10f,
+                dashStyle: D2D1_DASH_STYLE.SOLID,
+                dashOffset: 0f,
+                transformType: D2D1_STROKE_TRANSFORM_TYPE.FIXED);
+            D2D1VTable.CreateStrokeStyle1(
+                (ID2D1Factory*)_d2dFactory, defaultProps,
+                ReadOnlySpan<float>.Empty, out _defaultFixedStrokeStyle);
+        }
+
         _initialized = true;
     }
+
+    public ISolidColorBrush CreateSolidColorBrush(Color color) =>
+        new Direct2DSolidColorBrush(color);
+
+    public IPen CreatePen(Color color, double thickness = 1.0, StrokeStyle? strokeStyle = null)
+    {
+        var ss = strokeStyle ?? StrokeStyle.Default;
+        return new Direct2DPen(color, thickness, ss, GetOrCreateStrokeStyle(ss));
+    }
+
+    public IPen CreatePen(IBrush brush, double thickness = 1.0, StrokeStyle? strokeStyle = null)
+    {
+        var ss = strokeStyle ?? StrokeStyle.Default;
+        return new Direct2DPen(brush, thickness, ss, GetOrCreateStrokeStyle(ss));
+    }
+
+    private nint GetOrCreateStrokeStyle(StrokeStyle ss)
+    {
+        EnsureInitialized();
+        lock (_rtLock)
+        {
+            if (_strokeStyles.TryGetValue(ss, out nint handle)) return handle;
+
+            float[]? dashes = null;
+            if (ss.IsDashed && ss.DashArray != null)
+            {
+                dashes = new float[ss.DashArray.Count];
+                for (int i = 0; i < ss.DashArray.Count; i++)
+                    dashes[i] = (float)ss.DashArray[i];
+            }
+
+            int hr;
+            if (_hasFactory1)
+            {
+                var props1 = new D2D1_STROKE_STYLE_PROPERTIES1(
+                    startCap: MapLineCap(ss.LineCap),
+                    endCap: MapLineCap(ss.LineCap),
+                    dashCap: MapLineCap(ss.LineCap),
+                    lineJoin: MapLineJoin(ss.LineJoin),
+                    miterLimit: (float)Math.Max(1.0, ss.MiterLimit),
+                    dashStyle: ss.IsDashed ? D2D1_DASH_STYLE.CUSTOM : D2D1_DASH_STYLE.SOLID,
+                    dashOffset: (float)ss.DashOffset,
+                    transformType: D2D1_STROKE_TRANSFORM_TYPE.FIXED);
+                hr = D2D1VTable.CreateStrokeStyle1(
+                    (ID2D1Factory*)_d2dFactory, props1,
+                    dashes != null ? dashes.AsSpan() : ReadOnlySpan<float>.Empty,
+                    out handle);
+            }
+            else
+            {
+                var props = new D2D1_STROKE_STYLE_PROPERTIES(
+                    startCap: MapLineCap(ss.LineCap),
+                    endCap: MapLineCap(ss.LineCap),
+                    dashCap: MapLineCap(ss.LineCap),
+                    lineJoin: MapLineJoin(ss.LineJoin),
+                    miterLimit: (float)Math.Max(1.0, ss.MiterLimit),
+                    dashStyle: ss.IsDashed ? D2D1_DASH_STYLE.CUSTOM : D2D1_DASH_STYLE.SOLID,
+                    dashOffset: (float)ss.DashOffset);
+                hr = D2D1VTable.CreateStrokeStyle(
+                    (ID2D1Factory*)_d2dFactory, props,
+                    dashes != null ? dashes.AsSpan() : ReadOnlySpan<float>.Empty,
+                    out handle);
+            }
+
+            if (hr >= 0 && handle != 0)
+                _strokeStyles[ss] = handle;
+
+            return handle;
+        }
+    }
+
+    private static D2D1_CAP_STYLE MapLineCap(StrokeLineCap cap) => cap switch
+    {
+        StrokeLineCap.Round => D2D1_CAP_STYLE.ROUND,
+        StrokeLineCap.Square => D2D1_CAP_STYLE.SQUARE,
+        _ => D2D1_CAP_STYLE.FLAT,
+    };
+
+    private static D2D1_LINE_JOIN MapLineJoin(StrokeLineJoin join) => join switch
+    {
+        StrokeLineJoin.Round => D2D1_LINE_JOIN.ROUND,
+        StrokeLineJoin.Bevel => D2D1_LINE_JOIN.BEVEL,
+        _ => D2D1_LINE_JOIN.MITER_OR_BEVEL, // auto-bevel when miter limit is exceeded
+    };
 
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false) =>
         new DirectWriteFont(ResolveWin32FontFamilyOrFile(family), size, weight, italic, underline, strikethrough);
@@ -164,6 +286,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             generation,
             _d2dFactory,
             _dwriteFactory,
+            _defaultFixedStrokeStyle,
             onRecreateTarget: () => InvalidateCachedWindowTarget(hwnd),
             ownsRenderTarget: false);
     }
@@ -181,6 +304,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             renderTargetGeneration: generation,
             d2dFactory: _d2dFactory,
             dwriteFactory: _dwriteFactory,
+            defaultStrokeStyle: _defaultFixedStrokeStyle,
             onRecreateTarget: null,
             ownsRenderTarget: true);
     }
