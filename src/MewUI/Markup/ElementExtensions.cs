@@ -167,28 +167,28 @@ public static class ElementExtensions
     /// <summary>
     /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/> or assign <see cref="Window.WindowSize"/> directly.
     /// </summary>
-    [System.Obsolete("Use .Resizable(w, h, minWidth: ...) or assign WindowSize directly.", error: true)]
+    [Obsolete("Use .Resizable(w, h, minWidth: ...) or assign WindowSize directly.", error: true)]
     public static Window MinWidth(this Window window, double minWidth)
         => throw new NotSupportedException("Use .Resizable(w, h, minWidth: ...) or assign WindowSize directly.");
 
     /// <summary>
     /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/> or assign <see cref="Window.WindowSize"/> directly.
     /// </summary>
-    [System.Obsolete("Use .Resizable(w, h, minHeight: ...) or assign WindowSize directly.", error: true)]
+    [Obsolete("Use .Resizable(w, h, minHeight: ...) or assign WindowSize directly.", error: true)]
     public static Window MinHeight(this Window window, double minHeight)
         => throw new NotSupportedException("Use .Resizable(w, h, minHeight: ...) or assign WindowSize directly.");
 
     /// <summary>
     /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/> or assign <see cref="Window.WindowSize"/> directly.
     /// </summary>
-    [System.Obsolete("Use .Resizable(w, h, maxWidth: ...) or assign WindowSize directly.", error: true)]
+    [Obsolete("Use .Resizable(w, h, maxWidth: ...) or assign WindowSize directly.", error: true)]
     public static Window MaxWidth(this Window window, double maxWidth)
         => throw new NotSupportedException("Use .Resizable(w, h, maxWidth: ...) or assign WindowSize directly.");
 
     /// <summary>
     /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/> or assign <see cref="Window.WindowSize"/> directly.
     /// </summary>
-    [System.Obsolete("Use .Resizable(w, h, maxHeight: ...) or assign WindowSize directly.", error: true)]
+    [Obsolete("Use .Resizable(w, h, maxHeight: ...) or assign WindowSize directly.", error: true)]
     public static Window MaxHeight(this Window window, double maxHeight)
         => throw new NotSupportedException("Use .Resizable(w, h, maxHeight: ...) or assign WindowSize directly.");
 
