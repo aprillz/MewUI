@@ -1,8 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-using Aprillz.MewUI.Native;
-
 namespace Aprillz.MewUI.Platform.Win32;
 
 [SupportedOSPlatform("windows")]
