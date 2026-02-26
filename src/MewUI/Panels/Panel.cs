@@ -12,6 +12,17 @@ public abstract class Panel : FrameworkElement
 
     protected override bool InvalidateOnMouseOverChanged => false;
 
+    public bool ClipToBounds
+    {
+        get; set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateVisual();
+            }
+        }
+    }
+
     /// <summary>
     /// Gets the collection of child elements.
     /// </summary>
@@ -119,9 +130,24 @@ public abstract class Panel : FrameworkElement
     {
         base.Render(context);
 
-        foreach (var child in _children)
+        if (ClipToBounds)
         {
-            child.Render(context);
+            context.Save();
+            context.SetClip(Bounds);
+        }
+        try
+        {
+            foreach (var child in _children)
+            {
+                child.Render(context);
+            }
+        }
+        finally
+        {
+            if (ClipToBounds)
+            {
+                context.Restore();
+            }
         }
     }
 
