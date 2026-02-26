@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Backend.Gdi</AssemblyName>
+    <PackageId>$(MewUITitle).Backend.Gdi</PackageId>
+    <Description>GDI rendering backend for $(MewUITitle)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Rendering\Gdi\**\*.cs" LinkBase="Rendering\Gdi" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
+    <Compile Include="..\MewUI\Shared\Native\Win32\Direct2D\**\*.cs" LinkBase="Native\Direct2D" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Constants\*.cs" LinkBase="Native\Constants" />
+    <Compile Include="..\MewUI\Shared\Platform\Win32\Resources\*.cs" LinkBase="Resources" />
+    <Compile Include="..\MewUI\Shared\Rendering\Direct2D\DirectWriteFont.cs" LinkBase="Rendering\Direct2D" />
+  </ItemGroup>
+
+</Project>

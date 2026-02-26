@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Platform.X11</AssemblyName>
+    <PackageId>$(MewUITitle).Platform.X11</PackageId>
+    <Description>X11 platform host for $(MewUITitle)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Platform\Linux\**\*.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native\X11.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native\LibGL.cs" />
+  </ItemGroup>
+
+</Project>

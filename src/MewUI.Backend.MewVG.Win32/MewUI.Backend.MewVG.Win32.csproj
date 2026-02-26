@@ -1,0 +1,66 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);MEWUI_OPENGL_WIN32;MEWUI_MEWVG_WIN32</DefineConstants>
+
+    <AssemblyName>$(MewUITitle).Backend.MewVG.Win32</AssemblyName>
+    <PackageId>$(MewUITitle).Backend.MewVG.Win32</PackageId>
+    <Description>MewVG (NanoVG) OpenGL backend for $(MewUITitle) on Win32</Description>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MewVGProjectPath)' == ''">
+    <PackageReference Include="Aprillz.MewVG.Core" Version="$(MewVGVersion)" />
+    <PackageReference Include="Aprillz.MewVG.GL" Version="$(MewVGVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MewVGProjectPath)' != ''">
+    <ProjectReference Include="$(MewVGProjectPath)\src\MewVG.Core\MewVG.Core.csproj" />
+    <ProjectReference Include="$(MewVGProjectPath)\src\MewVG.GL\MewVG.GL.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+ 
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsContext.Common.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.Win32.cs" LinkBase="Rendering\MewVG" />
+
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\ClipStack.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGGLBootstrap.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGGraphicsContext.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGWindowResources.cs" LinkBase="Rendering\MewVG" />
+
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLBitmapRenderTarget.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\ImagePixelUtils.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextRasterizer.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+
+    <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiFont.cs" LinkBase="Rendering\Gdi" />
+    <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiMeasurementContext.cs" LinkBase="Rendering\Gdi" />
+
+    <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\OpenGL32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
+    <Compile Include="..\MewUI\Shared\Native\Win32\Direct2D\**\*.cs" LinkBase="Native\Direct2D" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite" />
+    <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\GL.Win32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\OpenGLExt.Win32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Kernel32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Constants\*.cs" LinkBase="Native\Constants" />
+    <Compile Include="..\MewUI\Shared\Platform\Win32\Resources\*.cs" LinkBase="Resources" />
+  </ItemGroup>
+
+</Project>

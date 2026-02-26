@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);MEWUI_OPENGL_X11;MEWUI_MEWVG_X11</DefineConstants>
+
+    <AssemblyName>$(MewUITitle).Backend.MewVG.X11</AssemblyName>
+    <PackageId>$(MewUITitle).Backend.MewVG.X11</PackageId>
+    <Description>MewVG (NanoVG) OpenGL backend for $(MewUITitle) on Linux X11</Description>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MewVGProjectPath)' == ''">
+    <PackageReference Include="Aprillz.MewVG.Core" Version="$(MewVGVersion)" />
+    <PackageReference Include="Aprillz.MewVG.GL" Version="$(MewVGVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MewVGProjectPath)' != ''">
+    <ProjectReference Include="$(MewVGProjectPath)\src\MewVG.Core\MewVG.Core.csproj" />
+    <ProjectReference Include="$(MewVGProjectPath)\src\MewVG.GL\MewVG.GL.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared MewVG files -->
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsContext.Common.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.X11.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\ClipStack.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
+
+    <!-- X11-specific MewVG files -->
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\MewVGGLBootstrapX11.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\MewVGX11GraphicsContext.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\MewVGX11WindowResources.cs" LinkBase="Rendering\MewVG" />
+
+    <!-- OpenGL shared (GLX context, text cache, image utilities, measurement) -->
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\ImagePixelUtils.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.X11.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\GlxOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+
+    <!-- FreeType (text rendering on Linux) -->
+    <Compile Include="..\MewUI\Shared\Rendering\FreeType\**\*.cs" LinkBase="Rendering\FreeType" />
+
+    <!-- X11 & GL native bindings -->
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native\X11.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native\LibGL.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\GL.X11.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\OpenGLExt.X11.cs" LinkBase="Native\OpenGLExt.X11.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\FreeType\**\*.cs" LinkBase="Native\FreeType" />
+    <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native\OpenGLExt.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
+  </ItemGroup>
+
+</Project>

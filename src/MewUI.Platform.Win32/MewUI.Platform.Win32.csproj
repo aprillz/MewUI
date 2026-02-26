@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Platform.Win32</AssemblyName>
+    <PackageId>$(MewUITitle).Platform.Win32</PackageId>
+    <Description>Win32 platform host for $(MewUITitle)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Platform\Win32\**\*.cs" LinkBase="Platform\Win32" />
+    <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Constants\*.cs" LinkBase="Native\Constants" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\DwmApi.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Kernel32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Imm32.cs" LinkBase="Native" />
+  </ItemGroup>
+
+</Project>
