@@ -1,6 +1,5 @@
 #if DEBUG
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
@@ -88,7 +87,11 @@ public partial class Window
     {
         if (_debugVisualTreeWindow != null)
         {
-            try { _debugVisualTreeWindow.Close(); } catch { }
+            try
+            {
+                _debugVisualTreeWindow.Close();
+            }
+            catch { }
             _debugVisualTreeWindow = null;
 #if DEBUG
             DevToolsVisualTreeOpenChanged?.Invoke(false);
@@ -523,7 +526,7 @@ public partial class Window
 
             if (_target.Content is Element content)
             {
-                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: new[] { BuildModel(content, parentKey: "root:content") });
+                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: [BuildModel(content, parentKey: "root:content")]);
                 roots.Add(contentRoot);
             }
             else
@@ -620,18 +623,7 @@ public partial class Window
                 return count;
             }
         }
-
-        private UIElement? GetHoveredElement()
-        {
-            var pos = _target.LastMousePositionDip;
-            var hovered = _target.HitTest(pos);
-            if (hovered is Adorner)
-            {
-                return null;
-            }
-            return hovered;
-        }
-
+         
         private void PeekElement(UIElement? element)
         {
             if (element == null)

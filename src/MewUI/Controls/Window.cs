@@ -152,7 +152,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _popupManager = new PopupManager(this);
 
 #if DEBUG
-        InitializeDebugDevTools();
+        if (this is not DebugVisualTreeWindow)
+        {
+            InitializeDebugDevTools();
+        }
 #endif
     }
 
