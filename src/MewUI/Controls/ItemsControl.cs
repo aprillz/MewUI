@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Controls.Text;
-using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;

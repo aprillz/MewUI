@@ -74,8 +74,11 @@ public static class Glyph
             p3 = new Point(center.X + half, center.Y - half / 2);
         }
 
-        context.DrawLine(p1, p2, color, thickness);
-        context.DrawLine(p2, p3, color, thickness);
+        var g = new PathGeometry();
+        g.MoveTo(p1);
+        g.LineTo(p2);
+        g.LineTo(p3);
+        context.DrawPath(g, color, thickness);
     }
 
     private static void DrawChevronSide(IGraphicsContext context, Point center, double half, Color color, double thickness, bool left)
@@ -97,8 +100,12 @@ public static class Glyph
             p3 = new Point(center.X - half / 2, center.Y + half);
         }
 
-        context.DrawLine(p1, p2, color, thickness);
-        context.DrawLine(p2, p3, color, thickness);
+
+        var g = new PathGeometry();
+        g.MoveTo(p1);
+        g.LineTo(p2);
+        g.LineTo(p3);
+        context.DrawPath(g, color, thickness);
     }
 }
 

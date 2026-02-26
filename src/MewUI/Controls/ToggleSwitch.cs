@@ -16,6 +16,7 @@ public sealed class ToggleSwitch : ToggleBase
     public ToggleSwitch()
     {
         Padding = new Thickness(8, 4, 8, 4);
+        HorizontalAlignment = HorizontalAlignment.Left;
 
         // ToggleBase sets Background=Transparent. For ToggleSwitch we want a normal control background by default.
         Background = Theme.Palette.ButtonFace;
