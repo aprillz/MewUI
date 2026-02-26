@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/build/">
     <File Path="build/MewUI.Common.props" />
+    <File Path="build/MewUI.Local.props" />
+    <File Path="meta/MewUI.Meta.props" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
@@ -12,8 +14,22 @@
     <File Path="samples/FBASample/fba_sample.cs" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/MewUI.Backend.Direct2D/MewUI.Backend.Direct2D.csproj" />
+    <Project Path="src/MewUI.Backend.Gdi/MewUI.Backend.Gdi.csproj" />
+    <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
+    <Project Path="src/MewUI.Backend.MewVG.Win32/MewUI.Backend.MewVG.Win32.csproj" />
+    <Project Path="src/MewUI.Backend.MewVG.X11/MewUI.Backend.MewVG.X11.csproj" />
+    <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
+    <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
+    <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
     <Project Path="src/MewUI.Win32.WebView2/MewUI.Win32.WebView2.csproj" />
     <Project Path="src/MewUI/MewUI.csproj" />
+  </Folder>
+  <Folder Name="/meta/">
+    <Project Path="meta/MewUI.All/MewUI.All.csproj" />
+    <Project Path="meta/MewUI.Linux/MewUI.Linux.csproj" />
+    <Project Path="meta/MewUI.MacOS/MewUI.MacOS.csproj" />
+    <Project Path="meta/MewUI.Windows/MewUI.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MewUI.Test/MewUI.Test.csproj" />

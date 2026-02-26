@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Aprillz.MewUI.Platform.MacOS</AssemblyName>
+    <RootNamespace>Aprillz.MewUI</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Platform\MacOS\**\*.cs" LinkBase="Platform\MacOS" />
+  </ItemGroup>
+</Project>
