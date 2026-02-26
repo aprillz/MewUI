@@ -585,7 +585,7 @@ public sealed class SplitPanel : Panel
             if (hot)
             {
                 byte alpha = pressed ? (byte)48 : (byte)26;
-                var r = _owner.SplitterThickness / 2.0;
+                var r = Math.Min(theme.Metrics.ControlCornerRadius,_owner.SplitterThickness / 2.0);
                 if (r > 0)
                 {
                     context.FillRoundedRectangle(bounds, r, r, theme.Palette.Accent.WithAlpha(alpha));
