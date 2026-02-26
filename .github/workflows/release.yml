@@ -19,7 +19,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Compute version
         id: version
@@ -29,24 +31,58 @@ jobs:
           if ($tag.StartsWith("v")) { $tag = $tag.Substring(1) }
           "version=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: Pack
+      - name: Pack all packages
         shell: pwsh
         run: |
           $out = Join-Path $env:GITHUB_WORKSPACE ".artifacts/nuget"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          dotnet pack ".\src\MewUI\MewUI.csproj" -c Release -o $out `
-            /p:ContinuousIntegrationBuild=true `
-            /p:PackageVersion="${{ steps.version.outputs.version }}"
+
+          $projects = @(
+            # Individual packages
+            "src\MewUI\MewUI.csproj"
+            "src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj"
+            "src\MewUI.Platform.X11\MewUI.Platform.X11.csproj"
+            "src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj"
+            "src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj"
+            "src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj"
+            "src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj"
+            "src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj"
+            "src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj"
+            # Metapackages
+            "meta\MewUI.Windows\MewUI.Windows.csproj"
+            "meta\MewUI.Linux\MewUI.Linux.csproj"
+            "meta\MewUI.MacOS\MewUI.MacOS.csproj"
+            "meta\MewUI.All\MewUI.All.csproj"
+          )
+
+          $failed = @()
+          foreach ($proj in $projects) {
+            Write-Host "Packing $proj ..."
+            dotnet pack $proj -c Release -o $out `
+              /p:ContinuousIntegrationBuild=true `
+              /p:PackageVersion="${{ steps.version.outputs.version }}"
+            if ($LASTEXITCODE -ne 0) { $failed += $proj }
+          }
+
+          if ($failed.Count -gt 0) {
+            Write-Error "Failed to pack: $($failed -join ', ')"
+            exit 1
+          }
 
       - name: Push to NuGet
         shell: pwsh
         run: |
-          $pkg = Get-ChildItem ".\.artifacts\nuget" -Filter "*.nupkg" -File | Select-Object -First 1
-          if (-not $pkg) { throw "No .nupkg found under .artifacts/nuget" }
-          dotnet nuget push $pkg.FullName `
-            --api-key "${{ secrets.NUGET_API_KEY }}" `
-            --source "https://api.nuget.org/v3/index.json" `
-            --skip-duplicate
+          $packages = Get-ChildItem ".\.artifacts\nuget" -Filter "*.nupkg" -File
+          if ($packages.Count -eq 0) { throw "No .nupkg found under .artifacts/nuget" }
+
+          Write-Host "Pushing $($packages.Count) packages..."
+          foreach ($pkg in $packages) {
+            Write-Host "  $($pkg.Name)"
+            dotnet nuget push $pkg.FullName `
+              --api-key "${{ secrets.NUGET_API_KEY }}" `
+              --source "https://api.nuget.org/v3/index.json" `
+              --skip-duplicate
+          }
 
       - name: GitHub Release (auto notes)
         uses: softprops/action-gh-release@v2
