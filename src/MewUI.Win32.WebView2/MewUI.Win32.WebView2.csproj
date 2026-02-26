@@ -20,6 +20,7 @@
  
   <ItemGroup>
     <ProjectReference Include="..\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
   </ItemGroup>
  
   <ItemGroup>
