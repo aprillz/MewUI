@@ -56,6 +56,10 @@ public sealed class PathGeometry : IFreezable
     private double _lastX;
     private double _lastY;
 
+    // Sub-path start point (Close restores current point here per SVG spec).
+    private double _startX;
+    private double _startY;
+
     private bool _isFrozen;
 
     /// <inheritdoc/>
@@ -98,6 +102,7 @@ public sealed class PathGeometry : IFreezable
         FreezableHelper.ThrowIfFrozen(this);
         _commands.Add(new PathCommand(PathCommandType.MoveTo, x, y));
         _lastX = x; _lastY = y;
+        _startX = x; _startY = y;
     }
 
     /// <summary>Adds a straight line to the given point.</summary>
@@ -123,6 +128,7 @@ public sealed class PathGeometry : IFreezable
     {
         FreezableHelper.ThrowIfFrozen(this);
         _commands.Add(new PathCommand(PathCommandType.Close));
+        _lastX = _startX; _lastY = _startY;
     }
 
     /// <summary>
@@ -327,6 +333,7 @@ public sealed class PathGeometry : IFreezable
         FreezableHelper.ThrowIfFrozen(this);
         _commands.Clear();
         _lastX = _lastY = 0;
+        _startX = _startY = 0;
     }
 
     /// <summary>
@@ -344,6 +351,58 @@ public sealed class PathGeometry : IFreezable
             _lastY = other._lastY;
         }
     }
+
+    // ── Queries ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the conservative axis-aligned bounding box of this path.
+    /// For cubic Bézier curves, control points are included (the result may be
+    /// slightly larger than the tight bounds).
+    /// </summary>
+    public Rect GetBounds()
+    {
+        if (IsEmpty) return Rect.Empty;
+
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        foreach (var cmd in Commands)
+        {
+            switch (cmd.Type)
+            {
+                case PathCommandType.MoveTo:
+                case PathCommandType.LineTo:
+                    Expand(cmd.X0, cmd.Y0);
+                    break;
+                case PathCommandType.BezierTo:
+                    Expand(cmd.X0, cmd.Y0);
+                    Expand(cmd.X1, cmd.Y1);
+                    Expand(cmd.X2, cmd.Y2);
+                    break;
+            }
+        }
+
+        if (minX > maxX) return Rect.Empty;
+        return new Rect(minX, minY, maxX - minX, maxY - minY);
+
+        void Expand(double x, double y)
+        {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+        }
+    }
+
+    /// <summary>
+    /// Parses an SVG path data string into a <see cref="PathGeometry"/>.
+    /// </summary>
+    public static PathGeometry Parse(ReadOnlySpan<char> pathData) => SvgPathParser.Parse(pathData);
+
+    /// <summary>
+    /// Parses an SVG path data string into a <see cref="PathGeometry"/>.
+    /// </summary>
+    public static PathGeometry Parse(string pathData) => SvgPathParser.Parse(pathData);
 
     // ── Static factories ──────────────────────────────────────────────────────
 
