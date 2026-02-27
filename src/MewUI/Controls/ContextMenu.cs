@@ -730,7 +730,6 @@ public sealed class ContextMenu : Control, IPopupOwner
 
     protected override void OnRender(IGraphicsContext context)
     {
-        
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
         double radius = Theme.Metrics.ControlCornerRadius;

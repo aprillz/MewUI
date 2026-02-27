@@ -65,7 +65,15 @@ internal sealed class PopupManager
         // Popups render last (on top).
         for (int i = 0; i < _popups.Count; i++)
         {
-            _popups[i].Element.Render(context);
+            var entry = _popups[i];
+            if (entry.Chrome != null)
+            {
+                entry.Chrome.Render(context);
+            }
+            else
+            {
+                entry.Element.Render(context);
+            }
         }
     }
 
@@ -90,14 +98,14 @@ internal sealed class PopupManager
 
     internal void Dispose()
     {
-        foreach (var popup in _popups)
+        foreach (var entry in _popups)
         {
-            if (popup.Element is IDisposable disposable)
+            if (entry.Element is IDisposable disposable)
             {
                 disposable.Dispose();
             }
 
-            popup.Element.Parent = null;
+            DetachEntry(entry);
         }
 
         _popups.Clear();
@@ -109,7 +117,13 @@ internal sealed class PopupManager
     {
         for (int i = 0; i < _popups.Count; i++)
         {
-            if (_popups[i].Element is Control c)
+            var entry = _popups[i];
+            if (entry.Chrome != null)
+            {
+                entry.Chrome.NotifyThemeChanged(oldTheme, newTheme);
+            }
+
+            if (entry.Element is Control c)
             {
                 c.NotifyThemeChanged(oldTheme, newTheme);
             }
@@ -120,12 +134,15 @@ internal sealed class PopupManager
     {
         for (int i = 0; i < _popups.Count; i++)
         {
-            if (_popups[i].Element is Control c)
+            var entry = _popups[i];
+            entry.Chrome?.ClearDpiCacheDeep();
+
+            if (entry.Element is Control c)
             {
                 c.NotifyDpiChanged(oldDpi, newDpi);
             }
 
-            _popups[i].Element.ClearDpiCacheDeep();
+            entry.Element.ClearDpiCacheDeep();
         }
     }
 
@@ -134,7 +151,7 @@ internal sealed class PopupManager
         for (int i = 0; i < _popups.Count; i++)
         {
             var entry = _popups[i];
-            entry.Element.Parent = null;
+            DetachEntry(entry);
             if (entry.Owner is IPopupOwner owner)
             {
                 owner.OnPopupClosed(entry.Element, PopupCloseKind.Lifecycle);
@@ -172,12 +189,16 @@ internal sealed class PopupManager
             ? popupElement.ThemeInternal
             : _window.ThemeInternal;
 
-        popup.Parent = _window;
+        // Wrap in PopupChrome so the drop shadow renders within the chrome's layout bounds,
+        // avoiding clipping by ancestor clip regions.
+        var chrome = new PopupChrome(popup);
+        chrome.Parent = _window;
+        chrome.AttachChild();
 
-        ApplyPopupDpiChange(popup, oldDpi, _window.Dpi);
-        ApplyPopupThemeChange(popup, oldTheme, _window.ThemeInternal);
+        ApplyPopupDpiChange(chrome, oldDpi, _window.Dpi);
+        ApplyPopupThemeChange(chrome, oldTheme, _window.ThemeInternal);
 
-        var entry = new PopupEntry { Owner = owner, Element = popup, Bounds = bounds, StaysOpen = staysOpen };
+        var entry = new PopupEntry { Owner = owner, Element = popup, Chrome = chrome, Bounds = bounds, StaysOpen = staysOpen };
         _popups.Add(entry);
         LayoutPopup(entry);
         _window.Invalidate();
@@ -214,7 +235,7 @@ internal sealed class PopupManager
             }
 
             var entry = _popups[i];
-            _popups[i].Element.Parent = null;
+            DetachEntry(entry);
             _popups.RemoveAt(i);
             if (entry.Owner is IPopupOwner owner)
             {
@@ -265,7 +286,7 @@ internal sealed class PopupManager
                     restoreFocusTo = entry.Owner;
                 }
 
-                entry.Element.Parent = null;
+                DetachEntry(entry);
                 if (entry.Owner is IPopupOwner owner)
                 {
                     owner.OnPopupClosed(entry.Element, PopupCloseKind.Policy);
@@ -363,7 +384,7 @@ internal sealed class PopupManager
                         restoreFocusTo = entry.Owner;
                     }
 
-                    entry.Element.Parent = null;
+                    DetachEntry(entry);
                     _popups.RemoveAt(i);
                     if (entry.Owner is IPopupOwner popupOwner)
                     {
@@ -394,7 +415,7 @@ internal sealed class PopupManager
                     restoreFocusTo = entry.Owner;
                 }
 
-                entry.Element.Parent = null;
+                DetachEntry(entry);
                 _popups.RemoveAt(i);
                 if (entry.Owner is IPopupOwner popupOwner2)
                 {
@@ -480,7 +501,7 @@ internal sealed class PopupManager
                     restoreFocusTo = entry.Owner;
                 }
 
-                entry.Element.Parent = null;
+                DetachEntry(entry);
                 if (entry.Owner is IPopupOwner owner)
                 {
                     owner.OnPopupClosed(entry.Element, PopupCloseKind.Policy);
@@ -580,14 +601,38 @@ internal sealed class PopupManager
         _toolTipOwner = null;
     }
 
-    private void LayoutPopup(PopupEntry entry)
+    private static void DetachEntry(PopupEntry entry)
     {
-        entry.Element.Measure(new Size(entry.Bounds.Width, entry.Bounds.Height));
-        entry.Element.Arrange(entry.Bounds);
+        if (entry.Chrome != null)
+        {
+            entry.Chrome.DetachChild();
+            entry.Chrome.Parent = null;
+        }
+        else
+        {
+            entry.Element.Parent = null;
+        }
+    }
 
-        // Keep the stored bounds consistent with the actually arranged (layout-rounded) bounds,
-        // otherwise hit-testing (e.g. mouse wheel on popup content) can miss by sub-pixel rounding.
-        entry.Bounds = entry.Element.Bounds;
+    private static void LayoutPopup(PopupEntry entry)
+    {
+        if (entry.Chrome != null)
+        {
+            // Chrome bounds include shadow padding around the content area.
+            var chromeBounds = entry.Bounds.Inflate(PopupChrome.ShadowPadding);
+            entry.Chrome.Measure(new Size(chromeBounds.Width, chromeBounds.Height));
+            entry.Chrome.Arrange(chromeBounds);
+
+            // Keep the stored bounds consistent with the child's actually arranged (layout-rounded) bounds,
+            // otherwise hit-testing (e.g. mouse wheel on popup content) can miss by sub-pixel rounding.
+            entry.Bounds = entry.Chrome.Child.Bounds;
+        }
+        else
+        {
+            entry.Element.Measure(new Size(entry.Bounds.Width, entry.Bounds.Height));
+            entry.Element.Arrange(entry.Bounds);
+            entry.Bounds = entry.Element.Bounds;
+        }
     }
 
     private void EnsureFocusNotInClosedPopup(UIElement popup, UIElement owner)
@@ -659,6 +704,8 @@ internal sealed class PopupManager
         public Rect Bounds { get; set; }
 
         public bool StaysOpen { get; set; }
+
+        public PopupChrome? Chrome { get; set; }
     }
 }
 
