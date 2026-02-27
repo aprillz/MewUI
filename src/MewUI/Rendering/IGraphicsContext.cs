@@ -225,6 +225,112 @@ namespace Aprillz.MewUI.Rendering
             else if (brush is IGradientBrush g) FillPath(path, g.GetRepresentativeColor(), fillRule);
         }
 
+        // ── Box shadow ──────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Draws a box shadow around the specified bounds.
+        /// <para>
+        /// The shadow fades from <paramref name="shadowColor"/> at the box edge to
+        /// transparent at <paramref name="blurRadius"/> distance outside the box.
+        /// Backends may override for native shadow support (e.g. NanoVG BoxGradient).
+        /// The default implementation uses a 9-patch gradient decomposition.
+        /// </para>
+        /// </summary>
+        /// <param name="bounds">The box that casts the shadow.</param>
+        /// <param name="cornerRadius">Corner radius of the box.</param>
+        /// <param name="blurRadius">How far the shadow extends from the box edge.</param>
+        /// <param name="shadowColor">Shadow color (typically semi-transparent black).</param>
+        /// <param name="offsetX">Horizontal shadow offset.</param>
+        /// <param name="offsetY">Vertical shadow offset.</param>
+        void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius,
+            Color shadowColor, double offsetX = 0, double offsetY = 0)
+        {
+            if (blurRadius <= 0 || shadowColor.A == 0) return;
+
+            double sx = bounds.X + offsetX;
+            double sy = bounds.Y + offsetY;
+            double sw = bounds.Width;
+            double sh = bounds.Height;
+            double cr = Math.Min(Math.Max(cornerRadius, 0), Math.Min(sw, sh) * 0.5);
+
+            // NanoVG-compatible: transition is centered on box edge,
+            // so visible shadow extends feather/2 outward with 50% intensity at the edge.
+            double br = blurRadius * 0.5;
+            byte edgeAlpha = (byte)(shadowColor.A / 2);
+            var edgeColor = Color.FromArgb(edgeAlpha, shadowColor.R, shadowColor.G, shadowColor.B);
+            var transparent = Color.FromArgb(0, shadowColor.R, shadowColor.G, shadowColor.B);
+
+            var fadeOut = new GradientStop[] { new(0, edgeColor), new(1, transparent) };
+            var fadeIn  = new GradientStop[] { new(0, transparent), new(1, edgeColor) };
+
+            double cornerSize = cr + br;
+            double innerStop = cr > 0 ? cr / cornerSize : 0;
+            var cornerStops = innerStop > 0
+                ? new GradientStop[] { new(0, shadowColor), new(innerStop, edgeColor), new(1, transparent) }
+                : new GradientStop[] { new(0, edgeColor), new(1, transparent) };
+
+            double edgeW = sw - 2 * cr;
+            double edgeH = sh - 2 * cr;
+
+            // ── Interior cross (covered by background; avoids corner overlap) ──
+            if (edgeH > 0)
+                FillRectangle(new Rect(sx, sy + cr, sw, edgeH), shadowColor);
+            if (edgeW > 0)
+                FillRectangle(new Rect(sx + cr, sy, edgeW, sh), shadowColor);
+
+            // ── Edges ──
+            if (edgeW > 0)
+            {
+                // Top
+                FillRectangle(new Rect(sx + cr, sy - br, edgeW, br),
+                    new SimpleLinearGradientBrush(new Point(0, sy - br), new Point(0, sy),
+                        fadeIn, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+                // Bottom
+                FillRectangle(new Rect(sx + cr, sy + sh, edgeW, br),
+                    new SimpleLinearGradientBrush(new Point(0, sy + sh), new Point(0, sy + sh + br),
+                        fadeOut, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+            }
+
+            if (edgeH > 0)
+            {
+                // Left
+                FillRectangle(new Rect(sx - br, sy + cr, br, edgeH),
+                    new SimpleLinearGradientBrush(new Point(sx - br, 0), new Point(sx, 0),
+                        fadeIn, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+                // Right
+                FillRectangle(new Rect(sx + sw, sy + cr, br, edgeH),
+                    new SimpleLinearGradientBrush(new Point(sx + sw, 0), new Point(sx + sw + br, 0),
+                        fadeOut, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+            }
+
+            // ── Corners ──
+            double radius = cornerSize;
+
+            // Top-left
+            var tlCenter = new Point(sx + cr, sy + cr);
+            FillRectangle(new Rect(sx - br, sy - br, cornerSize, cornerSize),
+                new SimpleRadialGradientBrush(tlCenter, tlCenter, radius, radius,
+                    cornerStops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+
+            // Top-right
+            var trCenter = new Point(sx + sw - cr, sy + cr);
+            FillRectangle(new Rect(sx + sw - cr, sy - br, cornerSize, cornerSize),
+                new SimpleRadialGradientBrush(trCenter, trCenter, radius, radius,
+                    cornerStops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+
+            // Bottom-left
+            var blCenter = new Point(sx + cr, sy + sh - cr);
+            FillRectangle(new Rect(sx - br, sy + sh - cr, cornerSize, cornerSize),
+                new SimpleRadialGradientBrush(blCenter, blCenter, radius, radius,
+                    cornerStops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+
+            // Bottom-right
+            var brCenter = new Point(sx + sw - cr, sy + sh - cr);
+            FillRectangle(new Rect(sx + sw - cr, sy + sh - cr, cornerSize, cornerSize),
+                new SimpleRadialGradientBrush(brCenter, brCenter, radius, radius,
+                    cornerStops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null));
+        }
+
         #endregion
 
         #region Text Rendering
