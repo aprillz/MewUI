@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -67,7 +68,7 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         return StaHelper.Run(() => SelectFolderCore(options), pump);
     }
 
-    private static string? SelectFolderCore(FolderDialogOptions options)
+    private static unsafe string? SelectFolderCore(FolderDialogOptions options)
     {
         string title = options.Title ?? "Select folder";
         string? initialDirectory = options.InitialDirectory;
@@ -75,53 +76,49 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         int hr = Ole32.CoInitializeEx(0, Ole32.COINIT_APARTMENTTHREADED);
         bool uninitialize = hr is >= 0 and not Ole32.RPC_E_CHANGED_MODE;
 
-        IFileOpenDialog? dialog = null;
-        IShellItem? folderItem = null;
-        IShellItem? resultItem = null;
+        nint dialogPtr = 0;
+        nint folderItemPtr = 0;
+        nint resultItemPtr = 0;
         try
         {
-            var iidFileOpenDialog = typeof(IFileOpenDialog).GUID;
-            var clsidFileOpenDialog = CLSID.FileOpenDialog;
+            var clsid = CLSID.FileOpenDialog;
+            var iid = IID.IFileOpenDialog;
             int hrCreate = Ole32.CoCreateInstance(
-                ref clsidFileOpenDialog,
+                ref clsid,
                 0,
                 Ole32.CLSCTX_INPROC_SERVER,
-                ref iidFileOpenDialog,
-                out var dialogPtr);
+                ref iid,
+                out dialogPtr);
             if (hrCreate < 0 || dialogPtr == 0)
             {
                 Marshal.ThrowExceptionForHR(hrCreate);
             }
 
-            dialog = (IFileOpenDialog)Marshal.GetTypedObjectForIUnknown(dialogPtr, typeof(IFileOpenDialog));
-            Marshal.Release(dialogPtr);
-            dialog.GetOptions(out uint currentOptions);
+            var dialog = (IFileOpenDialog*)dialogPtr;
+
+            FileDialogVTable.GetOptions(dialog, out uint currentOptions);
             uint optionsFlags = currentOptions
                 | (uint)FILEOPENDIALOGOPTIONS.FOS_PICKFOLDERS
                 | (uint)FILEOPENDIALOGOPTIONS.FOS_FORCEFILESYSTEM
                 | (uint)FILEOPENDIALOGOPTIONS.FOS_PATHMUSTEXIST
                 | (uint)FILEOPENDIALOGOPTIONS.FOS_NOCHANGEDIR;
-            dialog.SetOptions(optionsFlags);
-            dialog.SetTitle(title);
+            FileDialogVTable.SetOptions(dialog, optionsFlags);
+
+            fixed (char* pTitle = title)
+            {
+                FileDialogVTable.SetTitle(dialog, pTitle);
+            }
 
             if (!string.IsNullOrWhiteSpace(initialDirectory))
             {
-                Guid shellItemGuid = typeof(IShellItem).GUID;
-                if (Shell32.SHCreateItemFromParsingName(initialDirectory!, 0, ref shellItemGuid, out var itemPtr) == 0 && itemPtr != 0)
+                var shellItemIid = IID.IShellItem;
+                if (Shell32.SHCreateItemFromParsingName(initialDirectory!, 0, ref shellItemIid, out folderItemPtr) == 0 && folderItemPtr != 0)
                 {
-                    try
-                    {
-                        folderItem = (IShellItem)Marshal.GetTypedObjectForIUnknown(itemPtr, typeof(IShellItem));
-                        dialog.SetFolder(folderItem);
-                    }
-                    finally
-                    {
-                        Marshal.Release(itemPtr);
-                    }
+                    FileDialogVTable.SetFolder(dialog, (IShellItem*)folderItemPtr);
                 }
             }
 
-            hr = dialog.Show(options.Owner);
+            hr = FileDialogVTable.Show(dialog, options.Owner);
             if (hr == unchecked((int)0x800704C7)) // ERROR_CANCELLED
             {
                 return null;
@@ -132,8 +129,8 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
                 Marshal.ThrowExceptionForHR(hr);
             }
 
-            dialog.GetResult(out resultItem);
-            resultItem.GetDisplayName(SIGDN.SIGDN_FILESYSPATH, out nint pszPath);
+            FileDialogVTable.GetResult(dialog, out resultItemPtr);
+            FileDialogVTable.GetDisplayName((IShellItem*)resultItemPtr, (uint)SIGDN.SIGDN_FILESYSPATH, out nint pszPath);
             try
             {
                 var path = Marshal.PtrToStringUni(pszPath);
@@ -149,9 +146,9 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         }
         finally
         {
-            if (resultItem != null) Marshal.ReleaseComObject(resultItem);
-            if (folderItem != null) Marshal.ReleaseComObject(folderItem);
-            if (dialog != null) Marshal.ReleaseComObject(dialog);
+            ReleaseComPtr(resultItemPtr);
+            ReleaseComPtr(folderItemPtr);
+            ReleaseComPtr(dialogPtr);
             if (uninitialize)
             {
                 Ole32.CoUninitialize();
@@ -380,49 +377,89 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         public uint FlagsEx;
     }
 
-    [ComImport]
-    [Guid("D57C7288-D4AD-4768-BE02-9D969532D960")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IFileOpenDialog
+#pragma warning disable CS0649 // Assigned by native code (COM vtable)
+    private unsafe struct IFileOpenDialog { public void** lpVtbl; }
+    private unsafe struct IShellItem { public void** lpVtbl; }
+#pragma warning restore CS0649
+
+    private static class IID
     {
-        [PreserveSig] int Show(nint parent);
-        void SetFileTypes(uint cFileTypes, nint rgFilterSpec);
-        void SetFileTypeIndex(uint iFileType);
-        void GetFileTypeIndex(out uint piFileType);
-        void Advise(nint pfde, out uint pdwCookie);
-        void Unadvise(uint dwCookie);
-        void SetOptions(uint fos);
-        void GetOptions(out uint pfos);
-        void SetDefaultFolder(IShellItem psi);
-        void SetFolder(IShellItem psi);
-        void GetFolder(out IShellItem ppsi);
-        void GetCurrentSelection(out IShellItem ppsi);
-        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
-        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
-        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
-        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
-        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
-        void GetResult(out IShellItem ppsi);
-        void AddPlace(IShellItem psi, int fdap);
-        void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
-        void Close(int hr);
-        void SetClientGuid(ref Guid guid);
-        void ClearClientData();
-        void SetFilter(nint pFilter);
-        void GetResults(out nint ppenum);
-        void GetSelectedItems(out nint ppsai);
+        public static readonly Guid IFileOpenDialog = new("D57C7288-D4AD-4768-BE02-9D969532D960");
+        public static readonly Guid IShellItem = new("43826D1E-E718-42EE-BC55-A1E261C37BFE");
     }
 
-    [ComImport]
-    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellItem
+    private static unsafe class FileDialogVTable
     {
-        void BindToHandler(nint pbc, ref Guid bhid, ref Guid riid, out nint ppv);
-        void GetParent(out IShellItem ppsi);
-        void GetDisplayName(SIGDN sigdnName, out nint ppszName);
-        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
-        void Compare(IShellItem psi, uint hint, out int piOrder);
+        // IModalWindow
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int Show(IFileOpenDialog* dialog, nint parent)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<IFileOpenDialog*, nint, int>)dialog->lpVtbl[3];
+            return fn(dialog, parent);
+        }
+
+        // IFileDialog
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int SetOptions(IFileOpenDialog* dialog, uint fos)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<IFileOpenDialog*, uint, int>)dialog->lpVtbl[9];
+            return fn(dialog, fos);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetOptions(IFileOpenDialog* dialog, out uint pfos)
+        {
+            uint opts = 0;
+            var fn = (delegate* unmanaged[Stdcall]<IFileOpenDialog*, uint*, int>)dialog->lpVtbl[10];
+            int hr = fn(dialog, &opts);
+            pfos = opts;
+            return hr;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int SetFolder(IFileOpenDialog* dialog, IShellItem* psi)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<IFileOpenDialog*, IShellItem*, int>)dialog->lpVtbl[12];
+            return fn(dialog, psi);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int SetTitle(IFileOpenDialog* dialog, char* pszTitle)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<IFileOpenDialog*, char*, int>)dialog->lpVtbl[17];
+            return fn(dialog, pszTitle);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetResult(IFileOpenDialog* dialog, out nint ppsi)
+        {
+            nint result = 0;
+            var fn = (delegate* unmanaged[Stdcall]<IFileOpenDialog*, nint*, int>)dialog->lpVtbl[20];
+            int hr = fn(dialog, &result);
+            ppsi = result;
+            return hr;
+        }
+
+        // IShellItem
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetDisplayName(IShellItem* item, uint sigdn, out nint ppszName)
+        {
+            nint name = 0;
+            var fn = (delegate* unmanaged[Stdcall]<IShellItem*, uint, nint*, int>)item->lpVtbl[5];
+            int hr = fn(item, sigdn, &name);
+            ppszName = name;
+            return hr;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static unsafe void ReleaseComPtr(nint ptr)
+    {
+        if (ptr != 0)
+        {
+            var vtbl = *(nint**)ptr;
+            ((delegate* unmanaged[Stdcall]<nint, uint>)vtbl[2])(ptr);
+        }
     }
 
     [Flags]
