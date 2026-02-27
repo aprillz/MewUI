@@ -266,7 +266,7 @@ public sealed class Win32PlatformHost : IPlatformHost
                     _dispatcher?.ProcessWorkItems();
                     if (_dispatcher?.HasPendingWork == true)
                     {
-                        _dispatcher?.BeginInvoke(() => { }, DispatcherPriority.Background);
+                        _dispatcher?.BeginInvoke(DispatcherPriority.Background, () => { });
                     }
                     return 0;
 

@@ -2,19 +2,19 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Defines the relative priority used by <see cref="IDispatcher"/> when ordering work items.
-/// Lower values run first.
+/// Higher values run first.
 /// </summary>
 public enum DispatcherPriority
 {
     /// <summary>
-    /// Input processing (mouse/keyboard).
+    /// Lowest priority work that should only run when idle.
     /// </summary>
-    Input = 0,
+    Idle = 0,
 
     /// <summary>
-    /// Layout processing (measure/arrange).
+    /// Background work that should not block interactive UI.
     /// </summary>
-    Layout = 1,
+    Background = 1,
 
     /// <summary>
     /// Rendering work (invalidate/paint).
@@ -22,14 +22,14 @@ public enum DispatcherPriority
     Render = 2,
 
     /// <summary>
-    /// Background work that should not block interactive UI.
+    /// Layout processing (measure/arrange).
     /// </summary>
-    Background = 3,
+    Layout = 3,
 
     /// <summary>
-    /// Lowest priority work that should only run when idle.
+    /// Input processing (mouse/keyboard).
     /// </summary>
-    Idle = 4,
+    Input = 4,
 }
 
 /// <summary>
@@ -71,19 +71,36 @@ public enum DispatcherOperationStatus
 public sealed class DispatcherOperation
 {
     private volatile DispatcherOperationStatus _status;
+    private volatile DispatcherPriority _priority;
     internal Action? Action;
 
 
     internal DispatcherOperation(DispatcherPriority priority, Action action)
     {
-        Priority = priority;
+        _priority = priority;
         Action = action;
 
         _status = DispatcherOperationStatus.Pending;
     }
 
 
-    public DispatcherPriority Priority { get; }
+    /// <summary>
+    /// Gets or sets the priority of this operation.
+    /// Setting the priority while <see cref="Status"/> is <see cref="DispatcherOperationStatus.Pending"/>
+    /// causes the work item to be moved to the appropriate queue on the next processing cycle.
+    /// Changes after execution has started are ignored.
+    /// </summary>
+    public DispatcherPriority Priority
+    {
+        get => _priority;
+        set
+        {
+            if (_status == DispatcherOperationStatus.Pending)
+            {
+                _priority = value;
+            }
+        }
+    }
 
     /// <summary>
     /// Gets the current status of this operation.
@@ -131,10 +148,10 @@ public interface IDispatcher
     /// <summary>
     /// Asynchronously executes an action on the UI thread at the specified priority.
     /// </summary>
-    /// <param name="action">The action to execute.</param>
     /// <param name="priority">Work item priority.</param>
+    /// <param name="action">The action to execute.</param>
     /// <returns>A handle that can be used to abort the operation.</returns>
-    DispatcherOperation BeginInvoke(Action action, DispatcherPriority priority);
+    DispatcherOperation BeginInvoke(DispatcherPriority priority, Action action);
 
     /// <summary>
     /// Executes an action synchronously on the UI thread.

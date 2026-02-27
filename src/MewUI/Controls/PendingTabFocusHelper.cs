@@ -49,7 +49,7 @@ internal sealed class PendingTabFocusHelper
             return;
         }
 
-        window.ApplicationDispatcher?.BeginInvoke(Apply, DispatcherPriority.Render);
+        window.ApplicationDispatcher?.BeginInvoke(DispatcherPriority.Render, Apply);
     }
 
     private void Apply()
@@ -71,7 +71,7 @@ internal sealed class PendingTabFocusHelper
         {
             if (_attempts++ < MaxAttempts)
             {
-                window.ApplicationDispatcher?.BeginInvoke(Apply, DispatcherPriority.Render);
+                window.ApplicationDispatcher?.BeginInvoke(DispatcherPriority.Render, Apply);
             }
             else
             {

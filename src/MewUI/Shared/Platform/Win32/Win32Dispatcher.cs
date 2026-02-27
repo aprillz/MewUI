@@ -46,9 +46,9 @@ public sealed class Win32Dispatcher : SynchronizationContext, IDispatcher, IDisp
     }
 
     public DispatcherOperation BeginInvoke(Action action)
-        => BeginInvoke(action, DispatcherPriority.Background);
+        => BeginInvoke(DispatcherPriority.Background, action);
 
-    public DispatcherOperation BeginInvoke(Action action, DispatcherPriority priority)
+    public DispatcherOperation BeginInvoke(DispatcherPriority priority, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         var op = _queue.EnqueueWithOperation(priority, action);

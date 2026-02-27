@@ -19,7 +19,7 @@ internal sealed class DispatcherQueue
     {
         get
         {
-            for (int i = 0; i < _queues.Length; i++)
+            for (int i = _queues.Length - 1; i >= 0; i--)
             {
                 if (!_queues[i].IsEmpty)
                 {
@@ -78,14 +78,26 @@ internal sealed class DispatcherQueue
     public void Process()
     {
         // Process highest priority first.
-        for (int p = 0; p < _queues.Length; p++)
+        for (int p = _queues.Length - 1; p >= 0; p--)
         {
             var queue = _queues[p];
             while (queue.TryDequeue(out var item))
             {
+                // If the operation's priority was changed while pending,
+                // re-enqueue to the correct queue without running cleanup.
+                var op = item.Operation;
+                if (op != null && op.Status != DispatcherOperationStatus.Aborted)
+                {
+                    int target = (int)op.Priority;
+                    if (target != p && (uint)target < (uint)_queues.Length)
+                    {
+                        _queues[target].Enqueue(item);
+                        continue;
+                    }
+                }
+
                 try
                 {
-                    var op = item.Operation;
                     if (op != null && op.Status == DispatcherOperationStatus.Aborted)
                     {
                         continue;

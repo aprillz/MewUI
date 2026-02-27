@@ -204,7 +204,7 @@ internal sealed class TracingPlatformHost : IPlatformHost
 
         public DispatcherOperation BeginInvoke(Action action) => _innerDispatcher.BeginInvoke(action);
 
-        public DispatcherOperation BeginInvoke(Action action, DispatcherPriority priority) => _innerDispatcher.BeginInvoke(action, priority);
+        public DispatcherOperation BeginInvoke(DispatcherPriority priority, Action action) => _innerDispatcher.BeginInvoke(priority, action);
 
         public bool PostMerged(DispatcherMergeKey mergeKey, Action action, DispatcherPriority priority)
         {
