@@ -1,17 +1,17 @@
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Specifies how an image is stretched to fill its destination rectangle.
+/// Specifies how content is stretched to fill its destination rectangle.
 /// </summary>
-public enum ImageStretch
+public enum Stretch
 {
     /// <summary>No scaling is applied.</summary>
     None,
-    /// <summary>The image is stretched to fill the destination (aspect ratio is not preserved).</summary>
+    /// <summary>Content is stretched to fill the destination (aspect ratio is not preserved).</summary>
     Fill,
-    /// <summary>The image is scaled uniformly to fit inside the destination (aspect ratio preserved).</summary>
+    /// <summary>Content is scaled uniformly to fit inside the destination (aspect ratio preserved).</summary>
     Uniform,
-    /// <summary>The image is scaled uniformly to fill the destination (aspect ratio preserved; may be clipped).</summary>
+    /// <summary>Content is scaled uniformly to fill the destination (aspect ratio preserved; may be clipped).</summary>
     UniformToFill
 }
 

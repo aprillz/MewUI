@@ -29,7 +29,7 @@ public sealed class Image : FrameworkElement
     /// <summary>
     /// Gets or sets how the image is stretched to fill available space.
     /// </summary>
-    public ImageStretch StretchMode
+    public Stretch StretchMode
     {
         get;
         set
@@ -40,7 +40,7 @@ public sealed class Image : FrameworkElement
                 InvalidateVisual();
             }
         }
-    } = ImageStretch.Uniform;
+    } = Stretch.Uniform;
 
     /// <summary>
     /// Gets or sets the viewbox region of the source image.
@@ -320,7 +320,7 @@ public sealed class Image : FrameworkElement
     private static void ComputeRects(
         Rect sourceRect,
         Rect bounds,
-        ImageStretch stretch,
+        Stretch stretch,
         ImageAlignmentX alignX,
         ImageAlignmentY alignY,
         out Rect dest,
@@ -338,11 +338,11 @@ public sealed class Image : FrameworkElement
 
         switch (stretch)
         {
-            case ImageStretch.Fill:
+            case Stretch.Fill:
                 dest = bounds;
                 return;
 
-            case ImageStretch.Uniform:
+            case Stretch.Uniform:
             {
                 double scale = Math.Min(bounds.Width / sw, bounds.Height / sh);
                 double dw = sw * scale;
@@ -355,7 +355,7 @@ public sealed class Image : FrameworkElement
                 return;
             }
 
-            case ImageStretch.UniformToFill:
+            case Stretch.UniformToFill:
             {
                 double boundsAspect = bounds.Width / bounds.Height;
                 double srcAspect = sw / sh;
@@ -378,7 +378,7 @@ public sealed class Image : FrameworkElement
                 return;
             }
 
-            case ImageStretch.None:
+            case Stretch.None:
             default:
             {
                 // Keep pixel size; center within bounds (and clip).

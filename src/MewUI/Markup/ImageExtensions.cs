@@ -65,7 +65,7 @@ public static class ImageExtensions
     /// <param name="image">Target image.</param>
     /// <param name="stretch">Stretch mode.</param>
     /// <returns>The image for chaining.</returns>
-    public static Image StretchMode(this Image image, ImageStretch stretch)
+    public static Image StretchMode(this Image image, Stretch stretch)
     {
         image.StretchMode = stretch;
         return image;

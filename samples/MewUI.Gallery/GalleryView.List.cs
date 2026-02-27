@@ -9,7 +9,7 @@ partial class GalleryView
     private ImageSource iconFolderOpen = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resources.folder-horizontal-open.png");
     private ImageSource iconFolderClose = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resources.folder-horizontal.png");
     private ImageSource iconFile = ImageSource.FromResource<Program>("Aprillz.MewUI.Gallery.Resources.document.png");
-    
+
     private FrameworkElement ListsPage()
     {
         var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
@@ -100,7 +100,7 @@ partial class GalleryView
                         new Image()
                             .Register(ctx, "Icon")
                             .Size(16, 16)
-                            .StretchMode(ImageStretch.None)
+                            .StretchMode(Stretch.None)
                             .CenterVertical(),
                         new Label()
                             .Register(ctx, "Text")

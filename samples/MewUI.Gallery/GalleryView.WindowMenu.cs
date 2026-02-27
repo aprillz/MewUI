@@ -89,7 +89,7 @@ partial class GalleryView
                                         .Width(500)
                                         .Height(256)
                                         .ImageScaleQuality(ImageScaleQuality.HighQuality)
-                                        .StretchMode(ImageStretch.Uniform)
+                                        .StretchMode(Stretch.Uniform)
                                         .Bottom(),
                                     new Border()
                                         .Padding(16)

@@ -22,7 +22,7 @@ partial class GalleryView
                             .Source(april)
                             .Width(120)
                             .Height(120)
-                            .StretchMode(ImageStretch.Uniform)
+                            .StretchMode(Stretch.Uniform)
                             .Center(),
                         new Label()
                             .Text("april.jpg")
@@ -46,7 +46,7 @@ partial class GalleryView
                             .ImageScaleQuality(ImageScaleQuality.HighQuality)
                             .Width(200)
                             .Height(120)
-                            .StretchMode(ImageStretch.Uniform)
+                            .StretchMode(Stretch.Uniform)
                             .Center(),
                         new Label()
                             .BindText(imagePeekText)
@@ -69,13 +69,13 @@ partial class GalleryView
                             .Children(
                                 new Image()
                                     .Source(april)
-                                    .StretchMode(ImageStretch.Uniform)
+                                    .StretchMode(Stretch.Uniform)
                                     .ImageScaleQuality(ImageScaleQuality.HighQuality),
 
                                 new Image()
                                     .Source(april)
                                     .ViewBoxRelative(new Rect(0.25, 0.25, 0.5, 0.5))
-                                    .StretchMode(ImageStretch.UniformToFill)
+                                    .StretchMode(Stretch.UniformToFill)
                                     .ImageScaleQuality(ImageScaleQuality.HighQuality)
                             ),
 

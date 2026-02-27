@@ -403,7 +403,7 @@ Element NormalControls()
                                     new Image()
                                         .Source(logo)
                                         .ImageScaleQuality(ImageScaleQuality.HighQuality)
-                                        .StretchMode(ImageStretch.Uniform)
+                                        .StretchMode(Stretch.Uniform)
                                         .Size(16, 16),
 
                                     new Label()
@@ -643,13 +643,13 @@ FrameworkElement ImageDemo() => new UniformGrid()
             .ImageScaleQuality(ImageScaleQuality.HighQuality)
             .Source(april)
             .Size(96, 96)
-            .StretchMode(ImageStretch.Uniform),
+            .StretchMode(Stretch.Uniform),
 
         new Image()
             .ImageScaleQuality(ImageScaleQuality.HighQuality)
             .SourceFile("logo_c-256.png")
             .Size(96, 96)
-            .StretchMode(ImageStretch.Uniform)
+            .StretchMode(Stretch.Uniform)
     );
 
 FrameworkElement CommandingSamples() => new StackPanel()
