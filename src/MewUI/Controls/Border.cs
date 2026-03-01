@@ -67,6 +67,18 @@ public sealed class Border : Control, IVisualTreeHost
         }
     }
 
+    public bool ClipToBounds
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                InvalidateVisual();
+            }
+        }
+    }
+
     protected override Size MeasureContent(Size availableSize)
     {
         var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
@@ -105,11 +117,18 @@ public sealed class Border : Control, IVisualTreeHost
                 dpiScale = 1.0;
             }
 
-            context.Save();
+            if (ClipToBounds)
+            {
+                context.Save();
+                context.SetClip(LayoutRounding.MakeClipRect(inner, dpiScale));
+            }
 
-            context.SetClip(LayoutRounding.MakeClipRect(inner, dpiScale));
             Child.Render(context);
-            context.Restore();
+
+            if (ClipToBounds)
+            {
+                context.Restore();
+            }
         }
     }
 

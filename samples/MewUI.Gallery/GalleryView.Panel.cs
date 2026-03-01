@@ -150,14 +150,14 @@ partial class GalleryView
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
                             .CornerRadius(8)
                             .Padding(8)
-                            .Child(new Label().Text("First"))
+                            .Child(new Label().Text("First").Center())
                     )
                     .Second(
                         new Border()
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
                             .CornerRadius(8)
                             .Padding(8)
-                            .Child(new Label().Text("Second"))
+                            .Child(new Label().Text("Second").Center())
                     )
             ),
 
@@ -176,14 +176,14 @@ partial class GalleryView
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
                             .CornerRadius(8)
                             .Padding(8)
-                            .Child(new Label().Text("Top"))
+                            .Child(new Label().Text("Top").Center())
                     )
                     .Second(
                         new Border()
                             .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
                             .CornerRadius(8)
                             .Padding(8)
-                            .Child(new Label().Text("Bottom"))
+                            .Child(new Label().Text("Bottom").Center())
                     )
             )
         );
