@@ -24,16 +24,26 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     private static readonly nint SelTexture2DDescriptorWithPixelFormat = ObjCRuntime.RegisterSelector("texture2DDescriptorWithPixelFormat:width:height:mipmapped:");
     private static readonly nint SelSetUsage = ObjCRuntime.RegisterSelector("setUsage:");
     private static readonly nint SelSetStorageMode = ObjCRuntime.RegisterSelector("setStorageMode:");
+    private static readonly nint SelSetTextureType = Metal.Sel.SetTextureType;
+    private static readonly nint SelSetSampleCount = Metal.Sel.SetSampleCount;
 
     // MTLTextureUsageRenderTarget = 1 << 2
     private const ulong MTLTextureUsageRenderTarget = 1ul << 2;
     // MTLStorageModePrivate = 2
     private const ulong MTLStorageModePrivate = 2;
 
+    /// <summary>
+    /// MSAA sample count. 1 = no MSAA, 4 or 8 for hardware multisampling.
+    /// </summary>
+    internal const int MsaaSampleCount = 4;
+
     private bool _disposed;
     private nint _stencilTexture;
     private int _stencilWidthPx;
     private int _stencilHeightPx;
+    private nint _msaaColorTexture;
+    private int _msaaColorWidthPx;
+    private int _msaaColorHeightPx;
 
     public nint Hwnd { get; }
     public nint Layer { get; }
@@ -67,12 +77,18 @@ internal sealed class MewVGMetalWindowResources : IDisposable
             throw new PlatformNotSupportedException("MetalDevice.CreateSystemDefaultDevice() returned null.");
         }
 
-        var vg = new NanoVGMetal(device)
+        // With MSAA enabled, disable geometry-based AA (fringe triangles are not needed).
+        var flags = MsaaSampleCount > 1
+            ? NVGcreateFlags.None
+            : NVGcreateFlags.Antialias;
+
+        var vg = new NanoVGMetal(device, flags)
         {
             PixelFormat = MTLPixelFormat.BGRA8Unorm,
             // Use a depth-stencil format for reliable stencil rendering on macOS.
             // Stencil8 alone is not consistently renderable across devices/drivers.
-            StencilFormat = MTLPixelFormat.Depth32Float_Stencil8
+            StencilFormat = MTLPixelFormat.Depth32Float_Stencil8,
+            SampleCount = MsaaSampleCount
         };
 
         // Configure layer to match the device and pixel format used by the renderer.
@@ -140,6 +156,41 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         _stencilWidthPx = widthPx;
         _stencilHeightPx = heightPx;
 
+        _stencilTexture = CreateTexture(
+            MTLPixelFormat.Depth32Float_Stencil8, widthPx, heightPx, MsaaSampleCount);
+        return _stencilTexture;
+    }
+
+    public nint EnsureMsaaColorTexture(int widthPx, int heightPx)
+    {
+        if (_disposed || MsaaSampleCount <= 1)
+        {
+            return 0;
+        }
+
+        widthPx = Math.Max(1, widthPx);
+        heightPx = Math.Max(1, heightPx);
+
+        if (_msaaColorTexture != 0 &&
+            _msaaColorWidthPx == widthPx &&
+            _msaaColorHeightPx == heightPx)
+        {
+            return _msaaColorTexture;
+        }
+
+        using var pool = new AutoReleasePool();
+
+        ReleaseIfNotNull(ref _msaaColorTexture);
+        _msaaColorWidthPx = widthPx;
+        _msaaColorHeightPx = heightPx;
+
+        _msaaColorTexture = CreateTexture(
+            MTLPixelFormat.BGRA8Unorm, widthPx, heightPx, MsaaSampleCount);
+        return _msaaColorTexture;
+    }
+
+    private nint CreateTexture(MTLPixelFormat format, int widthPx, int heightPx, int sampleCount)
+    {
         if (ClsMTLTextureDescriptor == 0 || SelTexture2DDescriptorWithPixelFormat == 0)
         {
             return 0;
@@ -149,7 +200,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         nint desc = ObjCRuntime.SendMessage(
             ClsMTLTextureDescriptor,
             SelTexture2DDescriptorWithPixelFormat,
-            (uint)MTLPixelFormat.Depth32Float_Stencil8,
+            (uint)format,
             (UIntPtr)(uint)widthPx,
             (UIntPtr)(uint)heightPx,
             false);
@@ -170,13 +221,26 @@ internal sealed class MewVGMetalWindowResources : IDisposable
             ObjCRuntime.SendMessageNoReturn(desc, SelSetStorageMode, (UInt64)MTLStorageModePrivate);
         }
 
+        // Configure MSAA.
+        if (sampleCount > 1)
+        {
+            if (SelSetTextureType != 0)
+            {
+                ObjCRuntime.SendMessageNoReturn(desc, SelSetTextureType, (UInt64)MTLTextureType.Type2DMultisample);
+            }
+
+            if (SelSetSampleCount != 0)
+            {
+                ObjCRuntime.SendMessageNoReturn(desc, SelSetSampleCount, (UInt64)sampleCount);
+            }
+        }
+
         if (Device == 0 || SelNewTextureWithDescriptor == 0)
         {
             return 0;
         }
 
-        _stencilTexture = ObjCRuntime.SendMessage(Device, SelNewTextureWithDescriptor, desc);
-        return _stencilTexture;
+        return ObjCRuntime.SendMessage(Device, SelNewTextureWithDescriptor, desc);
     }
 
     public void Dispose()
@@ -189,6 +253,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         _disposed = true;
 
         ReleaseIfNotNull(ref _stencilTexture);
+        ReleaseIfNotNull(ref _msaaColorTexture);
 
         TextCache.Dispose();
 

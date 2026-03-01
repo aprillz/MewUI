@@ -34,6 +34,7 @@ internal sealed partial class MewVGMetalGraphicsContext
     private static readonly nint SelSetClearStencil = ObjCRuntime.RegisterSelector("setClearStencil:");
     private static readonly nint SelDepthAttachment = ObjCRuntime.RegisterSelector("depthAttachment");
     private static readonly nint SelSetClearDepth = ObjCRuntime.RegisterSelector("setClearDepth:");
+    private static readonly nint SelSetResolveTexture = Metal.Sel.SetResolveTexture;
 
     private readonly MewVGMetalWindowResources _resources;
 
@@ -85,7 +86,8 @@ internal sealed partial class MewVGMetalGraphicsContext
         RetainIfNotNull(_commandBuffer);
 
         nint stencilTex = resources.EnsureStencilTexture(_viewportWidthPx, _viewportHeightPx);
-        nint passDesc = CreateRenderPass(drawableTexture, stencilTex);
+        nint msaaColorTex = resources.EnsureMsaaColorTexture(_viewportWidthPx, _viewportHeightPx);
+        nint passDesc = CreateRenderPass(drawableTexture, stencilTex, msaaColorTex);
         if (passDesc == 0)
         {
             return;
@@ -156,7 +158,7 @@ internal sealed partial class MewVGMetalGraphicsContext
         }
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture)
+    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint msaaColorTexture)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -169,15 +171,31 @@ internal sealed partial class MewVGMetalGraphicsContext
             return 0;
         }
 
+        bool msaa = msaaColorTexture != 0;
+
         // colorAttachments[0]
         nint colorAttachments = ObjCRuntime.SendMessage(passDesc, SelColorAttachments);
         nint color0 = colorAttachments != 0 ? ObjCRuntime.SendMessage(colorAttachments, SelObjectAtIndexedSubscript, (UInt64)0) : 0;
         if (color0 != 0)
         {
-            ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, drawableTexture);
-            // MTLLoadActionClear = 2, MTLStoreActionStore = 0
-            ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
-            ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.Store);
+            if (msaa)
+            {
+                // Render into the MSAA texture, resolve to the drawable.
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, msaaColorTexture);
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.MultisampleResolve);
+                if (SelSetResolveTexture != 0)
+                {
+                    ObjCRuntime.SendMessageNoReturn(color0, SelSetResolveTexture, drawableTexture);
+                }
+            }
+            else
+            {
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, drawableTexture);
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.Store);
+            }
+
             ObjCRuntime.SendMessageNoReturn(color0, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));
         }
 
@@ -341,7 +359,7 @@ internal sealed partial class MewVGMetalGraphicsContext
                 heightPx,
                 (uint)Math.Round(DpiScale * 96.0),
                 color,
-                TextAlignment.Left,
+                horizontalAlignment,
                 TextAlignment.Top,
                 wrapping,
                 out int imageId))

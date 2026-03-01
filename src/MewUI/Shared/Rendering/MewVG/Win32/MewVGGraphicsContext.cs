@@ -242,7 +242,7 @@ internal sealed partial class MewVGGraphicsContext
                 widthPx,
                 heightPx,
                 color,
-                TextAlignment.Left,
+                horizontalAlignment,
                 useRasterVerticalAlignment ? verticalAlignment : TextAlignment.Top,
                 wrapping);
             entry = _resources.TextCache.CreateImage(key, ref bmp);

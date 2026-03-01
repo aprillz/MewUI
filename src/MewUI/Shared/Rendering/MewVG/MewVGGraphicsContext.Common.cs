@@ -213,7 +213,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.MoveTo((float)start.X, (float)start.Y);
         _vg.LineTo((float)end.X, (float)end.Y);
         _vg.StrokeColor(ToNvgColor(color));
-        _vg.StrokeWidth((float)thickness);
+        NvgStrokeWidth((float)thickness);
         _vg.Stroke();
     }
 
@@ -222,7 +222,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         _vg.StrokeColor(ToNvgColor(color));
-        _vg.StrokeWidth((float)thickness);
+        NvgStrokeWidth((float)thickness);
         _vg.Stroke();
     }
 
@@ -240,7 +240,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.BeginPath();
         _vg.RoundedRect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height, radius);
         _vg.StrokeColor(ToNvgColor(color));
-        _vg.StrokeWidth((float)thickness);
+        NvgStrokeWidth((float)thickness);
         _vg.Stroke();
     }
 
@@ -263,7 +263,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.BeginPath();
         _vg.Ellipse(cx, cy, rx, ry);
         _vg.StrokeColor(ToNvgColor(color));
-        _vg.StrokeWidth((float)thickness);
+        NvgStrokeWidth((float)thickness);
         _vg.Stroke();
     }
 
@@ -289,7 +289,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
 
         ReplayNvgPathCommands(path);
         _vg.StrokeColor(ToNvgColor(color));
-        _vg.StrokeWidth((float)thickness);
+        NvgStrokeWidth((float)thickness);
         _vg.Stroke();
     }
 
@@ -325,6 +325,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.MoveTo((float)start.X, (float)start.Y);
         _vg.LineTo((float)end.X, (float)end.Y);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
+        NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, bounds);
         _vg.Stroke();
     }
@@ -342,6 +343,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
+        NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, rect);
         _vg.Stroke();
     }
@@ -360,6 +362,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.BeginPath();
         _vg.RoundedRect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height, radius);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
+        NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, rect);
         _vg.Stroke();
     }
@@ -381,6 +384,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.BeginPath();
         _vg.Ellipse(cx, cy, rx, ry);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
+        NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, bounds);
         _vg.Stroke();
     }
@@ -397,6 +401,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
 
         ReplayNvgPathCommands(path);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
+        NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, NvgStrokeHelper.ComputePathBounds(path));
         _vg.Stroke();
     }
@@ -451,24 +456,57 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
+    public void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius,
+        Color shadowColor, double offsetX = 0, double offsetY = 0)
+    {
+        if (blurRadius <= 0 || shadowColor.A == 0) return;
+
+        float x = (float)(bounds.X + offsetX);
+        float y = (float)(bounds.Y + offsetY);
+        float w = (float)bounds.Width;
+        float h = (float)bounds.Height;
+        float cr = (float)Math.Min(Math.Max(cornerRadius, 0), Math.Min(w, h) * 0.5);
+        float br = (float)blurRadius;
+
+        var inner = ToNvgColor(shadowColor);
+        var outer = ToNvgColor(Color.FromArgb(0, shadowColor.R, shadowColor.G, shadowColor.B));
+
+        var paint = _vg.BoxGradient(x, y, w, h, cr, br, inner, outer);
+
+        _vg.BeginPath();
+        _vg.Rect(x - br, y - br, w + br * 2, h + br * 2);
+        _vg.FillPaint(paint);
+        _vg.Fill();
+    }
+
     private void ReplayNvgPathCommands(PathGeometry path, FillRule fillRule = FillRule.NonZero)
     {
         _vg.BeginPath();
-        bool isEvenOdd = fillRule == FillRule.EvenOdd;
-        int subPathIndex = 0;
 
-        foreach (var cmd in path.Commands)
+        // NanoVG uses non-zero fill rule and defaults all sub-paths to CCW (solid).
+        // FlattenPaths enforces winding, destroying the natural direction.
+        // To render holes, detect CW sub-paths via signed area and mark them
+        // with PathWinding(CW) so NanoVG keeps them as holes.
+
+        // First pass: compute signed area per sub-path to detect holes.
+        var commands = path.Commands;
+        Span<double> areas = commands.Length <= 256
+            ? stackalloc double[CountSubPaths(commands)]
+            : new double[CountSubPaths(commands)];
+        ComputeSubPathAreas(commands, areas);
+
+        // Second pass: replay commands, setting PathWinding(CW) for hole sub-paths.
+        int subIdx = 0;
+        foreach (var cmd in commands)
         {
             switch (cmd.Type)
             {
                 case PathCommandType.MoveTo:
                     _vg.MoveTo((float)cmd.X0, (float)cmd.Y0);
-                    // For EvenOdd: mark alternating subpaths as holes (CW winding).
-                    // NanoVG doesn't have a true EvenOdd fill rule, but marking every other
-                    // subpath as CW achieves the expected result for concentric shapes.
-                    if (isEvenOdd && subPathIndex > 0 && subPathIndex % 2 == 1)
+                    // Signed area > 0 → CCW (solid), < 0 → CW (hole) in Y-down coords.
+                    if (subIdx < areas.Length && areas[subIdx] < 0)
                         _vg.PathWinding(NVGwinding.CW);
-                    subPathIndex++;
+                    subIdx++;
                     break;
                 case PathCommandType.LineTo:
                     _vg.LineTo((float)cmd.X0, (float)cmd.Y0);
@@ -485,6 +523,67 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         }
     }
 
+    private static int CountSubPaths(ReadOnlySpan<PathCommand> commands)
+    {
+        int count = 0;
+        foreach (var cmd in commands)
+            if (cmd.Type == PathCommandType.MoveTo) count++;
+        return count;
+    }
+
+    private static void ComputeSubPathAreas(ReadOnlySpan<PathCommand> commands, Span<double> areas)
+    {
+        int subIdx = -1;
+        double area = 0;
+        double startX = 0, startY = 0, lastX = 0, lastY = 0;
+        bool closedByZ = false;
+
+        foreach (var cmd in commands)
+        {
+            switch (cmd.Type)
+            {
+                case PathCommandType.MoveTo:
+                    // Close previous sub-path area (only if not already closed by Z)
+                    if (subIdx >= 0 && !closedByZ)
+                    {
+                        area += lastX * startY - startX * lastY;
+                        areas[subIdx] = area;
+                    }
+                    subIdx++;
+                    area = 0;
+                    closedByZ = false;
+                    startX = lastX = cmd.X0;
+                    startY = lastY = cmd.Y0;
+                    break;
+                case PathCommandType.LineTo:
+                    area += lastX * cmd.Y0 - cmd.X0 * lastY;
+                    lastX = cmd.X0;
+                    lastY = cmd.Y0;
+                    break;
+                case PathCommandType.BezierTo:
+                    // Approximate: use endpoint only (sufficient for winding detection)
+                    area += lastX * cmd.Y2 - cmd.X2 * lastY;
+                    lastX = cmd.X2;
+                    lastY = cmd.Y2;
+                    break;
+                case PathCommandType.Close:
+                    area += lastX * startY - startX * lastY;
+                    if (subIdx >= 0) areas[subIdx] = area;
+                    area = 0;
+                    closedByZ = true;
+                    lastX = startX;
+                    lastY = startY;
+                    break;
+            }
+        }
+
+        // Final unclosed sub-path
+        if (subIdx >= 0 && subIdx < areas.Length && !closedByZ && area != 0)
+        {
+            area += lastX * startY - startX * lastY;
+            areas[subIdx] = area;
+        }
+    }
     #endregion
 
     #region Image Helpers
@@ -565,6 +664,19 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
     }
 
     private static NVGcolor ToNvgColor(Color color) => NVGcolor.RGBA(color.R, color.G, color.B, color.A);
+
+    /// <summary>
+    /// Sets NanoVG stroke width compensated for the current transform scale.
+    /// NanoVG's Stroke() internally multiplies by GetAverageScale, but MewUI's
+    /// convention (matching GDI/D2D/WPF) is that stroke width is transform-independent.
+    /// </summary>
+    private void NvgStrokeWidth(float thickness)
+    {
+        float sx = MathF.Sqrt(_transform.M11 * _transform.M11 + _transform.M12 * _transform.M12);
+        float sy = MathF.Sqrt(_transform.M21 * _transform.M21 + _transform.M22 * _transform.M22);
+        float avgScale = (sx + sy) * 0.5f;
+        _vg.StrokeWidth(avgScale > 0.001f ? thickness / avgScale : thickness);
+    }
 
     #endregion
 }
