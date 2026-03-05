@@ -14,6 +14,25 @@ partial class GalleryView
     {
         var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
 
+        ObservableCollection<DemoUser> users =
+        [
+            new DemoUser(1, "Alice", "Admin", IsOnline: true),
+            new DemoUser(2, "Bob", "Editor", IsOnline: false),
+            new DemoUser(3, "Charlie", "Viewer", IsOnline: true),
+            new DemoUser(4, "Diana", "Editor", IsOnline: true),
+            new DemoUser(5, "Eve", "Viewer", IsOnline: false),
+            new DemoUser(6, "Frank", "Admin", IsOnline: true),
+            new DemoUser(7, "Grace", "Viewer", IsOnline: true),
+            new DemoUser(8, "Heidi", "Editor", IsOnline: false),
+            new DemoUser(9, "Ivan", "Viewer", IsOnline: true),
+            new DemoUser(10, "Judy", "Admin", IsOnline: true),
+            new DemoUser(11, "Mallory", "Editor", IsOnline: false),
+            new DemoUser(12, "Niaj", "Viewer", IsOnline: true),
+            new DemoUser(13, "Olivia", "Viewer", IsOnline: true),
+            new DemoUser(14, "Peggy", "Editor", IsOnline: false),
+            new DemoUser(15, "Sybil", "Admin", IsOnline: true),
+        ];
+
         return CardGrid(
             Card(
                 "ListBox",
@@ -21,6 +40,16 @@ partial class GalleryView
                     .Height(120)
                     .Width(200)
                     .Items(items)
+            ),
+
+            Card(
+                "ListBox (class items)",
+                ListBoxClassItemsCard()
+            ),
+
+            Card(
+                "ListBox (ItemsView + ItemTemplate)",
+                ListBoxItemsViewTemplateCard()
             ),
 
             Card(
@@ -52,6 +81,129 @@ partial class GalleryView
 
             ChatVariableHeightCard()
         );
+
+        FrameworkElement ListBoxClassItemsCard()
+        {
+            Label selectedText = null!;
+
+            var listBox = new ListBox()
+                .Height(160)
+                .Width(240)
+                .Items(users, u => $"{u.Name} ({u.Role})", keySelector: u => u.Id)
+                .OnSelectionChanged(obj =>
+                {
+                    var u = obj as DemoUser;
+                    selectedText.Text = u == null ? "Selected: (none)" : $"Selected: {u.Name} ({u.Role})";
+                });
+
+            return new DockPanel()
+                .Spacing(6)
+                .Children(
+                    new Label()
+                        .DockBottom()
+                        .Ref(out selectedText)
+                        .FontSize(11)
+                        .Text("Selected: (none)"),
+                    listBox
+                );
+        }
+
+        FrameworkElement ListBoxItemsViewTemplateCard()
+        {
+            var view = new ItemsView<DemoUser>(
+                users,
+                textSelector: u => u.Name,
+                keySelector: u => u.Id);
+
+            var nextId = users.Max(u => u.Id) + 1;
+
+            ListBox listBox = null!;
+            Label selectedText = null!;
+
+            var add = new Button()
+                .Content("Add")
+                .OnClick(() =>
+                {
+                    var id = nextId++;
+                    users.Add(new DemoUser(id, $"User {id}", "Viewer", IsOnline: id % 2 == 0));
+                });
+
+            var remove = new Button()
+                .Content("Remove")
+                .OnClick(() =>
+                {
+                    if (users.Count > 0)
+                    {
+                        users.RemoveAt(users.Count - 1);
+                    }
+                });
+
+            var panel = new DockPanel()
+                .Height(240)
+                .Spacing(6)
+                .Children(
+                    new StackPanel()
+                        .DockTop()
+                        .Horizontal()
+                        .Spacing(8)
+                        .Children(add, remove),
+                    new Label()
+                        .DockBottom()
+                        .Ref(out selectedText)
+                        .FontSize(11)
+                        .Text("Selected: (none)"),
+                    new ListBox()
+                        .Ref(out listBox)
+                        .Height(170)
+                        .Width(260)
+                        .ItemHeight(40)
+                        .ItemsSource(view)
+                        .OnSelectionChanged(obj =>
+                        {
+                            var u = obj as DemoUser;
+                            selectedText.Text = u == null ? "Selected: (none)" : $"Selected: {u.Name} ({u.Role})";
+                        })
+                );
+
+            listBox.ItemTemplate<DemoUser>(
+                build: ctx => new Border()
+                    .Padding(6, 4)
+                    .Child(
+                        new StackPanel()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(
+                                new Ellipse()
+                                    .Register(ctx, "Dot")
+                                    .Size(10, 10)
+                                    .CenterVertical(),
+                                new StackPanel()
+                                    .Vertical()
+                                    .Spacing(0)
+                                    .Children(
+                                        new Label()
+                                            .Register(ctx, "Name")
+                                            .FontSize(12)
+                                            .Bold(),
+                                        new Label()
+                                            .Register(ctx, "Role")
+                                            .FontSize(10)
+                                    ))),
+                bind: (root, u, _, ctx) =>
+                {
+                    ctx.Get<Label>("Name").Text = u.Name;
+                    ctx.Get<Label>("Role").Text = u.Role;
+
+                    var dot = ctx.Get<Ellipse>("Dot");
+                    dot.WithTheme((t, b) =>
+                    {
+                        b.Fill(u.IsOnline ? t.Palette.Accent : t.Palette.ControlBorder);
+                        b.Stroke((u.IsOnline ? t.Palette.Accent : t.Palette.ControlBorder).Lerp(t.Palette.WindowText, 0.5));
+                    });
+                });
+
+            return panel;
+        }
 
         FrameworkElement TreeViewCard()
         {
@@ -129,7 +281,7 @@ partial class GalleryView
         }
     }
 
-    FrameworkElement ChatVariableHeightCard()
+    private FrameworkElement ChatVariableHeightCard()
     {
         long nextId = 1;
         var messages = new ObservableCollection<ChatMessage>();
@@ -339,4 +491,5 @@ partial class GalleryView
     }
 }
 
+sealed record DemoUser(int Id, string Name, string Role, bool IsOnline);
 sealed record ChatMessage(long Id, string Sender, string Text, bool Mine, DateTimeOffset Time);
