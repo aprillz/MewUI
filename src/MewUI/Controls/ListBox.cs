@@ -480,6 +480,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         if (TryGetItemIndexAt(e, out int index))
         {
             SelectedIndex = index;
+            ItemActivated?.Invoke(index);
             InvalidateVisual();
             e.Handled = true;
         }
