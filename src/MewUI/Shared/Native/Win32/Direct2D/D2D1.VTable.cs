@@ -340,6 +340,16 @@ internal static unsafe class D2D1VTable
         }
     }
 
+    /// <summary>
+    /// ID2D1RenderTarget::DrawTextLayout (vtable index 28).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void DrawTextLayout(ID2D1RenderTarget* rt, D2D1_POINT_2F origin, nint textLayout, nint brush, D2D1_DRAW_TEXT_OPTIONS options)
+    {
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, D2D1_POINT_2F, nint, nint, D2D1_DRAW_TEXT_OPTIONS, void>)(rt->lpVtbl[28]);
+        fn(rt, origin, textLayout, brush, options);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static RECT GetClientRect(nint hwnd)
     {

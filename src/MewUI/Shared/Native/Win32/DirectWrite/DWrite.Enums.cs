@@ -63,3 +63,17 @@ internal enum DWRITE_WORD_WRAPPING : uint
     WHOLE_WORD = 3,
     CHARACTER = 4
 }
+
+internal enum DWRITE_TRIMMING_GRANULARITY : uint
+{
+    NONE = 0,
+    CHARACTER = 1,
+    WORD = 2
+}
+
+internal struct DWRITE_TRIMMING
+{
+    public DWRITE_TRIMMING_GRANULARITY granularity;
+    public uint delimiter;
+    public uint delimiterCount;
+}

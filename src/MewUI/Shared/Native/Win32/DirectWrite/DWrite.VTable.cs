@@ -110,6 +110,34 @@ internal static unsafe class DWriteVTable
         return fn(textFormat, wrapping);
     }
 
+    /// <summary>
+    /// IDWriteTextFormat::SetTrimming (vtable index 9).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetTrimming(nint textFormat, in DWRITE_TRIMMING trimming, nint trimmingSign)
+    {
+        var vtbl = *(nint**)textFormat;
+        fixed (DWRITE_TRIMMING* pTrimming = &trimming)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<nint, DWRITE_TRIMMING*, nint, int>)vtbl[9];
+            return fn(textFormat, pTrimming, trimmingSign);
+        }
+    }
+
+    /// <summary>
+    /// IDWriteFactory::CreateEllipsisTrimmingSign (vtable index 20).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateEllipsisTrimmingSign(IDWriteFactory* factory, nint textFormat, out nint trimmingSign)
+    {
+        trimmingSign = 0;
+        nint sign = 0;
+        var fn = (delegate* unmanaged[Stdcall]<IDWriteFactory*, nint, nint*, int>)factory->lpVtbl[20];
+        int hr = fn(factory, textFormat, &sign);
+        trimmingSign = sign;
+        return hr;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetMetrics(nint textLayout, out DWRITE_TEXT_METRICS metrics)
     {
@@ -119,6 +147,67 @@ internal static unsafe class DWriteVTable
         fixed (DWRITE_TEXT_METRICS* p = &metrics)
         {
             return fn(textLayout, p);
+        }
+    }
+
+    // --- IDWriteFontCollection vtable ---
+
+    /// <summary>IDWriteFontCollection::FindFamilyName (vtable index 5).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int FindFamilyName(nint fontCollection, string familyName, out uint index, out int exists)
+    {
+        index = 0;
+        exists = 0;
+        uint idx = 0;
+        int ex = 0;
+        var vtbl = *(nint**)fontCollection;
+        fixed (char* pName = familyName)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<nint, char*, uint*, int*, int>)vtbl[5];
+            int hr = fn(fontCollection, pName, &idx, &ex);
+            index = idx;
+            exists = ex;
+            return hr;
+        }
+    }
+
+    /// <summary>IDWriteFontCollection::GetFontFamily (vtable index 4).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetFontFamily(nint fontCollection, uint index, out nint fontFamily)
+    {
+        fontFamily = 0;
+        nint ff = 0;
+        var vtbl = *(nint**)fontCollection;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)vtbl[4];
+        int hr = fn(fontCollection, index, &ff);
+        fontFamily = ff;
+        return hr;
+    }
+
+    /// <summary>IDWriteFontFamily::GetFirstMatchingFont (vtable index 7).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetFirstMatchingFont(nint fontFamily, DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STRETCH stretch, DWRITE_FONT_STYLE style, out nint matchingFont)
+    {
+        matchingFont = 0;
+        nint mf = 0;
+        var vtbl = *(nint**)fontFamily;
+        var fn = (delegate* unmanaged[Stdcall]<nint, DWRITE_FONT_WEIGHT, DWRITE_FONT_STRETCH, DWRITE_FONT_STYLE, nint*, int>)vtbl[7];
+        int hr = fn(fontFamily, weight, stretch, style, &mf);
+        matchingFont = mf;
+        return hr;
+    }
+
+    /// <summary>IDWriteFont::GetMetrics (vtable index 11).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void GetFontMetrics(nint dwriteFont, out DWRITE_FONT_METRICS metrics)
+    {
+        metrics = default;
+        var vtbl = *(nint**)dwriteFont;
+        // IDWriteFont::GetMetrics is void return (not HRESULT).
+        var fn = (delegate* unmanaged[Stdcall]<nint, DWRITE_FONT_METRICS*, void>)vtbl[11];
+        fixed (DWRITE_FONT_METRICS* p = &metrics)
+        {
+            fn(dwriteFont, p);
         }
     }
 }
