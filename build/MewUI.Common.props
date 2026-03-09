@@ -2,14 +2,14 @@
 
   <PropertyGroup>
     <MewUITitle>Aprillz.MewUI</MewUITitle>
-    <MewUIVersion>0.12.0</MewUIVersion>
+    <MewUIVersion>0.13.0</MewUIVersion>
     <MewUIAuthor>Aprillz</MewUIAuthor>
     <MewUIDescription>A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT</MewUIDescription>
 
     <MewUIRootNamespace>Aprillz.MewUI</MewUIRootNamespace>
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
-    <MewVGVersion>0.2.1</MewVGVersion>
+    <MewVGVersion>0.3.0</MewVGVersion>
   </PropertyGroup>
 
   <!-- Local development override (gitignored) — MewVGProjectPath, etc. -->
