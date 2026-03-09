@@ -1,15 +1,17 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 using Aprillz.MewVG;
+using Aprillz.MewVG.Tess;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 #if MEWUI_MEWVG_MACOS
-internal sealed partial class MewVGMetalGraphicsContext : IGraphicsContext
+internal sealed partial class MewVGMetalGraphicsContext : GraphicsContextBase
 #elif MEWUI_MEWVG_X11
-internal sealed partial class MewVGX11GraphicsContext : IGraphicsContext
+internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase
 #else
-internal sealed partial class MewVGGraphicsContext : IGraphicsContext
+internal sealed partial class MewVGGraphicsContext : GraphicsContextBase
 #endif
 {
 #if MEWUI_MEWVG_MACOS
@@ -19,10 +21,11 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
 #endif
 
     private readonly ClipStack _clip = new();
-    private readonly Stack<(double tx, double ty, Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform)> _saveStack = new();
+    private readonly Stack<(double tx, double ty, Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)> _saveStack = new();
     private double _translateX;
     private double _translateY;
     private float _globalAlpha = 1f;
+    private bool _textPixelSnap = true;
     private Matrix3x2 _transform = Matrix3x2.Identity;
     private Rect? _clipBoundsWorld;
     private double _viewportWidthDip;
@@ -31,20 +34,32 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
     private int _viewportHeightPx;
     private bool _disposed;
 
-    public double DpiScale { get; private set; }
+    // Frozen PathGeometry → object-space tessellation cache (static: shared across
+    // windows, survives per-frame context recreation; ConditionalWeakTable ephemeron
+    // semantics auto-collect entries when PathGeometry key is GC'd)
+    private static readonly ConditionalWeakTable<PathGeometry, FrozenFillCacheEntry> _fillCache = new();
 
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    private sealed class FrozenFillCacheEntry
+    {
+        public FrozenFillCache? NonZero;
+        public FrozenFillCache? EvenOdd;
+    }
+
+    private double _dpiScale;
+    public override double DpiScale => _dpiScale;
+
+    public override ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
 
     #region State Management
 
-    public void Save()
+    protected override void SaveCore()
     {
         _vg.Save();
         _clip.Save();
-        _saveStack.Push((_translateX, _translateY, _clipBoundsWorld, _globalAlpha, _transform));
+        _saveStack.Push((_translateX, _translateY, _clipBoundsWorld, _globalAlpha, _transform, _textPixelSnap));
     }
 
-    public void Restore()
+    protected override void RestoreCore()
     {
         _vg.Restore();
         _clip.Restore();
@@ -55,12 +70,13 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             _translateY = state.ty;
             _clipBoundsWorld = state.clipBoundsWorld;
             _globalAlpha = state.globalAlpha;
+            _textPixelSnap = state.textPixelSnap;
             _transform = state.transform;
             _vg.GlobalAlpha(_globalAlpha);
         }
     }
 
-    public void SetClip(Rect rect)
+    protected override void SetClipCore(Rect rect)
     {
         var worldClip = new Rect(rect.X + _translateX, rect.Y + _translateY, rect.Width, rect.Height);
         _clipBoundsWorld = IntersectClipBounds(_clipBoundsWorld, worldClip);
@@ -69,11 +85,9 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             r => _vg.Scissor((float)r.X, (float)r.Y, (float)r.Width, (float)r.Height),
             r => _vg.IntersectScissor((float)r.X, (float)r.Y, (float)r.Width, (float)r.Height),
             () => _vg.ResetScissor());
-
-        //FillRectangle(rect, Color.Red.WithAlpha(32));
     }
 
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    protected override void SetClipRoundedRectCore(Rect rect, double radiusX, double radiusY)
     {
         if (radiusX <= 0 && radiusY <= 0)
         {
@@ -90,26 +104,8 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             r => _vg.IntersectScissor((float)r.X, (float)r.Y, (float)r.Width, (float)r.Height),
             () => _vg.ResetScissor());
 
-        // NanoVG's Clip() writes only the solid fill interior to the stencil buffer,
-        // which is inset by 0.5 * fringeWidth due to ExpandFill's AA offset.
-        // Expand the path by 1 device pixel on all edges to compensate.
-        // The scissor (set above) still clips the straight edges to the exact rect.
         float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
-        float expand = 1f / (float)DpiScale;
         _vg.BeginPath();
-        rect = new Rect((float)rect.X - expand,
-            (float)rect.Y - expand,
-            (float)rect.Width + expand * 2,
-            (float)rect.Height + expand * 2);
-
-        // Keep the visual corner radius consistent after expanding the clip rect.
-        radius = MathF.Max(0f, radius + expand * 2);
-        float maxR = MathF.Min((float)rect.Width, (float)rect.Height) * 0.5f;
-        if (radius > maxR)
-        {
-            radius = maxR;
-        }
-
         _vg.RoundedRect(
             (float)rect.X,
             (float)rect.Y,
@@ -117,11 +113,10 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             (float)rect.Height,
             radius);
         _vg.Clip();
-
-        //FillRectangle(rect, Color.Red.WithAlpha(64));
     }
 
-    public void Translate(double dx, double dy)
+
+    protected override void TranslateCore(double dx, double dy)
     {
         _translateX += dx;
         _translateY += dy;
@@ -129,19 +124,19 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Translate((float)dx, (float)dy);
     }
 
-    public void Rotate(double angleRadians)
+    protected override void RotateCore(double angleRadians)
     {
         _transform = Matrix3x2.CreateRotation((float)angleRadians) * _transform;
         _vg.Rotate((float)angleRadians);
     }
 
-    public void Scale(double sx, double sy)
+    protected override void ScaleCore(double sx, double sy)
     {
         _transform = Matrix3x2.CreateScale((float)sx, (float)sy) * _transform;
         _vg.Scale((float)sx, (float)sy);
     }
 
-    public void SetTransform(Matrix3x2 matrix)
+    protected override void SetTransformCore(Matrix3x2 matrix)
     {
         // NanoVG doesn't expose a direct set-matrix API.
         // Reset and then decompose the matrix into Translate + Rotate + Scale.
@@ -168,9 +163,9 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             _vg.Translate(matrix.M31, matrix.M32);
     }
 
-    public Matrix3x2 GetTransform() => _transform;
+    protected override Matrix3x2 GetTransformCore() => _transform;
 
-    public void ResetTransform()
+    protected override void ResetTransformCore()
     {
         _translateX = 0;
         _translateY = 0;
@@ -178,13 +173,19 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.ResetTransform();
     }
 
-    public float GlobalAlpha
+    public override float GlobalAlpha
     {
         get => _globalAlpha;
         set { _globalAlpha = value; _vg.GlobalAlpha(value); }
     }
 
-    public void ResetClip()
+    public override bool TextPixelSnap
+    {
+        get => _textPixelSnap;
+        set => _textPixelSnap = value;
+    }
+
+    protected override void ResetClipCore()
     {
         _clipBoundsWorld = null;
         _clip.Reset();
@@ -195,19 +196,23 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
 
     #region Drawing Primitives
 
-    public void Clear(Color color)
+    public override void Clear(Color color)
     {
         _vg.Save();
         _vg.ResetTransform();
         _vg.ResetScissor();
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
+
+        //_vg.Rect(-1, -1, (float)_viewportWidthDip + 2, (float)_viewportHeightDip + 2);
         _vg.Rect(0, 0, (float)_viewportWidthDip, (float)_viewportHeightDip);
+
         _vg.FillColor(ToNvgColor(color));
         _vg.Fill();
         _vg.Restore();
     }
 
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1)
+    protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
     {
         _vg.BeginPath();
         _vg.MoveTo((float)start.X, (float)start.Y);
@@ -217,24 +222,28 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
     {
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         _vg.StrokeColor(ToNvgColor(color));
         NvgStrokeWidth((float)thickness);
         _vg.Stroke();
+        _vg.ShapeAntiAlias(true);
     }
 
-    public void FillRectangle(Rect rect, Color color)
+    protected override void FillRectangleCore(Rect rect, Color color)
     {
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         _vg.FillColor(ToNvgColor(color));
         _vg.Fill();
+        _vg.ShapeAntiAlias(true);
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
+    protected override void DrawRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
     {
         float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
         _vg.BeginPath();
@@ -244,7 +253,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
+    protected override void FillRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color)
     {
         float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
         _vg.BeginPath();
@@ -253,7 +262,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
+    protected override void DrawEllipseCore(Rect bounds, Color color, double thickness = 1)
     {
         float cx = (float)(bounds.X + bounds.Width * 0.5);
         float cy = (float)(bounds.Y + bounds.Height * 0.5);
@@ -267,7 +276,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void FillEllipse(Rect bounds, Color color)
+    protected override void FillEllipseCore(Rect bounds, Color color)
     {
         float cx = (float)(bounds.X + bounds.Width * 0.5);
         float cy = (float)(bounds.Y + bounds.Height * 0.5);
@@ -280,7 +289,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
-    public void DrawPath(PathGeometry path, Color color, double thickness = 1)
+    public override void DrawPath(PathGeometry path, Color color, double thickness = 1)
     {
         if (path == null || color.A == 0 || thickness <= 0)
         {
@@ -293,13 +302,42 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void FillPath(PathGeometry path, Color color)
+    public override void FillPath(PathGeometry path, Color color)
         => FillPath(path, color, path?.FillRule ?? FillRule.NonZero);
 
-    public void FillPath(PathGeometry path, Color color, FillRule fillRule)
+    public override void FillPath(PathGeometry path, Color color, FillRule fillRule)
     {
         if (path == null || color.A == 0)
         {
+            return;
+        }
+
+        if (path.IsFrozen)
+        {
+            var windingRule = fillRule == FillRule.EvenOdd
+                ? TessWindingRule.Odd : TessWindingRule.NonZero;
+
+            var entry = _fillCache.GetOrCreateValue(path);
+            var cached = fillRule == FillRule.EvenOdd ? entry.EvenOdd : entry.NonZero;
+
+            if (cached == null || cached.IsStale(_vg.TessTol))
+            {
+                // First use or DPI changed: build object-space cache (identity transform)
+                ReplayNvgPathCommands(path, fillRule, identityTransform: true);
+                cached = _vg.BuildFillCache(windingRule);
+
+                // Store back into entry
+                if (fillRule == FillRule.EvenOdd)
+                    entry.EvenOdd = cached;
+                else
+                    entry.NonZero = cached;
+
+                _fillCache.AddOrUpdate(path, entry);
+            }
+
+            // Every frame: render from cache with current transform
+            _vg.FillColor(ToNvgColor(color));
+            _vg.FillFromCache(cached, windingRule);
             return;
         }
 
@@ -308,7 +346,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
-    public void DrawLine(Point start, Point end, IPen pen)
+    public override void DrawLine(Point start, Point end, IPen pen)
     {
         if (pen.Thickness <= 0) return;
         var bounds = new Rect(
@@ -330,7 +368,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void DrawRectangle(Rect rect, IPen pen)
+    public override void DrawRectangle(Rect rect, IPen pen)
     {
         if (pen.Thickness <= 0) return;
 
@@ -340,15 +378,17 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             return;
         }
 
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
         NvgStrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, rect);
         _vg.Stroke();
+        _vg.ShapeAntiAlias(true);
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
     {
         if (pen.Thickness <= 0) return;
         float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
@@ -367,7 +407,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void DrawEllipse(Rect bounds, IPen pen)
+    public override void DrawEllipse(Rect bounds, IPen pen)
     {
         if (pen.Thickness <= 0) return;
         float cx = (float)(bounds.X + bounds.Width * 0.5);
@@ -389,7 +429,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void DrawPath(PathGeometry path, IPen pen)
+    public override void DrawPath(PathGeometry path, IPen pen)
     {
         if (path == null || pen.Thickness <= 0) return;
 
@@ -406,18 +446,20 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Stroke();
     }
 
-    public void FillRectangle(Rect rect, IBrush brush)
+    public override void FillRectangle(Rect rect, IBrush brush)
     {
         if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
         if (brush is not IGradientBrush gradient) return;
 
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, rect);
         _vg.Fill();
+        _vg.ShapeAntiAlias(true);
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
     {
         if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
         if (brush is not IGradientBrush gradient) return;
@@ -429,7 +471,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
-    public void FillEllipse(Rect bounds, IBrush brush)
+    public override void FillEllipse(Rect bounds, IBrush brush)
     {
         if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
         if (brush is not IGradientBrush gradient) return;
@@ -442,10 +484,10 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
-    public void FillPath(PathGeometry path, IBrush brush)
+    public override void FillPath(PathGeometry path, IBrush brush)
         => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
 
-    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
     {
         if (path == null) return;
         if (brush is ISolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
@@ -456,7 +498,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
         _vg.Fill();
     }
 
-    public void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius,
+    public override void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius,
         Color shadowColor, double offsetX = 0, double offsetY = 0)
     {
         if (blurRadius <= 0 || shadowColor.A == 0) return;
@@ -473,40 +515,32 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
 
         var paint = _vg.BoxGradient(x, y, w, h, cr, br, inner, outer);
 
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect(x - br, y - br, w + br * 2, h + br * 2);
         _vg.FillPaint(paint);
         _vg.Fill();
+        _vg.ShapeAntiAlias(true);
     }
 
-    private void ReplayNvgPathCommands(PathGeometry path, FillRule fillRule = FillRule.NonZero)
+    private void ReplayNvgPathCommands(PathGeometry path, FillRule fillRule = FillRule.NonZero,
+        bool identityTransform = false)
     {
+        if (identityTransform)
+        {
+            _vg.Save();
+            _vg.ResetTransform();
+        }
+
         _vg.BeginPath();
+        _vg.FillRule(fillRule == FillRule.EvenOdd ? NVGfillRule.EvenOdd : NVGfillRule.NonZero);
 
-        // NanoVG uses non-zero fill rule and defaults all sub-paths to CCW (solid).
-        // FlattenPaths enforces winding, destroying the natural direction.
-        // To render holes, detect CW sub-paths via signed area and mark them
-        // with PathWinding(CW) so NanoVG keeps them as holes.
-
-        // First pass: compute signed area per sub-path to detect holes.
-        var commands = path.Commands;
-        Span<double> areas = commands.Length <= 256
-            ? stackalloc double[CountSubPaths(commands)]
-            : new double[CountSubPaths(commands)];
-        ComputeSubPathAreas(commands, areas);
-
-        // Second pass: replay commands, setting PathWinding(CW) for hole sub-paths.
-        int subIdx = 0;
-        foreach (var cmd in commands)
+        foreach (var cmd in path.Commands)
         {
             switch (cmd.Type)
             {
                 case PathCommandType.MoveTo:
                     _vg.MoveTo((float)cmd.X0, (float)cmd.Y0);
-                    // Signed area > 0 → CCW (solid), < 0 → CW (hole) in Y-down coords.
-                    if (subIdx < areas.Length && areas[subIdx] < 0)
-                        _vg.PathWinding(NVGwinding.CW);
-                    subIdx++;
                     break;
                 case PathCommandType.LineTo:
                     _vg.LineTo((float)cmd.X0, (float)cmd.Y0);
@@ -521,67 +555,10 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
                     break;
             }
         }
-    }
 
-    private static int CountSubPaths(ReadOnlySpan<PathCommand> commands)
-    {
-        int count = 0;
-        foreach (var cmd in commands)
-            if (cmd.Type == PathCommandType.MoveTo) count++;
-        return count;
-    }
-
-    private static void ComputeSubPathAreas(ReadOnlySpan<PathCommand> commands, Span<double> areas)
-    {
-        int subIdx = -1;
-        double area = 0;
-        double startX = 0, startY = 0, lastX = 0, lastY = 0;
-        bool closedByZ = false;
-
-        foreach (var cmd in commands)
+        if (identityTransform)
         {
-            switch (cmd.Type)
-            {
-                case PathCommandType.MoveTo:
-                    // Close previous sub-path area (only if not already closed by Z)
-                    if (subIdx >= 0 && !closedByZ)
-                    {
-                        area += lastX * startY - startX * lastY;
-                        areas[subIdx] = area;
-                    }
-                    subIdx++;
-                    area = 0;
-                    closedByZ = false;
-                    startX = lastX = cmd.X0;
-                    startY = lastY = cmd.Y0;
-                    break;
-                case PathCommandType.LineTo:
-                    area += lastX * cmd.Y0 - cmd.X0 * lastY;
-                    lastX = cmd.X0;
-                    lastY = cmd.Y0;
-                    break;
-                case PathCommandType.BezierTo:
-                    // Approximate: use endpoint only (sufficient for winding detection)
-                    area += lastX * cmd.Y2 - cmd.X2 * lastY;
-                    lastX = cmd.X2;
-                    lastY = cmd.Y2;
-                    break;
-                case PathCommandType.Close:
-                    area += lastX * startY - startX * lastY;
-                    if (subIdx >= 0) areas[subIdx] = area;
-                    area = 0;
-                    closedByZ = true;
-                    lastX = startX;
-                    lastY = startY;
-                    break;
-            }
-        }
-
-        // Final unclosed sub-path
-        if (subIdx >= 0 && subIdx < areas.Length && !closedByZ && area != 0)
-        {
-            area += lastX * startY - startX * lastY;
-            areas[subIdx] = area;
+            _vg.Restore();
         }
     }
     #endregion
@@ -627,10 +604,12 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
             paint = _vg.ImagePattern(patternX, patternY, patternW, patternH, 0f, imageId, alpha);
         }
 
+        _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect((float)destRect.X, (float)destRect.Y, (float)destRect.Width, (float)destRect.Height);
         _vg.FillPaint(paint);
         _vg.Fill();
+        _vg.ShapeAntiAlias(true);
     }
 
     private NVGimageFlags GetImageFlags()
@@ -665,6 +644,7 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
 
     private static NVGcolor ToNvgColor(Color color) => NVGcolor.RGBA(color.R, color.G, color.B, color.A);
 
+
     /// <summary>
     /// Sets NanoVG stroke width compensated for the current transform scale.
     /// NanoVG's Stroke() internally multiplies by GetAverageScale, but MewUI's
@@ -672,10 +652,18 @@ internal sealed partial class MewVGGraphicsContext : IGraphicsContext
     /// </summary>
     private void NvgStrokeWidth(float thickness)
     {
+        thickness = QuantizeStrokeDip(thickness);
         float sx = MathF.Sqrt(_transform.M11 * _transform.M11 + _transform.M12 * _transform.M12);
         float sy = MathF.Sqrt(_transform.M21 * _transform.M21 + _transform.M22 * _transform.M22);
         float avgScale = (sx + sy) * 0.5f;
         _vg.StrokeWidth(avgScale > 0.001f ? thickness / avgScale : thickness);
+    }
+
+    private float QuantizeStrokeDip(float thickness)
+    {
+        if (thickness <= 0) return 0;
+        float snappedPx = MathF.Max(1, MathF.Round(thickness * (float)DpiScale));
+        return snappedPx / (float)DpiScale;
     }
 
     #endregion

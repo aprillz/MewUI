@@ -39,7 +39,6 @@
 
     <!-- OpenGL shared (GLX context, text cache, image utilities, measurement) -->
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
-    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\ImagePixelUtils.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.X11.cs" LinkBase="Rendering\OpenGL" />
@@ -54,6 +53,8 @@
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\GL.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\OpenGLExt.X11.cs" LinkBase="Native\OpenGLExt.X11.cs" />
     <Compile Include="..\MewUI\Shared\Native\Linux\FreeType\**\*.cs" LinkBase="Native\FreeType" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\HarfBuzz\**\*.cs" LinkBase="Native\HarfBuzz" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\Fontconfig\**\*.cs" LinkBase="Native\Fontconfig" />
     <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native\OpenGLExt.cs" />
     <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />

@@ -37,21 +37,19 @@
 
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLBitmapRenderTarget.cs" LinkBase="Rendering\OpenGL" />
-    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\ImagePixelUtils.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextRasterizer.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
 
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiFont.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiMeasurementContext.cs" LinkBase="Rendering\Gdi" />
+    <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiWrappedEllipsisHelper.cs" LinkBase="Rendering\Gdi" />
 
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\OpenGL32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
-    <Compile Include="..\MewUI\Shared\Native\Win32\Direct2D\**\*.cs" LinkBase="Native\Direct2D" />
-    <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite" />
     <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\GL.Win32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native" />

@@ -5,6 +5,8 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 public sealed partial class MewVGGraphicsFactory
 {
+    public GraphicsBackend Backend => GraphicsBackend.Metal;
+
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
         uint dpi = 96;

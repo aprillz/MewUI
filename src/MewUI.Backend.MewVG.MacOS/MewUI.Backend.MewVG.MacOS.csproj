@@ -37,7 +37,6 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalWindowResources.cs" LinkBase="Rendering\MewVG" />
 
     <Compile Include="..\MewUI\Shared\Rendering\CoreText\*.cs" LinkBase="Rendering\CoreText" />
-    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\ImagePixelUtils.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Native\MacOS\Structs\CGGeometry.cs" LinkBase="Native\Structs" />
   </ItemGroup>
 

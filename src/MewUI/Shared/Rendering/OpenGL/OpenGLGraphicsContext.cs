@@ -3,7 +3,7 @@ using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
-internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
+internal sealed partial class OpenGLGraphicsContext : GraphicsContextBase
 {
     private readonly nint _hwnd;
     private readonly nint _hdc;
@@ -21,9 +21,9 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
     private int _viewportHeightPx;
     private bool _disposed;
 
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    public override ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
 
-    public double DpiScale { get; }
+    public override double DpiScale { get; }
 
     private readonly struct SavedState
     {
@@ -77,6 +77,15 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
         GL.Disable(GL.GL_SCISSOR_TEST);
         GL.Enable(GL.GL_BLEND);
+        // GL context state persists across frames; reset stencil-related state to avoid stale clips
+        // causing random corner cropping after scrolling/re-rendering.
+        GL.Disable(GL.GL_STENCIL_TEST);
+        GL.ColorMask(true, true, true, true);
+        GL.StencilMask(0xFF);
+        GL.StencilFunc(GL.GL_ALWAYS, 0, 0xFF);
+        GL.StencilOp(GL.GL_KEEP, GL.GL_KEEP, GL.GL_KEEP);
+        GL.ClearStencil(0);
+        GL.Clear(GL.GL_STENCIL_BUFFER_BIT);
         GL.BlendFuncSeparate(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA, GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA);
         GL.Enable(GL.GL_TEXTURE_2D);
         GL.Enable(GL.GL_MULTISAMPLE);
@@ -121,6 +130,15 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
         GL.Disable(GL.GL_SCISSOR_TEST);
         GL.Enable(GL.GL_BLEND);
+        // GL context state persists across frames; reset stencil-related state to avoid stale clips
+        // causing random corner cropping after scrolling/re-rendering.
+        GL.Disable(GL.GL_STENCIL_TEST);
+        GL.ColorMask(true, true, true, true);
+        GL.StencilMask(0xFF);
+        GL.StencilFunc(GL.GL_ALWAYS, 0, 0xFF);
+        GL.StencilOp(GL.GL_KEEP, GL.GL_KEEP, GL.GL_KEEP);
+        GL.ClearStencil(0);
+        GL.Clear(GL.GL_STENCIL_BUFFER_BIT);
         GL.BlendFuncSeparate(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA, GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA);
         GL.Enable(GL.GL_TEXTURE_2D);
         GL.Enable(GL.GL_MULTISAMPLE);
@@ -128,7 +146,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Hint(GL.GL_LINE_SMOOTH_HINT, GL.GL_NICEST);
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed)
         {
@@ -217,7 +235,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
     #region State Management
 
-    public void Save()
+    protected override void SaveCore()
     {
         _stateStack.Push(new SavedState
         {
@@ -230,7 +248,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         });
     }
 
-    public void Restore()
+    protected override void RestoreCore()
     {
         if (_stateStack.Count == 0)
         {
@@ -259,7 +277,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         ApplyClip();
     }
 
-    public void SetClip(Rect rect)
+    protected override void SetClipCore(Rect rect)
     {
         var r = ToDeviceRect(rect);
         var next = new ClipRectPx
@@ -274,7 +292,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         ApplyClip();
     }
 
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    protected override void SetClipRoundedRectCore(Rect rect, double radiusX, double radiusY)
     {
         if (radiusX <= 0 && radiusY <= 0)
         {
@@ -307,7 +325,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         ApplyRoundedClipToStencil(rect, radiusX, radiusY);
     }
 
-    public void Translate(double dx, double dy)
+    protected override void TranslateCore(double dx, double dy)
     {
         _translateX += dx;
         _translateY += dy;
@@ -419,7 +437,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
     #region Drawing Primitives
 
-    public void Clear(Color color)
+    public override void Clear(Color color)
     {
         GL.Disable(GL.GL_SCISSOR_TEST);
         GL.ClearColor(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
@@ -427,7 +445,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         ApplyClip();
     }
 
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1)
+    protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -447,7 +465,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -472,7 +490,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
-    public void FillRectangle(Rect rect, Color color)
+    protected override void FillRectangleCore(Rect rect, Color color)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -492,7 +510,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
+    protected override void DrawRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -524,7 +542,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
+    protected override void FillRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -558,7 +576,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
+    protected override void DrawEllipseCore(Rect bounds, Color color, double thickness = 1)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -590,7 +608,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
-    public void FillEllipse(Rect bounds, Color color)
+    protected override void FillEllipseCore(Rect bounds, Color color)
     {
         GL.Disable(GL.GL_TEXTURE_2D);
         GL.Color4ub(color.R, color.G, color.B, color.A);
@@ -624,25 +642,19 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.Enable(GL.GL_TEXTURE_2D);
     }
 
+    public override void DrawPath(PathGeometry path, Color color, double thickness = 1) { }
+
+    public override void FillPath(PathGeometry path, Color color) { }
+
     #endregion
 
     #region Text Rendering
 
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
-    {
-        if (text.IsEmpty)
-        {
-            return;
-        }
-
-        DrawText(text, new Rect(location.X, location.Y, 0, 0), font, color, TextAlignment.Left, TextAlignment.Top,
-            text.IndexOfAny('\r', '\n') >= 0 ? TextWrapping.Wrap : TextWrapping.NoWrap);
-    }
-
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
+    protected override void DrawTextCore(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        TextTrimming trimming = TextTrimming.None)
     {
         if (text.IsEmpty)
         {
@@ -685,13 +697,25 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
                 int yOffsetPx = verticalAlignment == TextAlignment.Bottom
                     ? remaining
                     : remaining / 2;
+
                 boundsPx = new RECT(boundsPx.left, boundsPx.top + yOffsetPx, boundsPx.right, boundsPx.top + yOffsetPx + textHeightPx);
                 heightPx = textHeightPx;
             }
         }
 
+        // Early clip cull: skip text entirely outside the scissor rect.
+        if (_clipPx.HasValue)
+        {
+            var c = _clipPx.Value;
+            if (boundsPx.right <= c.X || boundsPx.left >= c.X + c.Width ||
+                boundsPx.bottom <= c.Y || boundsPx.top >= c.Y + c.Height)
+            {
+                return;
+            }
+        }
+
         bool drawHandled = false;
-        TryDrawTextNative(text, boundsPx, font, color, widthPx, heightPx, horizontalAlignment, verticalAlignment, wrapping, ref drawHandled);
+        TryDrawTextNative(text, boundsPx, font, color, widthPx, heightPx, horizontalAlignment, verticalAlignment, wrapping, trimming, ref drawHandled);
     }
 
     private int ClampTextRasterExtent(int extentPx, RECT boundsPx, int axis)
@@ -721,7 +745,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         return Math.Clamp(remaining, 1, hardMax);
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         bool handled = false;
         var result = Size.Empty;
@@ -729,7 +753,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         return handled ? result : Size.Empty;
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         bool handled = false;
         var result = Size.Empty;
@@ -751,6 +775,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         TextAlignment horizontalAlignment,
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
+        TextTrimming trimming,
         ref bool handled);
 
     partial void TryMeasureTextNative(
@@ -806,7 +831,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
 
     #region Image Rendering
 
-    public void DrawImage(IImage image, Point location)
+    public override void DrawImage(IImage image, Point location)
     {
         ArgumentNullException.ThrowIfNull(image);
 
@@ -814,7 +839,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         DrawImage(image, dest);
     }
 
-    public void DrawImage(IImage image, Rect destRect)
+    protected override void DrawImageCore(IImage image, Rect destRect)
     {
         ArgumentNullException.ThrowIfNull(image);
 
@@ -865,7 +890,7 @@ internal sealed partial class OpenGLGraphicsContext : IGraphicsContext
         GL.End();
     }
 
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
+    protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
         ArgumentNullException.ThrowIfNull(image);
 

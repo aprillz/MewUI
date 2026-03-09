@@ -35,7 +35,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     /// <summary>
     /// MSAA sample count. 1 = no MSAA, 4 or 8 for hardware multisampling.
     /// </summary>
-    internal const int MsaaSampleCount = 4;
+    internal const int MsaaSampleCount = 0;
 
     private bool _disposed;
     private nint _stencilTexture;

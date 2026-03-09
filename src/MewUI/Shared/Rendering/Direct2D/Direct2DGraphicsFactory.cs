@@ -198,11 +198,17 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
         _ => D2D1_LINE_JOIN.MITER_OR_BEVEL, // auto-bevel when miter limit is exceeded
     };
 
-    public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false) =>
-        new DirectWriteFont(ResolveWin32FontFamilyOrFile(family), size, weight, italic, underline, strikethrough);
+    public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false)
+    {
+        EnsureInitialized();
+        return new DirectWriteFont(ResolveWin32FontFamilyOrFile(family), size, weight, italic, underline, strikethrough, _dwriteFactory);
+    }
 
-    public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false) =>
-        new DirectWriteFont(ResolveWin32FontFamilyOrFile(family), size, weight, italic, underline, strikethrough);
+    public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false)
+    {
+        EnsureInitialized();
+        return new DirectWriteFont(ResolveWin32FontFamilyOrFile(family), size, weight, italic, underline, strikethrough, _dwriteFactory);
+    }
 
     private void RefreshSystemFontCollection()
     {

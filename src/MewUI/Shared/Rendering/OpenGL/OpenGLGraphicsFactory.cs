@@ -82,7 +82,12 @@ public sealed partial class OpenGLGraphicsFactory : IGraphicsFactory, IWindowRes
         {
             hwnd = win32.Hwnd;
             hdc = win32.Hdc;
-        }        
+        }
+        else if (surface is Platform.MacOS.IMacOSOpenGLWindowSurface mac)
+        {
+            hwnd = mac.View;
+            hdc = mac.OpenGLContext;
+        }
         else if (surface is Platform.Linux.X11.IX11GlxWindowSurface x11)
         {
             hwnd = x11.Window;

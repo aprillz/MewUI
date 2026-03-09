@@ -7,14 +7,12 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// A lightweight graphics context for text measurement only.
 /// </summary>
-internal sealed class GdiMeasurementContext : IGraphicsContext
+internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase
 {
     private readonly nint _hdc;
     private bool _disposed;
 
-    public double DpiScale { get; }
-
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    public override double DpiScale { get; }
 
     public GdiMeasurementContext(nint hdc, uint dpi)
     {
@@ -22,7 +20,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
         DpiScale = dpi <= 0 ? 1.0 : dpi / 96.0;
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (!_disposed)
         {
@@ -31,7 +29,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
         }
     }
 
-    public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         if (text.IsEmpty || font is not GdiFont gdiFont)
         {
@@ -62,7 +60,7 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
         }
     }
 
-    public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (text.IsEmpty || font is not GdiFont gdiFont)
         {
@@ -96,27 +94,4 @@ internal sealed class GdiMeasurementContext : IGraphicsContext
             Gdi32.SelectObject(_hdc, oldFont);
         }
     }
-
-    // Below methods are not used for measurement but required by interface
-    public void Save() { }
-    public void Restore() { }
-    public void SetClip(Rect rect) { }
-
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY) { }
-    public void Translate(double dx, double dy) { }
-    public void Clear(Color color) { }
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1) { }
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1) { }
-    public void FillRectangle(Rect rect, Color color) { }
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1) { }
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) { }
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1) { }
-    public void FillEllipse(Rect bounds, Color color) { }
-    public void DrawPath(PathGeometry path, Color color, double thickness = 1) { }
-    public void FillPath(PathGeometry path, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap) { }
-    public void DrawImage(IImage image, Point location) { }
-    public void DrawImage(IImage image, Rect destRect) { }
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect) { }
 }

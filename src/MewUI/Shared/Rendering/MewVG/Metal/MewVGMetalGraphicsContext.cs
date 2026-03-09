@@ -54,7 +54,7 @@ internal sealed partial class MewVGMetalGraphicsContext
         _resources = resources;
         _vg = resources.Vg;
 
-        DpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
+        _dpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
         _viewportWidthPx = Math.Max(1, pixelWidth);
         _viewportHeightPx = Math.Max(1, pixelHeight);
         _viewportWidthDip = _viewportWidthPx / DpiScale;
@@ -108,7 +108,7 @@ internal sealed partial class MewVGMetalGraphicsContext
         _beganFrame = true;
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed)
         {
@@ -261,21 +261,11 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     #region Text Rendering
 
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
-    {
-        if (text.IsEmpty)
-        {
-            return;
-        }
-
-        DrawText(text, new Rect(location.X, location.Y, 0, 0), font, color, TextAlignment.Left, TextAlignment.Top,
-            text.IndexOfAny('\r', '\n') >= 0 ? TextWrapping.Wrap : TextWrapping.NoWrap);
-    }
-
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
+    protected override void DrawTextCore(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        TextTrimming trimming = TextTrimming.None)
     {
         if (text.IsEmpty)
         {
@@ -300,13 +290,28 @@ internal sealed partial class MewVGMetalGraphicsContext
         }
 
         double targetWidthDip = measured.Width;
-        if (wrapping != TextWrapping.NoWrap && bounds.Width > 0 && !double.IsInfinity(bounds.Width) && !double.IsNaN(bounds.Width))
+        if (bounds.Width > 0 && !double.IsInfinity(bounds.Width) && !double.IsNaN(bounds.Width))
         {
-            targetWidthDip = bounds.Width;
+            if (wrapping != TextWrapping.NoWrap)
+            {
+                // For wrapped text, use bounds width so Rasterize wraps at the same width
+                // as Measure. Using the narrower measured.Width would cause different line breaks.
+                targetWidthDip = bounds.Width;
+            }
+            else if (trimming != TextTrimming.None)
+            {
+                targetWidthDip = Math.Min(targetWidthDip, bounds.Width);
+            }
         }
 
         int widthPx = Math.Max(1, LayoutRounding.CeilToPixelInt(targetWidthDip, DpiScale));
-        int heightPx = Math.Max(1, LayoutRounding.CeilToPixelInt(measured.Height, DpiScale));
+
+        double targetHeightDip = measured.Height;
+        if (bounds.Height > 0 && !double.IsInfinity(bounds.Height) && !double.IsNaN(bounds.Height))
+        {
+            targetHeightDip = Math.Min(targetHeightDip, bounds.Height);
+        }
+        int heightPx = Math.Max(1, LayoutRounding.CeilToPixelInt(targetHeightDip, DpiScale));
 
         // Early clip cull: skip text entirely outside the current scissor region.
         if (_clipBoundsWorld.HasValue)
@@ -349,8 +354,12 @@ internal sealed partial class MewVGMetalGraphicsContext
 
         // Text is rasterized into a bitmap texture; snap placement to device pixels to avoid sampling blur
         // when bounds introduce fractional DIP coordinates (common during layout and live resize).
-        drawX = LayoutRounding.RoundToPixel(drawX, DpiScale);
-        drawY = LayoutRounding.RoundToPixel(drawY, DpiScale);
+        // Skip snapping during transitions to avoid visible jumping.
+        if (_textPixelSnap)
+        {
+            drawX = LayoutRounding.RoundToPixel(drawX, DpiScale);
+            drawY = LayoutRounding.RoundToPixel(drawY, DpiScale);
+        }
 
         if (!_resources.TextCache.TryGetOrCreate(
                 ct,
@@ -362,19 +371,61 @@ internal sealed partial class MewVGMetalGraphicsContext
                 horizontalAlignment,
                 TextAlignment.Top,
                 wrapping,
-                out int imageId))
+                trimming,
+                out int imageId,
+                out int bitmapWidthPx,
+                out int bitmapHeightPx))
         {
             return;
         }
 
-        var paint = _vg.ImagePattern((float)drawX, (float)drawY, (float)widthDip, (float)heightDip, 0, imageId, 1.0f);
+        // The bitmap may be wider than widthPx (Rasterize adds AA margin for right/center alignment).
+        // Use the actual bitmap dimensions for the image pattern so texels map 1:1 to device pixels.
+        double bitmapWidthDip = bitmapWidthPx / DpiScale;
+        double bitmapHeightDip = bitmapHeightPx / DpiScale;
+        var paint = _vg.ImagePattern((float)drawX, (float)drawY, (float)bitmapWidthDip, (float)bitmapHeightDip, 0, imageId, 1.0f);
+
+        // Clip the drawn rect to bounds so text doesn't visually overflow.
+        // The ImagePattern is anchored at (drawX, drawY) in absolute coords, so we can
+        // clip the fill rect on any side without shifting the texture.
+        double rectX = drawX;
+        double rectY = drawY;
+        double rectW = Math.Max(widthDip, Math.Min(bitmapWidthDip, widthDip + (bitmapWidthDip - widthDip)));
+        double rectH = heightDip;
+        double snapTolerance = 2.0 / DpiScale;
+        if (bounds.Width > 0 && !double.IsInfinity(bounds.Width))
+        {
+            // Left clip: text extends left of bounds (e.g. right-aligned overflow).
+            if (rectX < bounds.X)
+            {
+                double leftClip = bounds.X - rectX;
+                rectW -= leftClip;
+                rectX = bounds.X;
+            }
+
+            // Right clip: text extends right of bounds.
+            double maxRight = bounds.X + bounds.Width;
+            if (rectX + rectW > maxRight + snapTolerance)
+            {
+                rectW = maxRight - rectX;
+            }
+        }
+        if (bounds.Height > 0 && !double.IsInfinity(bounds.Height))
+        {
+            double maxBottom = bounds.Y + bounds.Height;
+            if (rectY + rectH > maxBottom)
+            {
+                rectH = maxBottom - rectY;
+            }
+        }
+
         _vg.BeginPath();
-        _vg.Rect((float)drawX, (float)drawY, (float)widthDip, (float)heightDip);
+        _vg.Rect((float)rectX, (float)rectY, (float)rectW, (float)rectH);
         _vg.FillPaint(paint);
         _vg.Fill();
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         if (text.IsEmpty)
         {
@@ -391,7 +442,7 @@ internal sealed partial class MewVGMetalGraphicsContext
         return new Size(sizePx.Width / DpiScale, sizePx.Height / DpiScale);
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (text.IsEmpty)
         {
@@ -412,13 +463,13 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     #region Image Rendering
 
-    public void DrawImage(IImage image, Point location)
-        => DrawImage(image, new Rect(location.X, location.Y, image.PixelWidth / DpiScale, image.PixelHeight / DpiScale));
+    public override void DrawImage(IImage image, Point location)
+        => DrawImageCore(image, new Rect(location.X, location.Y, image.PixelWidth / DpiScale, image.PixelHeight / DpiScale));
 
-    public void DrawImage(IImage image, Rect destRect)
-        => DrawImage(image, destRect, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
+    protected override void DrawImageCore(IImage image, Rect destRect)
+        => DrawImageCore(image, destRect, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
 
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
+    protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
         if (image is not MewVGImage mew)
         {

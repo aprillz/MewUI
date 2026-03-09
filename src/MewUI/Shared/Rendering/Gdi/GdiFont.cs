@@ -1,34 +1,23 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Constants;
+using Aprillz.MewUI.Native.Structs;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
 /// GDI font implementation.
 /// </summary>
-internal sealed class GdiFont : IFont
+internal sealed class GdiFont : FontBase
 {
     private bool _disposed;
     private nint _perPixelAlphaHandle;
-
-    public string Family { get; }
-    public double Size { get; }
-    public FontWeight Weight { get; }
-    public bool IsItalic { get; }
-    public bool IsUnderline { get; }
-    public bool IsStrikethrough { get; }
 
     internal nint Handle { get; private set; }
     private uint Dpi { get; }
 
     public GdiFont(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough, uint dpi)
+        : base(family, size, weight, italic, underline, strikethrough)
     {
-        Family = family;
-        Size = size;
-        Weight = weight;
-        IsItalic = italic;
-        IsUnderline = underline;
-        IsStrikethrough = strikethrough;
         Dpi = dpi;
 
         // Font size in this framework is in DIPs (1/96 inch). Convert to pixels for GDI.
@@ -41,7 +30,23 @@ internal sealed class GdiFont : IFont
         {
             throw new InvalidOperationException($"Failed to create font: {family}");
         }
+
+        // Query font metrics and convert from pixels to DIPs.
+        double dpiScale = dpi / 96.0;
+        var hdc = User32.GetDC(0);
+        var oldFont = Gdi32.SelectObject(hdc, Handle);
+        Gdi32.GetTextMetrics(hdc, out TEXTMETRIC tm);
+        Gdi32.SelectObject(hdc, oldFont);
+        User32.ReleaseDC(0, hdc);
+
+        InternalLeadingPx = tm.tmInternalLeading;
+        Ascent = tm.tmAscent / dpiScale;
+        Descent = tm.tmDescent / dpiScale;
+        InternalLeading = tm.tmInternalLeading / dpiScale;
     }
+
+    /// <summary>Internal leading in pixels (for use by rasterizers operating in pixel space).</summary>
+    internal int InternalLeadingPx { get; }
 
     private nint CreateFontCore(int height, uint quality)
     {
@@ -79,7 +84,7 @@ internal sealed class GdiFont : IFont
         return _perPixelAlphaHandle == 0 ? Handle : _perPixelAlphaHandle;
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (!_disposed && Handle != 0)
         {

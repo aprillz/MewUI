@@ -8,7 +8,7 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
-/// GDI graphics factory implementation.
+/// GDI+ graphics factory implementation.
 /// </summary>
 public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleaser, IWindowSurfacePresenter
 {
@@ -134,7 +134,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
 
     private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale)
         => IsDoubleBuffered
-        ? new GdiDoubleBufferedContext(hwnd, hdc, dpiScale, CurveQuality, ImageScaleQuality)
+        ? GdiPlusGraphicsContext.CreateDoubleBuffered(hwnd, hdc, dpiScale, ImageScaleQuality)
         : new GdiPlusGraphicsContext(hwnd, hdc, dpiScale, ImageScaleQuality);
 
 
@@ -167,7 +167,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
             }
         }
 
-        GdiDoubleBufferedContext.ReleaseForWindow(hwnd);
+        GdiPlusGraphicsContext.ReleaseForWindow(hwnd);
     }
 
     private readonly object _layeredLock = new();

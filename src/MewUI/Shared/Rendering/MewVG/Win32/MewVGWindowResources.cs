@@ -9,7 +9,7 @@ internal sealed class MewVGWindowResources : IDisposable
     /// <summary>
     /// MSAA sample count. 1 = no MSAA, 4 or 8 for hardware multisampling.
     /// </summary>
-    internal const int MsaaSampleCount = 4;
+    internal const int MsaaSampleCount = 0;
 
     private readonly nint _hwnd;
     private readonly WglOpenGLWindowResources _gl;

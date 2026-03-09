@@ -13,8 +13,6 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
 
     private MewVGGraphicsFactory() { }
 
-    public GraphicsBackend Backend => GraphicsBackend.Custom;
-
     public WindowSurfaceKind PreferredSurfaceKind
     {
         get

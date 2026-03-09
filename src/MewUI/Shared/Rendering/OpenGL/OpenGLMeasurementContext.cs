@@ -3,12 +3,10 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// <summary>
 /// Measurement-only graphics context used by OpenGL-based backends when a real rendering context is not available.
 /// </summary>
-internal sealed partial class OpenGLMeasurementContext : IGraphicsContext
+internal sealed partial class OpenGLMeasurementContext : MeasureGraphicsContextBase
 {
     private readonly uint _dpi;
-    public double DpiScale { get; }
-
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    public override double DpiScale { get; }
 
     public OpenGLMeasurementContext(uint dpi)
     {
@@ -16,9 +14,7 @@ internal sealed partial class OpenGLMeasurementContext : IGraphicsContext
         DpiScale = _dpi / 96.0;
     }
 
-    public void Dispose() { }
-
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         if (text.IsEmpty)
         {
@@ -76,7 +72,7 @@ internal sealed partial class OpenGLMeasurementContext : IGraphicsContext
         return new Size(width, height);
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (double.IsNaN(maxWidth) || maxWidth <= 0 || double.IsInfinity(maxWidth))
         {
@@ -122,26 +118,4 @@ internal sealed partial class OpenGLMeasurementContext : IGraphicsContext
         TextWrapping wrapping,
         ref bool handled,
         ref Size result);
-
-    public void Save() { }
-    public void Restore() { }
-    public void SetClip(Rect rect) { }
-
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY) { }
-    public void Translate(double dx, double dy) { }
-    public void Clear(Color color) { }
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1) { }
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1) { }
-    public void FillRectangle(Rect rect, Color color) { }
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1) { }
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) { }
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1) { }
-    public void FillEllipse(Rect bounds, Color color) { }
-    public void DrawPath(PathGeometry path, Color color, double thickness = 1) { }
-    public void FillPath(PathGeometry path, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap) { }
-    public void DrawImage(IImage image, Point location) { }
-    public void DrawImage(IImage image, Rect destRect) { }
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect) { }
 }

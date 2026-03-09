@@ -14,6 +14,12 @@ public static class MewVGWin32Backend
     {
         ArgumentNullException.ThrowIfNull(builder);
         Register();
+        // Runtime defaults for D2D-oriented MewVG Win32 pipeline:
+        // - No MSAA
+        // - No stencil buffer request
+        GraphicsRuntimeOptions.PreferredMsaaSamples = 0;
+        GraphicsRuntimeOptions.PreferredMewVGStencilBits = 0;
+        Application.SetDefaultGraphicsFactory(BackendId);
         return builder;
     }
 }

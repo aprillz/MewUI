@@ -3,21 +3,17 @@ using Aprillz.MewUI.Native.DirectWrite;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DMeasurementContext : IGraphicsContext
+internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContextBase
 {
     private readonly nint _dwriteFactory;
 
-    public double DpiScale => 1.0;
-
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    public override double DpiScale => 1.0;
 
     public Direct2DMeasurementContext(nint dwriteFactory) => _dwriteFactory = dwriteFactory;
 
-    public void Dispose() { }
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font) => MeasureText(text, font, float.MaxValue);
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font) => MeasureText(text, font, float.MaxValue);
-
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (text.IsEmpty)
         {
@@ -41,7 +37,6 @@ internal sealed unsafe class Direct2DMeasurementContext : IGraphicsContext
                 return Size.Empty;
             }
 
-            // When a max width is provided, we want DWrite to wrap within that width.
             DWriteVTable.SetWordWrapping(textFormat, DWRITE_WORD_WRAPPING.WRAP);
 
             float w = maxWidth >= float.MaxValue ? float.MaxValue : (float)Math.Max(0, maxWidth);
@@ -71,26 +66,4 @@ internal sealed unsafe class Direct2DMeasurementContext : IGraphicsContext
             ComHelpers.Release(textFormat);
         }
     }
-
-    public void Save() { }
-    public void Restore() { }
-    public void SetClip(Rect rect) { }
-
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY) { }
-    public void Translate(double dx, double dy) { }
-    public void Clear(Color color) { }
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1) { }
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1) { }
-    public void FillRectangle(Rect rect, Color color) { }
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1) { }
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color) { }
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1) { }
-    public void FillEllipse(Rect bounds, Color color) { }
-    public void DrawPath(PathGeometry path, Color color, double thickness = 1) { }
-    public void FillPath(PathGeometry path, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color) { }
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color, TextAlignment horizontalAlignment = TextAlignment.Left, TextAlignment verticalAlignment = TextAlignment.Top, TextWrapping wrapping = TextWrapping.NoWrap) { }
-    public void DrawImage(IImage image, Point location) { }
-    public void DrawImage(IImage image, Rect destRect) { }
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect) { }
 }

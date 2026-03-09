@@ -107,7 +107,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         OpenGLExt.FramebufferTexture2D(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_COLOR_ATTACHMENT0,
             GL.GL_TEXTURE_2D, _texture, 0);
 
-        int stencilBits = Math.Max(0, 4);
+        int stencilBits = Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
         if (stencilBits > 0)
         {
             uint renderbuffer = 0;

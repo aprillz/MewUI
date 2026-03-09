@@ -11,7 +11,7 @@ internal static class PerPixelAlphaTextRenderer
 
     public static unsafe void DrawText(
         nint hdc,
-        GdiBitmapRenderTarget bitmapTarget,
+        GdiBitmapRenderTarget? bitmapTarget,
         AaSurfacePool surfacePool,
         ReadOnlySpan<char> text,
         RECT targetRect,
@@ -19,7 +19,11 @@ internal static class PerPixelAlphaTextRenderer
         Color color,
         uint format,
         int yOffsetPx = 0,
-        int textHeightPx = 0)
+        int textHeightPx = 0,
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        TextTrimming trimming = TextTrimming.None,
+        TextAlignment hAlign = TextAlignment.Left,
+        TextAlignment vAlign = TextAlignment.Top)
     {
         int width = targetRect.Width;
         int height = targetRect.Height;
@@ -39,15 +43,15 @@ internal static class PerPixelAlphaTextRenderer
             drawRect.bottom = drawRect.top + textHeightPx;
         }
 
-        if (IsOpaqueUnderText(bitmapTarget, drawRect))
+        if (bitmapTarget != null && IsOpaqueUnderText(bitmapTarget, drawRect))
         {
-            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format);
+            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format, wrapping, trimming, hAlign, vAlign);
             return;
         }
 
         if (width > GdiRenderingConstants.MaxAaSurfaceSize || height > GdiRenderingConstants.MaxAaSurfaceSize)
         {
-            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format);
+            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format, wrapping, trimming, hAlign, vAlign);
             return;
         }
 
@@ -78,9 +82,20 @@ internal static class PerPixelAlphaTextRenderer
                 {
                     localRect.bottom = localRect.top + textHeightPx;
                 }
-                fixed (char* pText = text)
+
+                bool drawn = false;
+                if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
                 {
-                    Gdi32.DrawText(surface.MemDc, pText, text.Length, ref localRect, format);
+                    drawn = GdiWrappedEllipsisHelper.TryDrawWrappedWithEllipsis(
+                        surface.MemDc, text, localRect, width, height, hAlign, vAlign);
+                }
+
+                if (!drawn)
+                {
+                    fixed (char* pText = text)
+                    {
+                        Gdi32.DrawText(surface.MemDc, pText, text.Length, ref localRect, format);
+                    }
                 }
             }
             finally
@@ -182,16 +197,29 @@ internal static class PerPixelAlphaTextRenderer
         return true;
     }
 
-    private static unsafe void DrawTextDirect(nint hdc, ReadOnlySpan<char> text, RECT rect, nint fontHandle, Color color, uint format)
+    private static unsafe void DrawTextDirect(
+        nint hdc, ReadOnlySpan<char> text, RECT rect, nint fontHandle, Color color, uint format,
+        TextWrapping wrapping = TextWrapping.NoWrap, TextTrimming trimming = TextTrimming.None,
+        TextAlignment hAlign = TextAlignment.Left, TextAlignment vAlign = TextAlignment.Top)
     {
         var oldFont = Gdi32.SelectObject(hdc, fontHandle);
         var oldColor = Gdi32.SetTextColor(hdc, color.ToCOLORREF());
         try
         {
-            fixed (char* pText = text)
+            bool drawn = false;
+            if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
             {
-                var r = rect;
-                Gdi32.DrawText(hdc, pText, text.Length, ref r, format);
+                drawn = GdiWrappedEllipsisHelper.TryDrawWrappedWithEllipsis(
+                    hdc, text, rect, rect.Width, rect.Height, hAlign, vAlign);
+            }
+
+            if (!drawn)
+            {
+                fixed (char* pText = text)
+                {
+                    var r = rect;
+                    Gdi32.DrawText(hdc, pText, text.Length, ref r, format);
+                }
             }
         }
         finally

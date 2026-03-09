@@ -15,11 +15,15 @@ internal sealed class GdiStateManager
 
     public Matrix3x2 Transform { get; private set; } = Matrix3x2.Identity;
     public double DpiScale { get; }
+    public float GlobalAlpha { get; set; } = 1f;
+    public bool TextPixelSnap { get; set; } = true;
 
     private readonly struct SavedState
     {
         public required int DcState { get; init; }
         public required Matrix3x2 Transform { get; init; }
+        public required float GlobalAlpha { get; init; }
+        public required bool TextPixelSnap { get; init; }
     }
 
     public GdiStateManager(nint hdc, double dpiScale)
@@ -32,7 +36,7 @@ internal sealed class GdiStateManager
     public void Save()
     {
         int state = Gdi32.SaveDC(_hdc);
-        _savedStates.Push(new SavedState { DcState = state, Transform = Transform });
+        _savedStates.Push(new SavedState { DcState = state, Transform = Transform, GlobalAlpha = GlobalAlpha, TextPixelSnap = TextPixelSnap });
     }
 
     /// <summary>Restores the previously saved graphics state.</summary>
@@ -43,6 +47,8 @@ internal sealed class GdiStateManager
             var saved = _savedStates.Pop();
             Gdi32.RestoreDC(_hdc, saved.DcState);
             Transform = saved.Transform;
+            GlobalAlpha = saved.GlobalAlpha;
+            TextPixelSnap = saved.TextPixelSnap;
         }
     }
 

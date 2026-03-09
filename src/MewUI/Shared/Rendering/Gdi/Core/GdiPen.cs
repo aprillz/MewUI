@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Rendering.Gdi.Core;
 /// GDI pen resource.
 /// <para>
 /// The pen stores its stroke attributes (color, thickness, style) as logical values.
-/// The actual <c>HPEN</c> is created by <see cref="GdiGraphicsContext"/> per draw call using
+/// The actual <c>HPEN</c> is created by <see cref="GdiPlusGraphicsContext"/> per draw call using
 /// <see cref="Native.Gdi32.ExtCreatePen"/> so that the pixel width can be quantised against the
 /// current HDC's DPI scale.
 /// </para>

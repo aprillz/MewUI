@@ -14,6 +14,7 @@ public sealed partial class MewVGGraphicsFactory
     [ThreadStatic] private static nint _bitmapPresentHwnd;
     [ThreadStatic] private static nint _bitmapPresentHdc;
 #pragma warning restore CS0649
+    public GraphicsBackend Backend => GraphicsBackend.OpenGL;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {

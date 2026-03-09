@@ -64,7 +64,6 @@ internal static partial class GdiPlusInterop
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipResetClip(nint graphics);
 
-    // ── World Transform ─────────────────────────────────────────────────────
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipCreateMatrix2(float m11, float m12, float m21, float m22, float dx, float dy, out nint matrix);
 
@@ -179,7 +178,8 @@ internal static partial class GdiPlusInterop
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipFillEllipseI(nint graphics, nint brush, int x, int y, int width, int height);
 
-    // ── Linear gradient brush ───────────────────────────────────────────────
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipFillEllipse(nint graphics, nint brush, float x, float y, float width, float height);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipCreateLineBrush(
@@ -201,8 +201,6 @@ internal static partial class GdiPlusInterop
         fixed (float* pp = positions)
             return GdipSetLinePresetBlend(brush, pc, pp, colors.Length);
     }
-
-    // ── Path (radial) gradient brush ────────────────────────────────────────
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipAddPathEllipse(nint path, float x, float y, float width, float height);

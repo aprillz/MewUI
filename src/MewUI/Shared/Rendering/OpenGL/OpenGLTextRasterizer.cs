@@ -20,7 +20,8 @@ internal static class OpenGLTextRasterizer
         Color color,
         TextAlignment horizontalAlignment,
         TextAlignment verticalAlignment,
-        TextWrapping wrapping)
+        TextWrapping wrapping,
+        TextTrimming trimming = TextTrimming.None)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -61,40 +62,54 @@ internal static class OpenGLTextRasterizer
                 Gdi32.SetBkColor(memDc, 0x000000);
                 Gdi32.SetTextColor(memDc, 0xFFFFFF);
 
-                uint format = GdiConstants.DT_NOPREFIX;
-                format |= wrapping == TextWrapping.NoWrap ? GdiConstants.DT_SINGLELINE : GdiConstants.DT_WORDBREAK;
+                bool drawn = false;
 
-                format |= horizontalAlignment switch
+                // Wrap + Ellipsis: GDI's DT_END_ELLIPSIS doesn't handle vertical overflow
+                // with DT_WORDBREAK, so render line-by-line when text overflows vertically.
+                if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
                 {
-                    TextAlignment.Center => GdiConstants.DT_CENTER,
-                    TextAlignment.Right => GdiConstants.DT_RIGHT,
-                    _ => GdiConstants.DT_LEFT
-                };
-
-                // For wrapped text, GDI ignores DT_VCENTER/DT_BOTTOM, so we manually offset.
-                int yOffsetPx = 0;
-                int textHeightPx = 0;
-                if (wrapping != TextWrapping.NoWrap && verticalAlignment != TextAlignment.Top)
-                {
-                    ComputeWrappedTextOffsetsPx(memDc, text, font.Handle, widthPx, heightPx, verticalAlignment, out yOffsetPx, out textHeightPx);
+                    drawn = Gdi.GdiWrappedEllipsisHelper.TryDrawWrappedWithEllipsis(memDc, text, rect, widthPx, heightPx, horizontalAlignment, verticalAlignment);
                 }
 
-                format |= (wrapping == TextWrapping.NoWrap) ? verticalAlignment switch
+                if (!drawn)
                 {
-                    TextAlignment.Center => GdiConstants.DT_VCENTER,
-                    TextAlignment.Bottom => GdiConstants.DT_BOTTOM,
-                    _ => GdiConstants.DT_TOP
-                } : GdiConstants.DT_TOP;
+                    uint format = GdiConstants.DT_NOPREFIX;
+                    format |= wrapping == TextWrapping.NoWrap ? GdiConstants.DT_SINGLELINE : GdiConstants.DT_WORDBREAK;
+                    if (trimming == TextTrimming.CharacterEllipsis)
+                        format |= GdiConstants.DT_END_ELLIPSIS;
 
-                if (yOffsetPx != 0)
-                {
-                    rect.top += yOffsetPx;
-                    rect.bottom = rect.top + (textHeightPx > 0 ? textHeightPx : rect.Height);
-                }
+                    format |= horizontalAlignment switch
+                    {
+                        TextAlignment.Center => GdiConstants.DT_CENTER,
+                        TextAlignment.Right => GdiConstants.DT_RIGHT,
+                        _ => GdiConstants.DT_LEFT
+                    };
 
-                fixed (char* pText = text)
-                {
-                    Gdi32.DrawText(memDc, pText, text.Length, ref rect, format);
+                    // For wrapped text, GDI ignores DT_VCENTER/DT_BOTTOM, so we manually offset.
+                    int yOffsetPx = 0;
+                    int textHeightPx = 0;
+                    if (wrapping != TextWrapping.NoWrap && verticalAlignment != TextAlignment.Top)
+                    {
+                        ComputeWrappedTextOffsetsPx(memDc, text, font.Handle, widthPx, heightPx, verticalAlignment, out yOffsetPx, out textHeightPx);
+                    }
+
+                    format |= (wrapping == TextWrapping.NoWrap) ? verticalAlignment switch
+                    {
+                        TextAlignment.Center => GdiConstants.DT_VCENTER,
+                        TextAlignment.Bottom => GdiConstants.DT_BOTTOM,
+                        _ => GdiConstants.DT_TOP
+                    } : GdiConstants.DT_TOP;
+
+                    if (yOffsetPx != 0)
+                    {
+                        rect.top += yOffsetPx;
+                        rect.bottom = rect.top + (textHeightPx > 0 ? textHeightPx : rect.Height);
+                    }
+
+                    fixed (char* pText = text)
+                    {
+                        Gdi32.DrawText(memDc, pText, text.Length, ref rect, format);
+                    }
                 }
 
                 int bytes = widthPx * heightPx * 4;

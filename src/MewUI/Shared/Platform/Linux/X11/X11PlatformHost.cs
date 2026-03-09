@@ -36,6 +36,8 @@ public sealed class X11PlatformHost : IPlatformHost
     private int _wakeWriteFd = -1;
     private bool _usePollWait;
 
+    public string DefaultFontFamily => "sans-serif";
+
     public IMessageBoxService MessageBox { get; } = new X11MessageBoxService();
 
     public IFileDialogService FileDialog { get; } = new X11FileDialogService();

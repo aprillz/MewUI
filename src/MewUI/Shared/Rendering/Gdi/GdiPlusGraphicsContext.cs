@@ -10,7 +10,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics context (vector/clip quality), while keeping GDI text measurement/rendering.
 /// </summary>
-internal sealed class GdiPlusGraphicsContext : IGraphicsContext
+internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 {
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
@@ -20,7 +20,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
     private readonly int _pixelWidth;
     private readonly int _pixelHeight;
 
-    private readonly GdiStateManager _textStateManager;
+    private readonly GdiStateManager _stateManager;
     private readonly GdiPrimitiveRenderer _primitiveRenderer;
     private readonly AaSurfacePool _surfacePool = new();
 
@@ -30,10 +30,25 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
     private readonly double _dpiScale;
     private Matrix3x2 _transform = Matrix3x2.Identity;
 
-    public double DpiScale => _dpiScale;
+    // Double-buffering (set only via CreateDoubleBuffered factory)
+    private nint _screenDc;
+    private BackBuffer? _backBuffer;
 
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    public override double DpiScale => _dpiScale;
 
+    public override ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+
+    public override float GlobalAlpha
+    {
+        get => _stateManager.GlobalAlpha;
+        set => _stateManager.GlobalAlpha = value;
+    }
+
+    public override bool TextPixelSnap
+    {
+        get => _stateManager.TextPixelSnap;
+        set => _stateManager.TextPixelSnap = value;
+    }
     internal nint Hdc { get; }
 
     public GdiPlusGraphicsContext(
@@ -45,6 +60,21 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         : this(hwnd, hdc, 0, 0, dpiScale, imageScaleQuality, ownsDc)
     {
     }
+
+    internal static GdiPlusGraphicsContext CreateDoubleBuffered(
+        nint hwnd, nint screenDc, double dpiScale, ImageScaleQuality imageScaleQuality)
+    {
+        User32.GetClientRect(hwnd, out var clientRect);
+        int width = Math.Max(1, clientRect.Width);
+        int height = Math.Max(1, clientRect.Height);
+        var backBuffer = BackBuffer.GetOrCreate(hwnd, screenDc, width, height);
+        var ctx = new GdiPlusGraphicsContext(hwnd, backBuffer.MemDc, width, height, dpiScale, imageScaleQuality);
+        ctx._screenDc = screenDc;
+        ctx._backBuffer = backBuffer;
+        return ctx;
+    }
+
+    internal static void ReleaseForWindow(nint hwnd) => BackBuffer.Release(hwnd);
 
     internal GdiPlusGraphicsContext(
         nint hwnd,
@@ -65,14 +95,14 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         _bitmapTarget = bitmapTarget;
 
         _dpiScale = dpiScale;
-        _textStateManager = new GdiStateManager(hdc, dpiScale);
-        _primitiveRenderer = new GdiPrimitiveRenderer(hdc, _textStateManager);
+        _stateManager = new GdiStateManager(hdc, dpiScale);
+        _primitiveRenderer = new GdiPrimitiveRenderer(hdc, _stateManager);
 
         Gdi32.SetBkMode(Hdc, GdiConstants.TRANSPARENT);
         GdiPlusInterop.EnsureInitialized();
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed)
         {
@@ -89,6 +119,13 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             _graphics = 0;
         }
 
+        // Double-buffered: blit back buffer to screen
+        if (_backBuffer != null)
+        {
+            Gdi32.BitBlt(_screenDc, 0, 0, _pixelWidth, _pixelHeight,
+                _backBuffer.MemDc, 0, 0, 0x00CC0020); // SRCCOPY
+        }
+
         if (_ownsDc && Hdc != 0)
         {
             User32.ReleaseDC(_hwnd, Hdc);
@@ -97,9 +134,9 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
     #region State Management
 
-    public void Save()
+    protected override void SaveCore()
     {
-        _textStateManager.Save();
+        _stateManager.Save();
 
         uint state = 0;
         if (EnsureGraphics())
@@ -114,9 +151,9 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         });
     }
 
-    public void Restore()
+    protected override void RestoreCore()
     {
-        _textStateManager.Restore();
+        _stateManager.Restore();
 
         if (_states.Count == 0)
         {
@@ -132,10 +169,10 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void SetClip(Rect rect)
+    protected override void SetClipCore(Rect rect)
     {
         // Keep HDC clip in sync for GDI text rendering.
-        _textStateManager.SetClip(rect);
+        _stateManager.SetClip(rect);
 
         if (!EnsureGraphics())
         {
@@ -146,10 +183,10 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         GdiPlusInterop.GdipSetClipRectI(_graphics, r.left, r.top, r.Width, r.Height, GdiPlusInterop.CombineMode.Intersect);
     }
 
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    protected override void SetClipRoundedRectCore(Rect rect, double radiusX, double radiusY)
     {
         // GDI text can only do rectangle clip; keep it close to bounds.
-        _textStateManager.SetClip(rect);
+        _stateManager.SetClip(rect);
 
         if (!EnsureGraphics())
         {
@@ -183,34 +220,34 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void Translate(double dx, double dy)
+    protected override void TranslateCore(double dx, double dy)
     {
         _transform = Matrix3x2.CreateTranslation((float)dx, (float)dy) * _transform;
-        _textStateManager.Translate(dx, dy);
+        _stateManager.Translate(dx, dy);
         SyncWorldTransform();
     }
 
-    public void Rotate(double angleRadians)
+    protected override void RotateCore(double angleRadians)
     {
         _transform = Matrix3x2.CreateRotation((float)angleRadians) * _transform;
         SyncWorldTransform();
     }
 
-    public void Scale(double sx, double sy)
+    protected override void ScaleCore(double sx, double sy)
     {
         _transform = Matrix3x2.CreateScale((float)sx, (float)sy) * _transform;
         SyncWorldTransform();
     }
 
-    public void SetTransform(Matrix3x2 matrix)
+    protected override void SetTransformCore(Matrix3x2 matrix)
     {
         _transform = matrix;
         SyncWorldTransform();
     }
 
-    public Matrix3x2 GetTransform() => _transform;
+    protected override Matrix3x2 GetTransformCore() => _transform;
 
-    public void ResetTransform()
+    protected override void ResetTransformCore()
     {
         _transform = Matrix3x2.Identity;
         SyncWorldTransform();
@@ -235,7 +272,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void ResetClip()
+    protected override void ResetClipCore()
     {
         if (EnsureGraphics())
         {
@@ -247,7 +284,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
     #region Drawing Primitives (GDI+)
 
-    public void Clear(Color color)
+    public override void Clear(Color color)
     {
         if (_bitmapTarget != null)
         {
@@ -263,14 +300,14 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1)
+    protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
     {
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
-        float widthPx = (int)Math.Round(ToDevicePx(thickness));
+        float widthPx = QuantizeStrokePx(thickness);
         if (widthPx <= 0)
         {
             return;
@@ -286,7 +323,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
         try
         {
-            GdiPlusInterop.GdipDrawLineI(_graphics, pen, (int)Math.Round(ax), (int)Math.Round(ay), (int)Math.Round(bx), (int)Math.Round(by));
+            GdiPlusInterop.GdipDrawLine(_graphics, pen, (float)ax, (float)ay, (float)bx, (float)by);
         }
         finally
         {
@@ -294,8 +331,9 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
@@ -307,13 +345,13 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             return;
         }
 
-        float widthPx = (float)ToDevicePx(thickness);
+        float widthPx = QuantizeStrokePx(thickness);
         if (widthPx <= 0)
         {
             return;
         }
 
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb((color)), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
         {
             return;
         }
@@ -328,8 +366,9 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillRectangle(Rect rect, Color color)
+    protected override void FillRectangleCore(Rect rect, Color color)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || !EnsureGraphics())
         {
             return;
@@ -341,7 +380,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             return;
         }
 
-        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb((color)), out var brush) != 0 || brush == 0)
         {
             return;
         }
@@ -356,24 +395,26 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
+    protected override void DrawRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
         var r = ToDeviceRect(rect);
+        rect = new(rect.X * DpiScale, rect.Y * DpiScale, rect.Width * DpiScale, rect.Height * DpiScale);
         if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        float widthPx = (float)ToDevicePx(thickness);
+        float widthPx = QuantizeStrokePx(thickness);
         int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
         int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        if (GdiPlusInterop.GdipCreatePen1(ToArgb((color)), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
         {
             return;
         }
@@ -386,9 +427,11 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
         try
         {
-            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
-            GdiPlusInterop.GdipClosePathFigure(path);
-            GdiPlusInterop.GdipDrawPath(_graphics, pen, path);
+            int hr;
+            //AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
+            AddRoundedRectPathF(path, (float)rect.Left, (float)rect.Top, (float)rect.Width, (float)rect.Height, ew, eh);
+            hr = GdiPlusInterop.GdipClosePathFigure(path);
+            hr = GdiPlusInterop.GdipDrawPath(_graphics, pen, path);
         }
         finally
         {
@@ -397,14 +440,16 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
+    protected override void FillRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || !EnsureGraphics())
         {
             return;
         }
 
         var r = ToDeviceRect(rect);
+        rect = new(rect.X * DpiScale, rect.Y * DpiScale, rect.Width * DpiScale, rect.Height * DpiScale);
         if (r.Width <= 0 || r.Height <= 0)
         {
             return;
@@ -413,7 +458,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
         int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
-        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb((color)), out var brush) != 0 || brush == 0)
         {
             return;
         }
@@ -426,7 +471,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
         try
         {
-            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
+            AddRoundedRectPathF(path, (float)rect.Left, (float)rect.Top, (float)rect.Width, (float)rect.Height, ew, eh);
             GdiPlusInterop.GdipClosePathFigure(path);
             GdiPlusInterop.GdipFillPath(_graphics, brush, path);
         }
@@ -437,7 +482,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
+    protected override void DrawEllipseCore(Rect bounds, Color color, double thickness = 1)
     {
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
@@ -445,12 +490,13 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
 
         var r = ToDeviceRect(bounds);
+        bounds = new(bounds.X * DpiScale, bounds.Y * DpiScale, bounds.Width * DpiScale, bounds.Height * DpiScale);
         if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        float widthPx = (float)ToDevicePx(thickness);
+        float widthPx = QuantizeStrokePx(thickness);
         if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
         {
             return;
@@ -458,7 +504,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
         try
         {
-            GdiPlusInterop.GdipDrawEllipseI(_graphics, pen, r.left, r.top, r.Width, r.Height);
+            GdiPlusInterop.GdipDrawEllipse(_graphics, pen, (float)bounds.Left, (float)bounds.Top, (float)bounds.Width, (float)bounds.Height);
         }
         finally
         {
@@ -466,7 +512,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillEllipse(Rect bounds, Color color)
+    protected override void FillEllipseCore(Rect bounds, Color color)
     {
         if (color.A == 0 || !EnsureGraphics())
         {
@@ -474,6 +520,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
 
         var r = ToDeviceRect(bounds);
+        bounds = new(bounds.X * DpiScale, bounds.Y * DpiScale, bounds.Width * DpiScale, bounds.Height * DpiScale);
         if (r.Width <= 0 || r.Height <= 0)
         {
             return;
@@ -486,7 +533,8 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
         try
         {
-            GdiPlusInterop.GdipFillEllipseI(_graphics, brush, r.left, r.top, r.Width, r.Height);
+            //GdiPlusInterop.GdipFillEllipseI(_graphics, brush, r.left, r.top, r.Width, r.Height);
+            GdiPlusInterop.GdipFillEllipse(_graphics, brush, (float)bounds.Left, (float)bounds.Top, (float)bounds.Width, (float)bounds.Height);
         }
         finally
         {
@@ -494,14 +542,14 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawPath(PathGeometry path, Color color, double thickness = 1)
+    public override void DrawPath(PathGeometry path, Color color, double thickness = 1)
     {
         if (path == null || color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
         }
 
-        float widthPx = (float)ToDevicePx(thickness);
+        float widthPx = QuantizeStrokePx(thickness);
         if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
         {
             return;
@@ -525,11 +573,12 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillPath(PathGeometry path, Color color)
+    public override void FillPath(PathGeometry path, Color color)
         => FillPath(path, color, path?.FillRule ?? FillRule.NonZero);
 
-    public void FillPath(PathGeometry path, Color color, FillRule fillRule)
+    public override void FillPath(PathGeometry path, Color color, FillRule fillRule)
     {
+        color = BlendGlobalAlpha(color);
         if (path == null || color.A == 0 || !EnsureGraphics())
         {
             return;
@@ -559,9 +608,12 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillRectangle(Rect rect, IBrush brush)
+    public override void FillRectangle(Rect rect, IBrush brush)
     {
-        if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
+        if (brush is ISolidColorBrush solid)
+        {
+            FillRectangle(rect, solid.Color); return;
+        }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
@@ -579,9 +631,12 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
     {
-        if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
+        if (brush is ISolidColorBrush solid)
+        {
+            FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return;
+        }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
@@ -601,9 +656,12 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillEllipse(Rect bounds, IBrush brush)
+    public override void FillEllipse(Rect bounds, IBrush brush)
     {
-        if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
+        if (brush is ISolidColorBrush solid)
+        {
+            FillEllipse(bounds, solid.Color); return;
+        }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(bounds.X, bounds.Y);
@@ -621,13 +679,16 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillPath(PathGeometry path, IBrush brush)
+    public override void FillPath(PathGeometry path, IBrush brush)
         => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
 
-    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
     {
         if (path == null) return;
-        if (brush is ISolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
+        if (brush is ISolidColorBrush solid)
+        {
+            FillPath(path, solid.Color, fillRule); return;
+        }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
             var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
@@ -637,7 +698,9 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
                 BuildGdipPath(gdipPath, path);
                 // OBB requires path bounds; fall back to representative color for path+OBB.
                 if (gradient.GradientUnits == GradientUnits.ObjectBoundingBox)
-                { FillPath(path, gradient.GetRepresentativeColor()); return; }
+                {
+                    FillPath(path, gradient.GetRepresentativeColor()); return;
+                }
                 var pathBounds = ComputeApproximateBounds(path);
                 FillWithGradient(gradient, default, b => GdiPlusInterop.GdipFillPath(_graphics, b, gdipPath), pathBounds);
             }
@@ -645,11 +708,11 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawLine(Point start, Point end, IPen pen)
+    public override void DrawLine(Point start, Point end, IPen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
-        float widthPx = (float)ToDevicePx(pen.Thickness);
+        float widthPx = QuantizeStrokePx(pen.Thickness);
         if (widthPx <= 0) return;
 
         var (ax, ay) = ToDeviceCoords(start.X, start.Y);
@@ -658,19 +721,19 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
         try
         {
-            GdiPlusInterop.GdipDrawLineI(_graphics, gdipPen, (int)Math.Round(ax), (int)Math.Round(ay), (int)Math.Round(bx), (int)Math.Round(by));
+            GdiPlusInterop.GdipDrawLine(_graphics, gdipPen, (float)ax, (float)ay, (float)bx, (float)by);
         }
         finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
     }
 
-    public void DrawRectangle(Rect rect, IPen pen)
+    public override void DrawRectangle(Rect rect, IPen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
         var r = ToDeviceRect(rect);
         if (r.Width <= 0 || r.Height <= 0) return;
 
-        float widthPx = (float)ToDevicePx(pen.Thickness);
+        float widthPx = QuantizeStrokePx(pen.Thickness);
         if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
         try
         {
@@ -679,14 +742,15 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
         var r = ToDeviceRect(rect);
+        rect = new(rect.X * DpiScale, rect.Y * DpiScale, rect.Width * DpiScale, rect.Height * DpiScale);
         if (r.Width <= 0 || r.Height <= 0) return;
 
-        float widthPx = (float)ToDevicePx(pen.Thickness);
+        float widthPx = QuantizeStrokePx(pen.Thickness);
         int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
         int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
@@ -699,7 +763,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
         try
         {
-            AddRoundedRectPathI(path, r.left, r.top, r.Width, r.Height, ew, eh);
+            AddRoundedRectPathF(path, (float)rect.Left, (float)rect.Top, (float)rect.Width, (float)rect.Height, ew, eh);
             GdiPlusInterop.GdipClosePathFigure(path);
             GdiPlusInterop.GdipDrawPath(_graphics, gdipPen, path);
         }
@@ -710,27 +774,28 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawEllipse(Rect bounds, IPen pen)
+    public override void DrawEllipse(Rect bounds, IPen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
         var r = ToDeviceRect(bounds);
+        bounds = new(bounds.X * DpiScale, bounds.Y * DpiScale, bounds.Width * DpiScale, bounds.Height * DpiScale);
         if (r.Width <= 0 || r.Height <= 0) return;
 
-        float widthPx = (float)ToDevicePx(pen.Thickness);
+        float widthPx = QuantizeStrokePx(pen.Thickness);
         if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
         try
         {
-            GdiPlusInterop.GdipDrawEllipseI(_graphics, gdipPen, r.left, r.top, r.Width, r.Height);
+            GdiPlusInterop.GdipDrawEllipse(_graphics, gdipPen, (float)bounds.Left, (float)bounds.Top, (float)bounds.Width, (float)bounds.Height);
         }
         finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
     }
 
-    public void DrawPath(PathGeometry path, IPen pen)
+    public override void DrawPath(PathGeometry path, IPen pen)
     {
         if (path == null || pen.Thickness <= 0 || !EnsureGraphics()) return;
 
-        float widthPx = (float)ToDevicePx(pen.Thickness);
+        float widthPx = QuantizeStrokePx(pen.Thickness);
         if (!TryCreateStyledPen(pen, widthPx, out var gdipPen)) return;
 
         if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var gdipPath) != 0 || gdipPath == 0)
@@ -769,7 +834,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
         else
         {
-            uint argb = pen.Brush is ISolidColorBrush solid ? ToArgb(solid.Color) : 0xFF000000;
+            uint argb = pen.Brush is ISolidColorBrush solid ? ToArgb(BlendGlobalAlpha(solid.Color)) : 0xFF000000;
             if (GdiPlusInterop.GdipCreatePen1(argb, widthPx, GdiPlusInterop.Unit.Pixel, out gdipPen) != 0 || gdipPen == 0)
                 return false;
         }
@@ -809,6 +874,16 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
 
         return true;
+    }
+
+    private Color BlendGlobalAlpha(Color color)
+    {
+        if (_stateManager.GlobalAlpha == 1)
+        {
+            return color;
+        }
+
+        return color.WithAlpha((byte)(color.A * _stateManager.GlobalAlpha));
     }
 
     private void BuildGdipPath(nint gdipPath, PathGeometry path)
@@ -865,78 +940,30 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
     #region Text Rendering (GDI)
 
-    public unsafe void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
-    {
-        if (font is not GdiFont gdiFont)
-        {
-            throw new ArgumentException("Font must be a GdiFont", nameof(font));
-        }
-
-        if (text.IsEmpty || color.A == 0)
-        {
-            return;
-        }
-
-        // Early cull: skip if the text row is entirely outside the current clip region.
-        // Use font size as an estimated height; a bit generous to avoid false culling.
-        var cullPt = ToDevicePoint(location);
-        int cullH = Math.Max(4, (int)Math.Ceiling(font.Size * _dpiScale) * 2);
-        var cullRect = RECT.FromLTRB(cullPt.x, cullPt.y, 32767, cullPt.y + cullH);
-        if (Gdi32.RectVisible(Hdc, ref cullRect) == 0)
-        {
-            return;
-        }
-
-        // For layered/bitmap targets, legacy GDI text APIs do not produce usable per-pixel alpha.
-        // Use coverage-based rendering and synthesize premultiplied alpha for smooth edges.
-        if (_bitmapTarget != null)
-        {
-            var sizeDip = MeasureText(text, gdiFont);
-            int w = Math.Max(1, QuantizeLengthPx(sizeDip.Width));
-            int h = Math.Max(1, QuantizeLengthPx(sizeDip.Height));
-            var pt = ToDevicePoint(location);
-            var r = RECT.FromLTRB(pt.x, pt.y, pt.x + w, pt.y + h);
-            uint format = GdiConstants.DT_NOPREFIX | GdiConstants.DT_LEFT | GdiConstants.DT_TOP | GdiConstants.DT_SINGLELINE;
-            PerPixelAlphaTextRenderer.DrawText(Hdc, _bitmapTarget, _surfacePool, text, r, gdiFont, color, format);
-            return;
-        }
-
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
-        var oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
-
-        try
-        {
-            var pt = ToDevicePoint(location);
-            fixed (char* pText = text)
-            {
-                Gdi32.TextOut(Hdc, pt.x, pt.y, pText, text.Length);
-            }
-        }
-        finally
-        {
-            Gdi32.SetTextColor(Hdc, oldColor);
-            Gdi32.SelectObject(Hdc, oldFont);
-        }
-    }
-
-    public unsafe void DrawText(
+    protected override unsafe void DrawTextCore(
         ReadOnlySpan<char> text,
         Rect bounds,
         IFont font,
         Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        TextTrimming trimming = TextTrimming.None)
     {
         if (font is not GdiFont gdiFont)
         {
             throw new ArgumentException("Font must be a GdiFont", nameof(font));
         }
 
+        color = BlendGlobalAlpha(color);
+
         if (text.IsEmpty || color.A == 0)
         {
             return;
         }
+
+        // GDI text bypasses GDI+ WorldTransform — apply _transform manually.
+        bounds = TransformRect(bounds);
 
         // Early cull: skip if the bounds rect is entirely outside the current clip region.
         var cullR = ToDeviceRect(bounds);
@@ -945,10 +972,10 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             return;
         }
 
-        if (_bitmapTarget != null)
+        if (_bitmapTarget != null || color.A < 255)
         {
             var r = GetTextLayoutRect(bounds, wrapping);
-            uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping);
+            uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
             int yOffsetPx = 0;
             int textHeightPx = 0;
             if (wrapping != TextWrapping.NoWrap)
@@ -973,7 +1000,11 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
                 color,
                 format,
                 yOffsetPx,
-                textHeightPx);
+                textHeightPx,
+                wrapping,
+                trimming,
+                horizontalAlignment,
+                verticalAlignment);
             return;
         }
 
@@ -983,7 +1014,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         try
         {
             var r = GetTextLayoutRect(bounds, wrapping);
-            uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping);
+            uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
             int yOffsetPx = 0;
             int textHeightPx = 0;
             if (wrapping != TextWrapping.NoWrap)
@@ -998,12 +1029,21 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
                     out textHeightPx);
             }
 
-            int clipState = ApplyTextClip(r, wrapping);
+            int clipState = ApplyTextClip(r);
 
-            fixed (char* pText = text)
+            bool drawn = false;
+            if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
             {
-                ApplyVerticalOffset(ref r, yOffsetPx, textHeightPx);
-                Gdi32.DrawText(Hdc, pText, text.Length, ref r, format);
+                drawn = GdiWrappedEllipsisHelper.TryDrawWrappedWithEllipsis(Hdc, text, r, r.Width, r.Height, horizontalAlignment, verticalAlignment);
+            }
+
+            if (!drawn)
+            {
+                fixed (char* pText = text)
+                {
+                    ApplyVerticalOffset(ref r, yOffsetPx, textHeightPx);
+                    Gdi32.DrawText(Hdc, pText, text.Length, ref r, format);
+                }
             }
 
             RestoreTextClip(clipState);
@@ -1015,13 +1055,8 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    private int ApplyTextClip(RECT boundsPx, TextWrapping wrapping)
+    private int ApplyTextClip(RECT boundsPx)
     {
-        if (wrapping == TextWrapping.NoWrap)
-        {
-            return 0;
-        }
-
         int clipState = Gdi32.SaveDC(Hdc);
         if (clipState != 0)
         {
@@ -1043,7 +1078,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
     {
         if (wrapping == TextWrapping.NoWrap)
         {
-        return ToDeviceRect(bounds);
+            return ToDeviceRect(bounds);
         }
 
         var tl = ToDevicePoint(bounds.TopLeft);
@@ -1112,7 +1147,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    private static uint BuildTextFormat(TextAlignment horizontalAlignment, TextAlignment verticalAlignment, TextWrapping wrapping)
+    private static uint BuildTextFormat(TextAlignment horizontalAlignment, TextAlignment verticalAlignment, TextWrapping wrapping, TextTrimming trimming = TextTrimming.None)
     {
         uint format = GdiConstants.DT_NOPREFIX;
         format |= horizontalAlignment switch
@@ -1139,6 +1174,11 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
             format |= GdiConstants.DT_WORDBREAK;
         }
 
+        if (trimming == TextTrimming.CharacterEllipsis)
+        {
+            format |= GdiConstants.DT_END_ELLIPSIS;
+        }
+
         return format;
     }
 
@@ -1155,7 +1195,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         if (font is not GdiFont gdiFont)
         {
@@ -1193,7 +1233,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         }
     }
 
-    public unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override unsafe Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (font is not GdiFont gdiFont)
         {
@@ -1229,7 +1269,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
 
     #region Image Rendering (GDI)
 
-    public void DrawImage(IImage image, Point location)
+    public override void DrawImage(IImage image, Point location)
     {
         if (image is not GdiImage gdiImage)
         {
@@ -1239,7 +1279,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         DrawImage(gdiImage, new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight));
     }
 
-    public void DrawImage(IImage image, Rect destRect)
+    protected override void DrawImageCore(IImage image, Rect destRect)
     {
         if (image is not GdiImage gdiImage)
         {
@@ -1249,7 +1289,7 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         DrawImage(gdiImage, destRect, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
     }
 
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
+    protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
         if (image is not GdiImage gdiImage)
         {
@@ -1443,10 +1483,11 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         float right = x + w;
         float bottom = y + h;
 
-        GdiPlusInterop.GdipAddPathArc(path, x, y, ew, eh, 180, 90);
-        GdiPlusInterop.GdipAddPathArc(path, right - ew, y, ew, eh, 270, 90);
-        GdiPlusInterop.GdipAddPathArc(path, right - ew, bottom - eh, ew, eh, 0, 90);
-        GdiPlusInterop.GdipAddPathArc(path, x, bottom - eh, ew, eh, 90, 90);
+        int hr;
+        hr = GdiPlusInterop.GdipAddPathArc(path, x, y, ew, eh, 180, 90);
+        hr = GdiPlusInterop.GdipAddPathArc(path, right - ew, y, ew, eh, 270, 90);
+        hr = GdiPlusInterop.GdipAddPathArc(path, right - ew, bottom - eh, ew, eh, 0, 90);
+        hr = GdiPlusInterop.GdipAddPathArc(path, x, bottom - eh, ew, eh, 90, 90);
     }
 
     private static void AddRoundedRectPathI(nint path, int x, int y, int width, int height, int ellipseW, int ellipseH)
@@ -1470,6 +1511,19 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         GdiPlusInterop.GdipAddPathArcI(path, x, bottom - eh, ew, eh, 90, 90);
     }
 
+    private Point TransformPoint(Point pt)
+    {
+        var v = Vector2.Transform(new Vector2((float)pt.X, (float)pt.Y), _transform);
+        return new Point(v.X, v.Y);
+    }
+
+    private Rect TransformRect(Rect rect)
+    {
+        var tl = Vector2.Transform(new Vector2((float)rect.X, (float)rect.Y), _transform);
+        var br = Vector2.Transform(new Vector2((float)rect.Right, (float)rect.Bottom), _transform);
+        return new Rect(tl.X, tl.Y, br.X - tl.X, br.Y - tl.Y);
+    }
+
     private POINT ToDevicePoint(Point pt)
     {
         // _transform is applied by GDI+ World Transform; only DPI scale here.
@@ -1483,6 +1537,20 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         // _transform is applied by GDI+ World Transform; only DPI scale here.
         var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, 0, 0, _dpiScale);
         return new RECT(left, top, right, bottom);
+    }
+
+    private Rect ToDeviceRectF(Rect rect)
+    {
+        // _transform is applied by GDI+ World Transform; only DPI scale here.
+        var (left, top, right, bottom) = RenderingUtil.ToDeviceRect(rect, 0, 0, _dpiScale);
+        return new Rect(left, top, right, bottom);
+    }
+
+
+    private float QuantizeStrokePx(double thicknessDip)
+    {
+        if (thicknessDip <= 0) return 0;
+        return MathF.Max(1, MathF.Round((float)(thicknessDip * _dpiScale)));
     }
 
     private int QuantizeLengthPx(double lengthDip)
@@ -1513,17 +1581,22 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         if (stops == null || stops.Count == 0) return 0;
 
         var (colors, positions) = EnsureEndpointStops(stops);
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i] = BlendGlobalAlpha(Color.FromArgb(colors[i])).ToArgb();
+        }
+
         var wrapMode = brush.SpreadMethod switch
         {
             SpreadMethod.Reflect => GdiPlusInterop.WrapMode.TileFlipXY,
-            SpreadMethod.Repeat  => GdiPlusInterop.WrapMode.Tile,
-            _                    => GdiPlusInterop.WrapMode.TileFlipXY,
+            SpreadMethod.Repeat => GdiPlusInterop.WrapMode.Tile,
+            _ => GdiPlusInterop.WrapMode.TileFlipXY,
         };
 
         if (brush is ILinearGradientBrush linear)
         {
             var p1 = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
-            var p2 = ResolveGradientPoint(linear.EndPoint,   brush.GradientUnits, objectBounds);
+            var p2 = ResolveGradientPoint(linear.EndPoint, brush.GradientUnits, objectBounds);
             var (ax, ay) = ToDeviceCoords(p1.X, p1.Y);
             var (bx, by) = ToDeviceCoords(p2.X, p2.Y);
             var gp1 = new GdiPlusInterop.PointF((float)ax, (float)ay);
@@ -1583,20 +1656,24 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         if (stops == null || stops.Count == 0) return;
 
         var (colors, positions) = EnsureEndpointStops(stops);
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i] = BlendGlobalAlpha(Color.FromArgb(colors[i])).ToArgb();
+        }
 
         // GDI+ LinearGradientBrush does NOT support WrapMode.Clamp;
         // use TileFlipXY as the closest approximation for SpreadMethod.Pad.
         var wrapMode = brush.SpreadMethod switch
         {
             SpreadMethod.Reflect => GdiPlusInterop.WrapMode.TileFlipXY,
-            SpreadMethod.Repeat  => GdiPlusInterop.WrapMode.Tile,
-            _                    => GdiPlusInterop.WrapMode.TileFlipXY,
+            SpreadMethod.Repeat => GdiPlusInterop.WrapMode.Tile,
+            _ => GdiPlusInterop.WrapMode.TileFlipXY,
         };
 
         if (brush is ILinearGradientBrush linear)
         {
             var p1 = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
-            var p2 = ResolveGradientPoint(linear.EndPoint,   brush.GradientUnits, objectBounds);
+            var p2 = ResolveGradientPoint(linear.EndPoint, brush.GradientUnits, objectBounds);
             var (ax, ay) = ToDeviceCoords(p1.X, p1.Y);
             var (bx, by) = ToDeviceCoords(p2.X, p2.Y);
             var gp1 = new GdiPlusInterop.PointF((float)ax, (float)ay);
@@ -1735,12 +1812,12 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         if (list[^1].Offset < 1.0)
             list.Add(new GradientStop(1.0, list[^1].Color));
 
-        var colors    = new uint[list.Count];
+        var colors = new uint[list.Count];
         var positions = new float[list.Count];
         for (int i = 0; i < list.Count; i++)
         {
             var s = list[i];
-            colors[i]    = (uint)(s.Color.A << 24 | s.Color.R << 16 | s.Color.G << 8 | s.Color.B);
+            colors[i] = (uint)(s.Color.A << 24 | s.Color.R << 16 | s.Color.G << 8 | s.Color.B);
             positions[i] = (float)Math.Clamp(s.Offset, 0f, 1f);
         }
         return (colors, positions);
@@ -1756,4 +1833,88 @@ internal sealed class GdiPlusGraphicsContext : IGraphicsContext
         public required uint GdiPlusState { get; init; }
         public required Matrix3x2 Transform { get; init; }
     }
+
+    #region BackBuffer (double-buffering)
+
+    private sealed class BackBuffer : IDisposable
+    {
+        private static readonly Dictionary<nint, BackBuffer> Cache = new();
+
+        public static BackBuffer GetOrCreate(nint hwnd, nint screenDc, int width, int height)
+        {
+            if (Cache.TryGetValue(hwnd, out var existing))
+            {
+                existing.EnsureSize(screenDc, width, height);
+                return existing;
+            }
+
+            var buffer = new BackBuffer(hwnd, screenDc, width, height);
+            Cache[hwnd] = buffer;
+            return buffer;
+        }
+
+        public static void Release(nint hwnd)
+        {
+            if (Cache.Remove(hwnd, out var buffer))
+            {
+                buffer.Dispose();
+            }
+        }
+
+        private nint _bitmap;
+        private nint _oldBitmap;
+        private nint _bits;
+
+        public nint MemDc { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+
+        private BackBuffer(nint hwnd, nint screenDc, int width, int height)
+        {
+            Create(screenDc, width, height);
+        }
+
+        private void Create(nint screenDc, int width, int height)
+        {
+            Width = Math.Max(1, width);
+            Height = Math.Max(1, height);
+
+            MemDc = Gdi32.CreateCompatibleDC(screenDc);
+            var bmi = BITMAPINFO.Create32bpp(Width, Height);
+            _bitmap = Gdi32.CreateDIBSection(screenDc, ref bmi, usage: 0, out _bits, 0, 0);
+            _oldBitmap = Gdi32.SelectObject(MemDc, _bitmap);
+        }
+
+        private void Destroy()
+        {
+            if (MemDc == 0) return;
+
+            if (_oldBitmap != 0) Gdi32.SelectObject(MemDc, _oldBitmap);
+            if (_bitmap != 0) Gdi32.DeleteObject(_bitmap);
+            Gdi32.DeleteDC(MemDc);
+
+            MemDc = 0;
+            _bitmap = 0;
+            _oldBitmap = 0;
+            _bits = 0;
+            Width = 0;
+            Height = 0;
+        }
+
+        public void EnsureSize(nint screenDc, int width, int height)
+        {
+            width = Math.Max(1, width);
+            height = Math.Max(1, height);
+
+            if (width == Width && height == Height && MemDc != 0 && _bitmap != 0)
+                return;
+
+            Destroy();
+            Create(screenDc, width, height);
+        }
+
+        public void Dispose() => Destroy();
+    }
+
+    #endregion
 }

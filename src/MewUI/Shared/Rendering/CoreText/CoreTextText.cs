@@ -21,7 +21,8 @@ internal static unsafe partial class CoreTextText
         TextAlignment horizontalAlignment,
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
-        int wrapWidthPx = 0)
+        int wrapWidthPx = 0,
+        TextTrimming trimming = TextTrimming.None)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -31,6 +32,13 @@ internal static unsafe partial class CoreTextText
         {
             return new TextBitmap(1, 1, new byte[4]);
         }
+
+        // Extend the bitmap so glyphs at the text's trailing edge have room for
+        // anti-aliasing / font smoothing. Text is still aligned to the original widthPx
+        // boundary; the extra pixels are transparent and extend beyond it.
+        int alignWidthPx = widthPx;
+        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2); // 2 DIP in device pixels
+        widthPx += aaExtra;
 
         int stride = checked(widthPx * 4);
         var data = new byte[checked(stride * heightPx)];
@@ -59,9 +67,11 @@ internal static unsafe partial class CoreTextText
                 // Enable anti-aliasing.
                 CGContextSetShouldAntialias(ctx, true);
                 CGContextSetAllowsAntialiasing(ctx, true);
-                CGContextSetAllowsFontSmoothing(ctx, true);
-                // Improve text quality for bitmap-rendered glyphs (matches typical AppKit defaults).
-                CGContextSetShouldSmoothFonts(ctx, true);
+                // Disable subpixel font smoothing: rendering onto a transparent background
+                // causes RGB channel spread that produces color fringing and visually bolder
+                // text when alpha-composited later. Use grayscale AA only.
+                CGContextSetAllowsFontSmoothing(ctx, false);
+                CGContextSetShouldSmoothFonts(ctx, false);
                 CGContextSetShouldSubpixelPositionFonts(ctx, true);
                 CGContextSetShouldSubpixelQuantizeFonts(ctx, true);
 
@@ -70,13 +80,73 @@ internal static unsafe partial class CoreTextText
 
                 // Layout.
                 var metrics = GetLineMetrics(ctFont);
-                if (wrapping == TextWrapping.Wrap && wrapWidthPx > 0 && widthPx > wrapWidthPx)
+                if (wrapping == TextWrapping.Wrap && wrapWidthPx > 0 && alignWidthPx > wrapWidthPx)
                 {
-                    widthPx = wrapWidthPx;
+                    alignWidthPx = wrapWidthPx;
                 }
 
-                int lineWidthPx = wrapping == TextWrapping.Wrap && wrapWidthPx > 0 ? wrapWidthPx : widthPx;
-                var lines = BuildLines(ctFont, text, lineWidthPx, wrapping);
+                int lineWidthPx = wrapping == TextWrapping.Wrap && wrapWidthPx > 0 ? wrapWidthPx : alignWidthPx;
+
+                // Build lines: untrimmed for comparison, trimmed for rendering.
+                var linesNoTrim = BuildLines(ctFont, text, lineWidthPx, wrapping);
+                var lines = trimming == TextTrimming.CharacterEllipsis
+                    ? BuildLines(ctFont, text, lineWidthPx, wrapping, trimming)
+                    : linesNoTrim;
+
+                // Wrap + Ellipsis: if lines exceed available height, trim last visible line.
+                bool wrapOverflowTrimmed = false;
+                if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
+                {
+                    int maxVisibleLines = Math.Max(1, (int)(heightPx / metrics.LineHeight));
+                    if (lines.Count > maxVisibleLines)
+                    {
+                        lines.Lines.RemoveRange(maxVisibleLines, lines.Count - maxVisibleLines);
+
+                        int lastIdx = lines.Count - 1;
+                        var lastLine = lines[lastIdx];
+                        if (lastLine.Length > 0)
+                        {
+                            var lineText = text.Slice(lastLine.Start, lastLine.Length);
+                            double ellipsisW = MeasureRunWidth(ctFont, "...");
+                            double maxTextW = Math.Max(0, lineWidthPx - ellipsisW);
+
+                            // Trim text directly to fit within (lineWidthPx - ellipsisW).
+                            // Don't use TrimLineWithEllipsis here because its "text fits" fast path
+                            // omits the ellipsis width, which we always need for wrap overflow.
+                            int trimLen = lastLine.Length;
+                            double textW = MeasureRunWidth(ctFont, lineText);
+                            if (textW > maxTextW)
+                            {
+                                // Estimation-based approach: avgCharWidth → estimatedLen
+                                double avgChar = textW / trimLen;
+                                trimLen = Math.Clamp((int)(maxTextW / avgChar), 0, lastLine.Length);
+                                textW = trimLen > 0 ? MeasureRunWidth(ctFont, lineText.Slice(0, trimLen)) : 0;
+
+                                if (textW > maxTextW)
+                                {
+                                    while (trimLen > 0 && textW > maxTextW)
+                                    {
+                                        trimLen--;
+                                        textW = trimLen > 0 ? MeasureRunWidth(ctFont, lineText.Slice(0, trimLen)) : 0;
+                                    }
+                                }
+                                else
+                                {
+                                    while (trimLen < lastLine.Length)
+                                    {
+                                        double next = MeasureRunWidth(ctFont, lineText.Slice(0, trimLen + 1));
+                                        if (next > maxTextW) break;
+                                        trimLen++;
+                                        textW = next;
+                                    }
+                                }
+                            }
+
+                            lines.Lines[lastIdx] = new LineEntry(lastLine.Start, trimLen, textW + ellipsisW);
+                        }
+                        wrapOverflowTrimmed = true;
+                    }
+                }
 
                 // CoreGraphics uses bottom-left origin. We'll compute baselines from top.
                 double totalHeight = lines.Count * metrics.LineHeight;
@@ -90,10 +160,13 @@ internal static unsafe partial class CoreTextText
                 for (int i = 0; i < lines.Count; i++)
                 {
                     var line = lines[i];
+                    // Align text to the original content width (alignWidthPx), not the expanded
+                    // bitmap width (widthPx). The extra bitmap pixels (aaExtra) provide room for
+                    // anti-aliasing and glyph overhang on the trailing edge.
                     double x = horizontalAlignment switch
                     {
-                        TextAlignment.Center => (widthPx - line.Width) / 2.0,
-                        TextAlignment.Right => widthPx - line.Width,
+                        TextAlignment.Center => (alignWidthPx - line.Width) / 2.0,
+                        TextAlignment.Right => Math.Max(0, alignWidthPx - line.Width),
                         _ => 0.0
                     };
 
@@ -107,6 +180,19 @@ internal static unsafe partial class CoreTextText
                     if (line.Length > 0)
                     {
                         DrawLineGlyphs(ctx, ctFont, text.Slice(line.Start, line.Length), x, baselineY);
+                    }
+
+                    // Detect if this line needs an ellipsis.
+                    bool wasTrimmed;
+                    if (wrapOverflowTrimmed && i == lines.Count - 1)
+                        wasTrimmed = true;
+                    else
+                        wasTrimmed = i < linesNoTrim.Count && line.Length < linesNoTrim[i].Length;
+
+                    if (wasTrimmed)
+                    {
+                        double textWidth = line.Length > 0 ? MeasureRunWidth(ctFont, text.Slice(line.Start, line.Length)) : 0;
+                        DrawLineGlyphs(ctx, ctFont, "...", x + textWidth, baselineY);
                     }
                 }
 
@@ -169,7 +255,10 @@ internal static unsafe partial class CoreTextText
             totalLines = 1;
         }
 
-        double w = TextMeasurePolicy.ApplyWidthPadding(maxLineWidth);
+        // CoreText measures with DPI-scaled fonts, so padding must also scale with DPI
+        // to ensure a consistent 1 DIP padding after the caller divides by dpiScale.
+        double dpiScale = dpi / 96.0;
+        double w = maxLineWidth + TextMeasurePolicy.WidthPaddingPx * dpiScale;
 
         double h = totalLines * metrics.LineHeight;
         return new Size(w, h);
@@ -251,7 +340,7 @@ internal static unsafe partial class CoreTextText
 
     private readonly record struct LineEntry(int Start, int Length, double Width);
 
-    private static LinesBuffer BuildLines(nint ctFont, ReadOnlySpan<char> text, int widthPx, TextWrapping wrapping)
+    private static LinesBuffer BuildLines(nint ctFont, ReadOnlySpan<char> text, int widthPx, TextWrapping wrapping, TextTrimming trimming = TextTrimming.None)
     {
         var buffer = new LinesBuffer();
 
@@ -263,6 +352,21 @@ internal static unsafe partial class CoreTextText
         if (buffer.Count == 0)
         {
             buffer.Add(new LineEntry(0, 0, 0));
+        }
+
+        // Post-pass: apply character-ellipsis trimming.
+        if (trimming == TextTrimming.CharacterEllipsis && wrapping == TextWrapping.NoWrap)
+        {
+            for (int i = 0; i < buffer.Count; i++)
+            {
+                var entry = buffer[i];
+                if (entry.Width > widthPx && entry.Length > 0)
+                {
+                    var lineText = text.Slice(entry.Start, entry.Length);
+                    var trimmed = TextLayout.TrimLineWithEllipsis(lineText, entry.Start, widthPx, span => MeasureRunWidth(ctFont, span));
+                    buffer.Lines[i] = new LineEntry(trimmed.Start, trimmed.Length, trimmed.Width);
+                }
+            }
         }
 
         return buffer;
@@ -282,17 +386,45 @@ internal static unsafe partial class CoreTextText
             return;
         }
 
-        double localMax = maxLineWidth;
         int localLines = 0;
+
+        // Collect line end-char indices for overhang post-pass.
+        // ReadOnlySpan<char> can't be captured in the lambda, so we store indices
+        // and compute overhang after EnumerateLines returns.
+        int lineCapacity = 32;
+        var lineWidths = new double[lineCapacity];
+        var lineEndIndices = new int[lineCapacity];
+        int lineCount = 0;
 
         TextLayout.EnumerateLines(segment, maxWidthPx, wrapping, span => MeasureRunWidth(ctFont, span), line =>
         {
-            if (line.Width > localMax)
+            if (lineCount >= lineCapacity)
             {
-                localMax = line.Width;
+                lineCapacity *= 2;
+                Array.Resize(ref lineWidths, lineCapacity);
+                Array.Resize(ref lineEndIndices, lineCapacity);
             }
+            lineWidths[lineCount] = line.Width;
+            lineEndIndices[lineCount] = line.Length > 0 ? line.Start + line.Length - 1 : -1;
+            lineCount++;
             localLines++;
         });
+
+        // Post-pass: compute visual width (advance + last glyph overhang) per line.
+        double localMax = maxLineWidth;
+        for (int i = 0; i < lineCount; i++)
+        {
+            double visual = lineWidths[i];
+            int endIdx = lineEndIndices[i];
+            if (endIdx >= 0 && endIdx < segment.Length)
+            {
+                visual += GetLastGlyphOverhang(ctFont, segment.Slice(endIdx, 1));
+            }
+            if (visual > localMax)
+            {
+                localMax = visual;
+            }
+        }
 
         maxLineWidth = localMax;
         totalLines += localLines;
@@ -335,6 +467,35 @@ internal static unsafe partial class CoreTextText
             }
             return width;
         }
+    }
+
+    /// <summary>
+    /// Returns how many pixels the last glyph extends beyond its advance width (right-side bearing).
+    /// Used to prevent bitmap clipping during text alignment.
+    /// </summary>
+    private static double GetLastGlyphOverhang(nint ctFont, ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty)
+        {
+            return 0;
+        }
+
+        // Check only the last character.
+        char lastChar = text[text.Length - 1];
+        ushort glyph;
+        CGSize advance;
+        if (!CTFontGetGlyphsForCharacters(ctFont, &lastChar, &glyph, 1) || glyph == 0)
+        {
+            return 0;
+        }
+
+        CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientationHorizontal, &glyph, &advance, 1);
+        CGRect bounds;
+        CTFontGetBoundingRectsForGlyphs(ctFont, CTFontOrientationHorizontal, &glyph, &bounds, 1);
+
+        double glyphRight = bounds.origin.x + bounds.size.width;
+        double overhang = glyphRight - advance.width;
+        return overhang > 0 ? overhang : 0;
     }
 
     private static void DrawLineGlyphsWithFallback(nint ctx, nint baseFont, ReadOnlySpan<char> text, double x, double baselineY)
@@ -612,6 +773,9 @@ internal static unsafe partial class CoreTextText
 
     [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
     private static partial double CTFontGetAdvancesForGlyphs(nint font, int orientation, ushort* glyphs, CGSize* advances, nuint count);
+
+    [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
+    private static partial CGRect CTFontGetBoundingRectsForGlyphs(nint font, int orientation, ushort* glyphs, CGRect* boundingRects, nuint count);
 
     [LibraryImport("/System/Library/Frameworks/CoreText.framework/CoreText")]
     private static partial void CTFontDrawGlyphs(nint font, ushort* glyphs, CGPoint* positions, nuint count, nint context);

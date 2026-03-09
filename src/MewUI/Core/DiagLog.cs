@@ -13,7 +13,7 @@ public static class DiagLog
     /// <summary>
     /// Gets whether diagnostics logging is enabled.
     /// </summary>
-    public static bool Enabled => GraphicsRuntimeOptions.DiagnosticsEnabled;
+    public static bool Enabled => true;
 
     /// <summary>
     /// Writes a diagnostic message in DEBUG builds only.
@@ -115,5 +115,5 @@ public static class DiagLog
         return $"{mib / 1024.0:F2}GiB";
     }
 
-    private static string WritePath => field ??= System.IO.Path.Combine(AppContext.BaseDirectory, "mewui_diag.log");
+    private static string WritePath => field ??= Path.Combine(AppContext.BaseDirectory, "mewui_diag.log");
 }

@@ -2,7 +2,6 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Win32;
-using Aprillz.MewUI.Rendering.FreeType;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Resources;
 
@@ -24,45 +23,15 @@ public sealed partial class OpenGLGraphicsFactory
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            uint dpi = DpiHelper.GetSystemDpi();
-            family = ResolveWin32FontFamilyOrFile(family);
-            return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            var path = LinuxFontResolver.ResolveFontPath(family, weight, italic);
-            int px = (int)Math.Max(1, Math.Round(size)); // Assume 96dpi for now.
-            return path != null
-                ? new FreeTypeFont(family, size, weight, italic, underline, strikethrough, path, px)
-                : new BasicFont(family, size, weight, italic, underline, strikethrough);
-        }
-        else
-        {
-            throw new PlatformNotSupportedException();
-        }
+        uint dpi = DpiHelper.GetSystemDpi();
+        family = ResolveWin32FontFamilyOrFile(family);
+        return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
     }
 
     private partial IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            family = ResolveWin32FontFamilyOrFile(family);
-            return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            var path = LinuxFontResolver.ResolveFontPath(family, weight, italic);
-            int px = (int)Math.Max(1, Math.Round(size * dpi / 96.0, MidpointRounding.AwayFromZero));
-            return path != null
-                ? new FreeTypeFont(family, size, weight, italic, underline, strikethrough, path, px)
-                : new BasicFont(family, size, weight, italic, underline, strikethrough);
-        }
-        else
-        {
-            throw new PlatformNotSupportedException();
-        }
+        family = ResolveWin32FontFamilyOrFile(family);
+        return new GdiFont(family, size, weight, italic, underline, strikethrough, dpi);
     }
 
     private static string ResolveWin32FontFamilyOrFile(string familyOrPath)
@@ -73,7 +42,7 @@ public sealed partial class OpenGLGraphicsFactory
         }
 
         var path = Path.GetFullPath(familyOrPath);
-        _ = Win32Fonts.EnsurePrivateFont(path);
+        _ = Win32Fonts.EnsurePrivateFontFamily(path);
 
         return FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
             ? parsed
@@ -82,50 +51,25 @@ public sealed partial class OpenGLGraphicsFactory
 
     private partial IOpenGLWindowResources CreateWindowResources(IWindowSurface surface)
     {
-        if (OperatingSystem.IsWindows())
+        if (surface is not IWin32HdcWindowSurface win32)
         {
-            if (surface is not IWin32HdcWindowSurface win32)
-            {
-                throw new ArgumentException("OpenGL (Win32) requires a Win32 HDC window surface.", nameof(surface));
-            }
+            throw new ArgumentException("OpenGL (Win32) requires a Win32 HDC window surface.", nameof(surface));
+        }
 
-            // Immediate-mode OpenGL renderer does not need depth/stencil; avoid allocating them (especially with MSAA).
-            return WglOpenGLWindowResources.Create(win32.Hwnd, win32.Hdc,
-                new WglOpenGLWindowResources.WglPixelFormatOptions(
-                    PreferredMsaaSamples: Math.Max(0, 4),
-                    DepthBits: 0,
-                    StencilBits: 0));
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            if (surface is not Platform.Linux.X11.IX11GlxWindowSurface glx)
-            {
-                throw new ArgumentException("OpenGL (X11) requires an X11 GLX window surface.", nameof(surface));
-            }
-
-            return GlxOpenGLWindowResources.Create(glx.Display, glx.Window, glx.VisualInfo);
-        }
-        else
-        {
-            throw new PlatformNotSupportedException();
-        }
+        // Reserve a stencil buffer for rounded clip (path clip) support.
+        return WglOpenGLWindowResources.Create(win32.Hwnd, win32.Hdc,
+            new WglOpenGLWindowResources.WglPixelFormatOptions(
+                PreferredMsaaSamples: GraphicsRuntimeOptions.PreferredMsaaSamples > 0
+                    ? GraphicsRuntimeOptions.PreferredMsaaSamples
+                    : 4,
+                DepthBits: 0,
+                StencilBits: Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits)));
     }
 
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            var hdc = User32.GetDC(0);
-            return new GdiMeasurementContext(hdc, dpi);
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            return new OpenGLMeasurementContext(dpi);
-        }
-        else
-        {
-            throw new PlatformNotSupportedException();
-        }
+        var hdc = User32.GetDC(0);
+        return new GdiMeasurementContext(hdc, dpi);
     }
 
     private bool PresentLayeredWin32(Window window, IWindowSurface surface, double opacity)
@@ -294,11 +238,8 @@ public sealed partial class OpenGLGraphicsFactory
         private bool _disposed;
 
         public int PixelWidth { get; }
-
         public int PixelHeight { get; }
-
         public double DpiScale { get; }
-
         public nint Hdc { get; }
 
         public Win32LayeredBitmap(int pixelWidth, int pixelHeight, double dpiScale)

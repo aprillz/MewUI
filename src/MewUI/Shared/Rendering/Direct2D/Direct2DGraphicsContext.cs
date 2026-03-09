@@ -7,7 +7,7 @@ using Aprillz.MewUI.Native.DirectWrite;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
+internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
@@ -23,16 +23,17 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
     private nint _renderTarget; // ID2D1RenderTarget*
     private readonly int _renderTargetGeneration;
     private readonly Dictionary<uint, nint> _solidBrushes = new();
-    private readonly Stack<(Matrix3x2 transform, float globalAlpha, int clipCount, Rect? clipBoundsWorld)> _states = new();
+    private readonly Stack<(Matrix3x2 transform, float globalAlpha, int clipCount, Rect? clipBoundsWorld, bool textPixelSnap)> _states = new();
     private readonly Stack<ClipEntry> _clipStack = new();
     private Matrix3x2 _transform = Matrix3x2.Identity;
     private float _globalAlpha = 1f;
+    private bool _textPixelSnap = true;
     private Rect? _clipBoundsWorld;
     private bool _disposed;
 
-    public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
+    public override ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Default;
 
-    public double DpiScale { get; }
+    public override double DpiScale { get; }
 
     public Direct2DGraphicsContext(
         nint hwnd,
@@ -75,7 +76,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         DiagLog.Write(msg);
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed) return;
 
@@ -104,12 +105,10 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    // ── State Management ──────────────────────────────────────────────────────
+    protected override void SaveCore()
+        => _states.Push((_transform, _globalAlpha, _clipStack.Count, _clipBoundsWorld, _textPixelSnap));
 
-    public void Save()
-        => _states.Push((_transform, _globalAlpha, _clipStack.Count, _clipBoundsWorld));
-
-    public void Restore()
+    protected override void RestoreCore()
     {
         if (_states.Count == 0 || _renderTarget == 0) return;
 
@@ -118,11 +117,16 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
 
         _transform = state.transform;
         _globalAlpha = state.globalAlpha;
+        bool snapChanged = _textPixelSnap != state.textPixelSnap;
+        _textPixelSnap = state.textPixelSnap;
         _clipBoundsWorld = state.clipBoundsWorld;
         SyncNativeTransform();
+        if (snapChanged && _useClearTypeText)
+            D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget,
+                _textPixelSnap ? D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE : D2D1_TEXT_ANTIALIAS_MODE.GRAYSCALE);
     }
 
-    public void SetClip(Rect rect)
+    protected override void SetClipCore(Rect rect)
     {
         if (_renderTarget == 0) return;
 
@@ -133,7 +137,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         _clipStack.Push(new ClipEntry(ClipKind.AxisAligned, 0, 0));
     }
 
-    public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
+    protected override void SetClipRoundedRectCore(Rect rect, double radiusX, double radiusY)
     {
         if (_renderTarget == 0) return;
 
@@ -180,7 +184,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry));
     }
 
-    public void ResetClip()
+    protected override void ResetClipCore()
     {
         // Pop clips back to the save-boundary, or all clips if no save was pushed.
         int targetCount = _states.Count > 0 ? _states.Peek().clipCount : 0;
@@ -188,42 +192,58 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         _clipBoundsWorld = null;
     }
 
-    public void Translate(double dx, double dy)
+    protected override void TranslateCore(double dx, double dy)
     {
         _transform = Matrix3x2.CreateTranslation((float)dx, (float)dy) * _transform;
         SyncNativeTransform();
     }
 
-    public void Rotate(double angleRadians)
+    protected override void RotateCore(double angleRadians)
     {
         _transform = Matrix3x2.CreateRotation((float)angleRadians) * _transform;
         SyncNativeTransform();
     }
 
-    public void Scale(double sx, double sy)
+    protected override void ScaleCore(double sx, double sy)
     {
         _transform = Matrix3x2.CreateScale((float)sx, (float)sy) * _transform;
         SyncNativeTransform();
     }
 
-    public void SetTransform(Matrix3x2 matrix)
+    protected override void SetTransformCore(Matrix3x2 matrix)
     {
         _transform = matrix;
         SyncNativeTransform();
     }
 
-    public Matrix3x2 GetTransform() => _transform;
+    protected override Matrix3x2 GetTransformCore() => _transform;
 
-    public void ResetTransform()
+    protected override void ResetTransformCore()
     {
         _transform = Matrix3x2.Identity;
         SyncNativeTransform();
     }
 
-    public float GlobalAlpha
+    public override float GlobalAlpha
     {
         get => _globalAlpha;
         set => _globalAlpha = Math.Clamp(value, 0f, 1f);
+    }
+
+    public override bool TextPixelSnap
+    {
+        get => _textPixelSnap;
+        set
+        {
+            if (_textPixelSnap == value) return;
+            _textPixelSnap = value;
+            if (_renderTarget == 0) return;
+            // ClearType forces pixel snapping for subpixel RGB alignment.
+            // Switch to grayscale so NO_SNAP actually takes effect.
+            if (_useClearTypeText)
+                D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget,
+                    value ? D2D1_TEXT_ANTIALIAS_MODE.CLEARTYPE : D2D1_TEXT_ANTIALIAS_MODE.GRAYSCALE);
+        }
     }
 
     private void SyncNativeTransform()
@@ -236,15 +256,13 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, m);
     }
 
-    // ── Drawing Primitives ────────────────────────────────────────────────────
-
-    public void Clear(Color color)
+    public override void Clear(Color color)
     {
         if (_renderTarget == 0) return;
         D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, ToColorF(color));
     }
 
-    public void DrawLine(Point start, Point end, Color color, double thickness = 1)
+    protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
     {
         if (_renderTarget == 0) return;
 
@@ -253,51 +271,34 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         var p0 = ToPoint2F(start);
         var p1 = ToPoint2F(end);
 
-        var snap = GetHalfPixelDipForStroke(stroke);
-        if (snap != 0)
-        {
-            if (Math.Abs(p0.y - p1.y) < 0.0001f)
-            {
-                p0 = new D2D1_POINT_2F(p0.x, p0.y + snap);
-                p1 = new D2D1_POINT_2F(p1.x, p1.y + snap);
-            }
-            else if (Math.Abs(p0.x - p1.x) < 0.0001f)
-            {
-                p0 = new D2D1_POINT_2F(p0.x + snap, p0.y);
-                p1 = new D2D1_POINT_2F(p1.x + snap, p1.y);
-            }
-        }
-
         D2D1VTable.DrawLine((ID2D1RenderTarget*)_renderTarget, p0, p1, brush, stroke, _defaultStrokeStyle);
     }
 
-    public void DrawRectangle(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
     {
         if (_renderTarget == 0) return;
         nint brush = GetSolidBrush(color);
         float stroke = QuantizeStrokeDip((float)thickness);
-        D2D1VTable.DrawRectangle((ID2D1RenderTarget*)_renderTarget, ToStrokeRectF(rect, stroke), brush, stroke, _defaultStrokeStyle);
+        D2D1VTable.DrawRectangle((ID2D1RenderTarget*)_renderTarget, ToRectF(rect), brush, stroke, _defaultStrokeStyle);
     }
 
-    public void FillRectangle(Rect rect, Color color)
+    protected override void FillRectangleCore(Rect rect, Color color)
     {
         if (_renderTarget == 0) return;
         nint brush = GetSolidBrush(color);
         D2D1VTable.FillRectangle((ID2D1RenderTarget*)_renderTarget, ToRectF(rect), brush);
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
+    protected override void DrawRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
     {
         if (_renderTarget == 0) return;
         nint brush = GetSolidBrush(color);
         float stroke = QuantizeStrokeDip((float)thickness);
-        var snappedRect = ToStrokeRectF(rect, stroke);
-        var snap = GetHalfPixelDipForStroke(stroke);
-        var rr = new D2D1_ROUNDED_RECT(snappedRect, (float)Math.Max(0, radiusX - snap), (float)Math.Max(0, radiusY - snap));
+        var rr = new D2D1_ROUNDED_RECT(ToRectF(rect), (float)radiusX, (float)radiusY);
         D2D1VTable.DrawRoundedRectangle((ID2D1RenderTarget*)_renderTarget, rr, brush, stroke, _defaultStrokeStyle);
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
+    protected override void FillRoundedRectangleCore(Rect rect, double radiusX, double radiusY, Color color)
     {
         if (_renderTarget == 0) return;
         nint brush = GetSolidBrush(color);
@@ -305,26 +306,20 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         D2D1VTable.FillRoundedRectangle((ID2D1RenderTarget*)_renderTarget, rr, brush);
     }
 
-    public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
+    protected override void DrawEllipseCore(Rect bounds, Color color, double thickness = 1)
     {
         if (_renderTarget == 0) return;
         nint brush = GetSolidBrush(color);
         float stroke = QuantizeStrokeDip((float)thickness);
-        var snap = GetHalfPixelDipForStroke(stroke);
-
-        var snapped = snap != 0
-            ? new Rect(bounds.X + snap, bounds.Y + snap,
-                       Math.Max(0, bounds.Width - 2 * snap), Math.Max(0, bounds.Height - 2 * snap))
-            : bounds;
 
         var center = new D2D1_POINT_2F(
-            (float)(snapped.X + snapped.Width / 2),
-            (float)(snapped.Y + snapped.Height / 2));
-        var ellipse = new D2D1_ELLIPSE(center, (float)(snapped.Width / 2), (float)(snapped.Height / 2));
+            (float)(bounds.X + bounds.Width / 2),
+            (float)(bounds.Y + bounds.Height / 2));
+        var ellipse = new D2D1_ELLIPSE(center, (float)(bounds.Width / 2), (float)(bounds.Height / 2));
         D2D1VTable.DrawEllipse((ID2D1RenderTarget*)_renderTarget, ellipse, brush, stroke, _defaultStrokeStyle);
     }
 
-    public void FillEllipse(Rect bounds, Color color)
+    protected override void FillEllipseCore(Rect bounds, Color color)
     {
         if (_renderTarget == 0) return;
         nint brush = GetSolidBrush(color);
@@ -335,7 +330,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         D2D1VTable.FillEllipse((ID2D1RenderTarget*)_renderTarget, ellipse, brush);
     }
 
-    public void DrawPath(PathGeometry path, Color color, double thickness = 1)
+    public override void DrawPath(PathGeometry path, Color color, double thickness = 1)
     {
         if (_renderTarget == 0 || _d2dFactory == 0 || path == null || color.A == 0 || thickness <= 0) return;
 
@@ -354,12 +349,12 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillPath(PathGeometry path, Color color)
+    public override void FillPath(PathGeometry path, Color color)
     {
         FillPath(path, color, FillRule.NonZero);
     }
 
-    public void FillPath(PathGeometry path, Color color, FillRule fillRule)
+    public override void FillPath(PathGeometry path, Color color, FillRule fillRule)
     {
         if (_renderTarget == 0 || _d2dFactory == 0 || path == null || color.A == 0) return;
 
@@ -377,10 +372,10 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillPath(PathGeometry path, IBrush brush)
+    public override void FillPath(PathGeometry path, IBrush brush)
         => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
 
-    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
     {
         if (_renderTarget == 0 || _d2dFactory == 0 || path == null) return;
         if (brush is ISolidColorBrush solid)
@@ -404,7 +399,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
             FillPath(path, g.GetRepresentativeColor(), fillRule);
     }
 
-    public void FillRectangle(Rect rect, IBrush brush)
+    public override void FillRectangle(Rect rect, IBrush brush)
     {
         if (_renderTarget == 0) return;
         if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
@@ -416,7 +411,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
     {
         if (_renderTarget == 0) return;
         if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
@@ -428,7 +423,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void FillEllipse(Rect bounds, IBrush brush)
+    public override void FillEllipse(Rect bounds, IBrush brush)
     {
         if (_renderTarget == 0) return;
         if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
@@ -443,7 +438,7 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawPath(PathGeometry path, IPen pen)
+    public override void DrawPath(PathGeometry path, IPen pen)
     {
         if (_renderTarget == 0 || _d2dFactory == 0 || path == null || pen.Thickness <= 0) return;
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
@@ -473,28 +468,13 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawLine(Point start, Point end, IPen pen)
+    public override void DrawLine(Point start, Point end, IPen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0) return;
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
         nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
         var p0 = ToPoint2F(start);
         var p1 = ToPoint2F(end);
-
-        var snap = GetHalfPixelDipForStroke(stroke);
-        if (snap != 0)
-        {
-            if (Math.Abs(p0.y - p1.y) < 0.0001f)
-            {
-                p0 = new D2D1_POINT_2F(p0.x, p0.y + snap);
-                p1 = new D2D1_POINT_2F(p1.x, p1.y + snap);
-            }
-            else if (Math.Abs(p0.x - p1.x) < 0.0001f)
-            {
-                p0 = new D2D1_POINT_2F(p0.x + snap, p0.y);
-                p1 = new D2D1_POINT_2F(p1.x + snap, p1.y);
-            }
-        }
 
         if (pen.Brush is IGradientBrush gradient)
         {
@@ -509,12 +489,12 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawRectangle(Rect rect, IPen pen)
+    public override void DrawRectangle(Rect rect, IPen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0) return;
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
         nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
-        var rf = ToStrokeRectF(rect, stroke);
+        var rf = ToRectF(rect);
 
         if (pen.Brush is IGradientBrush gradient)
         {
@@ -529,14 +509,12 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0) return;
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
         nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
-        var snappedRect = ToStrokeRectF(rect, stroke);
-        var snap = GetHalfPixelDipForStroke(stroke);
-        var rr = new D2D1_ROUNDED_RECT(snappedRect, (float)Math.Max(0, radiusX - snap), (float)Math.Max(0, radiusY - snap));
+        var rr = new D2D1_ROUNDED_RECT(ToRectF(rect), (float)radiusX, (float)radiusY);
 
         if (pen.Brush is IGradientBrush gradient)
         {
@@ -551,22 +529,16 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         }
     }
 
-    public void DrawEllipse(Rect bounds, IPen pen)
+    public override void DrawEllipse(Rect bounds, IPen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0) return;
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
         nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
-        var snap = GetHalfPixelDipForStroke(stroke);
-
-        var snapped = snap != 0
-            ? new Rect(bounds.X + snap, bounds.Y + snap,
-                       Math.Max(0, bounds.Width - 2 * snap), Math.Max(0, bounds.Height - 2 * snap))
-            : bounds;
 
         var center = new D2D1_POINT_2F(
-            (float)(snapped.X + snapped.Width / 2),
-            (float)(snapped.Y + snapped.Height / 2));
-        var ellipse = new D2D1_ELLIPSE(center, (float)(snapped.Width / 2), (float)(snapped.Height / 2));
+            (float)(bounds.X + bounds.Width / 2),
+            (float)(bounds.Y + bounds.Height / 2));
+        var ellipse = new D2D1_ELLIPSE(center, (float)(bounds.Width / 2), (float)(bounds.Height / 2));
 
         if (pen.Brush is IGradientBrush gradient)
         {
@@ -661,27 +633,11 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         return geometry;
     }
 
-    // ── Text Rendering ────────────────────────────────────────────────────────
-
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
-    {
-        if (_clipBoundsWorld.HasValue)
-        {
-            var clip = _clipBoundsWorld.Value;
-            var wv = Vector2.Transform(new Vector2((float)location.X, (float)location.Y), _transform);
-            double estH = font is DirectWriteFont dwf ? dwf.Size * 2.5 : 40;
-            if (wv.X > clip.Right || wv.Y > clip.Bottom || wv.Y + estH < clip.Top)
-                return;
-        }
-
-        DrawText(text, new Rect(location.X, location.Y, 1_000_000, 1_000_000), font, color,
-            TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap);
-    }
-
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
+    protected override void DrawTextCore(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        TextTrimming trimming = TextTrimming.None)
     {
         if (_renderTarget == 0 || text.IsEmpty) return;
 
@@ -700,23 +656,44 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         nint textFormat = CreateTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
         if (textFormat == 0) return;
 
+        nint textLayout = 0;
+        nint trimmingSign = 0;
         try
         {
             nint brush = GetSolidBrush(color);
-            var options = wrapping == TextWrapping.NoWrap
-                ? D2D1_DRAW_TEXT_OPTIONS.NONE
-                : D2D1_DRAW_TEXT_OPTIONS.CLIP;
+            var options = _textPixelSnap
+                ? D2D1_DRAW_TEXT_OPTIONS.CLIP
+                : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP;
+
+            if (trimming == TextTrimming.CharacterEllipsis)
+            {
+                var rectF = ToRectF(bounds);
+                int hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, textFormat,
+                    rectF.right - rectF.left, rectF.bottom - rectF.top, out textLayout);
+                if (hr >= 0 && textLayout != 0)
+                {
+                    DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, textFormat, out trimmingSign);
+                    var dwriteTrimming = new DWRITE_TRIMMING { granularity = DWRITE_TRIMMING_GRANULARITY.CHARACTER };
+                    DWriteVTable.SetTrimming(textLayout, dwriteTrimming, trimmingSign);
+                    D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)_renderTarget,
+                        new D2D1_POINT_2F(rectF.left, rectF.top), textLayout, brush, options);
+                    return;
+                }
+            }
+
             D2D1VTable.DrawText((ID2D1RenderTarget*)_renderTarget, text, textFormat, ToRectF(bounds), brush, options);
         }
         finally
         {
+            ComHelpers.Release(trimmingSign);
+            ComHelpers.Release(textLayout);
             ComHelpers.Release(textFormat);
         }
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font) => MeasureText(text, font, float.MaxValue);
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font) => MeasureText(text, font, float.MaxValue);
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (text.IsEmpty) return Size.Empty;
 
@@ -779,15 +756,13 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
         return textFormat;
     }
 
-    // ── Image Rendering ───────────────────────────────────────────────────────
+    public override void DrawImage(IImage image, Point location) =>
+        DrawImageCore(image, new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight));
 
-    public void DrawImage(IImage image, Point location) =>
-        DrawImage(image, new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight));
+    protected override void DrawImageCore(IImage image, Rect destRect) =>
+        DrawImageCore(image, destRect, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
 
-    public void DrawImage(IImage image, Rect destRect) =>
-        DrawImage(image, destRect, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
-
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect) =>
+    protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect) =>
         DrawImageCore(
             image as Direct2DImage ?? throw new ArgumentException("Image must be a Direct2DImage", nameof(image)),
             destRect, sourceRect);
@@ -858,8 +833,6 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
             right: (float)(sourceRect.Right / factor),
             bottom: (float)(sourceRect.Bottom / factor));
     }
-
-    // ── Private Helpers ───────────────────────────────────────────────────────
 
     /// <summary>
     /// Creates a D2D gradient stop collection + gradient brush, invokes <paramref name="fillAction"/>
@@ -970,30 +943,12 @@ internal sealed unsafe class Direct2DGraphicsContext : IGraphicsContext
     private static D2D1_RECT_F ToRectF(Rect rect) =>
         new((float)rect.X, (float)rect.Y, (float)rect.Right, (float)rect.Bottom);
 
-    private D2D1_RECT_F ToStrokeRectF(Rect rect, float thickness)
-    {
-        var r = ToRectF(rect);
-        var snap = GetHalfPixelDipForStroke(thickness);
-        if (snap == 0) return r;
-        return new D2D1_RECT_F(r.left + snap, r.top + snap, r.right - snap, r.bottom - snap);
-    }
-
     private float QuantizeStrokeDip(float thickness)
     {
         if (thickness <= 0) return 0;
         float strokePx = thickness * (float)DpiScale;
         float snappedPx = Math.Max(1, (float)Math.Round(strokePx, MidpointRounding.AwayFromZero));
         return snappedPx / (float)DpiScale;
-    }
-
-    private float GetHalfPixelDipForStroke(float thickness)
-    {
-        if (thickness <= 0) return 0;
-        float strokePx = thickness * (float)DpiScale;
-        float rounded = (float)Math.Round(strokePx);
-        if (Math.Abs(strokePx - rounded) > 0.001f) return 0;
-        if (((int)rounded & 1) == 0) return 0;
-        return 0.5f / (float)DpiScale;
     }
 
     /// <summary>

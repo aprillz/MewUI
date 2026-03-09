@@ -28,7 +28,7 @@ internal sealed partial class MewVGGraphicsContext
         _bitmapTarget = bitmapTarget;
         _swapOnDispose = bitmapTarget == null;
 
-        DpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
+        _dpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
 
         _viewportWidthPx = Math.Max(1, pixelWidth);
         _viewportHeightPx = Math.Max(1, pixelHeight);
@@ -56,7 +56,7 @@ internal sealed partial class MewVGGraphicsContext
         _vg.ResetScissor();
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         if (_disposed)
         {
@@ -96,21 +96,11 @@ internal sealed partial class MewVGGraphicsContext
 
     #region Text Rendering
 
-    public void DrawText(ReadOnlySpan<char> text, Point location, IFont font, Color color)
-    {
-        if (text.IsEmpty)
-        {
-            return;
-        }
-
-        DrawText(text, new Rect(location.X, location.Y, 0, 0), font, color, TextAlignment.Left, TextAlignment.Top,
-            text.IndexOfAny('\r', '\n') >= 0 ? TextWrapping.Wrap : TextWrapping.NoWrap);
-    }
-
-    public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
+    protected override void DrawTextCore(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        TextTrimming trimming = TextTrimming.None)
     {
         if (text.IsEmpty)
         {
@@ -217,8 +207,12 @@ internal sealed partial class MewVGGraphicsContext
 
         // Pixel-snap to avoid sampling between texels (blurry text) when drawing rasterized text via image patterns.
         // NanoVG coordinates are in DIP, so we snap to the underlying device-pixel grid.
-        drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
-        drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+        // Skip snapping during transitions to avoid visible jumping.
+        if (_textPixelSnap)
+        {
+            drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
+            drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+        }
 
         var textHash = string.GetHashCode(text);
         var key = new MewVGTextCacheKey(new TextCacheKey(
@@ -231,7 +225,8 @@ internal sealed partial class MewVGGraphicsContext
             heightPx,
             (int)horizontalAlignment,
             (int)verticalAlignment,
-            (int)wrapping));
+            (int)wrapping,
+            (int)trimming));
 
         if (!_resources.TextCache.TryGet(key, out var entry))
         {
@@ -244,7 +239,8 @@ internal sealed partial class MewVGGraphicsContext
                 color,
                 horizontalAlignment,
                 useRasterVerticalAlignment ? verticalAlignment : TextAlignment.Top,
-                wrapping);
+                wrapping,
+                trimming);
             entry = _resources.TextCache.CreateImage(key, ref bmp);
         }
 
@@ -259,13 +255,13 @@ internal sealed partial class MewVGGraphicsContext
         DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
     {
         using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
         return measure.MeasureText(text, font);
     }
 
-    public Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
         return measure.MeasureText(text, font, maxWidth);
@@ -275,15 +271,15 @@ internal sealed partial class MewVGGraphicsContext
 
     #region Image Rendering
 
-    public void DrawImage(IImage image, Point location)
+    public override void DrawImage(IImage image, Point location)
     {
         ArgumentNullException.ThrowIfNull(image);
 
         var dest = new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight);
-        DrawImage(image, dest);
+        DrawImageCore(image, dest);
     }
 
-    public void DrawImage(IImage image, Rect destRect)
+    protected override void DrawImageCore(IImage image, Rect destRect)
     {
         ArgumentNullException.ThrowIfNull(image);
 
@@ -301,7 +297,7 @@ internal sealed partial class MewVGGraphicsContext
         DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: null, vgImage.PixelWidth, vgImage.PixelHeight);
     }
 
-    public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
+    protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
         ArgumentNullException.ThrowIfNull(image);
 

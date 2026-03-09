@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Rendering.CoreText;
-using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
@@ -25,7 +24,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
         int HeightPx,
         TextAlignment HorizontalAlignment,
         TextAlignment VerticalAlignment,
-        TextWrapping Wrapping)
+        TextWrapping Wrapping,
+        TextTrimming Trimming = TextTrimming.None)
     {
         public override int GetHashCode()
         {
@@ -38,6 +38,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 hash = (hash * 397) ^ (int)HorizontalAlignment;
                 hash = (hash * 397) ^ (int)VerticalAlignment;
                 hash = (hash * 397) ^ (int)Wrapping;
+                hash = (hash * 397) ^ (int)Trimming;
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Text);
                 return hash;
             }
@@ -59,9 +60,14 @@ internal sealed class MewVGMetalTextCache : IDisposable
         TextAlignment horizontalAlignment,
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
-        out int imageId)
+        TextTrimming trimming,
+        out int imageId,
+        out int bitmapWidthPx,
+        out int bitmapHeightPx)
     {
         imageId = 0;
+        bitmapWidthPx = widthPx;
+        bitmapHeightPx = heightPx;
 
         var fontRef = font.GetFontRef(dpi);
         if (_disposed || fontRef == 0 || text.IsEmpty)
@@ -83,16 +89,19 @@ internal sealed class MewVGMetalTextCache : IDisposable
             heightPx,
             horizontalAlignment,
             verticalAlignment,
-            wrapping);
+            wrapping,
+            trimming);
 
         if (_cache.TryGetValue(key, out var entry))
         {
             imageId = entry.ImageId;
+            bitmapWidthPx = entry.WidthPx;
+            bitmapHeightPx = entry.HeightPx;
             Touch(key);
             return imageId != 0;
         }
 
-        var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx);
+        var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx, trimming);
         if (bmp.WidthPx <= 0 || bmp.HeightPx <= 0 || bmp.Data.Length == 0)
         {
             return false;
@@ -106,6 +115,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
             return false;
         }
 
+        bitmapWidthPx = bmp.WidthPx;
+        bitmapHeightPx = bmp.HeightPx;
         Add(key, new CacheEntry(imageId, bmp.WidthPx, bmp.HeightPx));
         return true;
     }
