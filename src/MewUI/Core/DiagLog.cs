@@ -115,5 +115,5 @@ public static class DiagLog
         return $"{mib / 1024.0:F2}GiB";
     }
 
-    private static string WritePath => field ??= Path.Combine(AppContext.BaseDirectory, "mewui_diag.log");
+    private static string WritePath => field ??= System.IO.Path.Combine(AppContext.BaseDirectory, "mewui_diag.log");
 }

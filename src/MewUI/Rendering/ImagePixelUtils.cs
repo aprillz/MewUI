@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Rendering.OpenGL;
+namespace Aprillz.MewUI.Rendering;
 
 internal static class ImagePixelUtils
 {

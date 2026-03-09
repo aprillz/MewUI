@@ -34,4 +34,19 @@ public interface IFont : IDisposable
     /// Gets whether the font has strikethrough.
     /// </summary>
     bool IsStrikethrough { get; }
+
+    /// <summary>
+    /// Gets the font ascent in device-independent units (distance from baseline to top of character cell).
+    /// </summary>
+    double Ascent { get; }
+
+    /// <summary>
+    /// Gets the font descent in device-independent units (distance from baseline to bottom of character cell).
+    /// </summary>
+    double Descent { get; }
+
+    /// <summary>
+    /// Gets the internal leading in device-independent units (extra space above the ascent within the line height).
+    /// </summary>
+    double InternalLeading { get; }
 }

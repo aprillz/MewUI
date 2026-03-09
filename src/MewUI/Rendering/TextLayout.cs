@@ -40,6 +40,68 @@ internal static class TextLayout
         }
     }
 
+    private const string Ellipsis = "...";
+
+    /// <summary>
+    /// Trims a line segment to fit within the available width, appending an ellipsis (…).
+    /// Uses estimation-based approach: avgCharWidth → estimatedLen → verify with 1-3 measure calls.
+    /// </summary>
+    internal static LineSegment TrimLineWithEllipsis(
+        ReadOnlySpan<char> lineText,
+        int lineStart,
+        double availableWidth,
+        SpanMeasure measure)
+    {
+        if (lineText.IsEmpty || availableWidth <= 0)
+        {
+            return new LineSegment(lineStart, 0, 0);
+        }
+
+        double ellipsisWidth = measure(Ellipsis);
+        double targetWidth = availableWidth - ellipsisWidth;
+        if (targetWidth <= 0)
+        {
+            return new LineSegment(lineStart, 0, ellipsisWidth);
+        }
+
+        double fullWidth = measure(lineText);
+        if (fullWidth <= availableWidth)
+        {
+            return new LineSegment(lineStart, lineText.Length, fullWidth);
+        }
+
+        // Estimation: avgCharWidth → estimatedLen
+        double avgCharWidth = fullWidth / lineText.Length;
+        int estimatedLen = Math.Clamp((int)(targetWidth / avgCharWidth), 1, lineText.Length);
+
+        double w = measure(lineText.Slice(0, estimatedLen));
+
+        // Adjust: if too wide, shrink; if too narrow, grow
+        if (w > targetWidth)
+        {
+            while (estimatedLen > 1 && w > targetWidth)
+            {
+                estimatedLen--;
+                w = measure(lineText.Slice(0, estimatedLen));
+            }
+        }
+        else
+        {
+            while (estimatedLen < lineText.Length)
+            {
+                double next = measure(lineText.Slice(0, estimatedLen + 1));
+                if (next > targetWidth)
+                {
+                    break;
+                }
+                estimatedLen++;
+                w = next;
+            }
+        }
+
+        return new LineSegment(lineStart, estimatedLen, w + ellipsisWidth);
+    }
+
     private static void EnumerateWrappedSegment(
         ReadOnlySpan<char> segment,
         int segmentOffset,
@@ -81,6 +143,7 @@ internal static class TextLayout
             int lastGoodEnd = -1;
             double lineWidth = 0;
             bool anyWord = false;
+            double pendingSpaceWidth = 0;
 
             while (i < segment.Length)
             {
@@ -93,16 +156,9 @@ internal static class TextLayout
                 var word = segment.Slice(wordStart, i - wordStart);
                 double wordWidth = measure(word);
 
-                int spaceStart = i;
-                while (i < segment.Length && segment[i] == ' ')
-                {
-                    i++;
-                }
-
-                int spaceCount = i - spaceStart;
-                double spaceWidth = spaceCount > 0 ? singleSpaceWidth * spaceCount : 0;
-
-                double candidateWidth = lineWidth > 0 ? lineWidth + spaceWidth + wordWidth : wordWidth;
+                // Use pending space (from the previous word's trailing spaces)
+                // as the inter-word gap before this word.
+                double candidateWidth = lineWidth > 0 ? lineWidth + pendingSpaceWidth + wordWidth : wordWidth;
                 if (lineWidth > 0 && candidateWidth > maxWidth)
                 {
                     i = wordStart;
@@ -112,6 +168,16 @@ internal static class TextLayout
                 lineWidth = candidateWidth;
                 lastGoodEnd = wordStart + word.Length;
                 anyWord = true;
+
+                // Consume trailing spaces after this word; save width for next iteration.
+                int spaceStart = i;
+                while (i < segment.Length && segment[i] == ' ')
+                {
+                    i++;
+                }
+
+                int spaceCount = i - spaceStart;
+                pendingSpaceWidth = spaceCount > 0 ? singleSpaceWidth * spaceCount : 0;
             }
 
             if (!anyWord)

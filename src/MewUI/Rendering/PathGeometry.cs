@@ -92,8 +92,6 @@ public sealed class PathGeometry : IFreezable
     /// <summary>Gets the number of commands in the path.</summary>
     public int Count => _commands.Count;
 
-    // ── Builders ──────────────────────────────────────────────────────────────
-
     /// <summary>Starts a new sub-path at the given point.</summary>
     public void MoveTo(Point to) => MoveTo(to.X, to.Y);
     /// <summary>Starts a new sub-path at the given point.</summary>
@@ -325,8 +323,6 @@ public sealed class PathGeometry : IFreezable
         }
     }
 
-    // ── Mutation ──────────────────────────────────────────────────────────────
-
     /// <summary>Removes all commands from the path.</summary>
     public void Clear()
     {
@@ -450,8 +446,6 @@ public sealed class PathGeometry : IFreezable
         return result;
     }
 
-    // ── Queries ───────────────────────────────────────────────────────────────
-
     /// <summary>
     /// Returns the conservative axis-aligned bounding box of this path.
     /// For cubic Bézier curves, control points are included (the result may be
@@ -500,9 +494,7 @@ public sealed class PathGeometry : IFreezable
     /// <summary>
     /// Parses an SVG path data string into a <see cref="PathGeometry"/>.
     /// </summary>
-    public static PathGeometry Parse(string pathData) => SvgPathParser.Parse(pathData);
-
-    // ── Static factories ──────────────────────────────────────────────────────
+    public static PathGeometry Parse(string pathData) => SvgPathParser.Parse(pathData).Apply(x=>x.Freeze());
 
     /// <summary>Creates a closed rectangular path.</summary>
     public static PathGeometry FromRect(Rect rect)
@@ -621,8 +613,6 @@ public sealed class PathGeometry : IFreezable
     /// <summary>Creates a closed circle path with the given center and radius.</summary>
     public static PathGeometry FromCircle(double cx, double cy, double r)
         => FromEllipse(cx, cy, r, r);
-
-    // ── Private arc helpers ───────────────────────────────────────────────────
 
     /// <summary>
     /// Emits one cubic Bézier for a small arc (≤ π/2) of an axis-aligned ellipse

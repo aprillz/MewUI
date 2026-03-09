@@ -10,5 +10,6 @@ internal readonly record struct TextCacheKey(
     int HeightPx,
     int HAlign,
     int VAlign,
-    int Wrapping
+    int Wrapping,
+    int Trimming = 0
 );

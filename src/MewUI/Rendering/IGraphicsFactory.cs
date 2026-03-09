@@ -12,11 +12,8 @@ public interface IGraphicsFactory
 {
     /// <summary>
     /// Identifies which built-in backend this factory represents.
-    /// Custom factories can return <see cref="GraphicsBackend.Custom"/>.
     /// </summary>
     GraphicsBackend Backend { get; }
-
-    // ── Brush / Pen ───────────────────────────────────────────────────────────
 
     /// <summary>Creates a solid-color brush.</summary>
     /// <remarks>
@@ -47,8 +44,6 @@ public interface IGraphicsFactory
     /// <remarks>The caller is responsible for disposing the returned pen (and the brush separately).</remarks>
     IPen CreatePen(IBrush brush, double thickness = 1.0, StrokeStyle? strokeStyle = null) =>
         new Pen(brush, thickness, strokeStyle ?? StrokeStyle.Default);
-
-    // ── Gradient Brushes ──────────────────────────────────────────────────────
 
     /// <summary>
     /// Creates a linear gradient brush.
@@ -98,8 +93,6 @@ public interface IGraphicsFactory
         GradientUnits units = GradientUnits.UserSpaceOnUse,
         Matrix3x2? gradientTransform = null)
         => new RadialGradientBrush(center, gradientOrigin, radiusX, radiusY, stops, spreadMethod, units, gradientTransform);
-
-    // ── Font ──────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Creates a font resource.

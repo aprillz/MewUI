@@ -5,8 +5,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 public enum GraphicsBackend
 {
-    Direct2D = 0,
-    Gdi = 1,
-    OpenGL = 2,
-    Custom = 100,
+    Unknown,
+    Direct2D,
+    Gdi,
+    OpenGL,
+    Metal,
 }
