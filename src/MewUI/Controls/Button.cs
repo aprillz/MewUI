@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -6,43 +5,32 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A button control that responds to clicks.
 /// </summary>
-public partial class Button : Control
+public partial class Button : Control, IVisualTreeHost
 {
-    private bool _isPressed;
-    private TextMeasureCache _textMeasureCache;
+    public static readonly MewProperty<Element?> ContentProperty =
+        MewProperty<Element?>.Register<Button>(nameof(Content), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) =>
+            {
+                if (oldValue != null)
+                {
+                    oldValue.Parent = null;
+                }
 
-    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    public Button()
-    {
-        Padding = new Thickness(8, 4, 8, 4);
-    }
+                if (newValue != null)
+                {
+                    newValue.Parent = self;
+                }
+            });
 
     /// <summary>
-    /// Gets or sets the button content text.
+    /// Gets or sets the content element.
     /// </summary>
-    public string Content
+    public Element? Content
     {
-        get;
-        set
-        {
-            value ??= string.Empty;
-            if (field == value)
-            {
-                return;
-            }
-
-            field = value;
-            _textMeasureCache.Invalidate();
-            InvalidateMeasure();
-        }
-    } = string.Empty;
+        get => GetValue(ContentProperty);
+        set => SetValue(ContentProperty, value);
+    }
 
     /// <summary>
     /// Click event handler (AOT-compatible).
@@ -68,37 +56,41 @@ public partial class Button : Control
         var borderInset = GetBorderVisualInset();
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
-        // Keep the previous fallback sizing behavior for empty content.
-        if (string.IsNullOrEmpty(Content))
+        if (Content == null)
         {
             return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10).Inflate(border);
         }
 
-        var factory = GetGraphicsFactory();
-        var font = GetFont(factory);
-        var size = _textMeasureCache.Measure(factory, GetDpi(), font, Content, TextWrapping.NoWrap, 0);
-        return size.Inflate(Padding).Inflate(border);
+        var contentSize = availableSize.Deflate(Padding).Deflate(border);
+        Content.Measure(contentSize);
+        return Content.DesiredSize.Inflate(Padding).Inflate(border);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+
+        if (Content == null)
+        {
+            return;
+        }
+
+        var borderInset = GetBorderVisualInset();
+        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
+        var contentBounds = bounds.Deflate(Padding).Deflate(border);
+        Content.Arrange(contentBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var state = GetVisualState(_isPressed, _isPressed);
-
-        var bgColor = PickButtonBackground(state);
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        var bgColor = GetValue(BackgroundProperty);
+        var borderColor = GetValue(BorderBrushProperty);
 
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
         DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
 
-        // Draw text
-        if (!string.IsNullOrEmpty(Content))
-        {
-            var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(GetBorderVisualInset()));
-            var font = GetFont();
-            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-            context.DrawText(Content, contentBounds, font, textColor, TextAlignment.Center, TextAlignment.Center, TextWrapping.NoWrap);
-        }
+        Content?.Render(context);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -107,7 +99,7 @@ public partial class Button : Control
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
-            _isPressed = true;
+            SetPressed(true);
             Focus();
 
             // Capture mouse
@@ -117,7 +109,6 @@ public partial class Button : Control
                 window.CaptureMouse(this);
             }
 
-            InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -126,9 +117,9 @@ public partial class Button : Control
     {
         base.OnMouseUp(e);
 
-        if (e.Button == MouseButton.Left && _isPressed)
+        if (e.Button == MouseButton.Left && IsPressed)
         {
-            _isPressed = false;
+            SetPressed(false);
 
             // Release capture
             var root = FindVisualRoot();
@@ -143,7 +134,6 @@ public partial class Button : Control
                 OnClick();
             }
 
-            InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -151,11 +141,7 @@ public partial class Button : Control
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        if (_isPressed)
-        {
-            _isPressed = false;
-            InvalidateVisual();
-        }
+        SetPressed(false);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -165,8 +151,7 @@ public partial class Button : Control
         // Space or Enter triggers click
         if ((e.Key == Key.Space || e.Key == Key.Enter) && IsEffectivelyEnabled)
         {
-            _isPressed = true;
-            InvalidateVisual();
+            SetPressed(true);
             e.Handled = true;
         }
     }
@@ -175,18 +160,44 @@ public partial class Button : Control
     {
         base.OnKeyUp(e);
 
-        if ((e.Key == Key.Space || e.Key == Key.Enter) && _isPressed)
+        if ((e.Key == Key.Space || e.Key == Key.Enter) && IsPressed)
         {
-            _isPressed = false;
+            SetPressed(false);
             if (IsEffectivelyEnabled)
             {
                 OnClick();
             }
 
-            InvalidateVisual();
             e.Handled = true;
         }
     }
+
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (!IsVisible || !IsHitTestVisible)
+        {
+            return null;
+        }
+
+        if (Content is UIElement uiContent)
+        {
+            var result = uiContent.HitTest(point);
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
+        if (Bounds.Contains(point))
+        {
+            return this;
+        }
+
+        return null;
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => Content == null || visitor(Content);
 
     protected virtual void OnClick() => Click?.Invoke();
 }

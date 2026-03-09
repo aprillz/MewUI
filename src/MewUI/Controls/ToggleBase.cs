@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Styling;
+
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -5,38 +7,34 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract partial class ToggleBase : Control
 {
-    private bool _isChecked;
-    private bool _updatingFromSource;
+    public static readonly MewProperty<string> TextProperty =
+        MewProperty<string>.Register<ToggleBase>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<bool> IsCheckedProperty =
+        MewProperty<bool>.Register<ToggleBase>(nameof(IsChecked), false,
+            MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, _) =>
+            {
+                    self.OnIsCheckedChanged(self.IsChecked);
+                self.CheckedChanged?.Invoke(self.IsChecked);
+            });
 
     /// <summary>
     /// Gets or sets the text label.
     /// </summary>
     public string Text
     {
-        get;
-        set
-        {
-            field = value ?? string.Empty;
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    } = string.Empty;
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value ?? string.Empty);
+    }
 
     /// <summary>
     /// Gets or sets the checked state.
     /// </summary>
     public bool IsChecked
     {
-        get => _isChecked;
-        set
-        {
-            if (_isChecked == value)
-            {
-                return;
-            }
-
-            SetIsCheckedCore(value, true);
-        }
+        get => GetValue(IsCheckedProperty);
+        set => SetValue(IsCheckedProperty, value);
     }
 
     /// <summary>
@@ -50,66 +48,25 @@ public abstract partial class ToggleBase : Control
     public override bool Focusable => true;
 
     /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    /// <summary>
     /// Initializes a new instance of the ToggleBase class.
     /// </summary>
     protected ToggleBase()
     {
     }
 
-    /// <summary>
-    /// Sets the checked state from a binding source.
-    /// </summary>
-    /// <param name="value">The new checked state.</param>
-    protected void SetIsCheckedFromSource(bool value) => SetIsCheckedCore(value, false);
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+        if (IsChecked)
+            return state with { Flags = state.Flags | VisualStateFlags.Checked };
+        return state;
+    }
 
     /// <summary>
     /// Called when the checked state changes.
     /// </summary>
     /// <param name="value">The new checked state.</param>
     protected virtual void OnIsCheckedChanged(bool value) { }
-
-    /// <summary>
-    /// Sets the checked state internally.
-    /// </summary>
-    /// <param name="value">The new checked state.</param>
-    /// <param name="fromInput">Whether the change originated from user input.</param>
-    private void SetIsCheckedCore(bool value, bool fromInput)
-    {
-        _isChecked = value;
-        OnIsCheckedChanged(value);
-        CheckedChanged?.Invoke(value);
-
-        if (fromInput && !_updatingFromSource)
-        {
-            if (TryGetBinding(CheckedBindingSlot, out ValueBinding<bool> checkedBinding))
-            {
-                checkedBinding.Set(value);
-            }
-        }
-
-        InvalidateVisual();
-    }
-
-    /// <summary>
-    /// Sets a two-way binding for the IsChecked property.
-    /// </summary>
-    /// <param name="get">Function to get the current value.</param>
-    /// <param name="set">Action to set the value.</param>
-    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
-    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
-    public void SetIsCheckedBinding(
-        Func<bool> get,
-        Action<bool> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        SetIsCheckedBindingCore(get, set, subscribe, unsubscribe);
-    }
 
     protected override void OnKeyUp(KeyEventArgs e)
     {

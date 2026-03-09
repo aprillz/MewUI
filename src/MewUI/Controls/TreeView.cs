@@ -44,8 +44,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     private readonly PendingTabFocusHelper _tabFocusHelper;
     private double _observedExtentWidth;
 
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
     /// <summary>
     /// Gets or sets the root nodes collection.
     /// </summary>
@@ -127,34 +125,31 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     /// <summary>
     /// Gets or sets the height of each tree node row.
     /// </summary>
+    public static readonly MewProperty<double> ItemHeightProperty =
+        MewProperty<double>.Register<TreeView>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
     public double ItemHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(ItemHeightProperty);
+        set => SetValue(ItemHeightProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the padding around each node's text.
     /// </summary>
+    public static readonly MewProperty<Thickness> ItemPaddingProperty =
+        MewProperty<Thickness>.Register<TreeView>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) =>
+            {
+                if (self._presenter != null)
+                    self._presenter.ItemPadding = self.ItemPadding;
+                self._rebindVisibleOnNextRender = true;
+            });
+
     public Thickness ItemPadding
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                _presenter?.ItemPadding = value;
-                _rebindVisibleOnNextRender = true;
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ItemPaddingProperty);
+        set => SetValue(ItemPaddingProperty, value);
     }
 
     /// <summary>
@@ -173,26 +168,31 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
     }
 
+    public static readonly MewProperty<double> IndentProperty =
+        MewProperty<double>.Register<TreeView>(nameof(Indent), 16.0,
+            MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<TreeViewExpandTrigger> ExpandTriggerProperty =
+        MewProperty<TreeViewExpandTrigger>.Register<TreeView>(nameof(ExpandTrigger),
+            TreeViewExpandTrigger.ClickChevron, MewPropertyOptions.None);
+
     /// <summary>
     /// Gets or sets the horizontal indentation per tree level.
     /// </summary>
     public double Indent
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = 16;
+        get => GetValue(IndentProperty);
+        set => SetValue(IndentProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets which user interactions toggle node expansion.
     /// </summary>
-    public TreeViewExpandTrigger ExpandTrigger { get; set; } = TreeViewExpandTrigger.ClickChevron;
+    public TreeViewExpandTrigger ExpandTrigger
+    {
+        get => GetValue(ExpandTriggerProperty);
+        set => SetValue(ExpandTriggerProperty, value);
+    }
 
     /// <summary>
     /// Initializes a new instance of the TreeView class.
@@ -222,10 +222,10 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             HorizontalScroll = ScrollMode.Auto,
             BorderThickness = 0,
             Background = default,
-            Padding = Padding,
             Content = _presenter,
         };
         _scrollViewer.Parent = this;
+        _scrollViewer.SetBinding(PaddingProperty, this, PaddingProperty);
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
 
         _tabFocusHelper = new PendingTabFocusHelper(
@@ -293,6 +293,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
     private void OnItemsChanged(ItemsChange change)
     {
+        _observedExtentWidth = 0;
         _presenter.RecycleAll();
         _rebindVisibleOnNextRender = true;
         _hoverVisibleIndex = -1;
@@ -362,16 +363,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     /// Gets whether the tree view can receive keyboard focus.
     /// </summary>
     public override bool Focusable => true;
-
-    /// <summary>
-    /// Gets the default background color.
-    /// </summary>
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     /// <summary>
     /// Attempts to find the item (row) index at the specified position in this control's coordinates.
@@ -551,7 +542,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         _presenter.ItemHeight = itemHeight;
         _presenter.ExtentWidth = extentWidth;
-        _scrollViewer.Padding = Padding;
 
         // Let ScrollViewer compute bar visibility/metrics for the current slot.
         _scrollViewer.Measure(new Size(
@@ -592,12 +582,11 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
         var borderInset = GetBorderVisualInset();
 
-        var state = GetVisualState();
-        var bg = PickControlBackground(state);
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        var bg = GetValue(BackgroundProperty);
+        var borderColor = GetValue(BorderBrushProperty);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
         if (_itemsSource.Count == 0)
@@ -605,7 +594,8 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             return;
         }
 
-        var clipR = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), GetDpi() / 96.0);
+        var dpiScale = GetDpi() / 96.0;
+        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
         _scrollViewer.ViewportCornerRadius = clipR;
         _presenter.ItemRadius = clipR;
 
@@ -992,6 +982,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
         }
 
         int found = -1;
+        FrameworkElement? foundContainer = null;
         _presenter.VisitRealized((i, element) =>
         {
             if (found != -1)
@@ -1002,10 +993,19 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
             if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
+                foundContainer = element;
             }
         });
 
-        if (found < 0)
+        if (found < 0 || foundContainer == null)
+        {
+            return false;
+        }
+
+        var edge = moveForward
+            ? FocusManager.FindLastFocusable(foundContainer)
+            : FocusManager.FindFirstFocusable(foundContainer);
+        if (edge != null && !ReferenceEquals(edge, focusedElement))
         {
             return false;
         }
@@ -1018,7 +1018,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         _itemsSource.SelectedIndex = target;
         ScrollIntoView(target);
-        _tabFocusHelper.Schedule(target);
+        _tabFocusHelper.Schedule(target, moveForward);
         return true;
     }
 

@@ -8,33 +8,18 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class ToggleSwitch : ToggleBase
 {
-    private bool _isPressed;
     private TextMeasureCache _textMeasureCache;
 
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    public ToggleSwitch()
+    static ToggleSwitch()
     {
-        Padding = new Thickness(8, 4, 8, 4);
-        HorizontalAlignment = HorizontalAlignment.Left;
-
-        // ToggleBase sets Background=Transparent. For ToggleSwitch we want a normal control background by default.
-        Background = Theme.Palette.ButtonFace;
+        HorizontalAlignmentProperty.OverrideDefaultValue<ToggleSwitch>(HorizontalAlignment.Left);
     }
 
     private const double spacing = 8;
 
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-
-        if (Background == oldTheme.Palette.ButtonFace)
-        {
-            Background = newTheme.Palette.ButtonFace;
-        }
-
         _textMeasureCache.Invalidate();
     }
 
@@ -79,38 +64,10 @@ public sealed class ToggleSwitch : ToggleBase
 
         double radius = trackRect.Height / 2.0;
         double borderInset = GetBorderVisualInset();
-        double stroke = Math.Max(1, BorderThickness);
 
-        var state = GetVisualState(_isPressed, _isPressed);
-        var isHot = state.IsHot;
-        var isFocus = state.IsFocused;
-        var isActive = state.IsActive;
-
-        Color trackOff;
-        Color trackOn;
-        if (state.IsEnabled)
-        {
-            trackOff = Background;
-            trackOn = Theme.Palette.Accent;
-
-            if (isHot)
-            {
-                trackOff = trackOff.Lerp(Theme.Palette.Accent, 0.08);
-                trackOn = trackOn.Lerp(Theme.Palette.ControlBackground, 0.10);
-            }
-            if (isActive)
-            {
-                trackOff = trackOff.Lerp(Theme.Palette.Accent, 0.12);
-                trackOn = trackOn.Lerp(Theme.Palette.ControlBackground, 0.06);
-            }
-        }
-        else
-        {
-            trackOff = Theme.Palette.ButtonDisabledBackground;
-            trackOn = Theme.Palette.DisabledAccent;
-        }
-
-        var trackFill = IsChecked ? trackOn : trackOff;
+        var trackFill = GetValue(BackgroundProperty);
+        var thumbFill = GetValue(ForegroundProperty);
+        var borderColor = GetValue(BorderBrushProperty);
 
         if (IsChecked)
         {
@@ -118,8 +75,6 @@ public sealed class ToggleSwitch : ToggleBase
         }
         else
         {
-            var borderColor = PickAccentBorder(Theme, Theme.Palette.ControlBorder, state);
-
             DrawBackgroundAndBorder(context, trackRect, trackFill, borderColor, radius);
         }
 
@@ -129,30 +84,12 @@ public sealed class ToggleSwitch : ToggleBase
         double thumbXMax = trackRect.Right - thumbInset - thumbSize;
         double thumbX = IsChecked ? thumbXMax : thumbXMin;
         var thumbRect = new Rect(thumbX, trackRect.Y + thumbInset, thumbSize, thumbSize);
-
-        Color thumbFill;
-
-        if (state.IsEnabled)
-        {
-            if (isFocus)
-            {
-                thumbFill = (IsChecked ? Theme.Palette.AccentText : Theme.Palette.WindowText).Lerp(Theme.Palette.Focus, 0.3);
-            }
-            else
-            {
-                thumbFill = IsChecked ? Theme.Palette.AccentText : Theme.Palette.WindowText;
-            }
-        }
-        else
-        {
-            thumbFill = IsChecked ? Theme.Palette.DisabledControlBackground : Theme.Palette.DisabledText;
-        }
         context.FillEllipse(thumbRect, thumbFill);
 
         if (!string.IsNullOrEmpty(Text))
         {
             var font = GetFont();
-            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+            var textColor = GetValue(ForegroundProperty);
             var textBounds = new Rect(trackRect.Right + spacing, contentBounds.Y, contentBounds.Width - trackRect.Width - spacing, contentBounds.Height);
             context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
@@ -167,7 +104,7 @@ public sealed class ToggleSwitch : ToggleBase
             return;
         }
 
-        _isPressed = true;
+        SetPressed(true);
         Focus();
 
         var root = FindVisualRoot();
@@ -176,21 +113,19 @@ public sealed class ToggleSwitch : ToggleBase
             window.CaptureMouse(this);
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
-
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
 
-        if (e.Button != MouseButton.Left || !_isPressed)
+        if (e.Button != MouseButton.Left || !IsPressed)
         {
             return;
         }
 
-        _isPressed = false;
+        SetPressed(false);
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -205,7 +140,6 @@ public sealed class ToggleSwitch : ToggleBase
 
         IsChecked = !IsChecked;
 
-        InvalidateVisual();
         e.Handled = true;
     }
 

@@ -3,7 +3,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
+public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 {
     private enum ButtonPart
     {
@@ -12,21 +12,38 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         Increment
     }
 
-    private string _format = "0.##";
-    private double _step = 1;
+    public static readonly MewProperty<string> FormatProperty =
+        MewProperty<string>.Register<NumericUpDown>(nameof(Format), "0.##", MewPropertyOptions.AffectsLayout,
+            static (self, _, _) =>
+            {
+                self._measureCache.Invalidate();
+                self.UpdateTextBoxFromValue();
+            });
+
+    public static readonly MewProperty<double> StepProperty =
+        MewProperty<double>.Register<NumericUpDown>(nameof(Step), 1.0, MewPropertyOptions.None);
+
+    public static readonly MewProperty<bool> EditModeProperty =
+        MewProperty<bool>.Register<NumericUpDown>(nameof(EditMode), false, MewPropertyOptions.None,
+            static (self, _, _) => self.UpdateEditMode());
+
     private TextMeasureCache _measureCache;
     private ButtonPart _hoverPart;
     private ButtonPart _pressedPart;
     private readonly TextBox _textBox;
-    private bool _editMode;
     private bool _suppressTextBoxUpdate;
 
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+
+        if (_pressedPart != ButtonPart.None)
+            return state with { Flags = state.Flags | Styling.VisualStateFlags.Pressed };
+        return state;
+    }
 
     public NumericUpDown()
     {
-        Padding = new Thickness(8, 4, 8, 4);
-
         _textBox = new TextBox
         {
             BorderThickness = 0,
@@ -43,56 +60,33 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         AttachChild(_textBox);
     }
 
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
+    public static readonly MewProperty<bool> ChangeOnWheelProperty =
+        MewProperty<bool>.Register<NumericUpDown>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    public bool ChangeOnWheel { get; set; } = true;
+    public bool ChangeOnWheel
+    {
+        get => GetValue(ChangeOnWheelProperty);
+        set => SetValue(ChangeOnWheelProperty, value);
+    }
 
     public override bool Focusable => true;
 
     public bool EditMode
     {
-        get => _editMode;
-        set
-        {
-            if (Set(ref _editMode, value))
-            {
-                UpdateEditMode();
-            }
-        }
+        get => GetValue(EditModeProperty);
+        set => SetValue(EditModeProperty, value);
     }
 
     public string Format
     {
-        get => _format;
-        set
-        {
-            if (_format == value)
-            {
-                return;
-            }
-            _format = value;
-            _measureCache.Invalidate();
-            InvalidateMeasure();
-            InvalidateVisual();
-            UpdateTextBoxFromValue();
-        }
+        get => GetValue(FormatProperty);
+        set => SetValue(FormatProperty, value);
     }
 
     public double Step
     {
-        get => _step;
-        set
-        {
-            if (_step.Equals(value))
-            {
-                return;
-            }
-            _step = value;
-        }
+        get => GetValue(StepProperty);
+        set => SetValue(StepProperty, value);
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -108,16 +102,11 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         _textBox.IsEnabled = IsEffectivelyEnabled;
     }
 
-    protected override void OnValueChanged(double value, bool fromUser)
+    protected override void OnValueChanged(double value)
     {
         _measureCache.Invalidate();
         InvalidateMeasure();
         UpdateTextBoxFromValue();
-
-        if (fromUser && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
-        {
-            valueBinding.Set(value);
-        }
     }
 
     protected override Size MeasureContent(Size available)
@@ -151,12 +140,12 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
     {
         _textBox.IsEnabled = IsEffectivelyEnabled;
 
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
 
-        var state = GetVisualState(_pressedPart != ButtonPart.None, _pressedPart != ButtonPart.None);
+        var state = CurrentVisualState;
         bool isEnabled = state.IsEnabled;
-        Color bg = PickControlBackground(state);
-        Color border = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        Color bg = GetValue(BackgroundProperty);
+        Color border = GetValue(BorderBrushProperty);
 
         var metrics = GetBorderRenderMetrics(Bounds, radius);
         var bounds = metrics.Bounds;
@@ -197,7 +186,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (buttonRect.Width > 0)
         {
-            var innerRadius = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), context.DpiScale);
+            var innerRadius = metrics.InnerCornerRadius;
             context.Save();
             context.SetClipRoundedRect(
                 inner,
@@ -209,7 +198,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
             if (BorderThickness > 0)
             {
-                context.DrawLine(new Point(buttonRect.Left, buttonRect.Y), new Point(buttonRect.Left, buttonRect.Bottom), Theme.Palette.ControlBorder, BorderThickness);
+                context.DrawLine(new Point(buttonRect.Left, buttonRect.Y), new Point(buttonRect.Left, buttonRect.Bottom), Theme.Palette.ControlBorder, BorderThickness, pixelSnap: true);
             }
 
             context.Restore();
@@ -249,7 +238,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         }
 
 
-        double delta = e.Delta > 0 ? _step : -_step;
+        double delta = e.Delta > 0 ? Step : -Step;
         Value += delta;
         e.Handled = true;
         UpdateTextBoxFromValue();
@@ -328,7 +317,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         var releasedPart = HitTestButtonPart(e.Position);
         if (releasedPart == _pressedPart && IsEffectivelyEnabled)
         {
-            Value += _pressedPart == ButtonPart.Increment ? _step : -_step;
+            Value += _pressedPart == ButtonPart.Increment ? Step : -Step;
             UpdateTextBoxFromValue();
         }
 
@@ -352,14 +341,14 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Up)
         {
-            Value += _step;
+            Value += Step;
             UpdateTextBoxFromValue();
             InvalidateVisual();
             e.Handled = true;
         }
         else if (e.Key == Key.Down)
         {
-            Value -= _step;
+            Value -= Step;
             UpdateTextBoxFromValue();
             InvalidateVisual();
             e.Handled = true;
@@ -439,7 +428,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
         return FormatValue(Value);
     }
 
-    private string FormatValue(double value) => value.ToString(_format);
+    private string FormatValue(double value) => value.ToString(Format);
 
     private void CommitEdit()
     {
@@ -589,7 +578,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Up)
         {
-            Value += _step;
+            Value += Step;
             UpdateTextBoxFromValue();
             e.Handled = true;
             return;
@@ -597,7 +586,7 @@ public sealed partial class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Down)
         {
-            Value -= _step;
+            Value -= Step;
             UpdateTextBoxFromValue();
             e.Handled = true;
         }

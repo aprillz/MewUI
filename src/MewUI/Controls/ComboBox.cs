@@ -8,14 +8,34 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed partial class ComboBox : DropDownBase
 {
+    public static readonly MewProperty<int> SelectedIndexProperty =
+        MewProperty<int>.Register<ComboBox>(nameof(SelectedIndex), -1,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
+
+    public static readonly MewProperty<bool> ZebraStripingProperty =
+        MewProperty<bool>.Register<ComboBox>(nameof(ZebraStriping), true, MewPropertyOptions.None,
+            static (self, _, _) =>
+            {
+                if (self._popupList != null)
+                    self._popupList.ZebraStriping = self.ZebraStriping;
+            });
+
+    public static readonly MewProperty<string> PlaceholderProperty =
+        MewProperty<string>.Register<ComboBox>(nameof(Placeholder), string.Empty, MewPropertyOptions.AffectsRender);
+
     private readonly TextWidthCache _textWidthCache = new(512);
     private ListBox? _popupList;
-    private bool _updatingFromSource;
+    private bool _syncingSelectedIndex;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private IDataTemplate? _itemTemplate;
 
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+    public bool ZebraStriping
+    {
+        get => GetValue(ZebraStripingProperty);
+        set => SetValue(ZebraStripingProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the items data source.
@@ -71,8 +91,8 @@ public sealed partial class ComboBox : DropDownBase
     /// </summary>
     public int SelectedIndex
     {
-        get => ItemsSource.SelectedIndex;
-        set => ItemsSource.SelectedIndex = value;
+        get => GetValue(SelectedIndexProperty);
+        set => SetValue(SelectedIndexProperty, value);
     }
 
     /// <summary>
@@ -85,56 +105,34 @@ public sealed partial class ComboBox : DropDownBase
     /// </summary>
     public string? SelectedText => SelectedIndex >= 0 && SelectedIndex < ItemsSource.Count ? ItemsSource.GetText(SelectedIndex) : null;
 
-    public bool ChangeOnWheel { get; set; } = true;
+    public static readonly MewProperty<bool> ChangeOnWheelProperty =
+        MewProperty<bool>.Register<ComboBox>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
+
+    public bool ChangeOnWheel
+    {
+        get => GetValue(ChangeOnWheelProperty);
+        set => SetValue(ChangeOnWheelProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the placeholder text shown when no item is selected.
     /// </summary>
     public string Placeholder
     {
-        get;
-        set
-        {
-            var v = value ?? string.Empty;
-            if (Set(ref field, v))
-            {
-                InvalidateVisual();
-            }
-        }
-    } = string.Empty;
+        get => GetValue(PlaceholderProperty);
+        set => SetValue(PlaceholderProperty, value ?? string.Empty);
+    }
 
     /// <summary>
     /// Gets or sets the height of items in the dropdown list.
     /// </summary>
+    public static readonly MewProperty<double> ItemHeightProperty =
+        MewProperty<double>.Register<ComboBox>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
     public double ItemHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = double.NaN;
-
-    /// <summary>
-    /// Gets or sets the maximum height of the dropdown list.
-    /// </summary>
-    public new double MaxDropDownHeight
-    {
-        get => base.MaxDropDownHeight;
-        set
-        {
-            // Keep Measure invalidation behavior from the previous implementation.
-            if (base.MaxDropDownHeight.Equals(value))
-            {
-                return;
-            }
-
-            base.MaxDropDownHeight = value;
-            InvalidateMeasure();
-        }
+        get => GetValue(ItemHeightProperty);
+        set => SetValue(ItemHeightProperty, value);
     }
 
     /// <summary>
@@ -168,11 +166,6 @@ public sealed partial class ComboBox : DropDownBase
     /// </summary>
     public ComboBox()
     {
-        Padding = new Thickness(8, 4, 8, 4);
-        // Do not set explicit Height, otherwise FrameworkElement.MeasureOverride will clamp DesiredSize
-        // and the drop-down cannot expand. Use MinHeight as the default header height.
-        Height = double.NaN;
-
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
         _itemsSource.Changed += OnItemsChanged;
     }
@@ -188,6 +181,22 @@ public sealed partial class ComboBox : DropDownBase
         InvalidateVisual();
     }
 
+    private void OnSelectedIndexPropertyChanged(int newIndex)
+    {
+        if (_syncingSelectedIndex) return;
+        _syncingSelectedIndex = true;
+        try
+        {
+            _itemsSource.SelectedIndex = newIndex;
+            int actual = _itemsSource.SelectedIndex;
+            if (actual != newIndex)
+            {
+                SetValue(SelectedIndexProperty, actual);
+            }
+        }
+        finally { _syncingSelectedIndex = false; }
+    }
+
     private void OnItemsSelectionChanged(int index)
     {
         if (_suppressItemsSelectionChanged)
@@ -195,12 +204,11 @@ public sealed partial class ComboBox : DropDownBase
             return;
         }
 
-        if (!_updatingFromSource)
+        if (!_syncingSelectedIndex)
         {
-            if (TryGetBinding(SelectedIndexBindingSlot, out ValueBinding<int> binding))
-            {
-                binding.Set(index);
-            }
+            _syncingSelectedIndex = true;
+            try { SetValue(SelectedIndexProperty, index); }
+            finally { _syncingSelectedIndex = false; }
         }
 
         SelectionChanged?.Invoke(SelectedItem);
@@ -253,7 +261,7 @@ public sealed partial class ComboBox : DropDownBase
             .Deflate(Padding);
 
         string text = SelectedText ?? string.Empty;
-        var state = GetVisualState(isPressed: false, isActive: IsDropDownOpen);
+        var state = CurrentVisualState;
         var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
         if (string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(Placeholder) && !state.IsFocused)
         {
@@ -344,6 +352,7 @@ public sealed partial class ComboBox : DropDownBase
     protected override UIElement CreatePopupContent()
     {
         _popupList = new ListBox();
+        _popupList.ZebraStriping = ZebraStriping;
         _popupList.SelectionChanged += OnPopupListSelectionChanged;
         _popupList.ItemActivated += OnPopupListItemActivated;
         return _popupList;
@@ -378,6 +387,7 @@ public sealed partial class ComboBox : DropDownBase
         }
 
         list.ItemHeight = ResolveItemHeight();
+        list.ZebraStriping = ZebraStriping;
 
         // Ensure popup reflects the current ComboBox selection.
         list.SelectedIndex = SelectedIndex;
@@ -452,22 +462,6 @@ public sealed partial class ComboBox : DropDownBase
         }
 
         e.Handled = true;
-    }
-
-    /// <summary>
-    /// Sets a two-way binding for the SelectedIndex property.
-    /// </summary>
-    /// <param name="get">Function to get the current value.</param>
-    /// <param name="set">Action to set the value.</param>
-    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
-    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
-    public void SetSelectedIndexBinding(
-        Func<int> get,
-        Action<int> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        SetSelectedIndexBindingCore(get, set, subscribe, unsubscribe);
     }
 
     private double ResolveItemHeight()

@@ -17,7 +17,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     public event Action<TextCompositionEventArgs>? TextCompositionEnd;
 
-    private bool _suppressBindingSet;
+    private bool _syncingText;
     private string? _cachedText;
     private int _cachedTextVersion = -1;
     private readonly TextEditorCore _editor;
@@ -31,6 +31,14 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     private int _compositionLength;
 
     private ContextMenu? _defaultContextMenu;
+
+    private CancellationTokenSource? _caretCts;
+    private bool _caretVisible = true;
+
+    /// <summary>
+    /// Gets whether the caret is currently visible (toggles during blink).
+    /// </summary>
+    internal bool CaretVisible => _caretVisible;
 
     /// <summary>
     /// Gets the text document.
@@ -150,56 +158,61 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         set
         {
             var normalized = NormalizeText(value ?? string.Empty);
-            var current = GetTextCore();
-            if (current == normalized)
+            if (GetTextCore() == normalized)
             {
                 return;
             }
 
-            var old = current;
-            SetTextCore(normalized);
-            _editor.ResetAfterTextSet();
-            InvalidateVisual();
-
-            OnTextChanged(old, normalized);
-            TextChanged?.Invoke(GetTextCore());
+            SetValue(TextProperty, normalized);
         }
     }
+
+    public static readonly MewProperty<string> TextProperty =
+        MewProperty<string>.Register<TextBase>(nameof(Text), string.Empty,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnTextPropertyChanged(newVal));
+
+    public static readonly MewProperty<string> PlaceholderProperty =
+        MewProperty<string>.Register<TextBase>(nameof(Placeholder), string.Empty, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<bool> IsReadOnlyProperty =
+        MewProperty<bool>.Register<TextBase>(nameof(IsReadOnly), false, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<bool> AcceptTabProperty =
+        MewProperty<bool>.Register<TextBase>(nameof(AcceptTab), false, MewPropertyOptions.None);
+
+    public static readonly MewProperty<bool> AcceptReturnProperty =
+        MewProperty<bool>.Register<TextBase>(nameof(AcceptReturn), false, MewPropertyOptions.None);
 
     /// <summary>
     /// Gets or sets the placeholder text shown when the control is empty.
     /// </summary>
     public string Placeholder
     {
-        get;
-        set
-        {
-            var v = value ?? string.Empty;
-            if (Set(ref field, v))
-            {
-                InvalidateVisual();
-            }
-        }
-    } = string.Empty;
+        get => GetValue(PlaceholderProperty);
+        set => SetValue(PlaceholderProperty, value ?? string.Empty);
+    }
 
     /// <summary>
     /// Gets or sets whether the text is read-only.
     /// </summary>
     public bool IsReadOnly
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(IsReadOnlyProperty);
+        set => SetValue(IsReadOnlyProperty, value);
     }
 
-    public bool AcceptTab { get; set; }
+    public bool AcceptTab
+    {
+        get => GetValue(AcceptTabProperty);
+        set => SetValue(AcceptTabProperty, value);
+    }
 
-    public bool AcceptReturn { get; set; }
+    public bool AcceptReturn
+    {
+        get => GetValue(AcceptReturnProperty);
+        set => SetValue(AcceptReturnProperty, value);
+    }
 
     public int CaretPosition
     {
@@ -210,6 +223,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
             _editor.SetCaretPosition(value);
             if (old != _editor.CaretPosition)
             {
+                ResetCaretBlink();
                 InvalidateVisual();
             }
         }
@@ -400,9 +414,9 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     protected override sealed void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
 
-        var state = GetVisualState();
+        var state = CurrentVisualState;
         var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
 
         DrawBackgroundAndBorder(
@@ -771,8 +785,16 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     void ITextInputClient.HandleTextInput(TextInputEventArgs e)
         => OnTextInput(e);
 
+    protected override void OnGotFocus()
+    {
+        base.OnGotFocus();
+        StartCaretBlink();
+    }
+
     protected override void OnLostFocus()
     {
+        StopCaretBlink();
+        _caretVisible = true;
         base.OnLostFocus();
         if (_isTextComposing)
         {
@@ -780,6 +802,37 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
             InvalidateMeasure();
             InvalidateVisual();
         }
+    }
+
+    private async void StartCaretBlink()
+    {
+        StopCaretBlink();
+        _caretVisible = true;
+        _caretCts = new CancellationTokenSource();
+        var ct = _caretCts.Token;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(500, ct);
+                _caretVisible = !_caretVisible;
+                InvalidateVisual();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void StopCaretBlink()
+    {
+        _caretCts?.Cancel();
+        _caretCts?.Dispose();
+        _caretCts = null;
+    }
+
+    private void ResetCaretBlink()
+    {
+        if (!IsFocused) return;
+        StartCaretBlink();
     }
 
     private void BeginTextCompositionInternal()
@@ -944,27 +997,18 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
     }
 
-    public void SetTextBinding(
-        Func<string> get,
-        Action<string> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(set);
-
-        SetTextBindingCore(get, set, subscribe, unsubscribe);
-    }
-
     protected override void OnDispose()
     {
         Document.Dispose();
-        TextChanged -= ForwardTextChangedToBinding;
     }
 
     protected void NotifyTextChanged()
     {
-        TextChanged?.Invoke(GetTextCore());
+        var text = GetTextCore();
+        _syncingText = true;
+        try { SetValue(TextProperty, text); }
+        finally { _syncingText = false; }
+        TextChanged?.Invoke(text);
     }
 
     protected void NotifyWrapChanged(bool value)
@@ -972,17 +1016,26 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         WrapChanged?.Invoke(value);
     }
 
-    private void ForwardTextChangedToBinding(string text)
+    private void OnTextPropertyChanged(string newValue)
     {
-        if (_suppressBindingSet)
+        if (_syncingText) return;
+        _syncingText = true;
+        try
         {
-            return;
-        }
+            var normalized = NormalizeText(newValue ?? string.Empty);
+            var current = GetTextCore();
+            if (current != normalized)
+            {
+                var old = current;
+                SetTextCore(normalized);
+                _editor.ResetAfterTextSet();
+                InvalidateVisual();
+                OnTextChanged(old, normalized);
+            }
 
-        if (TryGetBinding(TextBindingSlot, out ValueBinding<string> textBinding))
-        {
-            textBinding.Set(text);
+            TextChanged?.Invoke(GetTextCore());
         }
+        finally { _syncingText = false; }
     }
 
     public void Undo()
@@ -1114,6 +1167,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     protected void SetCaretAndSelection(int newPos, bool extendSelection)
     {
         _editor.SetCaretAndSelection(newPos, extendSelection);
+        ResetCaretBlink();
     }
 
     protected void MoveCaretHorizontal(int direction, bool extendSelection, bool word)

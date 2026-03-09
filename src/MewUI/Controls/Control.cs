@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -7,15 +8,61 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract class Control : FrameworkElement
 {
+    #region MewProperty Declarations
+
+    /// <summary>Background color property.</summary>
+    public static readonly MewProperty<Color> BackgroundProperty =
+        MewProperty<Color>.Register<Control>(nameof(Background), Color.Transparent, MewPropertyOptions.AffectsRender);
+
+    /// <summary>Border color property.</summary>
+    public static readonly MewProperty<Color> BorderBrushProperty =
+        MewProperty<Color>.Register<Control>(nameof(BorderBrush), Color.Transparent, MewPropertyOptions.AffectsRender);
+
+    /// <summary>Foreground (text) color property with inheritance support.</summary>
+    public static readonly MewProperty<Color> ForegroundProperty =
+        MewProperty<Color>.Register<Control>(nameof(Foreground), Color.Black,
+            MewPropertyOptions.AffectsRender | MewPropertyOptions.Inherits);
+
+    /// <summary>Font family property with inheritance support.</summary>
+    public static readonly MewProperty<string> FontFamilyProperty =
+        MewProperty<string>.Register<Control>(nameof(FontFamily), "Segoe UI",
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
+
+    /// <summary>Font size property with inheritance support.</summary>
+    public static readonly MewProperty<double> FontSizeProperty =
+        MewProperty<double>.Register<Control>(nameof(FontSize), 12.0,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
+
+    /// <summary>Font weight property with inheritance support.</summary>
+    public static readonly MewProperty<FontWeight> FontWeightProperty =
+        MewProperty<FontWeight>.Register<Control>(nameof(FontWeight), FontWeight.Normal,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
+
+    /// <summary>Corner radius for background/border rendering.</summary>
+    public static readonly MewProperty<double> CornerRadiusProperty =
+        MewProperty<double>.Register<Control>(nameof(CornerRadius), 0.0, MewPropertyOptions.AffectsRender);
+
+    /// <summary>Border thickness property.</summary>
+    public static readonly MewProperty<double> BorderThicknessProperty =
+        MewProperty<double>.Register<Control>(nameof(BorderThickness), 0.0,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
+
+    #endregion
+
     private IFont? _font;
-    private Color? _background;
-    private Color? _foreground;
-    private Color? _borderBrush;
-    private double? _borderThickness;
-    private string? _fontFamily;
-    private double? _fontSize;
-    private FontWeight? _fontWeight;
+    private uint _fontDpi;
     private Point _lastMousePositionInWindow;
+
+    // VisualState system fields
+    private VisualState _visualState;
+
+    private bool _isPressed;
+    private bool _forceApplyStyle;
+    private bool _styleResolved;
+
+    private Style? _style;
+    private string? _styleName;
+    private Dictionary<string, UIElement>? _parts;
 
     /// <summary>
     /// Gets or sets the tooltip text for this control.
@@ -38,17 +85,8 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public Color Background
     {
-        get => _background ?? DefaultBackground;
-        set
-        {
-            if (Background == value)
-            {
-                return;
-            }
-
-            _background = value;
-            InvalidateVisual();
-        }
+        get => GetValue(BackgroundProperty);
+        set => SetValue(BackgroundProperty, value);
     }
 
     /// <summary>
@@ -56,17 +94,8 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public Color Foreground
     {
-        get => _foreground ?? DefaultForeground;
-        set
-        {
-            if (Foreground == value)
-            {
-                return;
-            }
-
-            _foreground = value;
-            InvalidateVisual();
-        }
+        get => GetValue(ForegroundProperty);
+        set => SetValue(ForegroundProperty, value);
     }
 
     /// <summary>
@@ -74,17 +103,17 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public Color BorderBrush
     {
-        get => _borderBrush ?? DefaultBorderBrush;
-        set
-        {
-            if (BorderBrush == value)
-            {
-                return;
-            }
+        get => GetValue(BorderBrushProperty);
+        set => SetValue(BorderBrushProperty, value);
+    }
 
-            _borderBrush = value;
-            InvalidateVisual();
-        }
+    /// <summary>
+    /// Gets or sets the corner radius for background/border rendering.
+    /// </summary>
+    public double CornerRadius
+    {
+        get => GetValue(CornerRadiusProperty);
+        set => SetValue(CornerRadiusProperty, value);
     }
 
     /// <summary>
@@ -92,19 +121,8 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public double BorderThickness
     {
-        get => _borderThickness ?? DefaultBorderThickness;
-        set
-        {
-            if (BorderThickness.Equals(value))
-            {
-                return;
-            }
-
-            _borderThickness = value;
-            InvalidateMeasure();
-            InvalidateArrange();
-            InvalidateVisual();
-        }
+        get => GetValue(BorderThicknessProperty);
+        set => SetValue(BorderThicknessProperty, value);
     }
 
     /// <summary>
@@ -112,14 +130,8 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public string FontFamily
     {
-        get => _fontFamily ?? DefaultFontFamily;
-        set
-        {
-            _fontFamily = value ?? string.Empty;
-            _font?.Dispose();
-            _font = null;
-            InvalidateMeasure();
-        }
+        get => GetValue(FontFamilyProperty);
+        set => SetValue(FontFamilyProperty, value ?? string.Empty);
     }
 
     /// <summary>
@@ -127,14 +139,8 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public double FontSize
     {
-        get => _fontSize ?? DefaultFontSize;
-        set
-        {
-            _fontSize = value;
-            _font?.Dispose();
-            _font = null;
-            InvalidateMeasure();
-        }
+        get => GetValue(FontSizeProperty);
+        set => SetValue(FontSizeProperty, value);
     }
 
     /// <summary>
@@ -142,115 +148,334 @@ public abstract class Control : FrameworkElement
     /// </summary>
     public FontWeight FontWeight
     {
-        get => _fontWeight ?? DefaultFontWeight;
+        get => GetValue(FontWeightProperty);
+        set => SetValue(FontWeightProperty, value);
+    }
+
+
+    #region VisualState System
+
+    /// <summary>
+    /// Gets the current visual state. Updated automatically before each OnRender.
+    /// </summary>
+    protected VisualState CurrentVisualState => _visualState;
+
+    /// <summary>
+    /// Gets whether the control is currently pressed.
+    /// </summary>
+    protected bool IsPressed => _isPressed;
+
+    /// <summary>
+    /// Named style key. Resolved from the nearest StyleSheet up the tree.
+    /// Higher priority than StyleScope and Theme style.
+    /// </summary>
+    public string? StyleName
+    {
+        get => _styleName;
         set
         {
-            _fontWeight = value;
+            if (_styleName != value)
+            {
+                _styleName = value;
+                ResolveAndApplyStyle();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sets the pressed state and invalidates visual if changed.
+    /// </summary>
+    protected void SetPressed(bool pressed)
+    {
+        if (_isPressed != pressed)
+        {
+            _isPressed = pressed;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// Registers a child element as a named part for TargetSetter resolution.
+    /// </summary>
+    protected void RegisterPart(string name, UIElement element)
+    {
+        _parts ??= new();
+        _parts[name] = element;
+    }
+
+    /// <summary>
+    /// Gets a registered named part. Returns null if not found.
+    /// </summary>
+    internal UIElement? GetPart(string name)
+        => _parts?.GetValueOrDefault(name);
+
+    /// <summary>
+    /// Computes the current visual state. Override to include control-specific state.
+    /// Called once per render frame before OnRender.
+    /// </summary>
+    protected virtual VisualState ComputeVisualState()
+    {
+        var f = VisualStateFlags.None;
+        var enabled = IsEffectivelyEnabled;
+        if (enabled)
+        {
+            f |= VisualStateFlags.Enabled;
+            if (IsMouseOver || IsMouseCaptured) f |= VisualStateFlags.Hot;
+            if (IsFocused || IsFocusWithin) f |= VisualStateFlags.Focused;
+            if (_isPressed) f |= VisualStateFlags.Pressed;
+        }
+        return new VisualState { Flags = f };
+    }
+
+    /// <summary>
+    /// Called when the visual state changes.
+    /// Most controls do NOT need to override this — Style + StateTrigger handles state-based values automatically.
+    /// </summary>
+    protected virtual void OnVisualStateChanged(VisualState oldState, VisualState newState)
+    { }
+
+    /// <summary>
+    /// Ensures the control's style has been resolved at least once.
+    /// Call from layout entry points that bypass <see cref="MeasureOverride"/> (e.g. Window.PerformLayout).
+    /// </summary>
+    protected void EnsureStyleResolved()
+    {
+        if (!_styleResolved)
+        {
+            ResolveAndApplyStyle();
+        }
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        EnsureStyleResolved();
+
+        return base.MeasureOverride(availableSize);
+    }
+
+    /// <summary>
+    /// Sets the style for this control.
+    /// </summary>
+    /// <summary>
+    /// Forces the next <see cref="Render"/> pass to snap style values immediately
+    /// instead of animating from the cached <see cref="_visualState"/>.
+    /// Used when a virtualization-pinned container re-enters the visible range
+    /// and its cached visual state may be stale (e.g. still has Focused/Active
+    /// flags from when it was off-screen).
+    /// </summary>
+    internal void ForceStyleSnap()
+    {
+        _forceApplyStyle = true;
+    }
+
+    internal void SetStyle(Style? style)
+    {
+        _style = style;
+        _forceApplyStyle = true;
+
+        // Pre-apply the full style chain (base setters + matching triggers)
+        // via SetTarget so layout-affecting properties and current-state visuals
+        // are immediately correct before the next Measure/Arrange/Render.
+        // Without triggers, re-attachment would flash enabled colors because
+        // PreApply only set base (enabled) values and the disabled trigger
+        // was re-applied later via animation in Render.
+        PreApplyStyle(style);
+
+        InvalidateVisual();
+    }
+
+    private void PreApplyStyle(Style? style)
+    {
+        if (style == null) return;
+        PreApplyStyle(style.BasedOn);
+
+        var flags = ComputeVisualState().Flags;
+
+        for (int i = 0; i < style.Setters.Count; i++)
+        {
+            if (style.Setters[i] is Setter s)
+                PropertyStore.SetTarget(s.Property, s.Value);
+        }
+
+        for (int i = 0; i < style.Triggers.Count; i++)
+        {
+            var trigger = style.Triggers[i];
+            if (trigger.Matches(flags))
+            {
+                for (int j = 0; j < trigger.Setters.Count; j++)
+                {
+                    if (trigger.Setters[j] is Setter s)
+                        PropertyStore.SetTarget(s.Property, s.Value);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves the effective Style for this control from:
+    /// 1. StyleName (named style from nearest StyleSheet)
+    /// 2. StyleScope (nearest container's type-matched rule)
+    /// 3. Theme (type-based default)
+    /// </summary>
+    internal void ResolveAndApplyStyle()
+    {
+        _styleResolved = true;
+        Style? resolved = null;
+
+        // TODO: 1. StyleName → nearest StyleSheet lookup
+        // TODO: 2. StyleScope → nearest container type-matched rule
+
+        // 3. Theme default style (walk type hierarchy)
+        if (resolved == null)
+        {
+            var type = GetType();
+            while (type != null && type != typeof(UIElement))
+            {
+                resolved = Theme.GetStyle(type);
+                if (resolved != null) break;
+                type = type.BaseType;
+            }
+        }
+
+        SetStyle(resolved);
+    }
+
+    /// <summary>
+    /// Rendering pipeline override. Computes visual state, resolves style values, then renders.
+    /// </summary>
+    public override void Render(IGraphicsContext context)
+    {
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        var newState = ComputeVisualState();
+        var oldState = _visualState;
+
+        if (newState != oldState || _forceApplyStyle)
+        {
+            // When _forceApplyStyle is true (style just set/changed, re-attachment, theme change),
+            // snap to target values immediately instead of animating. Animations are only for
+            // interactive state changes (hover, press, focus).
+            bool snap = _forceApplyStyle;
+            _forceApplyStyle = false;
+            _visualState = newState;
+            ApplyStyleValues(newState.Flags, snap);
+            OnVisualStateChanged(oldState, newState);
+        }
+
+        OnRender(context);
+    }
+
+    /// <summary>
+    /// Resolves and applies property values from Style + StateTrigger based on current flags.
+    /// </summary>
+    private void ApplyStyleValues(VisualStateFlags flags, bool snap = false)
+    {
+        ApplyStyleChain(_style, flags, snap);
+    }
+
+    private void ApplyStyleChain(Style? style, VisualStateFlags flags, bool snap)
+    {
+        if (style == null) return;
+
+        // Process BasedOn first (lower priority)
+        ApplyStyleChain(style.BasedOn, flags, snap);
+
+        // Apply base setters
+        for (int i = 0; i < style.Setters.Count; i++)
+            ApplySetter(style.Setters[i], snap);
+
+        // Apply matching triggers in declaration order.
+        // Convention: declared in priority order (Hot < Focused < Pressed < Disabled).
+        // Higher specificity triggers should be declared after lower specificity ones.
+        for (int i = 0; i < style.Triggers.Count; i++)
+        {
+            var trigger = style.Triggers[i];
+            if (trigger.Matches(flags))
+            {
+                for (int j = 0; j < trigger.Setters.Count; j++)
+                    ApplySetter(trigger.Setters[j], snap);
+            }
+        }
+    }
+
+    private void ApplySetter(SetterBase setter, bool snap)
+    {
+        switch (setter)
+        {
+            case Setter s:
+                if (!snap && _style?.FindTransition(s.Property.Id) is Transition transition)
+                    Animator.Animate(s.Property, s.Value, transition.Duration, transition.Easing);
+                else
+                    PropertyStore.SetTarget(s.Property, s.Value);
+                break;
+
+            case TargetSetter ts:
+                GetPart(ts.TargetName)?.SetTargetInternal(ts.Property, ts.Value);
+                break;
+        }
+    }
+
+    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+    {
+        _font?.Dispose();
+        _font = null;
+        base.OnThemeChanged(oldTheme, newTheme);
+
+        // Re-resolve style with new theme's palette colors.
+        ResolveAndApplyStyle();
+    }
+
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        if (newRoot == null)
+        {
+            // Detached from visual tree — release style and parts references.
+            _style = null;
+            _parts?.Clear();
+        }
+        else
+        {
+            // Attached to visual tree — resolve style.
+            ResolveAndApplyStyle();
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Handles font cache invalidation when font MewProperty values change.
+    /// </summary>
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        if (property.Id == FontFamilyProperty.Id ||
+            property.Id == FontSizeProperty.Id ||
+            property.Id == FontWeightProperty.Id)
+        {
             _font?.Dispose();
             _font = null;
-            InvalidateMeasure();
         }
+
+        base.OnMewPropertyChanged(property);
     }
 
-
-    protected virtual Color DefaultBackground => Color.Transparent;
-
-    protected virtual Color DefaultForeground => Theme.Palette.WindowText;
-
-    protected virtual Color DefaultBorderBrush => Color.Transparent;
-
-    protected virtual double DefaultBorderThickness => 0;
-
-
-    protected virtual string DefaultFontFamily => Theme.Metrics.FontFamily;
-
-    protected virtual double DefaultFontSize => Theme.Metrics.FontSize;
-
-    protected virtual FontWeight DefaultFontWeight => Theme.Metrics.FontWeight;
-
-    public void ClearBackground()
+    /// <summary>
+    /// Invalidates the cached font when an inherited font property changes on an ancestor.
+    /// Called by the inheritance propagation system.
+    /// </summary>
+    internal void InvalidateFontCache(MewProperty property)
     {
-        if (_background == null)
+        if (property.Id == FontFamilyProperty.Id ||
+            property.Id == FontSizeProperty.Id ||
+            property.Id == FontWeightProperty.Id)
         {
-            return;
+            _font?.Dispose();
+            _font = null;
         }
-
-        _background = null;
-        InvalidateVisual();
-    }
-
-    public void ClearForeground()
-    {
-        if (_foreground == null)
-        {
-            return;
-        }
-
-        _foreground = null;
-        InvalidateVisual();
-    }
-
-    public void ClearBorderBrush()
-    {
-        if (_borderBrush == null)
-        {
-            return;
-        }
-
-        _borderBrush = null;
-        InvalidateVisual();
-    }
-
-    public void ClearBorderThickness()
-    {
-        if (_borderThickness == null)
-        {
-            return;
-        }
-
-        _borderThickness = null;
-        InvalidateMeasure();
-        InvalidateArrange();
-        InvalidateVisual();
-    }
-
-    public void ClearFontFamily()
-    {
-        if (_fontFamily == null)
-        {
-            return;
-        }
-
-        _fontFamily = null;
-        _font?.Dispose();
-        _font = null;
-        InvalidateMeasure();
-    }
-
-    public void ClearFontSize()
-    {
-        if (_fontSize == null)
-        {
-            return;
-        }
-
-        _fontSize = null;
-        _font?.Dispose();
-        _font = null;
-        InvalidateMeasure();
-    }
-
-    public void ClearFontWeight()
-    {
-        if (_fontWeight == null)
-        {
-            return;
-        }
-
-        _fontWeight = null;
-        _font?.Dispose();
-        _font = null;
-        InvalidateMeasure();
     }
 
     protected TextMeasurementScope BeginTextMeasurement()
@@ -262,12 +487,25 @@ public abstract class Control : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or creates the font for this control.
+    /// Gets or creates the font for this control. Validates the cached font against
+    /// current property values (which may be inherited from ancestors).
     /// </summary>
     protected IFont GetFont(IGraphicsFactory factory)
     {
-        _font ??= factory.CreateFont(FontFamily, FontSize, GetDpi(), FontWeight);
+        var family = FontFamily;
+        var size = FontSize;
+        var weight = FontWeight;
+        var dpi = GetDpi();
 
+        if (_font != null && _fontDpi == dpi &&
+            _font.Family == family && _font.Size.Equals(size) && _font.Weight == weight)
+        {
+            return _font;
+        }
+
+        _font?.Dispose();
+        _font = factory.CreateFont(family, size, dpi, weight);
+        _fontDpi = dpi;
         return _font;
     }
 
@@ -277,34 +515,6 @@ public abstract class Control : FrameworkElement
 
         _font?.Dispose();
         _font = null;
-    }
-
-    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        _font?.Dispose();
-        _font = null;
-
-        base.OnThemeChanged(oldTheme, newTheme);
-    }
-
-    protected VisualState GetVisualState(bool isPressed = false, bool isActive = false)
-    {
-        var enabled = IsEffectivelyEnabled;
-        var hot = enabled && (IsMouseOver || IsMouseCaptured);
-        var focused = enabled && (IsFocused || IsFocusWithin);
-        var pressed = enabled && isPressed;
-        var active = enabled && isActive;
-        return new VisualState(enabled, hot, focused, pressed, active);
-    }
-
-    protected VisualState GetVisualState(bool isPressed, bool isActive, bool enabledOverride)
-    {
-        var enabled = enabledOverride;
-        var hot = enabled && (IsMouseOver || IsMouseCaptured);
-        var focused = enabled && (IsFocused || IsFocusWithin);
-        var pressed = enabled && isPressed;
-        var active = enabled && isActive;
-        return new VisualState(enabled, hot, focused, pressed, active);
     }
 
     protected Color PickAccentBorder(Theme theme, Color baseBorder, in VisualState state, double hoverMix = 0.6)
@@ -418,11 +628,11 @@ public abstract class Control : FrameworkElement
         var borderThickness = metrics.BorderThickness;
         var radius = metrics.CornerRadius;
 
-
         bool canUseFillStrokeTrick = borderThickness > 0 &&
                                   borderBrush.A > 0 &&
                                   background.A > 0;
 
+#if USE_FILL_STROKE_TRICK
         if (canUseFillStrokeTrick || background.A == 255)
         {
             if (borderThickness > 0)
@@ -439,9 +649,7 @@ public abstract class Control : FrameworkElement
             }
 
             var inner = bounds.Deflate(new Thickness(borderThickness));
-            var innerRadius = cornerRadiusDip > 0 && BorderThickness > 0
-                ? LayoutRounding.RoundToPixel(Math.Max(0, cornerRadiusDip - BorderThickness), metrics.DpiScale)
-                : Math.Max(0, radius - borderThickness);
+            var innerRadius = metrics.InnerCornerRadius;
 
             if (inner.Width > 0 && inner.Height > 0)
             {
@@ -457,6 +665,7 @@ public abstract class Control : FrameworkElement
 
             return;
         }
+#endif
 
         if (background.A > 0)
         {
@@ -472,14 +681,13 @@ public abstract class Control : FrameworkElement
 
         if (borderThickness > 0 && borderBrush.A > 0)
         {
-            // Fallback: draw as stroke when background is transparent.
             if (radius > 0)
             {
-                context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, borderThickness);
+                context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, borderThickness, strokeInset: true);
             }
             else
             {
-                context.DrawRectangle(bounds, borderBrush, borderThickness);
+                context.DrawRectangle(bounds, borderBrush, borderThickness, strokeInset: true);
             }
         }
     }
@@ -488,22 +696,15 @@ public abstract class Control : FrameworkElement
     {
         base.OnRender(context);
 
-        if (Background.A == 0 && (BorderThickness <= 0 || BorderBrush.A == 0))
+        var bg = GetValue(BackgroundProperty);
+        var border = GetValue(BorderBrushProperty);
+
+        if (bg.A == 0 && (BorderThickness <= 0 || border.A == 0))
         {
             return;
         }
 
-        // Use the shared state-based border color logic (focus/hover/pressed/active).
-        // This keeps base rendering consistent with other controls.
-        var state = GetVisualState();
-        var borderBrush = PickAccentBorder(Theme, BorderBrush, state, 0.6);
-
-        DrawBackgroundAndBorder(
-            context,
-            Bounds,
-            Background,
-            borderBrush,
-            0);
+        DrawBackgroundAndBorder(context, Bounds, bg, border, CornerRadius);
     }
 
     protected override void OnMouseEnter()
@@ -671,26 +872,44 @@ public abstract class Control : FrameworkElement
         public void Dispose() => Context.Dispose();
     }
 
-    protected readonly struct VisualState
+    /// <summary>
+    /// Represents the visual interaction state of a control.
+    /// Stored on Control, compared per-frame, drives OnVisualStateChanged.
+    /// </summary>
+    protected readonly struct VisualState : IEquatable<VisualState>
     {
-        public VisualState(bool isEnabled, bool isHot, bool isFocused, bool isPressed, bool isActive)
-        {
-            IsEnabled = isEnabled;
-            IsHot = isHot;
-            IsFocused = isFocused;
-            IsPressed = isPressed;
-            IsActive = isActive;
-        }
+        /// <summary>Framework-defined state flags.</summary>
+        public VisualStateFlags Flags { get; init; }
 
-        public bool IsEnabled { get; }
+        /// <summary>
+        /// Control-defined custom state flags. The framework never reads or modifies this value.
+        /// </summary>
+        public uint CustomFlags { get; init; }
 
-        public bool IsHot { get; }
+        public bool IsEnabled => (Flags & VisualStateFlags.Enabled) != 0;
 
-        public bool IsFocused { get; }
+        public bool IsHot => (Flags & VisualStateFlags.Hot) != 0;
 
-        public bool IsPressed { get; }
+        public bool IsFocused => (Flags & VisualStateFlags.Focused) != 0;
 
-        public bool IsActive { get; }
+        public bool IsPressed => (Flags & VisualStateFlags.Pressed) != 0;
+
+        public bool IsActive => (Flags & VisualStateFlags.Active) != 0;
+
+        public bool IsChecked => (Flags & VisualStateFlags.Checked) != 0;
+
+        public bool IsIndeterminate => (Flags & VisualStateFlags.Indeterminate) != 0;
+
+        public bool Equals(VisualState other)
+            => Flags == other.Flags && CustomFlags == other.CustomFlags;
+
+        public override bool Equals(object? obj) => obj is VisualState o && Equals(o);
+
+        public override int GetHashCode() => HashCode.Combine(Flags, CustomFlags);
+
+        public static bool operator ==(VisualState a, VisualState b) => a.Equals(b);
+
+        public static bool operator !=(VisualState a, VisualState b) => !a.Equals(b);
     }
 
     protected readonly struct BorderRenderMetrics
@@ -701,6 +920,7 @@ public abstract class Control : FrameworkElement
             DpiScale = dpiScale;
             BorderThickness = borderThickness;
             CornerRadius = cornerRadius;
+            InnerCornerRadius = Math.Max(0, cornerRadius - borderThickness);
         }
 
         public Rect Bounds { get; }
@@ -710,5 +930,13 @@ public abstract class Control : FrameworkElement
         public double BorderThickness { get; }
 
         public double CornerRadius { get; }
+
+        /// <summary>
+        /// Corner radius for the inner contour of the border (content area).
+        /// Computed from snapped CornerRadius and snapped BorderThickness so it matches
+        /// the strokeInset inner edge exactly. Use this for clip radii instead of
+        /// <c>RoundToPixel(outerRadius - thickness)</c> to avoid fractional-DPI rounding mismatches.
+        /// </summary>
+        public double InnerCornerRadius { get; }
     }
 }

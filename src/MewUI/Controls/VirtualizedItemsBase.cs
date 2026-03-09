@@ -30,9 +30,6 @@ public abstract class VirtualizedItemsBase : Control, IVisualTreeHost
     }
 
     public override bool Focusable => true;
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => VisitScrollChildren(visitor);
 

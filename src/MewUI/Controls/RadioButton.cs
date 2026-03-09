@@ -8,13 +8,10 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class RadioButton : ToggleBase
 {
-    private bool _isPressed;
     private Window? _registeredWindow;
     private string? _registeredGroupName;
     private Element? _registeredParentScope;
     private TextMeasureCache _textMeasureCache;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     /// <summary>
     /// Ensures the radio button is registered with its group if checked.
@@ -55,8 +52,6 @@ public class RadioButton : ToggleBase
 
     public RadioButton()
     {
-        Background = Color.Transparent;
-        Padding = new Thickness(2);
     }
 
     protected override void OnIsCheckedChanged(bool value)
@@ -162,10 +157,9 @@ public class RadioButton : ToggleBase
     {
         EnsureGroupRegistered();
 
-        
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
-        var state = GetVisualState(_isPressed, _isPressed);
+        var state = CurrentVisualState;
 
         const double boxSize = 14;
         const double spacing = 6;
@@ -173,13 +167,13 @@ public class RadioButton : ToggleBase
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var circleRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = PickControlBackground(state, Theme.Palette.ControlBackground);
+        var fill = GetValue(BackgroundProperty);
         context.FillEllipse(circleRect, fill);
 
         if (BorderThickness > 0)
         {
-            var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
-            context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness));
+            var borderColor = GetValue(BorderBrushProperty);
+            context.DrawEllipse(circleRect, borderColor, Math.Max(1, BorderThickness), strokeInset: true);
         }
 
         if (IsChecked)
@@ -207,7 +201,7 @@ public class RadioButton : ToggleBase
             return;
         }
 
-        _isPressed = true;
+        SetPressed(true);
         Focus();
 
         var root = FindVisualRoot();
@@ -216,7 +210,6 @@ public class RadioButton : ToggleBase
             window.CaptureMouse(this);
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
 
@@ -224,12 +217,12 @@ public class RadioButton : ToggleBase
     {
         base.OnMouseUp(e);
 
-        if (e.Button != MouseButton.Left || !_isPressed)
+        if (e.Button != MouseButton.Left || !IsPressed)
         {
             return;
         }
 
-        _isPressed = false;
+        SetPressed(false);
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -242,7 +235,6 @@ public class RadioButton : ToggleBase
             IsChecked = true;
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
 

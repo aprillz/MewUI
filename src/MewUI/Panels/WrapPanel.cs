@@ -5,34 +5,34 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class WrapPanel : Panel
 {
+    public static readonly MewProperty<Orientation> OrientationProperty =
+        MewProperty<Orientation>.Register<WrapPanel>(nameof(Orientation), Orientation.Horizontal, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> SpacingProperty =
+        MewProperty<double>.Register<WrapPanel>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> ItemWidthProperty =
+        MewProperty<double>.Register<WrapPanel>(nameof(ItemWidth), double.NaN, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> ItemHeightProperty =
+        MewProperty<double>.Register<WrapPanel>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the orientation of the wrap panel.
     /// </summary>
     public Orientation Orientation
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = Orientation.Horizontal;
+        get => GetValue(OrientationProperty);
+        set => SetValue(OrientationProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the spacing between items and lines.
     /// </summary>
     public double Spacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
     }
 
     /// <summary>
@@ -40,30 +40,18 @@ public class WrapPanel : Panel
     /// </summary>
     public double ItemWidth
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(ItemWidthProperty);
+        set => SetValue(ItemWidthProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets a fixed height for all items. NaN means auto-size.
     /// </summary>
     public double ItemHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(ItemHeightProperty);
+        set => SetValue(ItemHeightProperty, value);
+    }
 
     protected override Size MeasureContent(Size availableSize)
     {

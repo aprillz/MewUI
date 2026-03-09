@@ -33,6 +33,11 @@ public interface IPlatformHost : IDisposable
     IDispatcher CreateDispatcher(nint windowHandle);
 
     /// <summary>
+    /// Gets the platform's default font family name.
+    /// </summary>
+    string DefaultFontFamily { get; }
+
+    /// <summary>
     /// Gets the system DPI used when no window handle is available.
     /// </summary>
     uint GetSystemDpi();

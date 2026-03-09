@@ -39,10 +39,14 @@ public sealed class ApplicationBuilder
             throw new InvalidOperationException("Main window is not configured. Use UseMainWindow(...) or Run<TWindow>().");
         }
 
+        // 1. Platform setup — establishes platform font and system theme detection.
+        _ = Application.DefaultPlatformHost;
+        // 2. Theme/options — user overrides applied on top of platform defaults.
+        ApplyOptions();
+
         var mainWindow = MainWindowFactory();
         ArgumentNullException.ThrowIfNull(mainWindow);
 
-        ApplyOptions();
         Application.Run(mainWindow);
     }
 
@@ -62,6 +66,7 @@ public sealed class ApplicationBuilder
 
         ArgumentNullException.ThrowIfNull(mainWindow);
 
+        _ = Application.DefaultPlatformHost;
         ApplyOptions();
         Application.Run(mainWindow);
     }
@@ -76,6 +81,7 @@ public sealed class ApplicationBuilder
             throw new InvalidOperationException("Main window factory is already set. Use Run().");
         }
 
+        _ = Application.DefaultPlatformHost;
         ApplyOptions();
         Application.Run(new TWindow());
     }
@@ -89,7 +95,20 @@ public sealed class ApplicationBuilder
 
         if (Options.Metrics != null)
         {
-            ThemeManager.DefaultMetrics = Options.Metrics;
+            var metrics = Options.Metrics;
+
+            // If the user's metrics still has the compile-time default font ("Segoe UI")
+            // but the platform provides a different system font (e.g. ".AppleSystemUIFont"),
+            // merge the platform font so it isn't lost.
+            var platformFont = ThemeMetrics.DefaultFontFamily;
+            if (!string.IsNullOrEmpty(platformFont) &&
+                metrics.FontFamily == ThemeMetrics.Default.FontFamily &&
+                metrics.FontFamily != platformFont)
+            {
+                metrics = metrics with { FontFamily = platformFont };
+            }
+
+            ThemeManager.DefaultMetrics = metrics;
         }
 
         if (Options.LightSeed != null)

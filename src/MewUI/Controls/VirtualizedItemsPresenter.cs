@@ -18,6 +18,7 @@ internal sealed class VirtualizedItemsPresenter
     private readonly Dictionary<int, FrameworkElement> _realized = new();
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
+    private HashSet<int>? _pendingRebind;
     private UIElement? _deferredFocusedElement;
     private UIElement? _deferredFocusOwner;
     private int? _deferredFocusedIndex;
@@ -220,6 +221,13 @@ internal sealed class VirtualizedItemsPresenter
                 {
                     Recycle(key);
                 }
+                else
+                {
+                    // Don't rebind focus-pinned items immediately — it can reset
+                    // user-interaction state (e.g. ToggleSwitch.IsChecked).
+                    // Defer rebind + style snap until the item re-enters the visible range.
+                    (_pendingRebind ??= new()).Add(key);
+                }
             }
         }
 
@@ -249,10 +257,21 @@ internal sealed class VirtualizedItemsPresenter
     {
         if (_realized.TryGetValue(index, out var existing))
         {
-            if (rebindExisting)
+            // Also rebind if the item was focus-pinned and missed a prior rebind pass.
+            bool pending = _pendingRebind != null && _pendingRebind.Remove(index);
+            if (rebindExisting || pending)
             {
                 _bind(existing, index);
             }
+
+            // When a focus-pinned item re-enters the visible range after being off-screen,
+            // its cached VisualState may be stale (e.g. still has Focused/Active flags).
+            // Force snap so the next Render applies the correct style immediately.
+            if (pending)
+            {
+                ForceStyleSnapSubtree(existing);
+            }
+
             return existing;
         }
 
@@ -383,6 +402,17 @@ internal sealed class VirtualizedItemsPresenter
         _deferredFocusedIndex = null;
     }
 
+    private static void ForceStyleSnapSubtree(FrameworkElement container)
+    {
+        VisualTree.Visit(container, static element =>
+        {
+            if (element is Control control)
+            {
+                control.ForceStyleSnap();
+            }
+        });
+    }
+
     private bool IsFocusedSubtree(int index)
     {
         if (!_realized.TryGetValue(index, out var element) || element is not UIElement uiElement)
@@ -398,4 +428,5 @@ internal sealed class VirtualizedItemsPresenter
         var focused = window.FocusManager.FocusedElement;
         return focused != null && VisualTree.IsInSubtreeOf(focused, uiElement);
     }
+
 }

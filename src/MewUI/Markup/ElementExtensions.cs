@@ -195,7 +195,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the width.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="width">Width value.</param>
     /// <returns>The element for chaining.</returns>
@@ -208,7 +208,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the height.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="height">Height value.</param>
     /// <returns>The element for chaining.</returns>
@@ -221,7 +221,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the size.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="width">Width value.</param>
     /// <param name="height">Height value.</param>
@@ -236,7 +236,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the size uniformly.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="size">Size value.</param>
     /// <returns>The element for chaining.</returns>
@@ -250,7 +250,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the minimum width.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="minWidth">Minimum width.</param>
     /// <returns>The element for chaining.</returns>
@@ -263,7 +263,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the minimum height.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="minHeight">Minimum height.</param>
     /// <returns>The element for chaining.</returns>
@@ -276,7 +276,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the maximum width.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="maxWidth">Maximum width.</param>
     /// <returns>The element for chaining.</returns>
@@ -289,7 +289,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the maximum height.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="maxHeight">Maximum height.</param>
     /// <returns>The element for chaining.</returns>
@@ -306,7 +306,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the dock position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="dock">Dock position.</param>
     /// <returns>The element for chaining.</returns>
@@ -319,7 +319,7 @@ public static class ElementExtensions
     /// <summary>
     /// Docks the element to the left.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T DockLeft<T>(this T element) where T : Element => element.DockTo(Dock.Left);
@@ -327,7 +327,7 @@ public static class ElementExtensions
     /// <summary>
     /// Docks the element to the top.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T DockTop<T>(this T element) where T : Element => element.DockTo(Dock.Top);
@@ -335,7 +335,7 @@ public static class ElementExtensions
     /// <summary>
     /// Docks the element to the right.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T DockRight<T>(this T element) where T : Element => element.DockTo(Dock.Right);
@@ -343,7 +343,7 @@ public static class ElementExtensions
     /// <summary>
     /// Docks the element to the bottom.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T DockBottom<T>(this T element) where T : Element => element.DockTo(Dock.Bottom);
@@ -355,7 +355,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the margin uniformly.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="value">Margin value.</param>
     /// <returns>The element for chaining.</returns>
@@ -368,7 +368,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the margin uniformly.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="uniform">Uniform margin value.</param>
     /// <returns>The element for chaining.</returns>
@@ -381,7 +381,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the margin with horizontal and vertical values.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="horizontal">Horizontal margin.</param>
     /// <param name="vertical">Vertical margin.</param>
@@ -395,7 +395,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the margin with individual values.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="left">Left margin.</param>
     /// <param name="top">Top margin.</param>
@@ -415,7 +415,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the padding.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="padding">Padding thickness.</param>
     /// <returns>The element for chaining.</returns>
@@ -428,7 +428,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the padding uniformly.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="uniform">Uniform padding value.</param>
     /// <returns>The element for chaining.</returns>
@@ -441,7 +441,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the padding with horizontal and vertical values.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="horizontal">Horizontal padding.</param>
     /// <param name="vertical">Vertical padding.</param>
@@ -455,7 +455,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the padding with individual values.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="left">Left padding.</param>
     /// <param name="top">Top padding.</param>
@@ -475,7 +475,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the horizontal alignment.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="alignment">Horizontal alignment.</param>
     /// <returns>The element for chaining.</returns>
@@ -488,7 +488,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the vertical alignment.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="alignment">Vertical alignment.</param>
     /// <returns>The element for chaining.</returns>
@@ -501,7 +501,7 @@ public static class ElementExtensions
     /// <summary>
     /// Centers the element horizontally and vertically.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Center<T>(this T element) where T : FrameworkElement
@@ -514,7 +514,7 @@ public static class ElementExtensions
     /// <summary>
     /// Centers the element horizontally.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T CenterHorizontal<T>(this T element) where T : FrameworkElement
@@ -526,7 +526,7 @@ public static class ElementExtensions
     /// <summary>
     /// Centers the element vertically.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T CenterVertical<T>(this T element) where T : FrameworkElement
@@ -538,7 +538,7 @@ public static class ElementExtensions
     /// <summary>
     /// Aligns the element to the left.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Left<T>(this T element) where T : FrameworkElement
@@ -550,7 +550,7 @@ public static class ElementExtensions
     /// <summary>
     /// Aligns the element to the right.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Right<T>(this T element) where T : FrameworkElement
@@ -562,7 +562,7 @@ public static class ElementExtensions
     /// <summary>
     /// Aligns the element to the top.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Top<T>(this T element) where T : FrameworkElement
@@ -574,7 +574,7 @@ public static class ElementExtensions
     /// <summary>
     /// Aligns the element to the bottom.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Bottom<T>(this T element) where T : FrameworkElement
@@ -586,7 +586,7 @@ public static class ElementExtensions
     /// <summary>
     /// Stretches the element horizontally.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T StretchHorizontal<T>(this T element) where T : FrameworkElement
@@ -598,7 +598,7 @@ public static class ElementExtensions
     /// <summary>
     /// Stretches the element vertically.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T StretchVertical<T>(this T element) where T : FrameworkElement
@@ -627,7 +627,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the grid row.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="row">Row index.</param>
     /// <returns>The element for chaining.</returns>
@@ -640,7 +640,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the grid column.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="column">Column index.</param>
     /// <returns>The element for chaining.</returns>
@@ -653,7 +653,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the grid row span.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="rowSpan">Row span count.</param>
     /// <returns>The element for chaining.</returns>
@@ -666,7 +666,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the grid column span.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="columnSpan">Column span count.</param>
     /// <returns>The element for chaining.</returns>
@@ -679,7 +679,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the grid position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="row">Row index.</param>
     /// <param name="column">Column index.</param>
@@ -694,7 +694,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the grid position with spans.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="row">Row index.</param>
     /// <param name="column">Column index.</param>
@@ -717,7 +717,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the canvas left position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="left">Left position.</param>
     /// <returns>The element for chaining.</returns>
@@ -730,7 +730,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the canvas top position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="top">Top position.</param>
     /// <returns>The element for chaining.</returns>
@@ -743,7 +743,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the canvas right position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="right">Right position.</param>
     /// <returns>The element for chaining.</returns>
@@ -756,7 +756,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the canvas bottom position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="bottom">Bottom position.</param>
     /// <returns>The element for chaining.</returns>
@@ -769,7 +769,7 @@ public static class ElementExtensions
     /// <summary>
     /// Sets the canvas position.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="left">Left position.</param>
     /// <param name="top">Top position.</param>

@@ -13,19 +13,19 @@ public class Rectangle : Shape
     private double _cachedRy;
     private double _cachedStroke;
 
+    public static readonly MewProperty<double> RadiusXProperty =
+        MewProperty<double>.Register<Rectangle>(nameof(RadiusX), 0.0, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<double> RadiusYProperty =
+        MewProperty<double>.Register<Rectangle>(nameof(RadiusY), 0.0, MewPropertyOptions.AffectsRender);
+
     /// <summary>
     /// Gets or sets the X-axis corner radius.
     /// </summary>
     public double RadiusX
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(RadiusXProperty);
+        set => SetValue(RadiusXProperty, value);
     }
 
     /// <summary>
@@ -33,14 +33,8 @@ public class Rectangle : Shape
     /// </summary>
     public double RadiusY
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(RadiusYProperty);
+        set => SetValue(RadiusYProperty, value);
     }
 
     /// <inheritdoc/>

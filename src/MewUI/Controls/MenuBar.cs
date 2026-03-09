@@ -21,29 +21,23 @@ public sealed class MenuBar : Control, IPopupOwner
     /// </summary>
     public IList<MenuItem> Items => _items;
 
+    public static readonly MewProperty<double> SpacingProperty =
+        MewProperty<double>.Register<MenuBar>(nameof(Spacing), 2.0, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the spacing between menu items.
     /// </summary>
     public double Spacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = 2;
+        get => GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
+    }
 
     /// <summary>
     /// Initializes a new instance of the MenuBar class.
     /// </summary>
     public MenuBar()
     {
-        Padding = new Thickness(4, 2, 4, 2);
-        BorderThickness = 0;
     }
 
     /// <summary>
@@ -72,10 +66,6 @@ public sealed class MenuBar : Control, IPopupOwner
             Add(items[i]);
         }
     }
-
-    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -224,6 +214,10 @@ public sealed class MenuBar : Control, IPopupOwner
         InvalidateVisual();
 
         var popup = new ContextMenu(item.SubMenu);
+        popup.FontFamily = FontFamily;
+        popup.FontSize = FontSize;
+        popup.FontWeight = FontWeight;
+
         _openPopup = popup;
 
         var b = _itemBounds.Count > index ? _itemBounds[index] : Rect.Empty;
@@ -298,7 +292,7 @@ public sealed class MenuBar : Control, IPopupOwner
 
             if (bg.A > 0)
             {
-                if (Theme.Metrics.ControlCornerRadius - 1 is double r && r > 0)
+                if (CornerRadius - 1 is double r && r > 0)
                 {
                     context.FillRoundedRectangle(row, r, r, bg);
                 }

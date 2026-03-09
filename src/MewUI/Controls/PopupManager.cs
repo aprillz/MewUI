@@ -189,6 +189,11 @@ internal sealed class PopupManager
         ApplyPopupDpiChange(chrome, oldDpi, _window.Dpi);
         ApplyPopupThemeChange(chrome, oldTheme, _window.ThemeInternal);
 
+        // Now that the popup is in the visual tree, inherited properties (e.g. FontFamily)
+        // are resolvable. Force style re-resolution and measure invalidation so that any
+        // measurement done before attachment (e.g. MeasureToolTip) is corrected.
+        ForceStyleAndMeasureRefresh(popup);
+
         var entry = new PopupEntry { Owner = owner, Element = popup, Chrome = chrome, Bounds = bounds, StaysOpen = staysOpen };
         _popups.Add(entry);
         LayoutPopup(entry);
@@ -372,6 +377,7 @@ internal sealed class PopupManager
         _toolTip ??= new ToolTip();
         _toolTip.Content = null;
         _toolTip.Text = text ?? string.Empty;
+        EnsureToolTipInheritsFromWindow();
         _toolTip.Measure(availableSize);
         return _toolTip.DesiredSize;
     }
@@ -383,8 +389,31 @@ internal sealed class PopupManager
         _toolTip ??= new ToolTip();
         _toolTip.Text = string.Empty;
         _toolTip.Content = content;
+        EnsureToolTipInheritsFromWindow();
         _toolTip.Measure(availableSize);
         return _toolTip.DesiredSize;
+    }
+
+    /// <summary>
+    /// Ensures the tooltip can resolve inherited properties (e.g. FontFamily) before
+    /// it is added to the visual tree via ShowPopup. Without this, the tooltip measures
+    /// with the registered default font ("Segoe UI") instead of the platform/theme font.
+    /// </summary>
+    private void EnsureToolTipInheritsFromWindow()
+    {
+        if (_toolTip == null)
+        {
+            return;
+        }
+
+        // If the tooltip is not in the visual tree, temporarily parent it to the window
+        // so inherited properties and styles resolve correctly during measurement.
+        if (_toolTip.Parent == null)
+        {
+            _toolTip.Parent = _window;
+            _toolTip.ResolveAndApplyStyle();
+            _toolTip.InvalidateMeasure();
+        }
     }
 
     internal void ShowToolTip(UIElement owner, string text, Rect bounds)
@@ -501,6 +530,19 @@ internal sealed class PopupManager
             {
                 c.NotifyDpiChanged(oldDpi, newDpi);
             }
+        });
+    }
+
+    private static void ForceStyleAndMeasureRefresh(UIElement popup)
+    {
+        VisualTree.Visit(popup, e =>
+        {
+            if (e is Control c)
+            {
+                c.ResolveAndApplyStyle();
+            }
+
+            e.InvalidateMeasure();
         });
     }
 

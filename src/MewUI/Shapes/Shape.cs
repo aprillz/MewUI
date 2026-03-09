@@ -8,19 +8,28 @@ namespace Aprillz.MewUI;
 /// </summary>
 public abstract class Shape : FrameworkElement
 {
+    public static readonly MewProperty<IBrush?> FillProperty =
+        MewProperty<IBrush?>.Register<Shape>(nameof(Fill), null, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<IBrush?> StrokeProperty =
+        MewProperty<IBrush?>.Register<Shape>(nameof(Stroke), null, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<double> StrokeThicknessProperty =
+        MewProperty<double>.Register<Shape>(nameof(StrokeThickness), 0.0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<StrokeStyle> StrokeStyleProperty =
+        MewProperty<StrokeStyle>.Register<Shape>(nameof(StrokeStyle), default, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<Stretch> StretchProperty =
+        MewProperty<Stretch>.Register<Shape>(nameof(Stretch), Stretch.None, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the brush used to fill the shape interior.
     /// </summary>
     public IBrush? Fill
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(FillProperty);
+        set => SetValue(FillProperty, value);
     }
 
     /// <summary>
@@ -28,14 +37,8 @@ public abstract class Shape : FrameworkElement
     /// </summary>
     public IBrush? Stroke
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(StrokeProperty);
+        set => SetValue(StrokeProperty, value);
     }
 
     /// <summary>
@@ -43,15 +46,8 @@ public abstract class Shape : FrameworkElement
     /// </summary>
     public double StrokeThickness
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(StrokeThicknessProperty);
+        set => SetValue(StrokeThicknessProperty, value);
     }
 
     /// <summary>
@@ -59,14 +55,8 @@ public abstract class Shape : FrameworkElement
     /// </summary>
     public StrokeStyle StrokeStyle
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(StrokeStyleProperty);
+        set => SetValue(StrokeStyleProperty, value);
     }
 
     /// <summary>
@@ -74,15 +64,8 @@ public abstract class Shape : FrameworkElement
     /// </summary>
     public Stretch Stretch
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(StretchProperty);
+        set => SetValue(StretchProperty, value);
     }
 
     /// <summary>

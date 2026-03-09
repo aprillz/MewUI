@@ -120,9 +120,6 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
     public FixedHeightItemsPresenter()
     {
-        BorderThickness = 0;
-        Padding = new Thickness(0);
-
         _itemsHost = new TemplatedItemsHost(
             owner: this,
             getItem: i => ItemsSource.GetItem(i),

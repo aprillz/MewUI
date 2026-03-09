@@ -58,34 +58,26 @@ public sealed class ItemsControl : VirtualizedItemsBase
     /// <summary>
     /// Gets or sets the height of each item (in DIPs). Use NaN to use theme default.
     /// </summary>
+    public static readonly MewProperty<double> ItemHeightProperty =
+        MewProperty<double>.Register<ItemsControl>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
     public double ItemHeight
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(ItemHeightProperty);
+        set => SetValue(ItemHeightProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the padding for each item.
     /// </summary>
+    public static readonly MewProperty<Thickness> ItemPaddingProperty =
+        MewProperty<Thickness>.Register<ItemsControl>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout);
+
     public Thickness ItemPadding
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = ThemeMetrics.Default.ItemPadding;
+        get => GetValue(ItemPaddingProperty);
+        set => SetValue(ItemPaddingProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the item template. When not set, a default label template is used.
@@ -129,7 +121,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
         _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
         _scrollViewer.VerticalScroll = ScrollMode.Auto;
-        _scrollViewer.Padding = Padding;
+        _scrollViewer.SetBinding(PaddingProperty, this, PaddingProperty);
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
 
         _itemTemplate = CreateDefaultItemTemplate();
@@ -232,7 +224,6 @@ public sealed class ItemsControl : VirtualizedItemsBase
         double itemHeight = ResolveItemHeight();
         _presenter.ItemHeightHint = itemHeight;
         _presenter.ExtentWidth = maxWidth;
-        _scrollViewer.Padding = Padding;
 
         // Let ScrollViewer update bar visibility/metrics for the current slot.
         var childAvailable = new Size(
@@ -274,14 +265,14 @@ public sealed class ItemsControl : VirtualizedItemsBase
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
 
-        var state = GetVisualState();
-        var bg = PickControlBackground(state);
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        var bg = GetValue(BackgroundProperty);
+        var borderColor = GetValue(BorderBrushProperty);
         DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
 
-        var clipR = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), GetDpi() / 96.0);
+        var dpiScale = GetDpi() / 96.0;
+        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - GetBorderVisualInset());
         _scrollViewer.ViewportCornerRadius = clipR;
         _presenter.ItemRadius = clipR;
         _scrollViewer.Render(context);

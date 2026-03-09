@@ -157,7 +157,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the visibility state.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="isVisible">Visibility state.</param>
     /// <returns>The element for chaining.</returns>
@@ -171,7 +171,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the enabled state.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="isEnabled">Enabled state.</param>
     /// <returns>The element for chaining.</returns>
@@ -185,7 +185,7 @@ public static class ControlExtensions
     /// <summary>
     /// Enables the element.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Enable<T>(this T element) where T : UIElement
@@ -198,7 +198,7 @@ public static class ControlExtensions
     /// <summary>
     /// Disables the element.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <returns>The element for chaining.</returns>
     public static T Disable<T>(this T element) where T : UIElement
@@ -211,7 +211,7 @@ public static class ControlExtensions
     /// <summary>
     /// Registers a theme callback.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="apply">Theme callback action.</param>
     /// <param name="invokeImmediately">Invoke immediately flag.</param>
@@ -232,7 +232,7 @@ public static class ControlExtensions
     /// <summary>
     /// Binds the visibility state to an observable value.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="source">Observable source.</param>
     /// <returns>The element for chaining.</returns>
@@ -241,17 +241,14 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(source);
 
-        element.SetIsVisibleBinding(
-            () => source.Value,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        element.SetBinding(UIElement.IsVisibleProperty, source);
         return element;
     }
 
     /// <summary>
     /// Binds the enabled state to an observable value.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="source">Observable source.</param>
     /// <returns>The element for chaining.</returns>
@@ -260,10 +257,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(source);
 
-        element.SetIsEnabledBinding(
-            () => source.Value,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        element.SetBinding(UIElement.IsEnabledProperty, source);
         return element;
     }
 
@@ -272,7 +266,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a got focus event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -285,7 +279,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a lost focus event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -298,7 +292,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse enter event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -311,7 +305,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse leave event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -324,7 +318,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse down event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -337,7 +331,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse double click event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -350,7 +344,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse up event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -363,7 +357,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse move event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -376,7 +370,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a mouse wheel event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -389,7 +383,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a key down event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -402,7 +396,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a key up event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -415,7 +409,7 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a text input event handler.
     /// </summary>
-    /// <typeparam name="T">Element type.</typeparam>
+    /// <typeparam name="T">Visual type.</typeparam>
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
@@ -575,6 +569,18 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the text trimming mode.
+    /// </summary>
+    /// <param name="label">Target label.</param>
+    /// <param name="trimming">Text trimming mode.</param>
+    /// <returns>The label for chaining.</returns>
+    public static Label TextTrimming(this Label label, TextTrimming trimming)
+    {
+        label.TextTrimming = trimming;
+        return label;
+    }
+
+    /// <summary>
     /// Binds the text to an observable value.
     /// </summary>
     /// <param name="label">Target label.</param>
@@ -585,10 +591,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(source);
 
-        label.SetTextBinding(
-            () => source.Value,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        label.SetBinding(Label.TextProperty, source);
         return label;
     }
 
@@ -606,11 +609,164 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(convert);
 
-        label.SetTextBinding(
-            () => convert(source.Value) ?? string.Empty,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        label.SetBinding(Label.TextProperty, source, v => convert(v) ?? string.Empty);
         return label;
+    }
+
+    #endregion
+
+    #region TextBlock
+
+    /// <summary>
+    /// Sets the text.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="text">Text content.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock Text(this TextBlock textBlock, string text)
+    {
+        textBlock.Text = text;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the foreground color.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="color">Foreground color.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock Foreground(this TextBlock textBlock, Color color)
+    {
+        textBlock.Foreground = color;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the font family.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="fontFamily">Font family name.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock FontFamily(this TextBlock textBlock, string fontFamily)
+    {
+        textBlock.FontFamily = fontFamily;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the font size.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="fontSize">Font size.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock FontSize(this TextBlock textBlock, double fontSize)
+    {
+        textBlock.FontSize = fontSize;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the font weight.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="fontWeight">Font weight.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock FontWeight(this TextBlock textBlock, FontWeight fontWeight)
+    {
+        textBlock.FontWeight = fontWeight;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the font weight to bold.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock Bold(this TextBlock textBlock)
+    {
+        textBlock.FontWeight = MewUI.FontWeight.Bold;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the text alignment.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="alignment">Text alignment.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock TextAlignment(this TextBlock textBlock, TextAlignment alignment)
+    {
+        textBlock.TextAlignment = alignment;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the vertical text alignment.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="alignment">Vertical text alignment.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock VerticalTextAlignment(this TextBlock textBlock, TextAlignment alignment)
+    {
+        textBlock.VerticalTextAlignment = alignment;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the text wrapping mode.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="wrapping">Text wrapping mode.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock TextWrapping(this TextBlock textBlock, TextWrapping wrapping)
+    {
+        textBlock.TextWrapping = wrapping;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the text trimming mode.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="trimming">Text trimming mode.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock TextTrimming(this TextBlock textBlock, TextTrimming trimming)
+    {
+        textBlock.TextTrimming = trimming;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Binds the text to an observable value.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock BindText(this TextBlock textBlock, ObservableValue<string> source)
+    {
+        ArgumentNullException.ThrowIfNull(textBlock);
+        ArgumentNullException.ThrowIfNull(source);
+
+        textBlock.SetBinding(TextBlock.TextProperty, source);
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Binds the text to an observable value with converter.
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Conversion function.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock BindText<TSource>(this TextBlock textBlock, ObservableValue<TSource> source, Func<TSource, string> convert)
+    {
+        ArgumentNullException.ThrowIfNull(textBlock);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        textBlock.SetBinding(TextBlock.TextProperty, source, v => convert(v) ?? string.Empty);
+        return textBlock;
     }
 
     #endregion
@@ -618,14 +774,76 @@ public static class ControlExtensions
     #region Button
 
     /// <summary>
-    /// Sets the button content text.
+    /// Sets the button content element.
     /// </summary>
     /// <param name="button">Target button.</param>
-    /// <param name="content">Content text.</param>
+    /// <param name="content">Content element.</param>
     /// <returns>The button for chaining.</returns>
-    public static Button Content(this Button button, string content)
+    public static Button Content(this Button button, Element content)
     {
         button.Content = content;
+        return button;
+    }
+
+    /// <summary>
+    /// Sets the button content to a centered text label.
+    /// </summary>
+    /// <param name="button">Target button.</param>
+    /// <param name="text">Content text.</param>
+    /// <returns>The button for chaining.</returns>
+    public static Button Content(this Button button, string text)
+    {
+        button.Content = new TextBlock
+        {
+            Text = text,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = MewUI.TextAlignment.Center,
+            VerticalTextAlignment = MewUI.TextAlignment.Center,
+        };
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the button content to an observable string value (creates a centered TextBlock).
+    /// </summary>
+    public static Button BindContent(this Button button, ObservableValue<string> source)
+    {
+        var tb = new TextBlock
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = MewUI.TextAlignment.Center,
+            VerticalTextAlignment = MewUI.TextAlignment.Center,
+        };
+        tb.SetBinding(TextBlock.TextProperty, source, BindingMode.OneWay);
+        button.Content = tb;
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the button content to an observable value with converter (creates a centered TextBlock).
+    /// </summary>
+    public static Button BindContent<TSource>(this Button button, ObservableValue<TSource> source, Func<TSource, string> convert)
+    {
+        var tb = new TextBlock
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = MewUI.TextAlignment.Center,
+            VerticalTextAlignment = MewUI.TextAlignment.Center,
+        };
+        tb.SetBinding(TextBlock.TextProperty, source, v => convert(v) ?? string.Empty);
+        button.Content = tb;
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the button content element to an observable value.
+    /// </summary>
+    public static Button BindContent(this Button button, ObservableValue<Element?> source)
+    {
+        button.SetBinding(Button.ContentProperty, source, BindingMode.OneWay);
         return button;
     }
 
@@ -680,43 +898,6 @@ public static class ControlExtensions
         return button;
     }
 
-    /// <summary>
-    /// Binds the content to an observable value.
-    /// </summary>
-    /// <param name="button">Target button.</param>
-    /// <param name="source">Observable source.</param>
-    /// <returns>The button for chaining.</returns>
-    public static Button BindContent(this Button button, ObservableValue<string> source)
-    {
-        ArgumentNullException.ThrowIfNull(button);
-        ArgumentNullException.ThrowIfNull(source);
-
-        button.SetContentBinding(
-            () => source.Value,
-            h => source.Changed += h,
-            h => source.Changed -= h);
-        return button;
-    }
-
-    /// <summary>
-    /// Binds the content to an observable value with converter.
-    /// </summary>
-    /// <typeparam name="TSource">Source value type.</typeparam>
-    /// <param name="button">Target button.</param>
-    /// <param name="source">Observable source.</param>
-    /// <param name="convert">Conversion function.</param>
-    /// <returns>The button for chaining.</returns>
-    public static Button BindContent<TSource>(this Button button, ObservableValue<TSource> source, Func<TSource, string> convert)
-    {
-        ArgumentNullException.ThrowIfNull(button);
-        ArgumentNullException.ThrowIfNull(source);
-
-        button.SetContentBinding(
-            () => convert(source.Value) ?? string.Empty,
-            h => source.Changed += h,
-            h => source.Changed -= h);
-        return button;
-    }
 
     #endregion
 
@@ -793,11 +974,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(textBox);
         ArgumentNullException.ThrowIfNull(source);
 
-        textBox.SetTextBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        textBox.SetBinding(TextBase.TextProperty, source);
         return textBox;
     }
 
@@ -897,11 +1074,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(checkBox);
         ArgumentNullException.ThrowIfNull(source);
 
-        checkBox.SetIsCheckedBinding(
-            () => source.Value,
-            v => source.Value = v ?? false,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        checkBox.SetBinding(CheckBox.IsCheckedProperty, source, v => (bool?)v, v => v ?? false);
         return checkBox;
     }
 
@@ -916,11 +1089,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(checkBox);
         ArgumentNullException.ThrowIfNull(source);
 
-        checkBox.SetIsCheckedBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        checkBox.SetBinding(CheckBox.IsCheckedProperty, source);
         return checkBox;
     }
 
@@ -1040,11 +1209,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(radioButton);
         ArgumentNullException.ThrowIfNull(source);
 
-        radioButton.SetIsCheckedBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        radioButton.SetBinding(ToggleBase.IsCheckedProperty, source);
         return radioButton;
     }
 
@@ -1062,17 +1227,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(radioButton);
         ArgumentNullException.ThrowIfNull(source);
 
-        radioButton.SetIsCheckedBinding(
-            () => convert(source.Value),
-            v =>
-            {
-                if (convertBack is not null)
-                {
-                    source.Value = convertBack.Invoke(v);
-                }
-            },
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        radioButton.SetBinding(ToggleBase.IsCheckedProperty, source, convert, convertBack);
         return radioButton;
     }
 
@@ -1090,22 +1245,10 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(radioButton);
         ArgumentNullException.ThrowIfNull(source);
 
-        radioButton.SetIsCheckedBinding(
-            () => convert(source.Value),
-            v =>
-            {
-                if (convertBack is not null)
-                {
-                    var result = convertBack.Invoke(v);
-
-                    if (result.success)
-                    {
-                        source.Value = result.value;
-                    }
-                }
-            },
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        Func<bool, T>? wrappedConvertBack = convertBack != null
+            ? v => { var r = convertBack(v); return r.success ? r.value : source.Value; }
+        : null;
+        radioButton.SetBinding(ToggleBase.IsCheckedProperty, source, convert, wrappedConvertBack);
         return radioButton;
     }
 
@@ -1121,7 +1264,14 @@ public static class ControlExtensions
     /// <returns>The toggle button for chaining.</returns>
     public static ToggleButton Content(this ToggleButton toggleButton, string content)
     {
-        toggleButton.Content = content;
+        toggleButton.Content = new TextBlock
+        {
+            Text = content,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = MewUI.TextAlignment.Center,
+            VerticalTextAlignment = MewUI.TextAlignment.Center,
+        };
         return toggleButton;
     }
 
@@ -1160,11 +1310,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(toggleButton);
         ArgumentNullException.ThrowIfNull(source);
 
-        toggleButton.SetIsCheckedBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        toggleButton.SetBinding(ToggleBase.IsCheckedProperty, source);
         return toggleButton;
     }
 
@@ -1219,11 +1365,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(toggleSwitch);
         ArgumentNullException.ThrowIfNull(source);
 
-        toggleSwitch.SetIsCheckedBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        toggleSwitch.SetBinding(ToggleBase.IsCheckedProperty, source);
         return toggleSwitch;
     }
 
@@ -1307,6 +1449,13 @@ public static class ControlExtensions
     public static ListBox ItemPadding(this ListBox listBox, Thickness itemPadding)
     {
         listBox.ItemPadding = itemPadding;
+        return listBox;
+    }
+
+    public static ListBox ZebraStriping(this ListBox listBox, bool value = true)
+    {
+        ArgumentNullException.ThrowIfNull(listBox);
+        listBox.ZebraStriping = value;
         return listBox;
     }
 
@@ -1399,11 +1548,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(listBox);
         ArgumentNullException.ThrowIfNull(source);
 
-        listBox.SetSelectedIndexBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        listBox.SetBinding(ListBox.SelectedIndexProperty, source);
         return listBox;
     }
 
@@ -1986,11 +2131,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(textBox);
         ArgumentNullException.ThrowIfNull(source);
 
-        textBox.SetTextBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        textBox.SetBinding(TextBase.TextProperty, source);
         return textBox;
     }
 
@@ -2129,11 +2270,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(comboBox);
         ArgumentNullException.ThrowIfNull(source);
 
-        comboBox.SetSelectedIndexBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        comboBox.SetBinding(ComboBox.SelectedIndexProperty, source);
         return comboBox;
     }
 
@@ -2146,6 +2283,13 @@ public static class ControlExtensions
     public static ComboBox ChangeOnWheel(this ComboBox comboBox, bool value = true)
     {
         comboBox.ChangeOnWheel = value;
+        return comboBox;
+    }
+
+    public static ComboBox ZebraStriping(this ComboBox comboBox, bool value = true)
+    {
+        ArgumentNullException.ThrowIfNull(comboBox);
+        comboBox.ZebraStriping = value;
         return comboBox;
     }
 
@@ -2389,10 +2533,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(progressBar);
         ArgumentNullException.ThrowIfNull(source);
 
-        progressBar.SetValueBinding(
-            () => source.Value,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        progressBar.SetBinding(RangeBase.ValueProperty, source, BindingMode.OneWay);
         return progressBar;
     }
 
@@ -2435,11 +2576,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(slider);
         ArgumentNullException.ThrowIfNull(source);
 
-        slider.SetValueBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        slider.SetBinding(RangeBase.ValueProperty, source);
         return slider;
     }
 
@@ -2518,11 +2655,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(numericUpDown);
         ArgumentNullException.ThrowIfNull(source);
 
-        numericUpDown.SetValueBinding(
-            () => source.Value,
-            v => source.Value = v,
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        numericUpDown.SetBinding(RangeBase.ValueProperty, source);
         return numericUpDown;
     }
 
@@ -2537,11 +2670,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(numericUpDown);
         ArgumentNullException.ThrowIfNull(source);
 
-        numericUpDown.SetValueBinding(
-            () => source.Value,
-            v => source.Value = (int)Math.Round(v),
-            h => source.Changed += h,
-            h => source.Changed -= h);
+        numericUpDown.SetBinding(RangeBase.ValueProperty, source, v => (double)v, v => (int)Math.Round(v));
         return numericUpDown;
     }
 
@@ -2570,6 +2699,13 @@ public static class ControlExtensions
     public static Window Title(this Window window, string title)
     {
         window.Title = title;
+        return window;
+    }
+
+    public static Window Icon(this Window window, IconSource? icon)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        window.Icon = icon;
         return window;
     }
 

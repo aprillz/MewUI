@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform;
@@ -29,6 +30,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
     private readonly List<AdornerEntry> _adorners = new();
+    private Controls.ToastPresenter? _toastPresenter;
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<Window> _modalChildren = new();
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
@@ -147,7 +149,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public Window()
     {
-        Padding = new Thickness(16);
         AdornerLayer = new AdornerLayer(this);
         _popupManager = new PopupManager(this);
 
@@ -159,9 +160,23 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 #endif
     }
 
-    protected override Color DefaultBackground => Theme.Palette.WindowBackground;
-
     public AdornerLayer AdornerLayer { get; }
+
+    /// <summary>
+    /// Shows a toast notification at 2/3 of the window height.
+    /// Auto-dismisses after a duration based on text length.
+    /// </summary>
+    public void ShowToast(string text)
+    {
+        if (_toastPresenter == null)
+        {
+            _toastPresenter = new Controls.ToastPresenter();
+            _toastPresenter.Parent = this;
+        }
+
+        var t = text ?? string.Empty;
+        _toastPresenter.Show(t, Controls.ToastPresenter.ComputeDuration(t));
+    }
 
     private readonly PopupManager _popupManager;
 
@@ -314,62 +329,71 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
     } = WindowSize.Resizable(800, 600);
 
+    public static readonly MewProperty<string> TitleProperty =
+        MewProperty<string>.Register<Window>(nameof(Title), "Window", MewPropertyOptions.None,
+            static (self, _, _) =>self._backend?.SetTitle(self.Title));
+
+    public static readonly MewProperty<IconSource?> IconProperty =
+        MewProperty<IconSource?>.Register<Window>(nameof(Icon), null, MewPropertyOptions.None,
+            static (self, _, _) =>self._backend?.SetIcon(self.Icon));
+
+    public static readonly MewProperty<WindowStartupLocation> StartupLocationProperty =
+        MewProperty<WindowStartupLocation>.Register<Window>(nameof(StartupLocation), WindowStartupLocation.CenterScreen, MewPropertyOptions.None);
+
+    public static readonly MewProperty<double> OpacityProperty =
+        MewProperty<double>.Register<Window>(nameof(Opacity), 1.0, MewPropertyOptions.None,
+            static (self, _, _) =>self._backend?.SetOpacity(self.Opacity));
+
+    public static readonly MewProperty<bool> AllowsTransparencyProperty =
+        MewProperty<bool>.Register<Window>(nameof(AllowsTransparency), false, MewPropertyOptions.AffectsRender,
+            static (self, _, _) =>self._backend?.SetAllowsTransparency(self.AllowsTransparency));
+
+    public static readonly MewProperty<bool> UseLayoutRoundingProperty =
+        MewProperty<bool>.Register<Window>(nameof(UseLayoutRounding), true, MewPropertyOptions.None);
+
     /// <summary>
     /// Gets or sets the window title.
     /// </summary>
     public string Title
     {
-        get;
-        set
-        {
-            field = value ?? string.Empty;
-            _backend?.SetTitle(field);
-        }
-    } = "Window";
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value ?? string.Empty);
+    }
 
     /// <summary>
     /// Gets or sets the window icon.
     /// </summary>
     public IconSource? Icon
     {
-        get;
-        set
-        {
-            field = value;
-            _backend?.SetIcon(field);
-        }
+        get => GetValue(IconProperty);
+        set => SetValue(IconProperty, value);
     }
 
     /// <summary>
     /// Gets or sets the initial window placement behavior.
     /// </summary>
-    public WindowStartupLocation StartupLocation { get; set; } = WindowStartupLocation.CenterScreen;
+    public WindowStartupLocation StartupLocation
+    {
+        get => GetValue(StartupLocationProperty);
+        set => SetValue(StartupLocationProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the window opacity (0..1).
     /// </summary>
     public double Opacity
     {
-        get;
-        set
-        {
-            field = Math.Clamp(value, 0.0, 1.0);
-            _backend?.SetOpacity(field);
-        }
-    } = 1.0;
+        get => GetValue(OpacityProperty);
+        set => SetValue(OpacityProperty, Math.Clamp(value, 0.0, 1.0));
+    }
 
     /// <summary>
     /// Gets or sets whether the window supports per-pixel transparency (platform dependent).
     /// </summary>
     public bool AllowsTransparency
     {
-        get;
-        set
-        {
-            field = value;
-            _backend?.SetAllowsTransparency(field);
-            Invalidate();
-        }
+        get => GetValue(AllowsTransparencyProperty);
+        set => SetValue(AllowsTransparencyProperty, value);
     }
 
     /// <summary>
@@ -479,7 +503,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Gets or sets whether layout rounding is enabled.
     /// </summary>
-    public bool UseLayoutRounding { get; set; } = true;
+    public bool UseLayoutRounding
+    {
+        get => GetValue(UseLayoutRoundingProperty);
+        set => SetValue(UseLayoutRoundingProperty, value);
+    }
 
     /// <summary>
     /// Gets the focus manager for this window.
@@ -539,6 +567,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Occurs after each frame is rendered.
     /// </summary>
     public event Action? FrameRendered;
+
+    /// <summary>
+    /// Gets the rendering statistics from the most recent frame.
+    /// </summary>
+    public RenderStats LastFrameStats { get; private set; }
 
     /// <summary>
     /// Preview (tunneling) keyboard events for the whole window.
@@ -872,6 +905,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
+        // Window is the visual root — it has no Parent, so OnVisualRootChanged never fires.
+        // Resolve its style here before reading layout-affecting properties like Padding.
+        EnsureStyleResolved();
+
         var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
         var padding = Padding;
 
@@ -918,8 +955,20 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _lastLayoutPadding = padding;
         _lastLayoutContent = Content;
 
+        LayoutToast(clientSize);
         LayoutAdorners();
         LayoutPopups();
+    }
+
+    private void LayoutToast(Size clientSize)
+    {
+        if (_toastPresenter == null)
+        {
+            return;
+        }
+
+        _toastPresenter.Measure(clientSize);
+        _toastPresenter.Arrange(new Rect(0, 0, clientSize.Width, clientSize.Height));
     }
 
     private bool HasOverlayLayoutDirty()
@@ -928,6 +977,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // up to the Window (Parent = this). If we early-return purely based on Content dirtiness,
         // overlay elements can get stuck with stale DesiredSize/Bounds until the owner explicitly
         // re-calls ShowPopup/UpdatePopup.
+        if (_toastPresenter != null && (_toastPresenter.IsMeasureDirty || _toastPresenter.IsArrangeDirty))
+        {
+            return true;
+        }
+
         for (int i = 0; i < _adorners.Count; i++)
         {
             var element = _adorners[i].Element;
@@ -1245,6 +1299,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private void RenderFrameCore(IRenderTarget target, Size clientSize)
     {
+        // Update animations before rendering so controls see current values.
+        AnimationManager.Instance.Update();
+
         using var context = GraphicsFactory.CreateContext(target);
 
         Color clearColor;
@@ -1276,6 +1333,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             Content?.Render(context);
 
+            _toastPresenter?.Render(context);
+
             for (int i = 0; i < _adorners.Count; i++)
             {
                 _adorners[i].Element.Render(context);
@@ -1287,6 +1346,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             context.Restore();
         }
+
+        if (context is GraphicsContextBase gcb)
+            LastFrameStats = new RenderStats(gcb.DrawCallCount, gcb.CullCount);
 
         if (!_firstFrameRenderedRaised)
         {
@@ -1363,6 +1425,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
         });
 
+        if (_toastPresenter is IDisposable toastDisposable)
+        {
+            toastDisposable.Dispose();
+        }
+
+        _toastPresenter = null;
+
         DisposeAdorners();
         _popupManager.Dispose();
     }
@@ -1397,6 +1466,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 if (e is FrameworkElement c)
                 {
                     c.NotifyThemeChanged(oldTheme, newTheme);
+                }
+            });
+        }
+
+        if (_toastPresenter != null)
+        {
+            VisitVisualTree(_toastPresenter, e =>
+            {
+                if (e is FrameworkElement fe)
+                {
+                    fe.NotifyThemeChanged(oldTheme, newTheme);
                 }
             });
         }

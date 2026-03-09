@@ -5,63 +5,26 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A progress bar control for displaying completion percentage.
 /// </summary>
-public sealed partial class ProgressBar : RangeBase
+public sealed class ProgressBar : RangeBase
 {
-
-    /// <summary>
-    /// Gets the default background color.
-    /// </summary>
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    /// <summary>
-    /// Initializes a new instance of the ProgressBar class.
-    /// </summary>
-    public ProgressBar()
+    static ProgressBar()
     {
-        Maximum = 100;
-        Padding = new Thickness(1);
-        Height = 10;
-    }
-
-    /// <summary>
-    /// Sets a one-way binding for the Value property.
-    /// </summary>
-    /// <param name="get">Function to get the current value.</param>
-    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
-    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
-    public void SetValueBinding(
-        Func<double> get,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        SetValueBindingCore(get, subscribe, unsubscribe);
+        MaximumProperty.OverrideDefaultValue<ProgressBar>(100.0);
+        HeightProperty.OverrideDefaultValue<ProgressBar>(10.0);
     }
 
     protected override Size MeasureContent(Size availableSize) => new Size(120, Height);
 
     protected override void OnRender(IGraphicsContext context)
     {
-
-        if (TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
-        {
-            // Pull latest value at paint time (one-way).
-            SetValueFromSource(valueBinding.Get());
-        }
-
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(borderInset));
-        double radius = Math.Min(bounds.Height / 2, Theme.Metrics.ControlCornerRadius);
+        double radius = Math.Min(bounds.Height / 2, CornerRadius);
 
-        var bg = PickControlBackground(GetVisualState());
-        DrawBackgroundAndBorder(context, bounds, bg, BorderBrush, radius);
+        var bg = GetValue(BackgroundProperty);
+        var border = GetValue(BorderBrushProperty);
+        DrawBackgroundAndBorder(context, bounds, bg, border, radius);
 
         double t = GetNormalizedValue();
 

@@ -8,8 +8,11 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class ToolTip : ContentControl
 {
+    public static readonly MewProperty<string> TextProperty =
+        MewProperty<string>.Register<ToolTip>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) =>self._textMeasureCache.Invalidate());
+
     private TextMeasureCache _textMeasureCache;
-    private string _text = string.Empty;
 
     /// <summary>
     /// Gets or sets the tooltip text.
@@ -17,36 +20,14 @@ public sealed class ToolTip : ContentControl
     /// </summary>
     public string Text
     {
-        get => _text;
-        set
-        {
-            value ??= string.Empty;
-            if (_text == value)
-            {
-                return;
-            }
-
-            _text = value;
-            _textMeasureCache.Invalidate();
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value ?? string.Empty);
     }
 
-    /// <summary>
-    /// Initializes a new instance of the ToolTip class.
-    /// </summary>
-    public ToolTip()
+    static ToolTip()
     {
-        IsHitTestVisible = false;
-        Padding = new Thickness(8, 4, 8, 4);
+        IsHitTestVisibleProperty.OverrideDefaultValue<ToolTip>(false);
     }
-
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -74,7 +55,7 @@ public sealed class ToolTip : ContentControl
     {
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
-        double radius = LayoutRounding.RoundToPixel(Theme.Metrics.ControlCornerRadius, dpiScale);
+        double radius = LayoutRounding.RoundToPixel(CornerRadius, dpiScale);
 
         DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, radius);
 

@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -20,7 +21,17 @@ public enum ScrollMode
 /// </summary>
 public sealed class ScrollViewer : ContentControl
     , IVisualTreeHost
+    , IFocusIntoViewHost
 {
+    public static readonly MewProperty<double> ViewportCornerRadiusProperty =
+        MewProperty<double>.Register<ScrollViewer>(nameof(ViewportCornerRadius), 0.0, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<ScrollMode> VerticalScrollProperty =
+        MewProperty<ScrollMode>.Register<ScrollViewer>(nameof(VerticalScroll), ScrollMode.Auto, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<ScrollMode> HorizontalScrollProperty =
+        MewProperty<ScrollMode>.Register<ScrollViewer>(nameof(HorizontalScroll), ScrollMode.Disabled, MewPropertyOptions.AffectsLayout);
+
     private readonly ScrollBar _vBar;
     private readonly ScrollBar _hBar;
     private readonly ScrollController _scroll = new();
@@ -30,8 +41,7 @@ public sealed class ScrollViewer : ContentControl
     private Size _lastNotifiedExtent = Size.Empty;
     private Size _lastNotifiedViewport = Size.Empty;
     private Point _lastNotifiedOffset = new(double.NaN, double.NaN);
-
-    /// <summary>
+/// <summary>
     /// Raised when scroll metrics or offsets change.
     /// </summary>
     public event Action? ScrollChanged;
@@ -41,14 +51,8 @@ public sealed class ScrollViewer : ContentControl
     /// </summary>
     public double ViewportCornerRadius
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ViewportCornerRadiusProperty);
+        set => SetValue(ViewportCornerRadiusProperty, value);
     }
 
     /// <summary>
@@ -56,32 +60,18 @@ public sealed class ScrollViewer : ContentControl
     /// </summary>
     public ScrollMode VerticalScroll
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = ScrollMode.Auto;
+        get => GetValue(VerticalScrollProperty);
+        set => SetValue(VerticalScrollProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the horizontal scrollbar mode.
     /// </summary>
     public ScrollMode HorizontalScroll
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = ScrollMode.Disabled;
+        get => GetValue(HorizontalScrollProperty);
+        set => SetValue(HorizontalScrollProperty, value);
+    }
 
     /// <summary>
     /// Gets the vertical scroll offset.
@@ -130,15 +120,70 @@ public sealed class ScrollViewer : ContentControl
         NotifyScrollChanged();
     }
 
+    bool IFocusIntoViewHost.OnDescendantFocused(UIElement focusedElement)
+    {
+        if (focusedElement == this || Content == null)
+        {
+            return false;
+        }
+
+        var size = focusedElement.RenderSize;
+        var localRect = new Rect(0, 0, size.Width, size.Height);
+
+        Rect rectInViewer;
+        try
+        {
+            // TranslateRect returns coords in ScrollViewer-local space (relative to this.Bounds.TopLeft).
+            rectInViewer = focusedElement.TranslateRect(localRect, this);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        // GetContentViewportBounds returns in parent coordinate space; convert to local space.
+        var borderInset = GetBorderVisualInset();
+        var vpParent = GetContentViewportBounds(Bounds, borderInset);
+        var vp = new Rect(vpParent.X - Bounds.X, vpParent.Y - Bounds.Y, vpParent.Width, vpParent.Height);
+
+        double newOffsetX = HorizontalOffset;
+        double newOffsetY = VerticalOffset;
+
+        if (_vBar.IsVisible)
+        {
+            if (rectInViewer.Y < vp.Y)
+                newOffsetY = VerticalOffset - (vp.Y - rectInViewer.Y);
+            else if (rectInViewer.Bottom > vp.Bottom)
+                newOffsetY = VerticalOffset + (rectInViewer.Bottom - vp.Bottom);
+        }
+
+        if (_hBar.IsVisible)
+        {
+            if (rectInViewer.X < vp.X)
+                newOffsetX = HorizontalOffset - (vp.X - rectInViewer.X);
+            else if (rectInViewer.Right > vp.Right)
+                newOffsetX = HorizontalOffset + (rectInViewer.Right - vp.Right);
+        }
+
+        // Clamp via ScrollController (DPI-aware pixel-accurate max) rather than raw extent arithmetic.
+        _scroll.DpiScale = DpiScale;
+        newOffsetX = Math.Clamp(newOffsetX, 0, _scroll.GetMaxDip(0));
+        newOffsetY = Math.Clamp(newOffsetY, 0, _scroll.GetMaxDip(1));
+
+        bool changed = !newOffsetX.Equals(HorizontalOffset) || !newOffsetY.Equals(VerticalOffset);
+        if (changed)
+        {
+            SetScrollOffsets(newOffsetX, newOffsetY);
+        }
+
+        return true;
+    } 
+
     /// <summary>
     /// Initializes a new instance of the ScrollViewer class.
     /// </summary>
     public ScrollViewer()
     {
-        BorderThickness = 0;
-
-        Padding = new Thickness(8);
-
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false };
         _hBar = new ScrollBar { Orientation = Orientation.Horizontal, IsVisible = false };
 
@@ -261,7 +306,9 @@ public sealed class ScrollViewer : ContentControl
         _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
 
         bool needV = _scroll.GetExtentPx(1) > _scroll.GetViewportPx(1);
-        bool needH = _scroll.GetExtentPx(0) > _scroll.GetViewportPx(0);
+        // Allow 1 device-pixel tolerance to suppress scrollbars caused by sub-pixel
+        // rounding differences between extent and viewport at non-integer DPI scales.
+        bool needH = _scroll.GetExtentPx(0) > _scroll.GetViewportPx(0) + 1;
         _vBar.IsVisible = IsBarVisible(VerticalScroll, needV);
         _hBar.IsVisible = IsBarVisible(HorizontalScroll, needH);
 
@@ -342,7 +389,7 @@ public sealed class ScrollViewer : ContentControl
         if (Background.A > 0 || BorderThickness > 0)
         {
 
-            DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, Theme.Metrics.ControlCornerRadius);
+            DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, CornerRadius);
         }
 
         var borderInset = GetBorderVisualInset();

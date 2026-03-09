@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -8,44 +9,52 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class CheckBox : Control
 {
-    private bool _isPressed;
-    private TextMeasureCache _textMeasureCache;
-    private bool? _isChecked = false;
-    private bool _updatingFromSource;
+    public static readonly MewProperty<string> TextProperty =
+        MewProperty<string>.Register<CheckBox>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self._textMeasureCache.Invalidate());
 
-    public CheckBox()
-    {
-        Background = Color.Transparent;
-        Padding = new Thickness(2);
-    }
+    public static readonly MewProperty<bool?> IsCheckedProperty =
+        MewProperty<bool?>.Register<CheckBox>(nameof(IsChecked), (bool?)false,
+            MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, _) => self.CheckedChanged?.Invoke(self.IsChecked));
+
+    public static readonly MewProperty<bool> IsThreeStateProperty =
+        MewProperty<bool>.Register<CheckBox>(nameof(IsThreeState), false, MewPropertyOptions.None);
+
+    private TextMeasureCache _textMeasureCache;
 
     public override bool Focusable => true;
 
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+        if (IsChecked == true)
+        {
+            return state with { Flags = state.Flags | VisualStateFlags.Checked };
+        }
+        if (IsChecked == null)
+        {
+            return state with { Flags = state.Flags | VisualStateFlags.Indeterminate };
+        }
+        return state;
+    }
 
     /// <summary>
     /// Gets or sets the checkbox label text.
     /// </summary>
     public string Text
     {
-        get;
-        set
-        {
-            field = value ?? string.Empty;
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    } = string.Empty;
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value ?? string.Empty);
+    }
 
     /// <summary>
     /// Gets or sets whether the checkbox supports indeterminate state.
     /// </summary>
     public bool IsThreeState
     {
-        get;
-        set;
+        get => GetValue(IsThreeStateProperty);
+        set => SetValue(IsThreeStateProperty, value);
     }
 
     /// <summary>
@@ -53,38 +62,14 @@ public partial class CheckBox : Control
     /// </summary>
     public bool? IsChecked
     {
-        get => _isChecked;
-        set
-        {
-            if (_isChecked == value)
-            {
-                return;
-            }
-
-            SetIsCheckedCore(value, fromInput: false);
-        }
+        get => GetValue(IsCheckedProperty);
+        set => SetValue(IsCheckedProperty, value);
     }
 
     /// <summary>
     /// Occurs when the checked state changes.
     /// </summary>
     public event Action<bool?>? CheckedChanged;
-
-    /// <summary>
-    /// Sets a two-way binding for the IsChecked property.
-    /// </summary>
-    /// <param name="get">Function to get the current value.</param>
-    /// <param name="set">Action to set the value.</param>
-    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
-    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
-    public void SetIsCheckedBinding(
-        Func<bool?> get,
-        Action<bool?> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        SetIsCheckedBindingCore(get, set, subscribe, unsubscribe);
-    }
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -108,10 +93,9 @@ public partial class CheckBox : Control
 
     protected override void OnRender(IGraphicsContext context)
     {
-        
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
-        var state = GetVisualState(_isPressed, _isPressed);
+        var state = CurrentVisualState;
 
         const double boxSize = 14;
         const double spacing = 6;
@@ -119,29 +103,28 @@ public partial class CheckBox : Control
         double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
         var boxRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
 
-        var fill = PickControlBackground(state, Theme.Palette.ControlBackground);
-        var radius = Math.Max(0, Theme.Metrics.ControlCornerRadius * 0.5);
+        var fill = GetValue(BackgroundProperty);
+        var radius = Math.Max(0, CornerRadius * 0.5);
 
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        var borderColor = GetValue(BorderBrushProperty);
         DrawBackgroundAndBorder(context, boxRect, fill, borderColor, radius);
 
         var markColor = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
 
-        if (_isChecked == true)
+        if (IsChecked == true)
         {
             // Check mark
             var p1 = new Point(boxRect.X + 3, boxRect.Y + boxRect.Height * 0.55);
-            var p2 = new Point(boxRect.X + boxRect.Width * 0.45, boxRect.Bottom - 3);
+            var p2 = new Point(boxRect.X + boxRect.Width * 0.45, boxRect.Bottom - 4);
             var p3 = new Point(boxRect.Right - 3, boxRect.Y + 3);
 
             var g = new PathGeometry();
             g.MoveTo(p1);
             g.LineTo(p2);
-            g.LineTo(p3); 
+            g.LineTo(p3);
             context.DrawPath(g, markColor, 2);
-
         }
-        else if (_isChecked == null)
+        else if (IsChecked == null)
         {
             // Indeterminate mark (horizontal bar)
             var y = boxRect.Y + boxRect.Height / 2;
@@ -168,7 +151,7 @@ public partial class CheckBox : Control
             return;
         }
 
-        _isPressed = true;
+        SetPressed(true);
         Focus();
 
         var root = FindVisualRoot();
@@ -177,7 +160,6 @@ public partial class CheckBox : Control
             window.CaptureMouse(this);
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
 
@@ -185,12 +167,12 @@ public partial class CheckBox : Control
     {
         base.OnMouseUp(e);
 
-        if (e.Button != MouseButton.Left || !_isPressed)
+        if (e.Button != MouseButton.Left || !IsPressed)
         {
             return;
         }
 
-        _isPressed = false;
+        SetPressed(false);
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -203,7 +185,6 @@ public partial class CheckBox : Control
             ToggleFromInput();
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
 
@@ -227,38 +208,18 @@ public partial class CheckBox : Control
     {
         if (IsThreeState)
         {
-            var next = _isChecked switch
+            var next = IsChecked switch
             {
                 false => (bool?)true,
                 true => (bool?)null,
                 _ => (bool?)false
             };
-
-            SetIsCheckedCore(next, fromInput: true);
+            IsChecked = next;
             return;
         }
 
-        // If currently indeterminate, a user toggle treats it like unchecked and toggles to checked.
-        bool nextBool = _isChecked != true;
-        SetIsCheckedCore(nextBool, fromInput: true);
-    }
-
-    private void SetIsCheckedFromSource(bool? value) => SetIsCheckedCore(value, fromInput: false);
-
-    private void SetIsCheckedCore(bool? value, bool fromInput)
-    {
-        _isChecked = value;
-        CheckedChanged?.Invoke(value);
-
-        if (fromInput && !_updatingFromSource)
-        {
-            if (TryGetBinding(CheckedBindingSlot, out ValueBinding<bool?> checkedBinding))
-            {
-                checkedBinding.Set(value);
-            }
-        }
-
-        InvalidateVisual();
+        bool nextBool = IsChecked != true;
+        IsChecked = nextBool;
     }
 
     protected override void OnDispose()

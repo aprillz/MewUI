@@ -139,3 +139,15 @@ public enum TextWrapping
     Wrap,
     WrapWithOverflow
 }
+
+/// <summary>
+/// Text trimming options for text that overflows its bounds.
+/// </summary>
+public enum TextTrimming
+{
+    /// <summary>Text is not trimmed (may overflow bounds).</summary>
+    None,
+
+    /// <summary>Text is trimmed at character boundary with an ellipsis (…).</summary>
+    CharacterEllipsis,
+}

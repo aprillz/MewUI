@@ -37,19 +37,17 @@ public class HeaderedContentControl : ContentControl
         }
     }
 
+    public static readonly MewProperty<double> HeaderSpacingProperty =
+        MewProperty<double>.Register<HeaderedContentControl>(nameof(HeaderSpacing), 0.0,
+            MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the spacing between header and content.
     /// </summary>
     public double HeaderSpacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(HeaderSpacingProperty);
+        set => SetValue(HeaderSpacingProperty, value);
     }
 
     protected override Size MeasureContent(Size availableSize)

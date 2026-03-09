@@ -54,34 +54,28 @@ public sealed class DockPanel : Panel
         return DockMap.TryGetValue(element, out var data) ? data.Dock : Dock.Left;
     }
 
+    public static readonly MewProperty<bool> LastChildFillProperty =
+        MewProperty<bool>.Register<DockPanel>(nameof(LastChildFill), true, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> SpacingProperty =
+        MewProperty<double>.Register<DockPanel>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets whether the last child fills remaining space.
     /// </summary>
     public bool LastChildFill
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = true;
+        get => GetValue(LastChildFillProperty);
+        set => SetValue(LastChildFillProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the spacing between children.
     /// </summary>
     public double Spacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
     }
 
     protected override Size MeasureContent(Size availableSize)

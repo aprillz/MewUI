@@ -5,34 +5,28 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class StackPanel : Panel
 {
+    public static readonly MewProperty<Orientation> OrientationProperty =
+        MewProperty<Orientation>.Register<StackPanel>(nameof(Orientation), Orientation.Vertical, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> SpacingProperty =
+        MewProperty<double>.Register<StackPanel>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the orientation of the stack.
     /// </summary>
     public Orientation Orientation
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = Orientation.Vertical;
+        get => GetValue(OrientationProperty);
+        set => SetValue(OrientationProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the spacing between children.
     /// </summary>
     public double Spacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
     }
 
     protected override Size MeasureContent(Size availableSize)

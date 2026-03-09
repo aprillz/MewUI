@@ -9,6 +9,14 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHost
 {
+    public static readonly MewProperty<int> SelectedIndexProperty =
+        MewProperty<int>.Register<ListBox>(nameof(SelectedIndex), -1,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
+
+    public static readonly MewProperty<bool> ZebraStripingProperty =
+        MewProperty<bool>.Register<ListBox>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
+
     private readonly TextWidthCache _textWidthCache = new(512);
     private IItemsPresenter _presenter;
     private IDataTemplate _itemTemplate;
@@ -17,9 +25,15 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _updatingFromSource;
+    private bool _syncingSelectedIndex;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
+
+    public bool ZebraStriping
+    {
+        get => GetValue(ZebraStripingProperty);
+        set => SetValue(ZebraStripingProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the items data source.
@@ -76,6 +90,9 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         else
         {
             int newIndex = _itemsSource.SelectedIndex;
+            _syncingSelectedIndex = true;
+            try { SetValue(SelectedIndexProperty, newIndex); }
+            finally { _syncingSelectedIndex = false; }
             if (newIndex >= 0)
             {
                 ScrollIntoView(newIndex);
@@ -91,8 +108,8 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     /// </summary>
     public int SelectedIndex
     {
-        get => ItemsSource.SelectedIndex;
-        set => ItemsSource.SelectedIndex = value;
+        get => GetValue(SelectedIndexProperty);
+        set => SetValue(SelectedIndexProperty, value);
     }
 
     /// <summary>
@@ -108,35 +125,31 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     /// <summary>
     /// Gets or sets the height of each list item.
     /// </summary>
+    public static readonly MewProperty<double> ItemHeightProperty =
+        MewProperty<double>.Register<ListBox>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
     public double ItemHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(ItemHeightProperty);
+        set => SetValue(ItemHeightProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the padding around each item's text.
     /// </summary>
+    public static readonly MewProperty<Thickness> ItemPaddingProperty =
+        MewProperty<Thickness>.Register<ListBox>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) =>
+            {
+                if (self._presenter != null)
+                    self._presenter.ItemPadding = self.ItemPadding;
+                self._rebindVisibleOnNextRender = true;
+            });
+
     public Thickness ItemPadding
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                _presenter?.ItemPadding = value;
-                _rebindVisibleOnNextRender = true;
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ItemPaddingProperty);
+        set => SetValue(ItemPaddingProperty, value);
     }
 
     /// <summary>
@@ -222,7 +235,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
                 return container;
             });
 
-        _scrollViewer.Padding = Padding;
+        _scrollViewer.SetBinding(PaddingProperty, this, PaddingProperty);
         _scrollViewer.Content = (UIElement)_presenter;
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
     }
@@ -278,7 +291,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         if (ItemPadding == oldTheme.Metrics.ItemPadding)
         {
             ItemPadding = newTheme.Metrics.ItemPadding;
-        } 
+        }
 
         _rebindVisibleOnNextRender = true;
     }
@@ -368,7 +381,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
 
         _presenter.ItemHeightHint = itemHeight;
         _presenter.ExtentWidth = maxWidth;
-        _scrollViewer.Padding = Padding;
 
         _scrollViewer.Measure(new Size(
             double.IsPositiveInfinity(availableSize.Width) ? double.PositiveInfinity : Math.Max(0, availableSize.Width - borderInset * 2),
@@ -404,20 +416,18 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = Theme.Metrics.ControlCornerRadius;
-
-        var state = GetVisualState();
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        double radius = CornerRadius;
 
         DrawBackgroundAndBorder(
             context,
             bounds,
-            PickControlBackground(state),
-            borderColor,
+            GetValue(BackgroundProperty),
+            GetValue(BorderBrushProperty),
             radius);
 
         var borderInset = GetBorderVisualInset();
-        var clipR = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), GetDpi() / 96.0);
+        var dpiScale = GetDpi() / 96.0;
+        var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
         _scrollViewer.ViewportCornerRadius = clipR;
         _presenter.ItemRadius = clipR;
 
@@ -482,22 +492,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             SelectedIndex = index;
             ItemActivated?.Invoke(index);
             InvalidateVisual();
-            e.Handled = true;
-        }
-    }
-
-    protected override void OnMouseDoubleClick(MouseEventArgs e)
-    {
-        base.OnMouseDoubleClick(e);
-
-        if (e.Handled || !IsEffectivelyEnabled)
-        {
-            return;
-        }
-
-        if (TryGetItemIndexAt(e, out int index))
-        {
-            ItemActivated?.Invoke(index);
             e.Handled = true;
         }
     }
@@ -609,6 +603,13 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     {
         double itemRadius = _presenter.ItemRadius;
 
+        if (ZebraStriping && (i & 1) == 1 && i != SelectedIndex && i != _hoverIndex)
+        {
+            var theme = Theme;
+            var bg = theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33);
+            context.FillRectangle(itemRect, bg);
+        }
+
         if (i == SelectedIndex)
         {
             var selectionBg = Theme.Palette.SelectionBackground;
@@ -700,6 +701,22 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         InvalidateVisual();
     }
 
+    private void OnSelectedIndexPropertyChanged(int newIndex)
+    {
+        if (_syncingSelectedIndex) return;
+        _syncingSelectedIndex = true;
+        try
+        {
+            _itemsSource.SelectedIndex = newIndex;
+            int actual = _itemsSource.SelectedIndex;
+            if (actual != newIndex)
+            {
+                SetValue(SelectedIndexProperty, actual);
+            }
+        }
+        finally { _syncingSelectedIndex = false; }
+    }
+
     private void OnItemsSelectionChanged(int index)
     {
         if (_suppressItemsSelectionChanged)
@@ -708,12 +725,12 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         }
 
         _rebindVisibleOnNextRender = true;
-        if (!_updatingFromSource)
+
+        if (!_syncingSelectedIndex)
         {
-            if (TryGetBinding(SelectedIndexBindingSlot, out ValueBinding<int> binding))
-            {
-                binding.Set(index);
-            }
+            _syncingSelectedIndex = true;
+            try { SetValue(SelectedIndexProperty, index); }
+            finally { _syncingSelectedIndex = false; }
         }
 
         SelectionChanged?.Invoke(SelectedItem);
@@ -745,22 +762,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
-    /// <summary>
-    /// Sets a two-way binding for the SelectedIndex property.
-    /// </summary>
-    /// <param name="get">Function to get the current value.</param>
-    /// <param name="set">Action to set the value.</param>
-    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
-    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
-    public void SetSelectedIndexBinding(
-        Func<int> get,
-        Action<int> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        SetSelectedIndexBindingCore(get, set, subscribe, unsubscribe);
-    }
-
     bool IVirtualizedTabNavigationHost.TryMoveFocusFromDescendant(UIElement focusedElement, bool moveForward)
     {
         if (!IsEffectivelyEnabled || ItemsSource.Count == 0)
@@ -769,6 +770,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         }
 
         int found = -1;
+        FrameworkElement? foundContainer = null;
         _presenter.VisitRealized((i, element) =>
         {
             if (found != -1)
@@ -779,10 +781,19 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             if (VisualTree.IsInSubtreeOf(focusedElement, element))
             {
                 found = i;
+                foundContainer = element;
             }
         });
 
-        if (found < 0)
+        if (found < 0 || foundContainer == null)
+        {
+            return false;
+        }
+
+        var edge = moveForward
+            ? FocusManager.FindLastFocusable(foundContainer)
+            : FocusManager.FindFirstFocusable(foundContainer);
+        if (edge != null && !ReferenceEquals(edge, focusedElement))
         {
             return false;
         }
@@ -795,7 +806,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
 
         SelectedIndex = target;
         ScrollIntoView(target);
-        _tabFocusHelper.Schedule(target);
+        _tabFocusHelper.Schedule(target, moveForward);
         return true;
     }
 

@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -7,8 +8,27 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class Image : FrameworkElement
 {
+    public static readonly MewProperty<ImageScaleQuality> ImageScaleQualityProperty =
+        MewProperty<ImageScaleQuality>.Register<Image>(nameof(ImageScaleQuality), ImageScaleQuality.Default, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<Stretch> StretchModeProperty =
+        MewProperty<Stretch>.Register<Image>(nameof(StretchMode), Stretch.Uniform, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<Rect?> ViewBoxProperty =
+        MewProperty<Rect?>.Register<Image>(nameof(ViewBox), null, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<ImageViewBoxUnits> ViewBoxUnitsProperty =
+        MewProperty<ImageViewBoxUnits>.Register<Image>(nameof(ViewBoxUnits), ImageViewBoxUnits.Pixels, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<ImageAlignmentX> AlignmentXProperty =
+        MewProperty<ImageAlignmentX>.Register<Image>(nameof(AlignmentX), ImageAlignmentX.Center, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<ImageAlignmentY> AlignmentYProperty =
+        MewProperty<ImageAlignmentY>.Register<Image>(nameof(AlignmentY), ImageAlignmentY.Center, MewPropertyOptions.AffectsRender);
+
     private readonly Dictionary<IGraphicsFactory, IImage> _cache =
         new(ReferenceEqualityComparer<IGraphicsFactory>.Instance);
+
     private INotifyImageChanged? _notifySource;
 
     /// <summary>
@@ -16,46 +36,26 @@ public sealed class Image : FrameworkElement
     /// </summary>
     public ImageScaleQuality ImageScaleQuality
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
-    } = ImageScaleQuality.Default;
+        get => GetValue(ImageScaleQualityProperty);
+        set => SetValue(ImageScaleQualityProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets how the image is stretched to fill available space.
     /// </summary>
     public Stretch StretchMode
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = Stretch.Uniform;
+        get => GetValue(StretchModeProperty);
+        set => SetValue(StretchModeProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the viewbox region of the source image.
     /// </summary>
     public Rect? ViewBox
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ViewBoxProperty);
+        set => SetValue(ViewBoxProperty, value);
     }
 
     /// <summary>
@@ -63,46 +63,27 @@ public sealed class Image : FrameworkElement
     /// </summary>
     public ImageViewBoxUnits ViewBoxUnits
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = ImageViewBoxUnits.Pixels;
+        get => GetValue(ViewBoxUnitsProperty);
+        set => SetValue(ViewBoxUnitsProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the horizontal alignment of the image.
     /// </summary>
     public ImageAlignmentX AlignmentX
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
-    } = ImageAlignmentX.Center;
+        get => GetValue(AlignmentXProperty);
+        set => SetValue(AlignmentXProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the vertical alignment of the image.
     /// </summary>
     public ImageAlignmentY AlignmentY
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
-    } = ImageAlignmentY.Center;
+        get => GetValue(AlignmentYProperty);
+        set => SetValue(AlignmentYProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the image source.
@@ -167,7 +148,7 @@ public sealed class Image : FrameworkElement
             return false;
         }
 
-        ComputeRects(srcRect, new (0, 0, ActualWidth, ActualHeight), StretchMode, AlignmentX, AlignmentY, out var dest, out var src);
+        ComputeRects(srcRect, new(0, 0, ActualWidth, ActualHeight), StretchMode, AlignmentX, AlignmentY, out var dest, out var src);
         if (dest.Width <= 0 || dest.Height <= 0 || src.Width <= 0 || src.Height <= 0)
         {
             return false;

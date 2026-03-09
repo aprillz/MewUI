@@ -104,43 +104,10 @@ public sealed class TabControl : Control
         }
     }
 
-    /// <summary>
-    /// Gets or sets the padding around tab content.
-    /// </summary>
-    public new Thickness Padding
-    {
-        get => _contentHost.Padding;
-        set
-        {
-            if (_contentHost.Padding == value)
-            {
-                return;
-            }
-
-            _contentHost.Padding = value;
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    }
-
-    /// <summary>
-    /// Gets the default background color.
-    /// </summary>
-    protected override Color DefaultBackground => Theme.Palette.ContainerBackground;
-
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
     public override bool Focusable => true;
 
     public TabControl()
     {
-        base.Padding = Thickness.Zero;
-
         _headerStrip = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -154,6 +121,8 @@ public sealed class TabControl : Control
             HorizontalScroll = ScrollMode.Disabled,
         };
         _contentHost.Parent = this;
+
+        _contentHost.SetBinding(PaddingProperty, this, PaddingProperty);
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -376,7 +345,7 @@ public sealed class TabControl : Control
         }
 
         var stripBg = GetTabStripBackground(Theme);
-        var contentBg = Theme.Palette.ContainerBackground;
+        var contentBg = GetValue(BackgroundProperty);
 
         var headerRect = new Rect(inner.X, inner.Y, inner.Width, Math.Max(0, headerH));
 

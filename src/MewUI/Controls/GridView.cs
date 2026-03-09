@@ -5,6 +5,25 @@ namespace Aprillz.MewUI.Controls;
 
 public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtualizedTabNavigationHost
 {
+    public static readonly MewProperty<bool> ZebraStripingProperty =
+        MewProperty<bool>.Register<GridView>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<bool> ShowGridLinesProperty =
+        MewProperty<bool>.Register<GridView>(nameof(ShowGridLines), false, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<double> RowHeightProperty =
+        MewProperty<double>.Register<GridView>(nameof(RowHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> HeaderHeightProperty =
+        MewProperty<double>.Register<GridView>(nameof(HeaderHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<Thickness> CellPaddingProperty =
+        MewProperty<Thickness>.Register<GridView>(nameof(CellPadding), default, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self._rebindVisibleOnNextRender = true);
+
+    public static readonly MewProperty<double> MaxAutoViewportHeightProperty =
+        MewProperty<double>.Register<GridView>(nameof(MaxAutoViewportHeight), 320.0, MewPropertyOptions.AffectsLayout);
+
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
 
@@ -71,80 +90,39 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
     public bool ZebraStriping
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
-    } = true;
+        get => GetValue(ZebraStripingProperty);
+        set => SetValue(ZebraStripingProperty, value);
+    }
 
     public bool ShowGridLines
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ShowGridLinesProperty);
+        set => SetValue(ShowGridLinesProperty, value);
     }
 
     public double RowHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateArrange();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(RowHeightProperty);
+        set => SetValue(RowHeightProperty, value);
+    }
 
     public double HeaderHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateArrange();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(HeaderHeightProperty);
+        set => SetValue(HeaderHeightProperty, value);
+    }
 
     public Thickness CellPadding
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                _rebindVisibleOnNextRender = true;
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(CellPaddingProperty);
+        set => SetValue(CellPaddingProperty, value);
     }
 
     public double MaxAutoViewportHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateArrange();
-            }
-        }
-    } = 320;
+        get => GetValue(MaxAutoViewportHeightProperty);
+        set => SetValue(MaxAutoViewportHeightProperty, value);
+    }
 
     public int SelectedIndex
     {
@@ -799,7 +777,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             return;
         }
 
-        OnRender(context);
+        base.Render(context);
 
         var dpiScale = GetDpi() / 96.0;
         var borderInset = GetBorderVisualInset();
@@ -809,7 +787,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             .Deflate(Padding);
 
         var clipRect = LayoutRounding.MakeClipRect(contentBounds, dpiScale);
-        var clipRadius = LayoutRounding.RoundToPixel(Math.Max(0, Theme.Metrics.ControlCornerRadius - BorderThickness), dpiScale);
+        var clipRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
         clipRadius = Math.Min(clipRadius, Math.Min(clipRect.Width, clipRect.Height) / 2);
 
         context.Save();
@@ -835,24 +813,10 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var theme = Theme;
         var bounds = GetSnappedBorderBounds(Bounds);
-        var bg = IsEnabled ? Background : theme.Palette.DisabledControlBackground;
-
-        var borderColor = BorderBrush;
-        if (IsEnabled)
-        {
-            if (IsFocused)
-            {
-                borderColor = theme.Palette.Accent;
-            }
-            else if (IsMouseOver)
-            {
-                borderColor = BorderBrush.Lerp(theme.Palette.Accent, 0.6);
-            }
-        }
-
-        DrawBackgroundAndBorder(context, bounds, bg, borderColor, theme.Metrics.ControlCornerRadius);
+        var bg = GetValue(BackgroundProperty);
+        var borderColor = GetValue(BorderBrushProperty);
+        DrawBackgroundAndBorder(context, bounds, bg, borderColor, CornerRadius);
     }
 
     protected override UIElement? OnHitTest(Point point)
@@ -1111,7 +1075,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
                     break;
                 }
 
-                context.DrawLine(new Point(x, bounds.Y + inset), new Point(x, bounds.Bottom - inset), stroke, 1);
+                context.DrawLine(new Point(x, bounds.Y + inset), new Point(x, bounds.Bottom - inset), stroke, 1, pixelSnap: true);
             }
         }
     }
@@ -1313,7 +1277,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             if (_owner.ShowGridLines)
             {
                 var stroke = theme.Palette.ControlBorder;
-                context.DrawLine(new Point(snapped.X, snapped.Bottom - 1), new Point(snapped.Right, snapped.Bottom - 1), stroke, 1);
+                context.DrawLine(new Point(snapped.X, snapped.Bottom - 1), new Point(snapped.Right, snapped.Bottom - 1), stroke, 1, pixelSnap: true);
 
                 double x = snapped.X;
                 for (int i = 0; i < _owner._core.Columns.Count; i++)
@@ -1324,7 +1288,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
                         break;
                     }
 
-                    context.DrawLine(new Point(x, snapped.Y), new Point(x, snapped.Bottom), stroke, 1);
+                    context.DrawLine(new Point(x, snapped.Y), new Point(x, snapped.Bottom), stroke, 1, pixelSnap: true);
                 }
             }
         }

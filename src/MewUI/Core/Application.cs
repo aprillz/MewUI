@@ -126,7 +126,7 @@ public sealed class Application
             }
             catch
             {
-                return GraphicsBackend.Custom;
+                return GraphicsBackend.Unknown;
             }
         }
     }
@@ -196,11 +196,21 @@ public sealed class Application
 
     public static IPlatformHost DefaultPlatformHost
     {
-        get => _defaultPlatformHostOverride ??= CreateDefaultPlatformHost();
+        get
+        {
+            if (_defaultPlatformHostOverride == null)
+            {
+                _defaultPlatformHostOverride = CreateDefaultPlatformHost();
+                ApplyPlatformFontDefaults(_defaultPlatformHostOverride);
+            }
+
+            return _defaultPlatformHostOverride;
+        }
         set
         {
             ArgumentNullException.ThrowIfNull(value);
             _defaultPlatformHostOverride = value;
+            ApplyPlatformFontDefaults(value);
         }
     }
 
@@ -230,7 +240,8 @@ public sealed class Application
                 throw new InvalidOperationException("Application is already running.");
             }
 
-            var app = new Application(DefaultPlatformHost);
+            var host = DefaultPlatformHost;
+            var app = new Application(host);
             _current = app;
             _ = app.Theme;
             app.RegisterWindow(mainWindow);
@@ -434,6 +445,23 @@ public sealed class Application
 
     public void NotifyFatalDispatcherException(Exception ex)
         => Interlocked.CompareExchange(ref _pendingFatalException, ex, null);
+
+    private static void ApplyPlatformFontDefaults(IPlatformHost host)
+    {
+        var fontFamily = host.DefaultFontFamily;
+        if (string.IsNullOrEmpty(fontFamily))
+        {
+            return;
+        }
+
+        ThemeMetrics.DefaultFontFamily = fontFamily;
+
+        var metrics = ThemeManager.DefaultMetrics;
+        if (metrics.FontFamily != fontFamily)
+        {
+            ThemeManager.DefaultMetrics = metrics with { FontFamily = fontFamily };
+        }
+    }
 
     private static IPlatformHost CreateDefaultPlatformHost()
     {

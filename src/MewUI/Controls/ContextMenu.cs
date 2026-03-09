@@ -35,49 +35,38 @@ public sealed class ContextMenu : Control, IPopupOwner
     /// <summary>
     /// Gets or sets the height of menu items.
     /// </summary>
+    public static readonly MewProperty<double> ItemHeightProperty =
+        MewProperty<double>.Register<ContextMenu>(nameof(ItemHeight), double.NaN, MewPropertyOptions.AffectsLayout);
+
     public double ItemHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = double.NaN;
+        get => GetValue(ItemHeightProperty);
+        set => SetValue(ItemHeightProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the padding around menu items.
     /// </summary>
+    public static readonly MewProperty<Thickness> ItemPaddingProperty =
+        MewProperty<Thickness>.Register<ContextMenu>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout);
+
     public Thickness ItemPadding
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ItemPaddingProperty);
+        set => SetValue(ItemPaddingProperty, value);
     }
+
+    public static readonly MewProperty<double> MaxMenuHeightProperty =
+        MewProperty<double>.Register<ContextMenu>(nameof(MaxMenuHeight), 320.0, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
     /// Gets or sets the maximum height of the menu.
     /// </summary>
     public double MaxMenuHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = 320;
+        get => GetValue(MaxMenuHeightProperty);
+        set => SetValue(MaxMenuHeightProperty, value);
+    }
 
     /// <summary>
     /// Gets whether the context menu can receive keyboard focus.
@@ -112,20 +101,12 @@ public sealed class ContextMenu : Control, IPopupOwner
         {
             ItemPadding = Theme.Metrics.ItemPadding;
         }
-        Padding = new Thickness(1);
-
         _vBar = new ScrollBar { Orientation = Orientation.Vertical, IsVisible = false, Parent = this };
         _vBar.ValueChanged += v =>
         {
             UpdateScrollFromBar(v);
         };
     }
-
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
 
     public void AddItem(string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
     {
@@ -221,7 +202,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             return ItemHeight;
         }
 
-        
+
         return Math.Max(18, Theme.Metrics.BaseControlHeight - 2);
     }
 
@@ -273,22 +254,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         return LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
     }
 
-    private Rect GetItemViewportBounds()
-    {
-        var contentBounds = GetContentViewportBounds();
-        if (!_vBar.IsVisible)
-        {
-            return contentBounds;
-        }
-
-        var dpiScale = GetDpi() / 96.0;
-        double t = Theme.Metrics.ScrollBarHitThickness;
-        return LayoutRounding.SnapViewportRectToPixels(new Rect(
-            contentBounds.X,
-            contentBounds.Y,
-            Math.Max(0, contentBounds.Width - t),
-            contentBounds.Height), dpiScale);
-    }
+    private Rect GetItemViewportBounds() => GetContentViewportBounds();
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -296,7 +262,7 @@ public sealed class ContextMenu : Control, IPopupOwner
 
         double height = 0;
         double itemHeight = ResolveItemHeight();
-        
+
 
         using var measure = BeginTextMeasurement();
 
@@ -366,7 +332,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         base.ArrangeContent(bounds);
 
-        
+
         var snapped = GetSnappedBorderBounds(bounds);
         var borderInset = GetBorderVisualInset();
         var dpiScale = GetDpi() / 96.0;
@@ -375,7 +341,8 @@ public sealed class ContextMenu : Control, IPopupOwner
         var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
         _viewportHeight = Math.Max(0, contentBounds.Height);
 
-        bool needV = _extentHeight > _viewportHeight + 0.5;
+        double onePx = dpiScale > 0 ? 1.0 / dpiScale : 1;
+        bool needV = _extentHeight > _viewportHeight + onePx;
         _vBar.IsVisible = needV;
 
         if (!needV)
@@ -386,8 +353,6 @@ public sealed class ContextMenu : Control, IPopupOwner
             return;
         }
 
-        double t = Theme.Metrics.ScrollBarHitThickness;
-        var itemBounds = new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width - t), contentBounds.Height);
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(1, _extentHeight, _viewportHeight);
         _scroll.SetOffsetDip(1, _verticalOffset);
@@ -400,11 +365,13 @@ public sealed class ContextMenu : Control, IPopupOwner
         _vBar.LargeChange = Theme.Metrics.ScrollBarLargeChange;
         _vBar.Value = _verticalOffset;
 
+        // Overlay: scrollbar sits on top of content at the right edge.
+        double t = Theme.Metrics.ScrollBarHitThickness;
         _vBar.Arrange(new Rect(
-            itemBounds.Right,
-            itemBounds.Y,
+            contentBounds.Right - t,
+            contentBounds.Y,
             t,
-            Math.Max(0, itemBounds.Height)));
+            contentBounds.Height));
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -602,7 +569,7 @@ public sealed class ContextMenu : Control, IPopupOwner
 
         // Place to the right of the row (WPF-like), clamped to window client.
         const double horizontalOffset = 2;
-        const double verticalOffset = -2;
+        double verticalOffset = -(BorderThickness + Padding.Top);
         double x = ownerRowBounds.Right + horizontalOffset;
         double y = ownerRowBounds.Y + verticalOffset;
 
@@ -743,9 +710,9 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         var bounds = GetSnappedBorderBounds(Bounds);
         var dpiScale = GetDpi() / 96.0;
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
         var borderInset = GetBorderVisualInset();
-        double itemRadius = LayoutRounding.RoundToPixel(Math.Max(0, radius - BorderThickness), dpiScale);
+        double itemRadius = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
 
         DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, radius);
 
@@ -762,7 +729,6 @@ public sealed class ContextMenu : Control, IPopupOwner
         context.Save();
         context.SetClip(LayoutRounding.MakeClipRect(contentBounds, dpiScale));
 
-        double barOverlayWidth = _vBar.IsVisible ? Theme.Metrics.ScrollBarHitThickness : 0;
         double y = contentBounds.Y - _verticalOffset;
         for (int i = 0; i < Items.Count; i++)
         {
@@ -775,16 +741,10 @@ public sealed class ContextMenu : Control, IPopupOwner
                 continue;
             }
 
-            // Keep content (text/chevrons/separators) out of the scrollbar overlay area,
-            // but allow background/selection to extend under the overlay.
-            var layoutRow = barOverlayWidth > 0
-                ? new Rect(row.X, row.Y, Math.Max(0, row.Width - barOverlayWidth), row.Height)
-                : row;
-
             if (entry is MenuSeparator)
             {
                 var sepY = row.Y + (row.Height - 1) / 2;
-                context.DrawLine(new Point(layoutRow.X + 4, sepY), new Point(layoutRow.Right - 4, sepY), Theme.Palette.ControlBorder, 1);
+                context.DrawLine(new Point(row.X + 4, sepY), new Point(row.Right - 4, sepY), Theme.Palette.ControlBorder, 1, pixelSnap: true);
                 y += h;
                 continue;
             }
@@ -808,7 +768,7 @@ public sealed class ContextMenu : Control, IPopupOwner
                 var fg = item.IsEnabled ? Foreground : Theme.Palette.DisabledText;
                 var chevronReserved = item.SubMenu != null ? SubMenuGlyphAreaWidth : 0;
 
-                var paddedRow = layoutRow.Deflate(ItemPadding);
+                var paddedRow = row.Deflate(ItemPadding);
 
                 double textLeft = paddedRow.X;
                 double textRight = paddedRow.Right - chevronReserved;

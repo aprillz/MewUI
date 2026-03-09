@@ -10,17 +10,15 @@ public abstract class Panel : FrameworkElement
 {
     private readonly List<Element> _children = new();
 
+    public static readonly MewProperty<bool> ClipToBoundsProperty =
+        MewProperty<bool>.Register<Panel>(nameof(ClipToBounds), false, MewPropertyOptions.AffectsRender);
+
     protected override bool InvalidateOnMouseOverChanged => false;
 
     public bool ClipToBounds
     {
-        get; set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ClipToBoundsProperty);
+        set => SetValue(ClipToBoundsProperty, value);
     }
 
     /// <summary>

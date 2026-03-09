@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -7,8 +8,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal sealed class TabHeaderButton : ContentControl
 {
-    private bool _isPressed;
-
     /// <summary>
     /// Gets or sets the tab index this header represents.
     /// </summary>
@@ -29,17 +28,18 @@ internal sealed class TabHeaderButton : ContentControl
     /// </summary>
     public event Action<int>? Clicked;
 
-    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
     public TabHeaderButton()
     {
-        Padding = new Thickness(8, 4, 8, 4);
+    }
+
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+        if (!IsTabEnabled)
+            state = state with { Flags = state.Flags & ~VisualStateFlags.Enabled };
+        if (IsSelected)
+            state = state with { Flags = state.Flags | VisualStateFlags.Selected };
+        return state;
     }
 
     // Keep header buttons out of the default Tab focus order.
@@ -73,7 +73,7 @@ internal sealed class TabHeaderButton : ContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
-        double radiusDip = Math.Max(0, Theme.Metrics.ControlCornerRadius);
+        double radiusDip = Math.Max(0, CornerRadius);
         var metrics = GetBorderRenderMetrics(Bounds, radiusDip);
         var bounds = metrics.Bounds;
         var radius = metrics.CornerRadius;
@@ -82,12 +82,11 @@ internal sealed class TabHeaderButton : ContentControl
         var tabBg = host?.GetTabBackground(Theme, IsSelected) ?? (IsSelected ? Theme.Palette.ControlBackground : Theme.Palette.ButtonFace);
         var outline = host?.GetOutlineColor(Theme) ?? Theme.Palette.ControlBorder;
 
-        var isEffectivelyEnabled = IsEffectivelyEnabled && IsTabEnabled;
-        var state = GetVisualState(_isPressed, _isPressed, isEffectivelyEnabled);
+        var state = CurrentVisualState;
 
         Color bg = IsSelected ? tabBg : PickButtonBackground(state, tabBg);
 
-        var baseBorder = IsSelected && isEffectivelyEnabled ? outline : Theme.Palette.ControlBorder;
+        var baseBorder = IsSelected && state.IsEnabled ? outline : Theme.Palette.ControlBorder;
         var border = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.4);
 
         // Top-only rounding via clipping:
@@ -145,7 +144,7 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled && IsTabEnabled)
         {
-            _isPressed = true;
+            SetPressed(true);
 
             var root = FindVisualRoot();
             if (root is Window window)
@@ -153,7 +152,6 @@ internal sealed class TabHeaderButton : ContentControl
                 window.CaptureMouse(this);
             }
 
-            InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -162,9 +160,9 @@ internal sealed class TabHeaderButton : ContentControl
     {
         base.OnMouseUp(e);
 
-        if (e.Button == MouseButton.Left && _isPressed)
+        if (e.Button == MouseButton.Left && IsPressed)
         {
-            _isPressed = false;
+            SetPressed(false);
 
             var root = FindVisualRoot();
             if (root is Window window)
@@ -177,7 +175,6 @@ internal sealed class TabHeaderButton : ContentControl
                 Clicked?.Invoke(Index);
             }
 
-            InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -185,11 +182,7 @@ internal sealed class TabHeaderButton : ContentControl
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        if (_isPressed)
-        {
-            _isPressed = false;
-            InvalidateVisual();
-        }
+        SetPressed(false);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -202,8 +195,7 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Key is Key.Space or Key.Enter)
         {
-            _isPressed = true;
-            InvalidateVisual();
+            SetPressed(true);
             e.Handled = true;
         }
     }
@@ -218,11 +210,10 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Key is Key.Space or Key.Enter)
         {
-            if (_isPressed)
+            if (IsPressed)
             {
-                _isPressed = false;
+                SetPressed(false);
                 Clicked?.Invoke(Index);
-                InvalidateVisual();
             }
 
             e.Handled = true;

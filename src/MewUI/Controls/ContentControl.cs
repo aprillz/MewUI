@@ -16,6 +16,11 @@ public class ContentControl : Control
         get;
         set
         {
+            if (ReferenceEquals(value, this))
+            {
+                throw new InvalidOperationException("Cannot set Content to self.");
+            }
+
             if (field != value)
             {
                 if (field != null)

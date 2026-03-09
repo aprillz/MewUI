@@ -2,7 +2,6 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
 
-using Path = Aprillz.MewUI.PathShape;
 
 /// <summary>
 /// Fluent API extension methods for shape elements.
@@ -60,14 +59,14 @@ public static class ShapeExtensions
     #region Path
 
     /// <summary>Sets the path data geometry.</summary>
-    public static MewUI.PathShape Data(this MewUI.PathShape path, PathGeometry geometry)
+    public static PathShape Data(this PathShape path, PathGeometry geometry)
     {
         path.Data = geometry;
         return path;
     }
 
     /// <summary>Sets the path data from an SVG path data string.</summary>
-    public static MewUI.PathShape Data(this MewUI.PathShape path, string svgPathData)
+    public static PathShape Data(this PathShape path, string svgPathData)
     {
         path.Data = PathGeometry.Parse(svgPathData);
         return path;

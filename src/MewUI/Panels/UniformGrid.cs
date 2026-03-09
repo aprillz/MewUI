@@ -5,19 +5,22 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class UniformGrid : Panel
 {
+    public static readonly MewProperty<double> SpacingProperty =
+        MewProperty<double>.Register<UniformGrid>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<int> RowsProperty =
+        MewProperty<int>.Register<UniformGrid>(nameof(Rows), 0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<int> ColumnsProperty =
+        MewProperty<int>.Register<UniformGrid>(nameof(Columns), 0, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the spacing between cells (both row/column gaps).
     /// </summary>
     public double Spacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
     }
 
     /// <summary>
@@ -25,15 +28,8 @@ public class UniformGrid : Panel
     /// </summary>
     public int Rows
     {
-        get;
-        set
-        {
-            var v = Math.Max(0, value);
-            if (Set(ref field, v))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(RowsProperty);
+        set => SetValue(RowsProperty, Math.Max(0, value));
     }
 
     /// <summary>
@@ -41,15 +37,8 @@ public class UniformGrid : Panel
     /// </summary>
     public int Columns
     {
-        get;
-        set
-        {
-            var v = Math.Max(0, value);
-            if (Set(ref field, v))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(ColumnsProperty);
+        set => SetValue(ColumnsProperty, Math.Max(0, value));
     }
 
     private (int rows, int columns) CalculateGridSize()

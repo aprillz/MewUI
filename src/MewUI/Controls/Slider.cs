@@ -5,69 +5,51 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A slider control for selecting a numeric value within a range.
 /// </summary>
-public sealed partial class Slider : RangeBase
+public sealed class Slider : RangeBase
 {
     private bool _isDragging;
+
+    public static readonly MewProperty<double> SmallChangeProperty =
+        MewProperty<double>.Register<Slider>(nameof(SmallChange), 1.0, MewPropertyOptions.None);
+
+    public static readonly MewProperty<bool> ChangeOnWheelProperty =
+        MewProperty<bool>.Register<Slider>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
+
+    static Slider()
+    {
+        MaximumProperty.OverrideDefaultValue<Slider>(100.0);
+        HeightProperty.OverrideDefaultValue<Slider>(24.0);
+    }
 
     /// <summary>
     /// Gets or sets the increment for small changes.
     /// </summary>
-    public double SmallChange { get; set; } = 1;
+    public double SmallChange
+    {
+        get => GetValue(SmallChangeProperty);
+        set => SetValue(SmallChangeProperty, value);
+    }
 
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    public bool ChangeOnWheel { get; set; } = true;
+    public bool ChangeOnWheel
+    {
+        get => GetValue(ChangeOnWheelProperty);
+        set => SetValue(ChangeOnWheelProperty, value);
+    }
 
     /// <summary>
     /// Gets whether the slider can receive keyboard focus.
     /// </summary>
     public override bool Focusable => true;
 
-    /// <summary>
-    /// Initializes a new instance of the Slider class.
-    /// </summary>
-    public Slider()
-    {
-        Maximum = 100;
-        Background = Color.Transparent;
-        Height = 24;
-    }
-
     private double ThumbSize => 14;
-
-    /// <summary>
-    /// Sets a two-way binding for the Value property.
-    /// </summary>
-    /// <param name="get">Function to get the current value.</param>
-    /// <param name="set">Action to set the value.</param>
-    /// <param name="subscribe">Optional action to subscribe to change notifications.</param>
-    /// <param name="unsubscribe">Optional action to unsubscribe from change notifications.</param>
-    public void SetValueBinding(
-        Func<double> get,
-        Action<double> set,
-        Action<Action>? subscribe = null,
-        Action<Action>? unsubscribe = null)
-    {
-        SetValueBindingCore(get, set, subscribe, unsubscribe);
-    }
 
     protected override Size MeasureContent(Size availableSize) => new Size(ThumbSize * 3, ThumbSize);
 
     protected override void OnRender(IGraphicsContext context)
     {
-        if (!_isDragging && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
-        {
-            SetValueFromSource(valueBinding.Get());
-        }
-
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
-        var state = GetVisualState();
+        var state = CurrentVisualState;
 
         // Track
         double trackHeight = 4;
@@ -83,7 +65,7 @@ public sealed partial class Slider : RangeBase
         if (state.IsEnabled && Theme.Metrics.ControlBorderThickness > 0)
         {
             var trackBorder = trackBg.Lerp(Theme.Palette.WindowText, 0.12);
-            context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, Theme.Metrics.ControlBorderThickness);
+            context.DrawRoundedRectangle(trackRect, 2, 2, trackBorder, Theme.Metrics.ControlBorderThickness, strokeInset: true);
         }
 
         // Filled track
@@ -102,16 +84,18 @@ public sealed partial class Slider : RangeBase
         double thumbY = contentBounds.Y + (contentBounds.Height - ThumbSize) / 2;
         var thumbRect = new Rect(thumbX, thumbY, ThumbSize, ThumbSize);
 
-        var thumbFill = PickControlBackground(GetVisualState(), Theme.Palette.ControlBackground);
+        var thumbFill = PickControlBackground(state, Theme.Palette.ControlBackground);
 
         context.FillEllipse(thumbRect, thumbFill);
 
-        var thumbState = GetVisualState(_isDragging, _isDragging);
+        var thumbFlags = state.Flags;
+        if (_isDragging) thumbFlags |= Styling.VisualStateFlags.Pressed;
+        var thumbState = new VisualState { Flags = thumbFlags };
         Color thumbBorder = PickAccentBorder(Theme, BorderBrush, thumbState, 0.6);
 
         if (BorderThickness > 0)
         {
-            context.DrawEllipse(thumbRect, thumbBorder, BorderThickness);
+            context.DrawEllipse(thumbRect, thumbBorder, BorderThickness, strokeInset: true);
         }
     }
 
@@ -274,11 +258,6 @@ public sealed partial class Slider : RangeBase
         }
 
         Value = clamped;
-
-        if (fromInput && TryGetBinding(ValueBindingSlot, out ValueBinding<double> valueBinding))
-        {
-            valueBinding.Set(clamped);
-        }
     }
 
     protected override void OnDispose()

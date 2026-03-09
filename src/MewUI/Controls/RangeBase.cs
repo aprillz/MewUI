@@ -5,26 +5,40 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract class RangeBase : Control
 {
-    private double _value;
+    public static readonly MewProperty<double> ValueProperty =
+        MewProperty<double>.Register<RangeBase>(nameof(Value), 0.0,
+            MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, _) =>
+            {
+                var current = self.Value;
+                var coerced = self.ClampToRange(current);
+                if (!current.Equals(coerced))
+                {
+                    self.SetValue(ValueProperty!, coerced);
+                    return;
+                }
+
+                self.OnValueChanged(current);
+                self.ValueChanged?.Invoke(current);
+            });
+
+    public static readonly MewProperty<double> MinimumProperty =
+        MewProperty<double>.Register<RangeBase>(nameof(Minimum), 0.0,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.CoerceValueAfterRangeChange());
+
+    public static readonly MewProperty<double> MaximumProperty =
+        MewProperty<double>.Register<RangeBase>(nameof(Maximum), 1.0,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.CoerceValueAfterRangeChange());
 
     /// <summary>
     /// Gets or sets the minimum value.
     /// </summary>
     public double Minimum
     {
-        get;
-        set
-        {
-            var sanitized = Sanitize(value);
-            if (field.Equals(sanitized))
-            {
-                return;
-            }
-
-            field = sanitized;
-            CoerceValueAfterRangeChange();
-            InvalidateVisual();
-        }
+        get => GetValue(MinimumProperty);
+        set => SetValue(MinimumProperty, Sanitize(value));
     }
 
     /// <summary>
@@ -32,28 +46,17 @@ public abstract class RangeBase : Control
     /// </summary>
     public double Maximum
     {
-        get;
-        set
-        {
-            var sanitized = Sanitize(value);
-            if (field.Equals(sanitized))
-            {
-                return;
-            }
-
-            field = sanitized;
-            CoerceValueAfterRangeChange();
-            InvalidateVisual();
-        }
-    } = 1.0;
+        get => GetValue(MaximumProperty);
+        set => SetValue(MaximumProperty, Sanitize(value));
+    }
 
     /// <summary>
     /// Gets or sets the current value.
     /// </summary>
     public double Value
     {
-        get => _value;
-        set => SetValueCore(value, true);
+        get => GetValue(ValueProperty);
+        set => SetValue(ValueProperty, ClampToRange(value));
     }
 
     /// <summary>
@@ -62,17 +65,11 @@ public abstract class RangeBase : Control
     public event Action<double>? ValueChanged;
 
     /// <summary>
-    /// Sets the value from a binding source.
-    /// </summary>
-    /// <param name="value">The new value.</param>
-    protected void SetValueFromSource(double value) => SetValueCore(value, false);
-
-    /// <summary>
     /// Called when the value changes.
     /// </summary>
     /// <param name="value">The new value.</param>
-    /// <param name="fromUser">Whether the change originated from user input.</param>
-    protected virtual void OnValueChanged(double value, bool fromUser) { }
+    protected virtual void OnValueChanged(double value)
+    { }
 
     /// <summary>
     /// Clamps a value to the valid range.
@@ -101,34 +98,17 @@ public abstract class RangeBase : Control
             return 0;
         }
 
-        return Math.Clamp((_value - min) / range, 0, 1);
-    }
-
-    private void SetValueCore(double value, bool fromUser)
-    {
-        double clamped = ClampToRange(value);
-        if (_value.Equals(clamped))
-        {
-            return;
-        }
-
-        _value = clamped;
-        OnValueChanged(_value, fromUser);
-        ValueChanged?.Invoke(_value);
-        InvalidateVisual();
+        return Math.Clamp((Value - min) / range, 0, 1);
     }
 
     private void CoerceValueAfterRangeChange()
     {
-        double clamped = ClampToRange(_value);
-        if (_value.Equals(clamped))
+        var current = Value;
+        var coerced = ClampToRange(current);
+        if (!current.Equals(coerced))
         {
-            return;
+            Value = coerced;
         }
-
-        _value = clamped;
-        OnValueChanged(_value, false);
-        ValueChanged?.Invoke(_value);
     }
 
     private static double Sanitize(double value)

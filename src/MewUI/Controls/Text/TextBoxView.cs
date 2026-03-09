@@ -46,7 +46,7 @@ internal sealed class TextBoxView
                 context.DrawLine(
                     new Point(caretX, contentBounds.Y + 2),
                     new Point(caretX, contentBounds.Bottom - 2),
-                    theme.Palette.WindowText, 1);
+                    theme.Palette.WindowText, 1, pixelSnap: true);
             }
 
             return;
@@ -100,7 +100,7 @@ internal sealed class TextBoxView
                 context.DrawLine(
                     new Point(caretX, contentBounds.Y + 2),
                     new Point(caretX, contentBounds.Bottom - 2),
-                    theme.Palette.WindowText, 1);
+                    theme.Palette.WindowText, 1, pixelSnap: true);
             }
         }
     }

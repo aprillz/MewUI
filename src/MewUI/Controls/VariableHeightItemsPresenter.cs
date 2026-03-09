@@ -20,6 +20,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
     private readonly List<int> _recycleScratch = new();
+    private HashSet<int>? _pendingRebind;
 
     private UIElement? _deferredFocusedElement;
     private UIElement? _deferredFocusOwner;
@@ -38,6 +39,15 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     private bool _isRequestingOffsetCorrection;
     private bool _stickToBottom;
     private int _pendingScrollIntoViewIndex = -1;
+
+    // Tracks the DPI scale from the last OnRender call so we can detect DPI changes
+    // and invalidate prefix sums (which are DPI-dependent due to per-item pixel rounding).
+    private double _lastDpiScale = 1.0;
+
+    // Set to true on a DPI change so that the very first anchor correction after the change
+    // is suppressed. ScrollViewer.OnDpiChanged already preserves the logical DIP offset;
+    // we must not let the anchor correction override it with a partially-updated prefix.
+    private bool _suppressAnchorCorrectionForDpiChange;
 
     public event Action<Point>? OffsetCorrectionRequested;
 
@@ -148,8 +158,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
     public VariableHeightItemsPresenter()
     {
-        BorderThickness = 0;
-        Padding = new Thickness(0);
         _itemsSource.Changed += OnItemsChanged;
     }
 
@@ -227,6 +235,19 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         EnsureHeightsCapacity(count);
 
         var dpiScale = GetDpi() / 96.0;
+
+        // If DPI changed, prefix sums built from per-item pixel-rounded DIPs are stale.
+        // Invalidate so EnsurePrefix rebuilds them at the new scale. Also suppress the first
+        // anchor correction: ScrollViewer already preserved the logical DIP offset, and the
+        // prefix will be partially stale (only visible items re-measured) so the correction
+        // would produce a wrong result.
+        if (dpiScale != _lastDpiScale)
+        {
+            InvalidatePrefix();
+            _lastDpiScale = dpiScale;
+            _suppressAnchorCorrectionForDpiChange = true;
+        }
+
         var viewportBounds = Bounds;
         var contentBounds = LayoutRounding.SnapViewportRectToPixels(viewportBounds, dpiScale);
 
@@ -283,7 +304,17 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         {
             if (key < first || key >= lastExclusive)
             {
-                _recycleScratch.Add(key);
+                if (!IsFocusedSubtree(key))
+                {
+                    _recycleScratch.Add(key);
+                }
+                else
+                {
+                    // Don't rebind focus-pinned items immediately — it can reset
+                    // user-interaction state (e.g. ToggleSwitch.IsChecked).
+                    // Defer rebind + style snap until the item re-enters the visible range.
+                    (_pendingRebind ??= new()).Add(key);
+                }
             }
         }
         for (int i = 0; i < _recycleScratch.Count; i++)
@@ -388,17 +419,27 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
             }
 
             // Anchor correction: preserve the logical position within the anchor item.
-            EnsurePrefix();
-            if (anchorIndex >= 0 && anchorIndex < count)
+            // Skip on the first render after a DPI change: ScrollViewer already preserved the
+            // logical DIP offset, and only visible items have been re-measured so the prefix is
+            // partially stale — computing a correction from it would produce a wrong result.
+            if (_suppressAnchorCorrectionForDpiChange)
             {
-                double newAnchorTop = _prefix![anchorIndex];
-                double desiredOffsetY = newAnchorTop + anchorWithin;
-                desiredOffsetY = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - _viewport.Height));
-
-                // Only request correction when the difference is at least one device pixel.
-                if (!_isRequestingOffsetCorrection && Math.Abs(desiredOffsetY - alignedOffsetY) >= onePx * 0.99)
+                _suppressAnchorCorrectionForDpiChange = false;
+            }
+            else
+            {
+                EnsurePrefix();
+                if (anchorIndex >= 0 && anchorIndex < count)
                 {
-                    RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
+                    double newAnchorTop = _prefix![anchorIndex];
+                    double desiredOffsetY = newAnchorTop + anchorWithin;
+                    desiredOffsetY = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - _viewport.Height));
+
+                    // Only request correction when the difference is at least one device pixel.
+                    if (!_isRequestingOffsetCorrection && Math.Abs(desiredOffsetY - alignedOffsetY) >= onePx * 0.99)
+                    {
+                        RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
+                    }
                 }
             }
         }
@@ -728,9 +769,19 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     {
         if (_realized.TryGetValue(index, out var existing))
         {
-            if (rebindExisting)
+            // Also rebind if the item was focus-pinned and missed a prior rebind pass.
+            bool pending = _pendingRebind != null && _pendingRebind.Remove(index);
+            if (rebindExisting || pending)
             {
                 BindItemContainer(existing, index);
+            }
+
+            // When a focus-pinned item re-enters the visible range after being off-screen,
+            // its cached VisualState may be stale (e.g. still has Focused/Active flags).
+            // Force snap so the next Render applies the correct style immediately.
+            if (pending)
+            {
+                ForceStyleSnapSubtree(existing);
             }
 
             return existing;
@@ -752,6 +803,33 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         _realized[index] = element;
         TryRestoreDeferredFocus(element, index);
         return element;
+    }
+
+    private static void ForceStyleSnapSubtree(FrameworkElement container)
+    {
+        VisualTree.Visit(container, static element =>
+        {
+            if (element is Control control)
+            {
+                control.ForceStyleSnap();
+            }
+        });
+    }
+
+    private bool IsFocusedSubtree(int index)
+    {
+        if (!_realized.TryGetValue(index, out var element) || element is not UIElement uiElement)
+        {
+            return false;
+        }
+
+        if (FindVisualRoot() is not Window window)
+        {
+            return false;
+        }
+
+        var focused = window.FocusManager.FocusedElement;
+        return focused != null && VisualTree.IsInSubtreeOf(focused, uiElement);
     }
 
     private void Recycle(int index)

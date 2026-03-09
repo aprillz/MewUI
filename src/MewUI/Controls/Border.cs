@@ -7,6 +7,9 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class Border : Control, IVisualTreeHost
 {
+    public static readonly MewProperty<bool> ClipToBoundsProperty =
+        MewProperty<bool>.Register<Border>(nameof(ClipToBounds), false, MewPropertyOptions.AffectsRender);
+
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
@@ -24,21 +27,6 @@ public sealed class Border : Control, IVisualTreeHost
         }
 
         return base.OnHitTest(point);
-    }
-
-    public double CornerRadius
-    {
-        get;
-        set
-        {
-            if (field.Equals(value))
-            {
-                return;
-            }
-
-            field = value;
-            InvalidateVisual();
-        }
     }
 
     public UIElement? Child
@@ -69,14 +57,8 @@ public sealed class Border : Control, IVisualTreeHost
 
     public bool ClipToBounds
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(ClipToBoundsProperty);
+        set => SetValue(ClipToBoundsProperty, value);
     }
 
     protected override Size MeasureContent(Size availableSize)

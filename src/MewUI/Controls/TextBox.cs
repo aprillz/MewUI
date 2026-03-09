@@ -10,17 +10,8 @@ public class TextBox : TextBase
 {
     private readonly TextBoxView _view = new();
 
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
     public TextBox()
     {
-        Padding = new Thickness(4,2);
     }
 
     protected override Rect GetInteractionContentBounds()
@@ -91,7 +82,7 @@ public class TextBox : TextBase
             font,
             theme,
             state.IsEnabled,
-            state.IsFocused,
+            state.IsFocused && CaretVisible,
             IsReadOnly,
             Foreground,
             HorizontalOffset,

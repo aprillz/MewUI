@@ -297,7 +297,7 @@ public partial class Window
         {
             _target = target;
 
-            Title = "VisualTree";
+            Title = "Live Visual Tree";
             WindowSize = WindowSize.Resizable(520, 720);
 
             _selectedLabel = new Label { Text = "Selected: (none)" };
@@ -308,7 +308,7 @@ public partial class Window
             _followFocus.CheckedChanged += _ => UpdateFollowUi();
 
             _tree = new TreeView()
-                .ItemHeight(20)
+                .ItemHeight(24)
                 .ExpandTrigger(TreeViewExpandTrigger.ClickNode);
 
             _tree.ItemTemplate<VisualTreeNodeModel>(
@@ -318,17 +318,17 @@ public partial class Window
                     ((Label)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold : FontWeight.Normal));
                 });
 
-            var refreshBtn = new Button { Content = "Refresh" };
+            var refreshBtn = new Button().Content("Refresh");
             refreshBtn.Click += Refresh;
 
-            _goFocusButton = new Button { Content = "Go Focus" };
+            _goFocusButton = new Button().Content("Go Focus");
             _goFocusButton.Click += () => PeekElement(_lastNonNullFocused ?? _target.FocusManager.FocusedElement);
 
-            var pickBtn = new Button { Content = "Pick (Click)" };
+            var pickBtn = new Button().Content("Pick (Click)");
             _pickButton = pickBtn;
             pickBtn.Click += TogglePick;
 
-            var clearBtn = new Button { Content = "Clear Selection" };
+            var clearBtn = new Button().Content("Clear Selection");
             clearBtn.Click += () =>
             {
                 if (_target._debugInspectorOverlay != null)
@@ -403,7 +403,7 @@ public partial class Window
         {
             if (_pickButton != null)
             {
-                _pickButton.Content = _pickArmed ? "Pick: ARMED (click target)" : "Pick (Click)";
+                _pickButton.Content(_pickArmed ? "Pick: ARMED (click target)" : "Pick (Click)");
             }
 
             _modeLabel.Text = _pickArmed ? "Mode: Pick (click in target window to select)" : "Mode: Follow/Peek";
@@ -623,7 +623,7 @@ public partial class Window
                 return count;
             }
         }
-         
+
         private void PeekElement(UIElement? element)
         {
             if (element == null)

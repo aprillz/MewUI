@@ -13,6 +13,9 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
     internal const double ShadowBlurRadius = 8;
     internal const double ShadowOffsetY = 4;
 
+    internal static readonly MewProperty<double> ShadowOpacityProperty =
+        MewProperty<double>.Register<PopupChrome>(nameof(ShadowOpacity), 1.0, MewPropertyOptions.AffectsRender);
+
     /// <summary>
     /// Extra space around the child that the shadow occupies.
     /// Left/Right = BlurRadius, Top = BlurRadius - OffsetY, Bottom = BlurRadius.
@@ -31,6 +34,8 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
     }
 
     internal UIElement Child => _child;
+
+    private double ShadowOpacity => GetValue(ShadowOpacityProperty);
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -52,13 +57,20 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
             return;
         }
 
+        double opacity = ShadowOpacity;
+        if (opacity <= 0)
+        {
+            return;
+        }
+
         var dpiScale = GetDpi() / 96.0;
         double radius = LayoutRounding.RoundToPixel(Theme.Metrics.ControlCornerRadius, dpiScale);
         int strength = Theme.IsDark ? 128 : 64;
+        byte alpha = (byte)(strength * opacity);
 
-        var shadowBounds = new Rect(cb.X, cb.Y + ShadowOffsetY, cb.Width, cb.Height - ShadowOffsetY);
+        var shadowBounds = new Rect(cb.X, cb.Y + ShadowOffsetY, cb.Width, cb.Height - ShadowOffsetY /*/ 2*/);
         context.DrawBoxShadow(shadowBounds, radius, ShadowBlurRadius,
-            Color.FromArgb((byte)strength, 0, 0, 0));
+            Color.FromArgb(alpha, 0, 0, 0));
     }
 
     public override void Render(IGraphicsContext context)

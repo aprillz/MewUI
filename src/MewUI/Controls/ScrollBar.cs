@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -7,25 +8,39 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class ScrollBar : RangeBase
 {
-    private bool _dragging;
+    private static readonly MewProperty<bool> IsDraggingProperty =
+        MewProperty<bool>.Register<ScrollBar>(nameof(IsDragging), false,
+            MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<Orientation> OrientationProperty =
+        MewProperty<Orientation>.Register<ScrollBar>(nameof(Orientation), Orientation.Vertical, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> ViewportSizeProperty =
+        MewProperty<double>.Register<ScrollBar>(nameof(ViewportSize), 0.0, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<double> SmallChangeProperty =
+        MewProperty<double>.Register<ScrollBar>(nameof(SmallChange), 24.0, MewPropertyOptions.None);
+
+    public static readonly MewProperty<double> LargeChangeProperty =
+        MewProperty<double>.Register<ScrollBar>(nameof(LargeChange), 120.0, MewPropertyOptions.None);
+
     private double _dragStartPos;
     private double _dragStartValue;
+
+    private bool IsDragging
+    {
+        get => GetValue(IsDraggingProperty);
+        set => SetValue(IsDraggingProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the scroll direction (vertical or horizontal).
     /// </summary>
     public Orientation Orientation
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = Orientation.Vertical;
+        get => GetValue(OrientationProperty);
+        set => SetValue(OrientationProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the viewport size in DIPs.
@@ -33,36 +48,44 @@ public sealed class ScrollBar : RangeBase
     /// </summary>
     public double ViewportSize
     {
-        get;
-        set
-        {
-            if (field.Equals(value))
-            {
-                return;
-            }
-
-            field = value;
-            InvalidateVisual();
-        }
+        get => GetValue(ViewportSizeProperty);
+        set => SetValue(ViewportSizeProperty, value);
     }
 
     /// <summary>
     /// Gets or sets the amount to scroll for small changes (e.g. mouse wheel).
     /// </summary>
-    public double SmallChange { get; set; } = 24;
+    public double SmallChange
+    {
+        get => GetValue(SmallChangeProperty);
+        set => SetValue(SmallChangeProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the amount to scroll for large changes (e.g. track click).
     /// </summary>
-    public double LargeChange { get; set; } = 120;
+    public double LargeChange
+    {
+        get => GetValue(LargeChangeProperty);
+        set => SetValue(LargeChangeProperty, value);
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScrollBar"/> class.
     /// </summary>
     public ScrollBar()
     {
-        Background = Color.Transparent;
-        BorderThickness = 0;
+    }
+
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+        if (IsDragging)
+        {
+            state = new VisualState { Flags = state.Flags | VisualStateFlags.Pressed };
+        }
+
+        return state;
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -80,23 +103,13 @@ public sealed class ScrollBar : RangeBase
             return;
         }
 
-        
         var bounds = Bounds;
 
         var track = GetTrackRect(bounds, Theme);
         var thumb = GetThumbRect(track, Theme);
+        var thumbColor = GetValue(BackgroundProperty);
 
-        var thumbColor = Theme.Palette.ScrollBarThumb;
-        if (_dragging || IsMouseCaptured)
-        {
-            thumbColor = Theme.Palette.ScrollBarThumbActive;
-        }
-        else if (IsMouseOver)
-        {
-            thumbColor = Theme.Palette.ScrollBarThumbHover;
-        }
-
-        double radius = Math.Min(Theme.Metrics.ScrollBarThickness / 2, Theme.Metrics.ControlCornerRadius);
+        double radius = Theme.Metrics.ScrollBarThickness / 2;
         if (thumb.Width > 0 && thumb.Height > 0 && thumbColor.A > 0)
         {
             context.FillRoundedRectangle(thumb, radius, radius, thumbColor);
@@ -121,7 +134,7 @@ public sealed class ScrollBar : RangeBase
 
         if (thumbHit.Contains(e.Position))
         {
-            _dragging = true;
+            IsDragging = true;
             _dragStartPos = pos;
             _dragStartValue = Value;
 
@@ -153,7 +166,7 @@ public sealed class ScrollBar : RangeBase
     {
         base.OnMouseMove(e);
 
-        if (!IsEffectivelyEnabled || !_dragging || !IsMouseCaptured || !e.LeftButton)
+        if (!IsEffectivelyEnabled || !IsDragging || !IsMouseCaptured || !e.LeftButton)
         {
             return;
         }
@@ -185,9 +198,9 @@ public sealed class ScrollBar : RangeBase
             return;
         }
 
-        if (_dragging)
+        if (IsDragging)
         {
-            _dragging = false;
+            IsDragging = false;
             var root = FindVisualRoot();
             if (root is Window window)
             {

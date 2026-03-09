@@ -7,20 +7,16 @@ namespace Aprillz.MewUI;
 /// </summary>
 public class PathShape : Shape
 {
+    public static readonly MewProperty<PathGeometry?> DataProperty =
+        MewProperty<PathGeometry?>.Register<PathShape>(nameof(Data), null, MewPropertyOptions.AffectsLayout);
+
     /// <summary>
     /// Gets or sets the geometry that defines this path.
     /// </summary>
     public PathGeometry? Data
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
+        get => GetValue(DataProperty);
+        set => SetValue(DataProperty, value);
     }
 
     /// <inheritdoc/>

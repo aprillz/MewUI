@@ -1,4 +1,6 @@
+using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -7,11 +9,34 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class SplitPanel : Panel
 {
+    public static readonly MewProperty<Orientation> OrientationProperty =
+        MewProperty<Orientation>.Register<SplitPanel>(nameof(Orientation), Orientation.Horizontal, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> SplitterThicknessProperty =
+        MewProperty<double>.Register<SplitPanel>(nameof(SplitterThickness), 8.0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<GridLength> FirstLengthProperty =
+        MewProperty<GridLength>.Register<SplitPanel>(nameof(FirstLength), GridLength.Star, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<GridLength> SecondLengthProperty =
+        MewProperty<GridLength>.Register<SplitPanel>(nameof(SecondLength), GridLength.Star, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> MinFirstProperty =
+        MewProperty<double>.Register<SplitPanel>(nameof(MinFirst), 0.0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> MinSecondProperty =
+        MewProperty<double>.Register<SplitPanel>(nameof(MinSecond), 0.0, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> MaxFirstProperty =
+        MewProperty<double>.Register<SplitPanel>(nameof(MaxFirst), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> MaxSecondProperty =
+        MewProperty<double>.Register<SplitPanel>(nameof(MaxSecond), double.PositiveInfinity, MewPropertyOptions.AffectsLayout);
+
     private UIElement? _first;
     private UIElement? _second;
     private readonly SplitterThumb _splitter;
 
-    private bool _isDragging;
     private double _dragStartMain;
     private double _dragStartFirst;
     private double _dragStartSecond;
@@ -33,46 +58,27 @@ public sealed class SplitPanel : Panel
     /// </summary>
     public Orientation Orientation
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = Orientation.Horizontal;
+        get => GetValue(OrientationProperty);
+        set => SetValue(OrientationProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the splitter thickness (DIPs).
     /// </summary>
     public double SplitterThickness
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = 8;
+        get => GetValue(SplitterThicknessProperty);
+        set => SetValue(SplitterThicknessProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the first pane length.
     /// </summary>
     public GridLength FirstLength
     {
-        get;
-        set
-        {
-            if (!field.Equals(value))
-            {
-                field = value;
-                InvalidateMeasure();
-            }
-        }
-    } = GridLength.Star;
+        get => GetValue(FirstLengthProperty);
+        set => SetValue(FirstLengthProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the second pane length.
@@ -80,64 +86,33 @@ public sealed class SplitPanel : Panel
     /// </summary>
     public GridLength SecondLength
     {
-        get;
-        set
-        {
-            if (!field.Equals(value))
-            {
-                field = value;
-                InvalidateMeasure();
-            }
-        }
-    } = GridLength.Star;
+        get => GetValue(SecondLengthProperty);
+        set => SetValue(SecondLengthProperty, value);
+    }
 
     public double MinFirst
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(MinFirstProperty);
+        set => SetValue(MinFirstProperty, value);
     }
 
     public double MinSecond
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(MinSecondProperty);
+        set => SetValue(MinSecondProperty, value);
     }
 
     public double MaxFirst
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = double.PositiveInfinity;
+        get => GetValue(MaxFirstProperty);
+        set => SetValue(MaxFirstProperty, value);
+    }
 
     public double MaxSecond
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = double.PositiveInfinity;
+        get => GetValue(MaxSecondProperty);
+        set => SetValue(MaxSecondProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the first pane content.
@@ -454,7 +429,7 @@ public sealed class SplitPanel : Panel
 
     private void BeginDrag(MouseEventArgs e)
     {
-        if (_isDragging)
+        if (_splitter.IsDragging)
         {
             return;
         }
@@ -470,7 +445,7 @@ public sealed class SplitPanel : Panel
         _dragStartFirst = isHorizontal ? first.RenderSize.Width : first.RenderSize.Height;
         _dragStartSecond = isHorizontal ? second.RenderSize.Width : second.RenderSize.Height;
 
-        _isDragging = true;
+        _splitter.IsDragging = true;
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -481,7 +456,7 @@ public sealed class SplitPanel : Panel
 
     private void Drag(MouseEventArgs e)
     {
-        if (!_isDragging)
+        if (!_splitter.IsDragging)
         {
             return;
         }
@@ -519,7 +494,7 @@ public sealed class SplitPanel : Panel
 
     private void EndDrag()
     {
-        _isDragging = false;
+        _splitter.IsDragging = false;
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -528,17 +503,37 @@ public sealed class SplitPanel : Panel
         }
     }
 
-    private sealed class SplitterThumb : Control
+    internal sealed class SplitterThumb : Control
     {
+        private static readonly MewProperty<bool> IsDraggingProperty =
+            MewProperty<bool>.Register<SplitterThumb>(nameof(IsDragging), false,
+                MewPropertyOptions.AffectsRender);
+
         private readonly SplitPanel _owner;
 
         public SplitterThumb(SplitPanel owner)
         {
             _owner = owner;
-            Background = Color.Transparent;
         }
 
         public override bool Focusable => false;
+
+        internal bool IsDragging
+        {
+            get => GetValue(IsDraggingProperty);
+            set => SetValue(IsDraggingProperty, value);
+        }
+
+        protected override VisualState ComputeVisualState()
+        {
+            var state = base.ComputeVisualState();
+            if (IsDragging)
+            {
+                state = new VisualState { Flags = state.Flags | VisualStateFlags.Pressed };
+            }
+
+            return state;
+        }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -553,7 +548,7 @@ public sealed class SplitPanel : Panel
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (_owner._isDragging)
+            if (IsDragging)
             {
                 _owner.Drag(e);
                 e.Handled = true;
@@ -563,7 +558,7 @@ public sealed class SplitPanel : Panel
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
-            if (e.Button == MouseButton.Left && _owner._isDragging)
+            if (e.Button == MouseButton.Left && IsDragging)
             {
                 _owner.EndDrag();
                 e.Handled = true;
@@ -572,34 +567,27 @@ public sealed class SplitPanel : Panel
 
         protected override void OnRender(IGraphicsContext context)
         {
-            base.OnRender(context);
-
-            var theme = _owner.Theme;
+            // Skip base.OnRender — SplitterThumb draws its own visuals.
             var bounds = Bounds;
 
-            // Visual state
-            bool pressed = IsMouseCaptured || _owner._isDragging;
-            bool hot = pressed || IsMouseOver;
+            var bgColor = GetValue(BackgroundProperty);
+            var lineColor = GetValue(BorderBrushProperty);
 
-            // Subtle background highlight on hover/press.
-            if (hot)
+            // Background highlight.
+            if (bgColor.A > 0)
             {
-                byte alpha = pressed ? (byte)48 : (byte)26;
-                var r = Math.Min(theme.Metrics.ControlCornerRadius,_owner.SplitterThickness / 2.0);
+                var r = Math.Min(Theme.Metrics.ControlCornerRadius, _owner.SplitterThickness / 2.0);
                 if (r > 0)
                 {
-                    context.FillRoundedRectangle(bounds, r, r, theme.Palette.Accent.WithAlpha(alpha));
+                    context.FillRoundedRectangle(bounds, r, r, bgColor);
                 }
                 else
                 {
-                    context.FillRectangle(bounds, theme.Palette.Accent.WithAlpha(alpha));
+                    context.FillRectangle(bounds, bgColor);
                 }
             }
 
-            // Minimal visual: draw a subtle line centered in the thumb.
-            double t = pressed ? 0.65 : IsMouseOver ? 0.35 : 0.15;
-            var color = theme.Palette.ControlBorder.Lerp(theme.Palette.Accent, t);
-
+            // Centered line.
             var length = Theme.Metrics.BaseControlHeight;
 
             if (_owner.Orientation == Orientation.Horizontal)
@@ -607,14 +595,14 @@ public sealed class SplitPanel : Panel
                 double x = bounds.X + bounds.Width / 2;
                 length = Math.Min(length, bounds.Height - 8);
                 var y = bounds.Y + bounds.Height / 2;
-                context.DrawLine(new Point(x, y), new Point(x, y + length), color, theme.Metrics.ControlBorderThickness);
+                context.DrawLine(new Point(x, y - length / 2), new Point(x, y + length / 2), lineColor, Theme.Metrics.ControlBorderThickness);
             }
             else
             {
                 double y = bounds.Y + bounds.Height / 2;
                 length = Math.Min(length, bounds.Width - 8);
                 var x = bounds.X + bounds.Width / 2;
-                context.DrawLine(new Point(x - length / 2, y), new Point(x + length / 2 , y), color, theme.Metrics.ControlBorderThickness);
+                context.DrawLine(new Point(x - length / 2, y), new Point(x + length / 2, y), lineColor, Theme.Metrics.ControlBorderThickness);
             }
         }
     }

@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -8,35 +9,38 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract class DropDownBase : Control, IPopupOwner
 {
-    private bool _isDropDownOpen;
     private UIElement? _popup;
     private Rect? _lastPopupBounds;
+    private bool _closingPopup;
+
+    public static readonly MewProperty<bool> IsDropDownOpenProperty =
+        MewProperty<bool>.Register<DropDownBase>(nameof(IsDropDownOpen), false, MewPropertyOptions.AffectsRender,
+            static (self, _, _) =>
+            {
+                if (!self._closingPopup)
+                {
+                    if (self.IsDropDownOpen)
+                        self.ShowPopupCore();
+                    else
+                        self.ClosePopupCore();
+                }
+            });
+
+    public static readonly MewProperty<double> MaxDropDownHeightProperty =
+        MewProperty<double>.Register<DropDownBase>(nameof(MaxDropDownHeight), 240.0, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) =>
+            {
+                if (self.IsDropDownOpen)
+                    self.UpdatePopupBoundsCore();
+            });
 
     /// <summary>
     /// Gets or sets whether the popup is open.
     /// </summary>
     public bool IsDropDownOpen
     {
-        get => _isDropDownOpen;
-        set
-        {
-            if (_isDropDownOpen == value)
-            {
-                return;
-            }
-
-            _isDropDownOpen = value;
-            if (_isDropDownOpen)
-            {
-                ShowPopupCore();
-            }
-            else
-            {
-                ClosePopupCore();
-            }
-
-            InvalidateVisual();
-        }
+        get => GetValue(IsDropDownOpenProperty);
+        set => SetValue(IsDropDownOpenProperty, value);
     }
 
     /// <summary>
@@ -44,18 +48,9 @@ public abstract class DropDownBase : Control, IPopupOwner
     /// </summary>
     public double MaxDropDownHeight
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                if (IsDropDownOpen)
-                {
-                    UpdatePopupBoundsCore();
-                }
-            }
-        }
-    } = 240;
+        get => GetValue(MaxDropDownHeightProperty);
+        set => SetValue(MaxDropDownHeightProperty, value);
+    }
 
     /// <summary>
     /// Gets whether the control can receive keyboard focus.
@@ -76,23 +71,18 @@ public abstract class DropDownBase : Control, IPopupOwner
     /// <summary>
     /// Gets the corner radius used for the header border.
     /// </summary>
-    protected virtual double CornerRadiusDip => Theme.Metrics.ControlCornerRadius;
-
-
-    /// <summary>
-    /// Gets the default background color.
-    /// </summary>
-    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
-
-    /// <summary>
-    /// Gets the default border brush color.
-    /// </summary>
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
+    protected virtual double CornerRadiusDip => CornerRadius;
 
     /// <summary>
     /// Gets the default minimum height.
     /// </summary>
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
+    protected override VisualState ComputeVisualState()
+    {
+        var state = base.ComputeVisualState();
+        if (IsDropDownOpen)
+            return state with { Flags = state.Flags | VisualStateFlags.Active };
+        return state;
+    }
 
     /// <summary>
     /// Creates the popup content (cached and reused).
@@ -102,7 +92,8 @@ public abstract class DropDownBase : Control, IPopupOwner
     /// <summary>
     /// Updates the popup content before showing/updating bounds (e.g. sync selection).
     /// </summary>
-    protected virtual void SyncPopupContent(UIElement popup) { }
+    protected virtual void SyncPopupContent(UIElement popup)
+    { }
 
     /// <summary>
     /// Measures the header (excluding margin).
@@ -220,7 +211,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         var borderInset = GetBorderVisualInset();
         double radius = CornerRadiusDip;
 
-        var state = GetVisualState(isPressed: false, isActive: IsDropDownOpen);
+        var state = CurrentVisualState;
 
         var bg = PickButtonBackground(state);
 
@@ -329,7 +320,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         // If this control is detached from its Window (common with virtualization/recycling),
         // ensure an open dropdown popup is closed. The popup is owned by the old Window's overlay layer,
         // so ClosePopupCore() cannot be used after detaching (FindVisualRoot() would no longer be the window).
-        if (!_isDropDownOpen || _popup == null)
+        if (!IsDropDownOpen || _popup == null)
         {
             return;
         }
@@ -451,9 +442,10 @@ public abstract class DropDownBase : Control, IPopupOwner
             return;
         }
 
-        _isDropDownOpen = false;
+        _closingPopup = true;
+        try { IsDropDownOpen = false; }
+        finally { _closingPopup = false; }
         _lastPopupBounds = null;
-        InvalidateVisual();
 
         if (kind == PopupCloseKind.Lifecycle)
         {

@@ -12,6 +12,7 @@ internal sealed class TracingPlatformHost : IPlatformHost
         DiagLog.WriteAlways($"[PlatformHost#{_id}] created ({inner.GetType().Name})");
     }
 
+    public string DefaultFontFamily => _inner.DefaultFontFamily;
     public IMessageBoxService MessageBox => _inner.MessageBox;
     public IFileDialogService FileDialog => _inner.FileDialog;
     public IClipboardService Clipboard => _inner.Clipboard;

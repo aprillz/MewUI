@@ -8,8 +8,32 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class Label : Control
 {
+    public static readonly MewProperty<string> TextProperty =
+        MewProperty<string>.Register<Label>(nameof(Text), string.Empty,
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => { self._textMeasureCache.Invalidate(); self._lastWrapMeasureWidth = null; });
+
+    public static readonly MewProperty<TextAlignment> TextAlignmentProperty =
+        MewProperty<TextAlignment>.Register<Label>(nameof(TextAlignment), TextAlignment.Left,
+            MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<TextAlignment> VerticalTextAlignmentProperty =
+        MewProperty<TextAlignment>.Register<Label>(nameof(VerticalTextAlignment), TextAlignment.Top,
+            MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<TextWrapping> TextWrappingProperty =
+        MewProperty<TextWrapping>.Register<Label>(nameof(TextWrapping), TextWrapping.NoWrap,
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => { self._textMeasureCache.Invalidate(); self._lastWrapMeasureWidth = null; });
+
+    public static readonly MewProperty<TextTrimming> TextTrimmingProperty =
+        MewProperty<TextTrimming>.Register<Label>(nameof(TextTrimming), TextTrimming.None,
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => { self._textMeasureCache.Invalidate(); self._lastWrapMeasureWidth = null; });
+
     private TextMeasureCache _textMeasureCache;
     private double? _lastWrapMeasureWidth;
+
     protected override bool InvalidateOnMouseOverChanged => false;
 
     /// <summary>
@@ -17,67 +41,45 @@ public partial class Label : Control
     /// </summary>
     public string Text
     {
-        get;
-        set
-        {
-            value ??= string.Empty;
-            if (field == value)
-            {
-                return;
-            }
-
-            field = value;
-            _textMeasureCache.Invalidate();
-            _lastWrapMeasureWidth = null;
-            InvalidateMeasure();
-        }
-    } = string.Empty;
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value ?? string.Empty);
+    }
 
     /// <summary>
     /// Gets or sets the horizontal text alignment.
     /// </summary>
     public TextAlignment TextAlignment
     {
-        get;
-        set
-        {
-            field = value;
-            InvalidateVisual();
-        }
-    } = TextAlignment.Left;
+        get => GetValue(TextAlignmentProperty);
+        set => SetValue(TextAlignmentProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the vertical text alignment.
     /// </summary>
     public TextAlignment VerticalTextAlignment
     {
-        get;
-        set
-        {
-            field = value;
-            InvalidateVisual();
-        }
-    } = TextAlignment.Top;
+        get => GetValue(VerticalTextAlignmentProperty);
+        set => SetValue(VerticalTextAlignmentProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the text wrapping mode.
     /// </summary>
     public TextWrapping TextWrapping
     {
-        get;
-        set
-        {
-            if (field == value)
-            {
-                return;
-            }
+        get => GetValue(TextWrappingProperty);
+        set => SetValue(TextWrappingProperty, value);
+    }
 
-            field = value;
-            _textMeasureCache.Invalidate();
-            _lastWrapMeasureWidth = null;
-            InvalidateMeasure();
-        }
-    } = TextWrapping.NoWrap;
+    /// <summary>
+    /// Gets or sets the text trimming mode.
+    /// </summary>
+    public TextTrimming TextTrimming
+    {
+        get => GetValue(TextTrimmingProperty);
+        set => SetValue(TextTrimmingProperty, value);
+    }
 
     private bool HasExplicitLineBreaks => Text.AsSpan().IndexOfAny('\r', '\n') >= 0;
 
@@ -150,11 +152,6 @@ public partial class Label : Control
     {
         base.OnRender(context);
 
-        if (TryGetBinding(TextBindingSlot, out ValueBinding<string> textBinding))
-        {
-            SetTextFromBinding(textBinding.Get());
-        }
-
         if (string.IsNullOrEmpty(Text))
         {
             return;
@@ -170,23 +167,7 @@ public partial class Label : Control
         var font = GetFont();
 
         var color = IsEffectivelyEnabled ? Foreground : Theme.Palette.DisabledText;
-        context.DrawText(Text, bounds, font, color, TextAlignment, VerticalTextAlignment, wrapping);
-    }
-
-    public void SetTextBinding(Func<string> get, Action<Action>? subscribe = null, Action<Action>? unsubscribe = null)
-    {
-        SetTextBindingCore(get, subscribe, unsubscribe);
-    }
-
-    private void SetTextFromBinding(string value)
-    {
-        value ??= string.Empty;
-        if (Text == value)
-        {
-            return;
-        }
-
-        Text = value;
+        context.DrawText(Text, bounds, font, color, TextAlignment, VerticalTextAlignment, wrapping, TextTrimming);
     }
 
     protected override void OnDispose()

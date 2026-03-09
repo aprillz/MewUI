@@ -29,18 +29,13 @@ public sealed class MultiLineTextBox : TextBase
     private readonly ScrollBar _vBar;
     private readonly ScrollBar _hBar;
 
-    protected override Color DefaultBackground => Theme.Palette.ControlBackground;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
+    static MultiLineTextBox()
+    {
+        AcceptReturnProperty.OverrideDefaultValue<MultiLineTextBox>(true);
+    }
 
     public MultiLineTextBox()
     {
-        Padding = new Thickness(4);
-        AcceptReturn = true;
 
         _textView = new MultiLineTextView(
             () => DocumentVersion,
@@ -377,7 +372,7 @@ public sealed class MultiLineTextBox : TextBase
         {
             int caretLine = -1;
             int caretLineStart = 0;
-            if (IsFocused && IsEffectivelyEnabled)
+            if (IsFocused && IsEffectivelyEnabled && CaretVisible)
             {
                 GetLineFromIndex(CaretPosition, out caretLine, out caretLineStart, out _);
             }
@@ -444,7 +439,7 @@ public sealed class MultiLineTextBox : TextBase
         int rendered = 0;
 
         (int start, int end) selection = default;
-        bool canDrawCaret = IsFocused && IsEffectivelyEnabled;
+        bool canDrawCaret = IsFocused && IsEffectivelyEnabled && CaretVisible;
         bool canDrawSelection = HasSelection;
         if (canDrawSelection)
         {
@@ -884,7 +879,7 @@ public sealed class MultiLineTextBox : TextBase
         double y,
         MultiLineTextView.CachedLineMeasure lineMeasure)
     {
-        if (!IsFocused || !IsEffectivelyEnabled)
+        if (!IsFocused || !IsEffectivelyEnabled || !CaretVisible)
         {
             return;
         }
@@ -930,7 +925,7 @@ public sealed class MultiLineTextBox : TextBase
             bottom = y + lineHeight;
         }
 
-        context.DrawLine(new Point(x, top), new Point(x, bottom), theme.Palette.WindowText, 1);
+        context.DrawLine(new Point(x, top), new Point(x, bottom), theme.Palette.WindowText, 1, pixelSnap: true);
     }
 
     private string GetLineText(int lineIndex, int start, int end)

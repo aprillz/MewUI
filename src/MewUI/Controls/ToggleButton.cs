@@ -1,42 +1,35 @@
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Controls.Text;
 
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A button-like toggle control. When checked, its background is tinted with the theme accent (50%).
 /// </summary>
-public sealed partial class ToggleButton : ToggleBase
+public sealed partial class ToggleButton : ToggleBase, IVisualTreeHost
 {
-    private bool _isPressed;
-    private TextMeasureCache _textMeasureCache;
+    public static readonly MewProperty<Element?> ContentProperty =
+        MewProperty<Element?>.Register<ToggleButton>(nameof(Content), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) =>
+            {
+                if (oldValue != null)
+                {
+                    oldValue.Parent = null;
+                }
 
-    protected override Color DefaultBackground => Theme.Palette.ButtonFace;
-
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
-
-    protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    public ToggleButton()
-    {
-        Padding = new Thickness(8, 4, 8, 4);
-    }
+                if (newValue != null)
+                {
+                    newValue.Parent = self;
+                }
+            });
 
     /// <summary>
-    /// Gets or sets the button content text (alias for <see cref="ToggleBase.Text"/>).
+    /// Gets or sets the content element.
     /// </summary>
-    public string Content
+    public Element? Content
     {
-        get => Text;
-        set => Text = value;
-    }
-
-    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        base.OnThemeChanged(oldTheme, newTheme);
-        _textMeasureCache.Invalidate();
+        get => GetValue(ContentProperty);
+        set => SetValue(ContentProperty, value);
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -44,40 +37,41 @@ public sealed partial class ToggleButton : ToggleBase
         var borderInset = GetBorderVisualInset();
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
 
-        if (string.IsNullOrEmpty(Text))
+        if (Content == null)
         {
             return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10).Inflate(border);
         }
 
-        var factory = GetGraphicsFactory();
-        var font = GetFont(factory);
-        var size = _textMeasureCache.Measure(factory, GetDpi(), font, Text, TextWrapping.NoWrap, 0);
-        return size.Inflate(Padding).Inflate(border);
+        var contentSize = availableSize.Deflate(Padding).Deflate(border);
+        Content.Measure(contentSize);
+        return Content.DesiredSize.Inflate(Padding).Inflate(border);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+
+        if (Content == null)
+        {
+            return;
+        }
+
+        var borderInset = GetBorderVisualInset();
+        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
+        var contentBounds = bounds.Deflate(Padding).Deflate(border);
+        Content.Arrange(contentBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var state = GetVisualState(_isPressed, _isPressed);
-
-        var bgColor = PickButtonBackground(state);
-        if (IsChecked)
-        {
-            bgColor = Color.Composite(bgColor,state .IsEnabled?     Theme.Palette.Accent.WithAlpha(96): Theme.Palette.WindowText.WithAlpha(48));
-        }
-
-        var borderColor = PickAccentBorder(Theme, BorderBrush, state, 0.6);
+        var bgColor = GetValue(BackgroundProperty);
+        var borderColor = GetValue(BorderBrushProperty);
 
         var bounds = GetSnappedBorderBounds(Bounds);
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
         DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
 
-        if (!string.IsNullOrEmpty(Text))
-        {
-            var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(GetBorderVisualInset()));
-            var font = GetFont();
-            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-            context.DrawText(Text, contentBounds, font, textColor, TextAlignment.Center, TextAlignment.Center, TextWrapping.NoWrap);
-        }
+        Content?.Render(context);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -89,7 +83,7 @@ public sealed partial class ToggleButton : ToggleBase
             return;
         }
 
-        _isPressed = true;
+        SetPressed(true);
         Focus();
 
         if (FindVisualRoot() is Window window)
@@ -97,7 +91,6 @@ public sealed partial class ToggleButton : ToggleBase
             window.CaptureMouse(this);
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
 
@@ -105,12 +98,12 @@ public sealed partial class ToggleButton : ToggleBase
     {
         base.OnMouseUp(e);
 
-        if (e.Handled || e.Button != MouseButton.Left || !_isPressed)
+        if (e.Handled || e.Button != MouseButton.Left || !IsPressed)
         {
             return;
         }
 
-        _isPressed = false;
+        SetPressed(false);
 
         if (FindVisualRoot() is Window window)
         {
@@ -122,18 +115,13 @@ public sealed partial class ToggleButton : ToggleBase
             IsChecked = !IsChecked;
         }
 
-        InvalidateVisual();
         e.Handled = true;
     }
 
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        if (_isPressed)
-        {
-            _isPressed = false;
-            InvalidateVisual();
-        }
+        SetPressed(false);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -147,8 +135,7 @@ public sealed partial class ToggleButton : ToggleBase
 
         if (e.Key == Key.Space || e.Key == Key.Enter)
         {
-            _isPressed = true;
-            InvalidateVisual();
+            SetPressed(true);
             e.Handled = true;
         }
     }
@@ -162,17 +149,42 @@ public sealed partial class ToggleButton : ToggleBase
             return;
         }
 
-        if ((e.Key == Key.Space || e.Key == Key.Enter) && _isPressed)
+        if ((e.Key == Key.Space || e.Key == Key.Enter) && IsPressed)
         {
-            _isPressed = false;
+            SetPressed(false);
 
             if (e.Key == Key.Enter)
             {
                 IsChecked = !IsChecked;
                 e.Handled = true;
             }
-
-            InvalidateVisual();
         }
     }
+
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (!IsVisible || !IsHitTestVisible)
+        {
+            return null;
+        }
+
+        if (Content is UIElement uiContent)
+        {
+            var result = uiContent.HitTest(point);
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
+        if (Bounds.Contains(point))
+        {
+            return this;
+        }
+
+        return null;
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => Content == null || visitor(Content);
 }

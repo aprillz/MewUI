@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Animation;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
@@ -120,6 +121,12 @@ public class ColumnDefinition
 /// </summary>
 public class Grid : Panel
 {
+    public static readonly MewProperty<bool> AutoIndexingProperty =
+        MewProperty<bool>.Register<Grid>(nameof(AutoIndexing), true, MewPropertyOptions.AffectsLayout);
+
+    public static readonly MewProperty<double> SpacingProperty =
+        MewProperty<double>.Register<Grid>(nameof(Spacing), 0.0, MewPropertyOptions.AffectsLayout);
+
     private readonly List<RowDefinition> _rowDefinitions = new();
     private readonly List<ColumnDefinition> _columnDefinitions = new();
 
@@ -149,29 +156,17 @@ public class Grid : Panel
     /// </summary>
     public bool AutoIndexing
     {
-        get;
-        set
-        {
-            if (Set(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
-    } = true;
+        get => GetValue(AutoIndexingProperty);
+        set => SetValue(AutoIndexingProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the spacing between grid cells (both row/column gaps).
     /// </summary>
     public double Spacing
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-            }
-        }
+        get => GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
     }
 
     #region Attached Properties

@@ -7,37 +7,27 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class GroupBox : HeaderedContentControl
 {
-    protected override Color DefaultBackground => Theme.Palette.ContainerBackground;
-    protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
-    protected override double DefaultBorderThickness => Theme.Metrics.ControlBorderThickness;
     /// <summary>
     /// Gets whether to invalidate visual on mouse over changes.
     /// </summary>
     protected override bool InvalidateOnMouseOverChanged => false;
+
+    public static readonly MewProperty<double> HeaderInsetProperty =
+        MewProperty<double>.Register<GroupBox>(nameof(HeaderInset), 0.0,
+            MewPropertyOptions.AffectsLayout);
 
     /// <summary>
     /// Gets or sets the horizontal inset for the header.
     /// </summary>
     public double HeaderInset
     {
-        get;
-        set
-        {
-            if (SetDouble(ref field, value))
-            {
-                InvalidateMeasure();
-                InvalidateVisual();
-            }
-        }
-    } = 0;
+        get => GetValue(HeaderInsetProperty);
+        set => SetValue(HeaderInsetProperty, value);
+    }
 
-    /// <summary>
-    /// Initializes a new instance of the GroupBox class.
-    /// </summary>
-    public GroupBox()
+    static GroupBox()
     {
-        Padding = new Thickness(8);
-        HeaderSpacing = 4;
+        HeaderSpacingProperty.OverrideDefaultValue<GroupBox>(4.0);
     }
 
     /// <summary>
@@ -145,7 +135,7 @@ public sealed class GroupBox : HeaderedContentControl
             return;
         }
 
-        double radius = Theme.Metrics.ControlCornerRadius;
+        double radius = CornerRadius;
         DrawBackgroundAndBorder(context, boxRect, Background, BorderBrush, radius);
     }
 }
