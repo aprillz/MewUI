@@ -673,6 +673,12 @@ public sealed class ScrollViewer : ContentControl
         _lastNotifiedViewport = _viewport;
         _lastNotifiedOffset = offset;
         ScrollChanged?.Invoke();
+
+        // Close context menus when content scrolls (standard desktop UX).
+        if (FindVisualRoot() is Window window)
+        {
+            window.RequestClosePopups(PopupCloseRequest.Scroll());
+        }
     }
 
     protected override void OnDispose()

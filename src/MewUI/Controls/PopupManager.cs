@@ -262,6 +262,10 @@ internal sealed class PopupManager
             case PopupCloseRequest.Trigger.Lifecycle:
                 CloseAllPopups();
                 break;
+            case PopupCloseRequest.Trigger.Scroll:
+                // Close only context menus on scroll; dropdowns reposition themselves.
+                CloseTransientPopups(entry => entry.Element is not ContextMenu);
+                break;
         }
     }
 
@@ -590,6 +594,7 @@ internal readonly struct PopupCloseRequest
         FocusChanged,
         Explicit,
         Lifecycle,
+        Scroll,
     }
 
     private PopupCloseRequest(Trigger trigger, PopupCloseKind closeKind, UIElement? pointerLeaf, UIElement? newFocusedElement)
@@ -619,4 +624,7 @@ internal readonly struct PopupCloseRequest
 
     public static PopupCloseRequest Lifecycle(PopupCloseKind closeKind = PopupCloseKind.Lifecycle)
         => new(Trigger.Lifecycle, closeKind, pointerLeaf: null, newFocusedElement: null);
+
+    public static PopupCloseRequest Scroll(PopupCloseKind closeKind = PopupCloseKind.Policy)
+        => new(Trigger.Scroll, closeKind, pointerLeaf: null, newFocusedElement: null);
 }
