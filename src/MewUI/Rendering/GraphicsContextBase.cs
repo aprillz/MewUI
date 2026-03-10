@@ -239,11 +239,14 @@ public abstract class GraphicsContextBase : IGraphicsContext
         // capCenter = baseline - capHeight/2 = (lineHeight - Descent) - capHeight/2
         // lineCenter = lineHeight / 2
         // shift = capCenter - lineCenter = lineHeight/2 - Descent - capHeight/2
-        double lineHeight = font.Size + font.InternalLeading;
-        double leadingTrim = Math.Max(0, lineHeight / 2.0 - font.Descent - font.CapHeight / 2.0);
-        if (leadingTrim > 0)
+        if (verticalAlignment == TextAlignment.Center)
         {
-            bounds = new Rect(bounds.X, bounds.Y - leadingTrim, bounds.Width, bounds.Height);
+            double lineHeight = font.Size + font.InternalLeading;
+            double leadingTrim = Math.Max(0, lineHeight / 2.0 - font.Descent - font.CapHeight / 2.0);
+            if (leadingTrim > 0)
+            {
+                bounds = new Rect(bounds.X, bounds.Y - leadingTrim, bounds.Width, bounds.Height);
+            }
         }
 
         DrawTextCore(text, bounds, font, color, horizontalAlignment, verticalAlignment, wrapping, trimming);
