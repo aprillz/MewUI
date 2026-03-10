@@ -40,7 +40,7 @@ curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples
 ```
 
 ### Video
-https://github.com/user-attachments/assets/2e0c1e0e-3dcd-4b5a-8480-fa060475249a
+https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
 
 ### Screenshots
 
