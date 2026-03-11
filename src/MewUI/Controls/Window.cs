@@ -30,7 +30,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
     private readonly List<AdornerEntry> _adorners = new();
-    private Controls.ToastPresenter? _toastPresenter;
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<Window> _modalChildren = new();
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
@@ -150,6 +149,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public Window()
     {
         AdornerLayer = new AdornerLayer(this);
+        OverlayLayer = new OverlayLayer(this);
         _popupManager = new PopupManager(this);
 
 #if DEBUG
@@ -163,20 +163,27 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public AdornerLayer AdornerLayer { get; }
 
     /// <summary>
+    /// Window-level overlay layer for elements positioned relative to the full window area.
+    /// Renders above adorners but below popups. Examples: toast, progress ring, dim background.
+    /// </summary>
+    public OverlayLayer OverlayLayer { get; }
+
+    /// <summary>
     /// Shows a toast notification at 2/3 of the window height.
     /// Auto-dismisses after a duration based on text length.
     /// </summary>
     public void ShowToast(string text)
     {
-        if (_toastPresenter == null)
-        {
-            _toastPresenter = new Controls.ToastPresenter();
-            _toastPresenter.Parent = this;
-        }
+        _toastPresenter ??= new Controls.ToastPresenter();
+
+        if (!OverlayLayer.Contains(_toastPresenter))
+            OverlayLayer.Add(_toastPresenter);
 
         var t = text ?? string.Empty;
         _toastPresenter.Show(t, Controls.ToastPresenter.ComputeDuration(t));
     }
+
+    private Controls.ToastPresenter? _toastPresenter;
 
     private readonly PopupManager _popupManager;
 
@@ -955,20 +962,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _lastLayoutPadding = padding;
         _lastLayoutContent = Content;
 
-        LayoutToast(clientSize);
         LayoutAdorners();
         LayoutPopups();
-    }
-
-    private void LayoutToast(Size clientSize)
-    {
-        if (_toastPresenter == null)
-        {
-            return;
-        }
-
-        _toastPresenter.Measure(clientSize);
-        _toastPresenter.Arrange(new Rect(0, 0, clientSize.Width, clientSize.Height));
+        OverlayLayer.Layout(clientSize);
     }
 
     private bool HasOverlayLayoutDirty()
@@ -977,7 +973,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // up to the Window (Parent = this). If we early-return purely based on Content dirtiness,
         // overlay elements can get stuck with stale DesiredSize/Bounds until the owner explicitly
         // re-calls ShowPopup/UpdatePopup.
-        if (_toastPresenter != null && (_toastPresenter.IsMeasureDirty || _toastPresenter.IsArrangeDirty))
+        if (OverlayLayer.HasLayoutDirty())
         {
             return true;
         }
@@ -1097,7 +1093,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         RequestLayout();
     }
 
-    private void RequestLayout()
+    internal void RequestLayout()
     {
         var dispatcher = ApplicationDispatcher;
         if (dispatcher == null)
@@ -1114,7 +1110,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }, DispatcherPriority.Layout);
     }
 
-    private void RequestRender()
+    internal void RequestRender()
     {
         var dispatcher = ApplicationDispatcher;
         if (dispatcher == null)
@@ -1333,14 +1329,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             Content?.Render(context);
 
-            _toastPresenter?.Render(context);
-
             for (int i = 0; i < _adorners.Count; i++)
             {
                 _adorners[i].Element.Render(context);
             }
 
             _popupManager.Render(context);
+
+            OverlayLayer.Render(context);
         }
         finally
         {
@@ -1425,11 +1421,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
         });
 
-        if (_toastPresenter is IDisposable toastDisposable)
-        {
-            toastDisposable.Dispose();
-        }
-
+        OverlayLayer.Dispose();
         _toastPresenter = null;
 
         DisposeAdorners();
@@ -1470,16 +1462,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             });
         }
 
-        if (_toastPresenter != null)
-        {
-            VisitVisualTree(_toastPresenter, e =>
-            {
-                if (e is FrameworkElement fe)
-                {
-                    fe.NotifyThemeChanged(oldTheme, newTheme);
-                }
-            });
-        }
+        OverlayLayer.NotifyThemeChanged(oldTheme, newTheme);
 
         _popupManager.NotifyThemeChanged(oldTheme, newTheme);
 
@@ -1494,7 +1477,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         ThemeChanged?.Invoke(oldTheme, newTheme);
     }
 
-    private static void VisitVisualTree(Element element, Action<Element> visitor) => VisualTree.Visit(element, visitor);
+    internal static void VisitVisualTree(Element element, Action<Element> visitor) => VisualTree.Visit(element, visitor);
 
     internal void RaiseDpiChanged(uint oldDpi, uint newDpi)
     {
@@ -1516,6 +1499,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             });
         }
 
+        OverlayLayer.NotifyDpiChanged(oldDpi, newDpi);
         _popupManager.NotifyDpiChanged(oldDpi, newDpi);
 
         for (int i = 0; i < _adorners.Count; i++)
@@ -1589,6 +1573,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     protected override UIElement? OnHitTest(Point point)
     {
+        var overlayHit = OverlayLayer.HitTest(point);
+        if (overlayHit != null)
+        {
+            return overlayHit;
+        }
+
         var popupHit = _popupManager.HitTest(point);
         if (popupHit != null)
         {
