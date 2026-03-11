@@ -50,7 +50,15 @@ public sealed class SplitPanel : Panel
             IsHitTestVisible = true,
         };
 
+        UpdateSplitterCursor();
         RebuildChildren();
+    }
+
+    private void UpdateSplitterCursor()
+    {
+        _splitter.Cursor = Orientation == Orientation.Horizontal
+            ? CursorType.SizeWE
+            : CursorType.SizeNS;
     }
 
     /// <summary>
