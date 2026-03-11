@@ -55,6 +55,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     /// </summary>
     protected TextBase()
     {
+        Cursor = CursorType.IBeam;
         _editor = new TextEditorCore(
             GetTextLengthCore,
             GetTextCharCore,
