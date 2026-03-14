@@ -9,6 +9,7 @@ partial class GalleryView
     {
         var dialogStatus = new ObservableValue<string>("Dialog: -");
         var transparentStatus = new ObservableValue<string>("Transparent: -");
+        var manualPositionStatus = new ObservableValue<string>("Manual: -");
         var openFilesStatus = new ObservableValue<string>("Open Files: -");
         var saveFileStatus = new ObservableValue<string>("Save File: -");
         var folderStatus = new ObservableValue<string>("Select Folder: -");
@@ -19,6 +20,7 @@ partial class GalleryView
 
             var dlg = new Window()
                 .Resizable(420, 220)
+                .StartCenterScreen()
                 .OnBuild(x => x
                     .Title("ShowDialog sample")
                     .Padding(16)
@@ -64,24 +66,28 @@ partial class GalleryView
 
             new Window()
                 .Ref(out tw)
-                .Resizable(520, 400)
+                .FitContentHeight(520)
+                .Background(Color.Pink.WithAlpha(64))
+                .StartCenterOwner()
                 .OnBuild(x =>
                 {
                     x.Title = "Transparent window sample";
                     x.AllowsTransparency = true;
-                    x.Background = Color.Transparent;
                     x.Padding = new Thickness(20);
                     x.Content =
-                            new Grid()
+                            new DockPanel()
                                 .Children(
-                                    new Image()
-                                        .Source(logo)
-                                        .Apply(x => EnableWindowDrag(tw, x))
-                                        .Width(500)
-                                        .Height(256)
-                                        .ImageScaleQuality(ImageScaleQuality.HighQuality)
-                                        .StretchMode(Stretch.Uniform)
-                                        .Bottom(),
+                                    new Border()
+                                        .DockBottom()
+                                        .Background(Color.Green.WithAlpha(64))
+                                        .Child(
+                                            new Image()
+                                                .Source(logo)
+                                                .Apply(x => EnableWindowDrag(tw, x))
+                                                .Width(500)
+                                                .Height(128)
+                                                .ImageScaleQuality(ImageScaleQuality.HighQuality)
+                                                .StretchMode(Stretch.Uniform)),
                                     new Border()
                                         .Padding(16)
                                         .Top()
@@ -111,7 +117,7 @@ partial class GalleryView
 
             try
             {
-                tw.Show();
+                tw.Show(window);
                 transparentStatus.Value = "Transparent: shown";
             }
             catch (Exception ex)
@@ -120,9 +126,53 @@ partial class GalleryView
             }
         }
 
+        void ShowManualPositionSample()
+        {
+            const double left = 120;
+            const double top = 140;
+
+            manualPositionStatus.Value = $"Manual: opening at ({left}, {top})";
+
+            Window manual = null!;
+
+            new Window()
+                .Ref(out manual)
+                .Resizable(360, 180)
+                .StartManualPosition(left, top)
+                .OnBuild(x => x
+                    .Title("StartupManualPosition sample")
+                    .Padding(16)
+                    .Content(
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(10)
+                            .Children(
+                                new Label()
+                                    .Text($"StartupLocation.Manual\nLeft: {left}\nTop: {top}"),
+                                new Label()
+                                    .FontSize(11)
+                                    .Text("Use this sample to verify startup manual placement against the requested DIP coordinates."),
+                                new Button()
+                                    .Content("Close")
+                                    .OnClick(() => x.Close())
+                            )
+                    )
+                );
+
+            try
+            {
+                manual.Show();
+                manualPositionStatus.Value = $"Manual: shown at requested ({left}, {top})";
+            }
+            catch (Exception ex)
+            {
+                manualPositionStatus.Value = $"Manual: error ({ex.GetType().Name})";
+            }
+        }
+
         return CardGrid(
             MenusCard(),
-                        
+
             Card(
                 "ShowDialogAsync",
                 new StackPanel()
@@ -149,6 +199,24 @@ partial class GalleryView
                             .OnClick(ShowTransparentSample),
                         new Label()
                             .BindText(transparentStatus)
+                            .FontSize(11)
+                    )
+            ),
+
+            Card(
+                "StartupManualPosition",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Label()
+                            .FontSize(11)
+                            .Text("Opens a window with StartManualPosition(120, 140)."),
+                        new Button()
+                            .Content("Open manual-position window")
+                            .OnClick(ShowManualPositionSample),
+                        new Label()
+                            .BindText(manualPositionStatus)
                             .FontSize(11)
                     )
             ),
@@ -226,6 +294,8 @@ partial class GalleryView
                     )
             ),
 
+            PromptDialogCard(),
+
             DevToolsCard()
         );
     }
@@ -291,6 +361,87 @@ partial class GalleryView
                             .Text("Hover to switch menus while a popup is open. Submenus supported.")
                     )
             );
+    }
+
+    private FrameworkElement PromptDialogCard()
+    {
+        var promptStatus = new ObservableValue<string>("Result: -");
+
+        return Card(
+            "Prompt Dialog (FitContentHeight)",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new Label()
+                        .FontSize(11)
+                        .Text("Opens a FitContentHeight dialog.\nWindow height adjusts to content."),
+                    new Button()
+                        .Content("Show Prompt")
+                        .OnClick(async () =>
+                        {
+                            var result = await ShowPromptAsync(
+                                window,
+                                "Input",
+                                "Enter your name:",
+                                "Name...");
+                            promptStatus.Value = result is null
+                                ? "Result: canceled"
+                                : $"Result: {result}";
+                        }),
+                    new Label()
+                        .BindText(promptStatus)
+                        .FontSize(11)
+                )
+        );
+    }
+
+    private async Task<string?> ShowPromptAsync(
+        Window owner,
+        string title,
+        string message,
+        string? placeholder = null)
+    {
+        string? result = null;
+        TextBox input = null!;
+        Window dialog = null!;
+
+        await new Window()
+            .Ref(out dialog)
+            .Title(title)
+            .FitContentHeight(300, 300)
+            .Padding(12)
+            .Content(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(12)
+                    .Children(
+                        new Label()
+                            .Text(message),
+                        new TextBox()
+                            .Ref(out input)
+                            .Placeholder(placeholder ?? string.Empty),
+                        new StackPanel()
+                            .Horizontal()
+                            .Right()
+                            .Spacing(6)
+                            .Children(
+                                new Button()
+                                    .Content("OK")
+                                    .OnCanClick(() => !string.IsNullOrWhiteSpace(input.Text))
+                                    .OnClick(() =>
+                                    {
+                                        result = input.Text;
+                                        dialog.Close();
+                                    }),
+                                new Button()
+                                    .Content("Cancel")
+                                    .OnClick(dialog.Close)
+                            )
+                    )
+            ).ShowDialogAsync(owner);
+
+        return result;
     }
 
     private FrameworkElement DevToolsCard()
