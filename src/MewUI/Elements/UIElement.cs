@@ -413,10 +413,10 @@ public abstract partial class UIElement : Element
         => PropertyStore.SetLocal(IsMouseCapturedProperty, captured);
 
     /// <summary>
-    /// Converts a point from element coordinates to screen coordinates.
+    /// Converts a point from element coordinates in DIPs to screen coordinates in device pixels.
     /// </summary>
     /// <param name="point">The point in element coordinates.</param>
-    /// <returns>The point in screen coordinates.</returns>
+    /// <returns>The point in screen coordinates in device pixels.</returns>
     public Point PointToScreen(Point point)
     {
         var root = FindVisualRoot();
@@ -430,9 +430,9 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Converts a point from screen coordinates to element coordinates.
+    /// Converts a point from screen coordinates in device pixels to element coordinates in DIPs.
     /// </summary>
-    /// <param name="point">The point in screen coordinates.</param>
+    /// <param name="point">The point in screen coordinates in device pixels.</param>
     /// <returns>The point in element coordinates.</returns>
     public Point PointFromScreen(Point point)
     {
@@ -447,10 +447,10 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Converts a rectangle from element coordinates to screen coordinates.
+    /// Converts a rectangle from element coordinates in DIPs to screen coordinates in device pixels.
     /// </summary>
     /// <param name="rect">The rectangle in element coordinates.</param>
-    /// <returns>The rectangle in screen coordinates.</returns>
+    /// <returns>The rectangle in screen coordinates in device pixels.</returns>
     public Rect RectToScreen(Rect rect)
     {
         var tl = PointToScreen(rect.TopLeft);
@@ -459,9 +459,9 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Converts a rectangle from screen coordinates to element coordinates.
+    /// Converts a rectangle from screen coordinates in device pixels to element coordinates in DIPs.
     /// </summary>
-    /// <param name="rect">The rectangle in screen coordinates.</param>
+    /// <param name="rect">The rectangle in screen coordinates in device pixels.</param>
     /// <returns>The rectangle in element coordinates.</returns>
     public Rect RectFromScreen(Rect rect)
     {

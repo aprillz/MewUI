@@ -594,6 +594,18 @@ internal static unsafe class MacOSInterop
         return scale <= 0 ? 1.0 : scale;
     }
 
+    public static NSRect GetMainScreenFrame()
+    {
+        EnsureApplicationInitialized();
+        var screen = ObjC.MsgSend_nint(ClsNSScreen, SelMainScreen);
+        if (screen == 0)
+        {
+            return default;
+        }
+
+        return ObjC.MsgSend_rect(screen, SelFrame);
+    }
+
     public static double GetBackingScaleFactorForView(nint nsView)
     {
         EnsureApplicationInitialized();
@@ -1061,6 +1073,9 @@ internal static unsafe partial class ObjC
     private static partial void objc_msgSend_void_point(nint receiver, nint selector, NSPoint point);
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static partial void objc_msgSend_void_rect(nint receiver, nint selector, NSRect rect);
+
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static partial nint objc_msgSend_nint_size(nint receiver, nint selector, NSSize size);
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
@@ -1222,6 +1237,9 @@ internal static unsafe partial class ObjC
 
     public static void MsgSend_void_nint_point(nint receiver, nint selector, NSPoint point)
         => objc_msgSend_void_point(receiver, selector, point);
+
+    public static void MsgSend_void_nint_rect(nint receiver, nint selector, NSRect rect)
+        => objc_msgSend_void_rect(receiver, selector, rect);
 
     public static nint MsgSend_nint_nint_nint_nint_bool(nint receiver, nint selector, nint mask, nint untilDate, nint mode, bool dequeue)
     {

@@ -24,13 +24,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         Closed,
     }
 
+    private const double DefaultWidth = 800;
+    private const double DefaultHeight = 600;
+
     private IWindowBackend? _backend;
-    private Size _clientSizeDip = Size.Empty;
+    private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
     private readonly List<AdornerEntry> _adorners = new();
     private readonly RadioGroupManager _radioGroups = new();
+    private readonly List<Window> _ownedChildren = new();
     private readonly List<Window> _modalChildren = new();
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
     private readonly List<UIElement> _mouseOverNewPath = new(capacity: 16);
@@ -44,6 +48,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private bool _subscribedToDispatcherChanged;
     private WindowLifetimeState _lifetimeState;
     private int _modalDisableCount;
+    private bool _isDialogWindow;
     internal Action<Window>? BuildCallback { get; private set; }
 
     internal Point LastMousePositionDip => _lastMousePositionDip;
@@ -300,10 +305,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public nint Handle => _backend?.Handle ?? 0;
 
     /// <summary>
-    /// Converts a client-relative point to screen coordinates.
+    /// Converts a client-relative point in DIPs to screen coordinates in device pixels.
     /// </summary>
     /// <param name="clientPointDip">The client point in DIPs.</param>
-    /// <returns>The screen point.</returns>
+    /// <returns>The screen point in device pixels.</returns>
     public Point ClientToScreen(Point clientPointDip)
     {
         if (_backend == null || Handle == 0)
@@ -315,9 +320,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Converts a screen point to client-relative coordinates.
+    /// Converts a screen point in device pixels to client-relative coordinates in DIPs.
     /// </summary>
-    /// <param name="screenPointPx">The screen point in pixels.</param>
+    /// <param name="screenPointPx">The screen point in device pixels.</param>
     /// <returns>The client point in DIPs.</returns>
     public Point ScreenToClient(Point screenPointPx)
     {
@@ -339,22 +344,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             var previous = field;
             field = value;
-            if (!double.IsNaN(field.Width))
-            {
-                Width = field.Width;
-            }
 
-            if (!double.IsNaN(field.Height))
+            if (_backend != null)
             {
-                Height = field.Height;
-            }
+                if (previous.IsResizable != field.IsResizable)
+                    _backend.SetResizable(field.IsResizable);
 
-            if (_backend != null && previous.IsResizable != field.IsResizable)
-            {
-                _backend.SetResizable(field.IsResizable);
+                // FitContent defers sizing to PerformLayout.
+                if (!double.IsNaN(field.Width) && !double.IsNaN(field.Height))
+                    _backend.SetClientSize(field.Width, field.Height);
             }
         }
-    } = WindowSize.Resizable(800, 600);
+    } = WindowSize.Resizable(DefaultWidth, DefaultHeight);
 
     public static readonly MewProperty<string> TitleProperty =
         MewProperty<string>.Register<Window>(nameof(Title), "Window", MewPropertyOptions.None,
@@ -397,12 +398,41 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
+    /// Gets the owner window. Set via <see cref="Show(Window?)"/> or <see cref="ShowDialogAsync(Window?)"/>.
+    /// Used for <see cref="WindowStartupLocation.CenterOwner"/> positioning and modal dialog ownership.
+    /// </summary>
+    public Window? Owner { get; private set; }
+
+    internal bool IsDialogWindow => _isDialogWindow;
+
+    /// <summary>
     /// Gets or sets the initial window placement behavior.
+    /// Must be set before <see cref="Show"/> is called.
     /// </summary>
     public WindowStartupLocation StartupLocation
     {
         get => GetValue(StartupLocationProperty);
-        set => SetValue(StartupLocationProperty, value);
+        set
+        {
+            ThrowIfShown();
+            SetValue(StartupLocationProperty, value);
+        }
+    }
+
+    /// <summary>
+    /// Gets the resolved startup position in DIPs for <see cref="WindowStartupLocation.CenterOwner"/>
+    /// and <see cref="WindowStartupLocation.Manual"/> modes. <see langword="null"/> for <see cref="WindowStartupLocation.CenterScreen"/>.
+    /// </summary>
+    internal Point? ResolvedStartupPosition => StartupPosition;
+
+    internal Point? StartupPosition
+    {
+        get;
+        set
+        {
+            ThrowIfShown();
+            field = value;
+        }
     }
 
     /// <summary>
@@ -424,30 +454,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Gets the window client width in DIPs.
+    /// Gets the actual window client width in DIPs.
+    /// To change the window size, use <see cref="WindowSize"/>.
     /// </summary>
-    public new double Width
-    {
-        get;
-        internal set
-        {
-            field = value;
-            RequestClientSizeUpdate();
-        }
-    } = WindowSize.Resizable(800, 600).Width;
+    public new double Width => ClientSize.Width;
 
     /// <summary>
-    /// Gets the window client height in DIPs.
+    /// Gets the actual window client height in DIPs.
+    /// To change the window size, use <see cref="WindowSize"/>.
     /// </summary>
-    public new double Height
-    {
-        get;
-        internal set
-        {
-            field = value;
-            RequestClientSizeUpdate();
-        }
-    } = WindowSize.Resizable(800, 600).Height;
+    public new double Height => ClientSize.Height;
 
     /// <summary>
     /// Gets the minimum width from <see cref="WindowSize"/>. Use <see cref="WindowSize"/> to configure constraints.
@@ -487,7 +503,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Gets the client size in DIPs.
     /// </summary>
-    public Size ClientSize => _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+    public Size ClientSize => _clientSizeDip;
 
     /// <summary>
     /// Gets or sets the window position in screen coordinates (DIPs).
@@ -657,11 +673,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <summary>
     /// Shows the window.
     /// </summary>
-    public void Show()
+    /// <param name="owner">Optional owner window for <see cref="WindowStartupLocation.CenterOwner"/> positioning.</param>
+    public void Show(Window? owner = null)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
             throw new InvalidOperationException("Cannot show a closed window.");
+        }
+
+        if (owner != null)
+        {
+            Owner = owner;
+            owner.RegisterOwnedChild(this);
         }
 
         EnsureBackend();
@@ -672,6 +695,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
+        ResolveStartupPosition();
         _backend!.EnsureTheme(Theme.IsDark);
         _backend!.Show();
         _lifetimeState = WindowLifetimeState.Shown;
@@ -719,6 +743,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Closes the window.
     /// </summary>
     public void Close()
+        => RequestClose(fromBackend: false);
+
+    internal void RequestClose(bool fromBackend)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -726,6 +753,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         if (_backend == null)
+        {
+            RaiseClosed();
+            return;
+        }
+
+        if (fromBackend)
         {
             RaiseClosed();
             return;
@@ -790,13 +823,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
+            _isDialogWindow = true;
             if (owner != null)
             {
                 owner.AcquireModalDisable();
                 owner.RegisterModalChild(this);
             }
 
-            Show();
+            if (owner != null && Icon == null && owner.Icon != null)
+                Icon = owner.Icon;
+
+            Show(owner);
             if (owner != null && _backend != null && Handle != 0)
             {
                 _backend.SetOwner(owner.Handle);
@@ -835,6 +872,26 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private void UnregisterModalChild(Window child)
     {
         _modalChildren.Remove(child);
+    }
+
+    private void RegisterOwnedChild(Window child)
+    {
+        if (child == null || ReferenceEquals(child, this))
+        {
+            return;
+        }
+
+        if (_ownedChildren.Contains(child))
+        {
+            return;
+        }
+
+        _ownedChildren.Add(child);
+    }
+
+    private void UnregisterOwnedChild(Window child)
+    {
+        _ownedChildren.Remove(child);
     }
 
     internal Window? GetTopModalChild()
@@ -936,8 +993,38 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // Resolve its style here before reading layout-affecting properties like Padding.
         EnsureStyleResolved();
 
-        var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
         var padding = Padding;
+        var mode = WindowSize.Mode;
+
+        // For FitContent modes, measure content with max constraints first,
+        // then resize the window to match the content's desired size.
+        if (mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize)
+        {
+            var measureWidth = mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentSize
+                ? WindowSize.MaxWidth - padding.HorizontalThickness
+                : Width - padding.HorizontalThickness;
+            var measureHeight = mode is WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize
+                ? WindowSize.MaxHeight - padding.VerticalThickness
+                : Height - padding.VerticalThickness;
+
+            Content.Measure(new Size(Math.Max(0, measureWidth), Math.Max(0, measureHeight)));
+
+            var desired = Content.DesiredSize;
+            var fitWidth = mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentSize
+                ? Math.Min(desired.Width + padding.HorizontalThickness, WindowSize.MaxWidth)
+                : Width;
+            var fitHeight = mode is WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize
+                ? Math.Min(desired.Height + padding.VerticalThickness, WindowSize.MaxHeight)
+                : Height;
+
+            if (fitWidth != Width || fitHeight != Height)
+            {
+                _clientSizeDip = new Size(fitWidth, fitHeight);
+                _backend?.SetClientSize(fitWidth, fitHeight);
+            }
+        }
+
+        var clientSize = _clientSizeDip;
 
         // Layout can be expensive (e.g., large item collections). If nothing is dirty and the
         // client size hasn't changed, avoid re-running Measure/Arrange on every paint.
@@ -1200,18 +1287,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _backend.SetIcon(Icon);
         _backend.SetOpacity(Opacity);
         _backend.SetAllowsTransparency(AllowsTransparency);
-        RequestClientSizeUpdate();
+        if (!double.IsNaN(WindowSize.Width) && !double.IsNaN(WindowSize.Height))
+            _backend.SetClientSize(WindowSize.Width, WindowSize.Height);
     }
 
-    private void RequestClientSizeUpdate()
-    {
-        if (_backend == null)
-        {
-            return;
-        }
-
-        _backend.SetClientSize(Width, Height);
-    }
 
     internal void ReleaseWindowGraphicsResources(nint windowHandle)
     {
@@ -1259,6 +1338,21 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
+        if (Owner != null)
+        {
+            Owner.UnregisterOwnedChild(this);
+        }
+
+        if (_ownedChildren.Count > 0)
+        {
+            var ownedChildren = _ownedChildren.ToArray();
+            _ownedChildren.Clear();
+            for (int i = 0; i < ownedChildren.Length; i++)
+            {
+                try { ownedChildren[i]?.Close(); } catch { }
+            }
+        }
+
         // Close modal children first (best-effort) so modal tasks complete before owner closes.
         // Copy to avoid modification during Close()->RaiseClosed cascades.
         if (_modalChildren.Count > 0)
@@ -1294,7 +1388,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         ArgumentNullException.ThrowIfNull(surface);
-        var clientSize = _clientSizeDip.IsEmpty ? new Size(Width, Height) : _clientSizeDip;
+        var clientSize = _clientSizeDip;
         RenderFrameCore(new WindowRenderTarget(surface), clientSize);
 
     }
@@ -1694,5 +1788,26 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal void EnsureTheme(Theme theme)
     {
         _backend?.EnsureTheme(theme.IsDark);
+    }
+
+    private void ResolveStartupPosition()
+    {
+        if (StartupLocation != WindowStartupLocation.CenterOwner || Owner == null)
+            return;
+
+        if (Owner._backend == null || Owner.Handle == 0)
+            return;
+
+        var ownerPos = Owner.Position;
+        var ownerSize = Owner.ClientSize;
+        StartupPosition = new Point(
+            ownerPos.X + (ownerSize.Width - Width) / 2,
+            ownerPos.Y + (ownerSize.Height - Height) / 2);
+    }
+
+    private void ThrowIfShown()
+    {
+        if (_lifetimeState == WindowLifetimeState.Shown)
+            throw new InvalidOperationException("This property must be set before the window is shown.");
     }
 }

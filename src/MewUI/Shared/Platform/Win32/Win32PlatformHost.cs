@@ -232,7 +232,7 @@ public sealed class Win32PlatformHost : IPlatformHost
         wndClass.cbClsExtra = 0;
         wndClass.cbWndExtra = 0;
         wndClass.hInstance = _moduleHandle;
-        wndClass.hIcon = 0;
+        wndClass.hIcon = User32.LoadIcon(_moduleHandle, 0);
         wndClass.hCursor = User32.LoadCursor(0, SystemCursors.IDC_ARROW);
         wndClass.hbrBackground = 0;
         wndClass.lpszMenuName = 0;

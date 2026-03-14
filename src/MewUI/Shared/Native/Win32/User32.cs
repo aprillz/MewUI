@@ -134,6 +134,16 @@ internal static partial class User32
     public static partial bool GetWindowRect(nint hWnd, out RECT lpRect);
 
     [LibraryImport(LibraryName)]
+    public static partial nint MonitorFromWindow(nint hWnd, uint dwFlags);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [LibraryImport(LibraryName, EntryPoint = "GetMonitorInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetClientRect(nint hWnd, out RECT lpRect);
 
@@ -148,6 +158,10 @@ internal static partial class User32
     [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AdjustWindowRectEx(ref RECT lpRect, uint dwStyle, [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle);
+
+    [LibraryImport(LibraryName, EntryPoint = "AdjustWindowRectExForDpi")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AdjustWindowRectExForDpi(ref RECT lpRect, uint dwStyle, [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle, uint dpi);
 
     #endregion
 
@@ -238,6 +252,13 @@ internal static partial class User32
 
     [LibraryImport(LibraryName)]
     public static partial nint GetCapture();
+
+    #endregion
+
+    #region Icon
+
+    [LibraryImport(LibraryName, EntryPoint = "LoadIconW")]
+    public static partial nint LoadIcon(nint hInstance, nint lpIconName);
 
     #endregion
 

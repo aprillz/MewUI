@@ -28,6 +28,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private readonly TextInputSuppression _textInputSuppression = new();
     private nint _currentCursor;
+    private const uint MonitorDefaultToPrimary = 1;
+    private const uint MonitorDefaultToNearest = 2;
 
     internal bool NeedsRender { get; private set; }
 
@@ -71,6 +73,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         CreateWindow();
+        Window.PerformLayout();
+        ApplyResolvedStartupPosition();
         User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
         User32.UpdateWindow(Handle);
     }
@@ -190,7 +194,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         double dpiScale = dpi / 96.0;
 
         var rect = new RECT(0, 0, (int)Math.Round(widthDip * dpiScale), (int)Math.Round(heightDip * dpiScale));
-        User32.AdjustWindowRectEx(ref rect, GetWindowStyle(), false, 0);
+        Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, GetWindowStyle(), false, 0, dpi);
         User32.SetWindowPos(Handle, 0, 0, 0, rect.Width, rect.Height, 0x0002 | 0x0004); // SWP_NOMOVE | SWP_NOZORDER
     }
 
@@ -282,7 +286,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case WindowMessages.WM_CLOSE:
-                Window.RaiseClosed();
+                Window.RequestClose(fromBackend: true);
                 User32.DestroyWindow(Handle);
                 return 0;
 
@@ -396,34 +400,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private void CreateWindow()
     {
-        uint initialDpi = Win32DpiApiResolver.GetSystemDpi();
+        uint initialDpi = ResolveInitialDpi();
         Window.SetDpi(initialDpi);
         double dpiScale = Window.DpiScale;
 
         var rect = new RECT(0, 0, (int)(Window.Width * dpiScale), (int)(Window.Height * dpiScale));
         uint style = GetWindowStyle();
-        User32.AdjustWindowRectEx(ref rect, style, false, 0);
+        Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, 0, initialDpi);
 
-        int x = 100;
-        int y = 100;
-        if (Window.StartupLocation == WindowStartupLocation.CenterScreen)
-        {
-            const int SM_CXSCREEN = 0;
-            const int SM_CYSCREEN = 1;
-            int screenW = User32.GetSystemMetrics(SM_CXSCREEN);
-            int screenH = User32.GetSystemMetrics(SM_CYSCREEN);
-            if (screenW > 0 && screenH > 0)
-            {
-                x = Math.Max(0, (screenW - rect.Width) / 2);
-                y = Math.Max(0, (screenH - rect.Height) / 2);
-            }
-        }
+        var (x, y) = ResolveInitialPosition(rect.Width, rect.Height, initialDpi);
 
-        uint exStyle = 0;
-        if (Window.AllowsTransparency || Window.Opacity < 0.999)
-        {
-            exStyle |= WindowStylesEx.WS_EX_LAYERED;
-        }
+        uint exStyle = GetWindowExStyle();
 
         Handle = User32.CreateWindowEx(
             exStyle,
@@ -460,12 +447,172 @@ internal sealed class Win32WindowBackend : IWindowBackend
             Window.SetDpi(actualDpi);
             Window.RaiseDpiChanged(oldDpi, actualDpi);
             SetClientSize(Window.Width, Window.Height);
+            var updatedRect = new RECT(0, 0, (int)Math.Round(Window.Width * Window.DpiScale), (int)Math.Round(Window.Height * Window.DpiScale));
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref updatedRect, style, false, exStyle, actualDpi);
+            var (updatedX, updatedY) = ResolveInitialPosition(updatedRect.Width, updatedRect.Height, actualDpi);
+            User32.SetWindowPos(Handle, 0, updatedX, updatedY, 0, 0, 0x0001 | 0x0004 | 0x0010);
             // Force layout recalculation with the correct DPI before first paint
             Window.PerformLayout();
         }
 
         User32.GetClientRect(Handle, out var clientRect);
         Window.SetClientSizeDip(clientRect.Width / Window.DpiScale, clientRect.Height / Window.DpiScale);
+    }
+
+    private uint ResolveInitialDpi()
+    {
+        if (Window.StartupLocation == WindowStartupLocation.CenterOwner &&
+            Window.Owner is { } ownerWindow &&
+            ownerWindow.Handle != 0)
+        {
+            return GetDpiForWindow(ownerWindow.Handle);
+        }
+
+        var monitor = GetStartupMonitor();
+        return monitor != 0
+            ? Win32DpiApiResolver.GetDpiForMonitor(monitor)
+            : Win32DpiApiResolver.GetSystemDpi();
+    }
+
+    private (int X, int Y) ResolveInitialPosition(int windowWidthPx, int windowHeightPx, uint dpi)
+    {
+        if (Window.StartupLocation == WindowStartupLocation.CenterOwner &&
+            Window.Owner is { } ownerWindow &&
+            ownerWindow.Handle != 0 &&
+            TryGetOwnerPlacementRect(ownerWindow, out var ownerRect))
+        {
+            int x = ownerRect.left + ((ownerRect.Width - windowWidthPx) / 2);
+            int y = ownerRect.top + ((ownerRect.Height - windowHeightPx) / 2);
+            return ClampToWorkArea(x, y, windowWidthPx, windowHeightPx, User32.MonitorFromWindow(ownerWindow.Handle, MonitorDefaultToNearest));
+        }
+
+        if (Window.StartupLocation == WindowStartupLocation.CenterScreen)
+        {
+            var monitor = GetStartupMonitor();
+            if (TryGetMonitorWorkArea(monitor, out var workArea))
+            {
+                int x = workArea.left + ((workArea.Width - windowWidthPx) / 2);
+                int y = workArea.top + ((workArea.Height - windowHeightPx) / 2);
+                return (x, y);
+            }
+        }
+
+        if (Window.ResolvedStartupPosition is { } pos)
+        {
+            double dpiScale = Math.Max(1.0, dpi / 96.0);
+            int x = (int)Math.Round(pos.X * dpiScale);
+            int y = (int)Math.Round(pos.Y * dpiScale);
+            return ClampToWorkArea(x, y, windowWidthPx, windowHeightPx, GetStartupMonitor());
+        }
+
+        return (100, 100);
+    }
+
+    private void ApplyResolvedStartupPosition()
+    {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        if (Window.StartupLocation == WindowStartupLocation.Manual && Window.ResolvedStartupPosition is null)
+        {
+            return;
+        }
+
+        uint dpi = Window.Dpi == 0 ? GetDpiForWindow(Handle) : Window.Dpi;
+        uint style = GetWindowStyle();
+        uint exStyle = GetWindowExStyle();
+        var rect = new RECT(
+            0,
+            0,
+            (int)Math.Round(Window.Width * Window.DpiScale),
+            (int)Math.Round(Window.Height * Window.DpiScale));
+
+        Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, exStyle, dpi);
+        var (x, y) = ResolveInitialPosition(rect.Width, rect.Height, dpi);
+
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_NOACTIVATE = 0x0010;
+        User32.SetWindowPos(Handle, 0, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    private bool TryGetOwnerPlacementRect(Window ownerWindow, out RECT ownerRect)
+    {
+        if (Window.AllowsTransparency)
+        {
+            var ownerClientTopLeftPx = ownerWindow.ClientToScreen(Point.Zero);
+            double ownerScale = ownerWindow.DpiScale <= 0 ? 1.0 : ownerWindow.DpiScale;
+            int ownerClientWidthPx = Math.Max(0, (int)Math.Round(ownerWindow.ClientSize.Width * ownerScale));
+            int ownerClientHeightPx = Math.Max(0, (int)Math.Round(ownerWindow.ClientSize.Height * ownerScale));
+
+            ownerRect = RECT.FromXYWH(
+                (int)Math.Round(ownerClientTopLeftPx.X),
+                (int)Math.Round(ownerClientTopLeftPx.Y),
+                ownerClientWidthPx,
+                ownerClientHeightPx);
+
+            return ownerClientWidthPx > 0 && ownerClientHeightPx > 0;
+        }
+
+        return User32.GetWindowRect(ownerWindow.Handle, out ownerRect);
+    }
+
+    private nint GetStartupMonitor()
+    {
+        if (Window.StartupLocation == WindowStartupLocation.CenterOwner &&
+            Window.Owner is { } ownerWindow &&
+            ownerWindow.Handle != 0)
+        {
+            return User32.MonitorFromWindow(ownerWindow.Handle, MonitorDefaultToNearest);
+        }
+
+        if (Window.ResolvedStartupPosition is { } pos)
+        {
+            uint systemDpi = Win32DpiApiResolver.GetSystemDpi();
+            double scale = Math.Max(1.0, systemDpi / 96.0);
+            var point = new POINT((int)Math.Round(pos.X * scale), (int)Math.Round(pos.Y * scale));
+            return User32.MonitorFromPoint(point, MonitorDefaultToNearest);
+        }
+
+        if (User32.GetCursorPos(out var cursor))
+        {
+            return User32.MonitorFromPoint(cursor, MonitorDefaultToNearest);
+        }
+
+        return User32.MonitorFromPoint(new POINT(0, 0), MonitorDefaultToPrimary);
+    }
+
+    private static bool TryGetMonitorWorkArea(nint monitor, out RECT workArea)
+    {
+        if (monitor != 0)
+        {
+            var info = MONITORINFO.Create();
+            if (User32.GetMonitorInfo(monitor, ref info))
+            {
+                workArea = info.rcWork;
+                return true;
+            }
+        }
+
+        workArea = default;
+        return false;
+    }
+
+    private static (int X, int Y) ClampToWorkArea(int x, int y, int width, int height, nint monitor)
+    {
+        if (!TryGetMonitorWorkArea(monitor, out var workArea))
+        {
+            return (x, y);
+        }
+
+        int minX = workArea.left;
+        int minY = workArea.top;
+        int maxX = Math.Max(minX, workArea.right - width);
+        int maxY = Math.Max(minY, workArea.bottom - height);
+
+        return (Math.Clamp(x, minX, maxX), Math.Clamp(y, minY, maxY));
     }
 
     private nint HandleEraseBackground(nint hdc)
@@ -619,6 +766,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         {
             uint style = WindowStyles.WS_OVERLAPPEDWINDOW;
+            if (Window.IsDialogWindow)
+            {
+                style &= ~(WindowStyles.WS_MAXIMIZEBOX | WindowStyles.WS_MINIMIZEBOX);
+            }
             if (!Window.WindowSize.IsResizable)
             {
                 style &= ~(WindowStyles.WS_THICKFRAME | WindowStyles.WS_MAXIMIZEBOX);
@@ -626,6 +777,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             return style;
         }
+    }
+
+    private uint GetWindowExStyle()
+    {
+        uint exStyle = 0;
+        if (Window.AllowsTransparency || Window.Opacity < 0.999)
+        {
+            exStyle |= WindowStylesEx.WS_EX_LAYERED;
+        }
+
+        return exStyle;
     }
 
     private void ApplyResizeMode()
@@ -896,7 +1058,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             var minRect = new RECT(0, 0,
                 minW > 0 ? (int)Math.Ceiling(minW * dpiScale) : 0,
                 minH > 0 ? (int)Math.Ceiling(minH * dpiScale) : 0);
-            User32.AdjustWindowRectEx(ref minRect, style, false, 0);
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, style, false, 0, dpi);
 
             if (minW > 0) info->ptMinTrackSize.x = minRect.Width;
             if (minH > 0) info->ptMinTrackSize.y = minRect.Height;
@@ -907,7 +1069,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             var maxRect = new RECT(0, 0,
                 !double.IsPositiveInfinity(maxW) ? (int)Math.Ceiling(maxW * dpiScale) : 0,
                 !double.IsPositiveInfinity(maxH) ? (int)Math.Ceiling(maxH * dpiScale) : 0);
-            User32.AdjustWindowRectEx(ref maxRect, style, false, 0);
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, style, false, 0, dpi);
 
             if (!double.IsPositiveInfinity(maxW)) info->ptMaxTrackSize.x = maxRect.Width;
             if (!double.IsPositiveInfinity(maxH)) info->ptMaxTrackSize.y = maxRect.Height;

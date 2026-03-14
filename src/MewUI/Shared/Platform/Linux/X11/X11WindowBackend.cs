@@ -1126,7 +1126,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             bool leftDown = (e.state & (1u << 8)) != 0;
             bool middleDown = (e.state & (1u << 9)) != 0;
             bool rightDown = (e.state & (1u << 10)) != 0;
-            WindowInputRouter.MouseWheel(Window, pos, pos, delta, isHorizontal: false, leftDown, rightDown, middleDown);
+            WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal: false, leftDown, rightDown, middleDown);
 
             return;
         }
@@ -1178,10 +1178,11 @@ internal sealed class X11WindowBackend : IWindowBackend
             }
         }
 
+        var screenPos = ClientToScreen(pos);
         WindowInputRouter.MouseButton(
             Window,
             pos,
-            pos,
+            screenPos,
             btn,
             isDown,
             leftDown: left,
@@ -1193,12 +1194,13 @@ internal sealed class X11WindowBackend : IWindowBackend
     private void HandleMotion(XMotionEvent e)
     {
         var pos = new Point(e.x / Window.DpiScale, e.y / Window.DpiScale);
+        var screenPos = ClientToScreen(pos);
 
         bool left = (e.state & (1u << 8)) != 0;
         bool middle = (e.state & (1u << 9)) != 0;
         bool right = (e.state & (1u << 10)) != 0;
 
-        WindowInputRouter.MouseMove(Window, pos, pos, leftDown: left, rightDown: right, middleDown: middle);
+        WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown: left, rightDown: right, middleDown: middle);
     }
 
     internal void NotifyDpiChanged(uint oldDpi, uint newDpi)

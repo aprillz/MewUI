@@ -61,33 +61,71 @@ public readonly struct WindowSize
     public static WindowSize Resizable(double width, double height,
         double minWidth = 0, double minHeight = 0,
         double maxWidth = double.PositiveInfinity, double maxHeight = double.PositiveInfinity)
-        => new(WindowSizeMode.Resizable, width, height, minWidth, minHeight, maxWidth, maxHeight);
+    {
+        ThrowIfNotPositive(width, nameof(width));
+        ThrowIfNotPositive(height, nameof(height));
+        ThrowIfNegative(minWidth, nameof(minWidth));
+        ThrowIfNegative(minHeight, nameof(minHeight));
+        ThrowIfNotPositive(maxWidth, nameof(maxWidth));
+        ThrowIfNotPositive(maxHeight, nameof(maxHeight));
+        if (minWidth > maxWidth) throw new ArgumentException("minWidth must be <= maxWidth.");
+        if (minHeight > maxHeight) throw new ArgumentException("minHeight must be <= maxHeight.");
+        return new(WindowSizeMode.Resizable, width, height, minWidth, minHeight, maxWidth, maxHeight);
+    }
 
     /// <summary>
     /// Creates a fixed-size window configuration with the specified client size.
     /// </summary>
     public static WindowSize Fixed(double width, double height)
-        => new(WindowSizeMode.Fixed, width, height, width, height, width, height);
+    {
+        ThrowIfNotPositive(width, nameof(width));
+        ThrowIfNotPositive(height, nameof(height));
+        return new(WindowSizeMode.Fixed, width, height, width, height, width, height);
+    }
 
     /// <summary>
     /// Creates a configuration where the content determines width, up to <paramref name="maxWidth"/>.
     /// Height is fixed.
     /// </summary>
     public static WindowSize FitContentWidth(double maxWidth, double fixedHeight)
-        => new(WindowSizeMode.FitContentWidth, double.NaN, fixedHeight, 0, 0, maxWidth, fixedHeight);
+    {
+        ThrowIfNotPositive(maxWidth, nameof(maxWidth));
+        ThrowIfNotPositive(fixedHeight, nameof(fixedHeight));
+        return new(WindowSizeMode.FitContentWidth, double.NaN, fixedHeight, 0, 0, maxWidth, fixedHeight);
+    }
 
     /// <summary>
     /// Creates a configuration where the content determines height, up to <paramref name="maxHeight"/>.
     /// Width is fixed.
     /// </summary>
     public static WindowSize FitContentHeight(double fixedWidth, double maxHeight)
-        => new(WindowSizeMode.FitContentHeight, fixedWidth, double.NaN, 0, 0, fixedWidth, maxHeight);
+    {
+        ThrowIfNotPositive(fixedWidth, nameof(fixedWidth));
+        ThrowIfNotPositive(maxHeight, nameof(maxHeight));
+        return new(WindowSizeMode.FitContentHeight, fixedWidth, double.NaN, 0, 0, fixedWidth, maxHeight);
+    }
 
     /// <summary>
     /// Creates a configuration where the content determines both width and height, up to the specified maximums.
     /// </summary>
     public static WindowSize FitContentSize(double maxWidth, double maxHeight)
-        => new(WindowSizeMode.FitContentSize, double.NaN, double.NaN, 0, 0, maxWidth, maxHeight);
+    {
+        ThrowIfNotPositive(maxWidth, nameof(maxWidth));
+        ThrowIfNotPositive(maxHeight, nameof(maxHeight));
+        return new(WindowSizeMode.FitContentSize, double.NaN, double.NaN, 0, 0, maxWidth, maxHeight);
+    }
+
+    private static void ThrowIfNotPositive(double value, string name)
+    {
+        if (double.IsNaN(value) || value <= 0)
+            throw new ArgumentOutOfRangeException(name, value, $"{name} must be a positive number.");
+    }
+
+    private static void ThrowIfNegative(double value, string name)
+    {
+        if (double.IsNaN(value) || value < 0)
+            throw new ArgumentOutOfRangeException(name, value, $"{name} must be zero or positive.");
+    }
 }
 
 /// <summary>

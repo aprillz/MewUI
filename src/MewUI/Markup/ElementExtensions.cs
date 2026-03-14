@@ -8,90 +8,32 @@ public static class ElementExtensions
     #region Size
 
     /// <summary>
-    /// Sets the window width.
+    /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/>, <see cref="Fixed"/>, or the FitContent methods.
     /// </summary>
-    /// <param name="window">Target window.</param>
-    /// <param name="width">Width value.</param>
-    /// <returns>The window for chaining.</returns>
+    [Obsolete("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.", error: true)]
     public static Window Width(this Window window, double width)
-    {
-        window.WindowSize = window.WindowSize.Mode switch
-        {
-            WindowSizeMode.Fixed => WindowSize.Fixed(width, ResolveWindowHeight(window)),
-            WindowSizeMode.FitContentWidth => WindowSize.FitContentWidth(width, ResolveWindowHeight(window)),
-            WindowSizeMode.FitContentHeight => WindowSize.FitContentHeight(width, ResolveWindowMaxHeight(window)),
-            WindowSizeMode.FitContentSize => WindowSize.FitContentSize(width, ResolveWindowMaxHeight(window)),
-            _ => WindowSize.Resizable(width, ResolveWindowHeight(window))
-        };
-        window.Width = width;
-        return window;
-    }
+        => throw new NotSupportedException("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.");
 
     /// <summary>
-    /// Sets the window height.
+    /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/>, <see cref="Fixed"/>, or the FitContent methods.
     /// </summary>
-    /// <param name="window">Target window.</param>
-    /// <param name="height">Height value.</param>
-    /// <returns>The window for chaining.</returns>
+    [Obsolete("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.", error: true)]
     public static Window Height(this Window window, double height)
-    {
-        window.WindowSize = window.WindowSize.Mode switch
-        {
-            WindowSizeMode.Fixed => WindowSize.Fixed(ResolveWindowWidth(window), height),
-            WindowSizeMode.FitContentWidth => WindowSize.FitContentWidth(ResolveWindowMaxWidth(window), height),
-            WindowSizeMode.FitContentHeight => WindowSize.FitContentHeight(ResolveWindowWidth(window), height),
-            WindowSizeMode.FitContentSize => WindowSize.FitContentSize(ResolveWindowMaxWidth(window), height),
-            _ => WindowSize.Resizable(ResolveWindowWidth(window), height)
-        };
-        window.Height = height;
-        return window;
-    }
+        => throw new NotSupportedException("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.");
 
     /// <summary>
-    /// Sets the window size.
+    /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/>, <see cref="Fixed"/>, or the FitContent methods.
     /// </summary>
-    /// <param name="window">Target window.</param>
-    /// <param name="width">Width value.</param>
-    /// <param name="height">Height value.</param>
-    /// <returns>The window for chaining.</returns>
+    [Obsolete("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.", error: true)]
     public static Window Size(this Window window, double width, double height)
-    {
-        window.WindowSize = window.WindowSize.Mode switch
-        {
-            WindowSizeMode.Fixed => WindowSize.Fixed(width, height),
-            WindowSizeMode.FitContentWidth => WindowSize.FitContentWidth(width, height),
-            WindowSizeMode.FitContentHeight => WindowSize.FitContentHeight(width, height),
-            WindowSizeMode.FitContentSize => WindowSize.FitContentSize(width, height),
-            _ => WindowSize.Resizable(width, height)
-        };
-        window.Width = width;
-        window.Height = height;
-        return window;
-    }
-
-    private static double ResolveWindowWidth(Window window)
-        => double.IsNaN(window.WindowSize.Width) ? window.Width : window.WindowSize.Width;
-
-    private static double ResolveWindowHeight(Window window)
-        => double.IsNaN(window.WindowSize.Height) ? window.Height : window.WindowSize.Height;
-
-    private static double ResolveWindowMaxWidth(Window window)
-        => double.IsNaN(window.WindowSize.MaxWidth) ? window.Width : window.WindowSize.MaxWidth;
-
-    private static double ResolveWindowMaxHeight(Window window)
-        => double.IsNaN(window.WindowSize.MaxHeight) ? window.Height : window.WindowSize.MaxHeight;
+        => throw new NotSupportedException("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.");
 
     /// <summary>
-    /// Sets the window size uniformly.
+    /// Not supported on <see cref="Window"/>. Use <see cref="Resizable"/>, <see cref="Fixed"/>, or the FitContent methods.
     /// </summary>
-    /// <param name="window">Target window.</param>
-    /// <param name="size">Size value.</param>
-    /// <returns>The window for chaining.</returns>
+    [Obsolete("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.", error: true)]
     public static Window Size(this Window window, double size)
-    {
-        window.WindowSize = WindowSize.Resizable(size, size);
-        return window;
-    }
+        => throw new NotSupportedException("Use .Resizable(w, h), .Fixed(w, h), or FitContent methods to set Window dimensions.");
 
     /// <summary>
     /// Sets the window as resizable with optional min/max constraints.
@@ -129,10 +71,10 @@ public static class ElementExtensions
     /// Sets the window to fit content width.
     /// </summary>
     /// <param name="window">Target window.</param>
-    /// <param name="maxWidth">Maximum width.</param>
     /// <param name="fixedHeight">Fixed height.</param>
+    /// <param name="maxWidth">Maximum width.</param>
     /// <returns>The window for chaining.</returns>
-    public static Window FitContentWidth(this Window window, double maxWidth, double fixedHeight)
+    public static Window FitContentWidth(this Window window, double fixedHeight, double maxWidth = 1000)
     {
         window.WindowSize = WindowSize.FitContentWidth(maxWidth, fixedHeight);
         return window;
@@ -145,7 +87,7 @@ public static class ElementExtensions
     /// <param name="fixedWidth">Fixed width.</param>
     /// <param name="maxHeight">Maximum height.</param>
     /// <returns>The window for chaining.</returns>
-    public static Window FitContentHeight(this Window window, double fixedWidth, double maxHeight)
+    public static Window FitContentHeight(this Window window, double fixedWidth, double maxHeight = 1000)
     {
         window.WindowSize = WindowSize.FitContentHeight(fixedWidth, maxHeight);
         return window;
@@ -158,9 +100,39 @@ public static class ElementExtensions
     /// <param name="maxWidth">Maximum width.</param>
     /// <param name="maxHeight">Maximum height.</param>
     /// <returns>The window for chaining.</returns>
-    public static Window FitContentSize(this Window window, double maxWidth, double maxHeight)
+    public static Window FitContentSize(this Window window, double maxWidth = 1000, double maxHeight = 1000)
     {
         window.WindowSize = WindowSize.FitContentSize(maxWidth, maxHeight);
+        return window;
+    }
+
+    /// <summary>
+    /// Sets the window to open centered on the primary screen. Must be called before <see cref="Window.Show"/>.
+    /// </summary>
+    public static Window StartCenterScreen(this Window window)
+    {
+        window.StartupLocation = WindowStartupLocation.CenterScreen;
+        return window;
+    }
+
+    /// <summary>
+    /// Sets the window to open centered on the owner window.
+    /// The owner is provided when calling <see cref="Window.Show(Window?)"/> or <see cref="Window.ShowDialogAsync(Window?)"/>.
+    /// </summary>
+    public static Window StartCenterOwner(this Window window)
+    {
+        window.StartupLocation = WindowStartupLocation.CenterOwner;
+        return window;
+    }
+
+    /// <summary>
+    /// Sets the window to open at the specified position in DIPs (primary monitor DPI basis).
+    /// Must be called before <see cref="Window.Show"/>.
+    /// </summary>
+    public static Window StartManualPosition(this Window window, double leftDip, double topDip)
+    {
+        window.StartupLocation = WindowStartupLocation.Manual;
+        window.StartupPosition = new Point(leftDip, topDip);
         return window;
     }
 
@@ -610,7 +582,7 @@ public static class ElementExtensions
     #endregion
 
     #region Template
-    
+
     public static T Register<T>(this T control, TemplateContext ctx, string name) where T : UIElement
     {
         ArgumentNullException.ThrowIfNull(control);

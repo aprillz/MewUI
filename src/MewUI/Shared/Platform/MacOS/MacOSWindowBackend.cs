@@ -148,20 +148,29 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             throw new InvalidOperationException("NSWindow creation failed.");
         }
 
-        UpdateDpiIfNeeded();
-        UpdateClientSizeIfNeeded(forceLayout: true);
-
         if (_shown)
         {
+            UpdateDpiIfNeeded();
+            UpdateClientSizeIfNeeded(forceLayout: true);
             return;
         }
 
+        UpdateDpiIfNeeded();
+        _window.PerformLayout();
+
         _shown = true;
         MacOSWindowInterop.ShowWindow(_nsWindow);
+        if (_window.IsDialogWindow)
+        {
+            MacOSWindowInterop.HideDialogChromeButtons(_nsWindow);
+        }
         if (_allowsTransparency)
         {
             MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0ul);
         }
+        ApplyResolvedStartupPlacement();
+        UpdateClientSizeIfNeeded(forceLayout: true);
+        ApplyResolvedStartupPlacement();
         _host.RegisterWindow(_nsWindow, this);
         Interlocked.Exchange(ref _needsRender, 1);
         _host.RequestRender();
@@ -209,6 +218,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if (_nsWindow != 0)
         {
             MacOSWindowInterop.SetClientSize(_nsWindow, widthDip, heightDip);
+            _window.SetClientSizeDip(widthDip, heightDip);
         }
     }
 
@@ -220,7 +230,14 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         var frame = MacOSWindowInterop.GetWindowFrame(_nsWindow);
-        return new Point(frame.origin.x, frame.origin.y);
+        var screenFrame = GetPositioningScreenFrame();
+        if (screenFrame.size.height <= 0)
+        {
+            return new Point(frame.origin.x, frame.origin.y);
+        }
+
+        double top = (screenFrame.origin.y + screenFrame.size.height) - (frame.origin.y + frame.size.height);
+        return new Point(frame.origin.x, top);
     }
 
     public void SetPosition(double leftDip, double topDip)
@@ -230,7 +247,17 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        MacOSWindowInterop.SetWindowPosition(_nsWindow, leftDip, topDip);
+        var frame = MacOSWindowInterop.GetWindowFrame(_nsWindow);
+        var screenFrame = GetPositioningScreenFrame();
+        if (screenFrame.size.height <= 0)
+        {
+            MacOSWindowInterop.SetWindowPosition(_nsWindow, leftDip, topDip);
+            return;
+        }
+
+        double cocoaTop = screenFrame.origin.y + screenFrame.size.height;
+        double cocoaY = cocoaTop - topDip - frame.size.height;
+        MacOSWindowInterop.SetWindowPosition(_nsWindow, leftDip, cocoaY);
     }
 
     public void CaptureMouse() { }
@@ -247,7 +274,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         var client = _window.ClientSize;
         var windowPoint = new NSPoint(clientPointDip.X, client.Height - clientPointDip.Y);
         var screenPoint = MacOSWindowInterop.WindowConvertPointToScreen(_nsWindow, windowPoint);
-        return new Point(screenPoint.x, screenPoint.y);
+        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
+        return new Point(screenPoint.x * scale, screenPoint.y * scale);
     }
 
     public Point ScreenToClient(Point screenPointPx)
@@ -258,7 +286,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         var client = _window.ClientSize;
-        var windowPoint = MacOSWindowInterop.WindowConvertPointFromScreen(_nsWindow, new NSPoint(screenPointPx.X, screenPointPx.Y));
+        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
+        var windowPoint = MacOSWindowInterop.WindowConvertPointFromScreen(
+            _nsWindow,
+            new NSPoint(screenPointPx.X / scale, screenPointPx.Y / scale));
         return new Point(windowPoint.x, client.Height - windowPoint.y);
     }
 
@@ -413,24 +444,25 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         MacOSInterop.EnsureApplicationInitialized();
         _allowsTransparency = _window.AllowsTransparency;
+        var initialClientSize = GetInitialClientSize();
         _nsWindow = MacOSWindowInterop.CreateWindow(
             title: _window.Title ?? "MewUI",
-            widthDip: Math.Max(1, _window.Width),
-            heightDip: Math.Max(1, _window.Height),
-            allowsTransparency: _allowsTransparency);
+            widthDip: initialClientSize.Width,
+            heightDip: initialClientSize.Height,
+            allowsTransparency: _allowsTransparency,
+            isDialog: _window.IsDialogWindow);
 
         if (_nsWindow != 0)
         {
-            if (_window.StartupLocation == WindowStartupLocation.CenterScreen)
-            {
-                MacOSWindowInterop.CenterWindow(_nsWindow);
-            }
-
             // Prefer CAMetalLayer path when the active graphics factory requests it.
             // This avoids AppKit's "stretch last frame" behavior during live-resize by rendering from the layer draw cycle.
             if (_window.GraphicsFactory is IWindowSurfaceSelector { PreferredSurfaceKind: WindowSurfaceKind.Metal })
             {
                 var (view, layer) = MacOSWindowInterop.AttachMetalLayerView(_nsWindow, _window.Width, _window.Height);
+                if (view != 0 && (Math.Abs(initialClientSize.Width - _window.Width) > 0.01 || Math.Abs(initialClientSize.Height - _window.Height) > 0.01))
+                {
+                    MacOSWindowInterop.SetViewFrame(view, initialClientSize.Width, initialClientSize.Height);
+                }
                 _nsView = view;
                 _metalLayer = layer;
                 _nsContext = 0;
@@ -446,6 +478,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             else
             {
                 var (view, ctx) = MacOSWindowInterop.AttachLegacyOpenGLView(_nsWindow, _window.Width, _window.Height);
+                if (view != 0 && (Math.Abs(initialClientSize.Width - _window.Width) > 0.01 || Math.Abs(initialClientSize.Height - _window.Height) > 0.01))
+                {
+                    MacOSWindowInterop.SetViewFrame(view, initialClientSize.Width, initialClientSize.Height);
+                }
                 _nsView = view;
                 _nsContext = ctx;
                 _metalLayer = 0;
@@ -456,7 +492,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
             // Establish initial DPI once we have a view/screen.
             UpdateDpiIfNeeded(force: true);
+            ApplyRequestedClientSize();
             UpdateClientSizeIfNeeded(forceLayout: true);
+            ApplyResolvedStartupPlacement();
 
             _defaultWindowLevel = MacOSWindowInterop.GetWindowLevel(_nsWindow);
             _defaultStyleMask = MacOSWindowInterop.GetWindowStyleMask(_nsWindow);
@@ -472,6 +510,62 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
+    private void ApplyRequestedClientSize()
+    {
+        if (_nsWindow == 0)
+        {
+            return;
+        }
+
+        var requestedSize = GetInitialClientSize();
+        MacOSWindowInterop.SetClientSize(_nsWindow, requestedSize.Width, requestedSize.Height);
+        _window.SetClientSizeDip(requestedSize.Width, requestedSize.Height);
+    }
+
+    private Size GetInitialClientSize()
+    {
+        var ws = _window.WindowSize;
+        var current = _window.ClientSize;
+
+        double width = !double.IsNaN(ws.Width) ? ws.Width : Math.Max(1, current.Width);
+        double height = !double.IsNaN(ws.Height) ? ws.Height : Math.Max(1, current.Height);
+
+        return new Size(Math.Max(1, width), Math.Max(1, height));
+    }
+
+    private void ApplyResolvedStartupPlacement()
+    {
+        if (_nsWindow == 0)
+        {
+            return;
+        }
+
+        switch (_window.StartupLocation)
+        {
+            case WindowStartupLocation.CenterScreen:
+                MacOSWindowInterop.CenterWindow(_nsWindow);
+                return;
+
+            case WindowStartupLocation.Manual:
+                if (_window.ResolvedStartupPosition is { } manualPosition)
+                {
+                    SetPosition(manualPosition.X, manualPosition.Y);
+                }
+                return;
+
+            case WindowStartupLocation.CenterOwner:
+                if (_window.Owner is { } ownerWindow && ownerWindow.Handle != 0)
+                {
+                    var ownerFrame = MacOSWindowInterop.GetWindowFrame(MacOSWindowInterop.GetWindowFromView(ownerWindow.Handle));
+                    var frame = MacOSWindowInterop.GetWindowFrame(_nsWindow);
+                    double x = ownerFrame.origin.x + ((ownerFrame.size.width - frame.size.width) * 0.5);
+                    double y = ownerFrame.origin.y + ((ownerFrame.size.height - frame.size.height) * 0.25);
+                    MacOSWindowInterop.SetWindowPosition(_nsWindow, x, y);
+                }
+                return;
+        }
+    }
+
     internal void RaiseClosedOnce()
     {
         if (_closedRaised)
@@ -482,12 +576,26 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         _closedRaised = true;
         try
         {
-            _window.RaiseClosed();
+            _window.RequestClose(fromBackend: true);
         }
         catch
         {
             // Never let exceptions escape the native callback.
         }
+    }
+
+    private NSRect GetPositioningScreenFrame()
+    {
+        if (_nsWindow != 0)
+        {
+            var screenFrame = MacOSWindowInterop.GetScreenFrame(_nsWindow);
+            if (screenFrame.size.width > 0 && screenFrame.size.height > 0)
+            {
+                return screenFrame;
+            }
+        }
+
+        return MacOSInterop.GetMainScreenFrame();
     }
 
     private void UpdateDpiIfNeeded(bool force = false)
@@ -600,8 +708,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         var client = _window.ClientSize;
         var pos = new Point(loc.x, client.Height - loc.y);
 
-        // Best-effort screen position (not used for tooltip; window-relative is enough).
-        var screenPos = pos;
+        var screenPos = ClientToScreen(pos);
         _window.UpdateLastMousePosition(pos, screenPos);
 
         switch (type)
@@ -1517,7 +1624,11 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelSetTitlebarAppearsTransparent;
     private static nint SelSetMovableByWindowBackground;
     private static nint SelSetFrameOrigin;
+    private static nint SelSetFrame;
     private static nint SelFrame;
+    private static nint SelScreen;
+    private static nint SelStandardWindowButton;
+    private static nint SelSetHidden;
     private static nint SelConvertPointToScreen;
     private static nint SelConvertPointFromScreen;
     private static nint SelWindow;
@@ -1575,6 +1686,8 @@ internal static unsafe class MacOSWindowInterop
 
     // NSWindowStyleMaskTitled | Closable | Miniaturizable | Resizable
     private const ulong DefaultStyleMask = 1ul | 2ul | 4ul | 8ul;
+    // NSWindowStyleMaskTitled | Closable
+    private const ulong DialogStyleMask = 1ul | 2ul;
     private const int NSBackingStoreBuffered = 2;
     private const ulong NSViewWidthSizable = 2;
     private const ulong NSViewHeightSizable = 16;
@@ -1632,7 +1745,11 @@ internal static unsafe class MacOSWindowInterop
         SelSetTitlebarAppearsTransparent = ObjC.Sel("setTitlebarAppearsTransparent:");
         SelSetMovableByWindowBackground = ObjC.Sel("setMovableByWindowBackground:");
         SelSetFrameOrigin = ObjC.Sel("setFrameOrigin:");
+        SelSetFrame = ObjC.Sel("setFrame:");
         SelFrame = ObjC.Sel("frame");
+        SelScreen = ObjC.Sel("screen");
+        SelStandardWindowButton = ObjC.Sel("standardWindowButton:");
+        SelSetHidden = ObjC.Sel("setHidden:");
         SelConvertPointToScreen = ObjC.Sel("convertPointToScreen:");
         SelConvertPointFromScreen = ObjC.Sel("convertPointFromScreen:");
         SelWindow = ObjC.Sel("window");
@@ -1862,6 +1979,23 @@ internal static unsafe class MacOSWindowInterop
         return ObjC.MsgSend_rect(window, SelFrame);
     }
 
+    public static NSRect GetScreenFrame(nint window)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelScreen == 0 || SelFrame == 0)
+        {
+            return default;
+        }
+
+        var screen = ObjC.MsgSend_nint(window, SelScreen);
+        if (screen == 0)
+        {
+            return default;
+        }
+
+        return ObjC.MsgSend_rect(screen, SelFrame);
+    }
+
     public static void SetWindowPosition(nint window, double leftDip, double topDip)
     {
         EnsureInitialized();
@@ -1871,6 +2005,17 @@ internal static unsafe class MacOSWindowInterop
         }
 
         ObjC.MsgSend_void_nint_point(window, SelSetFrameOrigin, new NSPoint(leftDip, topDip));
+    }
+
+    public static void SetViewFrame(nint view, double widthDip, double heightDip)
+    {
+        EnsureInitialized();
+        if (view == 0 || SelSetFrame == 0)
+        {
+            return;
+        }
+
+        ObjC.MsgSend_void_nint_rect(view, SelSetFrame, new NSRect(0, 0, widthDip, heightDip));
     }
 
     public static NSPoint WindowConvertPointToScreen(nint window, NSPoint point)
@@ -2908,7 +3053,7 @@ internal static unsafe class MacOSWindowInterop
         return false;
     }
 
-    public static nint CreateWindow(string title, double widthDip, double heightDip, bool allowsTransparency)
+    public static nint CreateWindow(string title, double widthDip, double heightDip, bool allowsTransparency, bool isDialog)
     {
         EnsureInitialized();
         var win = ObjC.MsgSend_nint(ClsNSWindow, SelAlloc);
@@ -2918,7 +3063,7 @@ internal static unsafe class MacOSWindowInterop
         }
 
         var rect = new NSRect(0, 0, widthDip, heightDip);
-        ulong styleMask = allowsTransparency ? 0ul : DefaultStyleMask;
+        ulong styleMask = allowsTransparency ? 0ul : (isDialog ? DialogStyleMask : DefaultStyleMask);
         win = ObjC.MsgSend_nint_rect_ulong_int_bool(win, SelInitWithContentRect, rect, styleMask, NSBackingStoreBuffered, false);
         if (win == 0)
         {
@@ -2926,9 +3071,35 @@ internal static unsafe class MacOSWindowInterop
         }
 
         SetTitle(win, title);
+        if (isDialog)
+        {
+            HideDialogChromeButtons(win);
+        }
         // MouseMoved events are not delivered unless this is enabled.
         ObjC.MsgSend_void_nint_bool(win, SelSetAcceptsMouseMovedEvents, true);
         return win;
+    }
+
+    public static void HideDialogChromeButtons(nint window)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelStandardWindowButton == 0 || SelSetHidden == 0)
+        {
+            return;
+        }
+
+        // NSWindowButtonMiniaturizeButton = 1, NSWindowButtonZoomButton = 2
+        var miniaturizeButton = ObjC.MsgSend_nint_ulong(window, SelStandardWindowButton, 1ul);
+        if (miniaturizeButton != 0)
+        {
+            ObjC.MsgSend_void_nint_bool(miniaturizeButton, SelSetHidden, true);
+        }
+
+        var zoomButton = ObjC.MsgSend_nint_ulong(window, SelStandardWindowButton, 2ul);
+        if (zoomButton != 0)
+        {
+            ObjC.MsgSend_void_nint_bool(zoomButton, SelSetHidden, true);
+        }
     }
 
     public static void ShowWindow(nint window)
@@ -2959,7 +3130,14 @@ internal static unsafe class MacOSWindowInterop
     public static void CenterWindow(nint window)
     {
         EnsureInitialized();
-        ObjC.MsgSend_void(window, SelCenter);
+        if (window == 0)
+        {
+            return;
+        }
+        if (SelCenter != 0)
+        {
+            ObjC.MsgSend_void(window, SelCenter);
+        }
     }
 
     public static void ReleaseWindow(nint window)

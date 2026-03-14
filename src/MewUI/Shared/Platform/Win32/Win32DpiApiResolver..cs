@@ -18,8 +18,10 @@ internal static partial class Win32DpiApiResolver
     private static readonly bool _hasGetDpiForWindow;
     private static readonly bool _hasGetDpiForSystem;
     private static readonly bool _hasGetSystemMetricsForDpi;
+    private static readonly bool _hasAdjustWindowRectExForDpi;
     // Win8.1+ (shcore.dll)
     private static readonly nint _shcoreLib;
+    private static readonly nint _getDpiForMonitorPtr;
     private static readonly nint _setProcessDpiAwarenessPtr;
 
     static Win32DpiApiResolver()
@@ -29,10 +31,12 @@ internal static partial class Win32DpiApiResolver
         _hasGetDpiForWindow = NativeLibrary.TryGetExport(user32, "GetDpiForWindow", out _);
         _hasGetDpiForSystem = NativeLibrary.TryGetExport(user32, "GetDpiForSystem", out _);
         _hasGetSystemMetricsForDpi = NativeLibrary.TryGetExport(user32, "GetSystemMetricsForDpi", out _);
+        _hasAdjustWindowRectExForDpi = NativeLibrary.TryGetExport(user32, "AdjustWindowRectExForDpi", out _);
 
         // Probe shcore.dll for Win8.1 API (may not exist on Win7).
         if (NativeLibrary.TryLoad("shcore.dll", out _shcoreLib) && _shcoreLib != 0)
         {
+            NativeLibrary.TryGetExport(_shcoreLib, "GetDpiForMonitor", out _getDpiForMonitorPtr);
             NativeLibrary.TryGetExport(_shcoreLib, "SetProcessDpiAwareness", out _setProcessDpiAwarenessPtr);
         }
     }
@@ -106,6 +110,25 @@ internal static partial class Win32DpiApiResolver
     }
 
     /// <summary>
+    /// Gets the effective DPI for a monitor, falling back to system DPI when unavailable.
+    /// </summary>
+    public static uint GetDpiForMonitor(nint hMonitor)
+    {
+        if (_getDpiForMonitorPtr != 0 && hMonitor != 0)
+        {
+            const int MDT_EFFECTIVE_DPI = 0;
+            uint dpiX = 0;
+            uint dpiY = 0;
+            if (CallGetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, ref dpiX, ref dpiY) == 0 && dpiX > 0)
+            {
+                return dpiX;
+            }
+        }
+
+        return GetSystemDpi();
+    }
+
+    /// <summary>
     /// Gets DPI-scaled system metrics, falling back to unscaled GetSystemMetrics.
     /// </summary>
     public static int GetSystemMetricsForDpi(int nIndex, uint dpi)
@@ -117,6 +140,19 @@ internal static partial class Win32DpiApiResolver
 
         // Fallback: unscaled metrics (best effort on Win7/8).
         return User32.GetSystemMetrics(nIndex);
+    }
+
+    /// <summary>
+    /// Adjusts a client rect to a window rect using DPI-aware non-client metrics when available.
+    /// </summary>
+    public static bool AdjustWindowRectExForDpi(ref Native.Structs.RECT rect, uint style, bool hasMenu, uint exStyle, uint dpi)
+    {
+        if (_hasAdjustWindowRectExForDpi)
+        {
+            return User32.AdjustWindowRectExForDpi(ref rect, style, hasMenu, exStyle, dpi);
+        }
+
+        return User32.AdjustWindowRectEx(ref rect, style, hasMenu, exStyle);
     }
 
     [LibraryImport("gdi32.dll")]
@@ -131,5 +167,15 @@ internal static partial class Win32DpiApiResolver
         // SetProcessDpiAwareness has signature: HRESULT __stdcall(PROCESS_DPI_AWARENESS)
         var fn = (delegate* unmanaged[Stdcall]<int, int>)_setProcessDpiAwarenessPtr;
         return fn(value);
+    }
+
+    private static unsafe int CallGetDpiForMonitor(nint monitor, int dpiType, ref uint dpiX, ref uint dpiY)
+    {
+        var fn = (delegate* unmanaged[Stdcall]<nint, int, uint*, uint*, int>)_getDpiForMonitorPtr;
+        fixed (uint* px = &dpiX)
+        fixed (uint* py = &dpiY)
+        {
+            return fn(monitor, dpiType, px, py);
+        }
     }
 }
