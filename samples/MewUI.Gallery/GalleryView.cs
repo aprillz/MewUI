@@ -15,6 +15,7 @@ partial class GalleryView : UserControl
     public GalleryView(Window window)
     {
         this.window = window;
+        InitializeDragDropSample();
 
         Build();
     }

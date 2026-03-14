@@ -112,6 +112,8 @@ partial class GalleryView
                                         .Item("Disabled", isEnabled: false)
                                 )
                          )
-                 )
+                 ),
+
+                DragDropCard()
              );
 }
