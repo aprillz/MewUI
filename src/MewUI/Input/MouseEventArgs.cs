@@ -42,7 +42,7 @@ public class MouseEventArgs
     internal Point Position { get; }
 
     /// <summary>
-    /// Gets the position of the mouse in screen coordinates.
+    /// Gets the position of the mouse in screen coordinates in device pixels.
     /// </summary>
     public Point ScreenPosition { get; }
 
@@ -80,7 +80,7 @@ public class MouseEventArgs
     /// Initializes a new instance of the <see cref="MouseEventArgs"/> class.
     /// </summary>
     /// <param name="positionInWindow">Mouse position relative to the window (root) (DIPs).</param>
-    /// <param name="screenPosition">Mouse position in screen coordinates.</param>
+    /// <param name="screenPosition">Mouse position in screen coordinates in device pixels.</param>
     /// <param name="button">Button associated with the event.</param>
     /// <param name="leftButton">Whether the left button is pressed.</param>
     /// <param name="rightButton">Whether the right button is pressed.</param>
@@ -135,7 +135,7 @@ public class MouseWheelEventArgs : MouseEventArgs
     /// Initializes a new instance of the <see cref="MouseWheelEventArgs"/> class.
     /// </summary>
     /// <param name="position">Mouse position relative to the element (DIPs).</param>
-    /// <param name="screenPosition">Mouse position in screen coordinates.</param>
+    /// <param name="screenPosition">Mouse position in screen coordinates in device pixels.</param>
     /// <param name="delta">Wheel delta (positive = up, negative = down).</param>
     /// <param name="isHorizontal"><see langword="true"/> for horizontal scroll; otherwise, <see langword="false"/>.</param>
     /// <param name="leftButton">Whether the left button is pressed.</param>

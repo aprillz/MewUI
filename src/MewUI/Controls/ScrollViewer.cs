@@ -127,6 +127,13 @@ public sealed class ScrollViewer : ContentControl
             return false;
         }
 
+        // Don't scroll when the focused element is the direct content itself —
+        // it spans the entire scrollable area and scrolling it "into view" is nonsensical.
+        if (focusedElement == Content)
+        {
+            return true;
+        }
+
         var size = focusedElement.RenderSize;
         var localRect = new Rect(0, 0, size.Width, size.Height);
 
@@ -291,10 +298,13 @@ public sealed class ScrollViewer : ContentControl
         if (content is IScrollContent scrollContent)
         {
             scrollContent.SetViewport(_viewport);
-            _extent = LayoutRounding.RoundSizeToPixels(scrollContent.Extent, dpiScale);
 
             // Scroll-driven content should not require infinite measurement; it virtualizes internally.
             content.Measure(_viewport);
+
+            // Read extent AFTER measuring: measurement may sync containers and compute the real extent
+            // (e.g. StackItemsPresenter computes _totalHeight in MeasureAllItems).
+            _extent = LayoutRounding.RoundSizeToPixels(scrollContent.Extent, dpiScale);
         }
         else
         {
@@ -305,9 +315,9 @@ public sealed class ScrollViewer : ContentControl
         _scroll.SetMetricsDip(0, _extent.Width, _viewport.Width);
         _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
 
-        bool needV = _scroll.GetExtentPx(1) > _scroll.GetViewportPx(1);
         // Allow 1 device-pixel tolerance to suppress scrollbars caused by sub-pixel
         // rounding differences between extent and viewport at non-integer DPI scales.
+        bool needV = _scroll.GetExtentPx(1) > _scroll.GetViewportPx(1) + 1;
         bool needH = _scroll.GetExtentPx(0) > _scroll.GetViewportPx(0) + 1;
         _vBar.IsVisible = IsBarVisible(VerticalScroll, needV);
         _hBar.IsVisible = IsBarVisible(HorizontalScroll, needH);
@@ -319,8 +329,10 @@ public sealed class ScrollViewer : ContentControl
         // Extent/viewport changes can make existing offsets invalid.
         // Clamp using DIP offsets to avoid quantizing the logical offset via px roundtrips,
         // especially noticeable when DPI changes.
-        _scroll.SetOffsetDip(0, _scroll.GetOffsetDip(0));
-        _scroll.SetOffsetDip(1, _scroll.GetOffsetDip(1));
+        {
+            _scroll.SetOffsetDip(0, _scroll.GetOffsetDip(0));
+            _scroll.SetOffsetDip(1, _scroll.GetOffsetDip(1));
+        }
         SyncBars();
         NotifyScrollChanged();
 

@@ -74,8 +74,8 @@ internal sealed class ScrollController
 
     public void SetMetricsDip(int axis, double extentDip, double viewportDip)
     {
-        int extentPx = DipToPx(extentDip);
-        int viewportPx = DipToPx(viewportDip);
+        int extentPx = double.IsInfinity(extentDip) ? int.MaxValue : DipToPx(extentDip);
+        int viewportPx = double.IsInfinity(viewportDip) ? int.MaxValue : DipToPx(viewportDip);
         SetMetricsPx(axis, extentPx, viewportPx);
     }
 
