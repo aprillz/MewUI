@@ -14,4 +14,10 @@ public enum ItemsPresenterMode
     /// Items are measured individually and cached. <see cref="ItemsControl.ItemHeight"/> is used as an estimated height hint.
     /// </summary>
     Variable = 1,
+
+    /// <summary>
+    /// All items are realized and stacked vertically without virtualization.
+    /// Each item is measured individually. Suitable for short lists where all items should be visible.
+    /// </summary>
+    Stack = 2,
 }

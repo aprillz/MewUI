@@ -110,6 +110,18 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
     public bool UseHorizontalExtentForLayout { get; set; }
 
+    public double DesiredContentHeight
+    {
+        get
+        {
+            int count = ItemsSource.Count;
+            double h = ItemHeight;
+            return count == 0 || h <= 0 ? 0 : Math.Min(count * h, h * 12);
+        }
+    }
+
+    public bool FillsAvailableWidth => false;
+
     public event Action<Point>? OffsetCorrectionRequested;
 
     public void RecycleAll() => _itemsHost.RecycleAll();

@@ -31,6 +31,18 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
     /// </summary>
     bool UseHorizontalExtentForLayout { get; set; }
 
+    /// <summary>
+    /// The desired content height when the parent provides infinite available height.
+    /// Virtualized presenters cap this to a reasonable default; non-virtualized presenters
+    /// return the total measured height.
+    /// </summary>
+    double DesiredContentHeight { get; }
+
+    /// <summary>
+    /// Whether this presenter fills the available width rather than sizing to content.
+    /// </summary>
+    bool FillsAvailableWidth { get; }
+
     bool TryGetItemIndexAtY(double yContent, out int index);
 
     /// <summary>

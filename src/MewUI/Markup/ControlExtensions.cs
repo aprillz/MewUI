@@ -444,14 +444,14 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the corner radius.
     /// </summary>
-    /// <param name="border">Target border.</param>
+    /// <param name="control">Target control.</param>
     /// <param name="radius">Corner radius.</param>
-    /// <returns>The border for chaining.</returns>
-    public static Border CornerRadius(this Border border, double radius)
+    /// <returns>The control for chaining.</returns>
+    public static T CornerRadius<T>(this T control, double radius) where T : Control
     {
-        ArgumentNullException.ThrowIfNull(border);
-        border.CornerRadius = radius;
-        return border;
+        ArgumentNullException.ThrowIfNull(control);
+        control.CornerRadius = radius;
+        return control;
     }
 
     /// <summary>
@@ -464,6 +464,20 @@ public static class ControlExtensions
     {
         ArgumentNullException.ThrowIfNull(border);
         border.Child = child;
+        return border;
+    }
+
+    /// <summary>
+    /// Enables or disables clipping child content to the border bounds.
+    /// When <see cref="Control.CornerRadius"/> is set, the clip respects the rounded corners.
+    /// </summary>
+    /// <param name="border">Target border.</param>
+    /// <param name="clip">Whether to clip to bounds.</param>
+    /// <returns>The border for chaining.</returns>
+    public static Border ClipToBounds(this Border border, bool clip = true)
+    {
+        ArgumentNullException.ThrowIfNull(border);
+        border.ClipToBounds = clip;
         return border;
     }
 
@@ -514,6 +528,50 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(control);
         control.HeaderSpacing = spacing;
         return control;
+    }
+
+    #endregion
+
+    #region Expander
+
+    /// <summary>
+    /// Sets the expanded state.
+    /// </summary>
+    public static Expander IsExpanded(this Expander expander, bool expanded)
+    {
+        ArgumentNullException.ThrowIfNull(expander);
+        expander.IsExpanded = expanded;
+        return expander;
+    }
+
+    /// <summary>
+    /// Binds the expanded state to an observable value.
+    /// </summary>
+    public static Expander BindIsExpanded(this Expander expander, ObservableValue<bool> source)
+    {
+        ArgumentNullException.ThrowIfNull(expander);
+        expander.SetBinding(Expander.IsExpandedProperty, source);
+        return expander;
+    }
+
+    /// <summary>
+    /// Sets the chevron glyph size.
+    /// </summary>
+    public static Expander GlyphSize(this Expander expander, double size)
+    {
+        ArgumentNullException.ThrowIfNull(expander);
+        expander.GlyphSize = size;
+        return expander;
+    }
+
+    /// <summary>
+    /// Registers an expanded state change handler.
+    /// </summary>
+    public static Expander OnExpandedChanged(this Expander expander, Action<bool> handler)
+    {
+        ArgumentNullException.ThrowIfNull(expander);
+        expander.ExpandedChanged += handler;
+        return expander;
     }
 
     #endregion
@@ -1514,6 +1572,12 @@ public static class ControlExtensions
         => listBox.PresenterMode(ItemsPresenterMode.Variable);
 
     /// <summary>
+    /// Uses non-virtualizing stack layout (all items realized).
+    /// </summary>
+    public static ListBox StackPresenter(this ListBox listBox)
+        => listBox.PresenterMode(ItemsPresenterMode.Stack);
+
+    /// <summary>
     /// Sets the selected index.
     /// </summary>
     /// <param name="listBox">Target list box.</param>
@@ -1675,6 +1739,14 @@ public static class ControlExtensions
     /// <returns>The items control for chaining.</returns>
     public static ItemsControl VariablePresenter(this ItemsControl itemsControl)
         => itemsControl.PresenterMode(ItemsPresenterMode.Variable);
+
+    /// <summary>
+    /// Uses non-virtualizing stack layout (all items realized).
+    /// </summary>
+    /// <param name="itemsControl">Target items control.</param>
+    /// <returns>The items control for chaining.</returns>
+    public static ItemsControl StackPresenter(this ItemsControl itemsControl)
+        => itemsControl.PresenterMode(ItemsPresenterMode.Stack);
 
     #endregion
 

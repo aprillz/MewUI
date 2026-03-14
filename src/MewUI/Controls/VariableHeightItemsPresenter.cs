@@ -156,6 +156,18 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         set => EstimatedItemHeight = value;
     }
 
+    public double DesiredContentHeight
+    {
+        get
+        {
+            int count = ItemsSource.Count;
+            double h = EstimatedItemHeight;
+            return count == 0 || h <= 0 ? 0 : Math.Min(count * h, h * 12);
+        }
+    }
+
+    public bool FillsAvailableWidth => true;
+
     public VariableHeightItemsPresenter()
     {
         _itemsSource.Changed += OnItemsChanged;

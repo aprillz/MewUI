@@ -12,6 +12,8 @@ public sealed class ItemsControl : VirtualizedItemsBase
     private IItemsPresenter _presenter;
     private IDataTemplate _itemTemplate;
 
+    internal bool ShowRowHover { get; set; } = false;
+
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
@@ -105,6 +107,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
         {
             if (Set(ref _presenterMode, value))
             {
+                ConfigureScrollModes(value);
                 ReplacePresenter(value, preserveScrollOffsets: true);
                 _hoverIndex = -1;
                 InvalidateMeasure();
@@ -119,8 +122,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
         ItemPadding = Theme.Metrics.ItemPadding;
 
-        _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
-        _scrollViewer.VerticalScroll = ScrollMode.Auto;
+        ConfigureScrollModes(PresenterMode);
         _scrollViewer.SetBinding(PaddingProperty, this, PaddingProperty);
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
 
@@ -151,10 +153,10 @@ public sealed class ItemsControl : VirtualizedItemsBase
         double maxWidth;
         int count = ItemsSource.Count;
 
-        // Variable-height presenter is used for wrapping content (chat/messages): always fill width.
+        // Some presenters (Variable, Stack) always fill available width.
         // Stretch alignment also fills available width without measuring individual items.
         bool useFullWidth = !double.IsPositiveInfinity(widthLimit) &&
-            (HorizontalAlignment == HorizontalAlignment.Stretch || PresenterMode == ItemsPresenterMode.Variable);
+            (HorizontalAlignment == HorizontalAlignment.Stretch || _presenter.FillsAvailableWidth);
 
         if (useFullWidth)
         {
@@ -173,7 +175,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
                 {
                     double itemHeightEstimate = ResolveItemHeight();
                     double viewportEstimate = double.IsPositiveInfinity(availableSize.Height)
-                        ? Math.Min(count * itemHeightEstimate, itemHeightEstimate * 12)
+                        ? _presenter.DesiredContentHeight
                         : Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2);
 
                     int visibleEstimate = itemHeightEstimate <= 0 ? count : (int)Math.Ceiling(viewportEstimate / itemHeightEstimate) + 1;
@@ -232,9 +234,9 @@ public sealed class ItemsControl : VirtualizedItemsBase
         _scrollViewer.Measure(childAvailable);
 
         double desiredHeight;
-        if (double.IsPositiveInfinity(availableSize.Height))
+        if (PresenterMode == ItemsPresenterMode.Stack || double.IsPositiveInfinity(availableSize.Height))
         {
-            desiredHeight = count == 0 || itemHeight <= 0 ? 0 : Math.Min(count * itemHeight, itemHeight * 12);
+            desiredHeight = _presenter.DesiredContentHeight;
         }
         else
         {
@@ -372,7 +374,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
     private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
     {
-        if (i == _hoverIndex && IsEffectivelyEnabled)
+        if (ShowRowHover && i == _hoverIndex && IsEffectivelyEnabled)
         {
             var hoverBg = Theme.Palette.ControlBackground.Lerp(Theme.Palette.Accent, 0.10);
             context.FillRectangle(itemRect, hoverBg);
@@ -449,9 +451,12 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
     private IItemsPresenter CreatePresenter(ItemsPresenterMode mode)
     {
-        IItemsPresenter presenter = mode == ItemsPresenterMode.Variable
-            ? new VariableHeightItemsPresenter()
-            : new FixedHeightItemsPresenter();
+        IItemsPresenter presenter = mode switch
+        {
+            ItemsPresenterMode.Variable => new VariableHeightItemsPresenter(),
+            ItemsPresenterMode.Stack => new StackItemsPresenter(),
+            _ => new FixedHeightItemsPresenter(),
+        };
 
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = _itemTemplate;
@@ -485,5 +490,13 @@ public sealed class ItemsControl : VirtualizedItemsBase
     private void OnPresenterOffsetCorrectionRequested(Point offset)
     {
         _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, offset.Y);
+    }
+
+    private void ConfigureScrollModes(ItemsPresenterMode mode)
+    {
+        _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
+        _scrollViewer.VerticalScroll = mode == ItemsPresenterMode.Stack
+            ? ScrollMode.Disabled
+            : ScrollMode.Auto;
     }
 }
