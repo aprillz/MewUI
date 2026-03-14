@@ -686,6 +686,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         nint textFormat = CreateTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
         if (textFormat == 0) return;
 
+        // Build layout rect so that width/height are converted to float independently of position,
+        // avoiding float precision loss from (float)(X+W) - (float)X != (float)W.
+        float left = (float)bounds.X;
+        float top = (float)bounds.Y;
+        float w = (float)bounds.Width;
+        float h = (float)bounds.Height;
+        var layoutRect = new D2D1_RECT_F(left, top, left + w, top + h);
+
         nint textLayout = 0;
         nint trimmingSign = 0;
         try
@@ -697,21 +705,20 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
             if (trimming == TextTrimming.CharacterEllipsis)
             {
-                var rectF = ToRectF(bounds);
                 int hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, textFormat,
-                    rectF.right - rectF.left, rectF.bottom - rectF.top, out textLayout);
+                    w, h, out textLayout);
                 if (hr >= 0 && textLayout != 0)
                 {
                     DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, textFormat, out trimmingSign);
                     var dwriteTrimming = new DWRITE_TRIMMING { granularity = DWRITE_TRIMMING_GRANULARITY.CHARACTER };
                     DWriteVTable.SetTrimming(textLayout, dwriteTrimming, trimmingSign);
                     D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)_renderTarget,
-                        new D2D1_POINT_2F(rectF.left, rectF.top), textLayout, brush, options);
+                        new D2D1_POINT_2F(left, top), textLayout, brush, options);
                     return;
                 }
             }
 
-            D2D1VTable.DrawText((ID2D1RenderTarget*)_renderTarget, text, textFormat, ToRectF(bounds), brush, options);
+            D2D1VTable.DrawText((ID2D1RenderTarget*)_renderTarget, text, textFormat, layoutRect, brush, options);
         }
         finally
         {
