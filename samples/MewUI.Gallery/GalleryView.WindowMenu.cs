@@ -296,6 +296,8 @@ partial class GalleryView
 
             PromptDialogCard(),
 
+            NativeMessageHookCard(),
+
             DevToolsCard()
         );
     }
@@ -519,6 +521,74 @@ partial class GalleryView
 #endif
 
         return Card("DevTools", content);
+    }
+
+    private FrameworkElement NativeMessageHookCard()
+    {
+        var hookLog = new ObservableValue<string>("Hook: idle");
+        var messageCount = 0;
+        bool hookActive = false;
+
+        void OnNativeMessage(NativeMessageEventArgs args)
+        {
+            messageCount++;
+            switch (args)
+            {
+                case Win32NativeMessageEventArgs win32:
+                    hookLog.Value = $"Win32 #{messageCount}: msg=0x{win32.Msg:X4} wParam=0x{win32.WParam:X} lParam=0x{win32.LParam:X}";
+                    break;
+                case X11NativeMessageEventArgs x11:
+                    hookLog.Value = $"X11 #{messageCount}: type={x11.EventType}";
+                    break;
+                case MacOSNativeMessageEventArgs macos:
+                    hookLog.Value = $"macOS #{messageCount}: type={macos.EventType}";
+                    break;
+            }
+        }
+
+        return Card(
+            "NativeMessage Hook",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new Label()
+                        .FontSize(11)
+                        .Text("Subscribes to Window.NativeMessage to observe raw platform messages."),
+                    new StackPanel()
+                        .Horizontal()
+                        .Spacing(6)
+                        .Children(
+                            new Button()
+                                .Content("Start Hook")
+                                .OnClick(() =>
+                                {
+                                    if (!hookActive)
+                                    {
+                                        hookActive = true;
+                                        messageCount = 0;
+                                        window.NativeMessage += OnNativeMessage;
+                                        hookLog.Value = "Hook: active";
+                                    }
+                                }),
+                            new Button()
+                                .Content("Stop Hook")
+                                .OnClick(() =>
+                                {
+                                    if (hookActive)
+                                    {
+                                        hookActive = false;
+                                        window.NativeMessage -= OnNativeMessage;
+                                        hookLog.Value = $"Hook: stopped (total {messageCount} messages)";
+                                    }
+                                })
+                        ),
+                    new Label()
+                        .BindText(hookLog)
+                        .FontSize(11)
+                        .TextWrapping(TextWrapping.Wrap)
+                )
+        );
     }
 
     private void EnableWindowDrag(Window window, UIElement element)

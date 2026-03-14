@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Platform;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Base class for native platform message/event arguments delivered through

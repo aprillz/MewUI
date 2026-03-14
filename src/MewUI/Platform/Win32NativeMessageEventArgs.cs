@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Platform;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Provides Win32 window message data for the <see cref="Aprillz.MewUI.Window.NativeMessage"/> event.
