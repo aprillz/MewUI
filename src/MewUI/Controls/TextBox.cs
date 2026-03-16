@@ -124,6 +124,18 @@ public class TextBox : TextBase
 
     protected override void EnsureCaretVisibleCore(Rect contentBounds) => EnsureCaretVisible(contentBounds);
 
+    public override Rect GetCharRectInWindow(int charIndex)
+    {
+        var contentBounds = GetViewportContentBounds();
+        using var measure = BeginTextMeasurement();
+        _view.EnsureCache(measure.Context, measure.Font, FontFamily, FontSize, FontWeight, GetDpi(), DocumentVersion, Document.Length, (buffer, start, length) => Document.CopyTo(buffer, start, length));
+        int idx = Math.Clamp(charIndex, 0, Document.Length);
+        double charX = contentBounds.X - HorizontalOffset + _view.GetAbsoluteX(idx, measure.Context, measure.Font);
+        double lineHeight = measure.Context.MeasureText("M", measure.Font).Height;
+        double charY = contentBounds.Y + (contentBounds.Height - lineHeight) / 2;
+        return new Rect(charX, charY, 1, lineHeight);
+    }
+
     private int GetCharacterIndexFromX(double x)
     {
         using var measure = BeginTextMeasurement();

@@ -145,6 +145,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
     /// </summary>
     public double ActualHeight => Bounds.Height;
 
+    /// <summary>
+    /// Gets the current DPI value.
+    /// </summary>
+    /// <returns>The DPI value.</returns>
+    public uint GetDpi() => GetDpiCached();
+
     protected Theme Theme => ThemeInternal;
 
     internal Theme ThemeInternal
@@ -256,12 +262,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
         return Application.DefaultGraphicsFactory;
     }
-
-    /// <summary>
-    /// Gets the current DPI value.
-    /// </summary>
-    /// <returns>The DPI value.</returns>
-    protected uint GetDpi() => GetDpiCached();
 
     /// <summary>
     /// Called when the theme changes.

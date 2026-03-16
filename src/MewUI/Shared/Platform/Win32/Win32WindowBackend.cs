@@ -1461,10 +1461,37 @@ internal sealed class Win32WindowBackend : IWindowBackend
             if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
             {
                 client.HandleTextCompositionStart(args);
+                PositionImeWindow(client);
             }
         }
 
         return 0;
+    }
+
+    private void PositionImeWindow(ITextCompositionClient client)
+    {
+        nint himc = Imm32.ImmGetContext(Handle);
+        if (himc == 0) return;
+
+        try
+        {
+            var caretRect = client.GetCharRectInWindow(client.CompositionStartIndex);
+            double dpiScale = GetDpiForWindow(Handle) / 96.0;
+            var form = new Imm32.COMPOSITIONFORM
+            {
+                dwStyle = Imm32.CFS_POINT,
+                ptCurrentPos = new Imm32.POINT
+                {
+                    x = (int)(caretRect.X * dpiScale),
+                    y = (int)((caretRect.Y + caretRect.Height) * dpiScale),
+                }
+            };
+            Imm32.ImmSetCompositionWindow(himc, ref form);
+        }
+        finally
+        {
+            Imm32.ImmReleaseContext(Handle, himc);
+        }
     }
 
     private nint HandleImeComposition(nint lParam)
@@ -1481,6 +1508,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
                 {
                     client.HandleTextCompositionUpdate(args);
+                    PositionImeWindow(client);
                 }
             }
         }

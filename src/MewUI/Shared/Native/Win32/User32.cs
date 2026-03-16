@@ -433,4 +433,14 @@ internal static partial class User32
     public static partial int MessageBox(nint hWnd, string lpText, string lpCaption, uint uType);
 
     #endregion
+
+    #region System Parameters
+
+    [LibraryImport(LibraryName, EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SystemParametersInfo(uint uiAction, uint uiParam, nint pvParam, uint fWinIni);
+
+    public const uint SPI_GETNONCLIENTMETRICS = 0x0029;
+
+    #endregion
 }

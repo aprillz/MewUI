@@ -2698,9 +2698,26 @@ internal static unsafe class MacOSWindowInterop
                 if (window != 0)
                 {
                     var frame = ObjC.MsgSend_rect(window, SelFrame);
-                    var r = new NSRect(frame.origin.x + 10, frame.origin.y + 10, 0, 0);
-                    MacOSWindowBackend.ImeNativeLogger.Write($"objc firstRectForCharacterRange view=0x{self:x} range=({range.location},{range.length}) actualRangePtr=0x{actualRange:x} -> ({r.origin.x},{r.origin.y},{r.size.width},{r.size.height})");
-                    return r;
+
+                    // Try to get the caret position from the focused text element.
+                    if (TryGetTextInputTarget(self, out var backend) &&
+                        backend.Window.FocusManager.FocusedElement is ITextCompositionClient client)
+                    {
+                        var caretRect = client.GetCharRectInWindow(client.CompositionStartIndex);
+                        // Convert from window-DIP (y-down) to screen coordinates (y-up).
+                        // frame.origin is the bottom-left of the window in screen coords.
+                        // frame.size.height is the window height.
+                        double screenX = frame.origin.x + caretRect.X;
+                        double screenY = frame.origin.y + (frame.size.height - caretRect.Y - caretRect.Height);
+                        var r = new NSRect(screenX, screenY, caretRect.Width, caretRect.Height);
+                        MacOSWindowBackend.ImeNativeLogger.Write($"objc firstRectForCharacterRange view=0x{self:x} range=({range.location},{range.length}) actualRangePtr=0x{actualRange:x} -> ({r.origin.x},{r.origin.y},{r.size.width},{r.size.height})");
+                        return r;
+                    }
+
+                    // Fallback: top-left of window.
+                    var fallback = new NSRect(frame.origin.x + 10, frame.origin.y + frame.size.height - 30, 0, 0);
+                    MacOSWindowBackend.ImeNativeLogger.Write($"objc firstRectForCharacterRange view=0x{self:x} range=({range.location},{range.length}) -> fallback");
+                    return fallback;
                 }
             }
         }

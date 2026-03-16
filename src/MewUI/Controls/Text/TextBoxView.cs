@@ -209,7 +209,7 @@ internal sealed class TextBoxView
     /// <summary>
     /// Build chunk-level prefix width cache. Per-character positions are computed lazily.
     /// </summary>
-    private void EnsureCache(
+    internal void EnsureCache(
         IGraphicsContext context,
         IFont font,
         string fontFamily,
@@ -339,7 +339,7 @@ internal sealed class TextBoxView
     /// <summary>
     /// Get absolute X position of character at given index. O(1) after chunk is cached.
     /// </summary>
-    private double GetAbsoluteX(int index, IGraphicsContext context, IFont font)
+    internal double GetAbsoluteX(int index, IGraphicsContext context, IFont font)
     {
         index = Math.Clamp(index, 0, _cacheTextLength);
         if (index <= 0) return 0;

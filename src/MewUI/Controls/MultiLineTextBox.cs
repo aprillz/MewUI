@@ -106,6 +106,50 @@ public sealed class MultiLineTextBox : TextBase
 
     protected override void EnsureCaretVisibleCore(Rect contentBounds) => EnsureCaretVisible(contentBounds);
 
+    public override Rect GetCharRectInWindow(int charIndex)
+    {
+        var contentBounds = GetViewportContentBounds();
+        using var measure = BeginTextMeasurement();
+        var font = measure.Font;
+
+        int idx = Math.Clamp(charIndex, 0, Document.Length);
+        GetLineFromIndex(idx, out int line, out int lineStart, out int lineEnd);
+        double lineHeight = GetLineHeight();
+
+        double charY;
+        double charX;
+
+        if (!WrapEnabled)
+        {
+            charY = line * lineHeight - VerticalOffset;
+            if (idx <= lineStart)
+                charX = 0;
+            else
+            {
+                var cache = _textView.EnsureLineMeasureCache(line, lineStart, lineEnd, measure.Context, font);
+                charX = MultiLineTextView.GetPrefixWidthCached(cache, idx - lineStart, measure.Context, font) - HorizontalOffset;
+            }
+        }
+        else
+        {
+            double wrapWidth = Math.Max(1, contentBounds.Width);
+            GetLineSpan(line, out _, out int wrapLineEnd);
+            var lineMeasure = _textView.EnsureLineMeasureCache(line, lineStart, wrapLineEnd, measure.Context, font);
+            string fullLine = lineMeasure.Text;
+            var layout = _wrapVirtualizer.GetWrapLayout(line, fullLine, wrapWidth, measure.Context, font);
+            int col = Math.Clamp(idx - lineStart, 0, fullLine.Length);
+            int row = TextWrapVirtualizer.GetWrapRowFromColumn(layout, col);
+            int lineStartRow = _wrapVirtualizer.GetVisualRowStartForLine(line, wrapWidth, measure.Context, font);
+            charY = (lineStartRow + row) * lineHeight - VerticalOffset;
+
+            int segStart = layout.SegmentStarts[row];
+            charX = MultiLineTextView.GetPrefixWidthCached(lineMeasure, col, measure.Context, font) -
+                     MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, measure.Context, font);
+        }
+
+        return new Rect(contentBounds.X + charX, contentBounds.Y + charY, 1, lineHeight);
+    }
+
     /// <summary>
     /// Enables hard-wrapping at the available width. When enabled, horizontal scrolling is disabled.
     /// </summary>

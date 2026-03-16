@@ -230,6 +230,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
     }
 
+    int ITextCompositionClient.CompositionStartIndex => _compositionStart;
     internal int CompositionStartIndex => _compositionStart;
     internal int CompositionLength => _compositionLength;
 
@@ -451,6 +452,11 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     }
 
     protected abstract void SetCaretFromPoint(Point point, Rect contentBounds);
+
+    /// <summary>
+    /// Returns the rectangle at the given character index in window coordinates (DIPs).
+    /// </summary>
+    public abstract Rect GetCharRectInWindow(int charIndex);
 
     protected virtual void AutoScrollForSelectionDrag(Point point, Rect contentBounds)
     {
@@ -838,17 +844,15 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     private void BeginTextCompositionInternal()
     {
-        // IME composition replaces selection in typical text controls.
+        // If there is a selection, treat it as the initial composition range
+        // so that the first composition update replaces it (e.g. Hanja conversion).
         if (HasSelection)
         {
             var (start, end) = GetSelectionRange();
-            int len = end - start;
-            if (len > 0)
-            {
-                ApplyRemoveForEdit(start, len);
-                SetCaretAndSelection(start, extendSelection: false);
-                InvalidateMeasure();
-            }
+            _isTextComposing = true;
+            _compositionStart = start;
+            _compositionLength = end - start;
+            return;
         }
 
         _isTextComposing = true;
