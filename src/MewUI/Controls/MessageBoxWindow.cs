@@ -71,6 +71,7 @@ public sealed class MessageBoxWindow : Window
         StartupLocation = WindowStartupLocation.CenterOwner;
 
         Closed += OnDialogClosed;
+        PreviewKeyDown += OnPreviewKeyDown;
         BuildContent();
     }
 
@@ -242,6 +243,15 @@ public sealed class MessageBoxWindow : Window
         }
 
         Close();
+    }
+
+    private void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close();
+        }
     }
 
     private void OnDialogClosed()
