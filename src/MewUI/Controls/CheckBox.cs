@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Styling;
 
@@ -21,7 +20,7 @@ public partial class CheckBox : Control
     public static readonly MewProperty<bool> IsThreeStateProperty =
         MewProperty<bool>.Register<CheckBox>(nameof(IsThreeState), false, MewPropertyOptions.None);
 
-    private TextMeasureCache _textMeasureCache;
+    private readonly TextBlock _textBlock = new() { VerticalTextAlignment = TextAlignment.Center };
 
     public override bool Focusable => true;
 
@@ -68,7 +67,7 @@ public partial class CheckBox : Control
 
     private void OnTextChanged(string oldValue, string newValue)
     {
-        _textMeasureCache.Invalidate();
+        _textBlock.Text = newValue;
     }
 
     protected virtual void OnIsCheckedChanged(bool? oldValue, bool? newValue)
@@ -91,11 +90,10 @@ public partial class CheckBox : Control
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var factory = GetGraphicsFactory();
-            var font = GetFont(factory);
-            var size = _textMeasureCache.Measure(factory, GetDpi(), font, Text, TextWrapping.NoWrap, 0);
-            width += size.Width;
-            height = Math.Max(height, size.Height);
+            _textBlock.Parent ??= this;
+            _textBlock.Measure(new Size(Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness), double.PositiveInfinity));
+            width += _textBlock.DesiredSize.Width;
+            height = Math.Max(height, _textBlock.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -145,10 +143,9 @@ public partial class CheckBox : Control
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
-            var font = GetFont();
-            context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+            _textBlock.Arrange(textBounds);
+            _textBlock.Render(context);
         }
     }
 
@@ -240,6 +237,5 @@ public partial class CheckBox : Control
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-        _textMeasureCache.Invalidate();
     }
 }

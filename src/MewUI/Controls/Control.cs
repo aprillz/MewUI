@@ -51,11 +51,8 @@ public abstract class Control : FrameworkElement
     public static readonly MewProperty<Thickness> PaddingProperty =
         MewProperty<Thickness>.Register<Control>(nameof(Padding), default, MewPropertyOptions.AffectsLayout);
 
-    public static readonly MewProperty<string?> ToolTipTextProperty =
-        MewProperty<string?>.Register<Control>(nameof(ToolTipText), null, MewPropertyOptions.None);
-
-    public static readonly MewProperty<Element?> ToolTipContentProperty =
-        MewProperty<Element?>.Register<Control>(nameof(ToolTipContent), null, MewPropertyOptions.None);
+    public static readonly MewProperty<Element?> ToolTipProperty =
+        MewProperty<Element?>.Register<Control>(nameof(ToolTip), null, MewPropertyOptions.None);
 
     public static readonly MewProperty<ContextMenu?> ContextMenuProperty =
         MewProperty<ContextMenu?>.Register<Control>(nameof(ContextMenu), null, MewPropertyOptions.None);
@@ -78,22 +75,13 @@ public abstract class Control : FrameworkElement
     private Dictionary<string, UIElement>? _parts;
 
     /// <summary>
-    /// Gets or sets the tooltip text for this control.
+    /// Gets or sets the tooltip element for this control.
+    /// Use the <c>ToolTip(string)</c> extension method for simple text tooltips.
     /// </summary>
-    public string? ToolTipText
+    public Element? ToolTip
     {
-        get => GetValue(ToolTipTextProperty);
-        set => SetValue(ToolTipTextProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the tooltip content for this control.
-    /// When set, this takes precedence over <see cref="ToolTipText"/>.
-    /// </summary>
-    public Element? ToolTipContent
-    {
-        get => GetValue(ToolTipContentProperty);
-        set => SetValue(ToolTipContentProperty, value);
+        get => GetValue(ToolTipProperty);
+        set => SetValue(ToolTipProperty, value);
     }
 
     /// <summary>
@@ -804,7 +792,7 @@ public abstract class Control : FrameworkElement
             return;
         }
 
-        if (ToolTipContent == null && string.IsNullOrWhiteSpace(ToolTipText))
+        if (ToolTip == null)
         {
             return;
         }
@@ -831,20 +819,8 @@ public abstract class Control : FrameworkElement
         double x = anchor.X + dx;
         double y = anchor.Y + dy;
 
-        Size desired;
-        if (ToolTipContent != null)
-        {
-            // Measure using the window-owned tooltip instance so sizing matches what will be shown.
-            // This avoids creating a tooltip per control.
-            var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
-            desired = window.MeasureToolTip(ToolTipContent, measureSize);
-        }
-        else
-        {
-            var toolTipText = ToolTipText!;
-            var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
-            desired = window.MeasureToolTip(toolTipText, measureSize);
-        }
+        var measureSize = new Size(Math.Max(0, client.Width), Math.Max(0, client.Height));
+        Size desired = window.MeasureToolTip(ToolTip!, measureSize);
 
         double w = Math.Max(0, desired.Width);
         double h = Math.Max(0, desired.Height);
@@ -863,14 +839,7 @@ public abstract class Control : FrameworkElement
             }
         }
 
-        if (ToolTipContent != null)
-        {
-            window.ShowToolTip(this, ToolTipContent, new Rect(x, y, w, h));
-        }
-        else
-        {
-            window.ShowToolTip(this, ToolTipText!, new Rect(x, y, w, h));
-        }
+        window.ShowToolTip(this, ToolTip!, new Rect(x, y, w, h));
     }
 
     private void HideToolTip()

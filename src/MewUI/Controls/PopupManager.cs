@@ -369,22 +369,11 @@ internal sealed class PopupManager
         return false;
     }
 
-    internal Size MeasureToolTip(string text, Size availableSize)
-    {
-        _toolTip ??= new ToolTip();
-        _toolTip.Content = null;
-        _toolTip.Text = text ?? string.Empty;
-        EnsureToolTipInheritsFromWindow();
-        _toolTip.Measure(availableSize);
-        return _toolTip.DesiredSize;
-    }
-
     internal Size MeasureToolTip(Element content, Size availableSize)
     {
         ArgumentNullException.ThrowIfNull(content);
 
         _toolTip ??= new ToolTip();
-        _toolTip.Text = string.Empty;
         _toolTip.Content = content;
         EnsureToolTipInheritsFromWindow();
         _toolTip.Measure(availableSize);
@@ -413,24 +402,12 @@ internal sealed class PopupManager
         }
     }
 
-    internal void ShowToolTip(UIElement owner, string text, Rect bounds)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-
-        _toolTip ??= new ToolTip();
-        _toolTip.Content = null;
-        _toolTip.Text = text ?? string.Empty;
-        _toolTipOwner = owner;
-        ShowPopup(owner, _toolTip, bounds);
-    }
-
     internal void ShowToolTip(UIElement owner, Element content, Rect bounds)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(content);
 
         _toolTip ??= new ToolTip();
-        _toolTip.Text = string.Empty;
         _toolTip.Content = content;
         _toolTipOwner = owner;
         ShowPopup(owner, _toolTip, bounds);

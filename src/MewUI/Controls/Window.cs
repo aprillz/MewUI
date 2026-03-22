@@ -1699,14 +1699,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal void RequestClosePopups(PopupCloseRequest request)
         => _popupManager.RequestClosePopups(request);
 
-    internal Size MeasureToolTip(string text, Size availableSize)
-        => _popupManager.MeasureToolTip(text, availableSize);
-
     internal Size MeasureToolTip(Element content, Size availableSize)
         => _popupManager.MeasureToolTip(content, availableSize);
-
-    internal void ShowToolTip(UIElement owner, string text, Rect bounds)
-        => _popupManager.ShowToolTip(owner, text, bounds);
 
     internal void ShowToolTip(UIElement owner, Element content, Rect bounds)
         => _popupManager.ShowToolTip(owner, content, bounds);

@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -11,7 +10,7 @@ public class RadioButton : ToggleBase
     private Window? _registeredWindow;
     private string? _registeredGroupName;
     private Element? _registeredParentScope;
-    private TextMeasureCache _textMeasureCache;
+    private readonly TextBlock _textBlock = new() { VerticalTextAlignment = TextAlignment.Center };
 
     public static readonly MewProperty<string?> GroupNameProperty =
         MewProperty<string?>.Register<RadioButton>(nameof(GroupName), null,
@@ -51,6 +50,11 @@ public class RadioButton : ToggleBase
 
     public RadioButton()
     {
+    }
+
+    protected override void OnTextChanged(string oldValue, string newValue)
+    {
+        _textBlock.Text = newValue;
     }
 
     protected override void OnIsCheckedChanged(bool value)
@@ -142,11 +146,10 @@ public class RadioButton : ToggleBase
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var factory = GetGraphicsFactory();
-            var font = GetFont(factory);
-            var size = _textMeasureCache.Measure(factory, GetDpi(), font, Text, TextWrapping.NoWrap, 0);
-            width += size.Width;
-            height = Math.Max(height, size.Height);
+            _textBlock.Parent ??= this;
+            _textBlock.Measure(new Size(Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness), double.PositiveInfinity));
+            width += _textBlock.DesiredSize.Width;
+            height = Math.Max(height, _textBlock.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -184,10 +187,9 @@ public class RadioButton : ToggleBase
 
         if (!string.IsNullOrEmpty(Text))
         {
-            var textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
-            var font = GetFont();
-            context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+            _textBlock.Arrange(textBounds);
+            _textBlock.Render(context);
         }
     }
 
@@ -245,6 +247,5 @@ public class RadioButton : ToggleBase
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-        _textMeasureCache.Invalidate();
     }
 }

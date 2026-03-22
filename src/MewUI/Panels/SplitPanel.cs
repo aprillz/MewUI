@@ -11,7 +11,7 @@ public sealed class SplitPanel : Panel
 {
     public static readonly MewProperty<Orientation> OrientationProperty =
         MewProperty<Orientation>.Register<SplitPanel>(nameof(Orientation), Orientation.Horizontal, MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => self.UpdateSplitterCursor());
+            static (self, _, _) => self.OnOrientationChanged());
 
     public static readonly MewProperty<double> SplitterThicknessProperty =
         MewProperty<double>.Register<SplitPanel>(nameof(SplitterThickness), 8.0, MewPropertyOptions.AffectsLayout);
@@ -70,6 +70,8 @@ public sealed class SplitPanel : Panel
         get => GetValue(OrientationProperty);
         set => SetValue(OrientationProperty, value);
     }
+
+    private void OnOrientationChanged() => UpdateSplitterCursor();
 
     /// <summary>
     /// Gets or sets the splitter thickness (DIPs).

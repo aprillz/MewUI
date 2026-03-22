@@ -8,7 +8,8 @@ namespace Aprillz.MewUI.Controls;
 public abstract partial class ToggleBase : Control
 {
     public static readonly MewProperty<string> TextProperty =
-        MewProperty<string>.Register<ToggleBase>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout);
+        MewProperty<string>.Register<ToggleBase>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) => self.OnTextChanged(oldValue, newValue));
 
     public static readonly MewProperty<bool> IsCheckedProperty =
         MewProperty<bool>.Register<ToggleBase>(nameof(IsChecked), false,
@@ -57,6 +58,8 @@ public abstract partial class ToggleBase : Control
             return state with { Flags = state.Flags | VisualStateFlags.Checked };
         return state;
     }
+
+    protected virtual void OnTextChanged(string oldValue, string newValue) { }
 
     private void OnIsCheckedPropertyChanged(bool oldValue, bool newValue)
     {

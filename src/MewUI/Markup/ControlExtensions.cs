@@ -131,7 +131,7 @@ public static class ControlExtensions
     /// <returns>The control for chaining.</returns>
     public static T ToolTip<T>(this T control, string? text) where T : Control
     {
-        control.ToolTipText = text;
+        control.ToolTip = string.IsNullOrEmpty(text) ? null : new TextBlock { Text = text };
         return control;
     }
 
