@@ -164,10 +164,18 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         _window.PerformLayout();
 
         _shown = true;
+        if (_window.IsAlertWindow)
+        {
+            MacOSWindowInterop.SetAlertPanelAnimation(_nsWindow);
+        }
         MacOSWindowInterop.ShowWindow(_nsWindow);
         if (_window.IsDialogWindow)
         {
             MacOSWindowInterop.HideDialogChromeButtons(_nsWindow);
+        }
+        if (_window.IsAlertWindow)
+        {
+            MacOSWindowInterop.HideCloseButton(_nsWindow);
         }
         if (_allowsTransparency)
         {
@@ -1705,6 +1713,7 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelSetContentSize;
     private static nint SelSetContentView;
     private static nint SelSetAcceptsMouseMovedEvents;
+    private static nint SelSetAnimationBehavior;
     private static nint SelSetIgnoresMouseEvents;
     private static nint SelCenter;
     private static nint SelRelease;
@@ -1835,6 +1844,7 @@ internal static unsafe class MacOSWindowInterop
         SelSetContentSize = ObjC.Sel("setContentSize:");
         SelSetContentView = ObjC.Sel("setContentView:");
         SelSetAcceptsMouseMovedEvents = ObjC.Sel("setAcceptsMouseMovedEvents:");
+        SelSetAnimationBehavior = ObjC.Sel("setAnimationBehavior:");
         SelSetIgnoresMouseEvents = ObjC.Sel("setIgnoresMouseEvents:");
         SelCenter = ObjC.Sel("center");
         SelRelease = ObjC.Sel("release");
@@ -3435,6 +3445,26 @@ internal static unsafe class MacOSWindowInterop
         }
     }
 
+    public static void HideCloseButton(nint window)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelStandardWindowButton == 0 || SelSetHidden == 0) return;
+
+        // NSWindowCloseButton = 0
+        var closeButton = ObjC.MsgSend_nint_ulong(window, SelStandardWindowButton, 0ul);
+        if (closeButton != 0)
+        {
+            ObjC.MsgSend_void_nint_bool(closeButton, SelSetHidden, true);
+        }
+    }
+
+    public static void SetAlertPanelAnimation(nint window)
+    {
+        EnsureInitialized();
+        // NSAnimationBehaviorAlertPanel = 3
+        ObjC.MsgSend_void_nint_nint(window, SelSetAnimationBehavior, 3);
+    }
+
     public static void ShowWindow(nint window)
     {
         EnsureInitialized();
@@ -3860,8 +3890,8 @@ internal static unsafe class MacOSWindowInterop
             dpiScale = 1.0;
         }
 
-        double widthPx = Math.Max(1.0, widthDip * dpiScale);
-        double heightPx = Math.Max(1.0, heightDip * dpiScale);
+        double widthPx = Math.Max(1.0, Math.Ceiling(widthDip * dpiScale));
+        double heightPx = Math.Max(1.0, Math.Ceiling(heightDip * dpiScale));
 
         if (SelSetDrawableSize != 0)
         {

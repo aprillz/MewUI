@@ -92,12 +92,20 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
         }
         else if (icon == NativeMessageBoxIcon.Error)
         {
-            // "Stop" variants differ by macOS version; this name exists on modern macOS.
             named = ObjC.MsgSend_nint_nint(ClsNSImage, SelImageNamed, ObjC.CreateNSString("NSImageNameStopProgressTemplate"));
             if (named == 0)
             {
                 named = ObjC.MsgSend_nint_nint(ClsNSImage, SelImageNamed, ObjC.CreateNSString("NSImageNameCaution"));
             }
+        }
+        else if (icon == NativeMessageBoxIcon.Information)
+        {
+            named = ObjC.MsgSend_nint_nint(ClsNSImage, SelImageNamed, ObjC.CreateNSString("NSImageNameInfo"));
+        }
+        else if (icon == NativeMessageBoxIcon.Question)
+        {
+            // macOS has no dedicated question icon; use Info as closest match.
+            named = ObjC.MsgSend_nint_nint(ClsNSImage, SelImageNamed, ObjC.CreateNSString("NSImageNameInfo"));
         }
 
         if (named != 0)
@@ -107,6 +115,7 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
 
         if (icon != NativeMessageBoxIcon.None)
         {
+            // Unknown icon type — let NSAlert use default (app icon).
             return 0;
         }
 
@@ -121,27 +130,27 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
         switch (buttons)
         {
             case NativeMessageBoxButtons.Ok:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("OK"));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.OK));
                 break;
 
             case NativeMessageBoxButtons.OkCancel:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("OK"));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("Cancel"));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.OK));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.Cancel));
                 break;
 
             case NativeMessageBoxButtons.YesNo:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("Yes"));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("No"));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.Yes));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.No));
                 break;
 
             case NativeMessageBoxButtons.YesNoCancel:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("Yes"));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("No"));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("Cancel"));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.Yes));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.No));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.Cancel));
                 break;
 
             default:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString("OK"));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, ObjC.CreateNSString(MewUIStrings.OK));
                 break;
         }
     }

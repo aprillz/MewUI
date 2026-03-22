@@ -863,6 +863,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
             {
                 style &= ~(WindowStyles.WS_MAXIMIZEBOX | WindowStyles.WS_MINIMIZEBOX);
             }
+            if (Window.IsAlertWindow)
+            {
+                style &= ~WindowStyles.WS_SYSMENU;
+            }
             if (!Window.WindowSize.IsResizable)
             {
                 style &= ~(WindowStyles.WS_THICKFRAME | WindowStyles.WS_MAXIMIZEBOX);
