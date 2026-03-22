@@ -15,17 +15,19 @@ public sealed partial class ComboBox : DropDownBase
 
     public static readonly MewProperty<bool> ZebraStripingProperty =
         MewProperty<bool>.Register<ComboBox>(nameof(ZebraStriping), true, MewPropertyOptions.None,
-            static (self, _, _) =>
-            {
-                if (self._popupList != null)
-                    self._popupList.ZebraStriping = self.ZebraStriping;
-            });
+            static (self, oldValue, newValue) => self.OnZebraStripingChanged(oldValue, newValue));
 
     public static readonly MewProperty<string> PlaceholderProperty =
         MewProperty<string>.Register<ComboBox>(nameof(Placeholder), string.Empty, MewPropertyOptions.AffectsRender);
 
     private readonly TextWidthCache _textWidthCache = new(512);
     private ListBox? _popupList;
+
+    private void OnZebraStripingChanged(bool oldValue, bool newValue)
+    {
+        if (_popupList != null)
+            _popupList.ZebraStriping = newValue;
+    }
     private bool _syncingSelectedIndex;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;

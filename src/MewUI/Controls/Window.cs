@@ -347,22 +347,22 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     public static readonly MewProperty<string> TitleProperty =
         MewProperty<string>.Register<Window>(nameof(Title), "Window", MewPropertyOptions.None,
-            static (self, _, _) =>self._backend?.SetTitle(self.Title));
+            static (self, _, _) => self.OnTitleChanged());
 
     public static readonly MewProperty<IconSource?> IconProperty =
         MewProperty<IconSource?>.Register<Window>(nameof(Icon), null, MewPropertyOptions.None,
-            static (self, _, _) =>self._backend?.SetIcon(self.Icon));
+            static (self, _, _) => self.OnIconChanged());
 
     public static readonly MewProperty<WindowStartupLocation> StartupLocationProperty =
         MewProperty<WindowStartupLocation>.Register<Window>(nameof(StartupLocation), WindowStartupLocation.CenterScreen, MewPropertyOptions.None);
 
     public static readonly MewProperty<double> OpacityProperty =
         MewProperty<double>.Register<Window>(nameof(Opacity), 1.0, MewPropertyOptions.None,
-            static (self, _, _) =>self._backend?.SetOpacity(self.Opacity));
+            static (self, _, _) => self.OnOpacityChanged());
 
     public static readonly MewProperty<bool> AllowsTransparencyProperty =
         MewProperty<bool>.Register<Window>(nameof(AllowsTransparency), false, MewPropertyOptions.AffectsRender,
-            static (self, _, _) =>self._backend?.SetAllowsTransparency(self.AllowsTransparency));
+            static (self, _, _) => self.OnAllowsTransparencyChanged());
 
     public static readonly MewProperty<bool> UseLayoutRoundingProperty =
         MewProperty<bool>.Register<Window>(nameof(UseLayoutRounding), true, MewPropertyOptions.None);
@@ -445,6 +445,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         get => GetValue(AllowsTransparencyProperty);
         set => SetValue(AllowsTransparencyProperty, value);
     }
+
+    private void OnTitleChanged() => _backend?.SetTitle(Title);
+    private void OnIconChanged() => _backend?.SetIcon(Icon);
+    private void OnOpacityChanged() => _backend?.SetOpacity(Opacity);
+    private void OnAllowsTransparencyChanged() => _backend?.SetAllowsTransparency(AllowsTransparency);
 
     /// <summary>
     /// Gets the actual window client width in DIPs.

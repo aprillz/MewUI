@@ -11,7 +11,7 @@ public partial class Label : Control
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<Label>(nameof(Text), string.Empty,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => { self._textMeasureCache.Invalidate(); self._lastWrapMeasureWidth = null; });
+            static (self, _, _) => self.OnTextChanged());
 
     public static readonly MewProperty<TextAlignment> TextAlignmentProperty =
         MewProperty<TextAlignment>.Register<Label>(nameof(TextAlignment), TextAlignment.Left,
@@ -24,15 +24,25 @@ public partial class Label : Control
     public static readonly MewProperty<TextWrapping> TextWrappingProperty =
         MewProperty<TextWrapping>.Register<Label>(nameof(TextWrapping), TextWrapping.NoWrap,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => { self._textMeasureCache.Invalidate(); self._lastWrapMeasureWidth = null; });
+            static (self, _, _) => self.OnTextWrappingChanged());
 
     public static readonly MewProperty<TextTrimming> TextTrimmingProperty =
         MewProperty<TextTrimming>.Register<Label>(nameof(TextTrimming), TextTrimming.None,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => { self._textMeasureCache.Invalidate(); self._lastWrapMeasureWidth = null; });
+            static (self, _, _) => self.OnTextTrimmingChanged());
 
     private TextMeasureCache _textMeasureCache;
     private double? _lastWrapMeasureWidth;
+
+    private void OnTextChanged() => InvalidateTextLayout();
+    private void OnTextWrappingChanged() => InvalidateTextLayout();
+    private void OnTextTrimmingChanged() => InvalidateTextLayout();
+
+    private void InvalidateTextLayout()
+    {
+        _textMeasureCache.Invalidate();
+        _lastWrapMeasureWidth = null;
+    }
 
     protected override bool InvalidateOnMouseOverChanged => false;
 

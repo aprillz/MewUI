@@ -15,24 +15,11 @@ public abstract class DropDownBase : Control, IPopupOwner
 
     public static readonly MewProperty<bool> IsDropDownOpenProperty =
         MewProperty<bool>.Register<DropDownBase>(nameof(IsDropDownOpen), false, MewPropertyOptions.AffectsRender,
-            static (self, _, _) =>
-            {
-                if (!self._closingPopup)
-                {
-                    if (self.IsDropDownOpen)
-                        self.ShowPopupCore();
-                    else
-                        self.ClosePopupCore();
-                }
-            });
+            static (self, oldValue, newValue) => self.OnIsDropDownOpenChanged(oldValue, newValue));
 
     public static readonly MewProperty<double> MaxDropDownHeightProperty =
         MewProperty<double>.Register<DropDownBase>(nameof(MaxDropDownHeight), 240.0, MewPropertyOptions.AffectsLayout,
-            static (self, _, _) =>
-            {
-                if (self.IsDropDownOpen)
-                    self.UpdatePopupBoundsCore();
-            });
+            static (self, oldValue, newValue) => self.OnMaxDropDownHeightChanged(oldValue, newValue));
 
     /// <summary>
     /// Gets or sets whether the popup is open.
@@ -41,6 +28,23 @@ public abstract class DropDownBase : Control, IPopupOwner
     {
         get => GetValue(IsDropDownOpenProperty);
         set => SetValue(IsDropDownOpenProperty, value);
+    }
+
+    private void OnMaxDropDownHeightChanged(double oldValue, double newValue)
+    {
+        if (IsDropDownOpen)
+            UpdatePopupBoundsCore();
+    }
+
+    protected virtual void OnIsDropDownOpenChanged(bool oldValue, bool newValue)
+    {
+        if (!_closingPopup)
+        {
+            if (newValue)
+                ShowPopupCore();
+            else
+                ClosePopupCore();
+        }
     }
 
     /// <summary>

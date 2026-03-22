@@ -139,17 +139,19 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     /// </summary>
     public static readonly MewProperty<Thickness> ItemPaddingProperty =
         MewProperty<Thickness>.Register<TreeView>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
-            static (self, _, _) =>
-            {
-                if (self._presenter != null)
-                    self._presenter.ItemPadding = self.ItemPadding;
-                self._rebindVisibleOnNextRender = true;
-            });
+            static (self, _, _) => self.OnItemPaddingChanged());
 
     public Thickness ItemPadding
     {
         get => GetValue(ItemPaddingProperty);
         set => SetValue(ItemPaddingProperty, value);
+    }
+
+    private void OnItemPaddingChanged()
+    {
+        if (_presenter != null)
+            _presenter.ItemPadding = ItemPadding;
+        _rebindVisibleOnNextRender = true;
     }
 
     /// <summary>

@@ -19,10 +19,12 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
     public static readonly MewProperty<Thickness> CellPaddingProperty =
         MewProperty<Thickness>.Register<GridView>(nameof(CellPadding), default, MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => self._rebindVisibleOnNextRender = true);
+            static (self, _, _) => self.OnCellPaddingChanged());
 
     public static readonly MewProperty<double> MaxAutoViewportHeightProperty =
         MewProperty<double>.Register<GridView>(nameof(MaxAutoViewportHeight), 320.0, MewPropertyOptions.AffectsLayout);
+
+    private void OnCellPaddingChanged() => _rebindVisibleOnNextRender = true;
 
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();

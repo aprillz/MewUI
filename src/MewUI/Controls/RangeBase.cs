@@ -8,29 +8,17 @@ public abstract class RangeBase : Control
     public static readonly MewProperty<double> ValueProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Value), 0.0,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, _) =>
-            {
-                var current = self.Value;
-                var coerced = self.ClampToRange(current);
-                if (!current.Equals(coerced))
-                {
-                    self.SetValue(ValueProperty!, coerced);
-                    return;
-                }
-
-                self.OnValueChanged(current);
-                self.ValueChanged?.Invoke(current);
-            });
+            static (self, _, _) => self.OnValuePropertyChanged());
 
     public static readonly MewProperty<double> MinimumProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Minimum), 0.0,
             MewPropertyOptions.AffectsRender,
-            static (self, _, _) => self.CoerceValueAfterRangeChange());
+            static (self, _, _) => self.OnMinimumChanged());
 
     public static readonly MewProperty<double> MaximumProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Maximum), 1.0,
             MewPropertyOptions.AffectsRender,
-            static (self, _, _) => self.CoerceValueAfterRangeChange());
+            static (self, _, _) => self.OnMaximumChanged());
 
     /// <summary>
     /// Gets or sets the minimum value.
@@ -63,6 +51,24 @@ public abstract class RangeBase : Control
     /// Occurs when the value changes.
     /// </summary>
     public event Action<double>? ValueChanged;
+
+    private void OnValuePropertyChanged()
+    {
+        var current = Value;
+        var coerced = ClampToRange(current);
+        if (!current.Equals(coerced))
+        {
+            SetValue(ValueProperty!, coerced);
+            return;
+        }
+
+        OnValueChanged(current);
+        ValueChanged?.Invoke(current);
+    }
+
+    private void OnMinimumChanged() => CoerceValueAfterRangeChange();
+
+    private void OnMaximumChanged() => CoerceValueAfterRangeChange();
 
     /// <summary>
     /// Called when the value changes.

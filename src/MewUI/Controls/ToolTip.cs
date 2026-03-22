@@ -10,7 +10,9 @@ public sealed class ToolTip : ContentControl
 {
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<ToolTip>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
-            static (self, _, _) =>self._textMeasureCache.Invalidate());
+            static (self, _, _) => self.OnTextChanged());
+
+    private void OnTextChanged() => _textMeasureCache.Invalidate();
 
     private TextMeasureCache _textMeasureCache;
 

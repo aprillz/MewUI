@@ -11,12 +11,12 @@ public partial class CheckBox : Control
 {
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<CheckBox>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => self._textMeasureCache.Invalidate());
+            static (self, oldValue, newValue) => self.OnTextChanged(oldValue, newValue));
 
     public static readonly MewProperty<bool?> IsCheckedProperty =
         MewProperty<bool?>.Register<CheckBox>(nameof(IsChecked), (bool?)false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, _) => self.CheckedChanged?.Invoke(self.IsChecked));
+            static (self, oldValue, newValue) => self.OnIsCheckedChanged(oldValue, newValue));
 
     public static readonly MewProperty<bool> IsThreeStateProperty =
         MewProperty<bool>.Register<CheckBox>(nameof(IsThreeState), false, MewPropertyOptions.None);
@@ -64,6 +64,16 @@ public partial class CheckBox : Control
     {
         get => GetValue(IsCheckedProperty);
         set => SetValue(IsCheckedProperty, value);
+    }
+
+    private void OnTextChanged(string oldValue, string newValue)
+    {
+        _textMeasureCache.Invalidate();
+    }
+
+    protected virtual void OnIsCheckedChanged(bool? oldValue, bool? newValue)
+    {
+        CheckedChanged?.Invoke(newValue);
     }
 
     /// <summary>

@@ -8,36 +8,26 @@ namespace Aprillz.MewUI.Controls;
 public class ContentControl : Control
     , IVisualTreeHost
 {
+    public static readonly MewProperty<Element?> ContentProperty =
+        MewProperty<Element?>.Register<ContentControl>(nameof(Content), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) => self.OnContentChanged(oldValue, newValue));
+
     /// <summary>
     /// Gets or sets the content element.
     /// </summary>
     public Element? Content
     {
-        get;
-        set
-        {
-            if (ReferenceEquals(value, this))
-            {
-                throw new InvalidOperationException("Cannot set Content to self.");
-            }
+        get => GetValue(ContentProperty);
+        set => SetValue(ContentProperty, value);
+    }
 
-            if (field != value)
-            {
-                if (field != null)
-                {
-                    field.Parent = null;
-                }
-
-                field = value;
-
-                if (field != null)
-                {
-                    field.Parent = this;
-                }
-
-                InvalidateMeasure();
-            }
-        }
+    protected virtual void OnContentChanged(Element? oldValue, Element? newValue)
+    {
+        if (ReferenceEquals(newValue, this))
+            throw new InvalidOperationException("Cannot set Content to self.");
+        if (oldValue != null) oldValue.Parent = null;
+        if (newValue != null) newValue.Parent = this;
     }
 
     protected override Size MeasureContent(Size availableSize)

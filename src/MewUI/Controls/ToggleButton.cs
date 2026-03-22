@@ -10,18 +10,7 @@ public sealed partial class ToggleButton : ToggleBase, IVisualTreeHost
     public static readonly MewProperty<Element?> ContentProperty =
         MewProperty<Element?>.Register<ToggleButton>(nameof(Content), null,
             MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) =>
-            {
-                if (oldValue != null)
-                {
-                    oldValue.Parent = null;
-                }
-
-                if (newValue != null)
-                {
-                    newValue.Parent = self;
-                }
-            });
+            static (self, oldValue, newValue) => self.OnContentChanged(oldValue, newValue));
 
     /// <summary>
     /// Gets or sets the content element.
@@ -30,6 +19,12 @@ public sealed partial class ToggleButton : ToggleBase, IVisualTreeHost
     {
         get => GetValue(ContentProperty);
         set => SetValue(ContentProperty, value);
+    }
+
+    private void OnContentChanged(Element? oldValue, Element? newValue)
+    {
+        if (oldValue != null) oldValue.Parent = null;
+        if (newValue != null) newValue.Parent = this;
     }
 
     protected override Size MeasureContent(Size availableSize)

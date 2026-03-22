@@ -51,6 +51,15 @@ public abstract class Control : FrameworkElement
     public static readonly MewProperty<Thickness> PaddingProperty =
         MewProperty<Thickness>.Register<Control>(nameof(Padding), default, MewPropertyOptions.AffectsLayout);
 
+    public static readonly MewProperty<string?> ToolTipTextProperty =
+        MewProperty<string?>.Register<Control>(nameof(ToolTipText), null, MewPropertyOptions.None);
+
+    public static readonly MewProperty<Element?> ToolTipContentProperty =
+        MewProperty<Element?>.Register<Control>(nameof(ToolTipContent), null, MewPropertyOptions.None);
+
+    public static readonly MewProperty<ContextMenu?> ContextMenuProperty =
+        MewProperty<ContextMenu?>.Register<Control>(nameof(ContextMenu), null, MewPropertyOptions.None);
+
     #endregion
 
     private IFont? _font;
@@ -71,18 +80,30 @@ public abstract class Control : FrameworkElement
     /// <summary>
     /// Gets or sets the tooltip text for this control.
     /// </summary>
-    public string? ToolTipText { get; set; }
+    public string? ToolTipText
+    {
+        get => GetValue(ToolTipTextProperty);
+        set => SetValue(ToolTipTextProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the tooltip content for this control.
     /// When set, this takes precedence over <see cref="ToolTipText"/>.
     /// </summary>
-    public Element? ToolTipContent { get; set; }
+    public Element? ToolTipContent
+    {
+        get => GetValue(ToolTipContentProperty);
+        set => SetValue(ToolTipContentProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the context menu for this control.
     /// </summary>
-    public ContextMenu? ContextMenu { get; set; }
+    public ContextMenu? ContextMenu
+    {
+        get => GetValue(ContextMenuProperty);
+        set => SetValue(ContextMenuProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the background color.

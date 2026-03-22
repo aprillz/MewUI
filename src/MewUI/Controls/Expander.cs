@@ -11,10 +11,7 @@ public class Expander : HeaderedContentControl
     public static readonly MewProperty<bool> IsExpandedProperty =
         MewProperty<bool>.Register<Expander>(nameof(IsExpanded), true,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, _) =>
-            {
-                self.ExpandedChanged?.Invoke(self.IsExpanded);
-            });
+            static (self, oldValue, newValue) => self.OnIsExpandedChanged(oldValue, newValue));
 
     public static readonly MewProperty<double> GlyphSizeProperty =
         MewProperty<double>.Register<Expander>(nameof(GlyphSize), 4.0, MewPropertyOptions.AffectsRender);
@@ -26,6 +23,11 @@ public class Expander : HeaderedContentControl
     {
         get => GetValue(IsExpandedProperty);
         set => SetValue(IsExpandedProperty, value);
+    }
+
+    protected virtual void OnIsExpandedChanged(bool oldValue, bool newValue)
+    {
+        ExpandedChanged?.Invoke(newValue);
     }
 
     /// <summary>

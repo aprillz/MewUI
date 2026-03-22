@@ -10,11 +10,13 @@ internal sealed class TabHeaderButton : ContentControl
 {
     public static readonly MewProperty<bool> IsSelectedProperty =
         MewProperty<bool>.Register<TabHeaderButton>(nameof(IsSelected), false, MewPropertyOptions.AffectsRender,
-            static (self, _, _) => self.RefreshVisualState());
+            static (self, _, _) => self.OnIsSelectedChanged());
 
     /// <summary>
     /// Gets or sets the tab index this header represents.
     /// </summary>
+    private void OnIsSelectedChanged() => RefreshVisualState();
+
     public int Index { get; set; }
 
     /// <summary>

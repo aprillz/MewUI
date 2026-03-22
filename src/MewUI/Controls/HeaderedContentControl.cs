@@ -8,33 +8,24 @@ namespace Aprillz.MewUI.Controls;
 public class HeaderedContentControl : ContentControl
     , IVisualTreeHost
 {
+    public static readonly MewProperty<Element?> HeaderProperty =
+        MewProperty<Element?>.Register<HeaderedContentControl>(nameof(Header), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) => self.OnHeaderChanged(oldValue, newValue));
+
     /// <summary>
     /// Gets or sets the header element.
     /// </summary>
     public Element? Header
     {
-        get;
-        set
-        {
-            if (field == value)
-            {
-                return;
-            }
+        get => GetValue(HeaderProperty);
+        set => SetValue(HeaderProperty, value);
+    }
 
-            if (field != null)
-            {
-                field.Parent = null;
-            }
-
-            field = value;
-
-            if (field != null)
-            {
-                field.Parent = this;
-            }
-
-            InvalidateMeasure();
-        }
+    protected virtual void OnHeaderChanged(Element? oldValue, Element? newValue)
+    {
+        if (oldValue != null) oldValue.Parent = null;
+        if (newValue != null) newValue.Parent = this;
     }
 
     public static readonly MewProperty<double> HeaderSpacingProperty =

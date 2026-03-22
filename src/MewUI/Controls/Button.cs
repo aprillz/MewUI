@@ -10,18 +10,7 @@ public partial class Button : Control, IVisualTreeHost
     public static readonly MewProperty<Element?> ContentProperty =
         MewProperty<Element?>.Register<Button>(nameof(Content), null,
             MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) =>
-            {
-                if (oldValue != null)
-                {
-                    oldValue.Parent = null;
-                }
-
-                if (newValue != null)
-                {
-                    newValue.Parent = self;
-                }
-            });
+            static (self, oldValue, newValue) => self.OnContentChanged(oldValue, newValue));
 
     /// <summary>
     /// Gets or sets the content element.
@@ -32,19 +21,31 @@ public partial class Button : Control, IVisualTreeHost
         set => SetValue(ContentProperty, value);
     }
 
+    protected virtual void OnContentChanged(Element? oldValue, Element? newValue)
+    {
+        if (oldValue != null) oldValue.Parent = null;
+        if (newValue != null) newValue.Parent = this;
+    }
+
     /// <summary>
     /// Click event handler (AOT-compatible).
     /// </summary>
     public event Action? Click;
 
+    public static readonly MewProperty<Func<bool>?> CanClickProperty =
+        MewProperty<Func<bool>?>.Register<Button>(nameof(CanClick), null,
+            MewPropertyOptions.None,
+            static (self, oldValue, newValue) => self.OnCanClickChanged(oldValue, newValue));
+
     public Func<bool>? CanClick
     {
-        get;
-        set
-        {
-            field = value;
-            ReevaluateSuggestedIsEnabled();
-        }
+        get => GetValue(CanClickProperty);
+        set => SetValue(CanClickProperty, value);
+    }
+
+    protected virtual void OnCanClickChanged(Func<bool>? oldValue, Func<bool>? newValue)
+    {
+        ReevaluateSuggestedIsEnabled();
     }
 
     public override bool Focusable => true;

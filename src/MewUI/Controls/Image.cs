@@ -26,6 +26,11 @@ public sealed class Image : FrameworkElement
     public static readonly MewProperty<ImageAlignmentY> AlignmentYProperty =
         MewProperty<ImageAlignmentY>.Register<Image>(nameof(AlignmentY), ImageAlignmentY.Center, MewPropertyOptions.AffectsRender);
 
+    public static readonly MewProperty<IImageSource?> SourceProperty =
+        MewProperty<IImageSource?>.Register<Image>(nameof(Source), null,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
+            static (self, oldValue, newValue) => self.OnSourcePropertyChanged(oldValue, newValue));
+
     private readonly Dictionary<IGraphicsFactory, IImage> _cache =
         new(ReferenceEqualityComparer<IGraphicsFactory>.Instance);
 
@@ -90,32 +95,25 @@ public sealed class Image : FrameworkElement
     /// </summary>
     public IImageSource? Source
     {
-        get;
-        set
+        get => GetValue(SourceProperty);
+        set => SetValue(SourceProperty, value);
+    }
+
+    private void OnSourcePropertyChanged(IImageSource? _, IImageSource? newValue)
+    {
+        if (_notifySource != null)
         {
-            if (field == value)
-            {
-                return;
-            }
-
-            if (_notifySource != null)
-            {
-                _notifySource.Changed -= OnSourceChanged;
-                _notifySource = null;
-            }
-
-            field = value;
-
-            _notifySource = value as INotifyImageChanged;
-            if (_notifySource != null)
-            {
-                _notifySource.Changed += OnSourceChanged;
-            }
-
-            ClearCache();
-            InvalidateMeasure();
-            InvalidateVisual();
+            _notifySource.Changed -= OnSourceChanged;
+            _notifySource = null;
         }
+
+        _notifySource = newValue as INotifyImageChanged;
+        if (_notifySource != null)
+        {
+            _notifySource.Changed += OnSourceChanged;
+        }
+
+        ClearCache();
     }
 
     /// <summary>
@@ -399,6 +397,17 @@ public sealed class Image : FrameworkElement
         }
 
         _cache.Clear();
+    }
+
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        // Auto-release backend resources when detached from visual tree.
+        if (newRoot == null)
+        {
+            ClearCache();
+        }
     }
 
     protected override void OnDispose()

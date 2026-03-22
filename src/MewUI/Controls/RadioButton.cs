@@ -13,6 +13,11 @@ public class RadioButton : ToggleBase
     private Element? _registeredParentScope;
     private TextMeasureCache _textMeasureCache;
 
+    public static readonly MewProperty<string?> GroupNameProperty =
+        MewProperty<string?>.Register<RadioButton>(nameof(GroupName), null,
+            MewPropertyOptions.AffectsRender,
+            static (self, oldValue, newValue) => self.OnGroupNameChanged(oldValue, newValue));
+
     /// <summary>
     /// Ensures the radio button is registered with its group if checked.
     /// </summary>
@@ -31,22 +36,16 @@ public class RadioButton : ToggleBase
     /// </summary>
     public string? GroupName
     {
-        get;
-        set
+        get => GetValue(GroupNameProperty);
+        set => SetValue(GroupNameProperty, value);
+    }
+
+    protected virtual void OnGroupNameChanged(string? oldValue, string? newValue)
+    {
+        if (IsChecked)
         {
-            if (field == value)
-            {
-                return;
-            }
-
-            field = value;
-            InvalidateVisual();
-
-            if (IsChecked)
-            {
-                UnregisterFromGroup();
-                RegisterToGroup();
-            }
+            UnregisterFromGroup();
+            RegisterToGroup();
         }
     }
 

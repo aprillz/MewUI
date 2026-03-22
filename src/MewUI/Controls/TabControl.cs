@@ -31,25 +31,29 @@ public sealed class TabControl : Control
     /// </summary>
     public IReadOnlyList<TabItem> Tabs => _tabs;
 
+    public static readonly MewProperty<int> SelectedIndexProperty =
+        MewProperty<int>.Register<TabControl>(nameof(SelectedIndex), -1,
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self.OnSelectedIndexChanged());
+
     /// <summary>
     /// Gets or sets the selected tab index.
     /// </summary>
     public int SelectedIndex
     {
-        get;
+        get => GetValue(SelectedIndexProperty);
         set
         {
             int clamped = _tabs.Count == 0 ? -1 : Math.Clamp(value, 0, _tabs.Count - 1);
-            if (field == clamped)
-            {
-                return;
-            }
-
-            field = clamped;
-            UpdateSelection();
-            SelectionChanged?.Invoke(SelectedItem);
+            SetValue(SelectedIndexProperty, clamped);
         }
-    } = -1;
+    }
+
+    private void OnSelectedIndexChanged()
+    {
+        UpdateSelection();
+        SelectionChanged?.Invoke(SelectedItem);
+    }
 
     /// <summary>
     /// Gets the currently selected tab item.

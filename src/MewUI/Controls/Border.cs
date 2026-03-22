@@ -10,6 +10,11 @@ public sealed class Border : Control, IVisualTreeHost
     public static readonly MewProperty<bool> ClipToBoundsProperty =
         MewProperty<bool>.Register<Border>(nameof(ClipToBounds), false, MewPropertyOptions.AffectsRender);
 
+    public static readonly MewProperty<UIElement?> ChildProperty =
+        MewProperty<UIElement?>.Register<Border>(nameof(Child), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) => self.OnChildChanged(oldValue, newValue));
+
     protected override UIElement? OnHitTest(Point point)
     {
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
@@ -31,28 +36,14 @@ public sealed class Border : Control, IVisualTreeHost
 
     public UIElement? Child
     {
-        get;
-        set
-        {
-            if (field == value)
-            {
-                return;
-            }
+        get => GetValue(ChildProperty);
+        set => SetValue(ChildProperty, value);
+    }
 
-            if (field != null)
-            {
-                field.Parent = null;
-            }
-
-            field = value;
-            if (field != null)
-            {
-                field.Parent = this;
-            }
-
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
+    private void OnChildChanged(UIElement? oldValue, UIElement? newValue)
+    {
+        if (oldValue != null) oldValue.Parent = null;
+        if (newValue != null) newValue.Parent = this;
     }
 
     public bool ClipToBounds

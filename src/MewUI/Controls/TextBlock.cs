@@ -14,7 +14,7 @@ public sealed partial class TextBlock : FrameworkElement, IDisposable
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<TextBlock>(nameof(Text), string.Empty,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => { self.InvalidateTextMeasure(); self._lastWrapMeasureWidth = null; });
+            static (self, _, _) => self.OnTextChanged());
 
     public static readonly MewProperty<TextAlignment> TextAlignmentProperty =
         MewProperty<TextAlignment>.Register<TextBlock>(nameof(TextAlignment), TextAlignment.Left,
@@ -27,17 +27,27 @@ public sealed partial class TextBlock : FrameworkElement, IDisposable
     public static readonly MewProperty<TextWrapping> TextWrappingProperty =
         MewProperty<TextWrapping>.Register<TextBlock>(nameof(TextWrapping), TextWrapping.NoWrap,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => { self.InvalidateTextMeasure(); self._lastWrapMeasureWidth = null; });
+            static (self, _, _) => self.OnTextWrappingChanged());
 
     public static readonly MewProperty<TextTrimming> TextTrimmingProperty =
         MewProperty<TextTrimming>.Register<TextBlock>(nameof(TextTrimming), TextTrimming.None,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => { self.InvalidateTextMeasure(); self._lastWrapMeasureWidth = null; });
+            static (self, _, _) => self.OnTextTrimmingChanged());
 
     private IFont? _font;
 
     private TextMeasureCache _textMeasureCache;
     private double? _lastWrapMeasureWidth;
+
+    private void OnTextChanged() => InvalidateTextLayout();
+    private void OnTextWrappingChanged() => InvalidateTextLayout();
+    private void OnTextTrimmingChanged() => InvalidateTextLayout();
+
+    private void InvalidateTextLayout()
+    {
+        InvalidateTextMeasure();
+        _lastWrapMeasureWidth = null;
+    }
 
     private uint _lastFontDpi;
     private Theme? _lastFontTheme;

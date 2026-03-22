@@ -13,11 +13,7 @@ public abstract partial class ToggleBase : Control
     public static readonly MewProperty<bool> IsCheckedProperty =
         MewProperty<bool>.Register<ToggleBase>(nameof(IsChecked), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, _) =>
-            {
-                    self.OnIsCheckedChanged(self.IsChecked);
-                self.CheckedChanged?.Invoke(self.IsChecked);
-            });
+            static (self, oldValue, newValue) => self.OnIsCheckedPropertyChanged(oldValue, newValue));
 
     /// <summary>
     /// Gets or sets the text label.
@@ -60,6 +56,12 @@ public abstract partial class ToggleBase : Control
         if (IsChecked)
             return state with { Flags = state.Flags | VisualStateFlags.Checked };
         return state;
+    }
+
+    private void OnIsCheckedPropertyChanged(bool oldValue, bool newValue)
+    {
+        OnIsCheckedChanged(newValue);
+        CheckedChanged?.Invoke(newValue);
     }
 
     /// <summary>

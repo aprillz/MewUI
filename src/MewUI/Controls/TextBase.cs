@@ -13,10 +13,17 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     public event Action<TextCompositionEventArgs>? TextCompositionStart;
 
+    public static readonly MewProperty<ImeMode> ImeModeProperty =
+        MewProperty<ImeMode>.Register<TextBase>(nameof(ImeMode), ImeMode.Auto, MewPropertyOptions.None);
+
     /// <summary>
     /// Gets or sets the IME mode for this text control.
     /// </summary>
-    public ImeMode ImeMode { get; set; }
+    public ImeMode ImeMode
+    {
+        get => GetValue(ImeModeProperty);
+        set => SetValue(ImeModeProperty, value);
+    }
 
     public event Action<TextCompositionEventArgs>? TextCompositionUpdate;
 

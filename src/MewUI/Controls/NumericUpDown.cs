@@ -14,18 +14,22 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     public static readonly MewProperty<string> FormatProperty =
         MewProperty<string>.Register<NumericUpDown>(nameof(Format), "0.##", MewPropertyOptions.AffectsLayout,
-            static (self, _, _) =>
-            {
-                self._measureCache.Invalidate();
-                self.UpdateTextBoxFromValue();
-            });
+            static (self, _, _) => self.OnFormatChanged());
 
     public static readonly MewProperty<double> StepProperty =
         MewProperty<double>.Register<NumericUpDown>(nameof(Step), 1.0, MewPropertyOptions.None);
 
     public static readonly MewProperty<bool> EditModeProperty =
         MewProperty<bool>.Register<NumericUpDown>(nameof(EditMode), false, MewPropertyOptions.None,
-            static (self, _, _) => self.UpdateEditMode());
+            static (self, _, _) => self.OnEditModeChanged());
+
+    private void OnFormatChanged()
+    {
+        _measureCache.Invalidate();
+        UpdateTextBoxFromValue();
+    }
+
+    private void OnEditModeChanged() => UpdateEditMode();
 
     private TextMeasureCache _measureCache;
     private ButtonPart _hoverPart;
