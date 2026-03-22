@@ -1493,9 +1493,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             double dpiScale = GetDpiForWindow(Handle) / 96.0;
 
             // Composition window follows current caret (end of preedit text).
-            // Use CFS_EXCLUDE so IME places its UI just below the text line.
             int caretPos = (client is Controls.TextBase tb) ? tb.CaretPosition : client.CompositionStartIndex;
             var caretRect = client.GetCharRectInWindow(caretPos);
+
+            // Skip positioning if the rect is not yet valid (layout not performed).
+            if (caretRect.Width <= 0 && caretRect.Height <= 0) return;
             int caretPx = (int)(caretRect.X * dpiScale);
             int caretPy = (int)(caretRect.Y * dpiScale);
             int lineH = (int)(caretRect.Height * dpiScale);
