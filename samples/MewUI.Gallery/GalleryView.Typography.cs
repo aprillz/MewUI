@@ -57,7 +57,7 @@ partial class GalleryView
                     .Children(
                         new Label().Text("Inherited Bold"),
                         new Label().Text("Also Bold"),
-                        new Label().Text("Override: Normal").FontWeight(MewUI.FontWeight.Normal),
+                        new Label().Text("Override: Normal").FontWeight(FontWeight.Normal),
                         new Button().Content("Bold Button")
                     ));
 

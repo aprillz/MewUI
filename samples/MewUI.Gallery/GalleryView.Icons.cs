@@ -32,6 +32,7 @@ partial class GalleryView
 
         grid = new GridView()
             .RowHeight(32)
+            .Width(300)
             .ItemsSource(allIcons)
             .Columns(
                 new GridViewColumn<IconItem>()

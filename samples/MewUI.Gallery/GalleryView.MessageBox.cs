@@ -105,7 +105,28 @@ partial class GalleryView
                     owner: window
                 );
                 return $"Result: Closed";
-            })
+            }),
+
+            Card(
+                "Native",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Button()
+                            .Content("OK")
+                            .OnClick(() => NativeMessageBox.Show("This is a native OK message box.", "MewUI Gallery")),
+                        new Button()
+                            .Content("OK / Cancel")
+                            .OnClick(() => NativeMessageBox.Show("Do you want to continue?", "MewUI Gallery", NativeMessageBoxButtons.OkCancel, NativeMessageBoxIcon.Question)),
+                        new Button()
+                            .Content("Yes / No")
+                            .OnClick(() => NativeMessageBox.Show("Are you sure?", "MewUI Gallery", NativeMessageBoxButtons.YesNo, NativeMessageBoxIcon.Warning)),
+                        new Button()
+                            .Content("Yes / No / Cancel")
+                            .OnClick(() => NativeMessageBox.Show("Save changes before closing?", "MewUI Gallery", NativeMessageBoxButtons.YesNoCancel, NativeMessageBoxIcon.Information))
+                    )
+            )
         );
     }
 }

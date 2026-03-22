@@ -667,12 +667,11 @@ partial class GalleryView
         static Point GetScreenDip(Window window, MouseEventArgs e)
         {
             var screen = window.ClientToScreen(e.GetPosition(window));
-            if (OperatingSystem.IsWindows())
-            {
-                var scale = Math.Max(1.0, window.DpiScale);
-                return new Point(screen.X / scale, screen.Y / scale);
-            }
-            return screen;
+            var scale = Math.Max(1.0, window.DpiScale);
+            if (OperatingSystem.IsMacOS())
+                return new Point(screen.X / scale, -screen.Y / scale); // Cocoa Y (bottom-up) ¡æ top-down
+
+            return new Point(screen.X / scale, screen.Y / scale);
         }
     }
 }
