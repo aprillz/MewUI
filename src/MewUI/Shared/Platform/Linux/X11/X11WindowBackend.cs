@@ -1142,8 +1142,10 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         try
         {
-            var rect = client.GetCharRectInWindow(client.CompositionStartIndex);
-            X11Ime.UpdateSpotLocation(_xic, (int)rect.X, (int)(rect.Y + rect.Height));
+            // Use current caret position (not composition start) so the preedit UI tracks input.
+            int caretPos = (client is Controls.TextBase tb) ? tb.CaretPosition : client.CompositionStartIndex;
+            var rect = client.GetCharRectInWindow(caretPos);
+            X11Ime.UpdateSpotLocation(_xic, (int)rect.X, (int)rect.Y);
         }
         catch
         {

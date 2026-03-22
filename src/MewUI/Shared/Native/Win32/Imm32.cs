@@ -48,10 +48,12 @@ internal static partial class Imm32
     public const int CFS_POINT = 0x0002;
     public const int CFS_FORCE_POSITION = 0x0020;
     public const int CFS_CANDIDATEPOS = 0x0040;
+    public const int CFS_EXCLUDE = 0x0080;
 
     [LibraryImport("imm32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ImmSetCandidateWindow(nint hIMC, ref CANDIDATEFORM lpCandidate);
+
 
     [StructLayout(LayoutKind.Sequential)]
     public struct CANDIDATEFORM
@@ -85,4 +87,5 @@ internal static partial class Imm32
         public int right;
         public int bottom;
     }
+
 }

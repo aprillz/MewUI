@@ -99,7 +99,7 @@ internal sealed class TextBoxView
         context.DrawText(visible, new Rect(drawX, contentBounds.Y, 1_000_000, contentBounds.Height), font, textColor,
             TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
 
-        // Composition underline
+        // Composition underline (dashed)
         if (compositionLength > 0)
         {
             int cs = Math.Max(compositionStart, startCol);
@@ -109,7 +109,7 @@ internal sealed class TextBoxView
                 double ulX1 = drawX + GetAbsoluteX(cs, context, font) - prefixWidthStart;
                 double ulX2 = drawX + GetAbsoluteX(ce, context, font) - prefixWidthStart;
                 double ulY = lineTop + lineHeight - 2;
-                context.DrawLine(new Point(ulX1, ulY), new Point(ulX2, ulY), textColor, 1, pixelSnap: true);
+                DrawDashedLine(context, ulX1, ulX2, ulY, textColor);
             }
         }
 
@@ -124,6 +124,22 @@ internal sealed class TextBoxView
                     new Point(caretX, lineTop + lineHeight - 2),
                     theme.Palette.WindowText, 1, pixelSnap: true);
             }
+        }
+    }
+
+    /// <summary>
+    /// Draws a dashed horizontal line for IME composition underline.
+    /// </summary>
+    internal static void DrawDashedLine(IGraphicsContext context, double x1, double x2, double y, Color color)
+    {
+        const double dash = 3;
+        const double gap = 2;
+        double x = x1;
+        while (x < x2)
+        {
+            double end = Math.Min(x + dash, x2);
+            context.DrawLine(new Point(x, y), new Point(end, y), color, 1, pixelSnap: true);
+            x = end + gap;
         }
     }
 

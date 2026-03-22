@@ -1489,10 +1489,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
             double dpiScale = GetDpiForWindow(Handle) / 96.0;
 
             // Composition window follows current caret (end of preedit text).
+            // Use CFS_EXCLUDE so IME places its UI just below the text line.
             int caretPos = (client is Controls.TextBase tb) ? tb.CaretPosition : client.CompositionStartIndex;
             var caretRect = client.GetCharRectInWindow(caretPos);
             int caretPx = (int)(caretRect.X * dpiScale);
             int caretPy = (int)(caretRect.Y * dpiScale);
+            int lineH = (int)(caretRect.Height * dpiScale);
 
             var compForm = new Imm32.COMPOSITIONFORM
             {
@@ -1502,15 +1504,24 @@ internal sealed class Win32WindowBackend : IWindowBackend
             Imm32.ImmSetCompositionWindow(himc, ref compForm);
 
             // Candidate window stays at composition start position.
+            // CFS_EXCLUDE tells the IME to avoid overlapping the text line rect.
             var startRect = client.GetCharRectInWindow(client.CompositionStartIndex);
             int startPx = (int)(startRect.X * dpiScale);
             int startPy = (int)(startRect.Y * dpiScale);
+            int startLineH = (int)(startRect.Height * dpiScale);
 
             var candForm = new Imm32.CANDIDATEFORM
             {
                 dwIndex = 0,
-                dwStyle = Imm32.CFS_CANDIDATEPOS,
+                dwStyle = Imm32.CFS_EXCLUDE,
                 ptCurrentPos = new Imm32.POINT { x = startPx, y = startPy },
+                rcArea = new Imm32.RECT
+                {
+                    left = startPx,
+                    top = startPy,
+                    right = startPx,
+                    bottom = startPy + startLineH,
+                },
             };
             Imm32.ImmSetCandidateWindow(himc, ref candForm);
         }
