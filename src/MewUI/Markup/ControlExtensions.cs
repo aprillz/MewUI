@@ -2902,6 +2902,19 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Adds a closing event handler.
+    /// </summary>
+    /// <param name="window">Target window.</param>
+    /// <param name="handler">Event handler.</param>
+    /// <returns>The window for chaining.</returns>
+    public static Window OnClosing(this Window window, Action<ClosingEventArgs> handler)
+    {
+        window.Closing += handler;
+        return window;
+    }
+
+
+    /// <summary>
     /// Adds a closed event handler.
     /// </summary>
     /// <param name="window">Target window.</param>
