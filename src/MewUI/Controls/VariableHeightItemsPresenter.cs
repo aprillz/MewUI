@@ -1294,7 +1294,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
                 if (view is TextBlock label)
                 {
                     label.Text = index.ToString();
-                    label.VerticalTextAlignment = TextAlignment.Center;
                 }
             });
 }

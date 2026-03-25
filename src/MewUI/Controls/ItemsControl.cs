@@ -392,8 +392,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
                 }
 
                 label.Text = ItemsSource.GetText(index);
-                label.Margin= ItemPadding;
-                label.VerticalTextAlignment = TextAlignment.Center;
+                label.Margin = ItemPadding;
             });
 
     private bool TryGetItemIndexAtCore(Point position, out int index)

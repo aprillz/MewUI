@@ -644,7 +644,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
                 new TextBlock
                 {
                     IsHitTestVisible = false,
-                    VerticalTextAlignment = TextAlignment.Center,
                     TextWrapping = TextWrapping.NoWrap,
                 },
             bind: (view, _, index, _) =>

@@ -426,7 +426,6 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
                 if (view is TextBlock label)
                 {
                     label.Text = index.ToString();
-                    label.VerticalTextAlignment = TextAlignment.Center;
                 }
             });
 }

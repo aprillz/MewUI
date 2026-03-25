@@ -21,7 +21,7 @@ public partial class TextBlock : FrameworkElement, IDisposable
             MewPropertyOptions.AffectsRender);
 
     public static readonly MewProperty<TextAlignment> VerticalTextAlignmentProperty =
-        MewProperty<TextAlignment>.Register<TextBlock>(nameof(VerticalTextAlignment), TextAlignment.Top,
+        MewProperty<TextAlignment>.Register<TextBlock>(nameof(VerticalTextAlignment), TextAlignment.Center,
             MewPropertyOptions.AffectsRender);
 
     public static readonly MewProperty<TextWrapping> TextWrappingProperty =

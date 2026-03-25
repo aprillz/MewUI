@@ -1015,7 +1015,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             while (_cells.Count < columns.Count)
             {
-                var text = new TextBlock { Parent = this, VerticalTextAlignment = TextAlignment.Center };
+                var text = new TextBlock();
                 _cells.Add(text);
                 Add(text);
             }
@@ -1029,7 +1029,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             for (int i = 0; i < columns.Count; i++)
             {
                 _cells[i].Text = columns[i].Header;
-                _cells[i].Margin= new Thickness(6, 0, 6, 0);
+                _cells[i].Margin = new Thickness(6, 0, 6, 0);
             }
         }
 

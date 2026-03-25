@@ -672,7 +672,6 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 new TextBlock
                 {
                     IsHitTestVisible = false,
-                    VerticalTextAlignment = TextAlignment.Center,
                     TextWrapping = TextWrapping.NoWrap,
                 },
             bind: (view, item, index, _) =>

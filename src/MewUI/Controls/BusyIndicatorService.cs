@@ -235,7 +235,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             _confirmLabel = new TextBlock
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
                 Text = MewUIStrings.AbortConfirmation.Value
             };
             _confirmLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);

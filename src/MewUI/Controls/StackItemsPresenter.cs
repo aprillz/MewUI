@@ -477,7 +477,6 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
                 if (view is TextBlock label)
                 {
                     label.Text = index.ToString();
-                    label.VerticalTextAlignment = TextAlignment.Center;
                 }
             });
 }
