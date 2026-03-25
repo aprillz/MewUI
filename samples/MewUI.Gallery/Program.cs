@@ -193,6 +193,8 @@ FrameworkElement AccentPicker() => new WrapPanel()
     .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray());
 
 Button AccentSwatch(Accent accent) => new Button()
+    .CornerRadius(14)
+    .BorderThickness(0)
     .Content(string.Empty)
     .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
     .ToolTip(accent.ToString())
