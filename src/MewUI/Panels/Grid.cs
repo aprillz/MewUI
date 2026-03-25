@@ -278,11 +278,12 @@ public class Grid : Panel
         double availableWidth = Math.Max(0, paddedSize.Width - colGaps);
         double availableHeight = Math.Max(0, paddedSize.Height - rowGaps);
 
-        // Calculate column widths
-        CalculateLengths(_columnDefinitions, availableWidth, true);
+        // Calculate fixed (Absolute + Auto) sizes, then resolve star for Measure
+        CalculateFixedLengths(_columnDefinitions, true);
+        ResolveStarMeasure(_columnDefinitions, true);
 
-        // Calculate row heights
-        CalculateLengths(_rowDefinitions, availableHeight, false);
+        CalculateFixedLengths(_rowDefinitions, false);
+        ResolveStarMeasure(_rowDefinitions, false);
 
         // Second pass: re-measure children with actual cell sizes when constrained.
         // This is required for wrapped text to compute correct line breaks within the final width.
@@ -293,8 +294,11 @@ public class Grid : Panel
             // Recalculate auto sizes based on updated DesiredSize.
             if (_columnDefinitions.Any(c => c.Width.IsAuto) || _rowDefinitions.Any(r => r.Height.IsAuto))
             {
-                CalculateLengths(_columnDefinitions, availableWidth, true);
-                CalculateLengths(_rowDefinitions, availableHeight, false);
+                CalculateFixedLengths(_columnDefinitions, true);
+                ResolveStarMeasure(_columnDefinitions, true);
+
+                CalculateFixedLengths(_rowDefinitions, false);
+                ResolveStarMeasure(_rowDefinitions, false);
             }
         }
 
@@ -337,8 +341,11 @@ public class Grid : Panel
         double availableHeight = Math.Max(0, contentBounds.Height - rowGaps);
 
         // Recalculate with actual available space
-        CalculateLengths(_columnDefinitions, availableWidth, true);
-        CalculateLengths(_rowDefinitions, availableHeight, false);
+        double colFixed = CalculateFixedLengths(_columnDefinitions, true);
+        ResolveStarArrange(_columnDefinitions, availableWidth, colFixed, true);
+
+        double rowFixed = CalculateFixedLengths(_rowDefinitions, false);
+        ResolveStarArrange(_rowDefinitions, availableHeight, rowFixed, false);
 
         // Calculate offsets
         CalculateOffsets(_columnDefinitions, Spacing);
@@ -619,11 +626,12 @@ public class Grid : Panel
         return false;
     }
 
-    private void CalculateLengths<T>(IList<T> definitions, double available, bool isColumn) where T : class
+    /// <summary>
+    /// Calculates Absolute and Auto definition sizes. Star definitions are deferred to <see cref="ResolveStarMeasure"/> or <see cref="ResolveStarArrange"/>.
+    /// </summary>
+    private double CalculateFixedLengths<T>(IList<T> definitions, bool isColumn) where T : class
     {
-        bool isInfinite = double.IsPositiveInfinity(available);
         double totalFixed = 0;
-        double totalStars = 0;
 
         foreach (var def in definitions)
         {
@@ -639,93 +647,154 @@ public class Grid : Panel
             }
             else if (length.IsAuto)
             {
-                // Find max desired size of children in this row/column
-                double maxDesired = 0;
-                foreach (var child in Children)
-                {
-                    if (child is UIElement ui && !ui.IsVisible)
-                    {
-                        continue;
-                    }
-
-                    int index = isColumn ? GetColumn(child) : GetRow(child);
-                    int span = isColumn ? GetColumnSpan(child) : GetRowSpan(child);
-                    int defIndex = definitions.IndexOf(def);
-
-                    if (index <= defIndex && index + span > defIndex)
-                    {
-                        double desired = isColumn ? child.DesiredSize.Width : child.DesiredSize.Height;
-                        if (span > 1)
-                        {
-                            desired = Math.Max(0, desired - (span - 1) * Spacing);
-                        }
-
-                        maxDesired = Math.Max(maxDesired, desired / span);
-                    }
-                }
+                double maxDesired = GetMaxDesiredSize(definitions, def, isColumn);
                 var size = Math.Clamp(maxDesired, min, max);
                 SetActualSize(def, size, isColumn);
                 totalFixed += size;
             }
-            else // Star
+        }
+
+        return totalFixed;
+    }
+
+    /// <summary>
+    /// Resolves star definitions for the Measure pass.
+    /// Each star column is sized to the largest content-per-star-weight across all star definitions,
+    /// ensuring proportional sizing based on content. DesiredSize reflects content needs only,
+    /// not the parent's available space.
+    /// </summary>
+    private double ResolveStarMeasure<T>(IList<T> definitions, bool isColumn) where T : class
+    {
+        // Phase 1: Collect max content size per unit of star weight
+        double maxContentPerStar = 0;
+
+        foreach (var def in definitions)
+        {
+            var length = isColumn ? ((ColumnDefinition)(object)def).Width : ((RowDefinition)(object)def).Height;
+            if (!length.IsStar) continue;
+
+            double maxDesired = GetMaxDesiredSize(definitions, def, isColumn);
+            maxContentPerStar = Math.Max(maxContentPerStar, maxDesired / length.Value);
+        }
+
+        // Phase 2: Assign each star definition: maxContentPerStar * weight, clamped to Min/Max
+        double totalStar = 0;
+
+        foreach (var def in definitions)
+        {
+            var length = isColumn ? ((ColumnDefinition)(object)def).Width : ((RowDefinition)(object)def).Height;
+            if (!length.IsStar) continue;
+
+            var min = isColumn ? ((ColumnDefinition)(object)def).MinWidth : ((RowDefinition)(object)def).MinHeight;
+            var max = isColumn ? ((ColumnDefinition)(object)def).MaxWidth : ((RowDefinition)(object)def).MaxHeight;
+
+            var size = Math.Clamp(maxContentPerStar * length.Value, min, max);
+            SetActualSize(def, size, isColumn);
+            totalStar += size;
+        }
+
+        return totalStar;
+    }
+
+    /// <summary>
+    /// Resolves star definitions for the Arrange pass.
+    /// Distributes the remaining space (available minus fixed/auto) proportionally by star weight,
+    /// respecting Min/Max constraints. Definitions that hit their Min or Max are resolved first,
+    /// and remaining space is redistributed among unconstrained definitions.
+    /// </summary>
+    private void ResolveStarArrange<T>(IList<T> definitions, double available, double totalFixed, bool isColumn) where T : class
+    {
+        double remaining = Math.Max(0, available - totalFixed);
+        double totalStars = 0;
+
+        foreach (var def in definitions)
+        {
+            var length = isColumn ? ((ColumnDefinition)(object)def).Width : ((RowDefinition)(object)def).Height;
+            if (length.IsStar)
+                totalStars += length.Value;
+        }
+
+        if (totalStars <= 0) return;
+
+        // Phase 1: Identify constrained star definitions (hit Min or Max) and resolve them first.
+        // This prevents one constrained column from stealing space from others.
+        double constrainedTotal = 0;
+        double constrainedStars = 0;
+
+        foreach (var def in definitions)
+        {
+            var length = isColumn ? ((ColumnDefinition)(object)def).Width : ((RowDefinition)(object)def).Height;
+            if (!length.IsStar) continue;
+
+            var min = isColumn ? ((ColumnDefinition)(object)def).MinWidth : ((RowDefinition)(object)def).MinHeight;
+            var max = isColumn ? ((ColumnDefinition)(object)def).MaxWidth : ((RowDefinition)(object)def).MaxHeight;
+
+            double proportional = remaining * length.Value / totalStars;
+
+            if (proportional < min)
             {
-                if (isInfinite)
-                {
-                    // WPF-like behavior: when unconstrained, star sizing behaves like "size to content" in Measure.
-                    // Actual star distribution still happens during Arrange with the real available size.
-                    double maxDesired = 0;
-                    foreach (var child in Children)
-                    {
-                        if (child is UIElement ui && !ui.IsVisible)
-                        {
-                            continue;
-                        }
-
-                        int index = isColumn ? GetColumn(child) : GetRow(child);
-                        int span = isColumn ? GetColumnSpan(child) : GetRowSpan(child);
-                        int defIndex = definitions.IndexOf(def);
-
-                        if (index <= defIndex && index + span > defIndex)
-                        {
-                            double desired = isColumn ? child.DesiredSize.Width : child.DesiredSize.Height;
-                            if (span > 1)
-                            {
-                                desired = Math.Max(0, desired - (span - 1) * Spacing);
-                            }
-
-                            maxDesired = Math.Max(maxDesired, desired / span);
-                        }
-                    }
-
-                    var size = Math.Clamp(maxDesired, min, max);
-                    SetActualSize(def, size, isColumn);
-                    totalFixed += size;
-                }
-                else
-                {
-                    totalStars += length.Value;
-                }
+                SetActualSize(def, min, isColumn);
+                constrainedTotal += min;
+                constrainedStars += length.Value;
+            }
+            else if (proportional > max)
+            {
+                SetActualSize(def, max, isColumn);
+                constrainedTotal += max;
+                constrainedStars += length.Value;
             }
         }
 
-        // Distribute remaining space to star-sized definitions
-        double remaining = Math.Max(0, available - totalFixed);
+        // Phase 2: Distribute remaining space among unconstrained star definitions
+        double unconstrainedRemaining = Math.Max(0, remaining - constrainedTotal);
+        double unconstrainedStars = totalStars - constrainedStars;
 
-        if (totalStars > 0)
+        if (unconstrainedStars > 0)
         {
             foreach (var def in definitions)
             {
                 var length = isColumn ? ((ColumnDefinition)(object)def).Width : ((RowDefinition)(object)def).Height;
+                if (!length.IsStar) continue;
+
                 var min = isColumn ? ((ColumnDefinition)(object)def).MinWidth : ((RowDefinition)(object)def).MinHeight;
                 var max = isColumn ? ((ColumnDefinition)(object)def).MaxWidth : ((RowDefinition)(object)def).MaxHeight;
 
-                if (length.IsStar)
+                double proportional = remaining * length.Value / totalStars;
+                if (proportional >= min && proportional <= max)
                 {
-                    var size = Math.Clamp(remaining * length.Value / totalStars, min, max);
-                    SetActualSize(def, size, isColumn);
+                    var size = unconstrainedRemaining * length.Value / unconstrainedStars;
+                    SetActualSize(def, Math.Clamp(size, min, max), isColumn);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Gets the maximum desired size of children that span the given definition.
+    /// </summary>
+    private double GetMaxDesiredSize<T>(IList<T> definitions, T def, bool isColumn) where T : class
+    {
+        double maxDesired = 0;
+        int defIndex = definitions.IndexOf(def);
+
+        foreach (var child in Children)
+        {
+            if (child is UIElement ui && !ui.IsVisible)
+                continue;
+
+            int index = isColumn ? GetColumn(child) : GetRow(child);
+            int span = isColumn ? GetColumnSpan(child) : GetRowSpan(child);
+
+            if (index <= defIndex && index + span > defIndex)
+            {
+                double desired = isColumn ? child.DesiredSize.Width : child.DesiredSize.Height;
+                if (span > 1)
+                    desired = Math.Max(0, desired - (span - 1) * Spacing);
+                maxDesired = Math.Max(maxDesired, desired / span);
+            }
+        }
+
+        return maxDesired;
     }
 
     private static void SetActualSize<T>(T def, double size, bool isColumn) where T : class
