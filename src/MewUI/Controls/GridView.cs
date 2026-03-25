@@ -984,7 +984,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         private const double SeparatorHitWidth = 6;
 
         private readonly GridView _owner;
-        private readonly List<Label> _cells = new();
+        private readonly List<TextBlock> _cells = new();
         private double _horizontalOffset;
 
         // Column resize drag state
@@ -1015,7 +1015,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             while (_cells.Count < columns.Count)
             {
-                var text = new Label { Parent = this, VerticalTextAlignment = TextAlignment.Center };
+                var text = new TextBlock { Parent = this, VerticalTextAlignment = TextAlignment.Center };
                 _cells.Add(text);
                 Add(text);
             }
@@ -1029,7 +1029,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             for (int i = 0; i < columns.Count; i++)
             {
                 _cells[i].Text = columns[i].Header;
-                _cells[i].Padding = new Thickness(6, 0, 6, 0);
+                _cells[i].Margin= new Thickness(6, 0, 6, 0);
             }
         }
 
@@ -1388,7 +1388,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             {
                 _row = row;
                 Context = context;
-                View = new Label();
+                View = new TextBlock();
             }
 
             public TemplateContext Context { get; }

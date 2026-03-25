@@ -24,7 +24,10 @@ public sealed class MenuItem : MenuEntry
 
     public bool IsEnabled { get; set; } = true;
 
-    public string? ShortcutText { get; set; }
+    /// <summary>
+    /// Keyboard shortcut gesture. Auto-generates display text and registers with Window.KeyBindings.
+    /// </summary>
+    public KeyGesture? Shortcut { get; set; }
 
     public Action? Click { get; set; }
 

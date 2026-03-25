@@ -43,6 +43,7 @@ internal sealed class TextBoxView
         int textLength,
         int compositionStart,
         int compositionLength,
+        CompositionAttr[]? compositionAttributes,
         Action<char[], int, int> copyTextTo)
     {
         if (textLength <= 0)
@@ -99,17 +100,19 @@ internal sealed class TextBoxView
         context.DrawText(visible, new Rect(drawX, contentBounds.Y, 1_000_000, contentBounds.Height), font, textColor,
             TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
 
-        // Composition underline (dashed)
+        // Composition underline (attribute-based styling)
         if (compositionLength > 0)
         {
             int cs = Math.Max(compositionStart, startCol);
             int ce = Math.Min(compositionStart + compositionLength, endCol);
             if (cs < ce)
             {
-                double ulX1 = drawX + GetAbsoluteX(cs, context, font) - prefixWidthStart;
-                double ulX2 = drawX + GetAbsoluteX(ce, context, font) - prefixWidthStart;
                 double ulY = lineTop + lineHeight - 2;
-                DrawDashedLine(context, ulX1, ulX2, ulY, textColor);
+                int attrOffset = cs - compositionStart;
+                DrawSegmentedCompositionUnderline(
+                    context, ulY, textColor,
+                    compositionAttributes, attrOffset, ce - cs,
+                    i => drawX + GetAbsoluteX(cs + i, context, font) - prefixWidthStart);
             }
         }
 
@@ -128,20 +131,66 @@ internal sealed class TextBoxView
     }
 
     /// <summary>
-    /// Draws a dashed horizontal line for IME composition underline.
+    /// Draws IME composition underline with attribute-based styling.
     /// </summary>
-    internal static void DrawDashedLine(IGraphicsContext context, double x1, double x2, double y, Color color)
+    internal static void DrawCompositionUnderline(
+        IGraphicsContext context, double x1, double x2, double y, Color color,
+        CompositionAttr attr = CompositionAttr.Input)
     {
+        double thickness = attr is CompositionAttr.TargetConverted or CompositionAttr.TargetNotConverted ? 2 : 1;
+        bool dashed = attr is CompositionAttr.Input or CompositionAttr.TargetNotConverted;
+
+        if (!dashed)
+        {
+            context.DrawLine(new Point(x1, y), new Point(x2, y), color, thickness, pixelSnap: true);
+            return;
+        }
+
         const double dash = 3;
         const double gap = 2;
         double x = x1;
         while (x < x2)
         {
             double end = Math.Min(x + dash, x2);
-            context.DrawLine(new Point(x, y), new Point(end, y), color, 1, pixelSnap: true);
+            context.DrawLine(new Point(x, y), new Point(end, y), color, thickness, pixelSnap: true);
             x = end + gap;
         }
     }
+
+    /// <summary>
+    /// Draws composition underline with per-character attribute segmentation.
+    /// </summary>
+    internal static void DrawSegmentedCompositionUnderline(
+        IGraphicsContext context, double y, Color color,
+        CompositionAttr[]? attrs, int attrOffset, int count,
+        Func<int, double> getX)
+    {
+        if (count <= 0) return;
+
+        if (attrs == null || attrs.Length == 0)
+        {
+            // No attribute data — default to dashed underline (Input).
+            DrawCompositionUnderline(context, getX(0), getX(count), y, color, CompositionAttr.Input);
+            return;
+        }
+
+        // Group consecutive chars with the same attribute and draw each segment.
+        int segStart = 0;
+        var segAttr = GetAttr(attrs, attrOffset);
+        for (int i = 1; i <= count; i++)
+        {
+            var a = i < count ? GetAttr(attrs, attrOffset + i) : (CompositionAttr)255;
+            if (a != segAttr)
+            {
+                DrawCompositionUnderline(context, getX(segStart), getX(i), y, color, segAttr);
+                segStart = i;
+                segAttr = a;
+            }
+        }
+    }
+
+    private static CompositionAttr GetAttr(CompositionAttr[] attrs, int index)
+        => index >= 0 && index < attrs.Length ? attrs[index] : CompositionAttr.Input;
 
     public int GetCaretIndexFromX(
         double x,

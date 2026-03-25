@@ -8,8 +8,7 @@ namespace Aprillz.MewUI;
 public static class WindowExtensions
 {
     /// <summary>
-    /// Shows a toast notification at 4/5 of the window height.
-    /// Auto-dismisses after a duration based on text length.
+    /// Shows a toast notification that auto-dismisses after a duration based on text length.
     /// </summary>
     public static void ShowToast(this Window window, string text)
     {
@@ -20,8 +19,12 @@ public static class WindowExtensions
 
     /// <summary>
     /// Creates and shows a busy indicator overlay.
-    /// Dispose the returned <see cref="IBusyIndicator"/> to dismiss it.
+    /// Dispose the returned <see cref="IBusyIndicator"/> to dismiss.
+    /// While active, window content is disabled and closing is prevented.
     /// </summary>
+    /// <param name="window">Target window.</param>
+    /// <param name="message">Initial progress message displayed below the spinner.</param>
+    /// <param name="cancellable">If <c>true</c>, an Abort button is shown and <see cref="IBusyIndicator.CancellationToken"/> becomes usable.</param>
     public static IBusyIndicator CreateBusyIndicator(this Window window, string? message = null, bool cancellable = false)
     {
         var service = window.OverlayLayer.GetOrCreateService<BusyIndicatorService>(

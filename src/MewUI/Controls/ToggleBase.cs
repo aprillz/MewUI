@@ -5,25 +5,12 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for toggle controls like checkboxes and radio buttons.
 /// </summary>
-public abstract partial class ToggleBase : Control
+public abstract partial class ToggleBase : ContentControl
 {
-    public static readonly MewProperty<string> TextProperty =
-        MewProperty<string>.Register<ToggleBase>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) => self.OnTextChanged(oldValue, newValue));
-
     public static readonly MewProperty<bool> IsCheckedProperty =
         MewProperty<bool>.Register<ToggleBase>(nameof(IsChecked), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
             static (self, oldValue, newValue) => self.OnIsCheckedPropertyChanged(oldValue, newValue));
-
-    /// <summary>
-    /// Gets or sets the text label.
-    /// </summary>
-    public string Text
-    {
-        get => GetValue(TextProperty);
-        set => SetValue(TextProperty, value ?? string.Empty);
-    }
 
     /// <summary>
     /// Gets or sets the checked state.
@@ -59,7 +46,7 @@ public abstract partial class ToggleBase : Control
         return state;
     }
 
-    protected virtual void OnTextChanged(string oldValue, string newValue) { }
+    internal override void OnAccessKey() { Focus(); ToggleFromKeyboard(); }
 
     private void OnIsCheckedPropertyChanged(bool oldValue, bool newValue)
     {

@@ -14,8 +14,14 @@ public enum ModifierKeys
     Shift = 2,
     /// <summary>Alt key.</summary>
     Alt = 4,
-    /// <summary>Windows / Command key.</summary>
-    Windows = 8
+    /// <summary>Meta key (Cmd on macOS, Win on Windows, Super on Linux).</summary>
+    Meta = 8,
+
+    /// <summary>
+    /// Platform primary command modifier. Resolved to Control or Meta at matching/display time
+    /// via <see cref="PlatformKeyConfiguration.Current"/>.
+    /// </summary>
+    Primary = 16,
 }
 
 /// <summary>
@@ -82,6 +88,16 @@ public class KeyEventArgs
     /// Gets whether the Alt key is pressed.
     /// </summary>
     public bool AltKey => (Modifiers & ModifierKeys.Alt) != 0;
+
+    /// <summary>
+    /// Gets whether the Meta key is pressed (Cmd on macOS, Win on Windows).
+    /// </summary>
+    public bool MetaKey => (Modifiers & ModifierKeys.Meta) != 0;
+
+    /// <summary>
+    /// Gets whether the platform's primary command modifier is pressed (Ctrl on Windows/Linux, Cmd on macOS).
+    /// </summary>
+    public bool PrimaryKey => (Modifiers & PlatformKeyConfiguration.Current.PrimaryModifier) != 0;
 }
 
 /// <summary>

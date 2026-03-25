@@ -26,28 +26,8 @@ public partial class Window
 
     private void InitializeDebugDevTools()
     {
-        PreviewKeyDown += OnDebugDevToolsPreviewKeyDown;
-    }
-
-    private void OnDebugDevToolsPreviewKeyDown(KeyEventArgs e)
-    {
-        var chord = e.ShiftKey &&
-                    (e.Modifiers.HasFlag(ModifierKeys.Control) || e.Modifiers.HasFlag(ModifierKeys.Windows));
-
-        // Ctrl/Cmd + Shift + I: toggle inspector overlay.
-        if (chord && e.Key == Key.I)
-        {
-            ToggleDebugInspector();
-            e.Handled = true;
-            return;
-        }
-
-        // Ctrl/Cmd + Shift + T: toggle visual tree window.
-        if (chord && e.Key == Key.T)
-        {
-            ToggleDebugVisualTree();
-            e.Handled = true;
-        }
+        KeyBindings.Add(new KeyBinding(new KeyGesture(Key.I, ModifierKeys.Primary | ModifierKeys.Shift), ToggleDebugInspector));
+        KeyBindings.Add(new KeyBinding(new KeyGesture(Key.T, ModifierKeys.Primary | ModifierKeys.Shift), ToggleDebugVisualTree));
     }
 
     private void ToggleDebugInspector()
@@ -208,7 +188,8 @@ public partial class Window
                 return;
             }
 
-            context.DrawRectangle(rect, color, thickness: 2);
+            rect = LayoutRounding.SnapBoundsRectToPixels(rect, context.DpiScale);
+            context.DrawRectangle(rect, color, thickness: 2, strokeInset: true);
         }
 
         private void DrawInfoPanel(IGraphicsContext context, UIElement? hovered, UIElement? focused, UIElement? pinned)
@@ -219,10 +200,11 @@ public partial class Window
             var pad = 8.0;
             var size = context.MeasureText(text, font, maxWidth: 420);
             var panelRect = new Rect(Bounds.X + 8, Bounds.Y + 8, size.Width + pad * 2, size.Height + pad * 2);
+            panelRect = LayoutRounding.SnapBoundsRectToPixels(panelRect, context.DpiScale);
             var bg = Color.FromArgb(190, 20, 20, 20);
             var border = Color.FromArgb(220, 80, 160, 255);
             context.FillRoundedRectangle(panelRect, 6, 6, bg);
-            context.DrawRoundedRectangle(panelRect, 6, 6, border, 1);
+            context.DrawRoundedRectangle(panelRect, 6, 6, border, 1, strokeInset: true);
             context.DrawText(text, panelRect.Deflate(new Thickness(pad)), font, Color.White, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
         }
 
@@ -278,8 +260,8 @@ public partial class Window
     {
         private readonly Window _target;
         private readonly TreeView _tree;
-        private readonly Label _selectedLabel;
-        private readonly Label _modeLabel;
+        private readonly TextBlock _selectedLabel;
+        private readonly TextBlock _modeLabel;
         private readonly CheckBox _followFocus;
         private readonly CheckBox _autoExpandFocus;
         private Button? _goFocusButton;
@@ -300,11 +282,11 @@ public partial class Window
             Title = "Live Visual Tree";
             WindowSize = WindowSize.Resizable(520, 720);
 
-            _selectedLabel = new Label { Text = "Selected: (none)" };
-            _modeLabel = new Label { Text = "Mode: Follow/Peek" };
+            _selectedLabel = new TextBlock { Text = "Selected: (none)" };
+            _modeLabel = new TextBlock { Text = "Mode: Follow/Peek" };
 
-            _followFocus = new CheckBox { Text = "Follow Focus", IsChecked = true };
-            _autoExpandFocus = new CheckBox { Text = "Auto Expand Focus", IsChecked = true };
+            _followFocus = new CheckBox { Content = new TextBlock { Text = "Follow Focus", VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
+            _autoExpandFocus = new CheckBox { Content = new TextBlock { Text = "Auto Expand Focus", VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
             _followFocus.CheckedChanged += _ => UpdateFollowUi();
 
             _tree = new TreeView()
@@ -312,10 +294,10 @@ public partial class Window
                 .ExpandTrigger(TreeViewExpandTrigger.ClickNode);
 
             _tree.ItemTemplate<VisualTreeNodeModel>(
-                build: ctx => new Label().CenterVertical().Padding(8, 0),
+                build: ctx => new TextBlock().CenterVertical().Margin(8, 0),
                 bind: (view, item, _, ctx) =>
                 {
-                    ((Label)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold : FontWeight.Normal));
+                    ((TextBlock)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold : FontWeight.Normal));
                 });
 
             var refreshBtn = new Button().Content("Refresh");

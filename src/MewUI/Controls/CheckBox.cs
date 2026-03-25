@@ -4,14 +4,10 @@ using Aprillz.MewUI.Styling;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// A checkbox control with optional text label.
+/// A checkbox control with optional content label.
 /// </summary>
-public partial class CheckBox : Control
+public class CheckBox : ContentControl
 {
-    public static readonly MewProperty<string> TextProperty =
-        MewProperty<string>.Register<CheckBox>(nameof(Text), string.Empty, MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) => self.OnTextChanged(oldValue, newValue));
-
     public static readonly MewProperty<bool?> IsCheckedProperty =
         MewProperty<bool?>.Register<CheckBox>(nameof(IsChecked), (bool?)false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
@@ -20,7 +16,9 @@ public partial class CheckBox : Control
     public static readonly MewProperty<bool> IsThreeStateProperty =
         MewProperty<bool>.Register<CheckBox>(nameof(IsThreeState), false, MewPropertyOptions.None);
 
-    private readonly TextBlock _textBlock = new() { VerticalTextAlignment = TextAlignment.Center };
+    public CheckBox()
+    {
+    }
 
     public override bool Focusable => true;
 
@@ -36,15 +34,6 @@ public partial class CheckBox : Control
             return state with { Flags = state.Flags | VisualStateFlags.Indeterminate };
         }
         return state;
-    }
-
-    /// <summary>
-    /// Gets or sets the checkbox label text.
-    /// </summary>
-    public string Text
-    {
-        get => GetValue(TextProperty);
-        set => SetValue(TextProperty, value ?? string.Empty);
     }
 
     /// <summary>
@@ -65,10 +54,7 @@ public partial class CheckBox : Control
         set => SetValue(IsCheckedProperty, value);
     }
 
-    private void OnTextChanged(string oldValue, string newValue)
-    {
-        _textBlock.Text = newValue;
-    }
+    internal override void OnAccessKey() { Focus(); Toggle(); }
 
     protected virtual void OnIsCheckedChanged(bool? oldValue, bool? newValue)
     {
@@ -80,23 +66,61 @@ public partial class CheckBox : Control
     /// </summary>
     public event Action<bool?>? CheckedChanged;
 
+    /// <summary>
+    /// Toggles the checked state, respecting three-state mode.
+    /// </summary>
+    internal void Toggle()
+    {
+        if (IsThreeState)
+        {
+            IsChecked = IsChecked switch
+            {
+                false => true,
+                true => (bool?)null,
+                _ => false
+            };
+        }
+        else
+        {
+            IsChecked = IsChecked != true;
+        }
+    }
+
+    private const double BoxSize = 14;
+    private const double Spacing = 6;
+
     protected override Size MeasureContent(Size availableSize)
     {
-        const double boxSize = 14;
-        const double spacing = 6;
+        double width = BoxSize + Spacing;
+        double height = BoxSize;
 
-        double width = boxSize + spacing;
-        double height = boxSize;
-
-        if (!string.IsNullOrEmpty(Text))
+        if (Content != null)
         {
-            _textBlock.Parent ??= this;
-            _textBlock.Measure(new Size(Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness), double.PositiveInfinity));
-            width += _textBlock.DesiredSize.Width;
-            height = Math.Max(height, _textBlock.DesiredSize.Height);
+            var contentAvailable = new Size(
+                Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness),
+                double.PositiveInfinity);
+            Content.Measure(contentAvailable);
+            width += Content.DesiredSize.Width;
+            height = Math.Max(height, Content.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        if (Content == null)
+        {
+            return;
+        }
+
+        var contentBounds = bounds.Deflate(Padding);
+        var textBounds = new Rect(
+            contentBounds.X + BoxSize + Spacing,
+            contentBounds.Y,
+            Math.Max(0, contentBounds.Width - BoxSize - Spacing),
+            contentBounds.Height);
+        Content.Arrange(textBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -105,11 +129,8 @@ public partial class CheckBox : Control
         var contentBounds = bounds.Deflate(Padding);
         var state = CurrentVisualState;
 
-        const double boxSize = 14;
-        const double spacing = 6;
-
-        double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
-        var boxRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
+        double boxY = contentBounds.Y + (contentBounds.Height - BoxSize) / 2;
+        var boxRect = new Rect(contentBounds.X, boxY, BoxSize, BoxSize);
 
         var fill = GetValue(BackgroundProperty);
         var radius = Math.Max(0, CornerRadius * 0.5);
@@ -141,12 +162,6 @@ public partial class CheckBox : Control
             context.DrawLine(p1, p2, markColor, 2);
         }
 
-        if (!string.IsNullOrEmpty(Text))
-        {
-            var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
-            _textBlock.Arrange(textBounds);
-            _textBlock.Render(context);
-        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -189,7 +204,7 @@ public partial class CheckBox : Control
 
         if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
-            ToggleFromInput();
+            Toggle();
         }
 
         e.Handled = true;
@@ -206,27 +221,9 @@ public partial class CheckBox : Control
 
         if (e.Key == Key.Space)
         {
-            ToggleFromInput();
+            Toggle();
             e.Handled = true;
         }
-    }
-
-    private void ToggleFromInput()
-    {
-        if (IsThreeState)
-        {
-            var next = IsChecked switch
-            {
-                false => (bool?)true,
-                true => (bool?)null,
-                _ => (bool?)false
-            };
-            IsChecked = next;
-            return;
-        }
-
-        bool nextBool = IsChecked != true;
-        IsChecked = nextBool;
     }
 
     protected override void OnDispose()

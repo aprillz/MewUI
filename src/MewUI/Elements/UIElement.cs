@@ -618,6 +618,17 @@ public abstract partial class UIElement : Element
     /// <param name="e">Key event arguments.</param>
     protected virtual void OnKeyUp(KeyEventArgs e) => KeyUp?.Invoke(e);
 
+    /// <summary>
+    /// Called when the element's access key is activated.
+    /// Override to define control-specific activation behavior.
+    /// Default: bubbles up the parent chain until a handler processes it.
+    /// </summary>
+    internal virtual void OnAccessKey()
+    {
+        if (Parent is UIElement parentUi)
+            parentUi.OnAccessKey();
+    }
+
     #endregion
 
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)

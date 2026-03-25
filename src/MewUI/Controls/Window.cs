@@ -9,6 +9,17 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI;
 
 /// <summary>
+/// Event arguments for the <see cref="Window.Closing"/> event.
+/// </summary>
+public sealed class ClosingEventArgs
+{
+    /// <summary>
+    /// Set to <c>true</c> to cancel the close operation.
+    /// </summary>
+    public bool Cancel { get; set; }
+}
+
+/// <summary>
 /// Represents a top-level window.
 /// </summary>
 public partial class Window : ContentControl, ILayoutRoundingHost
@@ -566,6 +577,42 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public FocusManager FocusManager => field ??= new FocusManager(this);
 
+    internal static readonly MewProperty<bool> ShowAccessKeysProperty =
+        MewProperty<bool>.Register<Window>("ShowAccessKeys", false,
+            MewPropertyOptions.Inherits | MewPropertyOptions.AffectsRender);
+
+    internal Input.AccessKeyManager AccessKeyManager => field ??= new Input.AccessKeyManager(this);
+
+    internal bool ShowAccessKeys
+    {
+        get => GetValue(ShowAccessKeysProperty);
+        set => SetValue(ShowAccessKeysProperty, value);
+    }
+
+    /// <summary>
+    /// Gets the list of global keyboard shortcuts for this window.
+    /// Bindings are checked after bubbling (so control-level shortcuts like TextBox Ctrl+C take priority).
+    /// </summary>
+    public List<KeyBinding> KeyBindings { get; } = new();
+
+    /// <summary>
+    /// Processes global key bindings. Called after bubbling if the event is still unhandled.
+    /// </summary>
+    internal void ProcessKeyBindings(KeyEventArgs e)
+    {
+        if (e.Handled) return;
+
+        for (int i = 0; i < KeyBindings.Count; i++)
+        {
+            if (KeyBindings[i].TryHandle(e))
+                return;
+        }
+    }
+
+    internal void ProcessAccessKeyDown(KeyEventArgs e) => AccessKeyManager.OnKeyDown(e);
+
+    internal void ProcessAccessKeyUp(KeyEventArgs e) => AccessKeyManager.OnKeyUp(e);
+
     /// <summary>
     /// Gets the graphics factory for rendering.
     /// </summary>
@@ -579,6 +626,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Occurs when the window is loaded and ready.
     /// </summary>
     public event Action? Loaded;
+
+    /// <summary>
+    /// Occurs when the window is about to close. Set <see cref="ClosingEventArgs.Cancel"/> to <c>true</c> to prevent closing.
+    /// </summary>
+    public event Action<ClosingEventArgs>? Closing;
 
     /// <summary>
     /// Occurs when the window is closed.
@@ -805,6 +857,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
             return;
+        }
+
+        if (Closing != null)
+        {
+            var args = new ClosingEventArgs();
+            Closing.Invoke(args);
+            if (args.Cancel)
+                return;
         }
 
         if (_backend == null)

@@ -61,6 +61,8 @@ public abstract class DropDownBase : Control, IPopupOwner
     /// </summary>
     public override bool Focusable => true;
 
+    internal override void OnAccessKey() { Focus(); IsDropDownOpen = true; }
+
     /// <summary>
     /// Gets or sets the arrow (chevron) color for the current frame.
     /// Derived controls can update this inside <see cref="RenderHeaderContent"/>.

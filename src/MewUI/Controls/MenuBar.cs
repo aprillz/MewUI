@@ -12,6 +12,7 @@ public sealed class MenuBar : Control, IPopupOwner
 
     private readonly List<MenuItem> _items = new();
     private readonly List<Rect> _itemBounds = new();
+    private readonly List<KeyBinding> _registeredBindings = new();
     private int _hotIndex = -1;
     private int _openIndex = -1;
     private ContextMenu? _openPopup;
@@ -40,6 +41,75 @@ public sealed class MenuBar : Control, IPopupOwner
     {
     }
 
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+        UnregisterKeyBindings(oldRoot as Window);
+        RegisterKeyBindings(newRoot as Window);
+    }
+
+    private void RegisterKeyBindings(Window? window)
+    {
+        if (window == null) return;
+
+        foreach (var item in _items)
+            RegisterMenuItemBindings(window, item);
+
+        RegisterAccessKeys(window);
+    }
+
+    private void UnregisterKeyBindings(Window? window)
+    {
+        if (window == null) return;
+
+        if (_registeredBindings.Count > 0)
+        {
+            for (int i = 0; i < _registeredBindings.Count; i++)
+                window.KeyBindings.Remove(_registeredBindings[i]);
+            _registeredBindings.Clear();
+        }
+
+        window.AccessKeyManager.Unregister(this);
+    }
+
+    private void RegisterAccessKeys(Window window)
+    {
+        for (int i = 0; i < _items.Count; i++)
+        {
+            var item = _items[i];
+            if (AccessKeyHelper.TryParse(item.Text ?? string.Empty, out var key, out _))
+            {
+                int index = i; // capture for closure
+                window.AccessKeyManager.Register(key, this, () => OpenMenu(index));
+            }
+        }
+    }
+
+    private static string GetDisplayText(MenuItem item)
+    {
+        var raw = item.Text ?? string.Empty;
+        return AccessKeyHelper.TryParse(raw, out _, out var display) ? display : raw;
+    }
+
+    private void RegisterMenuItemBindings(Window window, MenuItem item)
+    {
+        if (item.Shortcut is { } gesture && item.Click is { } click)
+        {
+            var binding = new KeyBinding(gesture, click);
+            window.KeyBindings.Add(binding);
+            _registeredBindings.Add(binding);
+        }
+
+        if (item.SubMenu != null)
+        {
+            foreach (var entry in item.SubMenu.Items)
+            {
+                if (entry is MenuItem sub)
+                    RegisterMenuItemBindings(window, sub);
+            }
+        }
+    }
+
     /// <summary>
     /// Adds a menu item to the menu bar.
     /// </summary>
@@ -60,11 +130,13 @@ public sealed class MenuBar : Control, IPopupOwner
     {
         ArgumentNullException.ThrowIfNull(items);
         CloseOpenMenu();
+        UnregisterKeyBindings(FindVisualRoot() as Window);
         _items.Clear();
         for (int i = 0; i < items.Length; i++)
         {
             Add(items[i]);
         }
+        RegisterKeyBindings(FindVisualRoot() as Window);
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -78,7 +150,7 @@ public sealed class MenuBar : Control, IPopupOwner
         for (int i = 0; i < _items.Count; i++)
         {
             var item = _items[i];
-            var text = item.Text ?? string.Empty;
+            var text = GetDisplayText(item);
             var textSize = string.IsNullOrEmpty(text) ? Size.Empty : measure.Context.MeasureText(text, measure.Font);
             var itemW = textSize.Width + (ItemHorizontalPadding * 2);
             var itemH = textSize.Height + (ItemVerticalPadding * 2);
@@ -110,7 +182,7 @@ public sealed class MenuBar : Control, IPopupOwner
         for (int i = 0; i < _items.Count; i++)
         {
             var item = _items[i];
-            var text = item.Text ?? string.Empty;
+            var text = GetDisplayText(item);
             var textSize = string.IsNullOrEmpty(text) ? Size.Empty : measure.Context.MeasureText(text, measure.Font);
             var itemW = textSize.Width + (ItemHorizontalPadding * 2);
             var itemH = Math.Min(innerH, textSize.Height + (ItemVerticalPadding * 2));
@@ -304,8 +376,8 @@ public sealed class MenuBar : Control, IPopupOwner
 
             var fg = item.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textRect = row.Deflate(new Thickness(ItemHorizontalPadding, 0, ItemHorizontalPadding, 0));
-            context.DrawText(item.Text ?? string.Empty, textRect, font, fg,
-                TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+            var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
+            AccessKeyRenderer.DrawText(context, item.Text ?? string.Empty, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
         }
 
         // Simple bottom separator.

@@ -27,6 +27,8 @@ public partial class Button : Control, IVisualTreeHost
         if (newValue != null) newValue.Parent = this;
     }
 
+    internal override void OnAccessKey() { Focus(); RaiseClick(); }
+
     /// <summary>
     /// Click event handler (AOT-compatible).
     /// </summary>
@@ -201,4 +203,6 @@ public partial class Button : Control, IVisualTreeHost
         => Content == null || visitor(Content);
 
     protected virtual void OnClick() => Click?.Invoke();
+
+    internal void RaiseClick() => OnClick();
 }

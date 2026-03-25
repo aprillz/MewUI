@@ -471,10 +471,10 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     private static IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
-            build: _ => new Label(),
+            build: _ => new TextBlock(),
             bind: (view, _, index, _) =>
             {
-                if (view is Label label)
+                if (view is TextBlock label)
                 {
                     label.Text = index.ToString();
                     label.VerticalTextAlignment = TextAlignment.Center;

@@ -641,7 +641,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     private IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
             build: _ =>
-                new Label
+                new TextBlock
                 {
                     IsHitTestVisible = false,
                     VerticalTextAlignment = TextAlignment.Center,
@@ -649,7 +649,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
                 },
             bind: (view, _, index, _) =>
             {
-                var tb = (Label)view;
+                var tb = (TextBlock)view;
 
                 var text = ItemsSource.GetText(index);
                 if (tb.Text != text)

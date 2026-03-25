@@ -1035,7 +1035,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             // Otherwise, common shortcuts like Ctrl+Z/C/V will stop working during preedit.
             // This mirrors typical Cocoa behavior: text services should not "eat" modifier chords that
             // don't represent text input.
-            bool isShortcutChord = (modifiers.HasFlag(ModifierKeys.Control) || modifiers.HasFlag(ModifierKeys.Windows)) &&
+            bool isShortcutChord = (modifiers.HasFlag(ModifierKeys.Control) || modifiers.HasFlag(ModifierKeys.Meta)) &&
                                    key != Key.None;
             if (isShortcutChord)
             {
@@ -1074,6 +1074,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             }
 
             WindowInputRouter.KeyDown(_window, args);
+            _window.ProcessKeyBindings(args);
+            _window.ProcessAccessKeyDown(args);
 
             // WPF-like Tab behavior:
             // - Always let the focused element see KeyDown first.
@@ -1146,6 +1148,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         WindowInputRouter.KeyUp(_window, args);
+        _window.ProcessAccessKeyUp(args);
     }
 
     internal void ImeSetMarkedText(string? text)
@@ -1381,7 +1384,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if ((flags & (1ul << 17)) != 0) m |= ModifierKeys.Shift;
         if ((flags & (1ul << 18)) != 0) m |= ModifierKeys.Control;
         if ((flags & (1ul << 19)) != 0) m |= ModifierKeys.Alt;
-        if ((flags & (1ul << 20)) != 0) m |= ModifierKeys.Windows;
+        if ((flags & (1ul << 20)) != 0) m |= ModifierKeys.Meta;
         return m;
     }
 

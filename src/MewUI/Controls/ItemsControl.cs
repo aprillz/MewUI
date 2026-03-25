@@ -383,16 +383,16 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
     private IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
-            build: _ => new Label(),
+            build: _ => new TextBlock(),
             bind: (view, _, index, _) =>
             {
-                if (view is not Label label)
+                if (view is not TextBlock label)
                 {
                     return;
                 }
 
                 label.Text = ItemsSource.GetText(index);
-                label.Padding = ItemPadding;
+                label.Margin= ItemPadding;
                 label.VerticalTextAlignment = TextAlignment.Center;
             });
 

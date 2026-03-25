@@ -669,7 +669,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
     private IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
             build: _ =>
-                new Label
+                new TextBlock
                 {
                     IsHitTestVisible = false,
                     VerticalTextAlignment = TextAlignment.Center,
@@ -677,7 +677,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
                 },
             bind: (view, item, index, _) =>
             {
-                var tb = (Label)view;
+                var tb = (TextBlock)view;
 
                 var text = _itemsSource.GetText(index);
                 if (tb.Text != text)

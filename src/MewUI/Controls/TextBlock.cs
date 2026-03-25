@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Controls;
 /// <see cref="Control.FontSizeProperty"/>, and <see cref="Control.FontWeightProperty"/> so that
 /// inherited values propagate naturally from parent controls without style-target interference.
 /// </summary>
-public sealed partial class TextBlock : FrameworkElement, IDisposable
+public partial class TextBlock : FrameworkElement, IDisposable
 {
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<TextBlock>(nameof(Text), string.Empty,
@@ -39,11 +39,11 @@ public sealed partial class TextBlock : FrameworkElement, IDisposable
     private TextMeasureCache _textMeasureCache;
     private double? _lastWrapMeasureWidth;
 
-    private void OnTextChanged() => InvalidateTextLayout();
+    protected virtual void OnTextChanged() => InvalidateTextLayout();
     private void OnTextWrappingChanged() => InvalidateTextLayout();
     private void OnTextTrimmingChanged() => InvalidateTextLayout();
 
-    private void InvalidateTextLayout()
+    protected void InvalidateTextLayout()
     {
         InvalidateTextMeasure();
         _lastWrapMeasureWidth = null;
@@ -168,7 +168,7 @@ public sealed partial class TextBlock : FrameworkElement, IDisposable
         }
     }
 
-    private IFont EnsureFont(IGraphicsFactory factory)
+    protected IFont EnsureFont(IGraphicsFactory factory)
     {
         var dpi = GetDpi();
         var family = FontFamily;

@@ -1,12 +1,11 @@
-using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// A control that displays text.
+/// A control that displays text, using an internal TextBlock for rendering.
 /// </summary>
-public partial class Label : Control
+public partial class Label : Control, IVisualTreeHost
 {
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<Label>(nameof(Text), string.Empty,
@@ -15,11 +14,13 @@ public partial class Label : Control
 
     public static readonly MewProperty<TextAlignment> TextAlignmentProperty =
         MewProperty<TextAlignment>.Register<Label>(nameof(TextAlignment), TextAlignment.Left,
-            MewPropertyOptions.AffectsRender);
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.OnTextAlignmentChanged());
 
     public static readonly MewProperty<TextAlignment> VerticalTextAlignmentProperty =
         MewProperty<TextAlignment>.Register<Label>(nameof(VerticalTextAlignment), TextAlignment.Center,
-            MewPropertyOptions.AffectsRender);
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.OnVerticalTextAlignmentChanged());
 
     public static readonly MewProperty<TextWrapping> TextWrappingProperty =
         MewProperty<TextWrapping>.Register<Label>(nameof(TextWrapping), TextWrapping.NoWrap,
@@ -31,17 +32,39 @@ public partial class Label : Control
             MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.OnTextTrimmingChanged());
 
-    private TextMeasureCache _textMeasureCache;
-    private double? _lastWrapMeasureWidth;
+    private readonly AccessText _accessText;
+    private UIElement? _target;
 
-    private void OnTextChanged() => InvalidateTextLayout();
-    private void OnTextWrappingChanged() => InvalidateTextLayout();
-    private void OnTextTrimmingChanged() => InvalidateTextLayout();
-
-    private void InvalidateTextLayout()
+    public Label()
     {
-        _textMeasureCache.Invalidate();
-        _lastWrapMeasureWidth = null;
+        _accessText = new() { Parent = this };
+    }
+
+    /// <summary>
+    /// Gets or sets the target element that receives focus when this label's access key is activated.
+    /// </summary>
+    public UIElement? Target
+    {
+        get => _target;
+        set => _target = value;
+    }
+
+    private void OnTextChanged() => _accessText.SetRawText(Text);
+
+    private void OnTextAlignmentChanged() => _accessText.TextAlignment = TextAlignment;
+
+    private void OnVerticalTextAlignmentChanged() => _accessText.VerticalTextAlignment = VerticalTextAlignment;
+
+    private void OnTextWrappingChanged() => _accessText.TextWrapping = TextWrapping;
+
+    private void OnTextTrimmingChanged() => _accessText.TextTrimming = TextTrimming;
+
+    internal override void OnAccessKey()
+    {
+        if (_target != null)
+            _target.OnAccessKey();
+        else
+            base.OnAccessKey();
     }
 
     protected override bool InvalidateOnMouseOverChanged => false;
@@ -91,8 +114,6 @@ public partial class Label : Control
         set => SetValue(TextTrimmingProperty, value);
     }
 
-    private bool HasExplicitLineBreaks => Text.AsSpan().IndexOfAny('\r', '\n') >= 0;
-
     protected override Size MeasureContent(Size availableSize)
     {
         if (string.IsNullOrEmpty(Text))
@@ -102,60 +123,15 @@ public partial class Label : Control
                 : Size.Empty;
         }
 
-        var wrapping = TextWrapping;
-        if (wrapping == TextWrapping.NoWrap && HasExplicitLineBreaks)
-        {
-            wrapping = TextWrapping.Wrap;
-        }
-
-        var factory = GetGraphicsFactory();
-        var font = GetFont(factory);
-
-        double maxWidth = 0;
-        if (wrapping != TextWrapping.NoWrap)
-        {
-            maxWidth = availableSize.Width - Padding.HorizontalThickness;
-            if (double.IsNaN(maxWidth) || maxWidth <= 0)
-            {
-                maxWidth = 0;
-            }
-
-            if (double.IsPositiveInfinity(maxWidth))
-            {
-                maxWidth = 1_000_000;
-            }
-
-            maxWidth = maxWidth > 0 ? maxWidth : 1_000_000;
-            _lastWrapMeasureWidth = maxWidth;
-        }
-
-        var size = _textMeasureCache.Measure(factory, GetDpi(), font, Text, wrapping, maxWidth);
-
-        return size.Inflate(Padding);
+        var contentSize = availableSize.Deflate(Padding);
+        _accessText.Measure(contentSize);
+        return _accessText.DesiredSize.Inflate(Padding);
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
         base.ArrangeContent(bounds);
-
-        if (TextWrapping == TextWrapping.NoWrap)
-        {
-            return;
-        }
-
-        var contentWidth = bounds.Width - Padding.HorizontalThickness;
-        if (double.IsNaN(contentWidth) || double.IsInfinity(contentWidth))
-        {
-            return;
-        }
-
-        if (!_lastWrapMeasureWidth.HasValue || !_lastWrapMeasureWidth.Value.Equals(contentWidth))
-        {
-            // If layout gives us a different width than we measured with, re-measure so wrap height is correct.
-            _lastWrapMeasureWidth = contentWidth;
-
-            InvalidateMeasure();
-        }
+        _accessText.Arrange(bounds.Deflate(Padding));
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -167,27 +143,13 @@ public partial class Label : Control
             return;
         }
 
-        var wrapping = TextWrapping;
-        if (wrapping == TextWrapping.NoWrap && HasExplicitLineBreaks)
-        {
-            wrapping = TextWrapping.Wrap;
-        }
-
-        var bounds = Bounds.Deflate(Padding);
-        var font = GetFont();
-
-        var color = Foreground;
-        context.DrawText(Text, bounds, font, color, TextAlignment, VerticalTextAlignment, wrapping, TextTrimming);
+        _accessText.Render(context);
     }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_accessText);
 
     protected override void OnDispose()
     {
         base.OnDispose();
-    }
-
-    protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        base.OnThemeChanged(oldTheme, newTheme);
-        _textMeasureCache.Invalidate();
     }
 }

@@ -1192,6 +1192,9 @@ internal sealed class X11WindowBackend : IWindowBackend
                         WindowInputRouter.KeyDown(Window, args);
                     }
 
+                    Window.ProcessKeyBindings(args);
+                    Window.ProcessAccessKeyDown(args);
+
                     // WPF-like Tab behavior:
                     // - Always let the focused element see KeyDown first.
                     // - Only perform focus navigation if the key is still unhandled.
@@ -1298,6 +1301,8 @@ internal sealed class X11WindowBackend : IWindowBackend
                 {
                     WindowInputRouter.KeyUp(Window, args);
                 }
+
+                Window.ProcessAccessKeyUp(args);
             }
 
             Window.RequerySuggested();

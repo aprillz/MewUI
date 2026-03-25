@@ -108,17 +108,17 @@ public sealed class ContextMenu : Control, IPopupOwner
         };
     }
 
-    public void AddItem(string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
+    public void AddItem(string text, Action? onClick = null, bool isEnabled = true, KeyGesture? shortcut = null)
     {
-        Menu.Item(text, onClick, isEnabled, shortcutText);
+        Menu.Item(text, onClick, isEnabled, shortcut);
         InvalidateMeasure();
         InvalidateVisual();
     }
 
-    public void AddSubMenu(string text, Menu subMenu, bool isEnabled = true, string? shortcutText = null)
+    public void AddSubMenu(string text, Menu subMenu, bool isEnabled = true, KeyGesture? shortcut = null)
     {
         ArgumentNullException.ThrowIfNull(subMenu);
-        Menu.SubMenu(text, subMenu, isEnabled, shortcutText);
+        Menu.SubMenu(text, subMenu, isEnabled, shortcut);
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -281,11 +281,11 @@ public sealed class ContextMenu : Control, IPopupOwner
 
             if (entry is MenuItem item)
             {
-                var text = item.Text ?? string.Empty;
+                var text = GetDisplayText(item);
                 var size = string.IsNullOrEmpty(text) ? Size.Empty : measure.Context.MeasureText(text, measure.Font);
                 _maxTextWidth = Math.Max(_maxTextWidth, size.Width);
 
-                var shortcutText = item.ShortcutText;
+                var shortcutText = item.Shortcut?.ToDisplayString();
                 if (!string.IsNullOrEmpty(shortcutText))
                 {
                     _hasAnyShortcut = true;
@@ -516,6 +516,62 @@ public sealed class ContextMenu : Control, IPopupOwner
                 window.ClosePopup(this);
                 e.Handled = true;
             }
+
+            return;
+        }
+
+        // Access key matching — character only, no modifiers (except Shift for uppercase)
+        if (!e.AltKey && !e.ControlKey && !e.MetaKey)
+        {
+            TryActivateByAccessKey(e);
+        }
+    }
+
+    private static string GetDisplayText(MenuItem item)
+    {
+        var raw = item.Text ?? string.Empty;
+        return AccessKeyHelper.TryParse(raw, out _, out var display) ? display : raw;
+    }
+
+    private void TryActivateByAccessKey(KeyEventArgs e)
+    {
+        var ch = e.Key switch
+        {
+            >= Key.A and <= Key.Z => (char)('A' + (e.Key - Key.A)),
+            >= Key.D0 and <= Key.D9 => (char)('0' + (e.Key - Key.D0)),
+            _ => default,
+        };
+
+        if (ch == default) return;
+        ch = char.ToUpperInvariant(ch);
+
+        foreach (var entry in Menu.Items)
+        {
+            if (entry is not MenuItem item || !item.IsEnabled)
+                continue;
+
+            if (!AccessKeyHelper.TryParse(item.Text, out var key, out _))
+                continue;
+
+            if (char.ToUpperInvariant(key) != ch)
+                continue;
+
+            if (item.SubMenu != null)
+            {
+                int index = Menu.Items.IndexOf(item);
+                if (index >= 0 && TryGetEntryRowBounds(index, out var rowBounds))
+                    OpenSubMenu(index, item.SubMenu, rowBounds);
+            }
+            else
+            {
+                item.Click?.Invoke();
+                var root = FindVisualRoot();
+                if (root is Window window)
+                    CloseHierarchy(window);
+            }
+
+            e.Handled = true;
+            return;
         }
     }
 
@@ -781,15 +837,15 @@ public sealed class ContextMenu : Control, IPopupOwner
                 }
 
                 var textRect = new Rect(textLeft, paddedRow.Y, Math.Max(0, textRight - textLeft), paddedRow.Height);
-                context.DrawText(item.Text ?? string.Empty, textRect, font, fg,
-                    TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+                var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
+                AccessKeyRenderer.DrawText(context, item.Text ?? string.Empty, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
 
-                if (_hasAnyShortcut && !string.IsNullOrEmpty(item.ShortcutText))
+                if (_hasAnyShortcut && !string.IsNullOrEmpty(item.Shortcut?.ToDisplayString()))
                 {
                     double shortcutRight = paddedRow.Right - chevronReserved;
                     double shortcutLeft = shortcutRight - _maxShortcutWidth;
                     var shortcutRect = new Rect(shortcutLeft, paddedRow.Y, Math.Max(0, shortcutRight - shortcutLeft), paddedRow.Height);
-                    context.DrawText(item.ShortcutText, shortcutRect, font, fg,
+                    context.DrawText(item.Shortcut?.ToDisplayString(), shortcutRect, font, fg,
                         TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
                 }
 

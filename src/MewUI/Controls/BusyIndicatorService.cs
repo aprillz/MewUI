@@ -49,6 +49,8 @@ internal sealed class BusyIndicatorSession : IBusyIndicator
     private readonly OverlayLayer _layer;
     private readonly BusyIndicatorPresenter _presenter;
     private readonly CancellationTokenSource? _cts;
+    private readonly Window? _window;
+    private readonly bool _contentWasEnabled;
     private bool _disposed;
 
     internal BusyIndicatorSession(OverlayLayer layer, string? message, bool cancellable)
@@ -58,6 +60,18 @@ internal sealed class BusyIndicatorSession : IBusyIndicator
         _presenter = new BusyIndicatorPresenter(message, cancellable, _cts);
         _layer.Add(_presenter);
         _presenter.FadeIn();
+
+        // Disable window content and prevent closing
+        _window = _presenter.Parent as Window;
+        if (_window != null)
+        {
+            if (_window.Content is UIElement content)
+            {
+                _contentWasEnabled = content.IsEnabled;
+                content.IsEnabled = false;
+            }
+            _window.Closing += OnWindowClosing;
+        }
     }
 
     public CancellationToken CancellationToken => _cts?.Token ?? CancellationToken.None;
@@ -73,12 +87,26 @@ internal sealed class BusyIndicatorSession : IBusyIndicator
         if (_disposed) return;
         _disposed = true;
 
+        // Restore window state
+        if (_window != null)
+        {
+            _window.Closing -= OnWindowClosing;
+            if (_window.Content is UIElement content)
+                content.IsEnabled = _contentWasEnabled;
+        }
+
         _presenter.FadeOut(() =>
         {
             _layer.Remove(_presenter);
             _presenter.StopAnimation();
             _cts?.Dispose();
         });
+    }
+
+    private void OnWindowClosing(ClosingEventArgs e)
+    {
+        if (!_disposed)
+            e.Cancel = true;
     }
 }
 
@@ -100,10 +128,10 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
     // Abort UI elements — only created when cancellable
     private readonly Label? _abortLabel;
 
-    private readonly Label? _confirmLabel;
+    private readonly TextBlock? _confirmLabel;
     private readonly Label? _yesLabel;
     private readonly Label? _noLabel;
-    private readonly Label? _abortingLabel;
+    private readonly TextBlock? _abortingLabel;
     private readonly Border? _abortArea;
     private readonly StackPanel? _normalPanel;
     private readonly StackPanel? _confirmPanel;
@@ -170,23 +198,23 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         if (cancellable)
         {
             // Normal state: "Abort" label
-            _abortLabel = new Label { Text = MewUIStrings.Abort.Value };
-            _abortLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
+            _abortLabel = new Label { Text = MewUIStrings.Abort.Value, Cursor = CursorType.Hand };
+            SetupHoverAccent(_abortLabel);
             _abortLabel.MouseDown += OnAbortClicked;
 
             _normalPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
             _normalPanel.Horizontal();
             _normalPanel.Add(_abortLabel);
 
-            _confirmLabel = new Label { Text = MewUIStrings.AbortConfirmation.Value };
+            _confirmLabel = new TextBlock { Text = MewUIStrings.AbortConfirmation.Value };
             _confirmLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
 
-            _yesLabel = new Label { Text = MewUIStrings.Yes.Value };
-            _yesLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
+            _yesLabel = new Label { Text = StripAccessKey(MewUIStrings.Yes.Value), Cursor = CursorType.Hand };
+            SetupHoverAccent(_yesLabel);
             _yesLabel.MouseDown += OnYesClicked;
 
-            _noLabel = new Label { Text = MewUIStrings.No.Value };
-            _noLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
+            _noLabel = new Label { Text = StripAccessKey(MewUIStrings.No.Value), Cursor = CursorType.Hand };
+            SetupHoverAccent(_noLabel);
             _noLabel.MouseDown += OnNoClicked;
 
             _confirmPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, IsVisible = false };
@@ -196,7 +224,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             _confirmPanel.Add(_noLabel);
 
             // Aborting state label
-            _abortingLabel = new Label { Text = MewUIStrings.Aborting.Value, IsVisible = false };
+            _abortingLabel = new TextBlock { Text = MewUIStrings.Aborting.Value, IsVisible = false };
             _abortingLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
 
             // Container that switches between the three states
@@ -205,8 +233,17 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             _abortPanel.Add(_confirmPanel);
             _abortPanel.Add(_abortingLabel);
 
-            _abortArea = new Border { Child = _abortPanel };
-            _abortArea.WithTheme((t, c) => c.Background = t.Palette.ControlBackground);
+            _abortArea = new Border
+            {
+                Child = _abortPanel,
+                Padding = new(8, 4),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            _abortArea.WithTheme((t, c) =>
+            {
+                c.Background = t.Palette.ControlBackground;
+                c.CornerRadius = t.Metrics.ControlCornerRadius;
+            });
 
             centerStack.Add(_abortArea);
         }
@@ -317,22 +354,43 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         _abortingLabel!.IsVisible = state == AbortState.Aborting;
     }
 
+    private static void SetupHoverAccent(Control label)
+    {
+        Color accentColor = default;
+        Color normalColor = default;
+        label.WithTheme((t, c) =>
+        {
+            accentColor = t.Palette.Accent;
+            normalColor = t.Palette.WindowText;
+            c.Foreground = normalColor;
+        });
+        label.MouseEnter += () => label.Foreground = accentColor;
+        label.MouseLeave += () => label.Foreground = normalColor;
+    }
+
+    private static string StripAccessKey(string text) => text.Replace("_", "");
+
     private void OnAbortClicked(MouseEventArgs e)
     {
-        SetAbortState(AbortState.Confirming);
+        if (_abortState == AbortState.Normal)
+            SetAbortState(AbortState.Confirming);
         e.Handled = true;
     }
 
     private void OnYesClicked(MouseEventArgs e)
     {
-        SetAbortState(AbortState.Aborting);
-        _cts?.Cancel();
+        if (_abortState == AbortState.Confirming)
+        {
+            SetAbortState(AbortState.Aborting);
+            _cts?.Cancel();
+        }
         e.Handled = true;
     }
 
     private void OnNoClicked(MouseEventArgs e)
     {
-        SetAbortState(AbortState.Normal);
+        if (_abortState == AbortState.Confirming)
+            SetAbortState(AbortState.Normal);
         e.Handled = true;
     }
 }

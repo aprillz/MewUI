@@ -3,14 +3,13 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// A radio button control with optional text label.
+/// A radio button control with optional content label.
 /// </summary>
 public class RadioButton : ToggleBase
 {
     private Window? _registeredWindow;
     private string? _registeredGroupName;
     private Element? _registeredParentScope;
-    private readonly TextBlock _textBlock = new() { VerticalTextAlignment = TextAlignment.Center };
 
     public static readonly MewProperty<string?> GroupNameProperty =
         MewProperty<string?>.Register<RadioButton>(nameof(GroupName), null,
@@ -52,11 +51,6 @@ public class RadioButton : ToggleBase
     {
     }
 
-    protected override void OnTextChanged(string oldValue, string newValue)
-    {
-        _textBlock.Text = newValue;
-    }
-
     protected override void OnIsCheckedChanged(bool value)
     {
         if (value)
@@ -78,8 +72,6 @@ public class RadioButton : ToggleBase
     {
         base.OnParentChanged();
 
-        // IsChecked can be set before the control is attached to a Window (e.g. in markup),
-        // which means group registration would have been skipped. Re-register once the parent chain changes.
         if (IsChecked)
         {
             UnregisterFromGroup();
@@ -131,25 +123,24 @@ public class RadioButton : ToggleBase
         _registeredParentScope = null;
     }
 
+    private const double BoxSize = 14;
+    private const double SpacingValue = 6;
+
     protected override Size MeasureContent(Size availableSize)
     {
-        // IsChecked may be set before this control is attached to a Window. In that case,
-        // initial group registration is skipped. Retrying here makes group exclusivity reliable
-        // without requiring global lifecycle hooks.
         EnsureGroupRegistered();
 
-        const double boxSize = 14;
-        const double spacing = 6;
+        double width = BoxSize + SpacingValue;
+        double height = BoxSize;
 
-        double width = boxSize + spacing;
-        double height = boxSize;
-
-        if (!string.IsNullOrEmpty(Text))
+        if (Content != null)
         {
-            _textBlock.Parent ??= this;
-            _textBlock.Measure(new Size(Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness), double.PositiveInfinity));
-            width += _textBlock.DesiredSize.Width;
-            height = Math.Max(height, _textBlock.DesiredSize.Height);
+            var contentAvailable = new Size(
+                Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness),
+                double.PositiveInfinity);
+            Content.Measure(contentAvailable);
+            width += Content.DesiredSize.Width;
+            height = Math.Max(height, Content.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -163,11 +154,8 @@ public class RadioButton : ToggleBase
         var contentBounds = bounds.Deflate(Padding);
         var state = CurrentVisualState;
 
-        const double boxSize = 14;
-        const double spacing = 6;
-
-        double boxY = contentBounds.Y + (contentBounds.Height - boxSize) / 2;
-        var circleRect = new Rect(contentBounds.X, boxY, boxSize, boxSize);
+        double boxY = contentBounds.Y + (contentBounds.Height - BoxSize) / 2;
+        var circleRect = new Rect(contentBounds.X, boxY, BoxSize, BoxSize);
 
         var fill = GetValue(BackgroundProperty);
         context.FillEllipse(circleRect, fill);
@@ -185,11 +173,14 @@ public class RadioButton : ToggleBase
             context.FillEllipse(inner, dot);
         }
 
-        if (!string.IsNullOrEmpty(Text))
+        if (Content != null)
         {
-            var textBounds = new Rect(contentBounds.X + boxSize + spacing, contentBounds.Y, contentBounds.Width - boxSize - spacing, contentBounds.Height);
-            _textBlock.Arrange(textBounds);
-            _textBlock.Render(context);
+            var textBounds = new Rect(
+                contentBounds.X + BoxSize + SpacingValue,
+                contentBounds.Y,
+                Math.Max(0, contentBounds.Width - BoxSize - SpacingValue),
+                contentBounds.Height);
+            Content.Arrange(textBounds);
         }
     }
 

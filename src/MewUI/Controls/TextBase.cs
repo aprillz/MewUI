@@ -295,6 +295,12 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     public override bool Focusable => true;
 
+    internal override void OnAccessKey()
+    {
+        Focus();
+        SelectAll();
+    }
+
     protected double HorizontalOffset => _view.HorizontalOffset;
 
     protected double VerticalOffset => _view.VerticalOffset;
@@ -529,7 +535,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
             return;
         }
 
-        if (e.ControlKey)
+        if (e.PrimaryKey)
         {
             switch (e.Key)
             {
@@ -996,14 +1002,15 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
             canPaste = true;
         }
 
-        menu.AddItem("Undo", () => Undo(), isEnabled: !IsReadOnly && CanUndo, shortcutText: "Ctrl+Z");
-        menu.AddItem("Redo", () => Redo(), isEnabled: !IsReadOnly && CanRedo, shortcutText: "Ctrl+Y");
+        var p = ModifierKeys.Primary;
+        menu.AddItem("Undo", () => Undo(), !IsReadOnly && CanUndo, new KeyGesture(Key.Z, p));
+        menu.AddItem("Redo", () => Redo(), !IsReadOnly && CanRedo, new KeyGesture(Key.Y, p));
         menu.AddSeparator();
-        menu.AddItem("Cut", () => Cut(), isEnabled: !IsReadOnly && HasSelection, shortcutText: "Ctrl+X");
-        menu.AddItem("Copy", () => Copy(), isEnabled: HasSelection, shortcutText: "Ctrl+C");
-        menu.AddItem("Paste", () => Paste(), isEnabled: canPaste, shortcutText: "Ctrl+V");
+        menu.AddItem("Cut", () => Cut(), !IsReadOnly && HasSelection, new KeyGesture(Key.X, p));
+        menu.AddItem("Copy", () => Copy(), HasSelection, new KeyGesture(Key.C, p));
+        menu.AddItem("Paste", () => Paste(), canPaste, new KeyGesture(Key.V, p));
         menu.AddSeparator();
-        menu.AddItem("Select All", () => SelectAll(), isEnabled: GetTextLengthCore() > 0, shortcutText: "Ctrl+A");
+        menu.AddItem("Select All", () => SelectAll(), GetTextLengthCore() > 0, new KeyGesture(Key.A, p));
 
         menu.ShowAt(this, positionInWindow);
     }

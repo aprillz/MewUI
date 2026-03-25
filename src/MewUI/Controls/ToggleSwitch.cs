@@ -1,24 +1,21 @@
-using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// A toggle switch control with optional text label.
+/// A toggle switch control with optional content label.
 /// </summary>
 public sealed class ToggleSwitch : ToggleBase
 {
     public static readonly MewProperty<Color> ThumbBrushProperty =
         MewProperty<Color>.Register<ToggleSwitch>(nameof(ThumbBrush), default, MewPropertyOptions.AffectsRender);
 
-    private TextMeasureCache _textMeasureCache;
-
     static ToggleSwitch()
     {
         HorizontalAlignmentProperty.OverrideDefaultValue<ToggleSwitch>(HorizontalAlignment.Left);
     }
 
-    private const double spacing = 8;
+    private const double Spacing = 8;
 
     public Color ThumbBrush
     {
@@ -29,13 +26,10 @@ public sealed class ToggleSwitch : ToggleBase
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-        _textMeasureCache.Invalidate();
     }
 
     private (double trackWidth, double trackHeight) GetTrackSize()
     {
-        // Match the overall control sizing style (Button/ComboBox) while keeping the switch itself compact.
-        // BaseControlHeight is 28 in the default InternalTheme -> trackHeight 20.
         double trackHeight = Math.Max(16, Theme.Metrics.BaseControlHeight - 8);
         double trackWidth = Math.Max(trackHeight * 2, trackHeight + 18);
         return (trackWidth, trackHeight);
@@ -48,13 +42,14 @@ public sealed class ToggleSwitch : ToggleBase
         double width = trackWidth;
         double height = trackHeight;
 
-        if (!string.IsNullOrEmpty(Text))
+        if (Content != null)
         {
-            var factory = GetGraphicsFactory();
-            var font = GetFont(factory);
-            var textSize = _textMeasureCache.Measure(factory, GetDpi(), font, Text, TextWrapping.NoWrap, 0);
-            width += spacing + textSize.Width;
-            height = Math.Max(height, textSize.Height);
+            var contentAvailable = new Size(
+                Math.Max(0, availableSize.Width - width - Spacing - Padding.HorizontalThickness),
+                double.PositiveInfinity);
+            Content.Measure(contentAvailable);
+            width += Spacing + Content.DesiredSize.Width;
+            height = Math.Max(height, Content.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -95,12 +90,14 @@ public sealed class ToggleSwitch : ToggleBase
         var thumbRect = new Rect(thumbX, trackRect.Y + thumbInset, thumbSize, thumbSize);
         context.FillEllipse(thumbRect, thumbFill);
 
-        if (!string.IsNullOrEmpty(Text))
+        if (Content != null)
         {
-            var font = GetFont();
-            var textColor = GetValue(ForegroundProperty);
-            var textBounds = new Rect(trackRect.Right + spacing, contentBounds.Y, contentBounds.Width - trackRect.Width - spacing, contentBounds.Height);
-            context.DrawText(Text, textBounds, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+            var labelBounds = new Rect(
+                trackRect.Right + Spacing,
+                contentBounds.Y,
+                Math.Max(0, contentBounds.Width - trackRect.Width - Spacing),
+                contentBounds.Height);
+            Content.Arrange(labelBounds);
         }
     }
 
@@ -152,5 +149,4 @@ public sealed class ToggleSwitch : ToggleBase
         e.Handled = true;
     }
 
-    // Binding provided by ToggleBase
 }

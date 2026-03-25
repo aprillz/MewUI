@@ -41,6 +41,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
             InvalidateVisual();
         }
     }
+
     private IItemsView _itemsSource = ItemsView.Empty;
 
     public IDataTemplate ItemTemplate
@@ -419,10 +420,10 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
     private static IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
-            build: _ => new Label(),
+            build: _ => new TextBlock(),
             bind: (view, _, index, _) =>
             {
-                if (view is Label label)
+                if (view is TextBlock label)
                 {
                     label.Text = index.ToString();
                     label.VerticalTextAlignment = TextAlignment.Center;

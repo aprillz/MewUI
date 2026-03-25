@@ -104,7 +104,7 @@ public sealed class MessageBoxWindow : Window
             Spacing = 12
         };
 
-        bodyPanel.Add(new Label
+        bodyPanel.Add(new TextBlock
         {
             Text = _message,
             TextWrapping = TextWrapping.Wrap,
@@ -122,9 +122,11 @@ public sealed class MessageBoxWindow : Window
                 IsVisible = false,
             };
 
+            var detailAt = new AccessText();
+            detailAt.SetRawText(MewUIStrings.ShowDetail.Value);
             var detailCheckBox = new CheckBox
             {
-                Text = MewUIStrings.ShowDetail.Value,
+                Content = detailAt,
                 Margin = new Thickness(0, 12, 0, 0)
             };
             detailCheckBox.CheckedChanged += isChecked =>
@@ -154,9 +156,11 @@ public sealed class MessageBoxWindow : Window
 
         foreach (var proxy in _checkBoxes)
         {
+            var at = new AccessText();
+            at.SetRawText(proxy.Text);
             var cb = new CheckBox
             {
-                Text = proxy.Text,
+                Content = at,
                 IsChecked = proxy.IsChecked
             };
             _checkBoxControls.Add((proxy, cb));

@@ -495,7 +495,7 @@ public static class ControlExtensions
     public static T Header<T>(this T control, string header) where T : HeaderedContentControl
     {
         ArgumentNullException.ThrowIfNull(control);
-        control.Header = new Label()
+        control.Header = new TextBlock()
             .Text(header ?? string.Empty)
             .Bold();
         return control;
@@ -587,6 +587,18 @@ public static class ControlExtensions
     public static Label Text(this Label label, string text)
     {
         label.Text = text;
+        return label;
+    }
+
+    /// <summary>
+    /// Sets the access key target element that receives focus when the label's access key is activated.
+    /// </summary>
+    /// <param name="label">Target label.</param>
+    /// <param name="target">Element to focus on access key activation.</param>
+    /// <returns>The label for chaining.</returns>
+    public static Label AccessKeyTarget(this Label label, UIElement target)
+    {
+        label.Target = target;
         return label;
     }
 
@@ -747,6 +759,15 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the font weight to semi-bold.
+    /// </summary>
+    public static TextBlock SemiBold(this TextBlock textBlock)
+    {
+        textBlock.FontWeight = MewUI.FontWeight.SemiBold;
+        return textBlock;
+    }
+
+    /// <summary>
     /// Sets the text alignment.
     /// </summary>
     /// <param name="textBlock">Target text block.</param>
@@ -844,21 +865,34 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the button content to a centered text label.
+    /// Sets the button content to a centered text label. When <paramref name="accessKey"/> is true (default),
+    /// "_" prefixes mark access key characters (e.g., "_Save" registers Alt+S).
     /// </summary>
-    /// <param name="button">Target button.</param>
-    /// <param name="text">Content text.</param>
-    /// <returns>The button for chaining.</returns>
-    public static Button Content(this Button button, string text)
+    public static Button Content(this Button button, string text, bool accessKey = true)
     {
-        button.Content = new TextBlock
+        if (accessKey)
         {
-            Text = text,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextAlignment = MewUI.TextAlignment.Center,
-            VerticalTextAlignment = MewUI.TextAlignment.Center,
-        };
+            var at = new Controls.AccessText
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = MewUI.TextAlignment.Center,
+                VerticalTextAlignment = MewUI.TextAlignment.Center,
+            };
+            at.SetRawText(text);
+            button.Content = at;
+        }
+        else
+        {
+            button.Content = new TextBlock
+            {
+                Text = text,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = MewUI.TextAlignment.Center,
+                VerticalTextAlignment = MewUI.TextAlignment.Center,
+            };
+        }
         return button;
     }
 
@@ -1038,17 +1072,47 @@ public static class ControlExtensions
 
     #endregion
 
+    #region ToggleBase
+
+    /// <summary>
+    /// Sets the content to a text label. When <paramref name="accessKey"/> is true (default),
+    /// "_" prefixes mark access key characters (e.g., "_Save" registers Alt+S).
+    /// </summary>
+    public static T Content<T>(this T control, string text, bool accessKey = true) where T : ToggleBase
+    {
+        if (accessKey)
+        {
+            var at = new Controls.AccessText();
+            at.SetRawText(text);
+            control.Content = at;
+        }
+        else
+        {
+            control.Content = new TextBlock { Text = text };
+        }
+        return control;
+    }
+
+    #endregion
+
     #region CheckBox
 
     /// <summary>
-    /// Sets the text.
+    /// Sets the content to a text label. When <paramref name="accessKey"/> is true (default),
+    /// "_" prefixes mark access key characters (e.g., "_Remember me" registers Alt+R).
     /// </summary>
-    /// <param name="checkBox">Target check box.</param>
-    /// <param name="text">Text content.</param>
-    /// <returns>The check box for chaining.</returns>
-    public static CheckBox Text(this CheckBox checkBox, string text)
+    public static CheckBox Content(this CheckBox checkBox, string text, bool accessKey = true)
     {
-        checkBox.Text = text;
+        if (accessKey)
+        {
+            var at = new Controls.AccessText();
+            at.SetRawText(text);
+            checkBox.Content = at;
+        }
+        else
+        {
+            checkBox.Content = new TextBlock { Text = text };
+        }
         return checkBox;
     }
 
@@ -1180,16 +1244,8 @@ public static class ControlExtensions
     #region RadioButton
 
     /// <summary>
-    /// Sets the text.
+    /// Sets the content to a text label (no access key parsing).
     /// </summary>
-    /// <param name="radioButton">Target radio button.</param>
-    /// <param name="text">Text content.</param>
-    /// <returns>The radio button for chaining.</returns>
-    public static RadioButton Text(this RadioButton radioButton, string text)
-    {
-        radioButton.Text = text;
-        return radioButton;
-    }
 
     /// <summary>
     /// Sets the group name.
@@ -1315,21 +1371,34 @@ public static class ControlExtensions
     #region ToggleButton
 
     /// <summary>
-    /// Sets the content text.
+    /// Sets the content to a centered text label. When <paramref name="accessKey"/> is true (default),
+    /// "_" prefixes mark access key characters.
     /// </summary>
-    /// <param name="toggleButton">Target toggle button.</param>
-    /// <param name="content">Text content.</param>
-    /// <returns>The toggle button for chaining.</returns>
-    public static ToggleButton Content(this ToggleButton toggleButton, string content)
+    public static ToggleButton Content(this ToggleButton toggleButton, string text, bool accessKey = true)
     {
-        toggleButton.Content = new TextBlock
+        if (accessKey)
         {
-            Text = content,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextAlignment = MewUI.TextAlignment.Center,
-            VerticalTextAlignment = MewUI.TextAlignment.Center,
-        };
+            var at = new Controls.AccessText
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = MewUI.TextAlignment.Center,
+                VerticalTextAlignment = MewUI.TextAlignment.Center,
+            };
+            at.SetRawText(text);
+            toggleButton.Content = at;
+        }
+        else
+        {
+            toggleButton.Content = new TextBlock
+            {
+                Text = text,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = MewUI.TextAlignment.Center,
+                VerticalTextAlignment = MewUI.TextAlignment.Center,
+            };
+        }
         return toggleButton;
     }
 
@@ -1375,18 +1444,6 @@ public static class ControlExtensions
     #endregion
 
     #region ToggleSwitch
-
-    /// <summary>
-    /// Sets the text.
-    /// </summary>
-    /// <param name="toggleSwitch">Target toggle switch.</param>
-    /// <param name="text">Text content.</param>
-    /// <returns>The toggle switch for chaining.</returns>
-    public static ToggleSwitch Text(this ToggleSwitch toggleSwitch, string text)
-    {
-        toggleSwitch.Text = text;
-        return toggleSwitch;
-    }
 
     /// <summary>
     /// Sets the checked state.
@@ -2004,18 +2061,18 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Adds a menu item with shortcut text.
+    /// Adds a menu item with a keyboard shortcut.
     /// </summary>
     /// <param name="menu">Target context menu.</param>
     /// <param name="text">Item text.</param>
-    /// <param name="shortcutText">Shortcut text.</param>
+    /// <param name="shortcut">Keyboard shortcut gesture.</param>
     /// <param name="onClick">Click handler.</param>
     /// <param name="isEnabled">Enabled state.</param>
     /// <returns>The context menu for chaining.</returns>
-    public static ContextMenu Item(this ContextMenu menu, string text, string shortcutText, Action? onClick = null, bool isEnabled = true)
+    public static ContextMenu Item(this ContextMenu menu, string text, KeyGesture shortcut, Action? onClick = null, bool isEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(menu);
-        menu.AddItem(text, onClick, isEnabled, shortcutText);
+        menu.AddItem(text, onClick, isEnabled, shortcut);
         return menu;
     }
 
@@ -2037,20 +2094,20 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Adds a submenu with shortcut text.
+    /// Adds a submenu with a keyboard shortcut.
     /// </summary>
     /// <param name="menu">Target context menu.</param>
     /// <param name="text">Submenu text.</param>
-    /// <param name="shortcutText">Shortcut text.</param>
+    /// <param name="shortcut">Keyboard shortcut gesture.</param>
     /// <param name="subMenu">Submenu.</param>
     /// <param name="isEnabled">Enabled state.</param>
     /// <returns>The context menu for chaining.</returns>
-    public static ContextMenu SubMenu(this ContextMenu menu, string text, string shortcutText, ContextMenu subMenu, bool isEnabled = true)
+    public static ContextMenu SubMenu(this ContextMenu menu, string text, KeyGesture shortcut, ContextMenu subMenu, bool isEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(menu);
         ArgumentNullException.ThrowIfNull(subMenu);
 
-        menu.AddSubMenu(text, subMenu.Menu, isEnabled, shortcutText);
+        menu.AddSubMenu(text, subMenu.Menu, isEnabled, shortcut);
         return menu;
     }
 
@@ -2374,11 +2431,21 @@ public static class ControlExtensions
     /// </summary>
     /// <param name="tab">Target tab item.</param>
     /// <param name="header">Header text.</param>
+    /// <param name="accessKey">When true (default), "_" prefixes mark access key characters.</param>
     /// <returns>The tab item for chaining.</returns>
-    public static TabItem Header(this TabItem tab, string header)
+    public static TabItem Header(this TabItem tab, string header, bool accessKey = true)
     {
         ArgumentNullException.ThrowIfNull(tab);
-        tab.Header = new Label().Text(header ?? string.Empty);
+        if (accessKey)
+        {
+            var at = new AccessText();
+            at.SetRawText(header ?? string.Empty);
+            tab.Header = at;
+        }
+        else
+        {
+            tab.Header = new TextBlock { Text = header ?? string.Empty };
+        }
         return tab;
     }
 

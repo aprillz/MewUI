@@ -495,7 +495,7 @@ public sealed class MultiLineTextBox : TextBase
                 RenderSelectionForRow(context, font, theme, start, startCol, visible, y, drawX);
                 context.DrawText(visible, lineRect, font, textColor, TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap);
 
-                // Composition underline (dashed)
+                // Composition underline (attribute-based)
                 if (IsComposing && CompositionLength > 0)
                 {
                     int compStart = CompositionStartIndex;
@@ -504,10 +504,13 @@ public sealed class MultiLineTextBox : TextBase
                     int ce = Math.Min(compEnd - start, endCol);
                     if (cs < ce && cs >= 0)
                     {
-                        double ulX1 = contentBounds.X - HorizontalOffset + MultiLineTextView.GetPrefixWidthCached(cache, cs, context, font);
-                        double ulX2 = contentBounds.X - HorizontalOffset + MultiLineTextView.GetPrefixWidthCached(cache, ce, context, font);
                         double ulY = y + lineHeight - 2;
-                        TextBoxView.DrawDashedLine(context, ulX1, ulX2, ulY, textColor);
+                        int attrOffset = (cs + start) - compStart;
+                        double baseX = contentBounds.X - HorizontalOffset;
+                        TextBoxView.DrawSegmentedCompositionUnderline(
+                            context, ulY, textColor,
+                            CompositionAttributes, attrOffset, ce - cs,
+                            i => baseX + MultiLineTextView.GetPrefixWidthCached(cache, cs + i, context, font));
                     }
                 }
 
@@ -571,23 +574,23 @@ public sealed class MultiLineTextBox : TextBase
                 RenderSelectionForRow(context, font, theme, lineStart, segStart, rowText, yWrap, contentBounds.X, lineMeasure);
                 context.DrawText(rowText, rowRect, font, textColor, TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap);
 
-                // Composition underline (wrap mode)
+                // Composition underline (wrap mode, attribute-based)
                 if (IsComposing && CompositionLength > 0)
                 {
                     int compStart = CompositionStartIndex;
                     int compEnd = compStart + CompositionLength;
-                    // Convert to line-local indices
                     int cs = Math.Max(compStart - lineStart, segStart);
                     int ce = Math.Min(compEnd - lineStart, segEnd);
                     if (cs < ce)
                     {
                         lineMeasure ??= _textView.EnsureLineMeasureCache(lineIndex, lineStart, lineEnd, measure.Context, measure.Font);
-                        double ulX1 = contentBounds.X + MultiLineTextView.GetPrefixWidthCached(lineMeasure, cs, measure.Context, measure.Font)
-                                     - MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, measure.Context, measure.Font);
-                        double ulX2 = contentBounds.X + MultiLineTextView.GetPrefixWidthCached(lineMeasure, ce, measure.Context, measure.Font)
-                                     - MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, measure.Context, measure.Font);
                         double ulY = yWrap + lineHeight - 2;
-                        TextBoxView.DrawDashedLine(context, ulX1, ulX2, ulY, textColor);
+                        int attrOffset = (cs + lineStart) - compStart;
+                        double segPrefixW = MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, measure.Context, measure.Font);
+                        TextBoxView.DrawSegmentedCompositionUnderline(
+                            context, ulY, textColor,
+                            CompositionAttributes, attrOffset, ce - cs,
+                            i => contentBounds.X + MultiLineTextView.GetPrefixWidthCached(lineMeasure, cs + i, measure.Context, measure.Font) - segPrefixW);
                     }
                 }
 

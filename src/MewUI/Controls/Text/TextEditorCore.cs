@@ -40,6 +40,15 @@ internal sealed class TextEditorCore
 
     public bool CanRedo => _redo.Count > 0;
 
+    /// <summary>
+    /// Records an insert edit for undo without applying it to the document.
+    /// Used when text is already in the document (e.g. IME composition commit).
+    /// </summary>
+    public void RecordInsertForUndo(int index, string text)
+    {
+        RecordEdit(new Edit(EditKind.Insert, index, text));
+    }
+
     public void ResetAfterTextSet()
     {
         ClearUndoRedo();
@@ -105,6 +114,7 @@ internal sealed class TextEditorCore
 
     public void MoveCaretHorizontal(int direction, bool extendSelection, bool word)
     {
+
         int length = _getLength();
         if (length == 0)
         {
@@ -241,6 +251,8 @@ internal sealed class TextEditorCore
         {
             return false;
         }
+
+
 
         var (start, end) = GetSelectionRange();
         int length = end - start;

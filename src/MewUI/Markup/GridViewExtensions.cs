@@ -328,7 +328,7 @@ public static class GridViewExtensions
 
         return Template(
             column,
-            build: _ => new Label().Padding(8, 0).CenterVertical(),
-            bind: (Label tb, TItem item) => tb.Text = textSelector(item) ?? string.Empty);
+            build: _ => new TextBlock().Margin(8, 0).CenterVertical(),
+            bind: (TextBlock tb, TItem item) => tb.Text = textSelector(item) ?? string.Empty);
     }
 }

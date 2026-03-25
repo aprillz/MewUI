@@ -380,6 +380,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             case WindowMessages.WM_CHAR:
                 return HandleChar(wParam);
 
+            case WindowMessages.WM_SYSCHAR:
+                // Suppress WM_SYSCHAR to prevent OS beep. MewUI does not use native menus,
+                // so there is no OS accelerator that needs this message.
+                return 0;
+
             case WindowMessages.WM_IME_STARTCOMPOSITION:
                 return HandleImeStartComposition();
 
@@ -391,7 +396,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             case 0x0282: // WM_IME_NOTIFY
                 ImeLogger.Write($"WM_IME_NOTIFY wParam=0x{wParam:X}");
-                return 0;
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_SETFOCUS:
                 User32.CreateCaret(Handle, 0, 1, 20);
@@ -1389,6 +1394,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         WindowInputRouter.KeyDown(Window, args);
+        Window.ProcessKeyBindings(args);
+        Window.ProcessAccessKeyDown(args);
 
         // WPF-like Tab behavior:
         // - Always let the focused element see KeyDown first.
@@ -1415,6 +1422,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
             _textInputSuppression.SuppressNextFromHandledKeyDown(args.Key);
         }
 
+        // Suppress DefWindowProc for WM_SYSKEYDOWN when the key is a bare modifier (Alt/F10).
+        // Otherwise Windows activates the native menu system which interferes with our access key handling.
+        if (!args.Handled && msg == WindowMessages.WM_SYSKEYDOWN &&
+            (platformKey == VirtualKeys.VK_MENU || platformKey == VirtualKeys.VK_F10))
+        {
+            return 0;
+        }
+
         return args.Handled ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
     }
 
@@ -1430,7 +1445,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
             WindowInputRouter.KeyUp(Window, args);
         }
 
+        Window.ProcessAccessKeyUp(args);
         Window.RequerySuggested();
+
+        // Suppress DefWindowProc for WM_SYSKEYUP with bare Alt to prevent native menu activation.
+        if (!args.Handled && msg == WindowMessages.WM_SYSKEYUP &&
+            (platformKey == VirtualKeys.VK_MENU || platformKey == VirtualKeys.VK_F10))
+        {
+            return 0;
+        }
 
         return args.Handled ? 0 : User32.DefWindowProc(Handle, msg, wParam, lParam);
     }
@@ -1496,8 +1519,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
             int caretPos = (client is Controls.TextBase tb) ? tb.CaretPosition : client.CompositionStartIndex;
             var caretRect = client.GetCharRectInWindow(caretPos);
 
-            // Skip positioning if the rect is not yet valid (layout not performed).
-            if (caretRect.Width <= 0 && caretRect.Height <= 0) return;
+            // If layout hasn't been performed yet, use a fallback height to avoid skipping IME positioning entirely.
+            if (caretRect.Width <= 0 && caretRect.Height <= 0)
+                caretRect = new Rect(caretRect.X, caretRect.Y, 1, 16);
             int caretPx = (int)(caretRect.X * dpiScale);
             int caretPy = (int)(caretRect.Y * dpiScale);
             int lineH = (int)(caretRect.Height * dpiScale);
@@ -1544,7 +1568,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if ((flags & Imm32.CompositionStringFlags.GCS_COMPSTR) != 0)
         {
             string comp = GetImeCompositionString(Imm32.CompositionStringFlags.GCS_COMPSTR);
-            var args = new TextCompositionEventArgs(comp);
+            var attrs = GetImeCompositionAttributes();
+            var args = new TextCompositionEventArgs(comp, attrs);
             Window.RaisePreviewTextCompositionUpdate(args);
             if (!args.Handled)
             {
@@ -1629,6 +1654,39 @@ internal sealed class Win32WindowBackend : IWindowBackend
             {
                 ArrayPool<byte>.Shared.Return(rented);
             }
+        }
+        finally
+        {
+            Imm32.ImmReleaseContext(Handle, himc);
+        }
+    }
+
+    private CompositionAttr[]? GetImeCompositionAttributes()
+    {
+        nint himc = Imm32.ImmGetContext(Handle);
+        if (himc == 0) return null;
+
+        try
+        {
+            int count = Imm32.ImmGetCompositionStringW(himc, Imm32.CompositionStringFlags.GCS_COMPATTR, 0, 0);
+            if (count <= 0) return null;
+
+            count = Math.Min(count, 1024);
+            var buf = new byte[count];
+            unsafe
+            {
+                fixed (byte* p = buf)
+                {
+                    Imm32.ImmGetCompositionStringW(himc, Imm32.CompositionStringFlags.GCS_COMPATTR, (nint)p, count);
+                }
+            }
+
+            var attrs = new CompositionAttr[count];
+            for (int i = 0; i < count; i++)
+            {
+                attrs[i] = (CompositionAttr)Math.Min(buf[i], (byte)4);
+            }
+            return attrs;
         }
         finally
         {

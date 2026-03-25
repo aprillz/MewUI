@@ -76,6 +76,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     public override bool Focusable => true;
 
+    internal override void OnAccessKey() => Focus();
+
     public bool EditMode
     {
         get => GetValue(EditModeProperty);

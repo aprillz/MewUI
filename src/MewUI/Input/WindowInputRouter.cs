@@ -79,6 +79,7 @@ internal static class WindowInputRouter
         var element = HitTest(window, positionInWindow);
         if (isDown)
         {
+            window.AccessKeyManager.OnPointerDown();
             window.OnAfterMouseDownHitTest(positionInWindow, button, element);
         }
 

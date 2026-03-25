@@ -5,28 +5,8 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A button-like toggle control. When checked, its background is tinted with the theme accent (50%).
 /// </summary>
-public sealed partial class ToggleButton : ToggleBase, IVisualTreeHost
+public sealed partial class ToggleButton : ToggleBase
 {
-    public static readonly MewProperty<Element?> ContentProperty =
-        MewProperty<Element?>.Register<ToggleButton>(nameof(Content), null,
-            MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) => self.OnContentChanged(oldValue, newValue));
-
-    /// <summary>
-    /// Gets or sets the content element.
-    /// </summary>
-    public Element? Content
-    {
-        get => GetValue(ContentProperty);
-        set => SetValue(ContentProperty, value);
-    }
-
-    private void OnContentChanged(Element? oldValue, Element? newValue)
-    {
-        if (oldValue != null) oldValue.Parent = null;
-        if (newValue != null) newValue.Parent = this;
-    }
-
     protected override Size MeasureContent(Size availableSize)
     {
         var borderInset = GetBorderVisualInset();
@@ -65,8 +45,6 @@ public sealed partial class ToggleButton : ToggleBase, IVisualTreeHost
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = CornerRadius;
         DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
-
-        Content?.Render(context);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -180,6 +158,4 @@ public sealed partial class ToggleButton : ToggleBase, IVisualTreeHost
         return null;
     }
 
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => Content == null || visitor(Content);
 }

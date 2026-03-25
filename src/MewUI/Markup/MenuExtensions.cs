@@ -106,17 +106,22 @@ public static class MenuExtensions
     }
 
     /// <summary>
-    /// Sets the shortcut text.
+    /// Sets the keyboard shortcut gesture. Auto-generates display text.
     /// </summary>
-    /// <param name="item">Target menu item.</param>
-    /// <param name="shortcutText">Shortcut text.</param>
-    /// <returns>The menu item for chaining.</returns>
-    public static MenuItem Shortcut(this MenuItem item, string? shortcutText)
+    public static MenuItem Shortcut(this MenuItem item, KeyGesture gesture)
     {
-        item.ShortcutText = shortcutText;
+        item.Shortcut = gesture;
         return item;
     }
 
+    /// <summary>
+    /// Sets the keyboard shortcut gesture by key and modifiers. Auto-generates display text.
+    /// </summary>
+    public static MenuItem Shortcut(this MenuItem item, Key key, ModifierKeys modifiers = ModifierKeys.None)
+    {
+        item.Shortcut = new KeyGesture(key, modifiers);
+        return item;
+    }
 
     /// <summary>
     /// Adds an entry to the menu.
@@ -139,9 +144,9 @@ public static class MenuExtensions
     /// <param name="text">Menu item text.</param>
     /// <param name="onClick">Click handler.</param>
     /// <param name="isEnabled">Whether the item is enabled.</param>
-    /// <param name="shortcutText">Shortcut display text (optional).</param>
+    /// <param name="shortcut">Keyboard shortcut gesture (optional).</param>
     /// <returns>The menu for chaining.</returns>
-    public static Menu Item(this Menu menu, string text, Action? onClick = null, bool isEnabled = true, string? shortcutText = null)
+    public static Menu Item(this Menu menu, string text, Action? onClick = null, bool isEnabled = true, KeyGesture? shortcut = null)
     {
         ArgumentNullException.ThrowIfNull(menu);
         menu.Items.Add(new MenuItem
@@ -149,7 +154,7 @@ public static class MenuExtensions
             Text = text ?? string.Empty,
             Click = onClick,
             IsEnabled = isEnabled,
-            ShortcutText = shortcutText
+            Shortcut = shortcut
         });
         return menu;
     }
@@ -161,9 +166,9 @@ public static class MenuExtensions
     /// <param name="text">Menu item text.</param>
     /// <param name="subMenu">Submenu.</param>
     /// <param name="isEnabled">Whether the item is enabled.</param>
-    /// <param name="shortcutText">Shortcut display text (optional).</param>
+    /// <param name="shortcut">Keyboard shortcut gesture (optional).</param>
     /// <returns>The menu for chaining.</returns>
-    public static Menu SubMenu(this Menu menu, string text, Menu subMenu, bool isEnabled = true, string? shortcutText = null)
+    public static Menu SubMenu(this Menu menu, string text, Menu subMenu, bool isEnabled = true, KeyGesture? shortcut = null)
     {
         ArgumentNullException.ThrowIfNull(menu);
         ArgumentNullException.ThrowIfNull(subMenu);
@@ -172,7 +177,7 @@ public static class MenuExtensions
         {
             Text = text ?? string.Empty,
             IsEnabled = isEnabled,
-            ShortcutText = shortcutText,
+            Shortcut = shortcut,
             SubMenu = subMenu
         });
         return menu;
