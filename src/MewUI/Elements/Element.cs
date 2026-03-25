@@ -230,7 +230,10 @@ public abstract class Element : MewObject
     /// </summary>
     public Element? FindVisualRoot()
     {
-        var current = this;
+        if (Parent == null)
+            return this is Window ? this : null;
+
+        var current = Parent;
         while (current.Parent != null)
         {
             current = current.Parent;
