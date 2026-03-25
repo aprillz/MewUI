@@ -21,10 +21,11 @@ public sealed class KeyBinding
     /// </summary>
     public Func<bool>? CanExecute { get; set; }
 
-    public KeyBinding(KeyGesture gesture, Action execute)
+    public KeyBinding(KeyGesture gesture, Action execute, Func<bool>? canExecute = null)
     {
         Gesture = gesture;
         Execute = execute ?? throw new ArgumentNullException(nameof(execute));
+        CanExecute = canExecute;
     }
 
     /// <summary>
