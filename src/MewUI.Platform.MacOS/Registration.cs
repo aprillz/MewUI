@@ -10,7 +10,10 @@ public static class MacOSPlatform
     public const string PlatformId = "macos";
 
     public static void Register()
-        => Application.RegisterPlatformHost(PlatformId, CreateHost);
+    {
+        Application.RegisterPlatformHost(PlatformId, CreateHost);
+        PlatformKeyConfiguration.Current = new Platform.MacOS.MacOSKeyConfiguration();
+    }
 
     private static MacOSPlatformHost CreateHost()
         => new();
