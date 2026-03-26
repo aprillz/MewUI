@@ -25,6 +25,18 @@ public sealed class MenuBar : Control, IPopupOwner
     public static readonly MewProperty<double> SpacingProperty =
         MewProperty<double>.Register<MenuBar>(nameof(Spacing), 2.0, MewPropertyOptions.AffectsLayout);
 
+    public static readonly MewProperty<bool> DrawBottomSeparatorProperty =
+        MewProperty<bool>.Register<MenuBar>(nameof(DrawBottomSeparator), true, MewPropertyOptions.AffectsRender);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to draw a bottom separator line below the menu bar. 
+    /// </summary>
+    public bool DrawBottomSeparator
+    {
+        get => GetValue(DrawBottomSeparatorProperty);
+        set => SetValue(DrawBottomSeparatorProperty, value);
+    }
+
     /// <summary>
     /// Gets or sets the spacing between menu items.
     /// </summary>
@@ -380,12 +392,15 @@ public sealed class MenuBar : Control, IPopupOwner
             AccessKeyRenderer.DrawText(context, item.Text ?? string.Empty, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
         }
 
-        // Simple bottom separator.
-        var dpiScale = GetDpi() / 96.0;
-        var thickness = LayoutRounding.SnapThicknessToPixels(1.0 / dpiScale, dpiScale, 1);
-        var rect = LayoutRounding.SnapBoundsRectToPixels(
-            new Rect(bounds.X, bounds.Bottom - thickness, Math.Max(0, bounds.Width), thickness),
-            dpiScale);
-        context.FillRectangle(rect, Theme.Palette.ControlBorder);
+        if (DrawBottomSeparator)
+        {
+            // Simple bottom separator.
+            var dpiScale = GetDpi() / 96.0;
+            var thickness = LayoutRounding.SnapThicknessToPixels(1.0 / dpiScale, dpiScale, 1);
+            var rect = LayoutRounding.SnapBoundsRectToPixels(
+                new Rect(bounds.X, bounds.Bottom - thickness, Math.Max(0, bounds.Width), thickness),
+                dpiScale);
+            context.FillRectangle(rect, Theme.Palette.ControlBorder);
+        }
     }
 }
