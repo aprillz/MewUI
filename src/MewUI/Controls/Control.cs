@@ -350,8 +350,34 @@ public abstract class Control : FrameworkElement
         _styleResolved = true;
         Style? resolved = null;
 
-        // TODO: 1. StyleName → nearest StyleSheet lookup
-        // TODO: 2. StyleScope → nearest container type-matched rule
+        // 1. StyleName → nearest StyleSheet lookup
+        if (_styleName != null)
+        {
+            resolved = FindNearestStyleSheet()?.Get(_styleName);
+        }
+
+        // 2. StyleScope → nearest container type-matched rule
+        if (resolved == null)
+        {
+            var controlType = GetType();
+            for (Element? current = Parent; current != null; current = current.Parent)
+            {
+                if (current is FrameworkElement fe && fe.StyleScope != null)
+                {
+                    var (style, styleName) = fe.StyleScope.GetStyleOrName(controlType);
+                    if (style != null)
+                    {
+                        resolved = style;
+                        break;
+                    }
+                    if (styleName != null)
+                    {
+                        resolved = FindNearestStyleSheet()?.Get(styleName);
+                        if (resolved != null) break;
+                    }
+                }
+            }
+        }
 
         // 3. Theme default style (walk type hierarchy)
         if (resolved == null)
@@ -366,6 +392,16 @@ public abstract class Control : FrameworkElement
         }
 
         SetStyle(resolved);
+    }
+
+    private Styling.StyleSheet? FindNearestStyleSheet()
+    {
+        for (Element? current = this; current != null; current = current.Parent)
+        {
+            if (current is FrameworkElement fe && fe.StyleSheet != null)
+                return fe.StyleSheet;
+        }
+        return null;
     }
 
     protected sealed override void ResolveVisualState()
@@ -403,10 +439,32 @@ public abstract class Control : FrameworkElement
 
     /// <summary>
     /// Resolves and applies property values from Style + StateTrigger based on current flags.
+    /// Trigger tracking is done at the top level (not per recursion) to avoid
+    /// BasedOn recursion clobbering the active trigger set.
     /// </summary>
     private void ApplyStyleValues(VisualStateFlags flags, bool snap = false)
     {
+        // 1. Collect ALL trigger property IDs from the entire style chain
+        _newTriggerPropertyIds ??= new HashSet<int>();
+        _newTriggerPropertyIds.Clear();
+        CollectTriggerProperties(_style, flags, _newTriggerPropertyIds);
+
+        // 2. Restore properties that were triggered before but not now
+        if (_activeTriggerPropertyIds != null && _style != null)
+        {
+            foreach (var id in _activeTriggerPropertyIds)
+            {
+                if (!_newTriggerPropertyIds.Contains(id))
+                    RestoreFromStyle(_style, id, snap);
+            }
+        }
+
+        // 3. Apply base setters + matching triggers through the chain
         ApplyStyleChain(_style, flags, snap);
+
+        // 4. Swap active sets
+        (_activeTriggerPropertyIds, _newTriggerPropertyIds) =
+            (_newTriggerPropertyIds, _activeTriggerPropertyIds);
     }
 
     // Tracks which property IDs were set by triggers in the previous state.
@@ -414,20 +472,10 @@ public abstract class Control : FrameworkElement
     private HashSet<int>? _activeTriggerPropertyIds;
     private HashSet<int>? _newTriggerPropertyIds;
 
-    private void ApplyStyleChain(Style? style, VisualStateFlags flags, bool snap)
+    private static void CollectTriggerProperties(Style? style, VisualStateFlags flags, HashSet<int> result)
     {
         if (style == null) return;
-
-        // Process BasedOn first (lower priority)
-        ApplyStyleChain(style.BasedOn, flags, snap);
-
-        // Apply base setters (source = Style)
-        for (int i = 0; i < style.Setters.Count; i++)
-            ApplySetter(style.Setters[i], ValueSource.Style, snap);
-
-        // Collect current trigger property IDs
-        _newTriggerPropertyIds ??= new HashSet<int>();
-        _newTriggerPropertyIds.Clear();
+        CollectTriggerProperties(style.BasedOn, flags, result);
 
         for (int i = 0; i < style.Triggers.Count; i++)
         {
@@ -437,35 +485,65 @@ public abstract class Control : FrameworkElement
                 for (int j = 0; j < trigger.Setters.Count; j++)
                 {
                     if (trigger.Setters[j] is Setter s)
-                        _newTriggerPropertyIds.Add(s.Property.Id);
+                        result.Add(s.Property.Id);
                 }
             }
         }
+    }
 
-        // Clear trigger values for properties that were triggered before but not now
-        if (_activeTriggerPropertyIds != null)
+    /// <summary>
+    /// Collects final (winning) values from the entire style chain, then applies once.
+    /// BasedOn values are overridden by derived style values for the same property.
+    /// This avoids intermediate animations when BasedOn and derived styles both set the same property.
+    /// </summary>
+    private void ApplyStyleChain(Style? style, VisualStateFlags flags, bool snap)
+    {
+        if (style == null) return;
+
+        // Collect final values: later styles override earlier (BasedOn) ones
+        _resolvedSetters ??= new();
+        _resolvedSetters.Clear();
+        CollectResolvedValues(style, flags, _resolvedSetters);
+
+        // Apply all collected values once
+        var theme = Theme;
+        foreach (var kv in _resolvedSetters)
         {
-            foreach (var id in _activeTriggerPropertyIds)
-            {
-                if (!_newTriggerPropertyIds.Contains(id))
-                    RestoreFromStyle(style, id, snap);
-            }
+            var (setter, source) = kv.Value;
+            ApplySetter(setter, source, snap);
+        }
+    }
+
+    private Dictionary<int, (SetterBase Setter, ValueSource Source)>? _resolvedSetters;
+
+    private static void CollectResolvedValues(Style? style, VisualStateFlags flags,
+        Dictionary<int, (SetterBase Setter, ValueSource Source)> result)
+    {
+        if (style == null) return;
+
+        // BasedOn first (lower priority — will be overwritten by derived)
+        CollectResolvedValues(style.BasedOn, flags, result);
+
+        // Base setters
+        for (int i = 0; i < style.Setters.Count; i++)
+        {
+            if (style.Setters[i] is Setter s)
+                result[s.Property.Id] = (s, ValueSource.Style);
         }
 
-        // Apply matching triggers (source = Trigger)
+        // Matching triggers (override base setters)
         for (int i = 0; i < style.Triggers.Count; i++)
         {
             var trigger = style.Triggers[i];
             if (trigger.Matches(flags))
             {
                 for (int j = 0; j < trigger.Setters.Count; j++)
-                    ApplySetter(trigger.Setters[j], ValueSource.Trigger, snap);
+                {
+                    if (trigger.Setters[j] is Setter s)
+                        result[s.Property.Id] = (s, ValueSource.Trigger);
+                }
             }
         }
-
-        // Swap active sets
-        (_activeTriggerPropertyIds, _newTriggerPropertyIds) =
-            (_newTriggerPropertyIds, _activeTriggerPropertyIds);
     }
 
     private void RestoreFromStyle(Style style, int propertyId, bool snap)
@@ -475,10 +553,6 @@ public abstract class Control : FrameworkElement
         if (currentSource >= ValueSource.Local)
             return;
 
-        // Clear the trigger source first so Style can take effect
-        // (SetStyle would be skipped if source is still Trigger because Style < Trigger)
-        PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
-
         // Find the base setter value for this property from the style chain
         var setterValue = FindStyleSetterValue(style, propertyId);
         if (setterValue != null)
@@ -487,12 +561,25 @@ public abstract class Control : FrameworkElement
             if (property != null)
             {
                 if (!snap && _style?.FindTransition(propertyId) is Styling.Transition transition)
-                    Animator.Animate(property, setterValue, transition.Duration, transition.Easing);
+                {
+                    // Animate directly — Animator bypasses source priority and
+                    // SetTargetDirect updates BaseSource to Style.
+                    // No ClearSource needed; avoids intermediate null/default flash.
+                    Animator.Animate(property, setterValue, transition.Duration, transition.Easing, ValueSource.Style);
+                }
                 else
+                {
+                    // Snap: force-set by clearing trigger source first, then setting style value
+                    PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
                     PropertyStore.SetStyle(property, setterValue);
+                }
             }
         }
-        // If no style setter, already cleared — inherited/default takes effect
+        else
+        {
+            // No style setter — clear trigger to let inherited/default take effect
+            PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
+        }
     }
 
     private object? FindStyleSetterValue(Style? style, int propertyId)
@@ -521,7 +608,7 @@ public abstract class Control : FrameworkElement
 
                 var value = s.ResolveValue(Theme);
                 if (!snap && _style?.FindTransition(s.Property.Id) is Styling.Transition transition)
-                    Animator.Animate(s.Property, value, transition.Duration, transition.Easing);
+                    Animator.Animate(s.Property, value, transition.Duration, transition.Easing, source);
                 else if (source == ValueSource.Style)
                     PropertyStore.SetStyle(s.Property, value);
                 else

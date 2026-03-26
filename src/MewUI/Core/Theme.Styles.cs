@@ -25,12 +25,18 @@ public partial record class Theme
         Transition.Create(ToggleSwitch.ThumbBrushProperty),
     ];
 
-    private Dictionary<Type, Style>? _styles;
+    private static Dictionary<Type, Style>? _styles;
 
     /// <summary>
     /// Gets the default style for the specified control type, or null if none registered.
     /// </summary>
-    public Style? GetStyle(Type controlType)
+    public Style? GetStyle(Type controlType) => GetStyleStatic(controlType);
+
+    /// <summary>
+    /// Gets the default style without requiring a Theme instance.
+    /// Styles are static (shared across all themes) and use Func&lt;Theme, T&gt; for dynamic values.
+    /// </summary>
+    internal static Style? GetStyleStatic(Type controlType)
     {
         _styles ??= BuildDefaultStyles();
         return _styles.GetValueOrDefault(controlType);
@@ -145,18 +151,11 @@ public partial record class Theme
         {
             Setters =
             [
-                // Foreground inherited from Window style — not set here
+                // Foreground inherited from Window style — not set here.
+                // Disabled Foreground is handled by individual control styles, not here,
+                // to avoid propagating DisabledText to child TextBlocks via inheritance.
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
-            ],
-            Triggers =
-            [
-                new StateTrigger
-                {
-                    Match = VisualStateFlags.None,
-                    Exclude = VisualStateFlags.Enabled,
-                    Setters = [Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText)],
-                },
             ],
         };
     }

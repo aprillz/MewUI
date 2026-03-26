@@ -7,6 +7,19 @@ namespace Aprillz.MewUI.Styling;
 public sealed class Style
 {
     /// <summary>
+    /// Gets the default theme style for the specified control type.
+    /// Equivalent to <c>Theme.GetStyle(type)</c> but without requiring a Theme instance.
+    /// </summary>
+    public static Style? ForType(Type controlType)
+        => Theme.GetStyleStatic(controlType);
+
+    /// <summary>
+    /// Gets the default theme style for the specified control type.
+    /// </summary>
+    public static Style? ForType<T>() where T : class
+        => ForType(typeof(T));
+
+    /// <summary>
     /// Gets the target control type this style applies to.
     /// </summary>
     public Type TargetType { get; }

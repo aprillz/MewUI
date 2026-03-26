@@ -23,14 +23,14 @@ internal sealed class PropertyAnimator
     /// starts a smooth transition from the current visual value.
     /// Falls back to snap if the type cannot lerp or this is the first target.
     /// </summary>
-    public void Animate(MewProperty property, object value, TimeSpan duration, Func<double, double> easing)
+    public void Animate(MewProperty property, object value, TimeSpan duration, Func<double, double> easing, ValueSource source = ValueSource.Trigger)
     {
         int id = property.Id;
 
         // First time this property is set — snap (no animation from default value)
         if (!_store.HasTargetValue(id))
         {
-            _store.SetTarget(property, value);
+            _store.SetValue(property, value, source);
             return;
         }
 
@@ -39,12 +39,7 @@ internal sealed class PropertyAnimator
         if (Equals(currentVisual, value))
         {
             // The visual already shows this value, so no visible animation is needed.
-            // However, a prior trigger in the same ApplyStyleChain pass may have changed
-            // the underlying target to something else (e.g. base setter set target=ButtonFace,
-            // then Checked trigger wants target=Accent — the animated overlay is still Accent
-            // from the "from" snapshot, making them look equal). Correct the target and stop
-            // any in-flight animation heading to the wrong destination.
-            _store.SetTargetDirect(property, value);
+            _store.SetTargetDirect(property, value, source);
             if (_states != null && _states.TryGetValue(id, out var existing))
             {
                 existing.Clock?.Stop();
@@ -59,7 +54,7 @@ internal sealed class PropertyAnimator
         // Type cannot lerp — snap immediately
         if (!TypeLerp.CanLerp(property.ValueType))
         {
-            _store.SetTarget(property, value);
+            _store.SetValue(property, value, source);
             return;
         }
 
@@ -85,7 +80,7 @@ internal sealed class PropertyAnimator
         // Set animated overlay first (so the store shows "from" value),
         // then update the underlying target silently.
         _store.SetAnimatedValue(id, from);
-        _store.SetTargetDirect(property, value);
+        _store.SetTargetDirect(property, value, source);
 
         state.Clock.Start();
     }

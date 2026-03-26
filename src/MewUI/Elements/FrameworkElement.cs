@@ -1,6 +1,7 @@
 namespace Aprillz.MewUI.Controls;
 
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Styling;
 
 /// <summary>
 /// Base class for elements with size, margin, alignment, and data binding support.
@@ -10,6 +11,52 @@ public abstract class FrameworkElement : UIElement, IDisposable
     private List<Action<Theme, FrameworkElement>>? _themeCallbacks;
     private Size _lastArrangedSize;
     private bool _hasArrangedSize;
+    private StyleScope? _styleScope;
+    private StyleSheet? _styleSheet;
+
+    /// <summary>
+    /// Gets or sets a <see cref="Styling.StyleScope"/> that provides type-based style overrides
+    /// for descendant controls. When set, descendant controls resolve their style from this scope
+    /// before falling back to the Theme default.
+    /// </summary>
+    public StyleScope? StyleScope
+    {
+        get => _styleScope;
+        set
+        {
+            if (_styleScope != value)
+            {
+                _styleScope = value;
+                InvalidateDescendantStyles();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a <see cref="Styling.StyleSheet"/> that provides named styles
+    /// resolvable via <see cref="Control.StyleName"/>.
+    /// </summary>
+    public StyleSheet? StyleSheet
+    {
+        get => _styleSheet;
+        set
+        {
+            if (_styleSheet != value)
+            {
+                _styleSheet = value;
+                InvalidateDescendantStyles();
+            }
+        }
+    }
+
+    private void InvalidateDescendantStyles()
+    {
+        VisualTree.Visit(this, e =>
+        {
+            if (!ReferenceEquals(e, this) && e is Control c)
+                c.ResolveAndApplyStyle();
+        });
+    }
 
     private bool _disposed;
 

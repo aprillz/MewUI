@@ -229,16 +229,20 @@ internal sealed class PropertyValueStore
     /// Sets the underlying target value without stopping animations or notifying.
     /// Used by <see cref="Animation.PropertyAnimator"/> when starting a new animation.
     /// </summary>
-    internal void SetTargetDirect(MewProperty property, object value)
+    internal void SetTargetDirect(MewProperty property, object value, ValueSource? source = null)
     {
         ref var entry = ref EnsureEntry(property.Id);
         if (entry.Value is AnimatedEntry animated)
         {
             animated.BaseValue = value;
+            if (source.HasValue)
+                animated.BaseSource = source.Value;
         }
         else
         {
             entry.Value = value;
+            if (source.HasValue)
+                entry.Source = source.Value;
         }
     }
 
