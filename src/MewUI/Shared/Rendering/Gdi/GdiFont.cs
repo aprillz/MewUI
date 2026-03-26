@@ -90,8 +90,10 @@ internal sealed class GdiFont : FontBase
         }
 
         int height = -(int)Math.Round(Size * Dpi / 96.0, MidpointRounding.AwayFromZero);
-        // Coverage mode uses grayscale AA so we can extract per-pixel alpha reliably.
-        _perPixelAlphaHandle = CreateFontCore(height, GdiConstants.ANTIALIASED_QUALITY);
+        // Use ClearType quality for stronger hinting. The caller extracts coverage
+        // from the max of R/G/B channels, so subpixel data is collapsed into alpha
+        // but glyph shapes benefit from ClearType's tighter grid-fitting.
+        _perPixelAlphaHandle = CreateFontCore(height, GdiConstants.CLEARTYPE_QUALITY);
         return _perPixelAlphaHandle == 0 ? Handle : _perPixelAlphaHandle;
     }
 
