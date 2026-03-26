@@ -11,6 +11,11 @@ public enum GlyphKind
     Plus,
     Minus,
     Cross,
+
+    // Window chrome
+    WindowMinimize,
+    WindowMaximize,
+    WindowRestore,
 }
 
 public static class Glyph
@@ -49,6 +54,33 @@ public static class Glyph
                 context.DrawLine(new Point(center.X - half, center.Y - half), new Point(center.X + half, center.Y + half), color, thickness);
                 context.DrawLine(new Point(center.X - half, center.Y + half), new Point(center.X + half, center.Y - half), color, thickness);
                 return;
+
+            case GlyphKind.WindowMinimize:
+                // Horizontal line at bottom of glyph area, slightly thicker
+                context.DrawLine(new Point(center.X - half, center.Y + half), new Point(center.X + half, center.Y + half), color, thickness);
+                return;
+
+            case GlyphKind.WindowMaximize:
+                // Square (□)
+                context.DrawRectangle(new Rect(center.X - half, center.Y - half, half * 2, half * 2), color, thickness);
+                return;
+
+            case GlyphKind.WindowRestore:
+            {
+                // Front square + back ㄱ-shape (top-right)
+                double offset = half * 0.4;
+                double s = half * 2 - offset;
+                // Back ㄱ shape: top edge + right edge behind the front square
+                double bx = center.X - half + offset;
+                double by = center.Y - half;
+                context.DrawLine(new Point(bx, by), new Point(bx + s, by), color, thickness);                         // top
+                context.DrawLine(new Point(bx + s, by), new Point(bx + s, by + s), color, thickness);                 // right
+                context.DrawLine(new Point(bx + s, by + s), new Point(bx + s - offset, by + s), color, thickness);    // bottom stub
+                // Front square (bottom-left)
+                context.DrawRectangle(new Rect(center.X - half, center.Y - half + offset, s, s), color, thickness);
+                return;
+            }
+
             default:
                 return;
         }

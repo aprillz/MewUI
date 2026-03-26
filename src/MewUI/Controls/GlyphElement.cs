@@ -76,7 +76,22 @@ public sealed class GlyphElement : FrameworkElement
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = Bounds;
-        var center = new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
-        Glyph.Draw(context, center, GlyphSize, Foreground, Kind, StrokeThickness);
+        double cx = bounds.X + bounds.Width / 2;
+        double cy = bounds.Y + bounds.Height / 2;
+
+        // Snap to pixel grid for crisp rendering.
+        double dpiScale = GetDpiScaleCached();
+        if (dpiScale > 0)
+        {
+            double pixel = 1.0 / dpiScale;
+            double strokePx = Math.Round(StrokeThickness * dpiScale);
+            double halfPixelOffset = (strokePx % 2 == 1) ? 0.5 * pixel : 0;
+
+            // Snap center and apply half-pixel offset for odd strokes
+            cx = Math.Floor(cx * dpiScale) * pixel + halfPixelOffset;
+            cy = Math.Floor(cy * dpiScale) * pixel + halfPixelOffset;
+        }
+
+        Glyph.Draw(context, new Point(cx, cy), GlyphSize, Foreground, Kind, StrokeThickness);
     }
 }
