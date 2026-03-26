@@ -85,17 +85,20 @@ public sealed class Border : Control, IVisualTreeHost
 
         if (ClipToBounds)
         {
-            var radius = Math.Max(0, CornerRadius);
-            var border = BorderThickness > 0 ? new Thickness(BorderThickness) : Thickness.Zero;
-            var inner = GetSnappedBorderBounds(Bounds).Deflate(border).Deflate(Padding);
-            var dpiScale = GetDpi() / 96.0;
-            if (dpiScale <= 0) dpiScale = 1.0;
+            // Use the same pixel-snapped metrics as OnRender to ensure clip aligns with drawn border.
+            var metrics = GetBorderRenderMetrics(Bounds, Math.Max(0, CornerRadius));
+            var bt = metrics.BorderThickness;
+            var clipRect = bt > 0
+                ? new Rect(metrics.Bounds.X + bt, metrics.Bounds.Y + bt,
+                    Math.Max(0, metrics.Bounds.Width - bt * 2),
+                    Math.Max(0, metrics.Bounds.Height - bt * 2))
+                : metrics.Bounds;
+            clipRect = clipRect.Deflate(Padding);
 
             context.Save();
-            var clipRect = LayoutRounding.MakeClipRect(inner, dpiScale);
-            if (radius > 0)
+            if (metrics.CornerRadius > 0)
             {
-                var clipRadius = Math.Max(0, radius - BorderThickness);
+                var clipRadius = Math.Max(0, metrics.CornerRadius - bt);
                 context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
             }
             else
