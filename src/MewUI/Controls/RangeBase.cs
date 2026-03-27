@@ -8,17 +8,20 @@ public abstract class RangeBase : Control
     public static readonly MewProperty<double> ValueProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Value), 0.0,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, _) => self.OnValuePropertyChanged());
+            static (self, _, _) => self.OnValuePropertyChanged(),
+            static (self, value) => self.ClampToRange(value));
 
     public static readonly MewProperty<double> MinimumProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Minimum), 0.0,
             MewPropertyOptions.AffectsRender,
-            static (self, _, _) => self.OnMinimumChanged());
+            static (self, _, _) => self.OnMinimumChanged(),
+            static (_, value) => Sanitize(value));
 
     public static readonly MewProperty<double> MaximumProperty =
         MewProperty<double>.Register<RangeBase>(nameof(Maximum), 1.0,
             MewPropertyOptions.AffectsRender,
-            static (self, _, _) => self.OnMaximumChanged());
+            static (self, _, _) => self.OnMaximumChanged(),
+            static (_, value) => Sanitize(value));
 
     /// <summary>
     /// Gets or sets the minimum value.
@@ -26,7 +29,7 @@ public abstract class RangeBase : Control
     public double Minimum
     {
         get => GetValue(MinimumProperty);
-        set => SetValue(MinimumProperty, Sanitize(value));
+        set => SetValue(MinimumProperty, value);
     }
 
     /// <summary>
@@ -35,7 +38,7 @@ public abstract class RangeBase : Control
     public double Maximum
     {
         get => GetValue(MaximumProperty);
-        set => SetValue(MaximumProperty, Sanitize(value));
+        set => SetValue(MaximumProperty, value);
     }
 
     /// <summary>
@@ -44,7 +47,7 @@ public abstract class RangeBase : Control
     public double Value
     {
         get => GetValue(ValueProperty);
-        set => SetValue(ValueProperty, ClampToRange(value));
+        set => SetValue(ValueProperty, value);
     }
 
     /// <summary>
@@ -54,21 +57,13 @@ public abstract class RangeBase : Control
 
     private void OnValuePropertyChanged()
     {
-        var current = Value;
-        var coerced = ClampToRange(current);
-        if (!current.Equals(coerced))
-        {
-            SetValue(ValueProperty!, coerced);
-            return;
-        }
-
-        OnValueChanged(current);
-        ValueChanged?.Invoke(current);
+        OnValueChanged(Value);
+        ValueChanged?.Invoke(Value);
     }
 
-    private void OnMinimumChanged() => CoerceValueAfterRangeChange();
+    private void OnMinimumChanged() => CoerceValue(ValueProperty);
 
-    private void OnMaximumChanged() => CoerceValueAfterRangeChange();
+    private void OnMaximumChanged() => CoerceValue(ValueProperty);
 
     /// <summary>
     /// Called when the value changes.
@@ -105,16 +100,6 @@ public abstract class RangeBase : Control
         }
 
         return Math.Clamp((Value - min) / range, 0, 1);
-    }
-
-    private void CoerceValueAfterRangeChange()
-    {
-        var current = Value;
-        var coerced = ClampToRange(current);
-        if (!current.Equals(coerced))
-        {
-            Value = coerced;
-        }
     }
 
     private static double Sanitize(double value)

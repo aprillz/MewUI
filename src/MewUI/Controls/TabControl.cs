@@ -34,7 +34,8 @@ public sealed class TabControl : Control
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<TabControl>(nameof(SelectedIndex), -1,
             MewPropertyOptions.AffectsLayout,
-            static (self, _, _) => self.OnSelectedIndexChanged());
+            static (self, _, _) => self.OnSelectedIndexChanged(),
+            static (self, value) => value < 0 || value >= self._tabs.Count ? -1 : value);
 
     /// <summary>
     /// Gets or sets the selected tab index.
@@ -42,11 +43,7 @@ public sealed class TabControl : Control
     public int SelectedIndex
     {
         get => GetValue(SelectedIndexProperty);
-        set
-        {
-            int clamped = _tabs.Count == 0 ? -1 : Math.Clamp(value, 0, _tabs.Count - 1);
-            SetValue(SelectedIndexProperty, clamped);
-        }
+        set => SetValue(SelectedIndexProperty, value);
     }
 
     private void OnSelectedIndexChanged()

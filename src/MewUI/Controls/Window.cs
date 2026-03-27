@@ -344,11 +344,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             var previous = field;
             field = value;
 
+            if (previous.IsResizable != field.IsResizable)
+            {
+                _backend?.SetResizable(field.IsResizable);
+                CoerceValue(CanMaximizeProperty);
+            }
+
             if (_backend != null)
             {
-                if (previous.IsResizable != field.IsResizable)
-                    _backend.SetResizable(field.IsResizable);
-
                 // FitContent defers sizing to PerformLayout.
                 if (!double.IsNaN(field.Width) && !double.IsNaN(field.Height))
                     _backend.SetClientSize(field.Width, field.Height);
@@ -369,7 +372,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     public static readonly MewProperty<double> OpacityProperty =
         MewProperty<double>.Register<Window>(nameof(Opacity), 1.0, MewPropertyOptions.None,
-            static (self, _, _) => self.OnOpacityChanged());
+            static (self, _, _) => self.OnOpacityChanged(),
+            static (_, value) => Math.Clamp(value, 0.0, 1.0));
 
     public static readonly MewProperty<bool> AllowsTransparencyProperty =
         MewProperty<bool>.Register<Window>(nameof(AllowsTransparency), false, MewPropertyOptions.AffectsRender,
@@ -391,7 +395,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     public static readonly MewProperty<bool> CanMaximizeProperty =
         MewProperty<bool>.Register<Window>(nameof(CanMaximize), true, MewPropertyOptions.None,
-            static (self, _, _) => self._backend?.SetCanMaximize(self.CanMaximize));
+            static (self, _, _) => self._backend?.SetCanMaximize(self.CanMaximize),
+            static (self, value) => value && self.WindowSize.IsResizable);
 
     public static readonly MewProperty<bool> CanCloseProperty =
         MewProperty<bool>.Register<Window>(nameof(CanClose), true, MewPropertyOptions.None);
@@ -471,7 +476,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public double Opacity
     {
         get => GetValue(OpacityProperty);
-        set => SetValue(OpacityProperty, Math.Clamp(value, 0.0, 1.0));
+        set => SetValue(OpacityProperty, value);
     }
 
     /// <summary>
