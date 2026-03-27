@@ -238,7 +238,7 @@ public abstract class Element : MewObject
         {
             current = current.Parent;
         }
-        return current;
+        return current is Window ? current : null;
     }
 
     private void NotifyVisualRootChanged(Element? oldRoot, Element? newRoot)

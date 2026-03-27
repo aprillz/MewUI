@@ -40,6 +40,19 @@ public sealed class Application
     public Theme Theme => _themeManager.CurrentTheme;
 
     /// <summary>
+    /// Gets the application-level style sheet. Named styles defined here are available to all controls
+    /// as a fallback when no closer StyleSheet is found in the visual tree.
+    /// </summary>
+    public StyleSheet StyleSheet { get; } = CreateDefaultStyleSheet();
+
+    private static StyleSheet CreateDefaultStyleSheet()
+    {
+        var sheet = new StyleSheet();
+        BuiltInStyles.Register(sheet);
+        return sheet;
+    }
+
+    /// <summary>
     /// Gets the render loop settings controlling frame scheduling.
     /// </summary>
     public RenderLoopSettings RenderLoopSettings => _renderLoopSettings;

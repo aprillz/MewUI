@@ -802,8 +802,9 @@ public sealed class ContextMenu : Control, IPopupOwner
 
             if (entry is MenuSeparator)
             {
-                var sepY = LayoutRounding.RoundToPixel(row.Y + row.Height / 2, dpiScale);
-                context.DrawLine(new Point(row.X + 4, sepY), new Point(row.Right - 4, sepY), Theme.Palette.ControlBorder, 1, pixelSnap: true);
+                double onePx = 1.0 / dpiScale;
+                double sepY = LayoutRounding.RoundToPixel(row.Y + (row.Height - onePx) / 2, dpiScale);
+                context.FillRectangle(new Rect(row.X + 4, sepY, row.Width - 8, onePx), Theme.Palette.ControlBorder);
                 y += h;
                 continue;
             }

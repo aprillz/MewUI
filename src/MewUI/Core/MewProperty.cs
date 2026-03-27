@@ -2,7 +2,7 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Non-generic base for <see cref="MewProperty{T}"/>.
-/// Enables type-erased storage in <see cref="Styling.SetterBase"/> and <see cref="PropertyValueStore"/>.
+/// Enables type-erased storage in <see cref="SetterBase"/> and <see cref="PropertyValueStore"/>.
 /// </summary>
 public abstract class MewProperty
 {

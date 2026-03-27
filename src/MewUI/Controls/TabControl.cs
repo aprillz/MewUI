@@ -148,9 +148,9 @@ public sealed class TabControl : Control
             {
                 element.ClearDpiCache();
 
-                if (element is Control control)
+                if (element is FrameworkElement fe)
                 {
-                    control.NotifyDpiChanged(oldDpi, newDpi);
+                    fe.NotifyDpiChanged(oldDpi, newDpi);
                 }
                 else
                 {

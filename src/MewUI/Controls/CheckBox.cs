@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -54,7 +53,11 @@ public class CheckBox : ContentControl
         set => SetValue(IsCheckedProperty, value);
     }
 
-    internal override void OnAccessKey() { Focus(); Toggle(); }
+    internal override void OnAccessKey()
+    {
+        Focus(); 
+        Toggle();
+    }
 
     protected virtual void OnIsCheckedChanged(bool? oldValue, bool? newValue)
     {
@@ -161,7 +164,6 @@ public class CheckBox : ContentControl
             var p2 = new Point(boxRect.Right - 3, y);
             context.DrawLine(p1, p2, markColor, 2);
         }
-
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

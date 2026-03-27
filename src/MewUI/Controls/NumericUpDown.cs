@@ -42,7 +42,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         var state = base.ComputeVisualState();
 
         if (_pressedPart != ButtonPart.None)
-            return state with { Flags = state.Flags | Styling.VisualStateFlags.Pressed };
+            return state with { Flags = state.Flags | VisualStateFlags.Pressed };
         return state;
     }
 

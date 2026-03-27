@@ -1,5 +1,4 @@
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Styling;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -68,7 +67,7 @@ public abstract class Control : FrameworkElement
 
     private bool _isPressed;
     private bool _forceApplyStyle;
-    private bool _styleResolved;
+    private bool _styleNameResolved;
 
     private Style? _style;
     private string? _styleName;
@@ -194,7 +193,7 @@ public abstract class Control : FrameworkElement
 
     /// <summary>
     /// Named style key. Resolved from the nearest StyleSheet up the tree.
-    /// Higher priority than StyleScope and Theme style.
+    /// Higher priority than StyleSheet type rules and Theme style.
     /// </summary>
     public string? StyleName
     {
@@ -204,7 +203,7 @@ public abstract class Control : FrameworkElement
             if (_styleName != value)
             {
                 _styleName = value;
-                ResolveAndApplyStyle();
+                _styleNameResolved = false; // force re-resolve on next Measure
             }
         }
     }
@@ -267,7 +266,7 @@ public abstract class Control : FrameworkElement
     /// </summary>
     protected void EnsureStyleResolved()
     {
-        if (!_styleResolved)
+        if (!_styleNameResolved)
         {
             ResolveAndApplyStyle();
         }
@@ -342,39 +341,37 @@ public abstract class Control : FrameworkElement
     /// <summary>
     /// Resolves the effective Style for this control from:
     /// 1. StyleName (named style from nearest StyleSheet)
-    /// 2. StyleScope (nearest container's type-matched rule)
+    /// 2. StyleSheet type rule (nearest container's type-matched rule)
     /// 3. Theme (type-based default)
     /// </summary>
     internal void ResolveAndApplyStyle()
     {
-        _styleResolved = true;
         Style? resolved = null;
 
-        // 1. StyleName → nearest StyleSheet lookup
+        // 1. StyleName → walk StyleSheet chain
         if (_styleName != null)
         {
-            resolved = FindNearestStyleSheet()?.Get(_styleName);
+            resolved = FindNamedStyle(_styleName);
+            if (resolved == null && !Application.IsRunning)
+            {
+                // StyleSheet not available yet (Application not running) — retry later
+                _styleNameResolved = false;
+                return;
+            }
         }
 
-        // 2. StyleScope → nearest container type-matched rule
+        _styleNameResolved = true;
+
+        // 2. StyleSheet type rule → nearest container type-matched rule
         if (resolved == null)
         {
             var controlType = GetType();
             for (Element? current = Parent; current != null; current = current.Parent)
             {
-                if (current is FrameworkElement fe && fe.StyleScope != null)
+                if (current is FrameworkElement fe)
                 {
-                    var (style, styleName) = fe.StyleScope.GetStyleOrName(controlType);
-                    if (style != null)
-                    {
-                        resolved = style;
-                        break;
-                    }
-                    if (styleName != null)
-                    {
-                        resolved = FindNearestStyleSheet()?.Get(styleName);
-                        if (resolved != null) break;
-                    }
+                    resolved = fe.StyleSheet?.GetByType(controlType);
+                    if (resolved != null) break;
                 }
             }
         }
@@ -394,14 +391,17 @@ public abstract class Control : FrameworkElement
         SetStyle(resolved);
     }
 
-    private Styling.StyleSheet? FindNearestStyleSheet()
+    private Style? FindNamedStyle(string name)
     {
         for (Element? current = this; current != null; current = current.Parent)
         {
             if (current is FrameworkElement fe && fe.StyleSheet != null)
-                return fe.StyleSheet;
+            {
+                var style = fe.StyleSheet.Get(name);
+                if (style != null) return style;
+            }
         }
-        return null;
+        return Application.IsRunning ? Application.Current.StyleSheet?.Get(name) : null;
     }
 
     protected sealed override void ResolveVisualState()
@@ -560,7 +560,7 @@ public abstract class Control : FrameworkElement
             var property = MewPropertyRegistry.GetProperty(propertyId);
             if (property != null)
             {
-                if (!snap && _style?.FindTransition(propertyId) is Styling.Transition transition)
+                if (!snap && _style?.FindTransition(propertyId) is Transition transition)
                 {
                     // Animate directly — Animator bypasses source priority and
                     // SetTargetDirect updates BaseSource to Style.
@@ -607,7 +607,7 @@ public abstract class Control : FrameworkElement
                     break;
 
                 var value = s.ResolveValue(Theme);
-                if (!snap && _style?.FindTransition(s.Property.Id) is Styling.Transition transition)
+                if (!snap && _style?.FindTransition(s.Property.Id) is Transition transition)
                     Animator.Animate(s.Property, value, transition.Duration, transition.Easing, source);
                 else if (source == ValueSource.Style)
                     PropertyStore.SetStyle(s.Property, value);

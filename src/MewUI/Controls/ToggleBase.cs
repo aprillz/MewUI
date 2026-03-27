@@ -1,5 +1,3 @@
-using Aprillz.MewUI.Styling;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -42,11 +40,17 @@ public abstract partial class ToggleBase : ContentControl
     {
         var state = base.ComputeVisualState();
         if (IsChecked)
+        {
             return state with { Flags = state.Flags | VisualStateFlags.Checked };
+        }
         return state;
     }
 
-    internal override void OnAccessKey() { Focus(); ToggleFromKeyboard(); }
+    internal override void OnAccessKey()
+    {
+        Focus();
+        ToggleFromKeyboard();
+    }
 
     private void OnIsCheckedPropertyChanged(bool oldValue, bool newValue)
     {
@@ -58,7 +62,8 @@ public abstract partial class ToggleBase : ContentControl
     /// Called when the checked state changes.
     /// </summary>
     /// <param name="value">The new checked state.</param>
-    protected virtual void OnIsCheckedChanged(bool value) { }
+    protected virtual void OnIsCheckedChanged(bool value)
+    { }
 
     protected override void OnKeyUp(KeyEventArgs e)
     {
