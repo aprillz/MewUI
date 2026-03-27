@@ -29,7 +29,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     public event Action<TextCompositionEventArgs>? TextCompositionEnd;
 
-    private bool _syncingText;
     private string? _cachedText;
     private int _cachedTextVersion = -1;
     private readonly TextEditorCore _editor;
@@ -163,28 +162,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         InvalidateVisual();
     }
 
-    /// <summary>
-    /// Gets or sets the text content.
-    /// </summary>
-    public string Text
-    {
-        get => GetTextCore();
-        set
-        {
-            var normalized = NormalizeText(value ?? string.Empty);
-            if (GetTextCore() == normalized)
-            {
-                return;
-            }
-
-            SetValue(TextProperty, normalized);
-        }
-    }
-
-    public static readonly MewProperty<string> TextProperty =
-        MewProperty<string>.Register<TextBase>(nameof(Text), string.Empty,
-            MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, newVal) => self.OnTextPropertyChanged(newVal));
 
     public static readonly MewProperty<string> PlaceholderProperty =
         MewProperty<string>.Register<TextBase>(nameof(Placeholder), string.Empty, MewPropertyOptions.AffectsRender);
@@ -205,6 +182,18 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     {
         get => GetValue(PlaceholderProperty);
         set => SetValue(PlaceholderProperty, value ?? string.Empty);
+    }
+
+    public static readonly MewProperty<int> MaxLengthProperty =
+        MewProperty<int>.Register<TextBase>(nameof(MaxLength), 0);
+
+    /// <summary>
+    /// Gets or sets the maximum number of characters allowed. 0 means no limit.
+    /// </summary>
+    public int MaxLength
+    {
+        get => GetValue(MaxLengthProperty);
+        set => SetValue(MaxLengthProperty, value);
     }
 
     /// <summary>
@@ -1080,13 +1069,9 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         Document.Dispose();
     }
 
-    protected void NotifyTextChanged()
+    protected virtual void NotifyTextChanged()
     {
-        var text = GetTextCore();
-        _syncingText = true;
-        try { SetValue(TextProperty, text); }
-        finally { _syncingText = false; }
-        TextChanged?.Invoke(text);
+        TextChanged?.Invoke(GetTextCore());
     }
 
     protected void NotifyWrapChanged(bool value)
@@ -1094,26 +1079,23 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         WrapChanged?.Invoke(value);
     }
 
-    private void OnTextPropertyChanged(string newValue)
+    /// <summary>
+    /// Applies a text change originating from outside the editing pipeline (e.g. property setter or binding).
+    /// Subclasses call this from their MewProperty change callback.
+    /// </summary>
+    protected void ApplyExternalTextChange(string newValue)
     {
-        if (_syncingText) return;
-        _syncingText = true;
-        try
+        var normalized = NormalizeText(newValue ?? string.Empty);
+        var current = GetTextCore();
+        if (current != normalized)
         {
-            var normalized = NormalizeText(newValue ?? string.Empty);
-            var current = GetTextCore();
-            if (current != normalized)
-            {
-                var old = current;
-                SetTextCore(normalized);
-                _editor.ResetAfterTextSet();
-                InvalidateVisual();
-                OnTextChanged(old, normalized);
-            }
-
-            TextChanged?.Invoke(GetTextCore());
+            SetTextCore(normalized);
+            _editor.ResetAfterTextSet();
+            InvalidateVisual();
+            OnTextChanged(current, normalized);
         }
-        finally { _syncingText = false; }
+
+        TextChanged?.Invoke(GetTextCore());
     }
 
     public void Undo()
@@ -1292,6 +1274,15 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         if (text.Length == 0)
         {
             return;
+        }
+
+        if (MaxLength > 0)
+        {
+            var (start, end) = GetSelectionRange();
+            int selectionLength = HasSelection ? end - start : 0;
+            int remaining = MaxLength - GetTextLengthCore() + selectionLength;
+            if (remaining <= 0) return;
+            if (text.Length > remaining) text = text[..remaining];
         }
 
         _editor.InsertTextAtCaretForEdit(text);

@@ -1,202 +1,45 @@
-using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Controls.Text;
-
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A single-line text input control.
 /// </summary>
-public class TextBox : TextBase
+public sealed class TextBox : SingleLineTextBase
 {
-    private readonly TextBoxView _view = new();
+    private bool _syncingText;
 
-    public TextBox()
+    public static readonly MewProperty<string> TextProperty =
+        MewProperty<string>.Register<TextBox>(nameof(Text), string.Empty,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnTextPropertyChanged(newVal));
+
+    /// <summary>
+    /// Gets or sets the text content.
+    /// </summary>
+    public string Text
     {
-    }
-
-    protected override Rect GetInteractionContentBounds()
-        // Keep interaction bounds consistent with rendering bounds (border inset + padding).
-        => GetViewportContentBounds();
-
-    protected override string NormalizePastedText(string text)
-    {
-        text ??= string.Empty;
-        if (text.Length == 0)
+        get => GetTextCore();
+        set
         {
-            return string.Empty;
+            var normalized = NormalizeText(value ?? string.Empty);
+            if (GetTextCore() == normalized)
+                return;
+            SetValue(TextProperty, normalized);
         }
-
-        // Single-line: preserve separation by converting newlines/tabs to spaces.
-        if (text.IndexOf('\r') >= 0 || text.IndexOf('\n') >= 0)
-        {
-            text = text.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
-        }
-
-        if (!AcceptTab && text.IndexOf('\t') >= 0)
-        {
-            text = text.Replace('\t', ' ');
-        }
-
-        return text;
     }
 
-    protected override Size MeasureContent(Size availableSize)
+    protected override void NotifyTextChanged()
     {
-        // Keep default sizing stable, but use actual font metrics and account for border inset.
-        var borderInset = GetBorderVisualInset();
-
-        using var measure = BeginTextMeasurement();
-        var metrics = measure.Context.MeasureText("Mg", measure.Font);
-        var lineHeight = Math.Max(FontSize, metrics.Height);
-
-        var sample = Text.AsSpan();
-        if (sample.IsEmpty)
-        {
-            sample = Placeholder.AsSpan();
-        }
-
-        if (sample.Length > 64)
-        {
-            sample = sample[..64];
-        }
-
-        double sampleWidth = sample.IsEmpty
-            ? measure.Context.MeasureText("MMMMMMMMMM", measure.Font).Width
-            : measure.Context.MeasureText(sample, measure.Font).Width;
-
-        double chromeW = Padding.HorizontalThickness + borderInset * 2;
-        double chromeH = Padding.VerticalThickness + borderInset * 2;
-
-        double desiredW = Math.Max(16, sampleWidth + chromeW + 4);
-        double desiredH = Math.Max(lineHeight + chromeH + 4, MinHeight > 0 ? MinHeight : 0);
-
-        return new Size(desiredW, desiredH);
+        _syncingText = true;
+        try { SetValue(TextProperty, GetTextCore()); }
+        finally { _syncingText = false; }
+        base.NotifyTextChanged();
     }
 
-    protected override void RenderTextContent(IGraphicsContext context, Rect contentBounds, IFont font, Theme theme, in VisualState state)
+    private void OnTextPropertyChanged(string newValue)
     {
-        var (selStart, selEnd) = GetSelectionRange();
-        _view.Render(
-            context,
-            contentBounds,
-            font,
-            theme,
-            state.IsEnabled,
-            state.IsFocused && CaretVisible,
-            IsReadOnly,
-            Foreground,
-            HorizontalOffset,
-            FontFamily,
-            FontSize,
-            FontWeight,
-            GetDpi(),
-            DocumentVersion,
-            CaretPosition,
-            HasSelection,
-            selStart,
-            selEnd,
-            Document.Length,
-            IsComposing ? CompositionStartIndex : 0,
-            IsComposing ? CompositionLength : 0,
-            IsComposing ? CompositionAttributes : null,
-            (buffer, start, length) => Document.CopyTo(buffer, start, length));
-    }
-
-    protected override void SetCaretFromPoint(Point point, Rect contentBounds)
-    {
-        var clickX = point.X - contentBounds.X + HorizontalOffset;
-        CaretPosition = GetCharacterIndexFromX(clickX);
-    }
-
-    protected override void AutoScrollForSelectionDrag(Point point, Rect contentBounds)
-    {
-        // If the pointer goes beyond the text box, scroll in that direction.
-        // This matches common native text box behavior and enables selecting off-screen text.
-        const double edgeDip = 8;
-        if (point.X < contentBounds.X + edgeDip)
-        {
-            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.X + edgeDip), false);
-        }
-        else if (point.X > contentBounds.Right - edgeDip)
-        {
-            SetHorizontalOffset(HorizontalOffset + point.X - (contentBounds.Right - edgeDip), false);
-        }
-
-        ClampScrollOffset();
-    }
-
-    protected override void EnsureCaretVisibleCore(Rect contentBounds) => EnsureCaretVisible(contentBounds);
-
-    public override Rect GetCharRectInWindow(int charIndex)
-    {
-        var contentBounds = GetViewportContentBounds();
-        using var measure = BeginTextMeasurement();
-        _view.EnsureCache(measure.Context, measure.Font, FontFamily, FontSize, FontWeight, GetDpi(), DocumentVersion, Document.Length, (buffer, start, length) => Document.CopyTo(buffer, start, length));
-        int idx = Math.Clamp(charIndex, 0, Document.Length);
-        double charX = contentBounds.X - HorizontalOffset + _view.GetAbsoluteX(idx, measure.Context, measure.Font);
-        double lineHeight = measure.Context.MeasureText("M", measure.Font).Height;
-        double charY = contentBounds.Y + (contentBounds.Height - lineHeight) / 2;
-        return new Rect(charX, charY, 1, lineHeight);
-    }
-
-    private int GetCharacterIndexFromX(double x)
-    {
-        using var measure = BeginTextMeasurement();
-        return _view.GetCaretIndexFromX(
-            x,
-            measure.Context,
-            measure.Font,
-            FontFamily,
-            FontSize,
-            FontWeight,
-            GetDpi(),
-            DocumentVersion,
-            Document.Length,
-            (buffer, start, length) => Document.CopyTo(buffer, start, length));
-    }
-
-    private void EnsureCaretVisible(Rect contentBounds)
-    {
-        using var measure = BeginTextMeasurement();
-        double newOffset = _view.EnsureCaretVisible(
-            measure.Context,
-            measure.Font,
-            FontFamily,
-            FontSize,
-            FontWeight,
-            GetDpi(),
-            DocumentVersion,
-            Document.Length,
-            CaretPosition,
-            HorizontalOffset,
-            contentBounds.Width,
-            Padding.Right,
-            (buffer, start, length) => Document.CopyTo(buffer, start, length));
-        SetHorizontalOffset(newOffset, false);
-    }
-
-    private void ClampScrollOffset(IGraphicsContext context, IFont font, double viewportWidthDip)
-    {
-        double newOffset = _view.ClampScrollOffset(
-            context,
-            font,
-            FontFamily,
-            FontSize,
-            FontWeight,
-            GetDpi(),
-            DocumentVersion,
-            Document.Length,
-            HorizontalOffset,
-            viewportWidthDip,
-            Padding.Right,
-            (buffer, start, length) => Document.CopyTo(buffer, start, length));
-        SetHorizontalOffset(newOffset, false);
-    }
-
-    private void ClampScrollOffset()
-    {
-        var contentBounds = GetInteractionContentBounds();
-        using var measure = BeginTextMeasurement();
-        ClampScrollOffset(measure.Context, measure.Font, contentBounds.Width);
+        if (_syncingText) return;
+        _syncingText = true;
+        try { ApplyExternalTextChange(newValue); }
+        finally { _syncingText = false; }
     }
 }
