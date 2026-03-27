@@ -7,6 +7,7 @@ partial class GalleryView
     private FrameworkElement SelectionPage()
     {
         var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
+        Calendar calendar = null!;
 
         return CardGrid(
             Card(
@@ -63,6 +64,33 @@ partial class GalleryView
             ),
 
             Card(
+                "Calendar",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Calendar()
+                            .Ref(out calendar),
+
+                        new TextBlock()
+                            .Bind(TextBlock.TextProperty, calendar, Calendar.SelectedDateProperty, x => $"Selected: ({x:yyyy-MM-dd})")
+                    )
+            ),
+
+            Card(
+                "DatePicker",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new DatePicker { Placeholder = "Select a date..." },
+                        new DatePicker { SelectedDate = DateTime.Today },
+                        new DatePicker { Placeholder = "Disabled" }.Disable()
+                    ),
+                minWidth: 250
+            ),
+
+            Card(
                 "TabControl",
                 new UniformGrid()
                     .Columns(2)
@@ -85,7 +113,7 @@ partial class GalleryView
                                 new TabItem().Header("About").Content(new TextBlock().Text("About tab content"))
                             )
                     )
-            ) 
+            )
         );
     }
 }
