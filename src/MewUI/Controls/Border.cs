@@ -76,42 +76,67 @@ public sealed class Border : Control, IVisualTreeHost
 
     protected override void OnRender(IGraphicsContext context)
     {
-        DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, Math.Max(0, CornerRadius));
+        // Background only — border is drawn after subtree in RenderSubtree.
+        var bg = Background;
+        if (bg.A == 0) return;
+
+        var metrics = GetBorderRenderMetrics(Bounds, Math.Max(0, CornerRadius));
+        var bounds = metrics.Bounds;
+        var radius = metrics.CornerRadius;
+
+        if (radius > 0)
+            context.FillRoundedRectangle(bounds, radius, radius, bg);
+        else
+            context.FillRectangle(bounds, bg);
     }
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
-        if (Child == null) return;
+        // Shared metrics for clip and border drawing.
+        var metrics = GetBorderRenderMetrics(Bounds, Math.Max(0, CornerRadius));
+        var bt = metrics.BorderThickness;
 
-        if (ClipToBounds)
+        if (Child != null)
         {
-            // Use the same pixel-snapped metrics as OnRender to ensure clip aligns with drawn border.
-            var metrics = GetBorderRenderMetrics(Bounds, Math.Max(0, CornerRadius));
-            var bt = metrics.BorderThickness;
-            var clipRect = bt > 0
-                ? new Rect(metrics.Bounds.X + bt, metrics.Bounds.Y + bt,
-                    Math.Max(0, metrics.Bounds.Width - bt * 2),
-                    Math.Max(0, metrics.Bounds.Height - bt * 2))
-                : metrics.Bounds;
-            clipRect = clipRect.Deflate(Padding);
-
-            context.Save();
-            if (metrics.CornerRadius > 0)
+            if (ClipToBounds)
             {
-                var clipRadius = Math.Max(0, metrics.CornerRadius - bt);
-                context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
+                var clipRect = bt > 0
+                    ? new Rect(metrics.Bounds.X + bt, metrics.Bounds.Y + bt,
+                        Math.Max(0, metrics.Bounds.Width - bt * 2),
+                        Math.Max(0, metrics.Bounds.Height - bt * 2))
+                    : metrics.Bounds;
+                clipRect = clipRect.Deflate(Padding);
+
+                context.Save();
+                if (metrics.CornerRadius > 0)
+                {
+                    var clipRadius = Math.Max(0, metrics.CornerRadius - bt);
+                    context.SetClipRoundedRect(clipRect, clipRadius, clipRadius);
+                }
+                else
+                {
+                    context.SetClip(clipRect);
+                }
+
+                Child.Render(context);
+                context.Restore();
             }
             else
             {
-                context.SetClip(clipRect);
+                Child.Render(context);
             }
-
-            Child.Render(context);
-            context.Restore();
         }
-        else
+
+        var borderBrush = BorderBrush;
+        if (bt > 0 && borderBrush.A > 0)
         {
-            Child.Render(context);
+            var bounds = metrics.Bounds;
+            var radius = metrics.CornerRadius;
+
+            if (radius > 0)
+                context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, bt, strokeInset: true);
+            else
+                context.DrawRectangle(bounds, borderBrush, bt, strokeInset: true);
         }
     }
 
