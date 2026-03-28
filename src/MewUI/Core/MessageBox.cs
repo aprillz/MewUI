@@ -124,6 +124,9 @@ public static class MessageBox
     public static async Task<bool?> PromptAsync(MessageBoxOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        var owner = options.Owner ?? FindActiveWindow();
+
         var dlg = new MessageBoxWindow(
             message: options.Message,
             icon: options.Icon,
@@ -131,8 +134,19 @@ public static class MessageBox
             detail: options.Detail,
             checkBoxes: options.CheckBoxes,
             title: options.Title);
-        dlg.SetMaxHeightFromOwner(options.Owner);
-        await dlg.ShowDialogAsync(options.Owner);
+        dlg.SetMaxHeightFromOwner(owner);
+        await dlg.ShowDialogAsync(owner);
         return dlg.DialogResult;
+    }
+
+    private static Window? FindActiveWindow()
+    {
+        if (!Application.IsRunning) return null;
+        var windows = Application.Current.AllWindows;
+        for (int i = 0; i < windows.Count; i++)
+        {
+            if (windows[i].IsActive) return windows[i];
+        }
+        return windows.Count > 0 ? windows[0] : null;
     }
 }
