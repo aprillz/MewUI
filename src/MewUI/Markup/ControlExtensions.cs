@@ -1663,34 +1663,6 @@ public static class ControlExtensions
         => ItemTemplate(listBox, new DelegateTemplate<TItem>(build, bind));
 
     /// <summary>
-    /// Sets the items presenter mode.
-    /// </summary>
-    /// <param name="listBox">Target list box.</param>
-    /// <param name="mode">Presenter mode.</param>
-    /// <returns>The list box for chaining.</returns>
-    [Obsolete("Use FixedHeightPresenter(), VariableHeightPresenter(), StackPresenter(), or WrapPresenter() instead.")]
-    public static ListBox PresenterMode(this ListBox listBox, ItemsPresenterMode mode)
-    {
-        ArgumentNullException.ThrowIfNull(listBox);
-        listBox.PresenterMode = mode;
-        return listBox;
-    }
-
-    /// <summary>
-    /// Uses fixed-size row virtualization.
-    /// </summary>
-    [Obsolete("Use FixedHeightPresenter() instead.")]
-    public static ListBox FixedPresenter(this ListBox listBox)
-        => listBox.FixedHeightPresenter();
-
-    /// <summary>
-    /// Uses variable-height virtualization (items are measured individually).
-    /// </summary>
-    [Obsolete("Use VariableHeightPresenter() instead.")]
-    public static ListBox VariablePresenter(this ListBox listBox)
-        => listBox.VariableHeightPresenter();
-
-    /// <summary>
     /// Uses fixed-height row virtualization with theme default item height.
     /// </summary>
     public static ListBox FixedHeightPresenter(this ListBox listBox)
@@ -1873,29 +1845,6 @@ public static class ControlExtensions
     /// Sets the items presenter mode.
     /// </summary>
     /// <param name="itemsControl">Target items control.</param>
-    /// <param name="mode">Presenter mode.</param>
-    /// <returns>The items control for chaining.</returns>
-    [Obsolete("Use FixedHeightPresenter(), VariableHeightPresenter(), StackPresenter(), or WrapPresenter() instead.")]
-    public static ItemsControl PresenterMode(this ItemsControl itemsControl, ItemsPresenterMode mode)
-    {
-        ArgumentNullException.ThrowIfNull(itemsControl);
-        itemsControl.PresenterMode = mode;
-        return itemsControl;
-    }
-
-    /// <summary>
-    /// Uses fixed-size row virtualization.
-    /// </summary>
-    [Obsolete("Use FixedHeightPresenter() instead.")]
-    public static ItemsControl FixedPresenter(this ItemsControl itemsControl)
-        => itemsControl.FixedHeightPresenter();
-
-    /// <summary>
-    /// Uses variable-height virtualization (items are measured individually).
-    /// </summary>
-    [Obsolete("Use VariableHeightPresenter() instead.")]
-    public static ItemsControl VariablePresenter(this ItemsControl itemsControl)
-        => itemsControl.VariableHeightPresenter();
 
     /// <summary>
     /// Uses fixed-height row virtualization with theme default item height.

@@ -167,6 +167,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     }
 
     public bool FillsAvailableWidth => true;
+    public bool IsNonVirtualized => false;
 
     public VariableHeightItemsPresenter()
     {

@@ -20,7 +20,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     private readonly TextWidthCache _textWidthCache = new(512);
     private IItemsPresenter _presenter;
     private IDataTemplate _itemTemplate;
-    private ItemsPresenterMode _presenterMode = ItemsPresenterMode.Fixed;
 
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
@@ -171,28 +170,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         }
     }
 
-    /// <summary>
-    /// Selects the virtualization strategy for this control.
-    /// </summary>
-    [Obsolete("Use SetPresenter() or fluent extension methods (FixedHeightPresenter, WrapPresenter, etc.) instead.")]
-    public ItemsPresenterMode PresenterMode
-    {
-        get => _presenterMode;
-        set
-        {
-            if (Set(ref _presenterMode, value))
-            {
-                IItemsPresenter p = value switch
-                {
-                    ItemsPresenterMode.Variable => new VariableHeightItemsPresenter(),
-                    ItemsPresenterMode.Stack => new StackItemsPresenter(),
-                    ItemsPresenterMode.Wrap => new WrapItemsPresenter(),
-                    _ => new FixedHeightItemsPresenter(),
-                };
-                SetPresenter(p);
-            }
-        }
-    }
 
     /// <summary>
     /// Occurs when the selected item changes.
@@ -258,12 +235,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             d.Dispose();
         }
 
-        presenter.ItemsSource = _itemsSource;
-        presenter.ItemTemplate = _itemTemplate;
-        presenter.BeforeItemRender = OnBeforeItemRender;
-        presenter.ItemPadding = ItemPadding;
-        presenter.ItemHeightHint = ResolveItemHeight();
-        presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
+        InitializePresenter(presenter);
 
         _presenter = presenter;
         _scrollViewer.Content = (UIElement)_presenter;
@@ -280,14 +252,19 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
 
     private IItemsPresenter CreateDefaultPresenter()
     {
-        var presenter = new FixedHeightItemsPresenter();
+        var p = new FixedHeightItemsPresenter();
+        InitializePresenter(p);
+        return p;
+    }
+
+    private void InitializePresenter(IItemsPresenter presenter)
+    {
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = _itemTemplate;
         presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
-        return presenter;
     }
 
     private void OnPresenterOffsetCorrectionRequested(Point offset)

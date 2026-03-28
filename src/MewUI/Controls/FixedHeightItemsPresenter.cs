@@ -122,6 +122,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
     }
 
     public bool FillsAvailableWidth => false;
+    public bool IsNonVirtualized => false;
 
     public event Action<Point>? OffsetCorrectionRequested;
 

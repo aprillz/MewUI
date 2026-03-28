@@ -43,6 +43,11 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
     /// </summary>
     bool FillsAvailableWidth { get; }
 
+    /// <summary>
+    /// Whether this presenter realizes all items without virtualization.
+    /// </summary>
+    bool IsNonVirtualized { get; }
+
     bool TryGetItemIndexAtY(double yContent, out int index);
 
     /// <summary>

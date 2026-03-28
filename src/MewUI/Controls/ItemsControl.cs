@@ -19,7 +19,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
     private Point _lastMousePosition;
 
     private IItemsView _itemsSource = ItemsView.Empty;
-    private ItemsPresenterMode _presenterMode = ItemsPresenterMode.Fixed;
+    // Presenter mode is determined by the IItemsPresenter instance set via SetPresenter().
 
     /// <summary>
     /// Gets the current vertical scroll offset in DIPs.
@@ -94,29 +94,6 @@ public sealed class ItemsControl : VirtualizedItemsBase
             _presenter.ItemTemplate = value;
             InvalidateMeasure();
             InvalidateVisual();
-        }
-    }
-
-    /// <summary>
-    /// Selects the virtualization strategy for this control.
-    /// </summary>
-    [Obsolete("Use SetPresenter() or fluent extension methods (FixedHeightPresenter, WrapPresenter, etc.) instead.")]
-    public ItemsPresenterMode PresenterMode
-    {
-        get => _presenterMode;
-        set
-        {
-            if (Set(ref _presenterMode, value))
-            {
-                IItemsPresenter p = value switch
-                {
-                    ItemsPresenterMode.Variable => new VariableHeightItemsPresenter(),
-                    ItemsPresenterMode.Stack => new StackItemsPresenter(),
-                    ItemsPresenterMode.Wrap => new WrapItemsPresenter(),
-                    _ => new FixedHeightItemsPresenter(),
-                };
-                SetPresenter(p);
-            }
         }
     }
 
@@ -237,7 +214,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
         _scrollViewer.Measure(childAvailable);
 
         double desiredHeight;
-        if (PresenterMode == ItemsPresenterMode.Stack || double.IsPositiveInfinity(availableSize.Height))
+        if (_presenter.IsNonVirtualized || double.IsPositiveInfinity(availableSize.Height))
         {
             desiredHeight = _presenter.DesiredContentHeight;
         }
@@ -463,11 +440,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
             d.Dispose();
         }
 
-        presenter.ItemsSource = _itemsSource;
-        presenter.ItemTemplate = _itemTemplate;
-        presenter.BeforeItemRender = OnBeforeItemRender;
-        presenter.ItemHeightHint = ResolveItemHeight();
-        presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
+        InitializePresenter(presenter);
 
         _presenter = presenter;
         _scrollViewer.Content = (UIElement)_presenter;
@@ -484,13 +457,19 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
     private IItemsPresenter CreateDefaultPresenter()
     {
-        var presenter = new FixedHeightItemsPresenter();
+        var p = new FixedHeightItemsPresenter();
+        InitializePresenter(p);
+        return p;
+    }
+
+    private void InitializePresenter(IItemsPresenter presenter)
+    {
         presenter.ItemsSource = _itemsSource;
         presenter.ItemTemplate = _itemTemplate;
         presenter.BeforeItemRender = OnBeforeItemRender;
+        presenter.ItemPadding = ItemPadding;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
-        return presenter;
     }
 
     private void OnPresenterOffsetCorrectionRequested(Point offset)
