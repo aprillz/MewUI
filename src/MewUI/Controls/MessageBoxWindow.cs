@@ -100,6 +100,7 @@ public sealed class MessageBoxWindow : Window
         // Body
         var bodyPanel = new StackPanel
         {
+            MinWidth = 160,
             Orientation = Orientation.Vertical,
             Spacing = 12
         };
