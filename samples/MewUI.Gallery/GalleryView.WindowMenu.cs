@@ -174,6 +174,38 @@ partial class GalleryView
             MenusCard(),
 
             Card(
+                "Native Custom Chrome",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Button()
+                            .Content("Open Native Chrome Window")
+                            .OnClick(() => new NativeCustomWindowSample().Show(window)),
+                        new TextBlock()
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap)
+                            .Text("Hides the default title bar while keeping\nthe native frame (rounded corners, shadow).")
+                    )
+            ),
+
+            Card(
+                "Custom Chrome Window",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Button()
+                            .Content("Open CustomWindow")
+                            .OnClick(() => new CustomWindowSample().Show(window)),
+                        new TextBlock()
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap)
+                            .Text("AllowsTransparency-based custom chrome.\nProvides rounded borders on Win10 and earlier.\nWin32: higher overhead. Prefer NativeCustomWindow.")
+                    )
+            ),
+
+            Card(
                 "Hot-reload",
                 new StackPanel()
                     .Vertical()
@@ -183,24 +215,8 @@ partial class GalleryView
                             .FontSize(11)
                             .TextWrapping(TextWrapping.Wrap)
                             .Text("Modify the code and save to see hot-reload in action.\nThis card will update with the current time."),
-                        new TextBlock()                    
-                            .Text($"Loaded: {DateTime.Now}"))
-            ),
-
-            Card(
-                "Custom Chrome Window",
-                new StackPanel()
-                    .Vertical()
-                    .Spacing(8)
-                    .Children(
                         new TextBlock()
-                            .FontSize(11)
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Text("Transparent window with custom title bar,\ndraggable header, and themed chrome."),
-                        new Button()
-                            .Content("Open CustomWindow")
-                            .OnClick(() => new CustomWindowSample().Show(window))
-                    )
+                            .Text($"Loaded: {DateTime.Now}"))
             ),
 
             Card(
