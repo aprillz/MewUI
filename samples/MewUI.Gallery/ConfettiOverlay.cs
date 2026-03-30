@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Aprillz.MewUI;
+
 using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Gallery;
 /// Renders particles on top of the adorned element via <see cref="AdornerLayer"/>.
 /// Port of WpfConfetti by caefale, adapted for MewUI's rendering model.
 /// </summary>
-public sealed class ConfettiOverlay : Adorner
+public sealed class ConfettiOverlay : FrameworkElement
 {
     private enum ParticleShape { Rectangle, Ellipse, Triangle }
 
@@ -68,7 +68,7 @@ public sealed class ConfettiOverlay : Adorner
 
     private static readonly Random Rng = new();
         
-    public ConfettiOverlay(UIElement adornedElement) : base(adornedElement)
+    public ConfettiOverlay()
     {
         IsHitTestVisible = false;
     }
@@ -79,7 +79,7 @@ public sealed class ConfettiOverlay : Adorner
         double minAngle = 0, double maxAngle = 360,
         double gravity = 85, Color[]? colors = null)
     {
-        var bounds = AdornedElement.Bounds;
+        var bounds = Bounds;
         var p = position ?? new Point(bounds.Width / 2, bounds.Height / 2);
         for (int i = 0; i < amount; i++)
             SpawnParticle(p, minAngle, maxAngle, minSpeed, maxSpeed, gravity, minSize, maxSize, 90, colors);
@@ -123,7 +123,7 @@ public sealed class ConfettiOverlay : Adorner
         _cannonAccumulator = 0;
     }
 
-    public new void Clear()
+    public void Clear()
     {
         _isRaining = false;
         _cannonQueue.Clear();
@@ -199,7 +199,7 @@ public sealed class ConfettiOverlay : Adorner
         _lastTimestamp = now;
         if (dt <= 0 || dt > 0.5) dt = 0.016;
 
-        var bounds = AdornedElement.Bounds;
+        var bounds = Bounds;
         double w = bounds.Width, h = bounds.Height;
         if (w <= 0 || h <= 0) return;
 

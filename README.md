@@ -36,7 +36,7 @@ You can run it immediately by entering the following command in the Windows comm
 > [!WARNING]
 > This command downloads and executes code directly from GitHub.
 ```bash
-curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_sample.cs -o - | dotnet run -
+curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_gallery.cs -o - | dotnet run -
 ```
 
 ### Video

@@ -36,7 +36,7 @@
 > [!WARNING]
 > 이 명령은 GitHub에서 코드를 직접 다운로드하여 실행합니다.
 ```bash
-curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_sample.cs -o - | dotnet run -
+curl -sL https://raw.githubusercontent.com/aprillz/MewUI/refs/heads/main/samples/FBASample/fba_gallery.cs -o - | dotnet run -
 ```
 
 

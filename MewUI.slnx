@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/samples/FBA/">
     <File Path="samples/FBASample/fba_calculator.cs" />
+    <File Path="samples/FBASample/fba_gallery.cs" />
     <File Path="samples/FBASample/fba_sample.cs" />
   </Folder>
   <Folder Name="/src/">

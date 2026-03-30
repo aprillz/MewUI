@@ -2291,7 +2291,7 @@ sealed class ConfettiOverlay : FrameworkElement
 
     public void StopRain() => _isRaining = false;
     public void StopCannons() { _cq.Clear(); _cannonAcc = 0; }
-    public new void Clear() { _isRaining = false; _cq.Clear(); _cannonAcc = 0; _p.Clear(); StopTimer(); InvalidateVisual(); }
+    public void Clear() { _isRaining = false; _cq.Clear(); _cannonAcc = 0; _p.Clear(); StopTimer(); InvalidateVisual(); }
 
     protected override void OnRender(IGraphicsContext ctx)
     {
