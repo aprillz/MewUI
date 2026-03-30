@@ -152,10 +152,15 @@ public class NativeCustomWindow : Window
             new Border().DockLeft().Child(_leftArea),
             titleText
         );
-        this._titleBar = new AlphaTextPanel { MinHeight = DefaultTitleBarHeight, Content = titleBarContent };
+        _titleBar = new AlphaTextPanel
+        {
+            MinHeight = DefaultTitleBarHeight,
+            Content = titleBarContent
+        };
+        _titleBar.SetBinding(BackgroundProperty, this, BackgroundProperty);
 
         // Title bar: double-click to maximize/restore
-        this._titleBar.MouseDoubleClick += e =>
+        _titleBar.MouseDoubleClick += e =>
         {
             if (e.Button == MouseButton.Left && CanMaximize)
             {
@@ -270,11 +275,6 @@ public class NativeCustomWindow : Window
     /// </summary>
     internal sealed class AlphaTextPanel : ContentControl
     {
-        protected override void OnRender(IGraphicsContext context)
-        {
-            base.OnRender(context);
-        }
-
         protected override void RenderSubtree(IGraphicsContext context)
         {
             context.EnableAlphaTextHint = true;

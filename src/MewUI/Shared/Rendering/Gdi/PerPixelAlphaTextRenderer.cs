@@ -133,10 +133,8 @@ internal static class PerPixelAlphaTextRenderer
                         continue;
                     }
 
-                    // Mild gamma correction — slightly thins edges without making text too faint.
-                    // sqrt-ish: lerp between linear and squared, biased toward linear.
-                    int sq = (coverage * coverage + 127) / 255;
-                    coverage = (byte)((coverage + sq + 1) / 2);
+                    // GDI grayscale coverage is gamma-encoded; apply a simple curve to avoid overly bold edges.
+                    coverage = (byte)((coverage * coverage + 127) / 255);
                     byte a = (byte)((coverage * aColor + 127) / 255);
                     row[i + 0] = (byte)((color.B * a + 127) / 255);
                     row[i + 1] = (byte)((color.G * a + 127) / 255);
