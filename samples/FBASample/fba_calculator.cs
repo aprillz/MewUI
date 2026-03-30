@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.11.2
+#:package Aprillz.MewUI@0.15.0
 
 using System.Globalization;
 using System.Text;
@@ -18,12 +18,22 @@ using System.Text;
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
-// GDI is Windows-only; fall back to OpenGL on Linux.
-Application.DefaultGraphicsBackend = OperatingSystem.IsWindows()
-    ? GraphicsBackend.Gdi
-    : GraphicsBackend.OpenGL;
-
-ThemeManager.DefaultAccent = Accent.Purple;
+// Platform/Backend registration
+if (OperatingSystem.IsWindows())
+{
+    Win32Platform.Register();
+    Direct2DBackend.Register();
+}
+else if (OperatingSystem.IsMacOS())
+{
+    MacOSPlatform.Register();
+    MewVGMacOSBackend.Register();
+}
+else if (OperatingSystem.IsLinux())
+{
+    X11Platform.Register();
+    MewVGX11Backend.Register();
+}
 
 var expression = new ObservableValue<string>(string.Empty);
 var result = new ObservableValue<string>("0");
@@ -60,7 +70,9 @@ UniformGrid Keypad() => new UniformGrid()
         KeyButton("+", () => Append("+"), Kind.Operator)
     );
 
-var window = new Window()
+Window window = null!;
+new Window()
+    .Ref(out window)
     .Padding(8)
     .Title("MewUI FBA Calculator")
     .Fixed(360, 520)
@@ -218,7 +230,7 @@ Button KeyButton(string text, Action onClick, Kind kind = Kind.Number)
     }
     else if (kind == Kind.Number)
     {
-        b.WithTheme((t, c) => c.Background(t.Palette.ButtonFace.Lerp(t.Palette.Accent,0.1)));
+        b.WithTheme((t, c) => c.Background(t.Palette.ButtonFace.Lerp(t.Palette.Accent, 0.1)));
     }
 
     return b;

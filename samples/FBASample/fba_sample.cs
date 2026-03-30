@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.11.2
+#:package Aprillz.MewUI@0.15.0
 
 using System.Diagnostics;
 
@@ -19,8 +19,22 @@ using Aprillz.MewUI.Controls;
 
 var stopwatch = Stopwatch.StartNew();
 
-Application.DefaultGraphicsBackend =
-    OperatingSystem.IsWindows() ? GraphicsBackend.Direct2D : GraphicsBackend.OpenGL;
+// Platform/Backend registration
+if (OperatingSystem.IsWindows())
+{
+    Win32Platform.Register();
+    Direct2DBackend.Register();
+}
+else if (OperatingSystem.IsMacOS())
+{
+    MacOSPlatform.Register();
+    MewVGMacOSBackend.Register();
+}
+else if (OperatingSystem.IsLinux())
+{
+    X11Platform.Register();
+    MewVGX11Backend.Register();
+}
 
 var vm = new DemoViewModel();
 
@@ -121,14 +135,14 @@ Element TopSection() => new StackPanel()
 Element MenuDemo()
 {
     var fileMenu = new Menu()
-        .Item("New", () => MessageBox.Show("New", "Menu"))
-        .Item("Open...", () => MessageBox.Show("Open", "Menu"))
+        .Item("New", () => NativeMessageBox.Show("New", "Menu"))
+        .Item("Open...", () => NativeMessageBox.Show("Open", "Menu"))
         .Separator()
         .Item("Exit", () => Application.Quit());
 
     var deepMenu = new Menu()
-        .Item("Deep A", () => MessageBox.Show("Deep A", "Menu"))
-        .Item("Deep B", () => MessageBox.Show("Deep B", "Menu"));
+        .Item("Deep A", () => NativeMessageBox.Show("Deep A", "Menu"))
+        .Item("Deep B", () => NativeMessageBox.Show("Deep B", "Menu"));
 
     var recentMenu = new Menu()
         .Apply(x =>
@@ -136,7 +150,7 @@ Element MenuDemo()
             for (char letter = 'a'; letter <= 'z'; letter++)
             {
                 var text = letter + ".txt";
-                x.Item(text, () => MessageBox.Show(text, "Recent"));
+                x.Item(text, () => NativeMessageBox.Show(text, "Recent"));
             }
         })
         .Separator()
@@ -145,15 +159,15 @@ Element MenuDemo()
     var editMenu = new Menu()
         .SubMenu("Recent", recentMenu)
         .Separator()
-        .Item("Copy", () => { }, shortcutText: "Ctrl+C")
-        .Item("Paste", () => { }, shortcutText: "Ctrl+V");
+        .Item("Copy", () => { }, shortcut: new KeyGesture(Key.C, ModifierKeys.Primary))
+        .Item("Paste", () => { }, shortcut: new KeyGesture(Key.V, ModifierKeys.Primary));
 
     var helpAboutMenu = new Menu()
-        .Item("About", () => MessageBox.Show("Aprillz.MewUI", "About"));
+        .Item("About", () => NativeMessageBox.Show("Aprillz.MewUI", "About"));
 
     var helpDocsMenu = new Menu()
-        .Item("Docs", () => MessageBox.Show("docs/", "Help"))
-        .Item("Korean Docs", () => MessageBox.Show("ko/docs/", "Help"));
+        .Item("Docs", () => NativeMessageBox.Show("docs/", "Help"))
+        .Item("Korean Docs", () => NativeMessageBox.Show("ko/docs/", "Help"));
 
     var helpMenu = new Menu()
         .SubMenu("Documentation", helpDocsMenu)
@@ -177,18 +191,18 @@ Element ThemeControls()
         .Spacing(12)
         .Children(
             new RadioButton()
-                .Text("System")
+                .Content("System")
                 .GroupName(group)
                 .IsChecked()
                 .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.System)),
 
             new RadioButton()
-                .Text("Light")
+                .Content("Light")
                 .GroupName(group)
                 .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Light)),
 
             new RadioButton()
-                .Text("Dark")
+                .Content("Dark")
                 .GroupName(group)
                 .OnChecked(() => Application.Current.SetThemeMode(ThemeVariant.Dark)),
 
@@ -235,7 +249,7 @@ Element Buttons() => new StackPanel()
         new Button()
             .Content("OK")
             .Width(80)
-            .OnClick(() => MessageBox.Show("OK clicked", "Aprillz.MewUI Demo", MessageBoxButtons.Ok, MessageBoxIcon.Information)),
+            .OnClick(() => NativeMessageBox.Show("OK clicked", "Aprillz.MewUI Demo", NativeMessageBoxButtons.Ok, NativeMessageBoxIcon.Information)),
 
         new Button()
             .Content("Quit")
@@ -250,12 +264,12 @@ Element NormalControls()
     int appendCount = 0;
     var demoMenu = new ContextMenu();
     var nestedMenu = new ContextMenu()
-        .Item("Option 1", () => MessageBox.Show("Option 1", "Nested ContextMenu"))
-        .Item("Option 2", () => MessageBox.Show("Option 2", "Nested ContextMenu"));
+        .Item("Option 1", () => NativeMessageBox.Show("Option 1", "Nested ContextMenu"))
+        .Item("Option 2", () => NativeMessageBox.Show("Option 2", "Nested ContextMenu"));
 
     var deepMenu = new ContextMenu()
-        .Item("Deep A", () => MessageBox.Show("Deep A", "Nested ContextMenu"))
-        .Item("Deep B", () => MessageBox.Show("Deep B", "Nested ContextMenu"));
+        .Item("Deep A", () => NativeMessageBox.Show("Deep A", "Nested ContextMenu"))
+        .Item("Deep B", () => NativeMessageBox.Show("Deep B", "Nested ContextMenu"));
 
     nestedMenu.SubMenu("More...", deepMenu);
 
@@ -263,7 +277,7 @@ Element NormalControls()
         .Item("Item 1")
         .Item("Item 2")
         .Separator()
-        .Item("Say hello", () => MessageBox.Show("Hello from ContextMenu!", "ContextMenu"))
+        .Item("Say hello", () => NativeMessageBox.Show("Hello from ContextMenu!", "ContextMenu"))
         .Separator()
         .SubMenu("Nested", nestedMenu)
         .Separator()
@@ -368,7 +382,7 @@ Element NormalControls()
 
                                                     if (file is not null)
                                                     {
-                                                        MessageBox.Show(file, "Open File");
+                                                        NativeMessageBox.Show(file, "Open File");
                                                     }
                                                 }),
 
@@ -385,7 +399,7 @@ Element NormalControls()
 
                                                     if (file is not null)
                                                     {
-                                                        MessageBox.Show(file, "Save File");
+                                                        NativeMessageBox.Show(file, "Save File");
                                                     }
                                                 }),
 
@@ -400,7 +414,7 @@ Element NormalControls()
 
                                                     if (folder is not null)
                                                     {
-                                                        MessageBox.Show(folder, "Select Folder");
+                                                        NativeMessageBox.Show(folder, "Select Folder");
                                                     }
                                                 })
                                         )
@@ -414,7 +428,7 @@ Element NormalControls()
                                 .Spacing(8)
                                 .Padding(4)
                                 .Children(
-                                    new CheckBox().Text("Enable feature"),
+                                    new CheckBox().Content("Enable feature"),
                                     new Slider().Minimum(0).Maximum(100).Value(25)
                                 )),
 
@@ -453,10 +467,10 @@ Element NormalControls()
                                 .Spacing(8)
                                 .Children(
                                     new CheckBox()
-                                        .Text("Enable feature"),
+                                        .Content("Enable feature"),
 
                                     new CheckBox()
-                                        .Text("Three-state (Indeterminate)")
+                                        .Content("Three-state (Indeterminate)")
                                         .IsThreeState(true)
                                         .IsChecked(null),
                                             new StackPanel()
@@ -468,12 +482,12 @@ Element NormalControls()
                                                         .CenterVertical(),
 
                                                     new RadioButton()
-                                                        .Text("A")
+                                                        .Content("A")
                                                         .GroupName("group1")
                                                         .IsChecked(true),
 
                                                     new RadioButton()
-                                                        .Text("B")
+                                                        .Content("B")
                                                         .GroupName("group1")
                                                 ),
 
@@ -485,12 +499,12 @@ Element NormalControls()
                                                         .CenterVertical(),
 
                                                     new RadioButton()
-                                                        .Text("C")
+                                                        .Content("C")
                                                         .GroupName("group2")
                                                         .IsChecked(true),
 
                                                     new RadioButton()
-                                                        .Text("D")
+                                                        .Content("D")
                                                         .GroupName("group2")
                                                 ),
 
@@ -502,11 +516,11 @@ Element NormalControls()
                                                         .CenterVertical(),
 
                                                     new RadioButton()
-                                                        .Text("X")
+                                                        .Content("X")
                                                         .IsChecked(true),
 
                                                     new RadioButton()
-                                                        .Text("Y")
+                                                        .Content("Y")
                                                 )
                                         )
                                 ),
@@ -538,7 +552,7 @@ Element NormalControls()
                                         .DockBottom()
                                         .Ref(out wrapCheck)
                                         .IsChecked(true)
-                                        .Text("Wrap")
+                                        .Content("Wrap")
                                         .OnCheckedChanged(x => notesTextBox.Wrap = x),
 
                                     new MultiLineTextBox()
@@ -649,7 +663,7 @@ FrameworkElement CommandingSamples()
                         .Spacing(8)
                         .Children(
                             new CheckBox()
-                                .Text("Enable Premium Features")
+                                .Content("Enable Premium Features")
                                 .BindIsChecked(vm.IsFeatureEnabled),
 
                             new StackPanel()
@@ -769,13 +783,13 @@ FrameworkElement BindSamples()
                     .Spacing(8)
                     .Children(
                         new CheckBox()
-                            .Text("Enabled")
+                            .Content("Enabled")
                             .BindIsChecked(vm.IsEnabled),
 
                         new Button()
                             .BindContent(vm.IsEnabled, x => x ? "Enabled action" : "Disabled action")
                             .BindIsEnabled(vm.IsEnabled)
-                            .OnClick(() => MessageBox.Show("Enabled button clicked", "Aprillz.MewUI Demo", MessageBoxButtons.Ok, MessageBoxIcon.Information))
+                            .OnClick(() => NativeMessageBox.Show("Enabled button clicked", "Aprillz.MewUI Demo", NativeMessageBoxButtons.Ok, NativeMessageBoxIcon.Information))
                     ),
 
                 new Label()
