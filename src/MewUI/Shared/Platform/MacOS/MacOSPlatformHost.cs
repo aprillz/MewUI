@@ -15,6 +15,11 @@ public sealed class MacOSPlatformHost : IPlatformHost
     private int _themeUpdateRequested;
     private bool _lastContinuous;
 
+    public MacOSPlatformHost()
+    {
+        MacOSInterop.EnsureApplicationInitialized();
+    }
+
     public string DefaultFontFamily => ".AppleSystemUIFont";
 
     public IMessageBoxService MessageBox { get; } = new MacOSMessageBoxService();
