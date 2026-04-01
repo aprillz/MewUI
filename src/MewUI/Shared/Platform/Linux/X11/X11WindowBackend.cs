@@ -101,6 +101,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         NativeX11.XMapWindow(Display, Handle);
         NativeX11.XFlush(Display);
         ApplyResolvedStartupPosition();
+        if (Window.WindowState != Controls.WindowState.Normal)
+            SetWindowState(Window.WindowState);
 
         // Some IM modules don't start preedit until the IC is focused.
         // Relying solely on FocusIn can miss cases where focus is already on the window when mapped.
@@ -662,7 +664,8 @@ internal sealed class X11WindowBackend : IWindowBackend
             event_mask = (nint)(X11EventMask.ExposureMask | X11EventMask.StructureNotifyMask |
                                X11EventMask.KeyPressMask | X11EventMask.KeyReleaseMask |
                                X11EventMask.ButtonPressMask | X11EventMask.ButtonReleaseMask |
-                               X11EventMask.PointerMotionMask | X11EventMask.FocusChangeMask),
+                               X11EventMask.PointerMotionMask | X11EventMask.FocusChangeMask |
+                               X11EventMask.PropertyChangeMask),
         };
 
         ulong valueMask = CWEventMask | CWColormap;
@@ -1078,6 +1081,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         const int FocusIn = 9;
         const int FocusOut = 10;
         const int SelectionNotify = 31;
+        const int PropertyNotify = 28;
 
         if (!_enabled && (ev.type == KeyPress || ev.type == KeyRelease || ev.type == ButtonPress || ev.type == ButtonRelease || ev.type == MotionNotify))
         {
@@ -1097,7 +1101,12 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case ConfigureNotify:
                 var cfg = ev.xconfigure;
-                Window.SetClientSizeDip(cfg.width / Window.DpiScale, cfg.height / Window.DpiScale);
+                var widthDip = cfg.width / Window.DpiScale;
+                var heightDip = cfg.height / Window.DpiScale;
+                Window.SetClientSizeDip(widthDip, heightDip);
+                Window.PerformLayout();
+                Window.Invalidate();
+                Window.RaiseClientSizeChanged(widthDip, heightDip);
                 NeedsRender = true;
                 break;
 
@@ -1182,6 +1191,8 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case FocusIn:
+                Window.SetIsActive(true);
+                Window.RaiseActivated();
                 if (_xic != 0)
                 {
                     ImeLogger.Write($"FocusIn -> XSetICFocus ic=0x{_xic.ToInt64():X}");
@@ -1191,13 +1202,40 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case FocusOut:
+                Window.SetIsActive(false);
+                Window.RaiseDeactivated();
                 if (_xic != 0)
                 {
                     ImeLogger.Write($"FocusOut -> XUnsetICFocus ic=0x{_xic.ToInt64():X}");
                     NativeX11.XUnsetICFocus(_xic);
                 }
                 break;
+
+            case PropertyNotify:
+                HandlePropertyNotify(ev.xproperty);
+                break;
         }
+    }
+
+    private void HandlePropertyNotify(in XPropertyEvent e)
+    {
+        var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
+        if (netWmState == 0 || e.atom != netWmState) return;
+
+        var atoms = ReadAtomProperty(Handle, netWmState);
+        var maxH = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MAXIMIZED_HORZ", false);
+        var maxV = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MAXIMIZED_VERT", false);
+        var hidden = NativeX11.XInternAtom(Display, "_NET_WM_STATE_HIDDEN", false);
+
+        bool isMaximized = maxH != 0 && maxV != 0 && atoms.Contains(maxH) && atoms.Contains(maxV);
+        bool isMinimized = hidden != 0 && atoms.Contains(hidden);
+
+        var newState = isMinimized ? Controls.WindowState.Minimized
+            : isMaximized ? Controls.WindowState.Maximized
+            : Controls.WindowState.Normal;
+
+        if (newState != Window.WindowState)
+            Window.SetWindowStateFromBackend(newState);
     }
 
     internal void RenderIfNeeded()
@@ -2139,6 +2177,12 @@ internal sealed class X11WindowBackend : IWindowBackend
         _opacity = Math.Clamp(opacity, 0.0, 1.0);
         ApplyOpacity();
     }
+
+    // X11 WM removes all decorations (title bar + border + shadow) — not a true
+    // "extend client area" like Win32/macOS. Reported as None so NativeCustomWindow
+    // keeps the default title bar on X11.
+    public Controls.WindowChromeCapabilities ChromeCapabilities =>
+        Controls.WindowChromeCapabilities.None;
 
     public void SetAllowsTransparency(bool allowsTransparency)
     {

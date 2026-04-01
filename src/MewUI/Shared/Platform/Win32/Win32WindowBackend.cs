@@ -79,7 +79,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
         CreateWindow();
         Window.PerformLayout();
         ApplyResolvedStartupPosition();
-        User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
+        var showCmd = Window.WindowState switch
+        {
+            Controls.WindowState.Maximized => ShowWindowCommands.SW_SHOWMAXIMIZED,
+            Controls.WindowState.Minimized => ShowWindowCommands.SW_SHOWMINIMIZED,
+            _ => ShowWindowCommands.SW_SHOW,
+        };
+        User32.ShowWindow(Handle, showCmd);
         User32.UpdateWindow(Handle);
     }
 
@@ -128,6 +134,18 @@ internal sealed class Win32WindowBackend : IWindowBackend
             _ => ShowWindowCommands.SW_RESTORE,
         };
         User32.ShowWindow(Handle, cmd);
+
+        // WS_POPUP | WS_THICKFRAME windows may have incorrect WINDOWPLACEMENT after
+        // WM_GETMINMAXINFO overrides the maximized bounds. Explicitly restore saved bounds.
+        if (state == Controls.WindowState.Normal && _allowsTransparency)
+        {
+            var rb = Window.RestoreBounds;
+            if (rb.Width > 0 && rb.Height > 0)
+            {
+                SetPosition(rb.X, rb.Y);
+                SetClientSize(rb.Width, rb.Height);
+            }
+        }
     }
 
     public void SetCanMinimize(bool value)
@@ -1432,6 +1450,22 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (dpiScale <= 0) dpiScale = 1.0;
 
         uint style = GetWindowStyle();
+
+        // For transparent (WS_POPUP | WS_THICKFRAME) windows, the OS extends the maximized
+        // window beyond the work area by the frame thickness. Override ptMaxPosition/ptMaxSize
+        // so the maximized window exactly fills the work area with no frame overshoot.
+        if (_allowsTransparency)
+        {
+            var hMonitor = User32.MonitorFromWindow(Handle, MonitorDefaultToNearest);
+            var mi = MONITORINFO.Create();
+            if (User32.GetMonitorInfo(hMonitor, ref mi))
+            {
+                info->ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+                info->ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
+                info->ptMaxSize.x = mi.rcWork.Width;
+                info->ptMaxSize.y = mi.rcWork.Height;
+            }
+        }
 
         var ws = Window.WindowSize;
         double minW = ws.MinWidth;

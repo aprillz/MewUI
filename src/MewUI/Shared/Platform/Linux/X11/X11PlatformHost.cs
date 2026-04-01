@@ -128,7 +128,6 @@ public sealed class X11PlatformHost : IPlatformHost
                     if (ev.type == 28) // PropertyNotify
                     {
                         HandlePropertyNotify(ev.xproperty);
-                        continue;
                     }
                     var window = GetEventWindow(ev);
                     if (window != 0 && _windows.TryGetValue(window, out var backend))
@@ -263,7 +262,8 @@ public sealed class X11PlatformHost : IPlatformHost
             if (ev.type == 28) // PropertyNotify
             {
                 HandlePropertyNotify(ev.xproperty);
-                continue;
+                // Fall through to also deliver PropertyNotify to the window backend
+                // so it can track _NET_WM_STATE changes for WindowState sync.
             }
             var window = GetEventWindow(ev);
             if (window != 0 && _windows.TryGetValue(window, out var backend))

@@ -194,6 +194,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         UpdateClientSizeIfNeeded(forceLayout: true);
         ApplyResolvedStartupPlacement();
         _host.RegisterWindow(_nsWindow, this);
+        if (_window.WindowState != Controls.WindowState.Normal)
+        {
+            SetWindowState(_window.WindowState);
+        }
         Interlocked.Exchange(ref _needsRender, 1);
         _host.RequestRender();
     }
@@ -3561,6 +3565,21 @@ internal static unsafe class MacOSWindowInterop
     }
 
     [UnmanagedCallersOnly]
+    private static void MewUIWindowDelegate_windowDidMiniaturize(nint self, nint sel, nint notification)
+    {
+        try
+        {
+            if (notification == 0) return;
+            nint window = GetWindowFromNotification(notification);
+            if (window != 0 && TryGetWindowCloseTarget(window, out var backend))
+            {
+                backend.Window.SetWindowStateFromBackend(Controls.WindowState.Minimized);
+            }
+        }
+        catch { }
+    }
+
+    [UnmanagedCallersOnly]
     private static void MewUIWindowDelegate_windowDidDeminiaturize(nint self, nint sel, nint notification)
     {
         try
@@ -3570,6 +3589,7 @@ internal static unsafe class MacOSWindowInterop
             if (window != 0 && TryGetWindowCloseTarget(window, out var backend))
             {
                 ObjC.MsgSend_void_nint_nint(window, ObjC.Sel("makeKeyAndOrderFront:"), 0);
+                backend.Window.SetWindowStateFromBackend(Controls.WindowState.Normal);
                 backend.Window.PerformLayout();
                 backend.Invalidate(erase: true);
             }
@@ -3718,6 +3738,9 @@ internal static unsafe class MacOSWindowInterop
 
                 var resignKeyImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidResignKey;
                 _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidResignKey:"), resignKeyImp, "v@:@");
+
+                var miniaturizeImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidMiniaturize;
+                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidMiniaturize:"), miniaturizeImp, "v@:@");
 
                 var deminiaturizeImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidDeminiaturize;
                 _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidDeminiaturize:"), deminiaturizeImp, "v@:@");
