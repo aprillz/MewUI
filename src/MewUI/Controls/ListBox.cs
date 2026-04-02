@@ -379,6 +379,12 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         {
             height = Math.Min(height, itemHeight * 12);
         }
+        else
+        {
+            // When a finite height is available, don't exceed it —
+            // the internal ScrollViewer handles overflow.
+            height = Math.Min(height, Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2));
+        }
 
         return new Size(
             Math.Max(0, maxWidth + Padding.HorizontalThickness + borderInset * 2),

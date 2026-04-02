@@ -1035,9 +1035,13 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         protected override Size MeasureContent(Size availableSize)
         {
-            foreach (var cell in _cells)
+            for (int i = 0; i < _cells.Count; i++)
             {
-                cell.Measure(new Size(double.PositiveInfinity, availableSize.Height));
+                // Use actual column width as constraint so TextTrimming/Ellipsis works
+                double colWidth = i < _owner._core.Columns.Count
+                    ? Math.Max(0, _owner._core.Columns[i].Width)
+                    : double.PositiveInfinity;
+                _cells[i].Measure(new Size(colWidth, availableSize.Height));
             }
 
             return new Size(availableSize.Width, availableSize.Height);

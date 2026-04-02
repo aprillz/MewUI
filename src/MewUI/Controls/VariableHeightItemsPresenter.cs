@@ -350,10 +350,17 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         {
             var element = GetOrCreate(i, RebindExisting);
 
-            // Measure with a width constraint to obtain the real height.
-            element.Measure(new Size(Math.Max(0, width), double.PositiveInfinity));
+            // Measure with ItemPadding-deflated width so the child measures within
+            // the actual space it will receive after Arrange Deflate.
+            var padding = ItemPadding;
+            double measureW = padding != default ? Math.Max(0, width - padding.HorizontalThickness) : width;
+            element.Measure(new Size(Math.Max(0, measureW), double.PositiveInfinity));
 
+            // Include ItemPadding in the slot height so Arrange's Deflate
+            // doesn't shrink below the child's DesiredSize.
             double desiredH = Math.Max(0, element.DesiredSize.Height);
+            if (padding != default)
+                desiredH += padding.VerticalThickness;
             double alignedH = LayoutRounding.RoundToPixel(desiredH, dpiScale);
             if (alignedH <= 0 || double.IsNaN(alignedH) || double.IsInfinity(alignedH))
             {
@@ -368,9 +375,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
             var itemRect = new Rect(x, y, width, alignedH);
             var containerRect = GetContainerRect != null ? GetContainerRect(i, itemRect) : itemRect;
-            if (ItemPadding != default)
+            if (padding != default)
             {
-                containerRect = containerRect.Deflate(ItemPadding);
+                containerRect = containerRect.Deflate(padding);
             }
             containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
 
@@ -567,10 +574,14 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
             double w = Math.Max(0, _viewport.Width);
             if (w > 0 && !double.IsNaN(w) && !double.IsInfinity(w))
             {
-                realized.Measure(new Size(w, double.PositiveInfinity));
+                var padding = ItemPadding;
+                double measureW = padding != default ? Math.Max(0, w - padding.HorizontalThickness) : w;
+                realized.Measure(new Size(measureW, double.PositiveInfinity));
 
                 var dpiScale = GetDpi() / 96.0;
                 double desiredH = Math.Max(0, realized.DesiredSize.Height);
+                if (padding != default)
+                    desiredH += padding.VerticalThickness;
                 double alignedH = LayoutRounding.RoundToPixel(desiredH, dpiScale);
                 if (alignedH <= 0 || double.IsNaN(alignedH) || double.IsInfinity(alignedH))
                 {
