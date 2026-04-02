@@ -61,6 +61,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private bool _loadedRaised;
     private bool _firstFrameRenderedRaised;
     private bool _firstFrameRenderedPending;
+    private bool _closeRequested;
     private bool _subscribedToDispatcherChanged;
     private WindowLifetimeState _lifetimeState;
     private int _modalDisableCount;
@@ -1071,6 +1072,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return true;
         }
 
+        if (_closeRequested)
+        {
+            return true;
+        }
+
         if (Closing != null)
         {
             var args = new ClosingEventArgs();
@@ -1078,6 +1084,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             if (args.Cancel)
                 return false;
         }
+
+        _closeRequested = true;
 
         if (_backend == null)
         {
@@ -1721,6 +1729,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         _lifetimeState = WindowLifetimeState.Closed;
+        _closeRequested = false;
         UnsubscribeFromDispatcherChanged();
 
         if (Application.IsRunning)
