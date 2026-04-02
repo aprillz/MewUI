@@ -1592,7 +1592,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// <param name="element">Element that should receive captured mouse events.</param>
     public void CaptureMouse(UIElement element)
     {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+        {
+            return;
+        }
+
         EnsureBackend();
+
         if (_backend!.Handle == 0)
         {
             return;
@@ -1630,13 +1636,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _backend.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
         if (!double.IsNaN(WindowSize.Width) && !double.IsNaN(WindowSize.Height))
             _backend.SetClientSize(WindowSize.Width, WindowSize.Height);
-        if (Topmost) 
+        if (Topmost)
             _backend.SetTopmost(true);
-        if (!ShowInTaskbar) 
+        if (!ShowInTaskbar)
             _backend.SetShowInTaskbar(false);
-        if (!CanMinimize) 
+        if (!CanMinimize)
             _backend.SetCanMinimize(false);
-        if (!CanMaximize) 
+        if (!CanMaximize)
             _backend.SetCanMaximize(false);
     }
 
