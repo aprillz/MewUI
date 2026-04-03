@@ -10,6 +10,8 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract class Element : MewObject
 {
+    private Element? _cachedVisualRoot;
+    private bool _visualRootCacheValid;
     private bool _dpiCacheValid;
     private uint _cachedDpi;
     private Size _lastMeasureConstraint;
@@ -70,6 +72,7 @@ public abstract class Element : MewObject
             {
                 var oldRoot = FindVisualRoot();
                 field = value;
+                InvalidateVisualRootCacheDeep();
                 ClearDpiCacheDeep();
                 OnParentChanged();
 
@@ -230,15 +233,29 @@ public abstract class Element : MewObject
     /// </summary>
     public Element? FindVisualRoot()
     {
-        if (Parent == null)
-            return this is Window ? this : null;
+        if (_visualRootCacheValid)
+        {
+            return _cachedVisualRoot;
+        }
 
+        Element? root;
+        if (Parent == null)
+        {
+            root = this is Window ? this : null;
+        }
+        else
+        {
         var current = Parent;
         while (current.Parent != null)
         {
             current = current.Parent;
         }
-        return current is Window ? current : null;
+            root = current is Window ? current : null;
+        }
+
+        _cachedVisualRoot = root;
+        _visualRootCacheValid = true;
+        return root;
     }
 
     private void NotifyVisualRootChanged(Element? oldRoot, Element? newRoot)
@@ -278,6 +295,15 @@ public abstract class Element : MewObject
     internal void ClearDpiCache() => _dpiCacheValid = false;
 
     internal void ClearDpiCacheDeep() => VisualTree.Visit(this, e => e.ClearDpiCache());
+
+    private void InvalidateVisualRootCacheDeep()
+    {
+        VisualTree.Visit(this, static e =>
+        {
+            e._visualRootCacheValid = false;
+            e._cachedVisualRoot = null;
+        });
+    }
 
     /// <summary>
     /// Determines whether this element is an ancestor of the specified element.

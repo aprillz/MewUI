@@ -325,6 +325,12 @@ public abstract partial class UIElement : Element
             return;
         }
 
+        if (this is not Window && 
+		    (FindVisualRoot() is not Window root || !new Rect(root.ClientSize).IntersectsWith(Bounds)))
+        {
+            return;
+        }
+
         ResolveVisualState();
         OnRender(context);
         RenderSubtree(context);
