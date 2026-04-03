@@ -422,7 +422,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         var borderInset = GetBorderVisualInset();
         var dpiScale = GetDpi() / 96.0;
         var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
-        _scrollViewer.ViewportCornerRadius = clipR;
+        _scrollViewer.CornerRadius = clipR;
         _presenter.ItemRadius = clipR;
 
         _presenter.RebindExisting = _rebindVisibleOnNextRender;

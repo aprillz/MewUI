@@ -255,7 +255,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
         var dpiScale = GetDpi() / 96.0;
         var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - GetBorderVisualInset());
-        _scrollViewer.ViewportCornerRadius = clipR;
+        _scrollViewer.CornerRadius = clipR;
         _presenter.ItemRadius = clipR;
     }
 

@@ -42,7 +42,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         CellPadding = Theme.Metrics.ItemPadding;
 
         _scrollViewer.Padding = new Thickness(0);
-        _scrollViewer.ViewportCornerRadius = 0;
+        _scrollViewer.CornerRadius = 0;
 
         _header = new HeaderRow(this) { Parent = this };
         _presenter = new FixedHeightItemsPresenter

@@ -23,9 +23,6 @@ public sealed class ScrollViewer : ContentControl
     , IVisualTreeHost
     , IFocusIntoViewHost
 {
-    public static readonly MewProperty<double> ViewportCornerRadiusProperty =
-        MewProperty<double>.Register<ScrollViewer>(nameof(ViewportCornerRadius), 0.0, MewPropertyOptions.AffectsRender);
-
     public static readonly MewProperty<ScrollMode> VerticalScrollProperty =
         MewProperty<ScrollMode>.Register<ScrollViewer>(nameof(VerticalScroll), ScrollMode.Auto, MewPropertyOptions.AffectsLayout);
 
@@ -44,16 +41,7 @@ public sealed class ScrollViewer : ContentControl
 /// <summary>
     /// Raised when scroll metrics or offsets change.
     /// </summary>
-    public event Action? ScrollChanged;
-
-    /// <summary>
-    /// Optional corner radius applied to the content viewport clip.
-    /// </summary>
-    public double ViewportCornerRadius
-    {
-        get => GetValue(ViewportCornerRadiusProperty);
-        set => SetValue(ViewportCornerRadiusProperty, value);
-    }
+    public event Action? ScrollChanged; 
 
     /// <summary>
     /// Gets or sets the vertical scrollbar mode.
@@ -327,9 +315,6 @@ public sealed class ScrollViewer : ContentControl
 
         // Extent/viewport changes (e.g. content becomes empty) can make existing offsets invalid.
         // Clamp them against the latest _extent/_viewport even when scrollbars are hidden.
-        // Extent/viewport changes can make existing offsets invalid.
-        // Clamp using DIP offsets to avoid quantizing the logical offset via px roundtrips,
-        // especially noticeable when DPI changes.
         {
             _scroll.SetOffsetDip(0, _scroll.GetOffsetDip(0));
             _scroll.SetOffsetDip(1, _scroll.GetOffsetDip(1));
@@ -411,7 +396,7 @@ public sealed class ScrollViewer : ContentControl
 
         // Render content clipped to viewport.
         context.Save();
-        double r = Math.Max(0, ViewportCornerRadius - Math.Min(Padding.Left, Math.Min(Padding.Right, Math.Min(Padding.Top, Padding.Bottom))));
+        double r = Math.Max(0, CornerRadius - Math.Min(Padding.Left, Math.Min(Padding.Right, Math.Min(Padding.Top, Padding.Bottom))));
         if (r > 0)
         {
             r = Math.Min(r, Math.Min(clip.Width, clip.Height) / 2);
