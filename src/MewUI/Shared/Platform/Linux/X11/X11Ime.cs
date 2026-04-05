@@ -27,6 +27,7 @@ internal static partial class X11Ime
     // Cached function pointers for dynamic XIM calls (resolved once during IC creation).
     private static unsafe delegate* unmanaged[Cdecl]<nint, nint, nint, nint, nint> _createNestedList;
     private static unsafe delegate* unmanaged[Cdecl]<nint, nint, nint, nint, nint> _setICValues;
+    private static unsafe delegate* unmanaged[Cdecl]<nint, nint, nint*, nint, nint> _getICValues;
     private static nint _xFreePtr;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -77,16 +78,19 @@ internal static partial class X11Ime
         string? envXModifiers = null;
         try { envXModifiers = Environment.GetEnvironmentVariable("XMODIFIERS"); } catch { }
 
-        string[] candidates = new string[5];
+        string[] candidates = new string[6];
         int candidateCount = 0;
         if (!string.IsNullOrWhiteSpace(envXModifiers))
         {
             candidates[candidateCount++] = envXModifiers!;
         }
-        candidates[candidateCount++] = "@im=ibus";
+        // Let Xlib resolve the desktop's configured/default IM first.
+        // Forcing ibus ahead of the default can break systems that actually use fcitx/fcitx5.
+        candidates[candidateCount++] = string.Empty;
+        candidates[candidateCount++] = "@im=local";
         candidates[candidateCount++] = "@im=fcitx5";
         candidates[candidateCount++] = "@im=fcitx";
-        candidates[candidateCount++] = string.Empty;
+        candidates[candidateCount++] = "@im=ibus";
 
         for (int i = 0; i < candidateCount && im == 0; i++)
         {
@@ -111,6 +115,8 @@ internal static partial class X11Ime
                 im = 0;
             }
         }
+
+        ImeLogger.Write($"Selected XMODIFIERS candidate -> im=0x{im.ToInt64():X} env='{envXModifiers ?? ""}'");
 
         if (im == 0)
         {
@@ -159,6 +165,11 @@ internal static partial class X11Ime
                     _setICValues = (delegate* unmanaged[Cdecl]<nint, nint, nint, nint, nint>)pSetIcValues;
                 }
 
+                if (NativeLibrary.TryGetExport(lib, "XGetICValues", out var pGetIcValues) && pGetIcValues != 0)
+                {
+                    _getICValues = (delegate* unmanaged[Cdecl]<nint, nint, nint*, nint, nint>)pGetIcValues;
+                }
+
                 if (NativeLibrary.TryGetExport(lib, "XFree", out var pXFree) && pXFree != 0)
                 {
                     _xFreePtr = pXFree;
@@ -205,6 +216,49 @@ internal static partial class X11Ime
             if (lib != 0)
             {
                 try { NativeLibrary.Free(lib); } catch { }
+            }
+        }
+    }
+
+    internal static unsafe bool TryGetFilterEvents(nint ic, out nint filterEvents)
+    {
+        filterEvents = 0;
+        if (ic == 0 || _getICValues == null)
+        {
+            return false;
+        }
+
+        nint nFilterEvents = 0;
+        try
+        {
+            nFilterEvents = Marshal.StringToCoTaskMemUTF8("filterEvents");
+            nint value = 0;
+            nint err = 0;
+            try
+            {
+                err = _getICValues(ic, nFilterEvents, &value, 0);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (err != 0)
+            {
+                var errName = Marshal.PtrToStringUTF8(err) ?? "(unknown)";
+                ImeLogger.Write($"XGetICValues(filterEvents) failed at '{errName}'");
+                return false;
+            }
+
+            filterEvents = value;
+            ImeLogger.Write($"XGetICValues(filterEvents) -> 0x{filterEvents.ToInt64():X}");
+            return filterEvents != 0;
+        }
+        finally
+        {
+            if (nFilterEvents != 0)
+            {
+                Marshal.FreeCoTaskMem(nFilterEvents);
             }
         }
     }
