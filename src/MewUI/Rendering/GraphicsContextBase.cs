@@ -166,7 +166,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
     public void DrawRectangle(Rect rect, Color color, double thickness = 1)
     {
         if (IsCulled(rect)) return;
-        DrawRectangleCore(rect, color, thickness);
+        DrawRectangleCore(rect, color, thickness, false);
     }
 
     public void FillRectangle(Rect rect, Color color)
@@ -201,7 +201,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     protected abstract void DrawLineCore(Point start, Point end, Color color, double thickness = 1);
 
-    protected abstract void DrawRectangleCore(Rect rect, Color color, double thickness = 1);
+    protected abstract void DrawRectangleCore(Rect rect, Color color, double thickness, bool strokeInset);
 
     protected abstract void FillRectangleCore(Rect rect, Color color);
 
@@ -316,7 +316,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
     public virtual void DrawRectangle(Rect rect, IPen pen)
     {
         if (IsCulled(rect)) return;
-        if (pen.Brush is ISolidColorBrush s) DrawRectangleCore(rect, s.Color, pen.Thickness);
+        if (pen.Brush is ISolidColorBrush s) DrawRectangleCore(rect, s.Color, pen.Thickness, false);
     }
 
     public virtual void FillRectangle(Rect rect, IBrush brush)
@@ -509,7 +509,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
         }
 
         if (IsCulled(rect)) return;
-        DrawRectangleCore(rect.Deflate(new Thickness(QuantizeHalfStroke(thickness, DpiScale))), color, thickness);
+        DrawRectangleCore(rect, color, thickness, true);
     }
 
     /// <summary>

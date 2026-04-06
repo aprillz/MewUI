@@ -331,7 +331,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness, bool strokeInset)
     {
         color = BlendGlobalAlpha(color);
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
@@ -339,30 +339,50 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        var r = ToDeviceRect(rect);
-        if (r.Width <= 0 || r.Height <= 0)
+        var outer = ToDeviceRect(rect);
+        if (outer.Width <= 0 || outer.Height <= 0)
         {
             return;
         }
 
-        float widthPx = QuantizeStrokePx(thickness);
-        if (widthPx <= 0)
+        if (strokeInset)
         {
-            return;
-        }
+            // Fill-based inset: avoids sub-pixel deflate that GDI+'s integer coords can't handle.
+            var snappedThickness = LayoutRounding.SnapThicknessToPixels(thickness, _dpiScale, 1);
+            var inner = ToDeviceRect(rect.Deflate(new Thickness(snappedThickness)));
 
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb((color)), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
-        {
-            return;
-        }
+            if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+                return;
 
-        try
-        {
-            GdiPlusInterop.GdipDrawRectangleI(_graphics, pen, r.left, r.top, r.Width, r.Height);
+            try
+            {
+                GdiPlusInterop.GdipFillRectangleI(_graphics, brush, outer.left, outer.top, outer.Width, inner.top - outer.top);
+                GdiPlusInterop.GdipFillRectangleI(_graphics, brush, outer.left, inner.bottom, outer.Width, outer.bottom - inner.bottom);
+                GdiPlusInterop.GdipFillRectangleI(_graphics, brush, outer.left, inner.top, inner.left - outer.left, inner.Height);
+                GdiPlusInterop.GdipFillRectangleI(_graphics, brush, inner.right, inner.top, outer.right - inner.right, inner.Height);
+            }
+            finally
+            {
+                GdiPlusInterop.GdipDeleteBrush(brush);
+            }
         }
-        finally
+        else
         {
-            GdiPlusInterop.GdipDeletePen(pen);
+            float widthPx = QuantizeStrokePx(thickness);
+            if (widthPx <= 0)
+                return;
+
+            if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+                return;
+
+            try
+            {
+                GdiPlusInterop.GdipDrawRectangleI(_graphics, pen, outer.left, outer.top, outer.Width, outer.Height);
+            }
+            finally
+            {
+                GdiPlusInterop.GdipDeletePen(pen);
+            }
         }
     }
 

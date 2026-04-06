@@ -222,8 +222,10 @@ internal sealed partial class MewVGGraphicsContext : GraphicsContextBase
         _vg.Stroke();
     }
 
-    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness, bool strokeInset)
     {
+        if (strokeInset)
+            rect = rect.Deflate(new Thickness(QuantizeHalfStroke(thickness, DpiScale)));
         _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
         _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);

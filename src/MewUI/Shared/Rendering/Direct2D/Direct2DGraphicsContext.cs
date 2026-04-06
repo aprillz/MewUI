@@ -302,9 +302,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         D2D1VTable.DrawLine((ID2D1RenderTarget*)_renderTarget, p0, p1, brush, stroke, _defaultStrokeStyle);
     }
 
-    protected override void DrawRectangleCore(Rect rect, Color color, double thickness = 1)
+    protected override void DrawRectangleCore(Rect rect, Color color, double thickness, bool strokeInset)
     {
         if (_renderTarget == 0) return;
+        if (strokeInset)
+            rect = rect.Deflate(new Thickness(QuantizeHalfStroke(thickness, DpiScale)));
         nint brush = GetSolidBrush(color);
         float stroke = QuantizeStrokeDip((float)thickness);
         D2D1VTable.DrawRectangle((ID2D1RenderTarget*)_renderTarget, ToRectF(rect), brush, stroke, _defaultStrokeStyle);
