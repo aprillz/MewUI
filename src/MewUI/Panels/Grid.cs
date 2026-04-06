@@ -410,7 +410,9 @@ public class Grid : Panel
 
         double totalWidth = SumMeasureSizes(columns, spacing);
         double totalHeight = SumMeasureSizes(rows, spacing);
-        return new Size(totalWidth, totalHeight).Inflate(Padding);
+        var result = new Size(totalWidth, totalHeight).Inflate(Padding);
+
+        return result;
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -668,7 +670,7 @@ public class Grid : Panel
                 continue;
             }
 
-            var constraint = CreateChildConstraint(placement, rows, columns, spacing, mode, columnConstraints, rowConstraints);
+            var constraint = CreateChildConstraint(placement, rows, columns, spacing, mode, columnConstraints, rowConstraints, finiteWidth, finiteHeight);
             placement.Child.Measure(constraint);
         }
     }
@@ -780,37 +782,61 @@ public class Grid : Panel
         return GridUnitType.Auto;
     }
 
-    private static Size CreateChildConstraint(
+    private Size CreateChildConstraint(
         Placement placement,
         IReadOnlyList<RowDefinition> rows,
         IReadOnlyList<ColumnDefinition> columns,
         double spacing,
         MeasureMode mode,
         double[]? columnConstraints,
-        double[]? rowConstraints)
+        double[]? rowConstraints,
+        bool finiteWidth,
+        bool finiteHeight)
     {
-        double width = CreateAxisConstraint(placement.Column, placement.ColumnSpan, columns, spacing, mode, columnConstraints);
-        double height = CreateAxisConstraint(placement.Row, placement.RowSpan, rows, spacing, mode, rowConstraints);
+        double width = CreateAxisConstraint(placement.Column, placement.ColumnSpan, columns, spacing, mode, columnConstraints, finiteWidth);
+        double height = CreateAxisConstraint(placement.Row, placement.RowSpan, rows, spacing, mode, rowConstraints, finiteHeight);
         return new Size(width, height);
     }
 
-    private static double CreateAxisConstraint<T>(
+    private double CreateAxisConstraint<T>(
         int start,
         int span,
         IReadOnlyList<T> definitions,
         double spacing,
         MeasureMode mode,
-        double[]? constraints)
+        double[]? constraints,
+        bool finiteConstraint)
         where T : GridDefinitionBase
     {
+        // Use effective unit type (Star becomes Auto when constraint is infinite).
+        bool hasAuto = false;
+        bool hasStar = false;
+        for (int i = start; i < start + span; i++)
+        {
+            var unitType = GetMeasureUnitType(definitions[i], finiteConstraint);
+            if (unitType == GridUnitType.Auto) hasAuto = true;
+            else if (unitType == GridUnitType.Star) hasStar = true;
+        }
+
+        if (hasAuto && !hasStar)
+        {
+            return double.PositiveInfinity;
+        }
+
+        // WPF GetMeasureSizeForRange: Auto → MinSize, others → MeasureSize.
         if (mode == MeasureMode.Constrained && constraints != null)
         {
-            for (int i = start; i < start + span; i++)
+            if (hasAuto)
             {
-                if (IsAutoConstraintUnresolved(definitions[i]))
+                double total = 0;
+                for (int i = start; i < start + span; i++)
                 {
-                    return double.PositiveInfinity;
+                    total += definitions[i].UserSize.IsAuto
+                        ? ClampDefinitionSize(definitions[i], definitions[i].UserMinSize)
+                        : constraints[i];
                 }
+                if (span > 1) total += (span - 1) * spacing;
+                return total;
             }
 
             return GetRangeSize(constraints, start, span, spacing);
@@ -966,20 +992,6 @@ public class Grid : Panel
         {
             DistributeExtra(otherDefinitions, extra, useStarWeights: false);
         }
-    }
-
-    private static bool IsAutoConstraintUnresolved(GridDefinitionBase definition)
-    {
-        if (!definition.UserSize.IsAuto)
-        {
-            return false;
-        }
-
-        // Auto definitions start each measure pass at their min size. Until some child contributes
-        // more than that baseline, using the current MeasureSize as a hard constraint would collapse
-        // natural measurement to 0 (or MinWidth/MinHeight) under global DesiredSize clamping.
-        double baseline = ClampDefinitionSize(definition, definition.UserMinSize);
-        return definition.MeasureSize <= baseline + 0.01;
     }
 
     private static void DistributeExtra<T>(IReadOnlyList<T> definitions, double extra, bool useStarWeights)
