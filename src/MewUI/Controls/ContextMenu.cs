@@ -773,7 +773,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         var borderInset = GetBorderVisualInset();
         double itemRadius = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
 
-        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, radius);
+        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, radius);
 
         var innerBounds = bounds.Deflate(new Thickness(borderInset));
         var contentBounds = GetContentViewportBounds();

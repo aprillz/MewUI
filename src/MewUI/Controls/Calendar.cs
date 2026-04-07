@@ -260,7 +260,7 @@ public sealed class Calendar : Control, IVisualTreeHost
 
     protected override void OnRender(IGraphicsContext context)
     {
-        DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, Math.Max(0, CornerRadius));
+        DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, BorderThickness, Math.Max(0, CornerRadius));
     }
 
     protected override void RenderSubtree(IGraphicsContext context)

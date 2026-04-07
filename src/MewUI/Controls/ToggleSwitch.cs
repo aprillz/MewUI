@@ -79,7 +79,7 @@ public sealed class ToggleSwitch : ToggleBase
         }
         else
         {
-            DrawBackgroundAndBorder(context, trackRect, trackFill, borderColor, radius);
+            DrawBackgroundAndBorder(context, trackRect, trackFill, borderColor, BorderThickness, radius);
         }
 
         double thumbInset = Math.Max(2, trackRect.Height * 0.20) + borderInset;

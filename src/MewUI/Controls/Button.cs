@@ -91,7 +91,7 @@ public partial class Button : Control, IVisualTreeHost
 
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = CornerRadius;
-        DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
+        DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, BorderThickness, radius);
 
         Content?.Render(context);
     }

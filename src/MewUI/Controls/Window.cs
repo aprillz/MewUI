@@ -779,7 +779,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         MewProperty<bool>.Register<Window>("ShowAccessKeys", false,
             MewPropertyOptions.Inherits | MewPropertyOptions.AffectsRender);
 
-    internal Input.AccessKeyManager AccessKeyManager => field ??= new Input.AccessKeyManager(this);
+    internal AccessKeyManager AccessKeyManager => field ??= new AccessKeyManager(this);
 
     internal bool ShowAccessKeys
     {

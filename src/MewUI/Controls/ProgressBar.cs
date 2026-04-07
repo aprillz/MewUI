@@ -24,7 +24,7 @@ public sealed class ProgressBar : RangeBase
 
         var bg = GetValue(BackgroundProperty);
         var border = GetValue(BorderBrushProperty);
-        DrawBackgroundAndBorder(context, bounds, bg, border, radius);
+        DrawBackgroundAndBorder(context, bounds, bg, border, BorderThickness, radius);
 
         double t = GetNormalizedValue();
 

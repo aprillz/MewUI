@@ -384,7 +384,7 @@ public sealed class ScrollViewer : ContentControl
         // Optional background/border (thin style defaults to none).
         if (Background.A > 0 || BorderThickness > 0)
         {
-            DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, CornerRadius);
+            DrawBackgroundAndBorder(context, Bounds, Background, BorderBrush, BorderThickness, CornerRadius);
         }
     }
 

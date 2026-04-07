@@ -366,8 +366,7 @@ public sealed class TabControl : Control
             return;
         }
 
-        DrawBackgroundAndBorder(context, contentRect, contentBg, outline, 0);
-
+        DrawBackgroundAndBorder(context, bounds, contentBg, outline, new Thickness(BorderThickness), new CornerRadius(0, 0, CornerRadius, CornerRadius));
         if (borderInset > 0)
         {
             DrawContentOutline(context, contentRect, contentBg, borderInset);

@@ -120,7 +120,7 @@ public sealed class GroupBox : HeaderedContentControl
     protected override void OnRender(IGraphicsContext context)
     {
         
-        var bounds = GetBorderRenderMetrics(Bounds, 0).Bounds;
+        var bounds = GetBorderRenderMetrics(Bounds, BorderThickness, 0).Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0)
         {
             return;
@@ -136,6 +136,6 @@ public sealed class GroupBox : HeaderedContentControl
         }
 
         double radius = CornerRadius;
-        DrawBackgroundAndBorder(context, boxRect, Background, BorderBrush, radius);
+        DrawBackgroundAndBorder(context, boxRect, Background, BorderBrush, BorderThickness, radius);
     }
 }

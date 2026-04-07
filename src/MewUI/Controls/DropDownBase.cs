@@ -224,7 +224,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         Color baseBorder = state.IsEnabled ? BorderBrush : Theme.Palette.ControlBorder;
         var borderColor = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.6);
 
-        DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
+        DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
 
         var headerHeight = ResolveHeaderHeight();
         var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);

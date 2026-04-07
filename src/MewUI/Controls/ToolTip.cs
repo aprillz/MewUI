@@ -19,6 +19,6 @@ public sealed class ToolTip : ContentControl
         var dpiScale = GetDpi() / 96.0;
         double radius = LayoutRounding.RoundToPixel(CornerRadius, dpiScale);
 
-        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, radius);
+        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, radius);
     }
 }

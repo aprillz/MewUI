@@ -154,12 +154,12 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         Color bg = GetValue(BackgroundProperty);
         Color border = GetValue(BorderBrushProperty);
 
-        var metrics = GetBorderRenderMetrics(Bounds, radius);
+        var metrics = GetBorderRenderMetrics(Bounds, BorderThickness, radius);
         var bounds = metrics.Bounds;
-        var borderInset = metrics.BorderThickness;
-        var cornerRadius = metrics.CornerRadius;
+        var borderInset = metrics.UniformThickness;
+        var cornerRadius = metrics.UniformRadius;
 
-        DrawBackgroundAndBorder(context, bounds, bg, border, radius);
+        DrawBackgroundAndBorder(context, bounds, bg, border, BorderThickness, radius);
 
         var inner = bounds.Deflate(new Thickness(borderInset));
 
@@ -193,7 +193,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (buttonRect.Width > 0)
         {
-            var innerRadius = metrics.InnerCornerRadius;
+            var innerRadius = metrics.UniformInnerRadius;
             context.Save();
             context.SetClipRoundedRect(
                 inner,

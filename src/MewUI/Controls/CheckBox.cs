@@ -139,7 +139,7 @@ public class CheckBox : ContentControl
         var radius = Math.Max(0, CornerRadius * 0.5);
 
         var borderColor = GetValue(BorderBrushProperty);
-        DrawBackgroundAndBorder(context, boxRect, fill, borderColor, radius);
+        DrawBackgroundAndBorder(context, boxRect, fill, borderColor, BorderThickness, radius);
 
         var markColor = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
 

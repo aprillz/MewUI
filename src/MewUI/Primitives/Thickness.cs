@@ -104,6 +104,11 @@ public readonly struct Thickness : IEquatable<Thickness>
     /// <summary>
     /// Determines whether two thicknesses are equal.
     /// </summary>
+    /// <summary>
+    /// Converts a uniform double value to a <see cref="Thickness"/>.
+    /// </summary>
+    public static implicit operator Thickness(double uniform) => new(uniform);
+
     public static bool operator ==(Thickness left, Thickness right) => left.Equals(right);
 
     /// <summary>

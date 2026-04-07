@@ -44,7 +44,7 @@ public sealed partial class ToggleButton : ToggleBase
 
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = CornerRadius;
-        DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, radius);
+        DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, BorderThickness, radius);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

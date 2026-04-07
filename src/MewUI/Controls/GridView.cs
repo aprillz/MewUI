@@ -777,7 +777,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         var bounds = GetSnappedBorderBounds(Bounds);
         var bg = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
-        DrawBackgroundAndBorder(context, bounds, bg, borderColor, CornerRadius);
+        DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, CornerRadius);
     }
 
     protected override void RenderSubtree(IGraphicsContext context)

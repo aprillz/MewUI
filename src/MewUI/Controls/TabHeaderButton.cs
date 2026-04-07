@@ -106,19 +106,14 @@ internal sealed class TabHeaderButton : ContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
-        double radiusDip = Math.Max(0, CornerRadius);
-        var metrics = GetBorderRenderMetrics(Bounds, radiusDip);
-        var bounds = metrics.Bounds;
         var bg = GetValue(BackgroundProperty);
-        var border = GetValue(BorderBrushProperty);
+        var borderBrush = GetValue(BorderBrushProperty);
+        double r = CornerRadius;
+        double bt = BorderThickness;
 
-        // Top-only rounding via clipping:
-        // Draw a taller rounded-rect, then clip to the real bounds so the bottom corners are clipped away.
-        // This keeps the header looking like VS-style "document tabs" without requiring path geometry support.
-        var rounded = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height + metrics.CornerRadius + 4);
-
-        // Use fill-based border (outer + inner) to avoid stroke centering being clipped by the tight clip.
-        DrawBackgroundAndBorder(context, rounded, bg, border, radiusDip);
+        // Top-only rounding + no bottom border for tab header
+        DrawBackgroundAndBorder(context, GetSnappedBorderBounds(Bounds), bg, borderBrush,
+            new Thickness(bt, bt, bt, 0), new CornerRadius(r, r, 0, 0));
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -131,7 +126,7 @@ internal sealed class TabHeaderButton : ContentControl
         }
 
         // Keep the tab label vertically centered.
-        var contentBounds = bounds.Deflate(Padding).Deflate(new Thickness(GetBorderVisualInset()));
+        var contentBounds = bounds.Deflate(Padding).Deflate(GetBorderVisualInset());
         var desired = Content.DesiredSize;
         if (desired.Height > 0 && contentBounds.Height > desired.Height + 0.5)
         {
@@ -150,11 +145,10 @@ internal sealed class TabHeaderButton : ContentControl
         // Keep measure/arrange symmetric: ArrangeContent deflates border inset (snapped to pixels),
         // so measurement must include it to avoid text clipping (GDI/OpenGL).
         var borderInset = GetBorderVisualInset();
-        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
-        var contentSize = availableSize.Deflate(Padding).Deflate(border);
+        var contentSize = availableSize.Deflate(Padding).Deflate(borderInset);
 
         Content.Measure(contentSize);
-        return Content.DesiredSize.Inflate(Padding).Inflate(border);
+        return Content.DesiredSize.Inflate(Padding).Inflate(borderInset);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

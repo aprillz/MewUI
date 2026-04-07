@@ -442,6 +442,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
             bounds,
             PickControlBackground(state),
             borderColor,
+            BorderThickness,
             radius);
 
         var contentBounds = GetViewportContentBounds();

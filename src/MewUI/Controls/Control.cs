@@ -434,7 +434,7 @@ public abstract class Control : FrameworkElement
             return;
         }
 
-        DrawBackgroundAndBorder(context, Bounds, bg, border, CornerRadius);
+        DrawBackgroundAndBorder(context, Bounds, bg, border, BorderThickness, CornerRadius);
     }
 
     /// <summary>
@@ -796,22 +796,19 @@ public abstract class Control : FrameworkElement
         }
 
         var dpiScale = GetDpi() / 96.0;
-        // Treat borders as an "inside" inset and snap thickness to whole device pixels.
         return LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, 1);
     }
 
-    protected BorderRenderMetrics GetBorderRenderMetrics(Rect bounds, double cornerRadiusDip, bool snapBounds = true)
+    internal BorderRenderMetrics GetBorderRenderMetrics(Rect bounds, double borderThicknessDip, double cornerRadiusDip, bool snapBounds = true)
     {
         var dpiScale = GetDpi() / 96.0;
-        var borderThickness = BorderThickness <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(BorderThickness, dpiScale, 1);
+        var borderThickness = borderThicknessDip <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThicknessDip, dpiScale, 1);
         var radius = cornerRadiusDip <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadiusDip, dpiScale);
 
         if (snapBounds)
-        {
             bounds = LayoutRounding.SnapBoundsRectToPixels(bounds, dpiScale);
-        }
 
-        return new BorderRenderMetrics(bounds, dpiScale, borderThickness, radius);
+        return new BorderRenderMetrics(bounds, dpiScale, new Thickness(borderThickness), new CornerRadius(radius));
     }
 
     protected void DrawBackgroundAndBorder(
@@ -819,28 +816,99 @@ public abstract class Control : FrameworkElement
         Rect bounds,
         Color background,
         Color borderBrush,
+        double borderThicknessDip,
         double cornerRadiusDip)
     {
-        if (background.A == 0 && (BorderThickness <= 0 || borderBrush.A == 0))
+        if (background.A == 0 && (borderThicknessDip <= 0 || borderBrush.A == 0))
         {
             return;
         }
 
-        var metrics = GetBorderRenderMetrics(bounds, cornerRadiusDip);
-        bounds = metrics.Bounds;
-        var borderThickness = metrics.BorderThickness;
-        var radius = metrics.CornerRadius;
+        var metrics = GetBorderRenderMetrics(bounds, borderThicknessDip, cornerRadiusDip);
 
+        if (metrics.IsSimple)
+        {
+            DrawBackgroundAndBorderSimple(context, in metrics, background, borderBrush);
+        }
+        else
+        {
+            DrawBackgroundAndBorderComplex(context, in metrics, background, borderBrush);
+        }
+    }
+
+    /// <summary>
+    /// Creates DPI-snapped border render metrics from non-uniform thickness and corner radius.
+    /// </summary>
+    internal static BorderRenderMetrics CreateBorderRenderMetrics(
+        Rect bounds, double dpiScale, Thickness borderThickness, CornerRadius cornerRadius)
+    {
+        bounds = LayoutRounding.SnapBoundsRectToPixels(bounds, dpiScale);
+
+        var bt = new Thickness(
+            borderThickness.Left   <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Left,   dpiScale, 1),
+            borderThickness.Top    <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Top,    dpiScale, 1),
+            borderThickness.Right  <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Right,  dpiScale, 1),
+            borderThickness.Bottom <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Bottom, dpiScale, 1));
+
+        var cr = new CornerRadius(
+            cornerRadius.TopLeft     <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.TopLeft,     dpiScale),
+            cornerRadius.TopRight    <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.TopRight,    dpiScale),
+            cornerRadius.BottomRight <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.BottomRight, dpiScale),
+            cornerRadius.BottomLeft  <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.BottomLeft,  dpiScale));
+
+        cr = BorderGeometry.ClampRadii(bounds, cr);
+
+        return new BorderRenderMetrics(bounds, dpiScale, bt, cr);
+    }
+
+    /// <summary>
+    /// Draws background and border with per-side thickness and per-corner radius.
+    /// Falls back to the optimized uniform path when both are uniform.
+    /// </summary>
+    protected void DrawBackgroundAndBorder(
+        IGraphicsContext context,
+        Rect bounds,
+        Color background,
+        Color borderBrush,
+        Thickness borderThickness,
+        CornerRadius cornerRadius)
+    {
+        if (background.A == 0 && (borderThickness == Thickness.Zero || borderBrush.A == 0))
+        {
+            return;
+        }
+
+        var metrics = CreateBorderRenderMetrics(bounds, GetDpi() / 96.0, borderThickness, cornerRadius);
+
+        if (metrics.IsSimple)
+        {
+            DrawBackgroundAndBorderSimple(context, in metrics, background, borderBrush);
+        }
+        else
+        {
+            DrawBackgroundAndBorderComplex(context, in metrics, background, borderBrush);
+        }
+    }
+
+    private static void DrawBackgroundAndBorderSimple(
+        IGraphicsContext context,
+        in BorderRenderMetrics metrics,
+        Color background,
+        Color borderBrush)
+    {
+        var bounds = metrics.Bounds;
+        var borderThickness = metrics.UniformThickness;
+        var radius = metrics.UniformRadius;
+
+#if USE_FILL_STROKE_TRICK
         bool canUseFillStrokeTrick = borderThickness > 0 &&
                                   borderBrush.A > 0 &&
                                   background.A > 0;
 
-#if USE_FILL_STROKE_TRICK
         if (canUseFillStrokeTrick || background.A == 255)
         {
             if (borderThickness > 0)
             {
-                // Fill "stroke" using outer + inner shapes (avoids half-pixel pen alignment issues).
                 if (radius > 0)
                 {
                     context.FillRoundedRectangle(bounds, radius, radius, borderBrush);
@@ -852,7 +920,7 @@ public abstract class Control : FrameworkElement
             }
 
             var inner = bounds.Deflate(new Thickness(borderThickness));
-            var innerRadius = metrics.InnerCornerRadius;
+            var innerRadius = metrics.UniformInnerRadius;
 
             if (inner.Width > 0 && inner.Height > 0)
             {
@@ -892,6 +960,29 @@ public abstract class Control : FrameworkElement
             {
                 context.DrawRectangle(bounds, borderBrush, borderThickness, strokeInset: true);
             }
+        }
+    }
+
+    private static void DrawBackgroundAndBorderComplex(
+        IGraphicsContext context,
+        in BorderRenderMetrics metrics,
+        Color background,
+        Color borderBrush)
+    {
+        // Border first: fill entire outer contour with border color.
+        // Background then overwrites the inner area — no seam at the boundary.
+        if (borderBrush.A > 0 && metrics.UniformThickness > 0)
+        {
+            var outerPath = BorderGeometry.CreateOuterContour(in metrics);
+            if (!outerPath.IsEmpty)
+                context.FillPath(outerPath, borderBrush);
+        }
+
+        if (background.A > 0)
+        {
+            var innerPath = BorderGeometry.CreateBackgroundRegion(in metrics);
+            if (!innerPath.IsEmpty)
+                context.FillPath(innerPath, background);
         }
     }
 
@@ -1087,31 +1178,4 @@ public abstract class Control : FrameworkElement
         public static bool operator !=(VisualState a, VisualState b) => !a.Equals(b);
     }
 
-    protected readonly struct BorderRenderMetrics
-    {
-        public BorderRenderMetrics(Rect bounds, double dpiScale, double borderThickness, double cornerRadius)
-        {
-            Bounds = bounds;
-            DpiScale = dpiScale;
-            BorderThickness = borderThickness;
-            CornerRadius = cornerRadius;
-            InnerCornerRadius = Math.Max(0, cornerRadius - borderThickness);
-        }
-
-        public Rect Bounds { get; }
-
-        public double DpiScale { get; }
-
-        public double BorderThickness { get; }
-
-        public double CornerRadius { get; }
-
-        /// <summary>
-        /// Corner radius for the inner contour of the border (content area).
-        /// Computed from snapped CornerRadius and snapped BorderThickness so it matches
-        /// the strokeInset inner edge exactly. Use this for clip radii instead of
-        /// <c>RoundToPixel(outerRadius - thickness)</c> to avoid fractional-DPI rounding mismatches.
-        /// </summary>
-        public double InnerCornerRadius { get; }
-    }
 }

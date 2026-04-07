@@ -251,7 +251,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
         var bg = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
-        DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
+        DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
 
         var dpiScale = GetDpi() / 96.0;
         var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - GetBorderVisualInset());

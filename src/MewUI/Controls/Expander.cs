@@ -131,7 +131,7 @@ public class Expander : HeaderedContentControl
     protected override void OnRender(IGraphicsContext context)
     {
         var bounds = GetSnappedBorderBounds(Bounds);
-        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, CornerRadius);
+        DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, CornerRadius);
 
         // Draw chevron glyph
         var inner = bounds.Deflate(Padding);

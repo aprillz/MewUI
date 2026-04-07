@@ -410,6 +410,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             bounds,
             GetValue(BackgroundProperty),
             GetValue(BorderBrushProperty),
+            BorderThickness,
             radius);
 
         var borderInset = GetBorderVisualInset();

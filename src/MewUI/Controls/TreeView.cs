@@ -594,7 +594,7 @@ public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVi
 
         var bg = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
-        DrawBackgroundAndBorder(context, bounds, bg, borderColor, radius);
+        DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
 
         if (_itemsSource.Count == 0)
         {
