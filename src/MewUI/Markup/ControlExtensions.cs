@@ -513,12 +513,20 @@ public static class ControlExtensions
     /// <param name="control">Target control.</param>
     /// <param name="header">Header text.</param>
     /// <returns>The control for chaining.</returns>
-    public static T Header<T>(this T control, string header) where T : HeaderedContentControl
+    public static T Header<T>(this T control, string text, bool accessKey = true) where T : HeaderedContentControl
     {
         ArgumentNullException.ThrowIfNull(control);
-        control.Header = new TextBlock()
-            .Text(header ?? string.Empty)
-            .Bold();
+        if (accessKey)
+        {
+            var at = new AccessText();
+            at.SetRawText(text ?? string.Empty);
+            control.Header = at;
+        }
+        else
+        {
+            control.Header = new TextBlock()
+                .Text(text ?? string.Empty);
+        }
         return control;
     }
 
@@ -549,6 +557,20 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(control);
         control.HeaderSpacing = spacing;
         return control;
+    }
+
+    #endregion
+
+    #region GroupBox
+
+    /// <summary>
+    /// Sets the header inset.
+    /// </summary>
+    public static GroupBox HeaderInset(this GroupBox groupBox, double inset)
+    {
+        ArgumentNullException.ThrowIfNull(groupBox);
+        groupBox.HeaderInset = inset;
+        return groupBox;
     }
 
     #endregion
