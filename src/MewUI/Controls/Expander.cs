@@ -25,7 +25,11 @@ public class Expander : HeaderedContentControl
         set => SetValue(IsExpandedProperty, value);
     }
 
-    internal override void OnAccessKey() { Focus(); IsExpanded = !IsExpanded; }
+    internal override void OnAccessKey()
+    {
+        Focus();
+        IsExpanded = !IsExpanded;
+    }
 
     protected virtual void OnIsExpandedChanged(bool oldValue, bool newValue)
     {

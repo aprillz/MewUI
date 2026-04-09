@@ -35,6 +35,42 @@ public sealed class GroupBox : HeaderedContentControl
     /// </summary>
     public override bool Focusable => false;
 
+    internal override void OnAccessKey()
+    {
+        if (Content is UIElement content)
+        {
+            var target = FindFirstFocusable(content);
+            if (target != null)
+            {
+                target.Focus();
+                return;
+            }
+        }
+    }
+
+    private static UIElement? FindFirstFocusable(UIElement element)
+    {
+        if (element.Focusable && element.IsVisible && element.IsEnabled)
+            return element;
+
+        if (element is IVisualTreeHost host)
+        {
+            UIElement? found = null;
+            host.VisitChildren(child =>
+            {
+                if (child is UIElement ui)
+                {
+                    found = FindFirstFocusable(ui);
+                    if (found != null) return false;
+                }
+                return true;
+            });
+            return found;
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Measures the content size.
     /// </summary>
