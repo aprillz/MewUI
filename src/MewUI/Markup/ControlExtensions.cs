@@ -519,7 +519,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(control);
         if (accessKey)
         {
-            var at = new AccessText();
+            var at = new AccessText().SemiBold();
             at.SetRawText(text ?? string.Empty);
             control.Header = at;
         }
@@ -737,74 +737,42 @@ public static class ControlExtensions
     /// <param name="textBlock">Target text block.</param>
     /// <param name="text">Text content.</param>
     /// <returns>The text block for chaining.</returns>
-    public static TextBlock Text(this TextBlock textBlock, string text)
+    public static T Text<T>(this T textBlock, string text) where T : TextBlock
     {
         textBlock.Text = text;
         return textBlock;
     }
 
-    /// <summary>
-    /// Sets the foreground color.
-    /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="color">Foreground color.</param>
-    /// <returns>The text block for chaining.</returns>
     public static TextBlock Foreground(this TextBlock textBlock, Color color)
     {
         textBlock.Foreground = color;
         return textBlock;
     }
 
-    /// <summary>
-    /// Sets the font family.
-    /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="fontFamily">Font family name.</param>
-    /// <returns>The text block for chaining.</returns>
     public static TextBlock FontFamily(this TextBlock textBlock, string fontFamily)
     {
         textBlock.FontFamily = fontFamily;
         return textBlock;
     }
 
-    /// <summary>
-    /// Sets the font size.
-    /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="fontSize">Font size.</param>
-    /// <returns>The text block for chaining.</returns>
     public static TextBlock FontSize(this TextBlock textBlock, double fontSize)
     {
         textBlock.FontSize = fontSize;
         return textBlock;
     }
 
-    /// <summary>
-    /// Sets the font weight.
-    /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="fontWeight">Font weight.</param>
-    /// <returns>The text block for chaining.</returns>
     public static TextBlock FontWeight(this TextBlock textBlock, FontWeight fontWeight)
     {
         textBlock.FontWeight = fontWeight;
         return textBlock;
     }
 
-    /// <summary>
-    /// Sets the font weight to bold.
-    /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <returns>The text block for chaining.</returns>
     public static TextBlock Bold(this TextBlock textBlock)
     {
         textBlock.FontWeight = MewUI.FontWeight.Bold;
         return textBlock;
     }
 
-    /// <summary>
-    /// Sets the font weight to semi-bold.
-    /// </summary>
     public static TextBlock SemiBold(this TextBlock textBlock)
     {
         textBlock.FontWeight = MewUI.FontWeight.SemiBold;
@@ -814,10 +782,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the text alignment.
     /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="alignment">Text alignment.</param>
-    /// <returns>The text block for chaining.</returns>
-    public static TextBlock TextAlignment(this TextBlock textBlock, TextAlignment alignment)
+    public static T TextAlignment<T>(this T textBlock, TextAlignment alignment) where T : TextBlock
     {
         textBlock.TextAlignment = alignment;
         return textBlock;
@@ -826,10 +791,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the vertical text alignment.
     /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="alignment">Vertical text alignment.</param>
-    /// <returns>The text block for chaining.</returns>
-    public static TextBlock VerticalTextAlignment(this TextBlock textBlock, TextAlignment alignment)
+    public static T VerticalTextAlignment<T>(this T textBlock, TextAlignment alignment) where T : TextBlock
     {
         textBlock.VerticalTextAlignment = alignment;
         return textBlock;
@@ -838,10 +800,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the text wrapping mode.
     /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="wrapping">Text wrapping mode.</param>
-    /// <returns>The text block for chaining.</returns>
-    public static TextBlock TextWrapping(this TextBlock textBlock, TextWrapping wrapping)
+    public static T TextWrapping<T>(this T textBlock, TextWrapping wrapping) where T : TextBlock
     {
         textBlock.TextWrapping = wrapping;
         return textBlock;
@@ -850,10 +809,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the text trimming mode.
     /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="trimming">Text trimming mode.</param>
-    /// <returns>The text block for chaining.</returns>
-    public static TextBlock TextTrimming(this TextBlock textBlock, TextTrimming trimming)
+    public static T TextTrimming<T>(this T textBlock, TextTrimming trimming) where T : TextBlock
     {
         textBlock.TextTrimming = trimming;
         return textBlock;
@@ -862,10 +818,7 @@ public static class ControlExtensions
     /// <summary>
     /// Binds the text to an observable value.
     /// </summary>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="source">Observable source.</param>
-    /// <returns>The text block for chaining.</returns>
-    public static TextBlock BindText(this TextBlock textBlock, ObservableValue<string> source)
+    public static T BindText<T>(this T textBlock, ObservableValue<string> source) where T : TextBlock
     {
         ArgumentNullException.ThrowIfNull(textBlock);
         ArgumentNullException.ThrowIfNull(source);
@@ -877,12 +830,7 @@ public static class ControlExtensions
     /// <summary>
     /// Binds the text to an observable value with converter.
     /// </summary>
-    /// <typeparam name="TSource">Source value type.</typeparam>
-    /// <param name="textBlock">Target text block.</param>
-    /// <param name="source">Observable source.</param>
-    /// <param name="convert">Conversion function.</param>
-    /// <returns>The text block for chaining.</returns>
-    public static TextBlock BindText<TSource>(this TextBlock textBlock, ObservableValue<TSource> source, Func<TSource, string> convert)
+    public static T BindText<T, TSource>(this T textBlock, ObservableValue<TSource> source, Func<TSource, string> convert) where T : TextBlock
     {
         ArgumentNullException.ThrowIfNull(textBlock);
         ArgumentNullException.ThrowIfNull(source);
@@ -890,6 +838,52 @@ public static class ControlExtensions
 
         textBlock.SetBinding(TextBlock.TextProperty, source, v => convert(v) ?? string.Empty);
         return textBlock;
+    }
+
+    #endregion
+
+    #region AccessText
+
+    internal static AccessText RawText(this AccessText at, string text)
+    {
+        at.SetRawText(text);
+        return at;
+    }
+
+    internal static AccessText Foreground(this AccessText at, Color color)
+    {
+        at.Foreground = color;
+        return at;
+    }
+
+    internal static AccessText FontFamily(this AccessText at, string fontFamily)
+    {
+        at.FontFamily = fontFamily;
+        return at;
+    }
+
+    internal static AccessText FontSize(this AccessText at, double fontSize)
+    {
+        at.FontSize = fontSize;
+        return at;
+    }
+
+    internal static AccessText FontWeight(this AccessText at, FontWeight fontWeight)
+    {
+        at.FontWeight = fontWeight;
+        return at;
+    }
+
+    internal static AccessText Bold(this AccessText at)
+    {
+        at.FontWeight = MewUI.FontWeight.Bold;
+        return at;
+    }
+
+    internal static AccessText SemiBold(this AccessText at)
+    {
+        at.FontWeight = MewUI.FontWeight.SemiBold;
+        return at;
     }
 
     #endregion
@@ -3172,7 +3166,7 @@ public static class ControlExtensions
     /// <returns>The control for chaining.</returns>
     public static T Content<T>(this T control, Element content) where T : ContentControl
     {
-        control.Content = content;
+        control.Content = content as UIElement;
         return control;
     }
 
