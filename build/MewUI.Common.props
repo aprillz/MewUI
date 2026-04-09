@@ -9,7 +9,7 @@
     <MewUIRootNamespace>Aprillz.MewUI</MewUIRootNamespace>
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
-    <MewVGVersion>0.3.0</MewVGVersion>
+    <MewVGVersion>0.3.1</MewVGVersion>
   </PropertyGroup>
 
   <!-- Local development override (gitignored) — MewVGProjectPath, etc. -->
