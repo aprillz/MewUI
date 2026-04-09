@@ -34,20 +34,17 @@ public partial class Button : Control, IVisualTreeHost
     /// </summary>
     public event Action? Click;
 
-    public static readonly MewProperty<Func<bool>?> CanClickProperty =
-        MewProperty<Func<bool>?>.Register<Button>(nameof(CanClick), null,
-            MewPropertyOptions.None,
-            static (self, oldValue, newValue) => self.OnCanClickChanged(oldValue, newValue));
-
     public Func<bool>? CanClick
     {
-        get => GetValue(CanClickProperty);
-        set => SetValue(CanClickProperty, value);
-    }
-
-    protected virtual void OnCanClickChanged(Func<bool>? oldValue, Func<bool>? newValue)
-    {
-        ReevaluateSuggestedIsEnabled();
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                ReevaluateSuggestedIsEnabled();
+            }
+        }
     }
 
     public override bool Focusable => true;

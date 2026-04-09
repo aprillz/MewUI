@@ -25,6 +25,12 @@ public sealed class MenuItem : MenuEntry
     public bool IsEnabled { get; set; } = true;
 
     /// <summary>
+    /// Optional predicate evaluated when the menu opens.
+    /// When set, <see cref="IsEnabled"/> is updated automatically.
+    /// </summary>
+    public Func<bool>? CanClick { get; set; }
+
+    /// <summary>
     /// Keyboard shortcut gesture. Auto-generates display text and registers with Window.KeyBindings.
     /// </summary>
     public KeyGesture? Shortcut { get; set; }
@@ -32,6 +38,15 @@ public sealed class MenuItem : MenuEntry
     public Action? Click { get; set; }
 
     public Menu? SubMenu { get; set; }
+
+    /// <summary>
+    /// Re-evaluates <see cref="CanClick"/> and updates <see cref="IsEnabled"/>.
+    /// </summary>
+    internal void ReevaluateCanClick()
+    {
+        if (CanClick != null)
+            IsEnabled = CanClick();
+    }
 
     public override string ToString() => Text;
 }

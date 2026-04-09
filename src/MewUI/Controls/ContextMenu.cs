@@ -148,6 +148,15 @@ public sealed class ContextMenu : Control, IPopupOwner
         InvalidateVisual();
     }
 
+    private void ReevaluateCanClick()
+    {
+        foreach (var entry in Menu.Items)
+        {
+            if (entry is MenuItem item)
+                item.ReevaluateCanClick();
+        }
+    }
+
     internal void ShowAt(UIElement owner, Point positionInWindow, double? anchorTopY = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
@@ -158,6 +167,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             return;
         }
 
+        ReevaluateCanClick();
         CloseDescendants(window);
         _parentMenu = null;
 
