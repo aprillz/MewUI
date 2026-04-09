@@ -1123,6 +1123,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             throw new InvalidOperationException("Cannot show a closed window.");
         }
 
+        // Auto-resolve owner from running application when not specified.
+        owner ??= ResolveDefaultOwner();
+
         if (owner != null && ReferenceEquals(owner, this))
         {
             throw new ArgumentException("Owner cannot be the dialog itself.", nameof(owner));
@@ -1199,6 +1202,35 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private void UnregisterModalChild(Window child)
     {
         _modalChildren.Remove(child);
+    }
+
+    private Window? ResolveDefaultOwner()
+    {
+        if (!Application.IsRunning)
+        {
+            return null;
+        }
+
+        var windows = Application.Current.AllWindows;
+        for (int i = 0; i < windows.Count; i++)
+        {
+            var w = windows[i];
+            if (!ReferenceEquals(w, this) && w.IsActive)
+            {
+                return w;
+            }
+        }
+
+        for (int i = 0; i < windows.Count; i++)
+        {
+            var w = windows[i];
+            if (!ReferenceEquals(w, this) && w.Handle != 0)
+            {
+                return w;
+            }
+        }
+
+        return null;
     }
 
     private void RegisterOwnedChild(Window child)
