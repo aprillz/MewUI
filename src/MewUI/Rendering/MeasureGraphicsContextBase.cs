@@ -23,7 +23,6 @@ public abstract class MeasureGraphicsContextBase : IGraphicsContext
     public virtual void Dispose() { }
 
     // All other interface members are no-ops for measurement contexts.
-
     public void Save() { }
     public void Restore() { }
     public void SetClip(Rect rect) { }
@@ -49,6 +48,27 @@ public abstract class MeasureGraphicsContextBase : IGraphicsContext
     public void DrawPath(PathGeometry path, Color color, double thickness = 1) { }
     public void FillPath(PathGeometry path, Color color) { }
     public void FillPath(PathGeometry path, Color color, FillRule fillRule) { }
+    public TextResourceTracker? TextTracker { get; set; }
+
+    public virtual TextFormat CreateTextFormat(IFont font, TextAlignment horizontalAlignment, TextAlignment verticalAlignment,
+        TextWrapping wrapping, TextTrimming trimming)
+    {
+        var format = new TextFormat
+        {
+            Font = font,
+            HorizontalAlignment = horizontalAlignment,
+            VerticalAlignment = verticalAlignment,
+            Wrapping = wrapping,
+            Trimming = trimming
+        };
+        TextTracker?.TrackFormat(format);
+        return format;
+    }
+
+    public abstract TextLayout CreateTextLayout(ReadOnlySpan<char> text, TextFormat format, in TextLayoutConstraints constraints);
+
+    public void DrawTextLayout(ReadOnlySpan<char> text, TextFormat format, TextLayout layout, Color color) { }
+
     public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,

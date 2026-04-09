@@ -88,6 +88,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         try
         {
+            TextTracker?.CleanupDetached();
+
             if (_renderTarget != 0)
             {
                 while (_clipStack.Count > 0) PopClip();
@@ -683,7 +685,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (font is not DirectWriteFont dwFont)
             throw new ArgumentException("Font must be a DirectWriteFont", nameof(font));
 
-        nint textFormat = CreateTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
+        nint textFormat = CreateDWriteTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
         if (textFormat == 0) return;
 
         // Build layout rect so that width/height are converted to float independently of position,
@@ -728,12 +730,127 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font) => MeasureText(text, font, float.MaxValue);
+    public override TextFormat CreateTextFormat(IFont font, TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment, TextWrapping wrapping, TextTrimming trimming)
+    {
+        var format = base.CreateTextFormat(font, horizontalAlignment, verticalAlignment, wrapping, trimming);
+        if (font is DirectWriteFont dwFont)
+        {
+            nint native = CreateDWriteTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
+            format.NativeHandle = native;
+        }
+        return format;
+    }
+
+    public override TextLayout CreateTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, in TextLayoutConstraints constraints)
+    {
+        if (text.IsEmpty) return null!;
+
+        if (format.Font is not DirectWriteFont dwFont)
+            throw new ArgumentException("Font must be a DirectWriteFont", nameof(format));
+
+        var bounds = constraints.Bounds;
+        double maxWidth = double.IsPositiveInfinity(bounds.Width) ? float.MaxValue : Math.Max(0, bounds.Width);
+
+        // Use cached native format if available, otherwise create a temporary one.
+        nint nativeFormat = format.NativeHandle;
+        bool ownFormat = false;
+        if (nativeFormat == 0)
+        {
+            nativeFormat = CreateDWriteTextFormat(dwFont, format.HorizontalAlignment, format.VerticalAlignment, format.Wrapping);
+            if (nativeFormat == 0) return null!;
+            ownFormat = true;
+        }
+
+        float w = maxWidth >= float.MaxValue ? float.MaxValue : (float)maxWidth;
+        float h = bounds.Height > 0 && !double.IsPositiveInfinity(bounds.Height) ? (float)bounds.Height : float.MaxValue;
+        int hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, nativeFormat, w, h, out nint nativeLayout);
+
+        if (ownFormat) ComHelpers.Release(nativeFormat);
+
+        if (hr < 0 || nativeLayout == 0) return null!;
+
+        // Apply trimming if requested.
+        if (format.Trimming == TextTrimming.CharacterEllipsis)
+        {
+            nint trimFormat = format.NativeHandle != 0 ? format.NativeHandle
+                : CreateDWriteTextFormat(dwFont, format.HorizontalAlignment, format.VerticalAlignment, format.Wrapping);
+            bool ownTrimFormat = format.NativeHandle == 0;
+            DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, trimFormat, out nint trimmingSign);
+            var dwriteTrimming = new DWRITE_TRIMMING { granularity = DWRITE_TRIMMING_GRANULARITY.CHARACTER };
+            DWriteVTable.SetTrimming(nativeLayout, dwriteTrimming, trimmingSign);
+            ComHelpers.Release(trimmingSign);
+            if (ownTrimFormat) ComHelpers.Release(trimFormat);
+        }
+
+        hr = DWriteVTable.GetMetrics(nativeLayout, out var metrics);
+        if (hr < 0)
+        {
+            ComHelpers.Release(nativeLayout);
+            return null!;
+        }
+
+        var height = metrics.height;
+        if (metrics.top < 0)
+        {
+            height += -metrics.top;
+        }
+
+        var measured = new Size(TextMeasurePolicy.ApplyWidthPadding(metrics.widthIncludingTrailingWhitespace), height);
+        double effectiveMaxWidth = bounds.Width > 0 && !double.IsPositiveInfinity(bounds.Width) ? bounds.Width : measured.Width;
+
+        var result = new TextLayout
+        {
+            MeasuredSize = measured,
+            EffectiveBounds = bounds,
+            EffectiveMaxWidth = effectiveMaxWidth,
+            ContentHeight = measured.Height,
+            NativeHandle = nativeLayout
+        };
+        TextTracker?.TrackLayout(result);
+        return result;
+    }
+
+    public override void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color)
+    {
+        if (layout == null) return;
+        var bounds = layout.EffectiveBounds;
+        if (_renderTarget == 0 || text.IsEmpty) return;
+
+        if (_clipBoundsWorld.HasValue && bounds.Width < 100_000)
+        {
+            var clip = _clipBoundsWorld.Value;
+            var wv = Vector2.Transform(new Vector2((float)bounds.X, (float)bounds.Y), _transform);
+            if (wv.X + bounds.Width <= clip.X || wv.X >= clip.Right ||
+                wv.Y + bounds.Height <= clip.Y || wv.Y >= clip.Bottom)
+                return;
+        }
+
+        nint brush = GetSolidBrush(color);
+        var options = _textPixelSnap
+            ? D2D1_DRAW_TEXT_OPTIONS.CLIP
+            : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP;
+
+        float left = (float)bounds.X;
+        float top = (float)bounds.Y;
+
+        if (layout.NativeHandle == 0) return;
+
+        D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)_renderTarget,
+            new D2D1_POINT_2F(left, top), layout.NativeHandle, brush, options);
+    }
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => MeasureTextDirect(text, font, float.MaxValue);
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => MeasureTextDirect(text, font, maxWidth);
+
+    private Size MeasureTextDirect(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (text.IsEmpty) return Size.Empty;
-
         if (font is not DirectWriteFont dwFont)
             throw new ArgumentException("Font must be a DirectWriteFont", nameof(font));
 
@@ -741,7 +858,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         nint textLayout = 0;
         try
         {
-            textFormat = CreateTextFormat(dwFont, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+            textFormat = CreateDWriteTextFormat(dwFont, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
             if (textFormat == 0) return Size.Empty;
 
             float w = maxWidth >= float.MaxValue ? float.MaxValue : (float)Math.Max(0, maxWidth);
@@ -753,7 +870,6 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
             var height = metrics.height;
             if (metrics.top < 0) height += -metrics.top;
-
             return new Size(TextMeasurePolicy.ApplyWidthPadding(metrics.widthIncludingTrailingWhitespace), height);
         }
         finally
@@ -763,7 +879,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    private nint CreateTextFormat(DirectWriteFont font, TextAlignment horizontalAlignment,
+
+    private nint CreateDWriteTextFormat(DirectWriteFont font, TextAlignment horizontalAlignment,
         TextAlignment verticalAlignment, TextWrapping wrapping)
     {
         var weight = (DWRITE_FONT_WEIGHT)(int)font.Weight;

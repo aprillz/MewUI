@@ -1075,6 +1075,147 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
+    public override TextLayout CreateTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, in TextLayoutConstraints constraints)
+    {
+        var bounds = constraints.Bounds;
+        var safeBounds = new Rect(bounds.X, bounds.Y,
+            double.IsPositiveInfinity(bounds.Width) ? 0 : bounds.Width,
+            double.IsPositiveInfinity(bounds.Height) ? 0 : bounds.Height);
+
+        Size measured;
+        if (format.Wrapping == TextWrapping.NoWrap)
+            measured = MeasureText(text, format.Font);
+        else
+        {
+            double maxWidth = safeBounds.Width > 0 ? safeBounds.Width : MeasureText(text, format.Font).Width;
+            measured = MeasureText(text, format.Font, maxWidth);
+        }
+
+        double effectiveMaxWidth = safeBounds.Width > 0 ? safeBounds.Width : measured.Width;
+
+        return new TextLayout
+        {
+            MeasuredSize = measured,
+            EffectiveBounds = safeBounds,
+            EffectiveMaxWidth = effectiveMaxWidth,
+            ContentHeight = measured.Height
+        };
+    }
+
+    public override unsafe void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color)
+    {
+        if (format.Font is not GdiFont gdiFont)
+        {
+            throw new ArgumentException("Font must be a GdiFont", nameof(format));
+        }
+
+        color = BlendGlobalAlpha(color);
+
+        if (text.IsEmpty || color.A == 0)
+        {
+            return;
+        }
+
+        var horizontalAlignment = format.HorizontalAlignment;
+        var verticalAlignment = format.VerticalAlignment;
+        var wrapping = format.Wrapping;
+        var trimming = format.Trimming;
+
+        // GDI text bypasses GDI+ WorldTransform — apply _transform manually.
+        var bounds = TransformRect(layout.EffectiveBounds);
+
+        // Early cull: skip if the bounds rect is entirely outside the current clip region.
+        var cullR = ToDeviceRect(bounds);
+        if (Gdi32.RectVisible(Hdc, ref cullR) == 0)
+        {
+            return;
+        }
+
+        if (_bitmapTarget != null || color.A < 255 || EnableAlphaTextHint)
+        {
+            var r = GetTextLayoutRect(bounds, wrapping);
+            uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
+            int yOffsetPx = 0;
+            int textHeightPx = 0;
+            if (wrapping != TextWrapping.NoWrap)
+            {
+                ComputeWrappedTextOffsetsPx(
+                    text,
+                    gdiFont.GetHandle(GdiFontRenderMode.Coverage),
+                    r.Width,
+                    r.Height,
+                    verticalAlignment,
+                    out yOffsetPx,
+                    out textHeightPx);
+            }
+
+            PerPixelAlphaTextRenderer.DrawText(
+                Hdc,
+                _bitmapTarget,
+                _surfacePool,
+                text,
+                r,
+                gdiFont,
+                color,
+                gdiFormat,
+                yOffsetPx,
+                textHeightPx,
+                wrapping,
+                trimming,
+                horizontalAlignment,
+                verticalAlignment);
+            return;
+        }
+
+        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
+        var oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
+
+        try
+        {
+            var r = GetTextLayoutRect(bounds, wrapping);
+            uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
+            int yOffsetPx = 0;
+            int textHeightPx = 0;
+            if (wrapping != TextWrapping.NoWrap)
+            {
+                ComputeWrappedTextOffsetsPx(
+                    text,
+                    gdiFont.GetHandle(GdiFontRenderMode.Default),
+                    r.Width,
+                    r.Height,
+                    verticalAlignment,
+                    out yOffsetPx,
+                    out textHeightPx);
+            }
+
+            int clipState = ApplyTextClip(r);
+
+            bool drawn = false;
+            if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
+            {
+                drawn = GdiWrappedEllipsisHelper.TryDrawWrappedWithEllipsis(Hdc, text, r, r.Width, r.Height, horizontalAlignment, verticalAlignment);
+            }
+
+            if (!drawn)
+            {
+                fixed (char* pText = text)
+                {
+                    ApplyVerticalOffset(ref r, yOffsetPx, textHeightPx);
+                    Gdi32.DrawText(Hdc, pText, text.Length, ref r, gdiFormat);
+                }
+            }
+
+            RestoreTextClip(clipState);
+        }
+        finally
+        {
+            Gdi32.SetTextColor(Hdc, oldColor);
+            Gdi32.SelectObject(Hdc, oldFont);
+        }
+    }
+
     private int ApplyTextClip(RECT boundsPx)
     {
         int clipState = Gdi32.SaveDC(Hdc);

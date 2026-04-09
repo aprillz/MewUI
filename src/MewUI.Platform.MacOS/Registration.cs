@@ -12,7 +12,7 @@ public static class MacOSPlatform
     public static void Register()
     {
         Application.RegisterPlatformHost(PlatformId, CreateHost);
-        PlatformKeyConfiguration.Current = new Platform.MacOS.MacOSKeyConfiguration();
+        PlatformKeyConfiguration.Current = new MacOSKeyConfiguration();
     }
 
     private static MacOSPlatformHost CreateHost()
@@ -21,7 +21,9 @@ public static class MacOSPlatform
     public static ApplicationBuilder UseMacOS(this ApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+
         Register();
+
         return builder;
     }
 }

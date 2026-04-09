@@ -89,20 +89,7 @@ internal sealed partial class MewVGX11GraphicsContext
         // Point-based draw uses measured size.
         if (widthPx <= 0 || heightPx <= 0)
         {
-            Size measured;
-            if (wrapping == TextWrapping.NoWrap)
-            {
-                measured = MeasureText(text, font);
-            }
-            else
-            {
-                double maxWidth = bounds.Width > 0 ? bounds.Width : MeasureText(text, font).Width;
-                measured = MeasureText(text, font, maxWidth);
-            }
-
-            widthPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Width, DpiScale));
-            heightPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Height, DpiScale));
-            boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
+            return;
         }
 
         widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
@@ -188,7 +175,8 @@ internal sealed partial class MewVGX11GraphicsContext
         DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
     }
 
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
     {
         if (font is FreeTypeFont ftFont)
         {
@@ -200,7 +188,7 @@ internal sealed partial class MewVGX11GraphicsContext
         return fallback.MeasureText(text, font);
     }
 
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
         if (font is FreeTypeFont ftFont)
         {
@@ -213,6 +201,127 @@ internal sealed partial class MewVGX11GraphicsContext
 
         using var fallback = new OpenGLMeasurementContext((uint)Math.Round(DpiScale * 96.0));
         return fallback.MeasureText(text, font, maxWidth);
+    }
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => MeasureTextCore(text, font);
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => MeasureTextCore(text, font, maxWidth);
+
+    public override TextLayout CreateTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, in TextLayoutConstraints constraints)
+    {
+        var bounds = constraints.Bounds;
+        var safeBounds = new Rect(bounds.X, bounds.Y,
+            double.IsPositiveInfinity(bounds.Width) ? 0 : bounds.Width,
+            double.IsPositiveInfinity(bounds.Height) ? 0 : bounds.Height);
+
+        Size measured;
+        if (format.Wrapping == TextWrapping.NoWrap)
+        {
+            measured = MeasureTextCore(text, format.Font);
+        }
+        else
+        {
+            double maxWidth = safeBounds.Width > 0 ? safeBounds.Width : MeasureTextCore(text, format.Font).Width;
+            measured = MeasureTextCore(text, format.Font, maxWidth);
+        }
+
+        var boundsPx = ToPixelRect(safeBounds);
+        int widthPx = boundsPx.Width;
+        int heightPx = boundsPx.Height;
+
+        if (widthPx <= 0 || heightPx <= 0)
+        {
+            widthPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Width, DpiScale));
+            heightPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Height, DpiScale));
+        }
+
+        double effectiveMaxWidth = safeBounds.Width > 0 ? safeBounds.Width : measured.Width;
+        var effectiveBounds = new Rect(safeBounds.X, safeBounds.Y,
+            widthPx / DpiScale, heightPx / DpiScale);
+
+        return new TextLayout
+        {
+            MeasuredSize = measured,
+            EffectiveBounds = effectiveBounds,
+            EffectiveMaxWidth = effectiveMaxWidth,
+            ContentHeight = measured.Height
+        };
+    }
+
+    public override void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color)
+    {
+        if (text.IsEmpty) return;
+        if (format.Font is not FreeTypeFont ftFont) return;
+
+        var bounds = layout.EffectiveBounds;
+        var boundsPx = ToPixelRect(bounds);
+        int widthPx = boundsPx.Width;
+        int heightPx = boundsPx.Height;
+
+        if (widthPx <= 0 || heightPx <= 0) return;
+
+        widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
+        heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
+        boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
+
+        if (_clipBoundsWorld.HasValue)
+        {
+            var c = _clipBoundsWorld.Value;
+            double worldLeft = bounds.X + _translateX;
+            double worldTop = bounds.Y + _translateY;
+            double worldRight = worldLeft + widthPx / DpiScale;
+            double worldBottom = worldTop + heightPx / DpiScale;
+            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+                return;
+        }
+
+        // FreeType bakes alignment into the rasterized bitmap.
+        double drawX = _textPixelSnap
+            ? RenderingUtil.RoundToPixelInt(boundsPx.Left / DpiScale, DpiScale) / DpiScale
+            : boundsPx.Left / DpiScale;
+        double drawY = _textPixelSnap
+            ? RenderingUtil.RoundToPixelInt(boundsPx.Top / DpiScale, DpiScale) / DpiScale
+            : boundsPx.Top / DpiScale;
+        double widthDip = widthPx / DpiScale;
+        double heightDip = heightPx / DpiScale;
+
+        var key = new MewVGTextCacheKey(new TextCacheKey(
+            string.GetHashCode(text),
+            0,
+            ftFont.FontPath,
+            ftFont.PixelHeight,
+            color.ToArgb(),
+            widthPx,
+            heightPx,
+            (int)format.HorizontalAlignment,
+            (int)format.VerticalAlignment,
+            (int)format.Wrapping,
+            (int)format.Trimming));
+
+        if (!_resources.TextCache.TryGet(key, out var entry))
+        {
+            var bmp = FreeTypeText.Rasterize(
+                text,
+                ftFont,
+                widthPx,
+                heightPx,
+                color,
+                format.HorizontalAlignment,
+                format.VerticalAlignment,
+                format.Wrapping,
+                format.Trimming);
+            entry = _resources.TextCache.CreateImage(key, ref bmp);
+        }
+
+        if (entry.ImageId == 0) return;
+
+        var drawRect = new Rect(drawX, drawY, widthDip, heightDip);
+        var srcRect = new Rect(entry.X, entry.Y, entry.WidthPx, entry.HeightPx);
+        DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
     }
 
     #endregion

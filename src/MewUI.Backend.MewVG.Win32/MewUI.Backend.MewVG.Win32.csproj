@@ -31,7 +31,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\ClipStack.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGGLBootstrap.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGGraphicsContext.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGWin32GraphicsContext.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGWindowResources.cs" LinkBase="Rendering\MewVG" />
 

@@ -15,7 +15,9 @@ public static class X11Platform
     public static ApplicationBuilder UseX11(this ApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+
         Register();
+
         return builder;
     }
 }

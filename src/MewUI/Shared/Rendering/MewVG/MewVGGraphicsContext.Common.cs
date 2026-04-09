@@ -11,7 +11,7 @@ internal sealed partial class MewVGMetalGraphicsContext : GraphicsContextBase
 #elif MEWUI_MEWVG_X11
 internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase
 #else
-internal sealed partial class MewVGGraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 #endif
 {
 #if MEWUI_MEWVG_MACOS

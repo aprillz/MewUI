@@ -14,10 +14,26 @@ internal sealed class MacOSKeyConfiguration : PlatformKeyConfiguration
     public override string FormatGesture(KeyGesture gesture)
     {
         var sb = new StringBuilder();
-        if (gesture.Modifiers.HasFlag(ModifierKeys.Control)) sb.Append('\u2303'); // ⌃
-        if (gesture.Modifiers.HasFlag(ModifierKeys.Alt)) sb.Append('\u2325');     // ⌥
-        if (gesture.Modifiers.HasFlag(ModifierKeys.Shift)) sb.Append('\u21e7');   // ⇧
-        if (gesture.Modifiers.HasFlag(ModifierKeys.Meta)) sb.Append('\u2318');    // ⌘
+        if (gesture.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            sb.Append('\u2303'); // ⌃
+        }
+
+        if (gesture.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            sb.Append('\u2325');     // ⌥
+        }
+
+        if (gesture.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            sb.Append('\u21e7');   // ⇧
+        }
+
+        if (gesture.Modifiers.HasFlag(ModifierKeys.Meta))
+        {
+            sb.Append('\u2318');    // ⌘
+        }
+
         sb.Append(FormatKey(gesture.Key));
         return sb.ToString();
     }

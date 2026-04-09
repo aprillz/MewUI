@@ -227,6 +227,32 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public abstract void FillPath(PathGeometry path, Color color);
 
+    // --- Core text API: layout + draw separation ---
+
+    public TextResourceTracker? TextTracker { get; set; }
+
+    public virtual TextFormat CreateTextFormat(IFont font,
+        TextAlignment horizontalAlignment, TextAlignment verticalAlignment,
+        TextWrapping wrapping, TextTrimming trimming)
+    {
+        var format = new TextFormat
+        {
+            Font = font,
+            HorizontalAlignment = horizontalAlignment,
+            VerticalAlignment = verticalAlignment,
+            Wrapping = wrapping,
+            Trimming = trimming
+        };
+        TextTracker?.TrackFormat(format);
+        return format;
+    }
+
+    public abstract TextLayout CreateTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, in TextLayoutConstraints constraints);
+
+    public abstract void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color);
+
     public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
@@ -237,10 +263,6 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
         // Cap-height centering: shift text so the cap-height midpoint aligns with
         // bounds center instead of the line-height midpoint.
-        // lineHeight = Size + InternalLeading (consistent across all backends).
-        // capCenter = baseline - capHeight/2 = (lineHeight - Descent) - capHeight/2
-        // lineCenter = lineHeight / 2
-        // shift = capCenter - lineCenter = lineHeight/2 - Descent - capHeight/2
         if (verticalAlignment == TextAlignment.Center)
         {
             double lineHeight = font.Size + font.InternalLeading;
@@ -400,7 +422,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
         var transparent = Color.FromArgb(0, shadowColor.R, shadowColor.G, shadowColor.B);
 
         GradientStop[] fadeOut = [new(0, edgeColor), new(1, transparent)];
-        GradientStop[] fadeIn  = [new(0, transparent), new(1, edgeColor)];
+        GradientStop[] fadeIn = [new(0, transparent), new(1, edgeColor)];
 
         double cornerSize = cr + br;
         double innerStop = cr > 0 ? cr / cornerSize : 0;

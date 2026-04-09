@@ -70,7 +70,7 @@ public sealed partial class MewVGGraphicsFactory
             throw new ArgumentException("MewVG (Win32) requires a Win32 HDC window surface.", nameof(target));
         }
 
-        return new MewVGGraphicsContext(win32.Hwnd, win32.Hdc, target.PixelWidth, target.PixelHeight, target.DpiScale, (MewVGWindowResources)resources);
+        return new MewVGWin32GraphicsContext(win32.Hwnd, win32.Hdc, target.PixelWidth, target.PixelHeight, target.DpiScale, (MewVGWindowResources)resources);
     }
 
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
@@ -109,7 +109,7 @@ public sealed partial class MewVGGraphicsFactory
         }
 
         var resources = MewVGWin32LayeredSupport.Instance.GetOrCreateWindowResources(hwnd, hdc);
-        context = new MewVGGraphicsContext(hwnd, hdc, bitmapTarget.PixelWidth, bitmapTarget.PixelHeight, bitmapTarget.DpiScale, resources, bitmapTarget);
+        context = new MewVGWin32GraphicsContext(hwnd, hdc, bitmapTarget.PixelWidth, bitmapTarget.PixelHeight, bitmapTarget.DpiScale, resources, bitmapTarget);
         handled = true;
     }
 

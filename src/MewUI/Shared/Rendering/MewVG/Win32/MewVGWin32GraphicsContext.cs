@@ -4,7 +4,7 @@ using Aprillz.MewUI.Rendering.OpenGL;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed partial class MewVGGraphicsContext
+internal sealed partial class MewVGWin32GraphicsContext
 {
     private readonly nint _hwnd;
     private readonly nint _hdc;
@@ -12,7 +12,7 @@ internal sealed partial class MewVGGraphicsContext
     private readonly OpenGLBitmapRenderTarget? _bitmapTarget;
     private readonly bool _swapOnDispose;
 
-    public MewVGGraphicsContext(
+    public MewVGWin32GraphicsContext(
         nint hwnd,
         nint hdc,
         int pixelWidth,
@@ -108,47 +108,19 @@ internal sealed partial class MewVGGraphicsContext
         TextWrapping wrapping = TextWrapping.NoWrap,
         TextTrimming trimming = TextTrimming.None)
     {
-        if (text.IsEmpty)
-        {
-            return;
-        }
-
-        if (font is not GdiFont gdiFont)
-        {
-            return;
-        }
+        if (text.IsEmpty) return;
+        if (font is not GdiFont gdiFont) return;
 
         var boundsPx = ToPixelRect(bounds);
-
         int widthPx = boundsPx.Width;
         int heightPx = boundsPx.Height;
 
-        // Point-based draw uses measured size.
-        if (widthPx <= 0 || heightPx <= 0)
-        {
-            Size measured;
-            if (wrapping == TextWrapping.NoWrap)
-            {
-                measured = MeasureText(text, font);
-            }
-            else
-            {
-                double maxWidth = bounds.Width > 0 ? bounds.Width : MeasureText(text, font).Width;
-                measured = MeasureText(text, font, maxWidth);
-            }
+        if (widthPx <= 0 || heightPx <= 0) return;
 
-            // When we materialize a text bitmap for point-based drawing, always round up to avoid clipping.
-            widthPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Width, DpiScale));
-            heightPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Height, DpiScale));
-            boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
-        }
-
-        // Guard against pathological sizes (matches OpenGL behavior).
         widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
         heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
         boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
 
-        // Early clip cull: skip text entirely outside the current scissor region.
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
@@ -157,39 +129,13 @@ internal sealed partial class MewVGGraphicsContext
             double worldRight = worldLeft + widthPx / DpiScale;
             double worldBottom = worldTop + heightPx / DpiScale;
             if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
-            {
                 return;
-            }
         }
 
         double drawX = bounds.X;
         double drawY = bounds.Y;
         double widthDip = widthPx / DpiScale;
         double heightDip = heightPx / DpiScale;
-
-        bool adjustedForWrapAlignment = false;
-        bool useRasterVerticalAlignment = wrapping == TextWrapping.NoWrap
-            && verticalAlignment != TextAlignment.Top
-            && bounds.Height > 0;
-        if (wrapping != TextWrapping.NoWrap && verticalAlignment != TextAlignment.Top && bounds.Height > 0)
-        {
-            double maxWidthDip = bounds.Width > 0 ? bounds.Width : MeasureText(text, font).Width;
-            var measured = MeasureText(text, font, maxWidthDip);
-            int textHeightPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Height, DpiScale));
-            int remaining = heightPx - textHeightPx;
-            if (remaining > 0)
-            {
-                int yOffsetPx = verticalAlignment == TextAlignment.Bottom
-                    ? remaining
-                    : remaining / 2;
-
-                boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top + yOffsetPx, widthPx, textHeightPx);
-                heightPx = textHeightPx;
-                heightDip = heightPx / DpiScale;
-                drawY = boundsPx.Top / DpiScale;
-                adjustedForWrapAlignment = true;
-            }
-        }
 
         if (bounds.Width > 0)
         {
@@ -201,7 +147,7 @@ internal sealed partial class MewVGGraphicsContext
             };
         }
 
-        if (bounds.Height > 0 && !useRasterVerticalAlignment && !adjustedForWrapAlignment)
+        if (bounds.Height > 0)
         {
             drawY = verticalAlignment switch
             {
@@ -211,9 +157,148 @@ internal sealed partial class MewVGGraphicsContext
             };
         }
 
-        // Pixel-snap to avoid sampling between texels (blurry text) when drawing rasterized text via image patterns.
-        // NanoVG coordinates are in DIP, so we snap to the underlying device-pixel grid.
-        // Skip snapping during transitions to avoid visible jumping.
+        if (_textPixelSnap)
+        {
+            drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
+            drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+        }
+
+        var textHash = string.GetHashCode(text);
+        var key = new MewVGTextCacheKey(new TextCacheKey(
+            textHash, gdiFont.Handle, string.Empty, 0, color.ToArgb(),
+            widthPx, heightPx,
+            (int)horizontalAlignment, (int)verticalAlignment,
+            (int)wrapping, (int)trimming));
+
+        if (!_resources.TextCache.TryGet(key, out var entry))
+        {
+            var bmp = OpenGLTextRasterizer.Rasterize(
+                _hdc, gdiFont, text, widthPx, heightPx, color,
+                horizontalAlignment, verticalAlignment, wrapping, trimming);
+            entry = _resources.TextCache.CreateImage(key, ref bmp);
+        }
+
+        if (entry.ImageId == 0) return;
+
+        var drawRect = new Rect(drawX, drawY, widthDip, heightDip);
+        var srcRect = new Rect(entry.X, entry.Y, entry.WidthPx, entry.HeightPx);
+        DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
+    }
+
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
+    {
+        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
+        return measure.MeasureText(text, font);
+    }
+
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    {
+        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
+        return measure.MeasureText(text, font, maxWidth);
+    }
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => MeasureTextCore(text, font);
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => MeasureTextCore(text, font, maxWidth);
+
+    public override TextLayout CreateTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, in TextLayoutConstraints constraints)
+    {
+        var bounds = constraints.Bounds;
+        var safeBounds = new Rect(bounds.X, bounds.Y,
+            double.IsPositiveInfinity(bounds.Width) ? 0 : bounds.Width,
+            double.IsPositiveInfinity(bounds.Height) ? 0 : bounds.Height);
+
+        Size measured;
+        if (format.Wrapping == TextWrapping.NoWrap)
+        {
+            measured = MeasureTextCore(text, format.Font);
+        }
+        else
+        {
+            double maxWidth = safeBounds.Width > 0 ? safeBounds.Width : MeasureTextCore(text, format.Font).Width;
+            measured = MeasureTextCore(text, format.Font, maxWidth);
+        }
+
+        var boundsPx = ToPixelRect(safeBounds);
+        int widthPx = boundsPx.Width;
+        int heightPx = boundsPx.Height;
+
+        if (widthPx <= 0 || heightPx <= 0)
+        {
+            widthPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Width, DpiScale));
+            heightPx = Math.Max(1, RenderingUtil.CeilToPixelInt(measured.Height, DpiScale));
+        }
+
+        double effectiveMaxWidth = safeBounds.Width > 0 ? safeBounds.Width : measured.Width;
+        var effectiveBounds = new Rect(safeBounds.X, safeBounds.Y,
+            widthPx / DpiScale, heightPx / DpiScale);
+
+        return new TextLayout
+        {
+            MeasuredSize = measured,
+            EffectiveBounds = effectiveBounds,
+            EffectiveMaxWidth = effectiveMaxWidth,
+            ContentHeight = measured.Height
+        };
+    }
+
+    public override void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color)
+    {
+        if (text.IsEmpty) return;
+        if (format.Font is not GdiFont gdiFont) return;
+
+        var bounds = layout.EffectiveBounds;
+        var boundsPx = ToPixelRect(bounds);
+        int widthPx = boundsPx.Width;
+        int heightPx = boundsPx.Height;
+
+        if (widthPx <= 0 || heightPx <= 0) return;
+
+        widthPx = ClampTextRasterExtent(widthPx, boundsPx, axis: 0);
+        heightPx = ClampTextRasterExtent(heightPx, boundsPx, axis: 1);
+        boundsPx = new PixelRect(boundsPx.Left, boundsPx.Top, widthPx, heightPx);
+
+        if (_clipBoundsWorld.HasValue)
+        {
+            var c = _clipBoundsWorld.Value;
+            double worldLeft = bounds.X + _translateX;
+            double worldTop = bounds.Y + _translateY;
+            double worldRight = worldLeft + widthPx / DpiScale;
+            double worldBottom = worldTop + heightPx / DpiScale;
+            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+                return;
+        }
+
+        var originalBounds = layout.EffectiveBounds;
+        double drawX = originalBounds.X;
+        double drawY = originalBounds.Y;
+        double widthDip = widthPx / DpiScale;
+        double heightDip = heightPx / DpiScale;
+
+        if (originalBounds.Width > 0)
+        {
+            drawX = format.HorizontalAlignment switch
+            {
+                TextAlignment.Center => originalBounds.X + (originalBounds.Width - widthDip) * 0.5,
+                TextAlignment.Right => originalBounds.X + originalBounds.Width - widthDip,
+                _ => originalBounds.X
+            };
+        }
+
+        if (originalBounds.Height > 0)
+        {
+            drawY = format.VerticalAlignment switch
+            {
+                TextAlignment.Center => originalBounds.Y + (originalBounds.Height - heightDip) * 0.5,
+                TextAlignment.Bottom => originalBounds.Y + originalBounds.Height - heightDip,
+                _ => originalBounds.Y
+            };
+        }
+
         if (_textPixelSnap)
         {
             drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
@@ -229,10 +314,10 @@ internal sealed partial class MewVGGraphicsContext
             color.ToArgb(),
             widthPx,
             heightPx,
-            (int)horizontalAlignment,
-            (int)verticalAlignment,
-            (int)wrapping,
-            (int)trimming));
+            (int)format.HorizontalAlignment,
+            (int)format.VerticalAlignment,
+            (int)format.Wrapping,
+            (int)format.Trimming));
 
         if (!_resources.TextCache.TryGet(key, out var entry))
         {
@@ -243,34 +328,18 @@ internal sealed partial class MewVGGraphicsContext
                 widthPx,
                 heightPx,
                 color,
-                horizontalAlignment,
-                useRasterVerticalAlignment ? verticalAlignment : TextAlignment.Top,
-                wrapping,
-                trimming);
+                format.HorizontalAlignment,
+                format.VerticalAlignment,
+                format.Wrapping,
+                format.Trimming);
             entry = _resources.TextCache.CreateImage(key, ref bmp);
         }
 
-        if (entry.ImageId == 0)
-        {
-            return;
-        }
-
+        if (entry.ImageId == 0) return;
 
         var drawRect = new Rect(drawX, drawY, widthDip, heightDip);
         var srcRect = new Rect(entry.X, entry.Y, entry.WidthPx, entry.HeightPx);
         DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
-    }
-
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
-    {
-        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
-        return measure.MeasureText(text, font);
-    }
-
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
-    {
-        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
-        return measure.MeasureText(text, font, maxWidth);
     }
 
     #endregion

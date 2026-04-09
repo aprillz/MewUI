@@ -425,38 +425,176 @@ internal sealed partial class MewVGMetalGraphicsContext
         _vg.Fill();
     }
 
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
     {
-        if (text.IsEmpty)
-        {
-            return Size.Empty;
-        }
-
-        if (font is not CoreTextFont ct)
-        {
-            return new Size(text.Length * 8, 16);
-        }
-
+        if (text.IsEmpty) return Size.Empty;
+        if (font is not CoreTextFont ct) return new Size(text.Length * 8, 16);
         int maxWidthPx = 0;
         var sizePx = CoreTextText.Measure(ct, text, maxWidthPx, TextWrapping.NoWrap, (uint)Math.Round(DpiScale * 96.0));
         return new Size(sizePx.Width / DpiScale, sizePx.Height / DpiScale);
     }
 
-    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+    private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
-        if (text.IsEmpty)
-        {
-            return Size.Empty;
-        }
-
-        if (font is not CoreTextFont ct)
-        {
-            return new Size(text.Length * 8, 16);
-        }
-
+        if (text.IsEmpty) return Size.Empty;
+        if (font is not CoreTextFont ct) return new Size(text.Length * 8, 16);
         int maxWidthPx = maxWidth <= 0 ? 0 : Math.Max(1, LayoutRounding.CeilToPixelInt(maxWidth, DpiScale));
         var sizePx = CoreTextText.Measure(ct, text, maxWidthPx, TextWrapping.Wrap, (uint)Math.Round(DpiScale * 96.0));
         return new Size(sizePx.Width / DpiScale, sizePx.Height / DpiScale);
+    }
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
+        => MeasureTextCore(text, font);
+
+    public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
+        => MeasureTextCore(text, font, maxWidth);
+
+    public override TextLayout CreateTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, in TextLayoutConstraints constraints)
+    {
+        var bounds = constraints.Bounds;
+        var safeBounds = new Rect(bounds.X, bounds.Y,
+            double.IsPositiveInfinity(bounds.Width) ? 0 : bounds.Width,
+            double.IsPositiveInfinity(bounds.Height) ? 0 : bounds.Height);
+
+        Size measured;
+        if (format.Wrapping == TextWrapping.NoWrap)
+        {
+            measured = MeasureTextCore(text, format.Font);
+        }
+        else
+        {
+            double maxWidth = safeBounds.Width > 0 ? safeBounds.Width : MeasureTextCore(text, format.Font).Width;
+            measured = MeasureTextCore(text, format.Font, maxWidth);
+        }
+
+        double effectiveMaxWidth = safeBounds.Width > 0 ? safeBounds.Width : measured.Width;
+
+        return new TextLayout
+        {
+            MeasuredSize = measured,
+            EffectiveBounds = safeBounds,
+            EffectiveMaxWidth = effectiveMaxWidth,
+            ContentHeight = measured.Height
+        };
+    }
+
+    public override void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color)
+    {
+        if (text.IsEmpty) return;
+        if (format.Font is not CoreTextFont ct) return;
+
+        var bounds = layout.EffectiveBounds;
+
+        double targetWidthDip = layout.MeasuredSize.Width;
+        if (bounds.Width > 0 && !double.IsInfinity(bounds.Width) && !double.IsNaN(bounds.Width))
+        {
+            if (format.Wrapping != TextWrapping.NoWrap)
+                targetWidthDip = bounds.Width;
+            else if (format.Trimming != TextTrimming.None)
+                targetWidthDip = Math.Min(targetWidthDip, bounds.Width);
+        }
+
+        int widthPx = Math.Max(1, LayoutRounding.CeilToPixelInt(targetWidthDip, DpiScale));
+
+        double targetHeightDip = layout.MeasuredSize.Height;
+        if (bounds.Height > 0 && !double.IsInfinity(bounds.Height) && !double.IsNaN(bounds.Height))
+            targetHeightDip = Math.Min(targetHeightDip, bounds.Height);
+        int heightPx = Math.Max(1, LayoutRounding.CeilToPixelInt(targetHeightDip, DpiScale));
+
+        if (_clipBoundsWorld.HasValue)
+        {
+            var c = _clipBoundsWorld.Value;
+            double worldLeft = bounds.X + _translateX;
+            double worldTop = bounds.Y + _translateY;
+            double worldRight = worldLeft + widthPx / DpiScale;
+            double worldBottom = worldTop + heightPx / DpiScale;
+            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+                return;
+        }
+
+        double drawX = bounds.X;
+        double drawY = bounds.Y;
+        double widthDip = widthPx / DpiScale;
+        double heightDip = heightPx / DpiScale;
+
+        if (bounds.Width > 0)
+        {
+            drawX = format.HorizontalAlignment switch
+            {
+                TextAlignment.Center => bounds.X + (bounds.Width - widthDip) / 2.0,
+                TextAlignment.Right => bounds.X + (bounds.Width - widthDip),
+                _ => bounds.X
+            };
+        }
+
+        if (bounds.Height > 0)
+        {
+            drawY = format.VerticalAlignment switch
+            {
+                TextAlignment.Center => bounds.Y + (bounds.Height - heightDip) / 2.0,
+                TextAlignment.Bottom => bounds.Y + (bounds.Height - heightDip),
+                _ => bounds.Y
+            };
+        }
+
+        if (_textPixelSnap)
+        {
+            drawX = LayoutRounding.RoundToPixel(drawX, DpiScale);
+            drawY = LayoutRounding.RoundToPixel(drawY, DpiScale);
+        }
+
+        if (!_resources.TextCache.TryGetOrCreate(
+                ct,
+                text,
+                widthPx,
+                heightPx,
+                (uint)Math.Round(DpiScale * 96.0),
+                color,
+                format.HorizontalAlignment,
+                TextAlignment.Top,
+                format.Wrapping,
+                format.Trimming,
+                out int imageId,
+                out int bitmapWidthPx,
+                out int bitmapHeightPx))
+        {
+            return;
+        }
+
+        double bitmapWidthDip = bitmapWidthPx / DpiScale;
+        double bitmapHeightDip = bitmapHeightPx / DpiScale;
+        var paint = _vg.ImagePattern((float)drawX, (float)drawY, (float)bitmapWidthDip, (float)bitmapHeightDip, 0, imageId, 1.0f);
+
+        double rectX = drawX;
+        double rectY = drawY;
+        double rectW = Math.Max(widthDip, Math.Min(bitmapWidthDip, widthDip + (bitmapWidthDip - widthDip)));
+        double rectH = heightDip;
+        double snapTolerance = 2.0 / DpiScale;
+        if (bounds.Width > 0 && !double.IsInfinity(bounds.Width))
+        {
+            if (rectX < bounds.X)
+            {
+                double leftClip = bounds.X - rectX;
+                rectW -= leftClip;
+                rectX = bounds.X;
+            }
+            double maxRight = bounds.X + bounds.Width;
+            if (rectX + rectW > maxRight + snapTolerance)
+                rectW = maxRight - rectX;
+        }
+        if (bounds.Height > 0 && !double.IsInfinity(bounds.Height))
+        {
+            double maxBottom = bounds.Y + bounds.Height;
+            if (rectY + rectH > maxBottom)
+                rectH = maxBottom - rectY;
+        }
+
+        _vg.BeginPath();
+        _vg.Rect((float)rectX, (float)rectY, (float)rectW, (float)rectH);
+        _vg.FillPaint(paint);
+        _vg.Fill();
     }
 
     #endregion

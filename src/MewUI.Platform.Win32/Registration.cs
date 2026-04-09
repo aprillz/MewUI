@@ -15,7 +15,9 @@ public static class Win32Platform
     public static ApplicationBuilder UseWin32(this ApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+
         Register();
+
         return builder;
     }
 }
