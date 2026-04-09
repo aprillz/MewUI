@@ -1,11 +1,8 @@
 namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
-/// Text layout result produced by <see cref="IGraphicsContext.CreateTextLayout"/>.
-/// <para>
-/// Backend manages the native handle lifecycle.
-/// Consumer sets <see cref="IsDetached"/> = true when no longer needed.
-/// </para>
+/// Text layout measurement result produced by <see cref="IGraphicsContext.CreateTextLayout"/>.
+/// Pure managed result. Backend may attach a native handle internally for rendering.
 /// </summary>
 public sealed class TextLayout
 {
@@ -17,21 +14,6 @@ public sealed class TextLayout
 
     public required double ContentHeight { get; init; }
 
-    /// <summary>Backend-specific native handle (e.g. IDWriteTextLayout*).</summary>
-    public nint NativeHandle { get; internal set; }
-
-    /// <summary>
-    /// Set to true when the consumer no longer needs this layout.
-    /// The backend will release native resources at an appropriate time.
-    /// </summary>
-    public bool IsDetached { get; private set; }
-
-    public static void Deatch(ref TextLayout? textLayout)
-    {
-        if (textLayout is not null)
-        {
-            textLayout.IsDetached = true;
-            textLayout = null;
-        }
-    }
+    /// <summary>Backend-private native handle for rendering.</summary>
+    internal nint BackendHandle { get; set; }
 }

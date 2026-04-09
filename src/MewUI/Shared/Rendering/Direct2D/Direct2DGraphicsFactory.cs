@@ -23,9 +23,10 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
 
     private readonly TextResourceTracker _textTracker = new()
     {
-        ReleaseNativeFormat = f => { if (f.NativeHandle != 0) { ComHelpers.Release(f.NativeHandle); f.NativeHandle = 0; } },
-        ReleaseNativeLayout = l => { if (l.NativeHandle != 0) { ComHelpers.Release(l.NativeHandle); l.NativeHandle = 0; } }
+        ReleaseNativeHandle = handle => { if (handle != 0) ComHelpers.Release(handle); }
     };
+
+    internal readonly DWriteTextFormatCache TextFormatCache = new();
 
     private readonly object _rtLock = new();
     private readonly Dictionary<nint, CachedWindowTarget> _windowTargets = new();
@@ -60,6 +61,8 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
                 ComHelpers.Release(ss);
             _strokeStyles.Clear();
         }
+
+        TextFormatCache.ReleaseAll();
 
         ComHelpers.Release(_defaultFixedStrokeStyle);
         _defaultFixedStrokeStyle = 0;
@@ -357,7 +360,8 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
             _dwriteFactory,
             _defaultFixedStrokeStyle,
             onRecreateTarget: () => InvalidateCachedWindowTarget(hwnd),
-            ownsRenderTarget: false);
+            ownsRenderTarget: false,
+            textFormatCache: TextFormatCache);
         ctx.TextTracker = _textTracker;
         return ctx;
     }
@@ -438,7 +442,7 @@ public sealed unsafe class Direct2DGraphicsFactory : IGraphicsFactory, IWindowRe
     public IGraphicsContext CreateMeasurementContext(uint dpi)
     {
         EnsureInitialized();
-        var ctx = new Direct2DMeasurementContext(_dwriteFactory);
+        var ctx = new Direct2DMeasurementContext(_dwriteFactory, TextFormatCache);
         ctx.TextTracker = _textTracker;
         return ctx;
     }

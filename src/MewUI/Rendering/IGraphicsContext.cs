@@ -226,12 +226,6 @@ namespace Aprillz.MewUI.Rendering
         #region Text Rendering
 
         /// <summary>
-        /// Creates a <see cref="TextFormat"/> and optionally attaches a backend-specific native handle.
-        /// </summary>
-        TextFormat CreateTextFormat(IFont font, TextAlignment horizontalAlignment, TextAlignment verticalAlignment,
-            TextWrapping wrapping, TextTrimming trimming);
-
-        /// <summary>
         /// Computes text layout from format and constraints.
         /// Layout phase — must not perform any drawing.
         /// </summary>

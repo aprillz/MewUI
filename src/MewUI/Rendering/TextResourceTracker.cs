@@ -1,71 +1,56 @@
 namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
-/// Tracks <see cref="TextFormat"/> and <see cref="TextLayout"/> instances
-/// created by a backend. Cleans up native resources for detached items.
-/// Shared across frame-scoped contexts via injection from the factory/resource owner.
+/// Tracks <see cref="TextLayout"/> instances with native handles.
+/// Releases native resources when layouts are no longer referenced.
 /// </summary>
 public sealed class TextResourceTracker
 {
-    private readonly LinkedList<TextFormat> _formats = new();
-    private readonly LinkedList<TextLayout> _layouts = new();
-
-    public void TrackFormat(TextFormat format) => _formats.AddFirst(format);
-    public void TrackLayout(TextLayout layout) => _layouts.AddFirst(layout);
-
-    /// <summary>
-    /// Override point for native release. Set by the backend.
-    /// </summary>
-    public Action<TextFormat>? ReleaseNativeFormat { get; set; }
-    public Action<TextLayout>? ReleaseNativeLayout { get; set; }
-
-    /// <summary>
-    /// Releases native resources for all items where <see cref="TextFormat.IsDetached"/>
-    /// or <see cref="TextLayout.IsDetached"/> is true.
-    /// </summary>
-    public void CleanupDetached()
+    private sealed class Entry(WeakReference<TextLayout> weakRef, nint handle)
     {
-        var fNode = _formats.First;
-        while (fNode != null)
-        {
-            var next = fNode.Next;
-            if (fNode.Value.IsDetached)
-            {
-                ReleaseNativeFormat?.Invoke(fNode.Value);
-                fNode.Value.NativeHandle = 0;
-                _formats.Remove(fNode);
-            }
-            fNode = next;
-        }
+        public readonly WeakReference<TextLayout> WeakRef = weakRef;
+        public readonly nint Handle = handle;
+    }
 
-        var lNode = _layouts.First;
-        while (lNode != null)
+    private readonly LinkedList<Entry> _layouts = new();
+
+    public Action<nint>? ReleaseNativeHandle { get; set; }
+
+    public void TrackLayout(TextLayout layout)
+    {
+        if (layout.BackendHandle != 0)
         {
-            var next = lNode.Next;
-            if (lNode.Value.IsDetached)
-            {
-                ReleaseNativeLayout?.Invoke(lNode.Value);
-                lNode.Value.NativeHandle = 0;
-                _layouts.Remove(lNode);
-            }
-            lNode = next;
+            _layouts.AddFirst(new Entry(new WeakReference<TextLayout>(layout), layout.BackendHandle));
         }
     }
 
-    /// <summary>Releases all tracked resources.</summary>
+    public void Cleanup()
+    {
+        var node = _layouts.First;
+        while (node != null)
+        {
+            var next = node.Next;
+            if (!node.Value.WeakRef.TryGetTarget(out _))
+            {
+                if (node.Value.Handle != 0)
+                {
+                    ReleaseNativeHandle?.Invoke(node.Value.Handle);
+                }
+
+                _layouts.Remove(node);
+            }
+            node = next;
+        }
+    }
+
     public void ReleaseAll()
     {
-        foreach (var f in _formats)
+        foreach (var entry in _layouts)
         {
-            ReleaseNativeFormat?.Invoke(f);
-            f.NativeHandle = 0;
-        }
-        _formats.Clear();
-
-        foreach (var l in _layouts)
-        {
-            ReleaseNativeLayout?.Invoke(l);
-            l.NativeHandle = 0;
+            if (entry.Handle != 0)
+            {
+                ReleaseNativeHandle?.Invoke(entry.Handle);
+            }
         }
         _layouts.Clear();
     }

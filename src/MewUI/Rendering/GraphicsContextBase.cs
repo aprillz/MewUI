@@ -231,22 +231,6 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public TextResourceTracker? TextTracker { get; set; }
 
-    public virtual TextFormat CreateTextFormat(IFont font,
-        TextAlignment horizontalAlignment, TextAlignment verticalAlignment,
-        TextWrapping wrapping, TextTrimming trimming)
-    {
-        var format = new TextFormat
-        {
-            Font = font,
-            HorizontalAlignment = horizontalAlignment,
-            VerticalAlignment = verticalAlignment,
-            Wrapping = wrapping,
-            Trimming = trimming
-        };
-        TextTracker?.TrackFormat(format);
-        return format;
-    }
-
     public abstract TextLayout? CreateTextLayout(ReadOnlySpan<char> text,
         TextFormat format, in TextLayoutConstraints constraints);
 

@@ -18,6 +18,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private readonly nint _defaultStrokeStyle;
     private readonly Action? _onRecreateTarget;
     private readonly bool _ownsRenderTarget;
+    private readonly DWriteTextFormatCache? _textFormatCache;
     private readonly bool _useClearTypeText;
     private readonly nint _deviceContext; // ID2D1DeviceContext* (0 if D2D 1.1 unavailable)
 
@@ -45,7 +46,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         nint dwriteFactory,
         nint defaultStrokeStyle,
         Action? onRecreateTarget,
-        bool ownsRenderTarget)
+        bool ownsRenderTarget,
+        DWriteTextFormatCache? textFormatCache = null)
     {
         _hwnd = hwnd;
         _d2dFactory = d2dFactory;
@@ -53,6 +55,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _defaultStrokeStyle = defaultStrokeStyle;
         _onRecreateTarget = onRecreateTarget;
         _ownsRenderTarget = ownsRenderTarget;
+        _textFormatCache = textFormatCache;
         DpiScale = dpiScale;
 
         _renderTarget = renderTarget;
@@ -88,7 +91,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         try
         {
-            TextTracker?.CleanupDetached();
+            TextTracker?.Cleanup();
 
             if (_renderTarget != 0)
             {
@@ -731,18 +734,6 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override TextFormat CreateTextFormat(IFont font, TextAlignment horizontalAlignment,
-        TextAlignment verticalAlignment, TextWrapping wrapping, TextTrimming trimming)
-    {
-        var format = base.CreateTextFormat(font, horizontalAlignment, verticalAlignment, wrapping, trimming);
-        if (font is DirectWriteFont dwFont)
-        {
-            nint native = CreateDWriteTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
-            format.NativeHandle = native;
-        }
-        return format;
-    }
-
     public override TextLayout? CreateTextLayout(ReadOnlySpan<char> text,
         TextFormat format, in TextLayoutConstraints constraints)
     {
@@ -754,38 +745,44 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         var bounds = constraints.Bounds;
         double maxWidth = double.IsPositiveInfinity(bounds.Width) ? float.MaxValue : Math.Max(0, bounds.Width);
 
-        // Use cached native format if available, otherwise create a temporary one.
-        nint nativeFormat = format.NativeHandle;
-        bool ownFormat = false;
-        if (nativeFormat == 0)
+        // Use cached native format when available, fall back to temporary.
+        nint nativeFormat;
+        bool ownFormat;
+        if (_textFormatCache != null)
+        {
+            nativeFormat = _textFormatCache.GetOrCreate(_dwriteFactory, dwFont,
+                format.HorizontalAlignment, format.VerticalAlignment, format.Wrapping);
+            ownFormat = false;
+        }
+        else
         {
             nativeFormat = CreateDWriteTextFormat(dwFont, format.HorizontalAlignment, format.VerticalAlignment, format.Wrapping);
-            if (nativeFormat == 0) return null;
             ownFormat = true;
         }
+        if (nativeFormat == 0) return null;
 
         float w = maxWidth >= float.MaxValue ? float.MaxValue : (float)maxWidth;
         float h = bounds.Height > 0 && !double.IsPositiveInfinity(bounds.Height) ? (float)bounds.Height : float.MaxValue;
         int hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, nativeFormat, w, h, out nint nativeLayout);
 
-        if (ownFormat) ComHelpers.Release(nativeFormat);
-
-        if (hr < 0 || nativeLayout == 0) return null;
+        if (hr < 0 || nativeLayout == 0)
+        {
+            if (ownFormat) ComHelpers.Release(nativeFormat);
+            return null;
+        }
 
         ApplyCustomFontFallback(nativeLayout);
 
         // Apply trimming if requested.
         if (format.Trimming == TextTrimming.CharacterEllipsis)
         {
-            nint trimFormat = format.NativeHandle != 0 ? format.NativeHandle
-                : CreateDWriteTextFormat(dwFont, format.HorizontalAlignment, format.VerticalAlignment, format.Wrapping);
-            bool ownTrimFormat = format.NativeHandle == 0;
-            DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, trimFormat, out nint trimmingSign);
+            DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, nativeFormat, out nint trimmingSign);
             var dwriteTrimming = new DWRITE_TRIMMING { granularity = DWRITE_TRIMMING_GRANULARITY.CHARACTER };
             DWriteVTable.SetTrimming(nativeLayout, dwriteTrimming, trimmingSign);
             ComHelpers.Release(trimmingSign);
-            if (ownTrimFormat) ComHelpers.Release(trimFormat);
         }
+
+        if (ownFormat) ComHelpers.Release(nativeFormat);
 
         hr = DWriteVTable.GetMetrics(nativeLayout, out var metrics);
         if (hr < 0)
@@ -809,7 +806,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             EffectiveBounds = bounds,
             EffectiveMaxWidth = effectiveMaxWidth,
             ContentHeight = measured.Height,
-            NativeHandle = nativeLayout
+            BackendHandle = nativeLayout
         };
         TextTracker?.TrackLayout(result);
         return result;
@@ -831,18 +828,15 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 return;
         }
 
+        if (layout.BackendHandle == 0) return;
+
         nint brush = GetSolidBrush(color);
         var options = _textPixelSnap
             ? D2D1_DRAW_TEXT_OPTIONS.CLIP
             : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP;
 
-        float left = (float)bounds.X;
-        float top = (float)bounds.Y;
-
-        if (layout.NativeHandle == 0) return;
-
         D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)_renderTarget,
-            new D2D1_POINT_2F(left, top), layout.NativeHandle, brush, options);
+            new D2D1_POINT_2F((float)bounds.X, (float)bounds.Y), layout.BackendHandle, brush, options);
     }
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)

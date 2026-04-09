@@ -6,10 +6,15 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContextBase
 {
     private readonly nint _dwriteFactory;
+    private readonly DWriteTextFormatCache? _textFormatCache;
 
     public override double DpiScale => 1.0;
 
-    public Direct2DMeasurementContext(nint dwriteFactory) => _dwriteFactory = dwriteFactory;
+    public Direct2DMeasurementContext(nint dwriteFactory, DWriteTextFormatCache? textFormatCache = null)
+    {
+        _dwriteFactory = dwriteFactory;
+        _textFormatCache = textFormatCache;
+    }
 
     public override TextLayout? CreateTextLayout(ReadOnlySpan<char> text,
         TextFormat format, in TextLayoutConstraints constraints)
@@ -23,19 +28,30 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         double maxWidth = double.IsPositiveInfinity(bounds.Width) ? float.MaxValue : Math.Max(0, bounds.Width);
 
         nint textFormat = 0;
+        bool ownFormat = false;
         nint textLayout = 0;
         try
         {
-            var weight = (DWRITE_FONT_WEIGHT)(int)dwFont.Weight;
-            var style = dwFont.IsItalic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL;
-            int hr = DWriteVTable.CreateTextFormat((IDWriteFactory*)_dwriteFactory, dwFont.Family, dwFont.PrivateFontCollection, weight, style, (float)dwFont.Size, out textFormat);
-            if (hr < 0 || textFormat == 0) return null;
-
-            DWriteVTable.SetWordWrapping(textFormat,
-                format.Wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
+            // Measurement: Left/Top only — alignment applied in render layout.
+            if (_textFormatCache != null)
+            {
+                textFormat = _textFormatCache.GetOrCreate(_dwriteFactory, dwFont,
+                    TextAlignment.Left, TextAlignment.Top, format.Wrapping);
+            }
+            else
+            {
+                var weight = (DWRITE_FONT_WEIGHT)(int)dwFont.Weight;
+                var style = dwFont.IsItalic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL;
+                int hr2 = DWriteVTable.CreateTextFormat((IDWriteFactory*)_dwriteFactory, dwFont.Family, dwFont.PrivateFontCollection, weight, style, (float)dwFont.Size, out textFormat);
+                if (hr2 < 0 || textFormat == 0) return null;
+                DWriteVTable.SetWordWrapping(textFormat,
+                    format.Wrapping == TextWrapping.NoWrap ? DWRITE_WORD_WRAPPING.NO_WRAP : DWRITE_WORD_WRAPPING.WRAP);
+                ownFormat = true;
+            }
+            if (textFormat == 0) return null;
 
             float w = maxWidth >= float.MaxValue ? float.MaxValue : (float)maxWidth;
-            hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, textFormat, w, float.MaxValue, out textLayout);
+            int hr = DWriteVTable.CreateTextLayout((IDWriteFactory*)_dwriteFactory, text, textFormat, w, float.MaxValue, out textLayout);
             if (hr < 0 || textLayout == 0) return null;
 
             ApplyCustomFontFallback(textLayout);
@@ -49,7 +65,6 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
             var measured = new Size(TextMeasurePolicy.ApplyWidthPadding(metrics.widthIncludingTrailingWhitespace), height);
             double effectiveMaxWidth = bounds.Width > 0 && !double.IsPositiveInfinity(bounds.Width) ? bounds.Width : measured.Width;
 
-            // Apply trimming if requested.
             if (format.Trimming == TextTrimming.CharacterEllipsis)
             {
                 DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, textFormat, out nint trimmingSign);
@@ -58,23 +73,19 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
                 ComHelpers.Release(trimmingSign);
             }
 
-            // Keep native layout alive — caller owns it via TextLayout.NativeHandle.
-            var result = new TextLayout
+            // Measurement only — native layout released immediately. No BackendHandle.
+            return new TextLayout
             {
                 MeasuredSize = measured,
                 EffectiveBounds = bounds,
                 EffectiveMaxWidth = effectiveMaxWidth,
                 ContentHeight = measured.Height,
-                NativeHandle = textLayout
             };
-            textLayout = 0; // prevent release in finally
-            TextTracker?.TrackLayout(result);
-            return result;
         }
         finally
         {
             ComHelpers.Release(textLayout);
-            ComHelpers.Release(textFormat);
+            if (ownFormat) ComHelpers.Release(textFormat);
         }
     }
 
@@ -86,56 +97,21 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         _ = DWriteTextLayout2VTable.SetFontFallback(textLayout, fallback);
     }
 
-    public void ReleaseTextLayout(TextLayout layout)
-    {
-        if (layout == null) return;
-        if (layout.NativeHandle != 0)
-        {
-            ComHelpers.Release(layout.NativeHandle);
-            layout.NativeHandle = 0;
-        }
-    }
-
-    public void ReleaseTextFormat(TextFormat format)
-    {
-        if (format == null) return;
-        if (format.NativeHandle != 0)
-        {
-            ComHelpers.Release(format.NativeHandle);
-            format.NativeHandle = 0;
-        }
-    }
-
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
-    {
-        return MeasureText(text, font, double.PositiveInfinity);
-    }
+        => MeasureText(text, font, double.PositiveInfinity);
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
     {
-        var format = CreateTextFormat(font, TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap, TextTrimming.None);
-        try
+        var format = new TextFormat
         {
-            var constraints = new TextLayoutConstraints(new Rect(0, 0, double.PositiveInfinity, 0));
-            var layout = CreateTextLayout(text, format, in constraints);
-            try
-            {
-                var size = layout?.MeasuredSize ?? Size.Empty;
-                return size;
-            }
-            finally
-            {
-                if (layout is not null)
-                {
-                    ReleaseTextLayout(layout);
-                    TextLayout.Deatch(ref layout);
-                }
-            }
-        }
-        finally
-        {
-            ReleaseTextFormat(format);
-            TextFormat.Deatch(ref format);
-        }
+            Font = font,
+            HorizontalAlignment = TextAlignment.Left,
+            VerticalAlignment = TextAlignment.Top,
+            Wrapping = TextWrapping.NoWrap,
+            Trimming = TextTrimming.None
+        };
+        var constraints = new TextLayoutConstraints(new Rect(0, 0, double.PositiveInfinity, 0));
+        var layout = CreateTextLayout(text, format, in constraints);
+        return layout?.MeasuredSize ?? Size.Empty;
     }
 }
