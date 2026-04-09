@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Native.Com;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -295,36 +296,33 @@ internal static unsafe class DWriteVTable
 /// </summary>
 internal static unsafe class DWriteFactory2VTable
 {
-    // IDWriteFactory2::GetSystemFontFallback — vtable index 29
-    // IDWriteFactory: 3 (IUnknown) + 25 methods = vtable[0..27]
-    // IDWriteFactory1: extends with 2 methods = vtable[28..29]
-    // IDWriteFactory2: extends with 4 methods:
-    //   GetSystemFontFallback = 30, CreateFontFallbackBuilder = 31, ...
-    // (Actual indices depend on the exact IDL; these are for Windows 8.1+ SDK)
+    // IDWriteFactory:  3 (IUnknown) + 21 methods = vtable[0..23]
+    // IDWriteFactory1: extends with 2 methods   = vtable[24..25]
+    // IDWriteFactory2: extends with 4 methods   = vtable[26..29]
 
     /// <summary>
-    /// IDWriteFactory2::GetSystemFontFallback (vtable index 30).
+    /// IDWriteFactory2::GetSystemFontFallback (vtable index 26).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetSystemFontFallback(IDWriteFactory* factory, out nint fontFallback)
     {
         fontFallback = 0;
         nint fb = 0;
-        var fn = (delegate* unmanaged[Stdcall]<IDWriteFactory*, nint*, int>)factory->lpVtbl[30];
+        var fn = (delegate* unmanaged[Stdcall]<IDWriteFactory*, nint*, int>)factory->lpVtbl[26];
         int hr = fn(factory, &fb);
         fontFallback = fb;
         return hr;
     }
 
     /// <summary>
-    /// IDWriteFactory2::CreateFontFallbackBuilder (vtable index 31).
+    /// IDWriteFactory2::CreateFontFallbackBuilder (vtable index 27).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int CreateFontFallbackBuilder(IDWriteFactory* factory, out nint builder)
     {
         builder = 0;
         nint b = 0;
-        var fn = (delegate* unmanaged[Stdcall]<IDWriteFactory*, nint*, int>)factory->lpVtbl[31];
+        var fn = (delegate* unmanaged[Stdcall]<IDWriteFactory*, nint*, int>)factory->lpVtbl[27];
         int hr = fn(factory, &b);
         builder = b;
         return hr;
@@ -391,15 +389,30 @@ internal static unsafe class DWriteFontFallbackBuilderVTable
 /// </summary>
 internal static unsafe class DWriteTextLayout2VTable
 {
+    // IDWriteTextLayout2 IID — required for SetFontFallback.
+    private static readonly Guid IID_IDWriteTextLayout2 = new("1093C18F-8D5E-43F0-B064-0917311B525E");
+
+    // IDWriteTextFormat:  3 (IUnknown) + 25 methods = vtable[0..27]
+    // IDWriteTextLayout:  +39 methods               = vtable[28..66]
+    // IDWriteTextLayout1: +4 methods                 = vtable[67..70]
+    // IDWriteTextLayout2: +9 methods                 = vtable[71..79]
+    //   SetFontFallback = 78
+
     /// <summary>
-    /// IDWriteTextLayout2::SetFontFallback (vtable index 82).
+    /// IDWriteTextLayout2::SetFontFallback (vtable index 78).
+    /// QIs for IDWriteTextLayout2 first; returns E_NOINTERFACE if unavailable.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int SetFontFallback(nint textLayout, nint fontFallback)
     {
-        var vtbl = *(nint**)textLayout;
-        var fn = (delegate* unmanaged[Stdcall]<nint, nint, int>)vtbl[82];
-        return fn(textLayout, fontFallback);
+        int hr = ComHelpers.QueryInterface(textLayout, in IID_IDWriteTextLayout2, out nint layout2);
+        if (hr < 0 || layout2 == 0) return hr;
+
+        var vtbl = *(nint**)layout2;
+        var fn = (delegate* unmanaged[Stdcall]<nint, nint, int>)vtbl[78];
+        hr = fn(layout2, fontFallback);
+        ComHelpers.Release(layout2);
+        return hr;
     }
 }
 

@@ -61,55 +61,68 @@ internal static unsafe class DWriteFontFallbackHelper
         return newFallback;
     }
 
+    // IDWriteFactory2 IID — required for CreateFontFallbackBuilder.
+    private static readonly Guid IID_IDWriteFactory2 = new("0439FC60-CA44-4994-8DEE-3A9AF7B732EC");
+
     private static nint Build(IDWriteFactory* factory, string[] chain)
     {
-        // Try to get IDWriteFactory2 interfaces
-        int hr = DWriteFactory2VTable.CreateFontFallbackBuilder(factory, out nint builder);
-        if (hr < 0 || builder == 0) return 0;
+        // QI for IDWriteFactory2 — CreateFontFallbackBuilder is not available on IDWriteFactory.
+        int hr = ComHelpers.QueryInterface((nint)factory, in IID_IDWriteFactory2, out nint factory2);
+        if (hr < 0 || factory2 == 0) return 0;
 
         try
         {
-            // Get system font collection for resolving families
-            hr = DWriteVTable.GetSystemFontCollection(factory, out nint fontCollection, false);
-            nint collection = hr >= 0 ? fontCollection : 0;
+            hr = DWriteFactory2VTable.CreateFontFallbackBuilder((IDWriteFactory*)factory2, out nint builder);
+            if (hr < 0 || builder == 0) return 0;
 
-            string locale = FontFallback.ResolvedLocale;
-
-            // Add user chain entries — each family maps to full Unicode range
-            fixed (DWRITE_UNICODE_RANGE* pRanges = FullRange)
-            fixed (char* pLocale = locale)
+            try
             {
-                foreach (var family in chain)
+                // Get system font collection for resolving families
+                hr = DWriteVTable.GetSystemFontCollection(factory, out nint fontCollection, false);
+                nint collection = hr >= 0 ? fontCollection : 0;
+
+                string locale = FontFallback.ResolvedLocale;
+
+                // Add user chain entries — each family maps to full Unicode range
+                fixed (DWRITE_UNICODE_RANGE* pRanges = FullRange)
+                fixed (char* pLocale = locale)
                 {
-                    fixed (char* pFamily = family)
+                    foreach (var family in chain)
                     {
-                        char** familyNames = &pFamily;
-                        // Errors on individual mappings are non-fatal — skip.
-                        _ = DWriteFontFallbackBuilderVTable.AddMapping(
-                            builder, pRanges, (uint)FullRange.Length,
-                            familyNames, 1, collection, pLocale, null, 1.0f);
+                        fixed (char* pFamily = family)
+                        {
+                            char** familyNames = &pFamily;
+                            // Errors on individual mappings are non-fatal — skip.
+                            _ = DWriteFontFallbackBuilderVTable.AddMapping(
+                                builder, pRanges, (uint)FullRange.Length,
+                                familyNames, 1, collection, pLocale, null, 1.0f);
+                        }
                     }
                 }
-            }
 
-            // Copy system default fallback mappings so we don't lose them
-            hr = DWriteFactory2VTable.GetSystemFontFallback(factory, out nint systemFallback);
-            if (hr >= 0 && systemFallback != 0)
-            {
-                DWriteFontFallbackBuilderVTable.AddMappings(builder, systemFallback);
-                ComHelpers.Release(systemFallback);
-            }
+                // Copy system default fallback mappings so we don't lose them
+                hr = DWriteFactory2VTable.GetSystemFontFallback((IDWriteFactory*)factory2, out nint systemFallback);
+                if (hr >= 0 && systemFallback != 0)
+                {
+                    DWriteFontFallbackBuilderVTable.AddMappings(builder, systemFallback);
+                    ComHelpers.Release(systemFallback);
+                }
 
-            // Build the final fallback
-            hr = DWriteFontFallbackBuilderVTable.CreateFontFallback(builder, out nint fallback);
-            if (hr >= 0 && fallback != 0)
+                // Build the final fallback
+                hr = DWriteFontFallbackBuilderVTable.CreateFontFallback(builder, out nint fallback);
+                if (hr >= 0 && fallback != 0)
+                {
+                    return fallback;
+                }
+            }
+            finally
             {
-                return fallback;
+                ComHelpers.Release(builder);
             }
         }
         finally
         {
-            ComHelpers.Release(builder);
+            ComHelpers.Release(factory2);
         }
 
         return 0;
