@@ -14,7 +14,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
     private static readonly Rect InfiniteCullRect = new(-1_000_000, -1_000_000, 2_000_000, 2_000_000);
 
     private Rect _cullRect = InfiniteCullRect;
-    private readonly Stack<Rect> _cullStack = new();
+    private readonly Stack<Rect> _cullStack = CollectionPool<Stack<Rect>>.Rent();
 
     private int _drawCalls;
     private int _cullCount;
@@ -291,7 +291,9 @@ public abstract class GraphicsContextBase : IGraphicsContext
     protected abstract void DrawImageCore(IImage image, Rect destRect, Rect sourceRect);
 
     public virtual void Dispose()
-    { }
+    {
+        CollectionPool<Stack<Rect>>.Return(_cullStack);
+    }
 
     #endregion
 
