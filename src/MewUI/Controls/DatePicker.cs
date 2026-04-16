@@ -8,6 +8,9 @@ namespace Aprillz.MewUI.Controls;
 public sealed class DatePicker : DropDownBase
 {
     private Calendar? _calendar;
+    private DateTime? _cachedHeaderDate;
+    private string? _cachedHeaderFormat;
+    private string? _cachedHeaderText;
 
     public static readonly MewProperty<DateTime?> SelectedDateProperty =
         MewProperty<DateTime?>.Register<DatePicker>(nameof(SelectedDate), null,
@@ -154,7 +157,15 @@ public sealed class DatePicker : DropDownBase
 
         if (SelectedDate.HasValue)
         {
-            text = SelectedDate.Value.ToString(DateFormat);
+            var date = SelectedDate.Value;
+            var fmt = DateFormat;
+            if (_cachedHeaderText == null || _cachedHeaderDate != date || _cachedHeaderFormat != fmt)
+            {
+                _cachedHeaderDate = date;
+                _cachedHeaderFormat = fmt;
+                _cachedHeaderText = date.ToString(fmt);
+            }
+            text = _cachedHeaderText;
             textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
         }
         else if (!string.IsNullOrEmpty(Placeholder) && !state.IsFocused)

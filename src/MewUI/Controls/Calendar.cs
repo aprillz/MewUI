@@ -30,6 +30,10 @@ public sealed class Calendar : Control, IVisualTreeHost
     private readonly Button _nextButton;
     private readonly Button _headerButton; // "March 2026" — click to switch mode
 
+    // Cached header text
+    private DateTime _cachedHeaderDate;
+    private CalendarMode _cachedHeaderMode = (CalendarMode)(-1);
+
     // Cached cell rects for hit testing
     private Rect[] _cellRects = Array.Empty<Rect>();
     private int _hotCellIndex = -1;
@@ -294,9 +298,17 @@ public sealed class Calendar : Control, IVisualTreeHost
     private void UpdateHeaderText()
     {
         var display = DisplayDate;
-        var label = (TextBlock)_headerButton.Content!;
+        var mode = DisplayMode;
 
-        label.Text = DisplayMode switch
+        // Skip if inputs haven't changed
+        if (_cachedHeaderDate == display && _cachedHeaderMode == mode)
+            return;
+
+        _cachedHeaderDate = display;
+        _cachedHeaderMode = mode;
+
+        var label = (TextBlock)_headerButton.Content!;
+        label.Text = mode switch
         {
             CalendarMode.Month => display.ToString("Y", CultureInfo.CurrentCulture),
             CalendarMode.Year => display.ToString("yyyy", CultureInfo.CurrentCulture),

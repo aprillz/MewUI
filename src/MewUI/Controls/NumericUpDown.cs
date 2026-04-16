@@ -32,6 +32,9 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private void OnEditModeChanged() => UpdateEditMode();
 
     private TextMeasureCache _measureCache;
+    private string? _cachedDisplayText;
+    private double _cachedDisplayValue = double.NaN;
+    private string? _cachedDisplayFormat;
     private ButtonPart _hoverPart;
     private ButtonPart _pressedPart;
     private readonly TextBox _textBox;
@@ -430,7 +433,15 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return string.IsNullOrEmpty(text) ? FormatValue(Value) : text;
         }
 
-        return FormatValue(Value);
+        var v = Value;
+        var fmt = Format;
+        if (_cachedDisplayText != null && _cachedDisplayValue == v && _cachedDisplayFormat == fmt)
+            return _cachedDisplayText;
+
+        _cachedDisplayText = FormatValue(v);
+        _cachedDisplayValue = v;
+        _cachedDisplayFormat = fmt;
+        return _cachedDisplayText;
     }
 
     private string FormatValue(double value) => value.ToString(Format);
