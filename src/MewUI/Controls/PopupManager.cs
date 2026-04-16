@@ -263,8 +263,7 @@ internal sealed class PopupManager
                 CloseAllPopups();
                 break;
             case PopupCloseRequest.Trigger.Scroll:
-                // Close only context menus on scroll; dropdowns reposition themselves.
-                CloseTransientPopups(entry => entry.Element is not ContextMenu);
+                CloseTransientPopups(shouldKeep: null);
                 break;
         }
     }
