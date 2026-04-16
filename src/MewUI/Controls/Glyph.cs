@@ -69,6 +69,7 @@ public static class Glyph
                 return;
 
             case GlyphKind.CheckMark:
+            {
                 var g = _cachedPath ??= new PathGeometry();
                 g.Reset();
                 g.MoveTo(center.X - half, center.Y + half * 0.1);
@@ -76,6 +77,7 @@ public static class Glyph
                 g.LineTo(center.X + half, center.Y - half);
                 context.DrawPath(g, color, thickness);
                 return;
+            }
 
             case GlyphKind.IndeterminateMark:
                 context.DrawLine(new Point(center.X - half, center.Y), new Point(center.X + half, center.Y), color, thickness);
