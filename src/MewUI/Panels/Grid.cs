@@ -408,7 +408,7 @@ public class Grid : Panel
 
         CommitActualSizes(columns, rows, useFinal: false);
 
-        CollectionPool<List<Placement>>.ReturnList(placements);
+        CollectionPool<List<Placement>>.Return(placements);
 
         double totalWidth = SumMeasureSizes(columns, spacing);
         double totalHeight = SumMeasureSizes(rows, spacing);
@@ -443,7 +443,7 @@ public class Grid : Panel
             placement.Child.Arrange(new Rect(x, y, width, height));
         }
 
-        CollectionPool<List<Placement>>.ReturnList(placements);
+        CollectionPool<List<Placement>>.Return(placements);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -1020,10 +1020,10 @@ public class Grid : Panel
             DistributeExtra(otherDefinitions, extra, useStarWeights: false);
         }
 
-        CollectionPool<List<T>>.ReturnList(preferredDefinitions);
-        CollectionPool<List<T>>.ReturnList(autoDefinitions);
-        CollectionPool<List<T>>.ReturnList(starDefinitions);
-        CollectionPool<List<T>>.ReturnList(otherDefinitions);
+        CollectionPool<List<T>>.Return(preferredDefinitions);
+        CollectionPool<List<T>>.Return(autoDefinitions);
+        CollectionPool<List<T>>.Return(starDefinitions);
+        CollectionPool<List<T>>.Return(otherDefinitions);
     }
 
     private static void DistributeExtra<T>(IReadOnlyList<T> definitions, double extra, bool useStarWeights)
@@ -1069,7 +1069,7 @@ public class Grid : Panel
             remaining -= applied;
         }
 
-        CollectionPool<List<T>>.ReturnList(pending);
+        CollectionPool<List<T>>.Return(pending);
     }
 
     private static double[] CreateMeasureConstraints<T>(IReadOnlyList<T> definitions, double available, double spacing)
@@ -1124,7 +1124,7 @@ public class Grid : Panel
 
         if (starDefinitions.Count == 0)
         {
-            CollectionPool<List<T>>.ReturnList(starDefinitions);
+            CollectionPool<List<T>>.Return(starDefinitions);
             return sizes;
         }
 
@@ -1137,7 +1137,7 @@ public class Grid : Panel
                     sizes[i] = definitions[i].MeasureSize;
                 }
             }
-            CollectionPool<List<T>>.ReturnList(starDefinitions);
+            CollectionPool<List<T>>.Return(starDefinitions);
             return sizes;
         }
 
@@ -1186,8 +1186,8 @@ public class Grid : Panel
             }
         }
 
-        CollectionPool<List<T>>.ReturnList(unresolved);
-        CollectionPool<List<T>>.ReturnList(starDefinitions);
+        CollectionPool<List<T>>.Return(unresolved);
+        CollectionPool<List<T>>.Return(starDefinitions);
 
         return sizes;
     }

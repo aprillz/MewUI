@@ -68,6 +68,11 @@ public abstract class Shape : FrameworkElement
         set => SetValue(StretchProperty, value);
     }
 
+    private IPen? _cachedPen;
+    private IBrush? _cachedPenBrush;
+    private double _cachedPenThickness;
+    private StrokeStyle _cachedPenStyle;
+
     /// <summary>
     /// When overridden, returns the <see cref="PathGeometry"/> that defines this shape.
     /// </summary>
@@ -123,8 +128,23 @@ public abstract class Shape : FrameworkElement
 
         if (Stroke != null && StrokeThickness > 0)
         {
-            using var pen = GetGraphicsFactory().CreatePen(Stroke, StrokeThickness, StrokeStyle);
-            context.DrawPath(geometry, pen);
+            var stroke = Stroke;
+            var thickness = StrokeThickness;
+            var style = StrokeStyle;
+
+            if (_cachedPen == null ||
+                !ReferenceEquals(_cachedPenBrush, stroke) ||
+                _cachedPenThickness != thickness ||
+                _cachedPenStyle != style)
+            {
+                _cachedPen?.Dispose();
+                _cachedPen = GetGraphicsFactory().CreatePen(stroke, thickness, style);
+                _cachedPenBrush = stroke;
+                _cachedPenThickness = thickness;
+                _cachedPenStyle = style;
+            }
+
+            context.DrawPath(geometry, _cachedPen);
         }
 
         context.Restore();
