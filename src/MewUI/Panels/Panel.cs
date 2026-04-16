@@ -39,6 +39,11 @@ public abstract class Panel : FrameworkElement
     public IReadOnlyList<Element> Children => _children;
 
     /// <summary>
+    /// Gets the underlying list directly for allocation-free enumeration in subclasses.
+    /// </summary>
+    protected List<Element> ChildrenList => _children;
+
+    /// <summary>
     /// Adds a child element to the panel.
     /// </summary>
     public void Add(Element child)

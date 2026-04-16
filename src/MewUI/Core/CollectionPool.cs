@@ -23,4 +23,10 @@ internal static class CollectionPool<T> where T : class, new()
         if (_pool.Count < MaxPoolSize)
             _pool.Push(item);
     }
+
+    public static void ReturnList<TElement>(List<TElement> list)
+    {
+        list.Clear();
+        CollectionPool<List<TElement>>.Return(list);
+    }
 }

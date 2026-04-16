@@ -44,7 +44,7 @@ public class UniformGrid : Panel
     private (int rows, int columns) CalculateGridSize()
     {
         int count = 0;
-        foreach (var child in Children)
+        foreach (var child in ChildrenList)
         {
             if (child is UIElement ui && !ui.IsVisible)
             {
@@ -99,7 +99,7 @@ public class UniformGrid : Panel
         double maxChildWidth = 0;
         double maxChildHeight = 0;
 
-        foreach (var child in Children)
+        foreach (var child in ChildrenList)
         {
             if (child is UIElement ui && !ui.IsVisible)
             {
