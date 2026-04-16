@@ -153,11 +153,11 @@ internal static unsafe class DWritePrivateFontCollection
             public nint FilePathsHandle;
         }
 
-        private static readonly delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int> s_qi = &QI;
-        private static readonly delegate* unmanaged[Stdcall]<nint, uint> s_addRef = &AddRef;
-        private static readonly delegate* unmanaged[Stdcall]<nint, uint> s_release = &Release;
-        private static readonly delegate* unmanaged[Stdcall]<nint, int*, int> s_moveNext = &MoveNext;
-        private static readonly delegate* unmanaged[Stdcall]<nint, nint*, int> s_getCurrent = &GetCurrentFontFile;
+        private static readonly delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int> _qi = &QI;
+        private static readonly delegate* unmanaged[Stdcall]<nint, uint> _addRef = &AddRef;
+        private static readonly delegate* unmanaged[Stdcall]<nint, uint> _release = &Release;
+        private static readonly delegate* unmanaged[Stdcall]<nint, int*, int> _moveNext = &MoveNext;
+        private static readonly delegate* unmanaged[Stdcall]<nint, nint*, int> _getCurrent = &GetCurrentFontFile;
 
         private static nint s_vtbl;
 
@@ -166,11 +166,11 @@ internal static unsafe class DWritePrivateFontCollection
             if (s_vtbl == 0)
             {
                 var vtbl = (nint*)NativeMemory.AllocZeroed(5, (nuint)sizeof(nint));
-                vtbl[0] = (nint)s_qi;
-                vtbl[1] = (nint)s_addRef;
-                vtbl[2] = (nint)s_release;
-                vtbl[3] = (nint)s_moveNext;
-                vtbl[4] = (nint)s_getCurrent;
+                vtbl[0] = (nint)_qi;
+                vtbl[1] = (nint)_addRef;
+                vtbl[2] = (nint)_release;
+                vtbl[3] = (nint)_moveNext;
+                vtbl[4] = (nint)_getCurrent;
                 s_vtbl = (nint)vtbl;
             }
 

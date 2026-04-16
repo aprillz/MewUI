@@ -56,7 +56,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase
         return Create(family, size, dpi: 96, weight, italic, underline, strikethrough);
     }
 
-    private static readonly HashSet<string> s_registeredPaths = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> _registeredPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public static CoreTextFont Create(
         string family,
@@ -219,11 +219,30 @@ internal sealed unsafe partial class CoreTextFont : FontBase
         }
         finally
         {
-            if (descriptor != 0) CoreFoundation.CFRelease(descriptor);
-            if (attrsDict != 0) CoreFoundation.CFRelease(attrsDict);
-            if (traitsDict != 0) CoreFoundation.CFRelease(traitsDict);
-            if (cfSlant != 0) CoreFoundation.CFRelease(cfSlant);
-            if (cfWeight != 0) CoreFoundation.CFRelease(cfWeight);
+            if (descriptor != 0)
+            {
+                CoreFoundation.CFRelease(descriptor);
+            }
+
+            if (attrsDict != 0)
+            {
+                CoreFoundation.CFRelease(attrsDict);
+            }
+
+            if (traitsDict != 0)
+            {
+                CoreFoundation.CFRelease(traitsDict);
+            }
+
+            if (cfSlant != 0)
+            {
+                CoreFoundation.CFRelease(cfSlant);
+            }
+
+            if (cfWeight != 0)
+            {
+                CoreFoundation.CFRelease(cfWeight);
+            }
         }
     }
 
@@ -369,24 +388,37 @@ internal sealed unsafe partial class CoreTextFont : FontBase
 
     private static void EnsureRegisteredWithCoreText(string filePath)
     {
-        if (!s_registeredPaths.Add(filePath))
+        if (!_registeredPaths.Add(filePath))
+        {
             return;
+        }
 
         nint cfPath = 0;
         nint url = 0;
         try
         {
             fixed (char* p = filePath)
+            {
                 cfPath = CoreFoundation.CFStringCreateWithCharacters(0, p, filePath.Length);
+            }
 
             url = CoreFoundation.CFURLCreateWithFileSystemPath(0, cfPath, 0 /* kCFURLPOSIXPathStyle */, false);
             if (url != 0)
+            {
                 CoreTextNative.CTFontManagerRegisterFontsForURL(url, 1 /* kCTFontManagerScopeProcess */, 0);
+            }
         }
         finally
         {
-            if (url != 0) CoreFoundation.CFRelease(url);
-            if (cfPath != 0) CoreFoundation.CFRelease(cfPath);
+            if (url != 0)
+            {
+                CoreFoundation.CFRelease(url);
+            }
+
+            if (cfPath != 0)
+            {
+                CoreFoundation.CFRelease(cfPath);
+            }
         }
     }
 

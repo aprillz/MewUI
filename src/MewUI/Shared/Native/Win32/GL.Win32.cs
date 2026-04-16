@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Native;
 /// </summary>
 internal static class GLNative
 {
-    private static readonly unsafe delegate* unmanaged<uint, uint, uint, uint, void> s_blendFuncSeparate;
+    private static readonly unsafe delegate* unmanaged<uint, uint, uint, uint, void> _blendFuncSeparate;
 
     static unsafe GLNative()
     {
@@ -17,7 +17,7 @@ internal static class GLNative
 
         if (proc != 0)
         {
-            s_blendFuncSeparate = (delegate* unmanaged<uint, uint, uint, uint, void>)proc;
+            _blendFuncSeparate = (delegate* unmanaged<uint, uint, uint, uint, void>)proc;
         }
     }
 
@@ -41,9 +41,9 @@ internal static class GLNative
     {
         unsafe
         {
-            if (s_blendFuncSeparate != null)
+            if (_blendFuncSeparate != null)
             {
-                s_blendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+                _blendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
                 return;
             }
         }

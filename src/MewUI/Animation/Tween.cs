@@ -105,7 +105,7 @@ public static class Lerp
 /// </summary>
 public static class TypeLerp
 {
-    private static readonly Dictionary<Type, Func<object, object, double, object>> s_registry = new();
+    private static readonly Dictionary<Type, Func<object, object, double, object>> _registry = new();
 
     static TypeLerp()
     {
@@ -121,20 +121,20 @@ public static class TypeLerp
     /// </summary>
     public static void Register<T>(LerpFunc<T> lerp)
     {
-        s_registry[typeof(T)] = (from, to, t) => (object)lerp((T)from, (T)to, t)!;
+        _registry[typeof(T)] = (from, to, t) => (object)lerp((T)from, (T)to, t)!;
     }
 
     /// <summary>
     /// Returns true if the type has a registered lerp function.
     /// </summary>
-    public static bool CanLerp(Type type) => s_registry.ContainsKey(type);
+    public static bool CanLerp(Type type) => _registry.ContainsKey(type);
 
     /// <summary>
     /// Interpolates between two boxed values. Snaps to target if no lerp registered.
     /// </summary>
     public static object Interpolate(Type type, object from, object to, double t)
     {
-        if (s_registry.TryGetValue(type, out var lerp))
+        if (_registry.TryGetValue(type, out var lerp))
             return lerp(from, to, t);
         return to;
     }
