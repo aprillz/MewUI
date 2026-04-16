@@ -71,7 +71,7 @@ public abstract class MewObject : IPropertyOwner
     /// Override in subclasses that participate in a visual tree.
     /// </summary>
     protected virtual T ResolveInheritedValue<T>(MewProperty<T> property)
-        => property.GetDefaultForType(GetType());
+        => property.GetDefaultForType(PropertyStore.OwnerType);
 
     /// <summary>
     /// Sets the local (user-defined) value of a property.

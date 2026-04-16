@@ -30,9 +30,14 @@ internal sealed class AnimatedEntry
 /// </summary>
 internal sealed class PropertyValueStore
 {
+    private static readonly object _boxedTrue = true;
+    private static readonly object _boxedFalse = false;
+
     private readonly WeakReference<IPropertyOwner> _ownerRef;
     private readonly Type _ownerType;
     private Entry[]? _entries;
+
+    internal Type OwnerType => _ownerType;
 
     /// <summary>
     /// Callback invoked when a snap overrides a property that has an animated value.
@@ -87,8 +92,26 @@ internal sealed class PropertyValueStore
     /// <summary>
     /// Sets the local (user-defined) value. Highest priority in resolution.
     /// </summary>
+    public void SetLocal(MewProperty<bool> property, bool value)
+    {
+        ref var entry = ref GetEntry(property.Id);
+        if (entry.Source == ValueSource.Local && entry.Value is bool existing && existing == value)
+            return;
+
+        SetValue(property, Box(value), ValueSource.Local);
+    }
+
+    /// <summary>
+    /// Sets the local (user-defined) value. Highest priority in resolution.
+    /// </summary>
     public void SetLocal<T>(MewProperty<T> property, T value)
     {
+        // Fast path: skip boxing when the value hasn't changed.
+        ref var entry = ref GetEntry(property.Id);
+        if (entry.Source == ValueSource.Local && entry.Value is T existing &&
+            EqualityComparer<T>.Default.Equals(existing, value))
+            return;
+
         SetValue(property, value!, ValueSource.Local);
     }
 
@@ -189,6 +212,51 @@ internal sealed class PropertyValueStore
     public void SetTarget<T>(MewProperty<T> property, T value)
     {
         SetTarget(property, (object)value!);
+    }
+
+    /// <summary>
+    /// Caches an inherited property value. Does not fire change notifications
+    /// because the effective value hasn't actually changed — it was already
+    /// resolved via parent chain traversal; we're just caching the result.
+    /// </summary>
+    internal void SetInherited<T>(MewProperty<T> property, T value)
+    {
+        ref var entry = ref EnsureEntry(property.Id);
+        // Don't overwrite a higher-priority source
+        if (entry.Source > ValueSource.Inherited)
+            return;
+        entry.Value = value;
+        entry.Source = ValueSource.Inherited;
+    }
+
+    /// <summary>
+    /// Clears a cached inherited value, allowing the next GetValue call
+    /// to re-resolve via the parent chain.
+    /// </summary>
+    internal void ClearInherited(int propertyId)
+    {
+        ref var entry = ref GetEntry(propertyId);
+        if (entry.Source != ValueSource.Inherited)
+            return;
+        entry.Value = null;
+        entry.Source = ValueSource.Default;
+    }
+
+    /// <summary>
+    /// Clears all cached inherited values. Called when the element's parent changes
+    /// so stale cached values from the old parent chain are discarded.
+    /// </summary>
+    internal void ClearAllInherited()
+    {
+        if (_entries == null) return;
+        for (int i = 0; i < _entries.Length; i++)
+        {
+            if (_entries[i].Source == ValueSource.Inherited)
+            {
+                _entries[i].Value = null;
+                _entries[i].Source = ValueSource.Default;
+            }
+        }
     }
 
     /// <summary>
@@ -327,6 +395,8 @@ internal sealed class PropertyValueStore
             owner.OnPropertyChanged(property, oldValue, newValue);
     }
 
+    private static object Box(bool value) => value ? _boxedTrue : _boxedFalse;
+
     /// <summary>
     /// Captures the current effective value before a mutation.
     /// </summary>
@@ -380,28 +450,28 @@ internal sealed class PropertyValueStore
 /// </summary>
 internal static class MewPropertyRegistry
 {
-    private static MewProperty?[] s_properties = new MewProperty?[16];
-    private static readonly object s_lock = new();
+    private static MewProperty?[] _properties = new MewProperty?[16];
+    private static readonly object _lock = new();
 
     /// <summary>
     /// Registers a property reference. Called during <see cref="MewProperty{T}"/> construction.
     /// </summary>
     internal static void Register(MewProperty property)
     {
-        lock (s_lock)
+        lock (_lock)
         {
             int id = property.Id;
-            if (id >= s_properties.Length)
+            if (id >= _properties.Length)
             {
-                int newSize = Math.Max(id + 1, s_properties.Length * 2);
-                Array.Resize(ref s_properties, newSize);
+                int newSize = Math.Max(id + 1, _properties.Length * 2);
+                Array.Resize(ref _properties, newSize);
             }
-            s_properties[id] = property;
+            _properties[id] = property;
         }
     }
 
     internal static MewProperty? GetProperty(int id)
     {
-        return id < s_properties.Length ? s_properties[id] : null;
+        return id < _properties.Length ? _properties[id] : null;
     }
 }

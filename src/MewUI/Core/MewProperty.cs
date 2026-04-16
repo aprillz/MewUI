@@ -6,8 +6,8 @@ namespace Aprillz.MewUI;
 /// </summary>
 public abstract class MewProperty
 {
-    private static readonly List<MewProperty> s_registry = new();
-    private static readonly object s_lock = new();
+    private static readonly List<MewProperty> _registry = new();
+    private static readonly object _lock = new();
 
     /// <summary>Gets the property name (for diagnostics).</summary>
     public abstract string Name { get; }
@@ -57,17 +57,17 @@ public abstract class MewProperty
 
     internal MewProperty()
     {
-        lock (s_lock)
+        lock (_lock)
         {
-            Id = s_registry.Count;
-            s_registry.Add(this);
+            Id = _registry.Count;
+            _registry.Add(this);
         }
     }
 
     /// <summary>Gets the total number of registered properties (for sizing internal arrays).</summary>
     internal static int RegisteredCount
     {
-        get { lock (s_lock) { return s_registry.Count; } }
+        get { lock (_lock) { return _registry.Count; } }
     }
 }
 
@@ -146,7 +146,12 @@ public sealed class MewProperty<T> : MewProperty
 
     /// <inheritdoc/>
     internal override object GetBoxedDefaultForType(Type ownerType)
-        => GetDefaultForType(ownerType)!;
+    {
+        // Fast path: no overrides — return cached boxed default to avoid re-boxing value types.
+        if (_defaultOverrides == null)
+            return BoxedDefaultValue;
+        return GetDefaultForType(ownerType)!;
+    }
 
     private MewProperty(string name, T defaultValue, MewPropertyOptions options)
     {

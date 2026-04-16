@@ -435,10 +435,14 @@ public abstract class Element : MewObject
         for (var p = Parent; p != null; p = p.Parent)
         {
             if (p.HasPropertyStore && p.PropertyStore.HasOwnValue(property.Id))
-                return p.PropertyStore.GetValue(property);
+            {
+                var value = p.PropertyStore.GetValue(property);
+                PropertyStore.SetInherited(property, value);
+                return value;
+            }
         }
 
-        return property.GetDefaultForType(GetType());
+        return property.GetDefaultForType(PropertyStore.OwnerType);
     }
 
     private Size ApplyLayoutRounding(Size size)
