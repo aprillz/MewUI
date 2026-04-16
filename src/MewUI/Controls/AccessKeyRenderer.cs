@@ -29,13 +29,33 @@ internal static class AccessKeyRenderer
         if (!AccessKeyHelper.TryParse(rawText, out _, out var displayText))
             displayText = rawText;
 
-        context.DrawText(displayText, bounds, font, color, hAlign, vAlign, wrapping);
+        int underlineIndex = showAccessKeys ? AccessKeyHelper.GetUnderlineIndex(rawText) : -1;
+        DrawParsed(context, displayText, underlineIndex, bounds, font, color, showAccessKeys, hAlign, vAlign, wrapping, dpiScale);
+    }
 
-        if (!showAccessKeys)
+    /// <summary>
+    /// Draws text using pre-parsed access key results (from <see cref="MenuItem.GetParsedText"/>).
+    /// Avoids repeated TryParse/GetUnderlineIndex calls on each render frame.
+    /// </summary>
+    internal static void DrawParsed(
+        IGraphicsContext context,
+        string displayText,
+        int underlineIndex,
+        Rect bounds,
+        IFont font,
+        Color color,
+        bool showAccessKeys,
+        TextAlignment hAlign = TextAlignment.Left,
+        TextAlignment vAlign = TextAlignment.Center,
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        double dpiScale = 1.0)
+    {
+        if (string.IsNullOrEmpty(displayText))
             return;
 
-        int underlineIndex = AccessKeyHelper.GetUnderlineIndex(rawText);
-        if (underlineIndex < 0 || underlineIndex >= displayText.Length)
+        context.DrawText(displayText, bounds, font, color, hAlign, vAlign, wrapping);
+
+        if (!showAccessKeys || underlineIndex < 0 || underlineIndex >= displayText.Length)
             return;
 
         DrawUnderline(context, displayText, underlineIndex, bounds, font, color, hAlign, vAlign, dpiScale);
