@@ -12,8 +12,12 @@ public enum GlyphKind
     Minus,
     Cross,
 
+    CheckMark,
+    IndeterminateMark,
+
     // Window chrome
     WindowMinimize,
+
     WindowMaximize,
     WindowRestore,
 }
@@ -37,43 +41,58 @@ public static class Glyph
             case GlyphKind.ChevronUp:
                 DrawChevron(context, center, half, color, thickness, up: true);
                 return;
+
             case GlyphKind.ChevronDown:
                 DrawChevron(context, center, half, color, thickness, up: false);
                 return;
+
             case GlyphKind.ChevronLeft:
                 DrawChevronSide(context, center, half, color, thickness, left: true);
                 return;
+
             case GlyphKind.ChevronRight:
                 DrawChevronSide(context, center, half, color, thickness, left: false);
                 return;
+
             case GlyphKind.Plus:
                 context.DrawLine(new Point(center.X - half, center.Y), new Point(center.X + half, center.Y), color, thickness);
                 context.DrawLine(new Point(center.X, center.Y - half), new Point(center.X, center.Y + half), color, thickness);
                 return;
+
             case GlyphKind.Minus:
                 context.DrawLine(new Point(center.X - half, center.Y), new Point(center.X + half, center.Y), color, thickness);
                 return;
+
             case GlyphKind.Cross:
                 context.DrawLine(new Point(center.X - half, center.Y - half), new Point(center.X + half, center.Y + half), color, thickness);
                 context.DrawLine(new Point(center.X - half, center.Y + half), new Point(center.X + half, center.Y - half), color, thickness);
                 return;
 
+            case GlyphKind.CheckMark:
+                var g = _cachedPath ??= new PathGeometry();
+                g.Reset();
+                g.MoveTo(center.X - half, center.Y + half * 0.1);
+                g.LineTo(center.X - half * 0.1, center.Y + half);
+                g.LineTo(center.X + half, center.Y - half);
+                context.DrawPath(g, color, thickness);
+                return;
+
+            case GlyphKind.IndeterminateMark:
+                context.DrawLine(new Point(center.X - half, center.Y), new Point(center.X + half, center.Y), color, thickness);
+                return;
+
             case GlyphKind.WindowMinimize:
-                // Horizontal line at bottom of glyph area, slightly thicker
                 context.DrawLine(new Point(center.X - half, center.Y + half), new Point(center.X + half, center.Y + half), color, thickness);
                 return;
 
             case GlyphKind.WindowMaximize:
-                // Square (□)
                 context.DrawRectangle(new Rect(center.X - half, center.Y - half, half * 2, half * 2), color, thickness);
                 return;
 
             case GlyphKind.WindowRestore:
             {
-                // Front square + back ㄱ-shape (top-right)
                 double offset = half * 0.4;
                 double s = half * 2 - offset;
-                // Back ㄱ shape: top edge + right edge behind the front square
                 double bx = center.X - half + offset;
                 double by = center.Y - half;
                 var g = _cachedPath ??= new PathGeometry();
@@ -92,7 +111,6 @@ public static class Glyph
         }
     }
 
-    // Matches the legacy ComboBox drop-down chevron (2 line segments).
     private static void DrawChevron(IGraphicsContext context, Point center, double half, Color color, double thickness, bool up)
     {
         Point p1, p2, p3;
@@ -143,4 +161,3 @@ public static class Glyph
         context.DrawPath(g, color, thickness);
     }
 }
-
