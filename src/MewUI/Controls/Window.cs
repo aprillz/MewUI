@@ -39,6 +39,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private const double DefaultHeight = 600;
 
     private IWindowBackend? _backend;
+    private WindowRenderTarget? _cachedRenderTarget;
     private Action? _cachedInvalidateBackend;
     private Action? _cachedLayoutAndRender;
 
@@ -1752,7 +1753,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         ArgumentNullException.ThrowIfNull(surface);
         var clientSize = _clientSizeDip;
-        RenderFrameCore(new WindowRenderTarget(surface), clientSize);
+        var target = _cachedRenderTarget;
+        if (target == null || !target.Matches(surface))
+        {
+            target = new WindowRenderTarget(surface);
+            _cachedRenderTarget = target;
+        }
+
+        RenderFrameCore(target, clientSize);
 
     }
 
