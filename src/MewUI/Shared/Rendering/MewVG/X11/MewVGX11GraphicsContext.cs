@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.FreeType;
 using Aprillz.MewUI.Rendering.OpenGL;
@@ -399,6 +401,30 @@ internal sealed partial class MewVGX11GraphicsContext
         int width = RenderingUtil.RoundToPixelInt(rect.Width, DpiScale);
         int height = RenderingUtil.RoundToPixelInt(rect.Height, DpiScale);
         return new PixelRect(left, top, Math.Max(0, width), Math.Max(0, height));
+    }
+
+    private void RecoverAfterExternalComposite()
+    {
+        _vg.GlobalAlpha(_globalAlpha);
+
+        if (_clipBoundsWorld.HasValue)
+        {
+            var clip = _clipBoundsWorld.Value;
+            _vg.SetTransformMatrix(Matrix3x2.Identity);
+            _vg.Scissor((float)clip.X, (float)clip.Y, (float)clip.Width, (float)clip.Height);
+        }
+        else
+        {
+            _vg.ResetScissor();
+        }
+
+        _vg.SetTransformMatrix(_transform);
+    }
+
+    void IMewVGGlExternalImageContext.DrawExternalImage(int imageId, Rect destRect, int imageWidthPx, int imageHeightPx)
+    {
+        RecoverAfterExternalComposite();
+        DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: null, imageWidthPx, imageHeightPx);
     }
 
     private readonly record struct PixelRect(int Left, int Top, int Width, int Height);

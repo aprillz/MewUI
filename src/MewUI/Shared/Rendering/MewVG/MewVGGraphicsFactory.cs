@@ -5,7 +5,7 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
+public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IGraphicsServiceProvider, IMewVGWindowResourceResolver, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
 {
     public static MewVGGraphicsFactory Instance => field ??= new MewVGGraphicsFactory();
 
@@ -90,6 +90,27 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
     public IGraphicsContext CreateMeasurementContext(uint dpi)
         => CreateMeasurementContextCore(dpi);
 
+    public object? GetGraphicsService(Type serviceType)
+        => GraphicsServiceRegistry.Resolve(this, serviceType);
+
+    public bool TryGetWindowResources(nint windowHandle, out IDisposable? resources)
+    {
+        if (_windows.TryGetValue(windowHandle, out resources))
+        {
+            return true;
+        }
+
+        bool handled = false;
+        TryResolveWindowResources(windowHandle, ref handled, ref resources);
+        if (handled && resources != null)
+        {
+            return true;
+        }
+
+        resources = null;
+        return false;
+    }
+
     public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0)
     {
         IBitmapRenderTarget? rt = null;
@@ -146,4 +167,6 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
     }
 
     static partial void TryPresentWindowSurface(Window window, IWindowSurface surface, double opacity, ref bool handled, ref bool result);
+
+    partial void TryResolveWindowResources(nint windowHandle, ref bool handled, ref IDisposable? resources);
 }
