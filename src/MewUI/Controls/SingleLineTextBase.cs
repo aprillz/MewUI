@@ -9,6 +9,10 @@ namespace Aprillz.MewUI.Controls;
 public abstract class SingleLineTextBase : TextBase
 {
     private readonly TextBoxView _view = new();
+    private Action<char[], int, int>? _cachedCopyDocumentTo;
+
+    private Action<char[], int, int> CachedCopyDocumentTo
+        => _cachedCopyDocumentTo ??= CopyDocumentTo;
 
     protected override Rect GetInteractionContentBounds()
         => GetViewportContentBounds();
@@ -99,7 +103,7 @@ public abstract class SingleLineTextBase : TextBase
             IsComposing ? CompositionStartIndex : 0,
             IsComposing ? CompositionLength : 0,
             IsComposing ? CompositionAttributes : null,
-            CopyDocumentTo);
+            CachedCopyDocumentTo);
     }
 
     protected override void SetCaretFromPoint(Point point, Rect contentBounds)
@@ -129,7 +133,7 @@ public abstract class SingleLineTextBase : TextBase
     {
         var contentBounds = GetViewportContentBounds();
         using var measure = BeginTextMeasurement();
-        _view.EnsureCache(measure.Context, measure.Font, FontFamily, FontSize, FontWeight, GetDpi(), DocumentVersion, Document.Length, CopyDocumentTo);
+        _view.EnsureCache(measure.Context, measure.Font, FontFamily, FontSize, FontWeight, GetDpi(), DocumentVersion, Document.Length, CachedCopyDocumentTo);
         int idx = Math.Clamp(charIndex, 0, Document.Length);
         double charX = contentBounds.X - HorizontalOffset + _view.GetAbsoluteX(idx, measure.Context, measure.Font);
         double lineHeight = measure.Context.MeasureText("M", measure.Font).Height;
@@ -150,7 +154,7 @@ public abstract class SingleLineTextBase : TextBase
             GetDpi(),
             DocumentVersion,
             Document.Length,
-            CopyDocumentTo);
+            CachedCopyDocumentTo);
     }
 
     private void EnsureCaretVisible(Rect contentBounds)
@@ -169,7 +173,7 @@ public abstract class SingleLineTextBase : TextBase
             HorizontalOffset,
             contentBounds.Width,
             Padding.Right,
-            CopyDocumentTo);
+            CachedCopyDocumentTo);
         SetHorizontalOffset(newOffset, false);
     }
 
@@ -187,7 +191,7 @@ public abstract class SingleLineTextBase : TextBase
             HorizontalOffset,
             viewportWidthDip,
             Padding.Right,
-            CopyDocumentTo);
+            CachedCopyDocumentTo);
         SetHorizontalOffset(newOffset, false);
     }
 
