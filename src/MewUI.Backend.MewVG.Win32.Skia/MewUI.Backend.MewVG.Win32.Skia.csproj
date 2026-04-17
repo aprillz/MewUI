@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Backend.MewVG.Win32.Skia</AssemblyName>
+    <PackageId>$(MewUITitle).Backend.MewVG.Win32.Skia</PackageId>
+    <Description>SkiaSharp GPU hosting registration for the $(MewUITitle) MewVG Win32 backend</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+    <ProjectReference Include="..\MewUI.Backend.MewVG.Skia\MewUI.Backend.MewVG.Skia.csproj" />
+  </ItemGroup>
+
+</Project>
