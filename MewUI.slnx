@@ -7,7 +7,6 @@
   <Folder Name="/samples/">
     <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
-    <Project Path="samples/MewUI.SkiaSharp.Sample/MewUI.SkiaSharp.Sample.csproj" />
     <Project Path="samples/MewUI.Win32.WebView2.Sample/MewUI.Win32.WebView2.Sample.csproj" />
   </Folder>
   <Folder Name="/samples/FBA/">
@@ -19,17 +18,12 @@
     <Project Path="src/MewUI.Backend.Direct2D/MewUI.Backend.Direct2D.csproj" />
     <Project Path="src/MewUI.Backend.Gdi/MewUI.Backend.Gdi.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
-    <Project Path="src/MewUI.Backend.MewVG.MacOS.Skia/MewUI.Backend.MewVG.MacOS.Skia.csproj" />
-    <Project Path="src/MewUI.Backend.MewVG.Skia/MewUI.Backend.MewVG.Skia.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.Win32/MewUI.Backend.MewVG.Win32.csproj" />
-    <Project Path="src/MewUI.Backend.MewVG.Win32.Skia/MewUI.Backend.MewVG.Win32.Skia.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.X11/MewUI.Backend.MewVG.X11.csproj" />
-    <Project Path="src/MewUI.Backend.MewVG.X11.Skia/MewUI.Backend.MewVG.X11.Skia.csproj" />
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
     <Project Path="src/MewUI.Win32.WebView2/MewUI.Win32.WebView2.csproj" />
-    <Project Path="src/MewUI.SkiaSharp/MewUI.SkiaSharp.csproj" />
     <Project Path="src/MewUI/MewUI.csproj" />
   </Folder>
   <Folder Name="/meta/">
