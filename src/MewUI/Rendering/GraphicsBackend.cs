@@ -10,4 +10,6 @@ public enum GraphicsBackend
     Gdi,
     OpenGL,
     Metal,
+    Drawing,
+    Skia
 }
