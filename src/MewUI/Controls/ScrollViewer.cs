@@ -304,10 +304,12 @@ public sealed class ScrollViewer : ContentControl
             _extent = LayoutRounding.RoundSizeToPixels(content.DesiredSize, dpiScale);
         }
 
-        // Note: _scroll metrics/offset and SyncBars() are intentionally NOT updated here.
-        // Measure can be called with hypothetical sizes (e.g. popup owners measuring for
-        // natural size every frame). Those mutations belong in ArrangeContent where the
-        // viewport reflects the actual displayed size.
+        // Note: _scroll state (DpiScale, metrics, offset) and bar properties (IsVisible,
+        // ViewportSize, Max) are intentionally NOT mutated here. Measure may be called
+        // with hypothetical sizes (e.g. popup owners measuring for natural size every
+        // frame), and those propagations would corrupt state that drives the rendered
+        // scrollbar or reset the user's scroll offset. All mutations happen in Arrange,
+        // where the viewport reflects the actual displayed size.
 
         // Desired size: cap by available chrome slot (exclude padding here because we inflate it below).
         double capW = Math.Max(0, slotW - Padding.HorizontalThickness);

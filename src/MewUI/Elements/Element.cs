@@ -187,22 +187,76 @@ public abstract class Element : MewObject
     /// <summary>
     /// Invalidates the Measure pass, causing a re-measure on next layout.
     /// </summary>
+    /// <remarks>
+    /// Idempotent per dirty cycle: if already dirty, returns immediately (Measure will reset the
+    /// flag). This bounds both the upward propagation and the optional subtree cascade to a single
+    /// visit per node per cycle.
+    /// For hosts that implement <see cref="ISubtreeInvalidationHost"/>, the dirty flag also
+    /// cascades into the visual subtree so private composition (e.g. ScrollViewer/presenter) does
+    /// not get skipped by <see cref="Measure"/>'s same-constraint short-circuit.
+    /// </remarks>
     public virtual void InvalidateMeasure()
     {
+        if (IsMeasureDirty) return;
         IsMeasureDirty = true;
         IsArrangeDirty = true;
         Parent?.InvalidateMeasure();
+
+        // The marker gates the *entry* of a cascade. Once started, the subtree is descended
+        // unconditionally via the helper — otherwise a non-marker intermediate like ScrollViewer
+        // would halt the cascade before it reaches the presenter that needs to re-measure.
+        if (this is ISubtreeInvalidationHost)
+        {
+            CascadeMeasureInvalidationToSubtree();
+        }
+
         InvalidateVisual();
+    }
+
+    private void CascadeMeasureInvalidationToSubtree()
+    {
+        if (this is not IVisualTreeHost host) return;
+        host.VisitChildren(static child =>
+        {
+            if (child.IsMeasureDirty) return true; // idempotent
+            child.IsMeasureDirty = true;
+            child.IsArrangeDirty = true;
+            child.CascadeMeasureInvalidationToSubtree();
+            return true;
+        });
     }
 
     /// <summary>
     /// Invalidates the Arrange pass, causing a re-arrange on next layout.
     /// </summary>
+    /// <remarks>
+    /// Idempotent per dirty cycle; cascades into <see cref="ISubtreeInvalidationHost"/> subtrees
+    /// so private composition re-arranges instead of short-circuiting on unchanged bounds.
+    /// </remarks>
     public virtual void InvalidateArrange()
     {
+        if (IsArrangeDirty) return;
         IsArrangeDirty = true;
         Parent?.InvalidateArrange();
+
+        if (this is ISubtreeInvalidationHost)
+        {
+            CascadeArrangeInvalidationToSubtree();
+        }
+
         InvalidateVisual();
+    }
+
+    private void CascadeArrangeInvalidationToSubtree()
+    {
+        if (this is not IVisualTreeHost host) return;
+        host.VisitChildren(static child =>
+        {
+            if (child.IsArrangeDirty) return true;
+            child.IsArrangeDirty = true;
+            child.CascadeArrangeInvalidationToSubtree();
+            return true;
+        });
     }
 
     /// <summary>
