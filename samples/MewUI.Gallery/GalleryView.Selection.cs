@@ -91,6 +91,27 @@ partial class GalleryView
             ),
 
             Card(
+                "ColorPicker",
+                new Grid()
+                    .Rows("Auto,Auto,Auto,Auto,Auto")
+                    .Columns("Auto,*")
+                    .Spacing(8)
+                    .Children(
+                        new TextBlock().Text("Both"),
+                        new ColorPicker().SelectedColor(Color.FromRgb(255, 0, 0)),
+                        new TextBlock().Text("Wheel"),
+                        new ColorPicker().SelectedColor(Color.FromRgb(0, 128, 255)).Kind(ColorPickerKind.Wheel),
+                        new TextBlock().Text("Panel"),
+                        new ColorPicker().SelectedColor(Color.FromRgb(0, 200, 100)).Kind(ColorPickerKind.Panel),
+                        new TextBlock().Text("Alpha"),
+                        new ColorPicker().SelectedColor(Color.FromArgb(180, 255, 128, 0)).ShowAlpha(),
+                        new TextBlock().Text("Disabled"),
+                        new ColorPicker().SelectedColor(Color.FromRgb(80, 80, 80)).Disable()
+                    ),
+                minWidth: 250
+            ),
+
+            Card(
                 "TabControl",
                 new UniformGrid()
                     .Columns(2)
