@@ -674,7 +674,7 @@ public sealed class ScrollViewer : ContentControl
         // Close context menus when content scrolls (standard desktop UX).
         if (FindVisualRoot() is Window window)
         {
-            window.RequestClosePopups(PopupCloseRequest.Scroll());
+            window.RequestClosePopups(PopupCloseRequest.Scroll(source: this));
         }
     }
 
