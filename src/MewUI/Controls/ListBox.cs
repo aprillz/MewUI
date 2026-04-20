@@ -391,6 +391,10 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
+
+        _presenter.RebindExisting = _rebindVisibleOnNextRender;
+        _rebindVisibleOnNextRender = false;
+
         _scrollViewer.Arrange(innerBounds);
 
         if (TryConsumeScrollIntoViewRequest(out var request) &&
@@ -418,9 +422,6 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         var clipR = Math.Max(0, LayoutRounding.RoundToPixel(radius, dpiScale) - borderInset);
         _scrollViewer.CornerRadius = clipR;
         _presenter.ItemRadius = clipR;
-
-        _presenter.RebindExisting = _rebindVisibleOnNextRender;
-        _rebindVisibleOnNextRender = false;
 
         _scrollViewer.Render(context);
     }
