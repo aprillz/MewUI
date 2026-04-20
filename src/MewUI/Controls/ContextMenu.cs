@@ -538,10 +538,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     }
 
     private static string GetDisplayText(MenuItem item)
-    {
-        var raw = item.Text ?? string.Empty;
-        return AccessKeyHelper.TryParse(raw, out _, out var display) ? display : raw;
-    }
+        => item.GetParsedText().displayText;
 
     private void TryActivateByAccessKey(KeyEventArgs e)
     {
@@ -560,10 +557,11 @@ public sealed class ContextMenu : Control, IPopupOwner
             if (entry is not MenuItem item || !item.IsEnabled)
                 continue;
 
-            if (!AccessKeyHelper.TryParse(item.Text, out var key, out _))
+            var parsed = item.GetParsedText();
+            if (parsed.accessKey == default)
                 continue;
 
-            if (char.ToUpperInvariant(key) != ch)
+            if (char.ToUpperInvariant(parsed.accessKey) != ch)
                 continue;
 
             if (item.SubMenu != null)
@@ -849,7 +847,8 @@ public sealed class ContextMenu : Control, IPopupOwner
 
                 var textRect = new Rect(textLeft, paddedRow.Y, Math.Max(0, textRight - textLeft), paddedRow.Height);
                 var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
-                AccessKeyRenderer.DrawText(context, item.Text ?? string.Empty, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
+                var parsed = item.GetParsedText();
+                AccessKeyRenderer.DrawParsed(context, parsed.displayText, parsed.underlineIndex, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
 
                 if (_hasAnyShortcut && !string.IsNullOrEmpty(item.Shortcut?.ToDisplayString()))
                 {

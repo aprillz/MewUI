@@ -27,4 +27,11 @@ internal sealed class WindowRenderTarget : IRenderTarget
         PixelHeight = Math.Max(1, surface.PixelHeight);
         DpiScale = surface.DpiScale <= 0 ? 1.0 : surface.DpiScale;
     }
+
+    internal bool Matches(Platform.IWindowSurface surface)
+    {
+        return ReferenceEquals(Surface, surface)
+            && PixelWidth == Math.Max(1, surface.PixelWidth)
+            && PixelHeight == Math.Max(1, surface.PixelHeight);
+    }
 }

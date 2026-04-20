@@ -148,7 +148,7 @@ internal static partial class GdiPlusInterop
     [LibraryImport("gdiplus.dll")]
     private static unsafe partial int GdipSetPenDashArray(nint pen, float* dash, int count);
 
-    public static unsafe int SetPenDashArray(nint pen, float[] dashes)
+    public static unsafe int SetPenDashArray(nint pen, Span<float> dashes)
     {
         fixed (float* p = dashes)
             return GdipSetPenDashArray(pen, p, dashes.Length);
@@ -195,7 +195,7 @@ internal static partial class GdiPlusInterop
     private static unsafe partial int GdipSetLinePresetBlend(
         nint brush, uint* blend, float* positions, int count);
 
-    public static unsafe int SetLinePresetBlend(nint brush, uint[] colors, float[] positions)
+    public static unsafe int SetLinePresetBlend(nint brush, Span<uint> colors, Span<float> positions)
     {
         fixed (uint* pc = colors)
         fixed (float* pp = positions)
@@ -218,7 +218,7 @@ internal static partial class GdiPlusInterop
     private static unsafe partial int GdipSetPathGradientPresetBlend(
         nint brush, uint* blend, float* positions, int count);
 
-    public static unsafe int SetPathGradientPresetBlend(nint brush, uint[] colors, float[] positions)
+    public static unsafe int SetPathGradientPresetBlend(nint brush, Span<uint> colors, Span<float> positions)
     {
         fixed (uint* pc = colors)
         fixed (float* pp = positions)

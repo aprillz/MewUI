@@ -2,9 +2,9 @@ namespace Aprillz.MewUI;
 
 public readonly partial struct Color
 {
-    private static readonly Dictionary<string, Color> s_named = CreateNamedColors();
+    private static readonly Dictionary<string, Color> _named = CreateNamedColors();
 
-    public static IReadOnlyDictionary<string, Color> NamedColors => s_named;
+    public static IReadOnlyDictionary<string, Color> NamedColors => _named;
 
     // Named colors (WPF/System.Drawing KnownColor set, excluding system colors)
 

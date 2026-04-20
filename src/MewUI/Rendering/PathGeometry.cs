@@ -89,6 +89,17 @@ public sealed class PathGeometry : IFreezable
     /// <summary>Returns <see langword="true"/> when the path contains no commands.</summary>
     public bool IsEmpty => _commands.Count == 0;
 
+    /// <summary>
+    /// Clears all commands, resetting the path for reuse without reallocating.
+    /// </summary>
+    public void Reset()
+    {
+        FreezableHelper.ThrowIfFrozen(this);
+        _commands.Clear();
+        _lastX = _lastY = _startX = _startY = 0;
+        _fillRule = FillRule.NonZero;
+    }
+
     /// <summary>Gets the number of commands in the path.</summary>
     public int Count => _commands.Count;
 

@@ -117,9 +117,10 @@ internal static class NvgStrokeHelper
         float dashOffset = (float)style.DashOffset * thickness;
 
         // Build dash pattern in absolute units (multiply by stroke width, like SVG/WPF)
-        var pattern = new float[dashes.Count];
+        int dashCount = dashes.Count;
+        Span<float> pattern = stackalloc float[dashCount];
         float patternLen = 0;
-        for (int i = 0; i < dashes.Count; i++)
+        for (int i = 0; i < dashCount; i++)
         {
             pattern[i] = (float)dashes[i] * thickness;
             patternLen += pattern[i];

@@ -76,6 +76,9 @@ public class WrapPanel : Panel
             }
         }
 
+        CollectionPool<List<ChildInfo>>.Return(items);
+        CollectionPool<List<ChildInfo>>.Return(lines);
+
         var contentSize = horizontal
             ? new Size(totalMain, totalCross)
             : new Size(totalCross, totalMain);
@@ -92,18 +95,6 @@ public class WrapPanel : Panel
         arrangedMain = RoundMainToPixels(arrangedMain);
         var items = CollectVisibleChildren(contentBounds.Size, measureChildren: false);
         var lines = BuildLines(items, arrangedMain);
-
-        double totalMain = 0;
-        double totalCross = 0;
-        for (int i = 0; i < lines.Count; i++)
-        {
-            totalMain = Math.Max(totalMain, lines[i].main);
-            totalCross += lines[i].size;
-            if (i < lines.Count - 1)
-            {
-                totalCross += Spacing;
-            }
-        }
 
         double crossOffset = 0;
         for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
@@ -134,12 +125,16 @@ public class WrapPanel : Panel
                 crossOffset += Spacing;
             }
         }
+
+        CollectionPool<List<ChildInfo>>.Return(items);
+        CollectionPool<List<ChildInfo>>.Return(lines);
     }
+
 
     private List<ChildInfo> CollectVisibleChildren(Size constraintSize, bool measureChildren)
     {
-        var items = new List<ChildInfo>(Children.Count);
-        foreach (var child in Children)
+        var items = CollectionPool<List<ChildInfo>>.Rent();
+        foreach (var child in ChildrenList)
         {
             if (child is UIElement ui && !ui.IsVisible)
             {
@@ -169,7 +164,8 @@ public class WrapPanel : Panel
 
     private List<LineInfo> BuildLines(List<ChildInfo> items, double maxMain)
     {
-        var lines = new List<LineInfo>();
+        var lines = CollectionPool<List<LineInfo>>.Rent();
+
         double lineSize = 0;
         double lineOffset = 0;
         int lineStart = 0;

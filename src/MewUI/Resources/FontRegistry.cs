@@ -12,7 +12,7 @@ internal static class FontRegistry
 
     // Key: family name (case-insensitive)
     // Value: file path to the cached font file
-    private static readonly ConcurrentDictionary<string, string> s_map = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, string> _map = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Registers a font file path for a given family name.
@@ -22,7 +22,7 @@ internal static class FontRegistry
         if (string.IsNullOrWhiteSpace(familyName) || string.IsNullOrWhiteSpace(filePath))
             return;
 
-        s_map[familyName] = filePath;
+        _map[familyName] = filePath;
     }
 
     /// <summary>
@@ -34,7 +34,7 @@ internal static class FontRegistry
         if (string.IsNullOrWhiteSpace(family))
             return null;
 
-        if (s_map.TryGetValue(family, out var filePath))
+        if (_map.TryGetValue(family, out var filePath))
             return new ResolvedFont(family, filePath);
 
         return null;

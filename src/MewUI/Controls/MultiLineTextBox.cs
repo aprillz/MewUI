@@ -581,9 +581,9 @@ public sealed class MultiLineTextBox : TextBase
                         int attrOffset = (cs + start) - compStart;
                         double baseX = contentBounds.X - HorizontalOffset;
                         TextBoxView.DrawSegmentedCompositionUnderline(
-                            context, ulY, textColor,
+                            cache, context, font, ulY, textColor,
                             CompositionAttributes, attrOffset, ce - cs,
-                            i => baseX + MultiLineTextView.GetPrefixWidthCached(cache, cs + i, context, font));
+                            cs, baseX);
                     }
                 }
 
@@ -661,9 +661,9 @@ public sealed class MultiLineTextBox : TextBase
                         int attrOffset = (cs + lineStart) - compStart;
                         double segPrefixW = MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, measure.Context, measure.Font);
                         TextBoxView.DrawSegmentedCompositionUnderline(
-                            context, ulY, textColor,
+                            lineMeasure, measure.Context, measure.Font, ulY, textColor,
                             CompositionAttributes, attrOffset, ce - cs,
-                            i => contentBounds.X + MultiLineTextView.GetPrefixWidthCached(lineMeasure, cs + i, measure.Context, measure.Font) - segPrefixW);
+                            cs, contentBounds.X - segPrefixW);
                     }
                 }
 

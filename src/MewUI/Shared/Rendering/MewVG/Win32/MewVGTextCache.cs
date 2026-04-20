@@ -66,7 +66,8 @@ internal sealed class MewVGTextCache : IDisposable
             return default;
         }
 
-        byte[] rgba = ImagePixelUtils.ConvertBgraToRgba(bmp.Data);
+        var rgba = new byte[bmp.Data.Length];
+        ImagePixelUtils.ConvertBgraToRgba(bmp.Data, rgba);
         int imageId = _vg.CreateImageRGBA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Nearest, rgba);
         if (imageId == 0)
         {

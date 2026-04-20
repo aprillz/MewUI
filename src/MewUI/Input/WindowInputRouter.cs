@@ -99,7 +99,9 @@ internal static class WindowInputRouter
 
             if (element?.Focusable == true)
             {
-                window.FocusManager.SetFocus(element);
+                // Mouse click expresses a precise location; skip GetDefaultFocusTarget redirection
+                // so focus lands where the user clicked, not on some off-screen "default" child.
+                window.FocusManager.SetFocus(element, resolveDefault: false);
             }
             else
             {
@@ -117,7 +119,7 @@ internal static class WindowInputRouter
 
                 if (focusTarget != null)
                 {
-                    window.FocusManager.SetFocus(focusTarget);
+                    window.FocusManager.SetFocus(focusTarget, resolveDefault: false);
                 }
             }
 

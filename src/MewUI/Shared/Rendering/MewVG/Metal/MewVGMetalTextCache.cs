@@ -108,7 +108,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
         }
 
         // CoreText produces BGRA premultiplied; NanoVG expects RGBA, and needs the Premultiplied flag to avoid double-premultiply.
-        byte[] rgba = ImagePixelUtils.ConvertBgraToRgba(bmp.Data);
+        var rgba = new byte[bmp.Data.Length];
+        ImagePixelUtils.ConvertBgraToRgba(bmp.Data, rgba);
         imageId = _vg.CreateImageRGBA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Premultiplied, rgba);
         if (imageId == 0)
         {

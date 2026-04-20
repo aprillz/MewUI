@@ -4,12 +4,25 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Helper for traversing the visual tree.
+/// Uses iterative traversal with a ThreadStatic stack to avoid
+/// per-node closure allocations.
 /// </summary>
 public static class VisualTree
 {
+    [ThreadStatic]
+    private static List<Element>? _stack;
+
+    // Single static delegate — no per-call allocation.
+    // Pushes children onto the ThreadStatic stack for iterative processing.
+    private static readonly Func<Element, bool> _collector = static child =>
+    {
+        _stack!.Add(child);
+        return true;
+    };
+
     public static Element? FindVisualChild<T>(this Element element) where T : Element
     {
-        return Find(element, x => x is T);
+        return Find(element, static x => x is T);
     }
 
     /// <summary>
@@ -28,8 +41,9 @@ public static class VisualTree
 
         return false;
     }
+
     /// <summary>
-    /// Visits <paramref name="element"/> and all of its descendants in depth-first order.
+    /// Visits <paramref name="element"/> and all of its descendants in depth-first pre-order.
     /// </summary>
     public static void Visit(Element? element, Action<Element> visitor)
     {
@@ -38,15 +52,26 @@ public static class VisualTree
             return;
         }
 
-        visitor(element);
+        var stack = _stack ??= new List<Element>();
+        int baseIndex = stack.Count; // support reentrance
 
-        if (element is IVisualTreeHost host)
+        stack.Add(element);
+
+        while (stack.Count > baseIndex)
         {
-            host.VisitChildren(child =>
+            int lastIdx = stack.Count - 1;
+            var el = stack[lastIdx];
+            stack.RemoveAt(lastIdx);
+
+            visitor(el);
+
+            if (el is IVisualTreeHost host)
             {
-                Visit(child, visitor);
-                return true;
-            });
+                int childStart = stack.Count;
+                host.VisitChildren(_collector);
+                // Reverse newly added children so first child is popped first (DFS pre-order)
+                ReverseRange(stack, childStart, stack.Count - 1);
+            }
         }
     }
 
@@ -66,17 +91,36 @@ public static class VisualTree
             return element;
         }
 
-        if (element is IVisualTreeHost host)
+        var stack = _stack ??= new List<Element>();
+        int baseIndex = stack.Count;
+
+        if (element is IVisualTreeHost rootHost)
         {
-            Element? found = null;
+            int childStart = stack.Count;
+            rootHost.VisitChildren(_collector);
+            ReverseRange(stack, childStart, stack.Count - 1);
+        }
 
-            host.VisitChildren(child =>
+        while (stack.Count > baseIndex)
+        {
+            int lastIdx = stack.Count - 1;
+            var el = stack[lastIdx];
+            stack.RemoveAt(lastIdx);
+
+            if (predicate(el))
             {
-                found = Find(child, predicate);
-                return found == null;
-            });
+                // Clear remaining work items back to base
+                if (stack.Count > baseIndex)
+                    stack.RemoveRange(baseIndex, stack.Count - baseIndex);
+                return el;
+            }
 
-            return found;
+            if (el is IVisualTreeHost host)
+            {
+                int childStart = stack.Count;
+                host.VisitChildren(_collector);
+                ReverseRange(stack, childStart, stack.Count - 1);
+            }
         }
 
         return null;
@@ -96,5 +140,15 @@ public static class VisualTree
             }
         });
         return result;
+    }
+
+    private static void ReverseRange(List<Element> list, int start, int end)
+    {
+        while (start < end)
+        {
+            (list[start], list[end]) = (list[end], list[start]);
+            start++;
+            end--;
+        }
     }
 }

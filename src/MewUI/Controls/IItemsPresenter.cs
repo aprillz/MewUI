@@ -75,6 +75,8 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
 
     void VisitRealized(Action<Element> visitor);
 
+    bool VisitRealized(Func<Element, bool> visitor);
+
     void VisitRealized(Action<int, FrameworkElement> visitor);
 
     event Action<Point>? OffsetCorrectionRequested;

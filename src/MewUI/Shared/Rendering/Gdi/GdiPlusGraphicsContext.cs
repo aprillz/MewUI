@@ -25,7 +25,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     private readonly AaSurfacePool _surfacePool = new();
 
     private nint _graphics;
-    private readonly Stack<GraphicsStateSnapshot> _states = new();
+    private readonly Stack<GraphicsStateSnapshot> _states = CollectionPool<Stack<GraphicsStateSnapshot>>.Rent();
     private bool _disposed;
     private readonly double _dpiScale;
 
@@ -126,6 +126,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             Gdi32.BitBlt(_screenDc, 0, 0, _pixelWidth, _pixelHeight,
                 _backBuffer.MemDc, 0, 0, 0x00CC0020); // SRCCOPY
         }
+        CollectionPool<Stack<GraphicsStateSnapshot>>.Return(_states);
+
+        base.Dispose();
 
         if (_ownsDc && Hdc != 0)
         {
@@ -885,8 +888,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         if (style.IsDashed && style.DashArray is { Count: > 0 } dashes)
         {
             GdiPlusInterop.GdipSetPenDashStyle(gdipPen, GdiPlusInterop.GpDashStyle.Custom);
-            var arr = new float[dashes.Count];
-            for (int i = 0; i < dashes.Count; i++)
+            int dashCount = dashes.Count;
+            Span<float> arr = stackalloc float[dashCount];
+            for (int i = 0; i < dashCount; i++)
                 arr[i] = (float)dashes[i];
             GdiPlusInterop.SetPenDashArray(gdipPen, arr);
             if (style.DashOffset != 0)
@@ -1838,8 +1842,13 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var stops = brush.Stops;
         if (stops == null || stops.Count == 0) return 0;
 
-        var (colors, positions) = EnsureEndpointStops(stops);
-        for (int i = 0; i < colors.Length; i++)
+        int maxStops = stops.Count + 2;
+        Span<uint> colors = maxStops <= 16 ? stackalloc uint[16] : new uint[maxStops];
+        Span<float> positions = maxStops <= 16 ? stackalloc float[16] : new float[maxStops];
+        int count = FillEndpointStops(stops, colors, positions);
+        colors = colors[..count];
+        positions = positions[..count];
+        for (int i = 0; i < count; i++)
         {
             colors[i] = BlendGlobalAlpha(Color.FromArgb(colors[i])).ToArgb();
         }
@@ -1900,10 +1909,10 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         return 0;
     }
 
-    private static void ReverseStops(uint[] colors, float[] positions)
+    private static void ReverseStops(Span<uint> colors, Span<float> positions)
     {
-        Array.Reverse(colors);
-        Array.Reverse(positions);
+        colors.Reverse();
+        positions.Reverse();
         for (int i = 0; i < positions.Length; i++)
             positions[i] = 1f - positions[i];
     }
@@ -1913,8 +1922,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var stops = brush.Stops;
         if (stops == null || stops.Count == 0) return;
 
-        var (colors, positions) = EnsureEndpointStops(stops);
-        for (int i = 0; i < colors.Length; i++)
+        // Max stops: original + 2 endpoints + 1 expansion entry
+        int maxStops = stops.Count + 3;
+        Span<uint> colors = maxStops <= 16 ? stackalloc uint[16] : new uint[maxStops];
+        Span<float> positions = maxStops <= 16 ? stackalloc float[16] : new float[maxStops];
+        int count = FillEndpointStops(stops, colors, positions);
+        colors = colors[..count];
+        positions = positions[..count];
+        for (int i = 0; i < count; i++)
         {
             colors[i] = BlendGlobalAlpha(Color.FromArgb(colors[i])).ToArgb();
         }
@@ -1954,18 +1969,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             double ry = radial.RadiusY * (brush.GradientUnits == GradientUnits.ObjectBoundingBox ? objectBounds.Height : 1.0) * _dpiScale;
             if (rx <= 0 || ry <= 0) return;
 
-            // PathGradientBrush is transparent outside its boundary ellipse.
-            // If the fill shape extends beyond the gradient ellipse, edge pixels get
-            // transparent brush values → no AA.  Compute the expansion factor needed
-            // so the boundary fully encloses the fill shape, then remap stops to
-            // preserve the gradient appearance within the original radius.
             double expansion = 1.0;
             if (fillBounds.Width > 0 && fillBounds.Height > 0)
             {
                 var (fL, fT) = ToDeviceCoords(fillBounds.X, fillBounds.Y);
                 var (fR, fB) = ToDeviceCoords(fillBounds.Right, fillBounds.Bottom);
                 double maxT = 0;
-                foreach (var (fx, fy) in new[] { (fL, fT), (fR, fT), (fR, fB), (fL, fB) })
+                ReadOnlySpan<(double fx, double fy)> corners =
+                    [(fL, fT), (fR, fT), (fR, fB), (fL, fB)];
+                foreach (var (fx, fy) in corners)
                 {
                     double dx = (fx - cx) / rx;
                     double dy = (fy - cy) / ry;
@@ -1973,7 +1985,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     if (t > maxT) maxT = t;
                 }
                 if (maxT > 1.0)
-                    expansion = Math.Sqrt(maxT) + 0.05; // small extra margin
+                    expansion = Math.Sqrt(maxT) + 0.05;
             }
 
             const float pad = 3f;
@@ -1995,29 +2007,37 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     GdiPlusInterop.GdipSetPathGradientCenterPoint(gradBrush, ref centerPt);
 
                     // GDI+ PathGradient preset blend: position 0 = boundary, 1 = center.
-                    var revColors = (uint[])colors.Clone();
-                    var revPositions = (float[])positions.Clone();
-                    ReverseStops(revColors, revPositions);
+                    // Reverse into separate span to avoid mutating original stops.
+                    Span<uint> revColors = count + 1 <= 16 ? stackalloc uint[16] : new uint[count + 1];
+                    Span<float> revPositions = count + 1 <= 16 ? stackalloc float[16] : new float[count + 1];
+                    colors.CopyTo(revColors);
+                    positions.CopyTo(revPositions);
+                    var revC = revColors[..count];
+                    var revP = revPositions[..count];
+                    ReverseStops(revC, revP);
 
                     // When expanded, remap stops so the gradient looks the same within
                     // the original radius; fill the expanded zone with the boundary color.
                     if (expansion > 1.0)
                     {
                         double totalF = expansion + pad / Math.Max(rx, 1.0);
-                        var newColors = new uint[revColors.Length + 1];
-                        var newPositions = new float[revPositions.Length + 1];
-                        newColors[0] = revColors[0]; // boundary color fills expanded zone
-                        newPositions[0] = 0f;
-                        for (int i = 0; i < revColors.Length; i++)
+                        // Shift existing entries right by 1 to insert boundary entry at [0]
+                        for (int i = count; i > 0; i--)
                         {
-                            newColors[i + 1] = revColors[i];
-                            newPositions[i + 1] = (float)(1.0 - (1.0 - revPositions[i]) / totalF);
+                            revColors[i] = revColors[i - 1];
+                            revPositions[i] = revPositions[i - 1];
                         }
-                        revColors = newColors;
-                        revPositions = newPositions;
+                        revColors[0] = revColors[1]; // boundary color fills expanded zone
+                        revPositions[0] = 0f;
+                        for (int i = 1; i <= count; i++)
+                        {
+                            revPositions[i] = (float)(1.0 - (1.0 - revPositions[i]) / totalF);
+                        }
+                        revC = revColors[..(count + 1)];
+                        revP = revPositions[..(count + 1)];
                     }
 
-                    GdiPlusInterop.SetPathGradientPresetBlend(gradBrush, revColors, revPositions);
+                    GdiPlusInterop.SetPathGradientPresetBlend(gradBrush, revC, revP);
                     GdiPlusInterop.GdipSetPathGradientWrapMode(gradBrush, wrapMode);
                     fillAction(gradBrush);
                 }
@@ -2055,30 +2075,50 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
+
     /// <summary>
-    /// Ensures the stop list has an entry at offset 0.0 (first) and 1.0 (last),
-    /// as required by GDI+ preset blend APIs.
-    /// Returns parallel color (ARGB uint) and position (float) arrays.
+    /// Fills <paramref name="colors"/> and <paramref name="positions"/> with sorted gradient stops,
+    /// inserting endpoint stops at 0.0 and 1.0 if missing. Returns the actual count used.
+    /// Caller must provide spans of at least <c>stops.Count + 2</c> elements.
     /// </summary>
-    private static (uint[] colors, float[] positions) EnsureEndpointStops(IReadOnlyList<GradientStop> stops)
+    private static int FillEndpointStops(IReadOnlyList<GradientStop> stops,
+        Span<uint> colors, Span<float> positions)
     {
-        var list = new List<GradientStop>(stops);
-        list.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+        // Copy and sort by offset using a small stackalloc buffer
+        int n = stops.Count;
+        Span<GradientStop> sorted = n <= 16
+            ? stackalloc GradientStop[16]
+            : new GradientStop[n];
+        sorted = sorted[..n];
+        for (int i = 0; i < n; i++) sorted[i] = stops[i];
+        sorted.Sort((a, b) => a.Offset.CompareTo(b.Offset));
 
-        if (list[0].Offset > 0.0)
-            list.Insert(0, new GradientStop(0.0, list[0].Color));
-        if (list[^1].Offset < 1.0)
-            list.Add(new GradientStop(1.0, list[^1].Color));
-
-        var colors = new uint[list.Count];
-        var positions = new float[list.Count];
-        for (int i = 0; i < list.Count; i++)
+        int idx = 0;
+        if (sorted[0].Offset > 0.0)
         {
-            var s = list[i];
-            colors[i] = (uint)(s.Color.A << 24 | s.Color.R << 16 | s.Color.G << 8 | s.Color.B);
-            positions[i] = (float)Math.Clamp(s.Offset, 0f, 1f);
+            var c = sorted[0].Color;
+            colors[idx] = (uint)(c.A << 24 | c.R << 16 | c.G << 8 | c.B);
+            positions[idx] = 0f;
+            idx++;
         }
-        return (colors, positions);
+
+        for (int i = 0; i < n; i++)
+        {
+            var s = sorted[i];
+            colors[idx] = (uint)(s.Color.A << 24 | s.Color.R << 16 | s.Color.G << 8 | s.Color.B);
+            positions[idx] = (float)Math.Clamp(s.Offset, 0f, 1f);
+            idx++;
+        }
+
+        if (sorted[n - 1].Offset < 1.0)
+        {
+            var c = sorted[n - 1].Color;
+            colors[idx] = (uint)(c.A << 24 | c.R << 16 | c.G << 8 | c.B);
+            positions[idx] = 1f;
+            idx++;
+        }
+
+        return idx;
     }
 
     private static Point ResolveGradientPoint(Point p, GradientUnits units, Rect objectBounds)

@@ -7,6 +7,9 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class Border : Control, IVisualTreeHost
 {
+    private PathGeometry? _cachedOuterPath;
+    private PathGeometry? _cachedBgPath;
+
     public static readonly MewProperty<Thickness> NonUniformBorderThicknessProperty =
         MewProperty<Thickness>.Register<Border>(nameof(NonUniformBorderThickness), default,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
@@ -146,16 +149,18 @@ public sealed class Border : Control, IVisualTreeHost
             // Border color extends under background — no seam at boundary.
             if (borderBrush.A > 0 && metrics.BorderThickness != Thickness.Zero)
             {
-                var outerPath = BorderGeometry.CreateOuterContour(in metrics);
-                if (!outerPath.IsEmpty)
-                    context.FillPath(outerPath, borderBrush);
+                _cachedOuterPath ??= new PathGeometry();
+                BorderGeometry.GenerateOuterContour(_cachedOuterPath, in metrics);
+                if (!_cachedOuterPath.IsEmpty)
+                    context.FillPath(_cachedOuterPath, borderBrush);
             }
 
             if (bg.A > 0)
             {
-                var bgPath = BorderGeometry.CreateBackgroundRegion(in metrics);
-                if (!bgPath.IsEmpty)
-                    context.FillPath(bgPath, bg);
+                _cachedBgPath ??= new PathGeometry();
+                BorderGeometry.GenerateBackgroundRegion(_cachedBgPath, in metrics);
+                if (!_cachedBgPath.IsEmpty)
+                    context.FillPath(_cachedBgPath, bg);
             }
         }
     }

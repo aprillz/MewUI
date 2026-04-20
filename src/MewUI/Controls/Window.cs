@@ -39,6 +39,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private const double DefaultHeight = 600;
 
     private IWindowBackend? _backend;
+    private WindowRenderTarget? _cachedRenderTarget;
+    private Action? _cachedInvalidateBackend;
+    private Action? _cachedLayoutAndRender;
 
     /// <summary>
     /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
@@ -1506,41 +1509,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     private static bool HasMeasureDirty(Element root)
-    {
-        bool dirty = false;
-        VisitVisualTree(root, e =>
-        {
-            if (dirty)
-            {
-                return;
-            }
-
-            if (e.IsMeasureDirty)
-            {
-                dirty = true;
-            }
-        });
-
-        return dirty;
-    }
+        => VisualTree.Find(root, static e => e.IsMeasureDirty) != null;
 
     private static bool IsLayoutDirty(Element root)
-    {
-        bool dirty = false;
-        VisitVisualTree(root, e =>
-        {
-            if (dirty)
-            {
-                return;
-            }
-
-            if (e.IsMeasureDirty || e.IsArrangeDirty)
-            {
-                dirty = true;
-            }
-        });
-        return dirty;
-    }
+        => VisualTree.Find(root, static e => e.IsMeasureDirty || e.IsArrangeDirty) != null;
 
     public void Invalidate() => RequestRender();
 
@@ -1584,11 +1556,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        (dispatcher as IDispatcherCore)?.PostMerged(_layoutMergeKey, () =>
+        _cachedLayoutAndRender ??= () =>
         {
             PerformLayout();
             RequestRender();
-        }, DispatcherPriority.Layout);
+        };
+        (dispatcher as IDispatcherCore)?.PostMerged(_layoutMergeKey, _cachedLayoutAndRender, DispatcherPriority.Layout);
     }
 
     internal void RequestRender()
@@ -1600,7 +1573,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        (dispatcher as IDispatcherCore)?.PostMerged(_renderMergeKey, InvalidateBackend, DispatcherPriority.Render);
+        _cachedInvalidateBackend ??= InvalidateBackend;
+        (dispatcher as IDispatcherCore)?.PostMerged(_renderMergeKey, _cachedInvalidateBackend, DispatcherPriority.Render);
     }
 
     internal bool SetFocusedElement(UIElement element) => FocusManager.SetFocus(element);
@@ -1779,7 +1753,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         ArgumentNullException.ThrowIfNull(surface);
         var clientSize = _clientSizeDip;
-        RenderFrameCore(new WindowRenderTarget(surface), clientSize);
+        var target = _cachedRenderTarget;
+        if (target == null || !target.Matches(surface))
+        {
+            target = new WindowRenderTarget(surface);
+            _cachedRenderTarget = target;
+        }
+
+        RenderFrameCore(target, clientSize);
 
     }
 

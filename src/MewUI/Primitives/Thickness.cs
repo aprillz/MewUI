@@ -128,4 +128,7 @@ public readonly struct Thickness : IEquatable<Thickness>
 
     public override int GetHashCode() =>
         HashCode.Combine(Left, Top, Right, Bottom);
+
+    public override string ToString() =>
+        $"Thickness({Left:0.##}, {Top:0.##}, {Right:0.##}, {Bottom:0.##})";
 }

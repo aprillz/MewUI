@@ -109,10 +109,11 @@ internal sealed class TextBoxView
             {
                 double ulY = lineTop + lineHeight;
                 int attrOffset = cs - compositionStart;
+                double compBaseX = drawX - prefixWidthStart;
                 DrawSegmentedCompositionUnderline(
-                    context, ulY, textColor,
+                    this, context, font, ulY, textColor,
                     compositionAttributes, attrOffset, ce - cs,
-                    i => drawX + GetAbsoluteX(cs + i, context, font) - prefixWidthStart);
+                    cs, compBaseX);
             }
         }
 
@@ -159,18 +160,21 @@ internal sealed class TextBoxView
 
     /// <summary>
     /// Draws composition underline with per-character attribute segmentation.
+    /// Uses view's GetAbsoluteX to compute positions without closure allocation.
     /// </summary>
     internal static void DrawSegmentedCompositionUnderline(
-        IGraphicsContext context, double y, Color color,
+        TextBoxView view, IGraphicsContext context, IFont font,
+        double y, Color color,
         CompositionAttr[]? attrs, int attrOffset, int count,
-        Func<int, double> getX)
+        int charStart, double baseX)
     {
         if (count <= 0) return;
 
         if (attrs == null || attrs.Length == 0)
         {
-            // No attribute data — default to dashed underline (Input).
-            DrawCompositionUnderline(context, getX(0), getX(count), y, color, CompositionAttr.Input);
+            double x0 = baseX + view.GetAbsoluteX(charStart, context, font);
+            double x1 = baseX + view.GetAbsoluteX(charStart + count, context, font);
+            DrawCompositionUnderline(context, x0, x1, y, color, CompositionAttr.Input);
             return;
         }
 
@@ -182,7 +186,45 @@ internal sealed class TextBoxView
             var a = i < count ? GetAttr(attrs, attrOffset + i) : (CompositionAttr)255;
             if (a != segAttr)
             {
-                DrawCompositionUnderline(context, getX(segStart), getX(i), y, color, segAttr);
+                double sx = baseX + view.GetAbsoluteX(charStart + segStart, context, font);
+                double ex = baseX + view.GetAbsoluteX(charStart + i, context, font);
+                DrawCompositionUnderline(context, sx, ex, y, color, segAttr);
+                segStart = i;
+                segAttr = a;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws composition underline using MultiLineTextView's cached line measurement.
+    /// Avoids closure allocation by taking the cache and offset parameters directly.
+    /// </summary>
+    internal static void DrawSegmentedCompositionUnderline(
+        MultiLineTextView.CachedLineMeasure cache, IGraphicsContext context, IFont font,
+        double y, Color color,
+        CompositionAttr[]? attrs, int attrOffset, int count,
+        int charStart, double baseX)
+    {
+        if (count <= 0) return;
+
+        if (attrs == null || attrs.Length == 0)
+        {
+            double x0 = baseX + MultiLineTextView.GetPrefixWidthCached(cache, charStart, context, font);
+            double x1 = baseX + MultiLineTextView.GetPrefixWidthCached(cache, charStart + count, context, font);
+            DrawCompositionUnderline(context, x0, x1, y, color, CompositionAttr.Input);
+            return;
+        }
+
+        int segStart = 0;
+        var segAttr = GetAttr(attrs, attrOffset);
+        for (int i = 1; i <= count; i++)
+        {
+            var a = i < count ? GetAttr(attrs, attrOffset + i) : (CompositionAttr)255;
+            if (a != segAttr)
+            {
+                double sx = baseX + MultiLineTextView.GetPrefixWidthCached(cache, charStart + segStart, context, font);
+                double ex = baseX + MultiLineTextView.GetPrefixWidthCached(cache, charStart + i, context, font);
+                DrawCompositionUnderline(context, sx, ex, y, color, segAttr);
                 segStart = i;
                 segAttr = a;
             }

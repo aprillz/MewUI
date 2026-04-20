@@ -13,6 +13,8 @@ internal sealed class FormattedTextStore
     private TextLayout? _renderLayout;
     private double _renderWidth;
     private double _renderHeight;
+    private double _measureConstraintWidth;
+    private double _measureConstraintHeight;
     private bool _dirty = true;
 
     public TextFormat? Format => _format;
@@ -49,8 +51,17 @@ internal sealed class FormattedTextStore
     public Size Measure(IGraphicsContext ctx, ReadOnlySpan<char> text, in TextLayoutConstraints constraints)
     {
         if (_format == null) return Size.Empty;
+
+        // Skip re-measurement if constraints haven't changed since last measure
+        if (!_dirty && _measuredSize != Size.Empty &&
+            _measureConstraintWidth == constraints.Bounds.Width &&
+            _measureConstraintHeight == constraints.Bounds.Height)
+            return _measuredSize;
+
         var layout = ctx.CreateTextLayout(text, _format, in constraints);
         _measuredSize = layout?.MeasuredSize ?? Size.Empty;
+        _measureConstraintWidth = constraints.Bounds.Width;
+        _measureConstraintHeight = constraints.Bounds.Height;
         return _measuredSize;
     }
 

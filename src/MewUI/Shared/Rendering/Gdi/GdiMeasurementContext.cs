@@ -26,6 +26,7 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase
         {
             User32.ReleaseDC(0, _hdc);
             _disposed = true;
+            base.Dispose();
         }
     }
 

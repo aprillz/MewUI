@@ -82,8 +82,13 @@ public abstract class RangeBase : Control
         value = Sanitize(value);
         double min = Math.Min(Minimum, Maximum);
         double max = Math.Max(Minimum, Maximum);
-        return Math.Clamp(value, min, max);
+        return OnCoerceValue(Math.Clamp(value, min, max));
     }
+
+    /// <summary>
+    /// Subclass hook for coercing values after sanitize+clamp (e.g. integer rounding).
+    /// </summary>
+    protected virtual double OnCoerceValue(double value) => value;
 
     /// <summary>
     /// Gets the value normalized to 0-1 range.

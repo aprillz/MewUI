@@ -18,7 +18,6 @@ public class WriteableBitmapControl : Control
     private IBitmapRenderTarget? _renderTarget;
     private IImage? _image;
     private bool _needsRender;
-    private int _lastVersion;
     private bool _isRendering;
 
     /// <summary>
@@ -53,12 +52,26 @@ public class WriteableBitmapControl : Control
     }
 
     /// <summary>
+    /// When false, skips creating a graphics context for <see cref="OnRenderBitmap"/>.
+    /// Set to false when only using <see cref="OnRenderPixels"/> for direct pixel manipulation.
+    /// </summary>
+    protected bool UseBitmapGraphicsContext { get; set; } = true;
+
+    /// <summary>
     /// Called when the bitmap needs to be redrawn using standard graphics operations.
     /// Override this method for drawing with IGraphicsContext (lines, rectangles, text, etc.).
     /// This is called after any direct pixel manipulation from OnBitmapSizeChanged.
     /// </summary>
     /// <param name="ctx">The graphics context for drawing operations.</param>
     protected virtual void OnRenderBitmap(IGraphicsContext ctx) { }
+
+    /// <summary>
+    /// Called after the graphics context is disposed (EndDraw complete) but before
+    /// the image is created from the pixel buffer.
+    /// Override this for direct pixel manipulation via <see cref="LockForWrite"/>
+    /// that must not conflict with the graphics context lifecycle (e.g. D2D BeginDraw/EndDraw).
+    /// </summary>
+    protected virtual void OnRenderPixels() { }
 
     /// <summary>
     /// Invalidates the bitmap content, causing a full redraw on next render.
@@ -103,7 +116,6 @@ public class WriteableBitmapControl : Control
                 var factory = GetGraphicsFactory();
                 _renderTarget = factory.CreateBitmapRenderTarget(pixelWidth, pixelHeight, scale);
                 _image = null;
-                _lastVersion = -1;
 
                 // Let derived class initialize the bitmap
                 OnBitmapSizeChanged(pixelWidth, pixelHeight);
@@ -118,10 +130,18 @@ public class WriteableBitmapControl : Control
             {
                 _needsRender = false;
 
-                using var renderCtx = GetGraphicsFactory().CreateContext(_renderTarget);
-                OnRenderBitmap(renderCtx);
+                // Vector graphics phase (context active — BeginDraw/EndDraw scope)
+                if (UseBitmapGraphicsContext)
+                {
+                    using var renderCtx = GetGraphicsFactory().CreateContext(_renderTarget);
+                    OnRenderBitmap(renderCtx);
+                }
+                // Context disposed: EndDraw complete — safe for direct pixel access
 
-                // Increment version after IGraphicsContext rendering
+                // Pixel manipulation phase (no context, LockForWrite safe)
+                OnRenderPixels();
+
+                // Increment version after all rendering
                 IncrementRenderTargetVersion();
             }
         }
@@ -130,14 +150,12 @@ public class WriteableBitmapControl : Control
             _isRendering = false;
         }
 
-        // Create or update IImage from render target (which implements IPixelBufferSource)
-        int currentVersion = _renderTarget.Version;
-        if (_image == null || _lastVersion != currentVersion)
+        // Create IImage once — it holds a reference to the render target (IPixelBufferSource)
+        // and updates internally via version tracking.
+        if (_image == null)
         {
-            _image?.Dispose();
             var factory = GetGraphicsFactory();
             _image = factory.CreateImageFromPixelSource(_renderTarget);
-            _lastVersion = currentVersion;
         }
 
         // Draw the bitmap to the screen

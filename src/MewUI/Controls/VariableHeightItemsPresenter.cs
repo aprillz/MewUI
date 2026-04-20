@@ -541,18 +541,56 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
     public void VisitRealized(Action<Element> visitor)
     {
-        foreach (var key in _realized.Keys.OrderBy(static k => k))
+        foreach (var key in GetSortedKeys())
         {
             visitor(_realized[key]);
         }
     }
 
+    public bool VisitRealized(Func<Element, bool> visitor)
+    {
+        if (_realized.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var key in GetSortedKeys())
+        {
+            if (!visitor(_realized[key]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public void VisitRealized(Action<int, FrameworkElement> visitor)
     {
-        foreach (var key in _realized.Keys.OrderBy(static k => k))
+        foreach (var key in GetSortedKeys())
         {
             visitor(key, _realized[key]);
         }
+    }
+
+    [ThreadStatic] private static List<int>? _sortedKeysBuffer;
+
+    private ReadOnlySpan<int> GetSortedKeys()
+    {
+        _sortedKeysBuffer ??= new List<int>();
+        _sortedKeysBuffer.Clear();
+
+        foreach (var key in _realized.Keys)
+        {
+            _sortedKeysBuffer.Add(key);
+        }
+
+        _sortedKeysBuffer.Sort();
+#if NET8_0_OR_GREATER
+        return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_sortedKeysBuffer);
+#else
+        return _sortedKeysBuffer.ToArray();
+#endif
     }
 
     public bool TryGetItemIndexAtY(double yContent, out int index)

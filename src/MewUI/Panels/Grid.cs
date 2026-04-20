@@ -359,6 +359,9 @@ public class Grid : Panel
     public static readonly MewProperty<bool> ShowGridLineProperty =
         MewProperty<bool>.Register<Grid>(nameof(ShowGridLine), false, MewPropertyOptions.AffectsRender);
 
+    public static readonly MewProperty<bool> ShareStarSizeProperty =
+        MewProperty<bool>.Register<Grid>(nameof(ShareStarSize), false, MewPropertyOptions.AffectsLayout);
+
     private readonly DefinitionCollection<RowDefinition> _rowDefinitions;
     private readonly DefinitionCollection<ColumnDefinition> _columnDefinitions;
     private readonly RowDefinition _implicitRow = new();
@@ -396,6 +399,18 @@ public class Grid : Panel
         set => SetValue(ShowGridLineProperty, value);
     }
 
+    /// <summary>
+    /// When true, all Star columns are sized to max(MeasureSize / weight) * weight,
+    /// and likewise for Star rows. The Grid's desired size grows to accommodate the
+    /// largest star content. (WPF SharedSizeGroup-like behavior, applied to all stars
+    /// on each axis regardless of Horizontal/VerticalAlignment.)
+    /// </summary>
+    public bool ShareStarSize
+    {
+        get => GetValue(ShareStarSizeProperty);
+        set => SetValue(ShareStarSizeProperty, value);
+    }
+
     protected override Size MeasureContent(Size availableSize)
     {
         var rows = GetEffectiveRows();
@@ -406,7 +421,15 @@ public class Grid : Panel
 
         MeasureByGroups(placements, rows, columns, paddedSize, spacing);
 
+        if (ShareStarSize)
+        {
+            EqualizeStarMeasureSizes(columns);
+            EqualizeStarMeasureSizes(rows);
+        }
+
         CommitActualSizes(columns, rows, useFinal: false);
+
+        CollectionPool<List<Placement>>.Return(placements);
 
         double totalWidth = SumMeasureSizes(columns, spacing);
         double totalHeight = SumMeasureSizes(rows, spacing);
@@ -440,6 +463,8 @@ public class Grid : Panel
             double height = GetRangeSize(rows, placement.Row, placement.RowSpan, spacing, useFinal: true);
             placement.Child.Arrange(new Rect(x, y, width, height));
         }
+
+        CollectionPool<List<Placement>>.Return(placements);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -507,11 +532,16 @@ public class Grid : Panel
 
     private List<Placement> BuildPlacements(int rowCount, int columnCount)
     {
-        var placements = new List<Placement>();
+        var placements = CollectionPool<List<Placement>>.Rent();
         var occupied = new bool[rowCount, columnCount];
 
-        foreach (var child in EnumerateVisibleChildren())
+        foreach (var child in ChildrenList)
         {
+            if (!IsVisibleChild(child))
+            {
+                continue;
+            }
+
             bool hasRow = HasRow(child);
             bool hasColumn = HasColumn(child);
             if (!hasRow || !hasColumn)
@@ -524,8 +554,13 @@ public class Grid : Panel
             MarkOccupied(occupied, placement);
         }
 
-        foreach (var child in EnumerateVisibleChildren())
+        foreach (var child in ChildrenList)
         {
+            if (!IsVisibleChild(child))
+            {
+                continue;
+            }
+
             bool hasRow = HasRow(child);
             bool hasColumn = HasColumn(child);
             if (hasRow && hasColumn)
@@ -704,7 +739,35 @@ public class Grid : Panel
     }
 
     private static double[] CaptureMeasureSizes<T>(IReadOnlyList<T> definitions) where T : GridDefinitionBase
-        => definitions.Select(definition => definition.MeasureSize).ToArray();
+    {
+        var sizes = new double[definitions.Count];
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            sizes[i] = definitions[i].MeasureSize;
+        }
+        return sizes;
+    }
+
+    private static void EqualizeStarMeasureSizes<T>(IReadOnlyList<T> definitions) where T : GridDefinitionBase
+    {
+        double sharedUnit = 0;
+        foreach (var def in definitions)
+        {
+            if (!def.UserSize.IsStar) continue;
+            double weight = Math.Max(0.0001, def.UserSize.Value);
+            double unit = def.MeasureSize / weight;
+            if (unit > sharedUnit) sharedUnit = unit;
+        }
+
+        if (sharedUnit <= 0) return;
+
+        foreach (var def in definitions)
+        {
+            if (!def.UserSize.IsStar) continue;
+            double weight = Math.Max(0.0001, def.UserSize.Value);
+            def.MeasureSize = ClampDefinitionSize(def, sharedUnit * weight);
+        }
+    }
 
     private static bool IsStable<T>(double[] before, IReadOnlyList<T> definitions) where T : GridDefinitionBase
     {
@@ -814,8 +877,14 @@ public class Grid : Panel
         for (int i = start; i < start + span; i++)
         {
             var unitType = GetMeasureUnitType(definitions[i], finiteConstraint);
-            if (unitType == GridUnitType.Auto) hasAuto = true;
-            else if (unitType == GridUnitType.Star) hasStar = true;
+            if (unitType == GridUnitType.Auto)
+            {
+                hasAuto = true;
+            }
+            else if (unitType == GridUnitType.Star)
+            {
+                hasStar = true;
+            }
         }
 
         if (hasAuto && !hasStar)
@@ -835,7 +904,11 @@ public class Grid : Panel
                         ? ClampDefinitionSize(definitions[i], definitions[i].UserMinSize)
                         : constraints[i];
                 }
-                if (span > 1) total += (span - 1) * spacing;
+                if (span > 1)
+                {
+                    total += (span - 1) * spacing;
+                }
+
                 return total;
             }
 
@@ -954,10 +1027,10 @@ public class Grid : Panel
             return;
         }
 
-        var preferredDefinitions = new List<T>();
-        var autoDefinitions = new List<T>();
-        var starDefinitions = new List<T>();
-        var otherDefinitions = new List<T>();
+        var preferredDefinitions = CollectionPool<List<T>>.Rent();
+        var autoDefinitions = CollectionPool<List<T>>.Rent();
+        var starDefinitions = CollectionPool<List<T>>.Rent();
+        var otherDefinitions = CollectionPool<List<T>>.Rent();
         for (int i = start; i < start + span; i++)
         {
             var definition = definitions[i];
@@ -979,30 +1052,37 @@ public class Grid : Panel
         if (preferredDefinitions.Count > 0)
         {
             DistributeExtra(preferredDefinitions, extra, useStarWeights: false);
-            return;
         }
-
-        if (starDefinitions.Count > 0)
+        else if (starDefinitions.Count > 0)
         {
             DistributeExtra(starDefinitions, extra, useStarWeights: true);
-            return;
         }
-
-        if (otherDefinitions.Count > 0)
+        else if (otherDefinitions.Count > 0)
         {
             DistributeExtra(otherDefinitions, extra, useStarWeights: false);
         }
+
+        CollectionPool<List<T>>.Return(preferredDefinitions);
+        CollectionPool<List<T>>.Return(autoDefinitions);
+        CollectionPool<List<T>>.Return(starDefinitions);
+        CollectionPool<List<T>>.Return(otherDefinitions);
     }
 
     private static void DistributeExtra<T>(IReadOnlyList<T> definitions, double extra, bool useStarWeights)
         where T : GridDefinitionBase
     {
         var remaining = extra;
-        var pending = new List<T>(definitions);
+        var pending = CollectionPool<List<T>>.Rent();
+        pending.AddRange(definitions);
 
         while (remaining > 0.01 && pending.Count > 0)
         {
-            double totalWeight = pending.Sum(def => GetDefinitionWeight(def, useStarWeights));
+            double totalWeight = 0;
+            for (int j = 0; j < pending.Count; j++)
+            {
+                totalWeight += GetDefinitionWeight(pending[j], useStarWeights);
+            }
+
             if (totalWeight <= 0)
             {
                 break;
@@ -1030,6 +1110,8 @@ public class Grid : Panel
 
             remaining -= applied;
         }
+
+        CollectionPool<List<T>>.Return(pending);
     }
 
     private static double[] CreateMeasureConstraints<T>(IReadOnlyList<T> definitions, double available, double spacing)
@@ -1037,7 +1119,7 @@ public class Grid : Panel
     {
         if (double.IsPositiveInfinity(available))
         {
-            return definitions.Select(def => def.MeasureSize).ToArray();
+            return CaptureMeasureSizes(definitions);
         }
 
         return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false);
@@ -1048,7 +1130,7 @@ public class Grid : Panel
     {
         if (double.IsPositiveInfinity(available))
         {
-            return definitions.Select(def => def.MeasureSize).ToArray();
+            return CaptureMeasureSizes(definitions);
         }
 
         return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false);
@@ -1065,7 +1147,7 @@ public class Grid : Panel
         double gaps = definitions.Count > 1 ? (definitions.Count - 1) * spacing : 0;
         double usable = Math.Max(0, available - gaps);
         double occupied = 0;
-        var starDefinitions = new List<T>();
+        var starDefinitions = CollectionPool<List<T>>.Rent();
 
         for (int i = 0; i < definitions.Count; i++)
         {
@@ -1084,6 +1166,7 @@ public class Grid : Panel
 
         if (starDefinitions.Count == 0)
         {
+            CollectionPool<List<T>>.Return(starDefinitions);
             return sizes;
         }
 
@@ -1096,12 +1179,18 @@ public class Grid : Panel
                     sizes[i] = definitions[i].MeasureSize;
                 }
             }
+            CollectionPool<List<T>>.Return(starDefinitions);
             return sizes;
         }
 
         double remaining = Math.Max(0, usable - occupied);
-        var unresolved = new List<T>(starDefinitions);
-        double remainingWeight = unresolved.Sum(def => Math.Max(0, def.UserSize.Value));
+        var unresolved = CollectionPool<List<T>>.Rent();
+        unresolved.AddRange(starDefinitions);
+        double remainingWeight = 0;
+        for (int i = 0; i < unresolved.Count; i++)
+        {
+            remainingWeight += Math.Max(0, unresolved[i].UserSize.Value);
+        }
 
         while (unresolved.Count > 0 && remainingWeight > 0)
         {
@@ -1138,6 +1227,9 @@ public class Grid : Panel
                 sizes[index] = ClampDefinitionSize(definition, proposed);
             }
         }
+
+        CollectionPool<List<T>>.Return(unresolved);
+        CollectionPool<List<T>>.Return(starDefinitions);
 
         return sizes;
     }
@@ -1232,18 +1324,8 @@ public class Grid : Panel
         return total;
     }
 
-    private IEnumerable<Element> EnumerateVisibleChildren()
-    {
-        foreach (var child in Children)
-        {
-            if (child is UIElement ui && !ui.IsVisible)
-            {
-                continue;
-            }
-
-            yield return child;
-        }
-    }
+    private static bool IsVisibleChild(Element child)
+        => child is not UIElement ui || ui.IsVisible;
 
     private static double GetDesiredSize(Element child, bool isColumn)
         => isColumn ? child.DesiredSize.Width : child.DesiredSize.Height;

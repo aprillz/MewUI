@@ -85,6 +85,22 @@ public abstract partial class UIElement : Element
             MewPropertyOptions.None);
 
     /// <summary>
+    /// Clears cached inherited property values when the parent changes,
+    /// so they will be re-resolved from the new parent chain.
+    /// Cascades to descendants because their parent chain also effectively changed
+    /// (they hang off this element) and their caches may be stale.
+    /// </summary>
+    protected override void OnParentChanged()
+    {
+        base.OnParentChanged();
+        VisualTree.Visit(this, static e =>
+        {
+            if (e is UIElement u && u.HasPropertyStore)
+                u.PropertyStore.ClearAllInherited();
+        });
+    }
+
+    /// <summary>
     /// Called when a MewProperty value changes. Handles layout/render invalidation
     /// and property-specific side effects.
     /// </summary>
@@ -159,9 +175,16 @@ public abstract partial class UIElement : Element
 
     private static void PropagateToDescendant(Element child, MewProperty property)
     {
-        // Stop propagation if child has its own value (local or style target)
-        if (child is UIElement u && u.HasPropertyStore && u.PropertyStore.HasOwnValue(property.Id))
-            return;
+        if (child is UIElement u && u.HasPropertyStore)
+        {
+            var source = u.PropertyStore.GetSource(property.Id);
+            // Stop propagation if child has its own value (local, trigger, or style)
+            if (source > ValueSource.Inherited)
+                return;
+            // Clear cached inherited value so it will be re-resolved on next access
+            if (source == ValueSource.Inherited)
+                u.PropertyStore.ClearInherited(property.Id);
+        }
 
         // Invalidate font cache on controls for font property changes
         if (child is Control control)

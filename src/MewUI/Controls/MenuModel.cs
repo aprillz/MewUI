@@ -16,11 +16,50 @@ public sealed class MenuSeparator : MenuEntry
 
 public sealed class MenuItem : MenuEntry
 {
+    private string _text = string.Empty;
+    private string? _cachedDisplayText;
+    private char _cachedAccessKey;
+    private int _cachedUnderlineIndex = -1;
+
     public MenuItem() { }
 
     public MenuItem(string text) => Text = text ?? string.Empty;
 
-    public string Text { get; set; } = string.Empty;
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            value ??= string.Empty;
+            if (_text == value) return;
+            _text = value;
+            _cachedDisplayText = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns cached access key parse results. Parsed once per Text change.
+    /// </summary>
+    internal (string displayText, char accessKey, int underlineIndex) GetParsedText()
+    {
+        if (_cachedDisplayText != null)
+            return (_cachedDisplayText, _cachedAccessKey, _cachedUnderlineIndex);
+
+        if (AccessKeyHelper.TryParse(_text, out var key, out var display))
+        {
+            _cachedAccessKey = key;
+            _cachedUnderlineIndex = AccessKeyHelper.GetUnderlineIndex(_text);
+        }
+        else
+        {
+            display = _text;
+            _cachedAccessKey = default;
+            _cachedUnderlineIndex = -1;
+        }
+
+        _cachedDisplayText = display;
+        return (_cachedDisplayText, _cachedAccessKey, _cachedUnderlineIndex);
+    }
 
     public bool IsEnabled { get; set; } = true;
 

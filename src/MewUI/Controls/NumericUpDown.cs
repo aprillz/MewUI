@@ -19,9 +19,17 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     public static readonly MewProperty<double> StepProperty =
         MewProperty<double>.Register<NumericUpDown>(nameof(Step), 1.0, MewPropertyOptions.None);
 
-    public static readonly MewProperty<bool> EditModeProperty =
-        MewProperty<bool>.Register<NumericUpDown>(nameof(EditMode), false, MewPropertyOptions.None,
-            static (self, _, _) => self.OnEditModeChanged());
+    public static readonly MewProperty<bool> IsIntegerProperty =
+        MewProperty<bool>.Register<NumericUpDown>(nameof(IsInteger), false,
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self.OnIsIntegerChanged());
+
+    private static readonly MewPropertyKey<bool> IsEditingPropertyKey =
+        MewProperty<bool>.RegisterReadOnly<NumericUpDown>(nameof(IsEditing), false,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.UpdateEditMode());
+
+    public static readonly MewProperty<bool> IsEditingProperty = IsEditingPropertyKey.Property;
 
     private void OnFormatChanged()
     {
@@ -29,9 +37,25 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         UpdateTextBoxFromValue();
     }
 
-    private void OnEditModeChanged() => UpdateEditMode();
+    private void OnIsIntegerChanged()
+    {
+        CoerceValue(ValueProperty);
+        _measureCache.Invalidate();
+        UpdateTextBoxFromValue();
+    }
+
+    protected override double OnCoerceValue(double value)
+        => IsInteger ? Math.Round(value, MidpointRounding.AwayFromZero) : value;
+
+    private double GetEffectiveStep()
+        => IsInteger
+            ? Math.Max(1, Math.Round(Step, MidpointRounding.AwayFromZero))
+            : Step;
 
     private TextMeasureCache _measureCache;
+    private string? _cachedDisplayText;
+    private double _cachedDisplayValue = double.NaN;
+    private string? _cachedDisplayFormat;
     private ButtonPart _hoverPart;
     private ButtonPart _pressedPart;
     private readonly TextBox _textBox;
@@ -78,10 +102,71 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     internal override void OnAccessKey() => Focus();
 
-    public bool EditMode
+    /// <summary>
+    /// True while the user (or programmatic call) is editing the value via the inline TextBox.
+    /// Use <see cref="BeginEdit"/>, <see cref="CommitEdit"/>, <see cref="CancelEdit"/> to control.
+    /// </summary>
+    public bool IsEditing => GetValue(IsEditingProperty);
+
+    private void SetIsEditing(bool value) => SetValue(IsEditingPropertyKey, value);
+
+    /// <summary>
+    /// Enters edit mode: shows the TextBox, focuses it and selects all text.
+    /// No-op if already editing or the control is disabled.
+    /// </summary>
+    public void BeginEdit()
     {
-        get => GetValue(EditModeProperty);
-        set => SetValue(EditModeProperty, value);
+        if (IsEditing || !IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        SetIsEditing(true);
+    }
+
+    /// <summary>
+    /// Parses the TextBox text into <see cref="RangeBase.Value"/> and exits edit mode.
+    /// If the text cannot be parsed, the displayed value is restored.
+    /// </summary>
+    public void CommitEdit()
+    {
+        if (!IsEditing)
+        {
+            return;
+        }
+
+        if (TryParseTextBox(out var parsed))
+        {
+            _suppressTextBoxUpdate = true;
+            try
+            {
+                Value = parsed;
+            }
+            finally
+            {
+                _suppressTextBoxUpdate = false;
+            }
+        }
+        else
+        {
+            UpdateTextBoxFromValue();
+        }
+
+        SetIsEditing(false);
+    }
+
+    /// <summary>
+    /// Exits edit mode without committing the TextBox text. The displayed value is restored.
+    /// </summary>
+    public void CancelEdit()
+    {
+        if (!IsEditing)
+        {
+            return;
+        }
+
+        UpdateTextBoxFromValue();
+        SetIsEditing(false);
     }
 
     public string Format
@@ -94,6 +179,16 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     {
         get => GetValue(StepProperty);
         set => SetValue(StepProperty, value);
+    }
+
+    /// <summary>
+    /// When true, <see cref="RangeBase.Value"/> is rounded to the nearest whole number
+    /// on every assignment and the effective step is at least 1. Default is false.
+    /// </summary>
+    public bool IsInteger
+    {
+        get => GetValue(IsIntegerProperty);
+        set => SetValue(IsIntegerProperty, value);
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -213,7 +308,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         var font = GetFont();
         var textColor = isEnabled ? Foreground : Theme.Palette.DisabledText;
-        if (!EditMode)
+        if (!IsEditing)
         {
             context.DrawText(GetDisplayText(), textRect, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
@@ -228,7 +323,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
-        if (EditMode)
+        if (IsEditing)
         {
             _textBox.Render(context);
         }
@@ -243,7 +338,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         }
 
 
-        double delta = e.Delta > 0 ? Step : -Step;
+        double step = GetEffectiveStep();
+        double delta = e.Delta > 0 ? step : -step;
         Value += delta;
         e.Handled = true;
         UpdateTextBoxFromValue();
@@ -258,7 +354,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return;
         }
 
-        if (!EditMode)
+        if (!IsEditing)
         {
             Focus();
         }
@@ -266,10 +362,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         var part = HitTestButtonPart(e.Position);
         if (part == ButtonPart.None)
         {
-            if (!EditMode)
-            {
-                EditMode = true;
-            }
+            BeginEdit();
+            e.Handled = true;
             return;
         }
 
@@ -322,7 +416,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         var releasedPart = HitTestButtonPart(e.Position);
         if (releasedPart == _pressedPart && IsEffectivelyEnabled)
         {
-            Value += _pressedPart == ButtonPart.Increment ? Step : -Step;
+            double step = GetEffectiveStep();
+            Value += _pressedPart == ButtonPart.Increment ? step : -step;
             UpdateTextBoxFromValue();
         }
 
@@ -339,21 +434,21 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return;
         }
 
-        if (EditMode)
+        if (IsEditing)
         {
             return;
         }
 
         if (e.Key == Key.Up)
         {
-            Value += Step;
+            Value += GetEffectiveStep();
             UpdateTextBoxFromValue();
             InvalidateVisual();
             e.Handled = true;
         }
         else if (e.Key == Key.Down)
         {
-            Value -= Step;
+            Value -= GetEffectiveStep();
             UpdateTextBoxFromValue();
             InvalidateVisual();
             e.Handled = true;
@@ -369,10 +464,9 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnLostFocus()
     {
         base.OnLostFocus();
-        if (!IsFocusWithin && EditMode)
+        if (!IsFocusWithin && IsEditing)
         {
             CommitEdit();
-            EditMode = false;
         }
         InvalidateVisual();
     }
@@ -384,7 +478,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return null;
         }
 
-        if (EditMode)
+        if (IsEditing)
         {
             var hit = _textBox.HitTest(point);
             if (hit != null)
@@ -424,49 +518,33 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     private string GetDisplayText()
     {
-        if (EditMode)
+        if (IsEditing)
         {
             var text = _textBox.Text;
             return string.IsNullOrEmpty(text) ? FormatValue(Value) : text;
         }
 
-        return FormatValue(Value);
+        var v = Value;
+        var fmt = Format;
+        if (_cachedDisplayText != null && _cachedDisplayValue == v && _cachedDisplayFormat == fmt)
+            return _cachedDisplayText;
+
+        _cachedDisplayText = FormatValue(v);
+        _cachedDisplayValue = v;
+        _cachedDisplayFormat = fmt;
+        return _cachedDisplayText;
     }
 
     private string FormatValue(double value) => value.ToString(Format);
 
-    private void CommitEdit()
-    {
-        if (!EditMode)
-        {
-            return;
-        }
-
-        if (TryParseTextBox(out var parsed))
-        {
-            _suppressTextBoxUpdate = true;
-            try
-            {
-                Value = parsed;
-            }
-            finally
-            {
-                _suppressTextBoxUpdate = false;
-            }
-        }
-        else
-        {
-            UpdateTextBoxFromValue();
-        }
-    }
-
     private void UpdateEditMode()
     {
-        _textBox.IsVisible = EditMode;
-        _textBox.IsHitTestVisible = EditMode;
+        bool editing = IsEditing;
+        _textBox.IsVisible = editing;
+        _textBox.IsHitTestVisible = editing;
         _textBox.IsEnabled = IsEffectivelyEnabled;
 
-        if (EditMode)
+        if (editing)
         {
             SyncTextBoxStyle();
             UpdateTextBoxFromValue();
@@ -497,7 +575,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     private void UpdateTextBoxFromValue()
     {
-        if (!EditMode || _suppressTextBoxUpdate)
+        if (!IsEditing || _suppressTextBoxUpdate)
         {
             return;
         }
@@ -533,7 +611,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     private void OnTextBoxTextChanged(string _)
     {
-        if (_suppressTextBoxUpdate || !EditMode)
+        if (_suppressTextBoxUpdate || !IsEditing)
         {
             return;
         }
@@ -558,7 +636,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     private void OnTextBoxKeyDown(KeyEventArgs e)
     {
-        if (!EditMode)
+        if (!IsEditing)
         {
             return;
         }
@@ -566,7 +644,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         if (e.Key == Key.Enter)
         {
             CommitEdit();
-            EditMode = false;
             Focus();
             e.Handled = true;
             return;
@@ -574,8 +651,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Escape)
         {
-            UpdateTextBoxFromValue();
-            EditMode = false;
+            CancelEdit();
             Focus();
             e.Handled = true;
             return;
@@ -583,7 +659,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Up)
         {
-            Value += Step;
+            Value += GetEffectiveStep();
             UpdateTextBoxFromValue();
             e.Handled = true;
             return;
@@ -591,7 +667,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Down)
         {
-            Value -= Step;
+            Value -= GetEffectiveStep();
             UpdateTextBoxFromValue();
             e.Handled = true;
         }
@@ -602,7 +678,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         if (!IsFocusWithin)
         {
             CommitEdit();
-            EditMode = false;
         }
     }
 
@@ -619,3 +694,4 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         base.OnDispose();
     }
 }
+

@@ -16,16 +16,40 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
 
     // FBO resources (created lazily when GL context is available)
     private uint _fbo;
+
     private uint _texture;
     private uint _stencilRenderbuffer;
     private bool _fboInitialized;
     private bool _hasStencil;
 
+    private byte[]? _lockBuffer;
+    private byte[]? _uploadBuffer;
+    private Action? _releaseAction;
+
+    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(dpiScale, 0);
+
+        PixelWidth = pixelWidth;
+        PixelHeight = pixelHeight;
+        DpiScale = dpiScale;
+
+        // Allocate CPU-side pixel buffer
+        _pixels = new byte[pixelWidth * pixelHeight * 4];
+    }
+
     public int PixelWidth { get; }
+
     public int PixelHeight { get; }
+
     public double DpiScale { get; }
+
     public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
+
     public int StrideBytes => PixelWidth * 4;
+
     public int Version => Volatile.Read(ref _version);
 
     /// <summary>
@@ -42,20 +66,128 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     /// Gets whether FBO resources have been initialized.
     /// </summary>
     internal bool IsFboInitialized => _fboInitialized;
+
     internal bool HasStencil => _hasStencil;
 
-    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale)
+    public byte[] CopyPixels()
     {
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(dpiScale, 0);
+        if (_disposed)
+        {
+            return Array.Empty<byte>();
+        }
 
-        PixelWidth = pixelWidth;
-        PixelHeight = pixelHeight;
-        DpiScale = dpiScale;
+        var copy = new byte[_pixels.Length];
+        Buffer.BlockCopy(_pixels, 0, copy, 0, _pixels.Length);
+        return copy;
+    }
 
-        // Allocate CPU-side pixel buffer
-        _pixels = new byte[pixelWidth * pixelHeight * 4];
+    public Span<byte> GetPixelSpan()
+    {
+        if (_disposed)
+        {
+            return Span<byte>.Empty;
+        }
+
+        return _pixels.AsSpan();
+    }
+
+    public void Clear(Color color)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        byte b = color.B;
+        byte g = color.G;
+        byte r = color.R;
+        byte a = color.A;
+
+        for (int i = 0; i < _pixels.Length; i += 4)
+        {
+            _pixels[i + 0] = b;
+            _pixels[i + 1] = g;
+            _pixels[i + 2] = r;
+            _pixels[i + 3] = a;
+        }
+
+        IncrementVersion();
+    }
+
+    public PixelBufferLock Lock()
+    {
+        Monitor.Enter(_gate);
+        if (_disposed)
+        {
+            Monitor.Exit(_gate);
+            throw new ObjectDisposedException(nameof(OpenGLBitmapRenderTarget));
+        }
+
+        int size = _pixels.Length;
+        if (_lockBuffer == null || _lockBuffer.Length != size)
+        {
+            _lockBuffer = new byte[size];
+        }
+
+        Buffer.BlockCopy(_pixels, 0, _lockBuffer, 0, size);
+
+        _releaseAction ??= () => Monitor.Exit(_gate);
+
+        return new PixelBufferLock(
+            _lockBuffer,
+            PixelWidth,
+            PixelHeight,
+            StrideBytes,
+            PixelFormat,
+            _version,
+            dirtyRegion: null,
+            release: _releaseAction);
+    }
+
+    /// <inheritdoc/>
+    public void IncrementVersion()
+    {
+        Interlocked.Increment(ref _version);
+    }
+
+    public unsafe void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // Note: FBO/texture cleanup requires a GL context to be current.
+        // If called without context (e.g., during GC), resources may leak.
+        // For proper cleanup, the factory should track and cleanup resources.
+        if (_fboInitialized)
+        {
+            if (_fbo != 0)
+            {
+                uint fbo = _fbo;
+                OpenGLExt.DeleteFramebuffers(1, &fbo);
+                _fbo = 0;
+            }
+
+            if (_stencilRenderbuffer != 0)
+            {
+                uint rb = _stencilRenderbuffer;
+                OpenGLExt.DeleteRenderbuffers(1, &rb);
+                _stencilRenderbuffer = 0;
+            }
+
+            if (_texture != 0)
+            {
+                uint tex = _texture;
+                GL.DeleteTextures(1, ref tex);
+                _texture = 0;
+            }
+
+            _hasStencil = false;
+            _fboInitialized = false;
+        }
     }
 
     /// <summary>
@@ -198,19 +330,29 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             return;
         }
 
-        // Create a temporary RGBA buffer (OpenGL expects RGBA, we store BGRA)
-        var rgba = ImagePixelUtils.ConvertBgraToRgba(_pixels);
+        // Convert BGRA→RGBA + flip vertically into cached upload buffer
+        int size = _pixels.Length;
+        if (_uploadBuffer == null || _uploadBuffer.Length != size)
+        {
+            _uploadBuffer = new byte[size];
+        }
 
-        // Flip vertically for OpenGL's bottom-left origin
         int stride = PixelWidth * 4;
-        var flipped = new byte[rgba.Length];
         for (int y = 0; y < PixelHeight; y++)
         {
-            Buffer.BlockCopy(rgba, (PixelHeight - 1 - y) * stride, flipped, y * stride, stride);
+            int srcOffset = y * stride;
+            int dstOffset = (PixelHeight - 1 - y) * stride;
+            for (int i = 0; i < stride; i += 4)
+            {
+                _uploadBuffer[dstOffset + i] = _pixels[srcOffset + i + 2];     // R
+                _uploadBuffer[dstOffset + i + 1] = _pixels[srcOffset + i + 1]; // G
+                _uploadBuffer[dstOffset + i + 2] = _pixels[srcOffset + i];     // B
+                _uploadBuffer[dstOffset + i + 3] = _pixels[srcOffset + i + 3]; // A
+            }
         }
 
         GL.BindTexture(GL.GL_TEXTURE_2D, _texture);
-        fixed (byte* p = flipped)
+        fixed (byte* p = _uploadBuffer)
         {
             GL.TexImage2D(GL.GL_TEXTURE_2D, 0, (int)GL.GL_RGBA, PixelWidth, PixelHeight, 0,
                 GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, (nint)p);
@@ -237,118 +379,4 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
 
     private void ConvertRgbaToBgra()
         => ImagePixelUtils.ConvertRgbaToBgraInPlace(_pixels);
-
-    public byte[] CopyPixels()
-    {
-        if (_disposed)
-        {
-            return Array.Empty<byte>();
-        }
-
-        var copy = new byte[_pixels.Length];
-        Buffer.BlockCopy(_pixels, 0, copy, 0, _pixels.Length);
-        return copy;
-    }
-
-    public Span<byte> GetPixelSpan()
-    {
-        if (_disposed)
-        {
-            return Span<byte>.Empty;
-        }
-
-        return _pixels.AsSpan();
-    }
-
-    public void Clear(Color color)
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        byte b = color.B;
-        byte g = color.G;
-        byte r = color.R;
-        byte a = color.A;
-
-        for (int i = 0; i < _pixels.Length; i += 4)
-        {
-            _pixels[i + 0] = b;
-            _pixels[i + 1] = g;
-            _pixels[i + 2] = r;
-            _pixels[i + 3] = a;
-        }
-
-        IncrementVersion();
-    }
-
-    public PixelBufferLock Lock()
-    {
-        Monitor.Enter(_gate);
-        if (_disposed)
-        {
-            Monitor.Exit(_gate);
-            throw new ObjectDisposedException(nameof(OpenGLBitmapRenderTarget));
-        }
-
-        var buffer = CopyPixels();
-        int v = _version;
-
-        return new PixelBufferLock(
-            buffer,
-            PixelWidth,
-            PixelHeight,
-            StrideBytes,
-            PixelFormat,
-            v,
-            dirtyRegion: null,
-            release: () => Monitor.Exit(_gate));
-    }
-
-    /// <inheritdoc/>
-    public void IncrementVersion()
-    {
-        Interlocked.Increment(ref _version);
-    }
-
-    public unsafe void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-
-        // Note: FBO/texture cleanup requires a GL context to be current.
-        // If called without context (e.g., during GC), resources may leak.
-        // For proper cleanup, the factory should track and cleanup resources.
-        if (_fboInitialized)
-        {
-            if (_fbo != 0)
-            {
-                uint fbo = _fbo;
-                OpenGLExt.DeleteFramebuffers(1, &fbo);
-                _fbo = 0;
-            }
-
-            if (_stencilRenderbuffer != 0)
-            {
-                uint rb = _stencilRenderbuffer;
-                OpenGLExt.DeleteRenderbuffers(1, &rb);
-                _stencilRenderbuffer = 0;
-            }
-
-            if (_texture != 0)
-            {
-                uint tex = _texture;
-                GL.DeleteTextures(1, ref tex);
-                _texture = 0;
-            }
-
-            _hasStencil = false;
-            _fboInitialized = false;
-        }
-    }
 }

@@ -145,24 +145,15 @@ public class CheckBox : ContentControl
 
         if (IsChecked == true)
         {
-            // Check mark
-            var p1 = new Point(boxRect.X + 3, boxRect.Y + boxRect.Height * 0.55);
-            var p2 = new Point(boxRect.X + boxRect.Width * 0.45, boxRect.Bottom - 4);
-            var p3 = new Point(boxRect.Right - 3, boxRect.Y + 3);
-
-            var g = new PathGeometry();
-            g.MoveTo(p1);
-            g.LineTo(p2);
-            g.LineTo(p3);
-            context.DrawPath(g, markColor, 2);
+            var center = new Point(boxRect.X + boxRect.Width / 2, boxRect.Y + boxRect.Height / 2);
+            double glyphSize = (BoxSize - 6) / 2;
+            Glyph.Draw(context, center, glyphSize, markColor, GlyphKind.CheckMark, 2);
         }
         else if (IsChecked == null)
         {
-            // Indeterminate mark (horizontal bar)
-            var y = boxRect.Y + boxRect.Height / 2;
-            var p1 = new Point(boxRect.X + 3, y);
-            var p2 = new Point(boxRect.Right - 3, y);
-            context.DrawLine(p1, p2, markColor, 2);
+            var center = new Point(boxRect.X + boxRect.Width / 2, boxRect.Y + boxRect.Height / 2);
+            double glyphSize = (BoxSize - 6) / 2;
+            Glyph.Draw(context, center, glyphSize, markColor, GlyphKind.IndeterminateMark, 2);
         }
     }
 

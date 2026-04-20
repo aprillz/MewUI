@@ -2803,14 +2803,12 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets edit mode.
+    /// Sets <see cref="NumericUpDown.IsInteger"/>: when true, values are rounded
+    /// to whole numbers and the effective Step is at least 1.
     /// </summary>
-    /// <param name="numericUpDown">Target numeric up-down.</param>
-    /// <param name="editMode">Edit mode state.</param>
-    /// <returns>The numeric up-down for chaining.</returns>
-    public static NumericUpDown EditMode(this NumericUpDown numericUpDown, bool editMode = true)
+    public static NumericUpDown IsInteger(this NumericUpDown numericUpDown, bool value = true)
     {
-        numericUpDown.EditMode = editMode;
+        numericUpDown.IsInteger = value;
         return numericUpDown;
     }
 
@@ -3384,6 +3382,46 @@ public static class ControlExtensions
 
         datePicker.SetBinding(DatePicker.SelectedDateProperty, source);
         return datePicker;
+    }
+
+    #endregion
+
+    #region ColorPicker
+
+    /// <summary>
+    /// Sets the selected color.
+    /// </summary>
+    public static ColorPicker SelectedColor(this ColorPicker colorPicker, Color color)
+    {
+        colorPicker.SelectedColor = color;
+        return colorPicker;
+    }
+
+    /// <summary>
+    /// Subscribes to the selected color changed event.
+    /// </summary>
+    public static ColorPicker OnSelectedColorChanged(this ColorPicker colorPicker, Action<Color> handler)
+    {
+        colorPicker.SelectedColorChanged += handler;
+        return colorPicker;
+    }
+
+    /// <summary>
+    /// Sets which sections are visible inside the popup.
+    /// </summary>
+    public static ColorPicker Kind(this ColorPicker colorPicker, ColorPickerKind kind)
+    {
+        colorPicker.Kind = kind;
+        return colorPicker;
+    }
+
+    /// <summary>
+    /// Toggles alpha-channel editing in the popup and the header preview.
+    /// </summary>
+    public static ColorPicker ShowAlpha(this ColorPicker colorPicker, bool showAlpha = true)
+    {
+        colorPicker.ShowAlpha = showAlpha;
+        return colorPicker;
     }
 
     #endregion

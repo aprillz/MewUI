@@ -293,4 +293,7 @@ public readonly struct Rect : IEquatable<Rect>
 
     public override int GetHashCode() =>
         HashCode.Combine(X, Y, Width, Height);
+
+    public override string ToString() =>
+        $"Rect({X:0.##}, {Y:0.##}, {Width:0.##}, {Height:0.##})";
 }

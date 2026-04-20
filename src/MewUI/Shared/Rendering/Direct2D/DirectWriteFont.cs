@@ -15,21 +15,28 @@ internal sealed unsafe class DirectWriteFont : FontBase
 
     // Cache raw metrics per (family, weight, italic, isPrivate) — size-independent.
     // Avoids repeated COM calls (FindFamilyName → GetFontFamily → GetFirstMatchingFont → GetMetrics).
-    private static readonly ConcurrentDictionary<(string family, FontWeight weight, bool italic, bool isPrivate), DWRITE_FONT_METRICS?> s_metricsCache = new();
+    private static readonly ConcurrentDictionary<(string family, FontWeight weight, bool italic, bool isPrivate), DWRITE_FONT_METRICS?> _metricsCache = new();
 
     public DirectWriteFont(string family, double size, FontWeight weight, bool italic,
         bool underline, bool strikethrough, nint dwriteFactory, nint privateFontCollection = 0)
         : base(family, size, weight, italic, underline, strikethrough)
     {
-        if (dwriteFactory == 0 || size <= 0) return;
+        if (dwriteFactory == 0 || size <= 0)
+        {
+            return;
+        }
+
         PrivateFontCollection = privateFontCollection;
 
         var cacheKey = (family, weight, italic, isPrivate: privateFontCollection != 0);
 
-        if (s_metricsCache.TryGetValue(cacheKey, out var cached))
+        if (_metricsCache.TryGetValue(cacheKey, out var cached))
         {
             if (cached.HasValue)
+            {
                 ApplyMetrics(cached.Value, size);
+            }
+
             return;
         }
 
@@ -38,7 +45,9 @@ internal sealed unsafe class DirectWriteFont : FontBase
         DWRITE_FONT_METRICS? metrics = null;
 
         if (privateFontCollection != 0)
+        {
             metrics = LoadMetricsFromCollection(factory, privateFontCollection, family, weight, italic);
+        }
 
         metrics ??= LoadMetricsFromCollection(factory, 0, family, weight, italic);
 
@@ -46,13 +55,17 @@ internal sealed unsafe class DirectWriteFont : FontBase
         {
             var resolved = FontRegistry.Resolve(family);
             if (resolved != null)
+            {
                 metrics = LoadMetricsFromFile(factory, resolved.Value.FilePath);
+            }
         }
 
-        s_metricsCache[cacheKey] = metrics;
+        _metricsCache[cacheKey] = metrics;
 
         if (metrics.HasValue)
+        {
             ApplyMetrics(metrics.Value, size);
+        }
     }
 
     private static DWRITE_FONT_METRICS? LoadMetricsFromCollection(IDWriteFactory* factory, nint fontCollection,
@@ -65,21 +78,34 @@ internal sealed unsafe class DirectWriteFont : FontBase
             if (collection == 0)
             {
                 int hr2 = DWriteVTable.GetSystemFontCollection(factory, out collection, checkForUpdates: false);
-                if (hr2 < 0 || collection == 0) return null;
+                if (hr2 < 0 || collection == 0)
+                {
+                    return null;
+                }
+
                 ownCollection = true;
             }
 
             int hr = DWriteVTable.FindFamilyName(collection, family, out uint familyIndex, out int exists);
-            if (hr < 0 || exists == 0) return null;
+            if (hr < 0 || exists == 0)
+            {
+                return null;
+            }
 
             hr = DWriteVTable.GetFontFamily(collection, familyIndex, out fontFamily);
-            if (hr < 0 || fontFamily == 0) return null;
+            if (hr < 0 || fontFamily == 0)
+            {
+                return null;
+            }
 
             var dwWeight = (DWRITE_FONT_WEIGHT)(uint)weight;
             var dwStyle = italic ? DWRITE_FONT_STYLE.ITALIC : DWRITE_FONT_STYLE.NORMAL;
             hr = DWriteVTable.GetFirstMatchingFont(fontFamily, dwWeight,
                 DWRITE_FONT_STRETCH.NORMAL, dwStyle, out dwriteFont);
-            if (hr < 0 || dwriteFont == 0) return null;
+            if (hr < 0 || dwriteFont == 0)
+            {
+                return null;
+            }
 
             DWriteVTable.GetFontMetrics(dwriteFont, out DWRITE_FONT_METRICS metrics);
             return metrics;
@@ -88,7 +114,10 @@ internal sealed unsafe class DirectWriteFont : FontBase
         {
             ComHelpers.Release(dwriteFont);
             ComHelpers.Release(fontFamily);
-            if (ownCollection) ComHelpers.Release(collection);
+            if (ownCollection)
+            {
+                ComHelpers.Release(collection);
+            }
         }
     }
 
@@ -98,7 +127,10 @@ internal sealed unsafe class DirectWriteFont : FontBase
         try
         {
             int hr = DWriteVTable.CreateFontFileReference(factory, filePath, out fontFile);
-            if (hr < 0 || fontFile == 0) return null;
+            if (hr < 0 || fontFile == 0)
+            {
+                return null;
+            }
 
             var faceType = filePath.EndsWith(".otf", StringComparison.OrdinalIgnoreCase)
                 ? DWRITE_FONT_FACE_TYPE.CFF
@@ -113,7 +145,10 @@ internal sealed unsafe class DirectWriteFont : FontBase
                     : DWRITE_FONT_FACE_TYPE.CFF;
                 hr = DWriteVTable.CreateFontFace(factory, faceType, fontFile, 0,
                     DWRITE_FONT_SIMULATIONS.NONE, out fontFace);
-                if (hr < 0 || fontFace == 0) return null;
+                if (hr < 0 || fontFace == 0)
+                {
+                    return null;
+                }
             }
 
             DWriteVTable.GetFontFaceMetrics(fontFace, out DWRITE_FONT_METRICS metrics);
@@ -128,7 +163,10 @@ internal sealed unsafe class DirectWriteFont : FontBase
 
     private void ApplyMetrics(DWRITE_FONT_METRICS metrics, double size)
     {
-        if (metrics.designUnitsPerEm == 0) return;
+        if (metrics.designUnitsPerEm == 0)
+        {
+            return;
+        }
 
         double scale = size / metrics.designUnitsPerEm;
         Ascent = metrics.ascent * scale;

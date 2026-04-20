@@ -190,7 +190,7 @@ internal sealed class PopupManager
         var entry = new PopupEntry { Owner = owner, Element = popup, Chrome = chrome, Bounds = bounds, StaysOpen = staysOpen };
         _popups.Add(entry);
         LayoutPopup(entry);
-        
+
         _window.Invalidate();
     }
 
@@ -263,10 +263,26 @@ internal sealed class PopupManager
                 CloseAllPopups();
                 break;
             case PopupCloseRequest.Trigger.Scroll:
-                // Close only context menus on scroll; dropdowns reposition themselves.
-                CloseTransientPopups(entry => entry.Element is not ContextMenu);
+            {
+                var src = request.Source;
+                CloseTransientPopups(src == null
+                    ? null
+                    : entry => IsAncestor(entry.Element, src));
                 break;
+            }
         }
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="possibleAncestor"/> appears in the visual parent chain of <paramref name="descendant"/>.
+    /// </summary>
+    private static bool IsAncestor(UIElement possibleAncestor, UIElement descendant)
+    {
+        for (var p = descendant.Parent as UIElement; p != null; p = p.Parent as UIElement)
+        {
+            if (ReferenceEquals(p, possibleAncestor)) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -553,6 +569,7 @@ internal sealed class PopupManager
         });
     }
 
+
     internal sealed class PopupEntry
     {
         public required UIElement Element { get; init; }
@@ -588,12 +605,13 @@ internal readonly struct PopupCloseRequest
         Scroll,
     }
 
-    private PopupCloseRequest(Trigger trigger, PopupCloseKind closeKind, UIElement? pointerLeaf, UIElement? newFocusedElement)
+    private PopupCloseRequest(Trigger trigger, PopupCloseKind closeKind, UIElement? pointerLeaf, UIElement? newFocusedElement, UIElement? source)
     {
         TriggerKind = trigger;
         CloseKind = closeKind;
         PointerLeaf = pointerLeaf;
         NewFocusedElement = newFocusedElement;
+        Source = source;
     }
 
     internal PopupCloseKind CloseKind { get; }
@@ -602,20 +620,22 @@ internal readonly struct PopupCloseRequest
 
     internal UIElement? NewFocusedElement { get; }
 
+    internal UIElement? Source { get; }
+
     internal Trigger TriggerKind { get; }
 
     public static PopupCloseRequest PointerDown(UIElement? pointerLeaf, PopupCloseKind closeKind = PopupCloseKind.Policy)
-        => new(Trigger.PointerDown, closeKind, pointerLeaf, newFocusedElement: null);
+        => new(Trigger.PointerDown, closeKind, pointerLeaf, newFocusedElement: null, source: null);
 
     public static PopupCloseRequest FocusChanged(UIElement? newFocusedElement, PopupCloseKind closeKind = PopupCloseKind.Policy)
-        => new(Trigger.FocusChanged, closeKind, pointerLeaf: null, newFocusedElement);
+        => new(Trigger.FocusChanged, closeKind, pointerLeaf: null, newFocusedElement, source: null);
 
     public static PopupCloseRequest Explicit(PopupCloseKind closeKind = PopupCloseKind.UserInitiated)
-        => new(Trigger.Explicit, closeKind, pointerLeaf: null, newFocusedElement: null);
+        => new(Trigger.Explicit, closeKind, pointerLeaf: null, newFocusedElement: null, source: null);
 
     public static PopupCloseRequest Lifecycle(PopupCloseKind closeKind = PopupCloseKind.Lifecycle)
-        => new(Trigger.Lifecycle, closeKind, pointerLeaf: null, newFocusedElement: null);
+        => new(Trigger.Lifecycle, closeKind, pointerLeaf: null, newFocusedElement: null, source: null);
 
-    public static PopupCloseRequest Scroll(PopupCloseKind closeKind = PopupCloseKind.Policy)
-        => new(Trigger.Scroll, closeKind, pointerLeaf: null, newFocusedElement: null);
+    public static PopupCloseRequest Scroll(UIElement? source = null, PopupCloseKind closeKind = PopupCloseKind.Policy)
+        => new(Trigger.Scroll, closeKind, pointerLeaf: null, newFocusedElement: null, source);
 }

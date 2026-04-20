@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// Provides shared infrastructure: ScrollViewer hosting, rebind flag, deferred scroll-into-view request,
 /// pending tab-focus helper, and default visual properties common to ListBox, GridView, and TreeView.
 /// </summary>
-public abstract class VirtualizedItemsBase : Control, IVisualTreeHost
+public abstract class VirtualizedItemsBase : Control, ISubtreeInvalidationHost
 {
     protected readonly ScrollViewer _scrollViewer;
 

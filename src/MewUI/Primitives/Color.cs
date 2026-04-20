@@ -179,4 +179,7 @@ public readonly partial struct Color : IEquatable<Color>
     public override bool Equals(object? obj) => obj is Color other && Equals(other);
 
     public override int GetHashCode() => _value.GetHashCode();
+
+    public override string ToString() =>
+        $"Color(A={A}, R={R}, G={G}, B={B})";
 }

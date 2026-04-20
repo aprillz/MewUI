@@ -109,7 +109,7 @@ public class Canvas : Panel
     protected override Size MeasureContent(Size availableSize)
     {
         // Canvas measures children with infinite space
-        foreach (var child in Children)
+        foreach (var child in ChildrenList)
         {
             child.Measure(Size.Infinity);
         }
@@ -120,7 +120,7 @@ public class Canvas : Panel
 
     protected override void ArrangeContent(Rect bounds)
     {
-        foreach (var child in Children)
+        foreach (var child in ChildrenList)
         {
             double x = bounds.X;
             double y = bounds.Y;

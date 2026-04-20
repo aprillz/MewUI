@@ -71,13 +71,47 @@ public abstract class MewObject : IPropertyOwner
     /// Override in subclasses that participate in a visual tree.
     /// </summary>
     protected virtual T ResolveInheritedValue<T>(MewProperty<T> property)
-        => property.GetDefaultForType(GetType());
+        => property.GetDefaultForType(PropertyStore.OwnerType);
 
     /// <summary>
     /// Sets the local (user-defined) value of a property.
     /// Highest priority in value resolution.
     /// </summary>
-    protected void SetValue<T>(MewProperty<T> property, T value) => PropertyStore.SetLocal(property, value);
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <paramref name="property"/> was registered via
+    /// <see cref="MewProperty{T}.RegisterReadOnly{TOwner}"/>. Use the
+    /// <see cref="SetValue{T}(MewPropertyKey{T}, T)"/> overload instead.
+    /// </exception>
+    protected void SetValue<T>(MewProperty<T> property, T value)
+    {
+        if (property.IsReadOnly)
+        {
+            throw new InvalidOperationException(
+                $"'{property.Name}' is a read-only property. " +
+                $"Use SetValue(MewPropertyKey<T>, T) with the registered key.");
+        }
+
+        PropertyStore.SetLocal(property, value);
+    }
+
+    /// <summary>
+    /// Sets the local value of a read-only property using its capability key.
+    /// </summary>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="key"/> does not match the property's registered key.</exception>
+    protected void SetValue<T>(MewPropertyKey<T> key, T value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var property = key.Property;
+        if (!ReferenceEquals(property.ReadOnlyKey, key))
+        {
+            throw new ArgumentException(
+                $"Key does not match the registered read-only key for '{property.Name}'.",
+                nameof(key));
+        }
+
+        PropertyStore.SetLocal(property, value);
+    }
 
     /// <summary>
     /// Re-evaluates the coerce callback for a property. Call when external state
@@ -99,6 +133,7 @@ public abstract class MewObject : IPropertyOwner
     {
         ArgumentNullException.ThrowIfNull(property);
         ArgumentNullException.ThrowIfNull(source);
+        ThrowIfReadOnly(property);
 
         // Dispose existing binding BEFORE creating the new one.
         // The new binding's constructor registers a callback by property.Id;
@@ -124,6 +159,7 @@ public abstract class MewObject : IPropertyOwner
         ArgumentNullException.ThrowIfNull(property);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(convert);
+        ThrowIfReadOnly(property);
 
         DisposeExistingBinding(property.Id);
 
@@ -136,6 +172,15 @@ public abstract class MewObject : IPropertyOwner
         var binding = new MewPropertyBinding<TProp, TSource>(
             this, property, source, convert, convertBack, resolvedMode);
         StorePropertyBinding(property.Id, binding);
+    }
+
+    private static void ThrowIfReadOnly(MewProperty property)
+    {
+        if (property.IsReadOnly)
+        {
+            throw new InvalidOperationException(
+                $"'{property.Name}' is a read-only property and cannot be bound externally.");
+        }
     }
 
     private void DisposeExistingBinding(int propertyId)
@@ -197,6 +242,7 @@ public abstract class MewObject : IPropertyOwner
         ArgumentNullException.ThrowIfNull(property);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(sourceProperty);
+        ThrowIfReadOnly(property);
 
         DisposeExistingBinding(property.Id);
 
@@ -220,6 +266,7 @@ public abstract class MewObject : IPropertyOwner
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(sourceProperty);
         ArgumentNullException.ThrowIfNull(convert);
+        ThrowIfReadOnly(property);
 
         DisposeExistingBinding(property.Id);
 

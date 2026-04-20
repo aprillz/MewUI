@@ -64,6 +64,17 @@ public sealed partial class MewVGGraphicsFactory
         handled = true;
     }
 
+    static partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, ref bool handled, ref IBitmapRenderTarget? renderTarget)
+    {
+        if (handled)
+        {
+            return;
+        }
+
+        renderTarget = new MewVGMetalBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
+        handled = true;
+    }
+
     partial void TryResolveWindowResources(nint windowHandle, ref bool handled, ref IDisposable? resources)
     {
         if (handled)

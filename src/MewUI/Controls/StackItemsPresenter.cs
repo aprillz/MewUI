@@ -177,6 +177,19 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         }
     }
 
+    public bool VisitRealized(Func<Element, bool> visitor)
+    {
+        for (int i = 0; i < _containers.Count; i++)
+        {
+            if (!visitor(_containers[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public void VisitRealized(Action<int, FrameworkElement> visitor)
     {
         for (int i = 0; i < _containers.Count; i++)

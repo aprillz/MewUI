@@ -55,24 +55,25 @@ internal sealed class MewVGImage : IImage
         if (_sourceVersion != version)
         {
             _sourceVersion = version;
-            _rgbaCache = null;
             _rgbaCacheVersion = -1;
             // Drop cached images for all flags on version change.
             if (_images.Count != 0)
             {
-                var keys = _images.Keys.ToArray();
-                for (int i = 0; i < keys.Length; i++)
+                while (true)
                 {
-                    var key = keys[i];
-                    if (ReferenceEquals(key.Vg, vg))
+                    bool found = false;
+                    foreach (var pair in _images)
                     {
-                        int cachedId = _images[key].ImageId;
-                        if (cachedId != 0)
+                        if (ReferenceEquals(pair.Key.Vg, vg))
                         {
-                            vg.DeleteImage(cachedId);
+                            if (pair.Value.ImageId != 0)
+                                vg.DeleteImage(pair.Value.ImageId);
+                            _images.Remove(pair.Key);
+                            found = true;
+                            break;
                         }
-                        _images.Remove(key);
                     }
+                    if (!found) break;
                 }
             }
         }
@@ -108,7 +109,9 @@ internal sealed class MewVGImage : IImage
 
         using var l = _source.Lock();
         byte[] bgra = l.Buffer;
-        _rgbaCache = ImagePixelUtils.ConvertBgraToRgba(bgra);
+        if (_rgbaCache == null || _rgbaCache.Length != bgra.Length)
+            _rgbaCache = new byte[bgra.Length];
+        ImagePixelUtils.ConvertBgraToRgba(bgra, _rgbaCache);
         _rgbaCacheVersion = version;
         return _rgbaCache;
     }

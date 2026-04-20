@@ -37,7 +37,7 @@ public class StackPanel : Panel
         var paddedSize = availableSize.Deflate(Padding);
         bool hasPrevious = false;
 
-        foreach (var child in Children)
+        foreach (var child in ChildrenList)
         {
             if (child is UIElement ui && !ui.IsVisible)
             {
@@ -81,7 +81,7 @@ public class StackPanel : Panel
         double offset = 0;
         bool hasPrevious = false;
 
-        foreach (var child in Children)
+        foreach (var child in ChildrenList)
         {
             if (child is UIElement ui && !ui.IsVisible)
             {

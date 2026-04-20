@@ -2,30 +2,21 @@ namespace Aprillz.MewUI.Rendering;
 
 internal static class ImagePixelUtils
 {
-    public static byte[] ConvertBgraToRgba(byte[] bgra)
+    public static void ConvertBgraToRgba(byte[] source, byte[] destination)
     {
-        var rgba = new byte[bgra.Length];
-        for (int i = 0; i < bgra.Length; i += 4)
+        for (int i = 0; i < source.Length; i += 4)
         {
-            rgba[i] = bgra[i + 2];
-            rgba[i + 1] = bgra[i + 1];
-            rgba[i + 2] = bgra[i];
-            rgba[i + 3] = bgra[i + 3];
+            destination[i] = source[i + 2];
+            destination[i + 1] = source[i + 1];
+            destination[i + 2] = source[i];
+            destination[i + 3] = source[i + 3];
         }
-        return rgba;
     }
 
-    public static byte[] ConvertRgbaToBgra(byte[] rgba)
+    public static void ConvertRgbaToBgra(byte[] source, byte[] destination)
     {
-        var bgra = new byte[rgba.Length];
-        for (int i = 0; i < rgba.Length; i += 4)
-        {
-            bgra[i] = rgba[i + 2];
-            bgra[i + 1] = rgba[i + 1];
-            bgra[i + 2] = rgba[i];
-            bgra[i + 3] = rgba[i + 3];
-        }
-        return bgra;
+        // Same byte swap as BgraToRgba
+        ConvertBgraToRgba(source, destination);
     }
 
     public static void ConvertRgbaToBgraInPlace(Span<byte> rgba)

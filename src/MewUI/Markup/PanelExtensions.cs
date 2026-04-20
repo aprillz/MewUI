@@ -230,6 +230,12 @@ public static class PanelExtensions
         return grid;
     }
 
+    public static Grid ShareStarSize(this Grid grid, bool shareStarSize = true)
+    {
+        grid.ShareStarSize = shareStarSize;
+        return grid;
+    }
+
     private static IEnumerable<GridLength> ParseGridLengths(string definition)
     {
         var parts = definition.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

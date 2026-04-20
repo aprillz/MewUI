@@ -73,6 +73,9 @@ public abstract class Control : FrameworkElement
     private string? _styleName;
     private Dictionary<string, UIElement>? _parts;
 
+    private PathGeometry? _sharedOuterPath;
+    private PathGeometry? _sharedInnerPath;
+
     /// <summary>
     /// Gets or sets the tooltip element for this control.
     /// Use the <c>ToolTip(string)</c> extension method for simple text tooltips.
@@ -177,7 +180,6 @@ public abstract class Control : FrameworkElement
         get => GetValue(FontWeightProperty);
         set => SetValue(FontWeightProperty, value);
     }
-
 
     #region VisualState System
 
@@ -404,7 +406,7 @@ public abstract class Control : FrameworkElement
         return Application.IsRunning ? Application.Current.StyleSheet?.Get(name) : null;
     }
 
-    protected sealed override void ResolveVisualState()
+    protected override sealed void ResolveVisualState()
     {
         var newState = ComputeVisualState();
         var oldState = _visualState;
@@ -470,6 +472,7 @@ public abstract class Control : FrameworkElement
     // Tracks which property IDs were set by triggers in the previous state.
     // Reused across calls to avoid allocation.
     private HashSet<int>? _activeTriggerPropertyIds;
+
     private HashSet<int>? _newTriggerPropertyIds;
 
     private static void CollectTriggerProperties(Style? style, VisualStateFlags flags, HashSet<int> result)
@@ -845,16 +848,16 @@ public abstract class Control : FrameworkElement
         bounds = LayoutRounding.SnapBoundsRectToPixels(bounds, dpiScale);
 
         var bt = new Thickness(
-            borderThickness.Left   <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Left,   dpiScale, 1),
-            borderThickness.Top    <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Top,    dpiScale, 1),
-            borderThickness.Right  <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Right,  dpiScale, 1),
+            borderThickness.Left <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Left, dpiScale, 1),
+            borderThickness.Top <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Top, dpiScale, 1),
+            borderThickness.Right <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Right, dpiScale, 1),
             borderThickness.Bottom <= 0 ? 0 : LayoutRounding.SnapThicknessToPixels(borderThickness.Bottom, dpiScale, 1));
 
         var cr = new CornerRadius(
-            cornerRadius.TopLeft     <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.TopLeft,     dpiScale),
-            cornerRadius.TopRight    <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.TopRight,    dpiScale),
+            cornerRadius.TopLeft <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.TopLeft, dpiScale),
+            cornerRadius.TopRight <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.TopRight, dpiScale),
             cornerRadius.BottomRight <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.BottomRight, dpiScale),
-            cornerRadius.BottomLeft  <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.BottomLeft,  dpiScale));
+            cornerRadius.BottomLeft <= 0 ? 0 : LayoutRounding.RoundToPixel(cornerRadius.BottomLeft, dpiScale));
 
         cr = BorderGeometry.ClampRadii(bounds, cr);
 
@@ -963,7 +966,7 @@ public abstract class Control : FrameworkElement
         }
     }
 
-    private static void DrawBackgroundAndBorderComplex(
+    private void DrawBackgroundAndBorderComplex(
         IGraphicsContext context,
         in BorderRenderMetrics metrics,
         Color background,
@@ -973,19 +976,20 @@ public abstract class Control : FrameworkElement
         // Background then overwrites the inner area — no seam at the boundary.
         if (borderBrush.A > 0 && metrics.UniformThickness > 0)
         {
-            var outerPath = BorderGeometry.CreateOuterContour(in metrics);
+            var outerPath = _sharedOuterPath ??= new PathGeometry();
+            BorderGeometry.GenerateOuterContour(outerPath, in metrics);
             if (!outerPath.IsEmpty)
                 context.FillPath(outerPath, borderBrush);
         }
 
         if (background.A > 0)
         {
-            var innerPath = BorderGeometry.CreateBackgroundRegion(in metrics);
+            var innerPath = _sharedInnerPath ??= new PathGeometry();
+            BorderGeometry.GenerateBackgroundRegion(innerPath, in metrics);
             if (!innerPath.IsEmpty)
                 context.FillPath(innerPath, background);
         }
     }
-
 
     protected override void OnMouseEnter()
     {
@@ -1177,5 +1181,4 @@ public abstract class Control : FrameworkElement
 
         public static bool operator !=(VisualState a, VisualState b) => !a.Equals(b);
     }
-
 }

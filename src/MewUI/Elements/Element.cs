@@ -141,6 +141,16 @@ public abstract class Element : MewObject
             return;
         }
 
+        // Pre-clear the dirty flag BEFORE MeasureCore so that invalidations originating inside
+        // MeasureCore (e.g. a descendant dirties itself, then Parent.InvalidateMeasure walks up
+        // to us) can propagate through this element to our parent. If we cleared AFTER, the
+        // child's early-return check (`if (IsMeasureDirty) return;`) would see us still dirty
+        // and abort — breaking the upward chain above us and leaving the root clean, which
+        // makes the next Measure pass short-circuit at the root.
+        IsMeasureDirty = false;
+        _lastMeasureConstraint = availableSize;
+        _hasMeasureConstraint = true;
+
         var measured = MeasureCore(availableSize);
 
         var clamped = new Size(
@@ -152,9 +162,6 @@ public abstract class Element : MewObject
                 : Math.Min(measured.Height, availableSize.Height));
 
         DesiredSize = ApplyLayoutRounding(clamped);
-        IsMeasureDirty = false;
-        _lastMeasureConstraint = availableSize;
-        _hasMeasureConstraint = true;
     }
 
     /// <summary>
@@ -174,9 +181,15 @@ public abstract class Element : MewObject
             return;
         }
 
+        // Pre-clear the dirty flag BEFORE ArrangeCore. See Measure() for the rationale —
+        // an invalidation triggered from inside ArrangeCore (e.g. TabControl restoring a
+        // pending scroll offset right after arranging its ScrollViewer) must be able to
+        // walk up past this element to the root. If this flag were still true, the
+        // InvalidateArrange early-return on the parent would abort, leaving the root's
+        // Arrange chain clean and skipping the re-arrange on the next layout pass.
+        IsArrangeDirty = false;
         Bounds = arrangedRect;
         ArrangeCore(arrangedRect);
-        IsArrangeDirty = false;
     }
 
     /// <summary>
@@ -187,22 +200,76 @@ public abstract class Element : MewObject
     /// <summary>
     /// Invalidates the Measure pass, causing a re-measure on next layout.
     /// </summary>
+    /// <remarks>
+    /// Idempotent per dirty cycle: if already dirty, returns immediately (Measure will reset the
+    /// flag). This bounds both the upward propagation and the optional subtree cascade to a single
+    /// visit per node per cycle.
+    /// For hosts that implement <see cref="ISubtreeInvalidationHost"/>, the dirty flag also
+    /// cascades into the visual subtree so private composition (e.g. ScrollViewer/presenter) does
+    /// not get skipped by <see cref="Measure"/>'s same-constraint short-circuit.
+    /// </remarks>
     public virtual void InvalidateMeasure()
     {
+        if (IsMeasureDirty) return;
         IsMeasureDirty = true;
         IsArrangeDirty = true;
         Parent?.InvalidateMeasure();
+
+        // The marker gates the *entry* of a cascade. Once started, the subtree is descended
+        // unconditionally via the helper — otherwise a non-marker intermediate like ScrollViewer
+        // would halt the cascade before it reaches the presenter that needs to re-measure.
+        if (this is ISubtreeInvalidationHost)
+        {
+            CascadeMeasureInvalidationToSubtree();
+        }
+
         InvalidateVisual();
+    }
+
+    private void CascadeMeasureInvalidationToSubtree()
+    {
+        if (this is not IVisualTreeHost host) return;
+        host.VisitChildren(static child =>
+        {
+            if (child.IsMeasureDirty) return true; // idempotent
+            child.IsMeasureDirty = true;
+            child.IsArrangeDirty = true;
+            child.CascadeMeasureInvalidationToSubtree();
+            return true;
+        });
     }
 
     /// <summary>
     /// Invalidates the Arrange pass, causing a re-arrange on next layout.
     /// </summary>
+    /// <remarks>
+    /// Idempotent per dirty cycle; cascades into <see cref="ISubtreeInvalidationHost"/> subtrees
+    /// so private composition re-arranges instead of short-circuiting on unchanged bounds.
+    /// </remarks>
     public virtual void InvalidateArrange()
     {
+        if (IsArrangeDirty) return;
         IsArrangeDirty = true;
         Parent?.InvalidateArrange();
+
+        if (this is ISubtreeInvalidationHost)
+        {
+            CascadeArrangeInvalidationToSubtree();
+        }
+
         InvalidateVisual();
+    }
+
+    private void CascadeArrangeInvalidationToSubtree()
+    {
+        if (this is not IVisualTreeHost host) return;
+        host.VisitChildren(static child =>
+        {
+            if (child.IsArrangeDirty) return true;
+            child.IsArrangeDirty = true;
+            child.CascadeArrangeInvalidationToSubtree();
+            return true;
+        });
     }
 
     /// <summary>
@@ -435,10 +502,14 @@ public abstract class Element : MewObject
         for (var p = Parent; p != null; p = p.Parent)
         {
             if (p.HasPropertyStore && p.PropertyStore.HasOwnValue(property.Id))
-                return p.PropertyStore.GetValue(property);
+            {
+                var value = p.PropertyStore.GetValue(property);
+                PropertyStore.SetInherited(property, value);
+                return value;
+            }
         }
 
-        return property.GetDefaultForType(GetType());
+        return property.GetDefaultForType(PropertyStore.OwnerType);
     }
 
     private Size ApplyLayoutRounding(Size size)

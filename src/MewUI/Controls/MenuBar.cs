@@ -89,19 +89,17 @@ public sealed class MenuBar : Control, IPopupOwner
         for (int i = 0; i < _items.Count; i++)
         {
             var item = _items[i];
-            if (AccessKeyHelper.TryParse(item.Text ?? string.Empty, out var key, out _))
+            var parsed = item.GetParsedText();
+            if (parsed.accessKey != default)
             {
                 int index = i; // capture for closure
-                window.AccessKeyManager.Register(key, this, () => OpenMenu(index));
+                window.AccessKeyManager.Register(parsed.accessKey, this, () => OpenMenu(index));
             }
         }
     }
 
     private static string GetDisplayText(MenuItem item)
-    {
-        var raw = item.Text ?? string.Empty;
-        return AccessKeyHelper.TryParse(raw, out _, out var display) ? display : raw;
-    }
+        => item.GetParsedText().displayText;
 
     private void RegisterMenuItemBindings(Window window, MenuItem item)
     {
@@ -389,7 +387,8 @@ public sealed class MenuBar : Control, IPopupOwner
             var fg = item.IsEnabled ? Foreground : Theme.Palette.DisabledText;
             var textRect = row.Deflate(new Thickness(ItemHorizontalPadding, 0, ItemHorizontalPadding, 0));
             var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
-            AccessKeyRenderer.DrawText(context, item.Text ?? string.Empty, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
+            var parsed = item.GetParsedText();
+            AccessKeyRenderer.DrawParsed(context, parsed.displayText, parsed.underlineIndex, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
         }
 
         if (DrawBottomSeparator)

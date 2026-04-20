@@ -17,19 +17,8 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
     private int _version;
     private bool _disposed;
 
-    public int PixelWidth { get; }
-    public int PixelHeight { get; }
-    public double DpiScale { get; }
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
-    public int StrideBytes => PixelWidth * 4;
-    public int Version => Volatile.Read(ref _version);
-
-    /// <summary>
-    /// Gets the memory device context for DC render target binding.
-    /// </summary>
-    internal nint Hdc { get; }
-
-    nint IWin32HdcSource.Hdc => Hdc;
+    private byte[]? _lockBuffer;
+    private Action? _releaseAction;
 
     public Direct2DBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale)
     {
@@ -64,6 +53,19 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
         _oldBitmap = Gdi32.SelectObject(Hdc, _dibSection);
     }
 
+    public int PixelWidth { get; }
+    public int PixelHeight { get; }
+    public double DpiScale { get; }
+    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
+    public int StrideBytes => PixelWidth * 4;
+    public int Version => Volatile.Read(ref _version);
+
+    nint IWin32HdcSource.Hdc => Hdc;
+
+    /// <summary>
+    /// Gets the memory device context for DC render target binding.
+    /// </summary>
+    internal nint Hdc { get; }
     public byte[] CopyPixels()
     {
         if (_disposed || _dibBits == 0)
@@ -122,7 +124,6 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
 
         IncrementVersion();
     }
-
     public PixelBufferLock Lock()
     {
         Monitor.Enter(_gate);
@@ -132,19 +133,31 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
             throw new ObjectDisposedException(nameof(Direct2DBitmapRenderTarget));
         }
 
-        // Copy from unmanaged DIB bits to managed array
-        var buffer = CopyPixels();
-        int v = _version;
+        int size = PixelWidth * PixelHeight * 4;
+        if (_lockBuffer == null || _lockBuffer.Length != size)
+        {
+            _lockBuffer = new byte[size];
+        }
+
+        unsafe
+        {
+            fixed (byte* dest = _lockBuffer)
+            {
+                Buffer.MemoryCopy((void*)_dibBits, dest, size, size);
+            }
+        }
+
+        _releaseAction ??= () => Monitor.Exit(_gate);
 
         return new PixelBufferLock(
-            buffer,
+            _lockBuffer,
             PixelWidth,
             PixelHeight,
             StrideBytes,
             PixelFormat,
-            v,
+            _version,
             dirtyRegion: null,
-            release: () => Monitor.Exit(_gate));
+            release: _releaseAction);
     }
 
     /// <inheritdoc/>

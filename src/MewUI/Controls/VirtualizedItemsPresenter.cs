@@ -88,7 +88,7 @@ internal sealed class VirtualizedItemsPresenter
             return;
         }
 
-        foreach (var key in _realized.Keys.OrderBy(static k => k))
+        foreach (var key in GetSortedKeys())
         {
             visitor(_realized[key]);
         }
@@ -101,10 +101,51 @@ internal sealed class VirtualizedItemsPresenter
             return;
         }
 
-        foreach (var key in _realized.Keys.OrderBy(static k => k))
+        foreach (var key in GetSortedKeys())
         {
             visitor(key, _realized[key]);
         }
+    }
+
+    /// <summary>
+    /// Visits realized containers with short-circuit support. Returns false if the visitor stopped early.
+    /// </summary>
+    public bool VisitRealized(Func<Element, bool> visitor)
+    {
+        if (_realized.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var key in GetSortedKeys())
+        {
+            if (!visitor(_realized[key]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    [ThreadStatic] private static List<int>? _sortedKeysBuffer;
+
+    private ReadOnlySpan<int> GetSortedKeys()
+    {
+        _sortedKeysBuffer ??= new List<int>();
+        _sortedKeysBuffer.Clear();
+
+        foreach (var key in _realized.Keys)
+        {
+            _sortedKeysBuffer.Add(key);
+        }
+
+        _sortedKeysBuffer.Sort();
+#if NET8_0_OR_GREATER
+        return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_sortedKeysBuffer);
+#else
+        return _sortedKeysBuffer.ToArray();
+#endif
     }
 
     /// <summary>

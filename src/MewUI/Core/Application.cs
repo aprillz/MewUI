@@ -11,6 +11,7 @@ public sealed class Application
     private static Application? _current;
     private static readonly object _syncLock = new();
     private static IGraphicsFactory? _defaultGraphicsFactoryOverride;
+    private static IGraphicsFactory? _resolvedGraphicsFactory;
     private static string? _defaultGraphicsFactoryId;
     private static readonly Dictionary<string, Func<IGraphicsFactory>> _graphicsFactoriesById = new(StringComparer.OrdinalIgnoreCase);
     private static string? _defaultPlatformHostId;
@@ -206,6 +207,7 @@ public sealed class Application
 
             _defaultGraphicsFactoryId = id;
             _defaultGraphicsFactoryOverride = null;
+            _resolvedGraphicsFactory = null;
         }
     }
 
@@ -337,6 +339,7 @@ public sealed class Application
 
         _defaultGraphicsFactoryOverride?.Dispose();
         _defaultGraphicsFactoryOverride = null;
+        _resolvedGraphicsFactory = null;
 
         _defaultPlatformHostOverride?.Dispose();
         _defaultPlatformHostOverride = null;
@@ -381,14 +384,21 @@ public sealed class Application
             return _defaultGraphicsFactoryOverride;
         }
 
+        if (_resolvedGraphicsFactory != null)
+        {
+            return _resolvedGraphicsFactory;
+        }
+
         if (_defaultGraphicsFactoryId != null)
         {
-            return CreateRegisteredGraphicsFactory(_defaultGraphicsFactoryId);
+            _resolvedGraphicsFactory = CreateRegisteredGraphicsFactory(_defaultGraphicsFactoryId);
+            return _resolvedGraphicsFactory;
         }
 
         if (TryGetSingleRegisteredGraphicsFactory(out var singleFactory))
         {
-            return singleFactory;
+            _resolvedGraphicsFactory = singleFactory;
+            return _resolvedGraphicsFactory;
         }
 
         throw new InvalidOperationException(

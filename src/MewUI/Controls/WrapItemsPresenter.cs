@@ -16,6 +16,16 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
     private double _itemRadius;
     private int _pendingScrollIntoViewIndex = -1;
 
+    // Cached render-time layout values (avoid closure allocation per OnRender)
+    private double _renderOffsetY;
+    private double _renderItemW;
+    private double _renderItemH;
+    private int _renderCols;
+    private Rect _renderBounds;
+    private Thickness _renderPad;
+    private Action<IGraphicsContext, int, Rect>? _cachedBeforeItemRender;
+    private Func<int, Rect, Rect>? _cachedGetContainerRect;
+
     private IItemsView _itemsSource = ItemsView.Empty;
 
     public double ItemWidth { get; set; } = 100;
@@ -77,6 +87,7 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
 
     public void RecycleAll() => _itemsHost.RecycleAll();
     public void VisitRealized(Action<Element> visitor) => _itemsHost.VisitRealized(visitor);
+    public bool VisitRealized(Func<Element, bool> visitor) => _itemsHost.VisitRealized(visitor);
     public void VisitRealized(Action<int, FrameworkElement> visitor) => _itemsHost.VisitRealized(visitor);
 
     public WrapItemsPresenter()
@@ -115,12 +126,7 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        bool stopped = false;
-        _itemsHost.VisitRealized(e =>
-        {
-            if (!stopped && !visitor(e)) stopped = true;
-        });
-        return !stopped;
+        return _itemsHost.VisitRealized(visitor);
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -188,13 +194,13 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
         int firstIndex = firstRow * cols;
         int lastIndexExcl = Math.Min(count, lastRowExcl * cols);
 
-        // Capture for closure
-        double capturedOffsetY = alignedOffsetY;
-        double capturedItemW = alignedItemW;
-        double capturedItemH = alignedItemH;
-        int capturedCols = cols;
-        var capturedBounds = contentBounds;
-        var pad = ItemPadding;
+        // Store layout values in fields (avoid closure allocation per OnRender)
+        _renderOffsetY = alignedOffsetY;
+        _renderItemW = alignedItemW;
+        _renderItemH = alignedItemH;
+        _renderCols = cols;
+        _renderBounds = contentBounds;
+        _renderPad = ItemPadding;
 
         _itemsHost.Layout = new TemplatedItemsHost.ItemsRangeLayout
         {
@@ -207,31 +213,29 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
             RebindExisting = RebindExisting,
         };
 
-        Rect CellRect(int index)
-        {
-            int row = index / capturedCols;
-            int col = index % capturedCols;
-            double x = capturedBounds.X + col * capturedItemW;
-            double y = capturedBounds.Y + row * capturedItemH - capturedOffsetY;
-            return new Rect(x, y, capturedItemW, capturedItemH);
-        }
-
         var userBeforeItemRender = BeforeItemRender;
         _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions
         {
-            // beforeItemRender receives the full cell rect (including padding area)
-            // so selection highlight covers the entire cell.
             BeforeItemRender = userBeforeItemRender != null
-                ? (ctx, index, _) => userBeforeItemRender(ctx, index, CellRect(index))
+                ? (_cachedBeforeItemRender ??= (ctx, index, _) => BeforeItemRender?.Invoke(ctx, index, RenderCellRect(index)))
                 : null,
-            GetContainerRect = (index, _) =>
+            GetContainerRect = _cachedGetContainerRect ??= (index, _) =>
             {
-                var cell = CellRect(index);
-                return pad != default ? cell.Deflate(pad) : cell;
+                var cell = RenderCellRect(index);
+                return _renderPad != default ? cell.Deflate(_renderPad) : cell;
             },
         };
 
         _itemsHost.Render(context);
+    }
+
+    private Rect RenderCellRect(int index)
+    {
+        int row = index / _renderCols;
+        int col = index % _renderCols;
+        double x = _renderBounds.X + col * _renderItemW;
+        double y = _renderBounds.Y + row * _renderItemH - _renderOffsetY;
+        return new Rect(x, y, _renderItemW, _renderItemH);
     }
 
     protected override UIElement? OnHitTest(Point point)

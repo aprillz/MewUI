@@ -28,7 +28,7 @@ public enum TreeViewExpandTrigger
 /// <summary>
 /// A hierarchical tree view control with expand/collapse functionality.
 /// </summary>
-public sealed class TreeView : Control, IVisualTreeHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
+public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly FixedHeightItemsPresenter _presenter;

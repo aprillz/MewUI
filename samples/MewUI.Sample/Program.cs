@@ -8,7 +8,7 @@ using Aprillz.MewUI.Controls;
 #endif
 
 var stopwatch = Stopwatch.StartNew();
-Startup(out var isBench, out var isSmoke);
+Startup(out var isBench);
 double loadedMs = -1;
 double firstFrameMs = -1;
 var metricsText = new ObservableValue<string>("Metrics:");
@@ -507,7 +507,7 @@ Element NormalControls()
                 ),
 
             new Grid()
-                .Rows("Auto,Auto")
+                .Rows("Auto,*")
                 .Columns("*,*")
                 .Spacing(16)
                 .Children(
@@ -580,6 +580,7 @@ Element NormalControls()
 
                     new GroupBox()
                         .Header("MultiLineTextBox")
+                        .Height(340)
                         .RowSpan(2)
                         .Content(
                             new DockPanel()
@@ -629,7 +630,7 @@ Element NormalControls()
                             new ListBox()
                                 .Items("First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
                                 .SelectedIndex(1)
-                                .Height(96)
+                                .Height(106)
                         )
                 )
         );
@@ -959,32 +960,6 @@ void ProcessMetric()
     {
         Application.Quit();
     }
-
-    if (!isSmoke)
-    {
-        return;
-    }
-
-    try
-    {
-        var outDir = Path.Combine(AppContext.BaseDirectory, "smoke_out");
-        Directory.CreateDirectory(outDir);
-
-        Log($"Smoke output: {outDir}");
-        File.AppendAllText(Path.Combine(outDir, "smoke_report.txt"),
-            $"Backend={Application.SelectedGraphicsBackend}{Environment.NewLine}" +
-            $"LoadedMs={loadedMs:F3}{Environment.NewLine}" +
-            $"FirstFrameMs={stopwatch.Elapsed.TotalMilliseconds:F3}{Environment.NewLine}");
-
-        if (Application.SelectedGraphicsBackend == GraphicsBackend.OpenGL)
-        {
-            SmokeCapture.Request(Path.Combine(outDir, "frame.ppm"));
-        }
-    }
-    finally
-    {
-        Application.Quit();
-    }
 }
 
 static void Log(string message)
@@ -999,12 +974,11 @@ static void Log(string message)
     }
 }
 
-static void Startup(out bool isBench, out bool isSmoke)
+static void Startup(out bool isBench)
 {
     var args = Environment.GetCommandLineArgs();
 
     isBench = args.Any(a => a is "--bench");
-    isSmoke = args.Any(a => a is "--smoke");
 
     if (OperatingSystem.IsWindows())
     {
@@ -1043,7 +1017,7 @@ static void Startup(out bool isBench, out bool isSmoke)
 
     Log($"Args: {string.Join(' ', Environment.GetCommandLineArgs())}");
     Log($"Backend: {Application.SelectedGraphicsBackend}");
-    Log($"Bench: {isBench}, Smoke: {isSmoke}");
+    Log($"Bench: {isBench}");
 }
 
 class DemoViewModel

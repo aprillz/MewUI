@@ -51,8 +51,17 @@ internal static class BorderGeometry
     public static PathGeometry CreateOuterContour(in BorderRenderMetrics m)
     {
         var path = new PathGeometry();
-        GenerateContour(path, m.Bounds, m.CornerRadius);
+        GenerateOuterContour(path, in m);
         return path;
+    }
+
+    /// <summary>
+    /// Populates <paramref name="path"/> with the outer contour (CW). Resets the path first.
+    /// </summary>
+    public static void GenerateOuterContour(PathGeometry path, in BorderRenderMetrics m)
+    {
+        path.Reset();
+        GenerateContour(path, m.Bounds, m.CornerRadius);
     }
 
     /// <summary>
@@ -62,6 +71,17 @@ internal static class BorderGeometry
     public static PathGeometry CreateBorderRegion(in BorderRenderMetrics m)
     {
         var path = new PathGeometry { FillRule = FillRule.NonZero };
+        GenerateBorderRegion(path, in m);
+        return path;
+    }
+
+    /// <summary>
+    /// Populates <paramref name="path"/> with the border region. Resets the path first.
+    /// </summary>
+    public static void GenerateBorderRegion(PathGeometry path, in BorderRenderMetrics m)
+    {
+        path.Reset();
+        path.FillRule = FillRule.NonZero;
 
         GenerateContour(path, m.Bounds, m.CornerRadius);
 
@@ -73,8 +93,6 @@ internal static class BorderGeometry
                 m.InnerBottomRightX, m.InnerBottomRightY,
                 m.InnerBottomLeftX, m.InnerBottomLeftY);
         }
-
-        return path;
     }
 
     /// <summary>
@@ -83,16 +101,24 @@ internal static class BorderGeometry
     public static PathGeometry CreateBackgroundRegion(in BorderRenderMetrics m)
     {
         var path = new PathGeometry();
+        GenerateBackgroundRegion(path, in m);
+        return path;
+    }
+
+    /// <summary>
+    /// Populates <paramref name="path"/> with the background region. Resets the path first.
+    /// </summary>
+    public static void GenerateBackgroundRegion(PathGeometry path, in BorderRenderMetrics m)
+    {
+        path.Reset();
         if (m.InnerBounds.Width <= 0 || m.InnerBounds.Height <= 0)
-            return path;
+            return;
 
         GenerateContour(path, m.InnerBounds,
             m.InnerTopLeftX, m.InnerTopLeftY,
             m.InnerTopRightX, m.InnerTopRightY,
             m.InnerBottomRightX, m.InnerBottomRightY,
             m.InnerBottomLeftX, m.InnerBottomLeftY);
-
-        return path;
     }
 
     /// <summary>

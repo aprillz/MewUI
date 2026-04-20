@@ -17,17 +17,8 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
     private int _version;
     private bool _disposed;
 
-    public int PixelWidth { get; }
-    public int PixelHeight { get; }
-    public double DpiScale { get; }
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
-    public int StrideBytes => PixelWidth * 4;
-    public int Version => Volatile.Read(ref _version);
-
-    /// <summary>
-    /// Gets the memory device context for rendering.
-    /// </summary>
-    internal nint Hdc { get; }
+    private byte[]? _lockBuffer;
+    private Action? _releaseAction;
 
     public GdiBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default)
     {
@@ -62,6 +53,23 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
 
         _oldBitmap = Gdi32.SelectObject(Hdc, _dibSection);
     }
+
+    public int PixelWidth { get; }
+
+    public int PixelHeight { get; }
+
+    public double DpiScale { get; }
+
+    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
+
+    public int StrideBytes => PixelWidth * 4;
+
+    public int Version => Volatile.Read(ref _version);
+
+    /// <summary>
+    /// Gets the memory device context for rendering.
+    /// </summary>
+    internal nint Hdc { get; }
 
     internal GdiPresentationMode PresentationMode { get; }
 
@@ -133,19 +141,31 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
             throw new ObjectDisposedException(nameof(GdiBitmapRenderTarget));
         }
 
-        // Copy from unmanaged DIB bits to managed array
-        var buffer = CopyPixels();
-        int v = _version;
+        int size = PixelWidth * PixelHeight * 4;
+        if (_lockBuffer == null || _lockBuffer.Length != size)
+        {
+            _lockBuffer = new byte[size];
+        }
+
+        unsafe
+        {
+            fixed (byte* dest = _lockBuffer)
+            {
+                Buffer.MemoryCopy((void*)_dibBits, dest, size, size);
+            }
+        }
+
+        _releaseAction ??= () => Monitor.Exit(_gate);
 
         return new PixelBufferLock(
-            buffer,
+            _lockBuffer,
             PixelWidth,
             PixelHeight,
             StrideBytes,
             PixelFormat,
-            v,
+            _version,
             dirtyRegion: null,
-            release: () => Monitor.Exit(_gate));
+            release: _releaseAction);
     }
 
     /// <inheritdoc/>

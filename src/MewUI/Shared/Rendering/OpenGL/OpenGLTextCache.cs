@@ -82,7 +82,9 @@ internal sealed class OpenGLTextCache : IDisposable
         // If BGRA is not supported, we convert.
         if (!supportsBgra)
         {
-            data = ImagePixelUtils.ConvertBgraToRgba(data);
+            var rgba = new byte[data.Length];
+            ImagePixelUtils.ConvertBgraToRgba(data, rgba);
+            data = rgba;
         }
 
         unsafe

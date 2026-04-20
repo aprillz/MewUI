@@ -265,18 +265,11 @@ public sealed class ScrollViewer : ContentControl
         // Without this, viewport calculated here may differ from the one in ArrangeContent/Render
         // due to rounding differences, causing content clipping at non-100% DPI.
         var dpiScale = DpiScale;
-        _scroll.DpiScale = dpiScale;
 
         if (Content is not UIElement content)
         {
             _extent = Size.Empty;
-            _vBar.IsVisible = false;
-            _hBar.IsVisible = false;
             _viewport = Size.Empty;
-            _scroll.SetMetricsPx(0, 0, 0);
-            _scroll.SetMetricsPx(1, 0, 0);
-            _scroll.SetOffsetPx(0, 0);
-            _scroll.SetOffsetPx(1, 0);
             return new Size(0, 0).Inflate(Padding);
         }
 
@@ -311,27 +304,12 @@ public sealed class ScrollViewer : ContentControl
             _extent = LayoutRounding.RoundSizeToPixels(content.DesiredSize, dpiScale);
         }
 
-        _scroll.SetMetricsDip(0, _extent.Width, _viewport.Width);
-        _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
-
-        // Allow 1 device-pixel tolerance to suppress scrollbars caused by sub-pixel
-        // rounding differences between extent and viewport at non-integer DPI scales.
-        // Use long arithmetic to avoid int overflow when viewport is int.MaxValue (Infinity).
-        bool needV = (long)_scroll.GetExtentPx(1) > (long)_scroll.GetViewportPx(1) + 1;
-        bool needH = (long)_scroll.GetExtentPx(0) > (long)_scroll.GetViewportPx(0) + 1;
-        _vBar.IsVisible = IsBarVisible(VerticalScroll, needV);
-        _hBar.IsVisible = IsBarVisible(HorizontalScroll, needH);
-
-        SyncBars();
-
-        // Extent/viewport changes (e.g. content becomes empty) can make existing offsets invalid.
-        // Clamp them against the latest _extent/_viewport even when scrollbars are hidden.
-        {
-            _scroll.SetOffsetDip(0, _scroll.GetOffsetDip(0));
-            _scroll.SetOffsetDip(1, _scroll.GetOffsetDip(1));
-        }
-        SyncBars();
-        NotifyScrollChanged();
+        // Note: _scroll state (DpiScale, metrics, offset) and bar properties (IsVisible,
+        // ViewportSize, Max) are intentionally NOT mutated here. Measure may be called
+        // with hypothetical sizes (e.g. popup owners measuring for natural size every
+        // frame), and those propagations would corrupt state that drives the rendered
+        // scrollbar or reset the user's scroll offset. All mutations happen in Arrange,
+        // where the viewport reflects the actual displayed size.
 
         // Desired size: cap by available chrome slot (exclude padding here because we inflate it below).
         double capW = Math.Max(0, slotW - Padding.HorizontalThickness);
@@ -339,7 +317,8 @@ public sealed class ScrollViewer : ContentControl
         double desiredW = double.IsPositiveInfinity(availableSize.Width) ? _extent.Width : Math.Min(_extent.Width, capW);
         double desiredH = double.IsPositiveInfinity(availableSize.Height) ? _extent.Height : Math.Min(_extent.Height, capH);
 
-        return new Size(desiredW, desiredH).Inflate(Padding).Inflate(new Thickness(borderInset));
+        var finalDesired = new Size(desiredW, desiredH).Inflate(Padding).Inflate(new Thickness(borderInset));
+        return finalDesired;
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -353,6 +332,17 @@ public sealed class ScrollViewer : ContentControl
         _scroll.DpiScale = dpiScale;
         _scroll.SetMetricsDip(0, _extent.Width, _viewport.Width);
         _scroll.SetMetricsDip(1, _extent.Height, _viewport.Height);
+
+        // Bar visibility reflects actual arranged viewport vs content extent.
+        // Setting this in Arrange (not Measure) keeps visibility stable even when
+        // Measure is called with hypothetical/unconstrained sizes (e.g. from popup
+        // owners computing natural size every frame).
+        // Allow 1 device-pixel tolerance to suppress scrollbars caused by sub-pixel
+        // rounding differences at non-integer DPI scales.
+        bool needV = (long)_scroll.GetExtentPx(1) > (long)_scroll.GetViewportPx(1) + 1;
+        bool needH = (long)_scroll.GetExtentPx(0) > (long)_scroll.GetViewportPx(0) + 1;
+        _vBar.IsVisible = IsBarVisible(VerticalScroll, needV);
+        _hBar.IsVisible = IsBarVisible(HorizontalScroll, needH);
 
         // Clamp offsets against the latest extent/viewport before arranging children.
         // Clamp using DIP offsets to avoid quantizing the logical offset via px roundtrips,
@@ -674,7 +664,7 @@ public sealed class ScrollViewer : ContentControl
         // Close context menus when content scrolls (standard desktop UX).
         if (FindVisualRoot() is Window window)
         {
-            window.RequestClosePopups(PopupCloseRequest.Scroll());
+            window.RequestClosePopups(PopupCloseRequest.Scroll(source: this));
         }
     }
 
