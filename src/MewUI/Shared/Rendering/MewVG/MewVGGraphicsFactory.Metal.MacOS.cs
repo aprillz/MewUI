@@ -63,4 +63,15 @@ public sealed partial class MewVGGraphicsFactory
         kind = WindowSurfaceKind.Metal;
         handled = true;
     }
+
+    static partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, ref bool handled, ref IBitmapRenderTarget? renderTarget)
+    {
+        if (handled)
+        {
+            return;
+        }
+
+        renderTarget = new MewVGMetalBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
+        handled = true;
+    }
 }
