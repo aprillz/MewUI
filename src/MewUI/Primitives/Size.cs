@@ -128,4 +128,7 @@ public readonly struct Size : IEquatable<Size>
 
     public override int GetHashCode() =>
         HashCode.Combine(Width, Height);
+
+    public override string ToString() =>
+        $"Size({Width:0.##}, {Height:0.##})";
 }

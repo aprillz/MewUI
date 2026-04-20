@@ -93,4 +93,7 @@ public readonly struct CornerRadius : IEquatable<CornerRadius>
 
     public override int GetHashCode() =>
         HashCode.Combine(TopLeft, TopRight, BottomRight, BottomLeft);
+
+    public override string ToString() =>
+        $"CornerRadius({TopLeft:0.##}, {TopRight:0.##}, {BottomRight:0.##}, {BottomLeft:0.##})";
 }

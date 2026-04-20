@@ -126,4 +126,7 @@ public readonly struct Vector : IEquatable<Vector>
 
     public override int GetHashCode() =>
         HashCode.Combine(X, Y);
+
+    public override string ToString() =>
+        $"Vector({X:0.##}, {Y:0.##})";
 }
