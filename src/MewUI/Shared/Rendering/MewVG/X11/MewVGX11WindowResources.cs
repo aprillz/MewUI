@@ -53,14 +53,14 @@ internal sealed class MewVGX11WindowResources : IDisposable, IMewVGGlWindowInter
 
     public void SetSwapInterval(int interval) => _gl.SetSwapInterval(interval);
 
-    int IMewVGGlWindowInterop.CreateExternalImage(int textureId, int pixelWidth, int pixelHeight)
+    int IMewVGExternalImageInterop.CreateExternalImage(nint handle, int pixelWidth, int pixelHeight)
         => Vg.CreateImageFromHandle(
-            textureId,
+            checked((int)handle),
             pixelWidth,
             pixelHeight,
             NVGimageFlags.FlipY | NVGimageFlags.Premultiplied | NVGimageFlags.NoDelete);
 
-    void IMewVGGlWindowInterop.DeleteExternalImage(int imageId)
+    void IMewVGExternalImageInterop.DeleteExternalImage(int imageId)
     {
         if (imageId != 0)
         {

@@ -216,6 +216,28 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGMetalWindow
     void IMewVGMetalWindowInterop.ReleaseSharedTexture(ref nint texture)
         => ReleaseTexture(ref texture);
 
+    int IMewVGExternalImageInterop.CreateExternalImage(nint handle, int pixelWidth, int pixelHeight)
+    {
+        if (_disposed)
+        {
+            return 0;
+        }
+
+        using var pool = new AutoReleasePool();
+        return MewVGMetalExternalImageBridge.CreateExternalImage(Vg, handle, pixelWidth, pixelHeight);
+    }
+
+    void IMewVGExternalImageInterop.DeleteExternalImage(int imageId)
+    {
+        if (_disposed || imageId == 0)
+        {
+            return;
+        }
+
+        using var pool = new AutoReleasePool();
+        Vg.DeleteImage(imageId);
+    }
+
     private nint CreateTexture(MTLPixelFormat format, int widthPx, int heightPx, int sampleCount, ulong usage = MTLTextureUsageRenderTarget)
     {
         if (ClsMTLTextureDescriptor == 0 || SelTexture2DDescriptorWithPixelFormat == 0)

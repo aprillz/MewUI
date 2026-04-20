@@ -1,4 +1,3 @@
-using System.Numerics;
 using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Rendering.CoreText;
@@ -46,7 +45,6 @@ internal sealed partial class MewVGMetalGraphicsContext
     private nint _commandBuffer;
     private nint _encoder;
     private bool _beganFrame;
-    private bool _externalCompositeActive;
 
     public MewVGMetalGraphicsContext(
         nint hwnd,
@@ -615,49 +613,6 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     #endregion
 
-    private void ApplyNanoVGState(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform)
-    {
-        _vg.GlobalAlpha(globalAlpha);
-
-        if (clipBoundsWorld.HasValue)
-        {
-            var clip = clipBoundsWorld.Value;
-            _vg.SetTransformMatrix(Matrix3x2.Identity);
-            _vg.Scissor((float)clip.X, (float)clip.Y, (float)clip.Width, (float)clip.Height);
-        }
-        else
-        {
-            _vg.ResetScissor();
-        }
-
-        _vg.SetTransformMatrix(transform);
-    }
-
-    private void RestoreNanoVGStateAfterSegmentRestart()
-    {
-        foreach (var state in _saveStack.Reverse())
-        {
-            ApplyNanoVGState(state.clipBoundsWorld, state.globalAlpha, state.transform);
-            _vg.Save();
-        }
-
-        ApplyNanoVGState(_clipBoundsWorld, _globalAlpha, _transform);
-    }
-
-    private bool RestartFrameSegment(bool clearColor)
-    {
-        if (!BeginSegment(clearColor))
-        {
-            return false;
-        }
-
-        _vg.SetRenderEncoder(_encoder, _commandBuffer);
-        _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
-        RestoreNanoVGStateAfterSegmentRestart();
-        _beganFrame = true;
-        return true;
-    }
-
     private bool BeginSegment(bool clearColor)
     {
         if (_drawable == 0 || _drawableTexture == 0)
@@ -725,44 +680,6 @@ internal sealed partial class MewVGMetalGraphicsContext
         {
             ObjCRuntime.SendMessageNoReturn(_drawable, SelPresent);
         }
-    }
-
-    bool IMewVGMetalExternalCompositeContext.TryBeginExternalComposite(out MewVGMetalExternalCompositeState state)
-    {
-        state = default;
-
-        if (_externalCompositeActive || _drawableTexture == 0 || !_beganFrame)
-        {
-            return false;
-        }
-
-        _vg.EndFrame();
-        CommitCurrentSegment(presentDrawable: false, waitUntilScheduled: true);
-        _vg.FrameCompleted();
-        _beganFrame = false;
-        _externalCompositeActive = true;
-
-        state = new MewVGMetalExternalCompositeState(
-            DrawableTexture: _drawableTexture,
-            ViewportWidthPx: _viewportWidthPx,
-            ViewportHeightPx: _viewportHeightPx,
-            DpiScale: DpiScale,
-            ClipBoundsWorld: _clipBoundsWorld,
-            GlobalAlpha: _globalAlpha,
-            Transform: _transform);
-
-        return true;
-    }
-
-    void IMewVGMetalExternalCompositeContext.EndExternalComposite()
-    {
-        if (!_externalCompositeActive)
-        {
-            return;
-        }
-
-        _externalCompositeActive = false;
-        RestartFrameSegment(clearColor: false);
     }
 
     private readonly struct AutoReleasePool : IDisposable
