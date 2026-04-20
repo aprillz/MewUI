@@ -141,6 +141,16 @@ public abstract class Element : MewObject
             return;
         }
 
+        // Pre-clear the dirty flag BEFORE MeasureCore so that invalidations originating inside
+        // MeasureCore (e.g. a descendant dirties itself, then Parent.InvalidateMeasure walks up
+        // to us) can propagate through this element to our parent. If we cleared AFTER, the
+        // child's early-return check (`if (IsMeasureDirty) return;`) would see us still dirty
+        // and abort — breaking the upward chain above us and leaving the root clean, which
+        // makes the next Measure pass short-circuit at the root.
+        IsMeasureDirty = false;
+        _lastMeasureConstraint = availableSize;
+        _hasMeasureConstraint = true;
+
         var measured = MeasureCore(availableSize);
 
         var clamped = new Size(
@@ -152,9 +162,6 @@ public abstract class Element : MewObject
                 : Math.Min(measured.Height, availableSize.Height));
 
         DesiredSize = ApplyLayoutRounding(clamped);
-        IsMeasureDirty = false;
-        _lastMeasureConstraint = availableSize;
-        _hasMeasureConstraint = true;
     }
 
     /// <summary>
@@ -174,9 +181,15 @@ public abstract class Element : MewObject
             return;
         }
 
+        // Pre-clear the dirty flag BEFORE ArrangeCore. See Measure() for the rationale —
+        // an invalidation triggered from inside ArrangeCore (e.g. TabControl restoring a
+        // pending scroll offset right after arranging its ScrollViewer) must be able to
+        // walk up past this element to the root. If this flag were still true, the
+        // InvalidateArrange early-return on the parent would abort, leaving the root's
+        // Arrange chain clean and skipping the re-arrange on the next layout pass.
+        IsArrangeDirty = false;
         Bounds = arrangedRect;
         ArrangeCore(arrangedRect);
-        IsArrangeDirty = false;
     }
 
     /// <summary>
