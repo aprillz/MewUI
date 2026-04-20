@@ -2803,14 +2803,12 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets edit mode.
+    /// Sets <see cref="NumericUpDown.IsInteger"/>: when true, values are rounded
+    /// to whole numbers and the effective Step is at least 1.
     /// </summary>
-    /// <param name="numericUpDown">Target numeric up-down.</param>
-    /// <param name="editMode">Edit mode state.</param>
-    /// <returns>The numeric up-down for chaining.</returns>
-    public static NumericUpDown EditMode(this NumericUpDown numericUpDown, bool editMode = true)
+    public static NumericUpDown IsInteger(this NumericUpDown numericUpDown, bool value = true)
     {
-        numericUpDown.EditMode = editMode;
+        numericUpDown.IsInteger = value;
         return numericUpDown;
     }
 
