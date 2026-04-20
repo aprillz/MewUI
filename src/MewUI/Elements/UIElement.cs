@@ -87,12 +87,17 @@ public abstract partial class UIElement : Element
     /// <summary>
     /// Clears cached inherited property values when the parent changes,
     /// so they will be re-resolved from the new parent chain.
+    /// Cascades to descendants because their parent chain also effectively changed
+    /// (they hang off this element) and their caches may be stale.
     /// </summary>
     protected override void OnParentChanged()
     {
         base.OnParentChanged();
-        if (HasPropertyStore)
-            PropertyStore.ClearAllInherited();
+        VisualTree.Visit(this, static e =>
+        {
+            if (e is UIElement u && u.HasPropertyStore)
+                u.PropertyStore.ClearAllInherited();
+        });
     }
 
     /// <summary>
