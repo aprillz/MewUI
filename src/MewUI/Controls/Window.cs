@@ -396,8 +396,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public static readonly MewProperty<bool> UseLayoutRoundingProperty =
         MewProperty<bool>.Register<Window>(nameof(UseLayoutRounding), true, MewPropertyOptions.None);
 
-    public static readonly MewProperty<bool> IsActiveProperty =
-        MewProperty<bool>.Register<Window>(nameof(IsActive), false, MewPropertyOptions.AffectsRender);
+    private static readonly MewPropertyKey<bool> IsActivePropertyKey =
+        MewProperty<bool>.RegisterReadOnly<Window>(nameof(IsActive), false, MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<bool> IsActiveProperty = IsActivePropertyKey.Property;
 
     public static readonly MewProperty<WindowState> WindowStateProperty =
         MewProperty<WindowState>.Register<Window>(nameof(WindowState), WindowState.Normal, MewPropertyOptions.None,
@@ -591,7 +593,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public bool IsActive
     {
         get => GetValue(IsActiveProperty);
-        private set => SetValue(IsActiveProperty, value);
+        private set => SetValue(IsActivePropertyKey, value);
     }
 
     /// <summary>
@@ -1885,51 +1887,51 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             context.BeginFrame(target);
 
-        Color clearColor;
-        if (AllowsTransparency)
-        {
-                // Layered windows use premultiplied alpha compositing.
-            clearColor = Color.Transparent;
-        }
-        else
-        {
-            // Default to an opaque window background when the user does not specify one.
-            clearColor = Background.A > 0 ? Background : Theme.Palette.WindowBackground;
-        }
-
-        context.Clear(clearColor);
-
-        if (AllowsTransparency && Background.A > 0)
-        {
-            // Draw the background through the normal pipeline so alpha is handled consistently.
-            context.FillRectangle(new Rect(0, 0, clientSize.Width, clientSize.Height), Background);
-        }
-
-        // Ensure nothing paints outside the client area.
-        context.Save();
-        // Clip should not shrink due to edge rounding; snap outward to avoid 1px clipping at non-100% DPI.
-        context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
-
-        try
-        {
-            Content?.Render(context);
-
-            for (int i = 0; i < _adorners.Count; i++)
+            Color clearColor;
+            if (AllowsTransparency)
             {
-                _adorners[i].Element.Render(context);
+                // Layered windows use premultiplied alpha compositing.
+                clearColor = Color.Transparent;
+            }
+            else
+            {
+                // Default to an opaque window background when the user does not specify one.
+                clearColor = Background.A > 0 ? Background : Theme.Palette.WindowBackground;
             }
 
-            _popupManager.Render(context);
+            context.Clear(clearColor);
 
-            OverlayLayer.Render(context);
-        }
-        finally
-        {
-            context.Restore();
-        }
+            if (AllowsTransparency && Background.A > 0)
+            {
+                // Draw the background through the normal pipeline so alpha is handled consistently.
+                context.FillRectangle(new Rect(0, 0, clientSize.Width, clientSize.Height), Background);
+            }
 
-        if (context is GraphicsContextBase gcb)
-            LastFrameStats = new RenderStats(gcb.DrawCallCount, gcb.CullCount);
+            // Ensure nothing paints outside the client area.
+            context.Save();
+            // Clip should not shrink due to edge rounding; snap outward to avoid 1px clipping at non-100% DPI.
+            context.SetClip(LayoutRounding.SnapViewportRectToPixels(new Rect(0, 0, clientSize.Width, clientSize.Height), DpiScale));
+
+            try
+            {
+                Content?.Render(context);
+
+                for (int i = 0; i < _adorners.Count; i++)
+                {
+                    _adorners[i].Element.Render(context);
+                }
+
+                _popupManager.Render(context);
+
+                OverlayLayer.Render(context);
+            }
+            finally
+            {
+                context.Restore();
+            }
+
+            if (context is GraphicsContextBase gcb)
+                LastFrameStats = new RenderStats(gcb.DrawCallCount, gcb.CullCount);
         }
         finally
         {
