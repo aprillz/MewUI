@@ -2521,59 +2521,7 @@ public static class ControlExtensions
     #endregion
 
     #region TabControl
-
-    /// <summary>
-    /// Sets the padding.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <param name="padding">Padding value.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl Padding(this TabControl tabControl, Thickness padding)
-    {
-        tabControl.Padding = padding;
-        return tabControl;
-    }
-
-    /// <summary>
-    /// Sets the padding with uniform value.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <param name="uniform">Uniform padding.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl Padding(this TabControl tabControl, double uniform)
-    {
-        tabControl.Padding = new Thickness(uniform);
-        return tabControl;
-    }
-
-    /// <summary>
-    /// Sets the padding with horizontal and vertical values.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <param name="horizontal">Horizontal padding.</param>
-    /// <param name="vertical">Vertical padding.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl Padding(this TabControl tabControl, double horizontal, double vertical)
-    {
-        tabControl.Padding = new Thickness(horizontal, vertical, horizontal, vertical);
-        return tabControl;
-    }
-
-    /// <summary>
-    /// Sets the padding with individual values.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <param name="left">Left padding.</param>
-    /// <param name="top">Top padding.</param>
-    /// <param name="right">Right padding.</param>
-    /// <param name="bottom">Bottom padding.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl Padding(this TabControl tabControl, double left, double top, double right, double bottom)
-    {
-        tabControl.Padding = new Thickness(left, top, right, bottom);
-        return tabControl;
-    }
-
+     
     /// <summary>
     /// Sets the tab items.
     /// </summary>
@@ -3182,76 +3130,6 @@ public static class ControlExtensions
         control.Content = content as UIElement;
         return control;
     }
-
-    #endregion
-
-    #region TabControl
-
-    /// <summary>
-    /// Sets the vertical scroll mode.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <param name="mode">Scroll mode.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl VerticalScroll(this TabControl tabControl, ScrollMode mode)
-    {
-        tabControl.VerticalScroll = mode;
-        return tabControl;
-    }
-
-    /// <summary>
-    /// Sets the horizontal scroll mode.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <param name="mode">Scroll mode.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl HorizontalScroll(this TabControl tabControl, ScrollMode mode)
-    {
-        tabControl.HorizontalScroll = mode;
-        return tabControl;
-    }
-
-    /// <summary>
-    /// Disables vertical scrolling.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl NoVerticalScroll(this TabControl tabControl) => tabControl.VerticalScroll(ScrollMode.Disabled);
-
-    /// <summary>
-    /// Enables auto vertical scrolling.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl AutoVerticalScroll(this TabControl tabControl) => tabControl.VerticalScroll(ScrollMode.Auto);
-
-    /// <summary>
-    /// Shows vertical scrollbar.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl ShowVerticalScroll(this TabControl tabControl) => tabControl.VerticalScroll(ScrollMode.Visible);
-
-    /// <summary>
-    /// Disables horizontal scrolling.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl NoHorizontalScroll(this TabControl tabControl) => tabControl.HorizontalScroll(ScrollMode.Disabled);
-
-    /// <summary>
-    /// Enables auto horizontal scrolling.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl AutoHorizontalScroll(this TabControl tabControl) => tabControl.HorizontalScroll(ScrollMode.Auto);
-
-    /// <summary>
-    /// Shows horizontal scrollbar.
-    /// </summary>
-    /// <param name="tabControl">Target tab control.</param>
-    /// <returns>The tab control for chaining.</returns>
-    public static TabControl ShowHorizontalScroll(this TabControl tabControl) => tabControl.HorizontalScroll(ScrollMode.Visible);
 
     #endregion
 

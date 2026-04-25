@@ -9,15 +9,9 @@ namespace Aprillz.MewUI.Controls;
 public sealed class TabControl : Control
     , IVisualTreeHost
 {
-    private readonly record struct TabScrollOffsets(double Horizontal, double Vertical);
-
     private readonly List<TabItem> _tabs = new();
     private readonly StackPanel _headerStrip;
-    private readonly ScrollViewer _contentHost;
-    private readonly Dictionary<TabItem, TabScrollOffsets> _tabOffsets = new();
     private TabItem? _lastTab;
-    private bool _pendingOffsetRestore;
-    private TabScrollOffsets _pendingOffsets;
     private int _cachedFocusedHeaderIndex = -1;
 
     internal override UIElement GetDefaultFocusTarget()
@@ -67,44 +61,6 @@ public sealed class TabControl : Control
     /// </summary>
     public event Action<object?>? SelectionChanged;
 
-    /// <summary>
-    /// Gets or sets the vertical scroll mode for tab content.
-    /// </summary>
-    public ScrollMode VerticalScroll
-    {
-        get => _contentHost.VerticalScroll;
-        set
-        {
-            if (_contentHost.VerticalScroll == value)
-            {
-                return;
-            }
-
-            _contentHost.VerticalScroll = value;
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets the horizontal scroll mode for tab content.
-    /// </summary>
-    public ScrollMode HorizontalScroll
-    {
-        get => _contentHost.HorizontalScroll;
-        set
-        {
-            if (_contentHost.HorizontalScroll == value)
-            {
-                return;
-            }
-
-            _contentHost.HorizontalScroll = value;
-            InvalidateMeasure();
-            InvalidateVisual();
-        }
-    }
-
     public override bool Focusable => true;
 
     public TabControl()
@@ -115,15 +71,6 @@ public sealed class TabControl : Control
             Spacing = 2,
         };
         _headerStrip.Parent = this;
-
-        _contentHost = new ScrollViewer
-        {
-            VerticalScroll = ScrollMode.Disabled,
-            HorizontalScroll = ScrollMode.Disabled,
-        };
-        _contentHost.Parent = this;
-
-        _contentHost.SetBinding(PaddingProperty, this, PaddingProperty);
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -132,7 +79,7 @@ public sealed class TabControl : Control
 
         // Tab contents are detached from the visual tree when not selected.
         // Window DPI broadcasts won't reach them, so their cached fonts/measures can remain stale.
-        var selectedContent = _contentHost.Content;
+        var selectedContent = SelectedTab?.Content;
         for (int i = 0; i < _tabs.Count; i++)
         {
             var content = _tabs[i].Content;
@@ -162,7 +109,7 @@ public sealed class TabControl : Control
         base.OnThemeChanged(oldTheme, newTheme);
         // Tab contents are detached from the visual tree when not selected.
         // Window DPI broadcasts won't reach them, so their cached fonts/measures can remain stale.
-        var selectedContent = _contentHost.Content;
+        var selectedContent = SelectedTab?.Content;
         for (int i = 0; i < _tabs.Count; i++)
         {
             var content = _tabs[i].Content;
@@ -246,7 +193,15 @@ public sealed class TabControl : Control
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_headerStrip) && visitor(_contentHost);
+    {
+        if (!visitor(_headerStrip))
+        {
+            return false;
+        }
+
+        var content = SelectedTab?.Content;
+        return content == null || visitor(content);
+    }
 
     public void AddTabs(params TabItem[] tabs)
     {
@@ -260,12 +215,10 @@ public sealed class TabControl : Control
 
     public void ClearTabs()
     {
+        DetachCurrentContent();
         _tabs.Clear();
         _headerStrip.Clear();
-        _contentHost.Content = null;
-        _tabOffsets.Clear();
         _lastTab = null;
-        _pendingOffsetRestore = false;
         SelectedIndex = -1;
         InvalidateMeasure();
         InvalidateVisual();
@@ -279,12 +232,12 @@ public sealed class TabControl : Control
         }
 
         var removedTab = _tabs[index];
-        _tabs.RemoveAt(index);
-        _tabOffsets.Remove(removedTab);
         if (_lastTab == removedTab)
         {
+            DetachCurrentContent();
             _lastTab = null;
         }
+        _tabs.RemoveAt(index);
         RebuildHeaders();
         EnsureValidSelection();
         InvalidateMeasure();
@@ -304,10 +257,17 @@ public sealed class TabControl : Control
         double contentW = inner.Width;
         double contentH = double.IsPositiveInfinity(inner.Height) ? double.PositiveInfinity : Math.Max(0, inner.Height - headerH);
 
-        _contentHost.Measure(new Size(contentW, contentH));
+        var contentDesired = Size.Empty;
+        var content = SelectedTab?.Content;
+        if (content != null)
+        {
+            var contentAvailable = new Size(contentW, contentH).Deflate(Padding);
+            content.Measure(contentAvailable);
+            contentDesired = content.DesiredSize.Inflate(Padding);
+        }
 
-        double desiredW = Math.Max(_headerStrip.DesiredSize.Width, _contentHost.DesiredSize.Width);
-        double desiredH = headerH + _contentHost.DesiredSize.Height;
+        double desiredW = Math.Max(_headerStrip.DesiredSize.Width, contentDesired.Width);
+        double desiredH = headerH + contentDesired.Height;
 
         return new Size(desiredW, desiredH).Inflate(border);
     }
@@ -323,13 +283,7 @@ public sealed class TabControl : Control
         _headerStrip.Arrange(new Rect(inner.X, inner.Y, inner.Width, headerH));
 
         var contentBounds = new Rect(inner.X, inner.Y + headerH, inner.Width, Math.Max(0, inner.Height - headerH));
-        _contentHost.Arrange(contentBounds);
-
-        if (_pendingOffsetRestore)
-        {
-            _pendingOffsetRestore = false;
-            _contentHost.SetScrollOffsets(_pendingOffsets.Horizontal, _pendingOffsets.Vertical);
-        }
+        SelectedTab?.Content?.Arrange(contentBounds.Deflate(Padding));
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -375,7 +329,7 @@ public sealed class TabControl : Control
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
-        _contentHost.Render(context);
+        SelectedTab?.Content?.Render(context);
     }
 
     protected override UIElement? OnHitTest(Point point)
@@ -391,10 +345,13 @@ public sealed class TabControl : Control
             return headerHit;
         }
 
-        var contentHit = _contentHost.HitTest(point);
-        if (contentHit != null)
+        if (SelectedTab?.Content is UIElement uiContent)
         {
-            return contentHit;
+            var contentHit = uiContent.HitTest(point);
+            if (contentHit != null)
+            {
+                return contentHit;
+            }
         }
 
         return Bounds.Contains(point) ? this : null;
@@ -417,7 +374,11 @@ public sealed class TabControl : Control
             header.ClickedCallback = idx =>
             {
                 SelectedIndex = idx;
-                Focus();
+                var root = FindVisualRoot();
+                if (root is Window window)
+                {
+                    window.FocusManager.SetFocus(this, resolveDefault: false);
+                }
             };
 
             _headerStrip.Add(header);
@@ -442,11 +403,19 @@ public sealed class TabControl : Control
         }
     }
 
+    private void DetachCurrentContent()
+    {
+        if (_lastTab?.Content != null)
+        {
+            _lastTab.Content.Parent = null;
+        }
+    }
+
     private void UpdateSelection()
     {
         var root = FindVisualRoot();
         var window = root as Window;
-        var oldContent = _contentHost.Content;
+        var oldContent = _lastTab?.Content;
         bool focusWasInOldContent = false;
 
         if (window != null && oldContent != null)
@@ -473,29 +442,20 @@ public sealed class TabControl : Control
             }
         }
 
-        if (_lastTab != null)
-        {
-            _tabOffsets[_lastTab] = new TabScrollOffsets(_contentHost.HorizontalOffset, _contentHost.VerticalOffset);
-        }
-
-        // The ScrollViewer persists offsets across content swaps; clear immediately so the previous tab's
-        // offsets don't "bleed" into the newly selected tab before we restore the saved offsets.
-        _contentHost.SetScrollOffsets(0, 0);
-
         var selected = SelectedTab;
-        _contentHost.Content = SelectedTab?.Content;
-
-        _lastTab = selected;
-        if (selected != null && _tabOffsets.TryGetValue(selected, out var offsets))
+        if (!ReferenceEquals(_lastTab, selected))
         {
-            _pendingOffsets = offsets;
-        }
-        else
-        {
-            _pendingOffsets = default;
+            if (oldContent != null)
+            {
+                oldContent.Parent = null;
+            }
+            if (selected?.Content != null)
+            {
+                selected.Content.Parent = this;
+            }
+            _lastTab = selected;
         }
 
-        _pendingOffsetRestore = true;
         InvalidateMeasure();
         InvalidateVisual();
 
@@ -505,7 +465,7 @@ public sealed class TabControl : Control
             // so KeyUp/Focus-based RequerySuggested keeps working (and key events don't go to a detached element).
             if (focusWasInOldContent)
             {
-                if (!window.FocusManager.SetFocus(this))
+                if (!window.FocusManager.SetFocus(this, resolveDefault: false))
                 {
                     window.RequerySuggested();
                 }
