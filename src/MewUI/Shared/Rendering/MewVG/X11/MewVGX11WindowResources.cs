@@ -4,7 +4,7 @@ using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed class MewVGX11WindowResources : IDisposable
+internal sealed class MewVGX11WindowResources : IDisposable, IMewVGGlWindowInterop
 {
     private readonly nint _display;
     private readonly GlxOpenGLWindowResources _gl;
@@ -15,6 +15,8 @@ internal sealed class MewVGX11WindowResources : IDisposable
     public MewVGTextCache TextCache { get; }
 
     public bool SupportsBgra => _gl.SupportsBgra;
+
+    public nint Display => _display;
 
     private MewVGX11WindowResources(nint display, GlxOpenGLWindowResources gl, NanoVGGL vg)
     {
@@ -50,6 +52,37 @@ internal sealed class MewVGX11WindowResources : IDisposable
     public void SwapBuffers(nint display, nint window) => _gl.SwapBuffers(display, window);
 
     public void SetSwapInterval(int interval) => _gl.SetSwapInterval(interval);
+
+    int IMewVGExternalImageInterop.CreateExternalImage(nint handle, int pixelWidth, int pixelHeight)
+        => Vg.CreateImageFromHandle(
+            checked((int)handle),
+            pixelWidth,
+            pixelHeight,
+            NVGimageFlags.FlipY | NVGimageFlags.Premultiplied | NVGimageFlags.NoDelete);
+
+    void IMewVGExternalImageInterop.DeleteExternalImage(int imageId)
+    {
+        if (imageId != 0)
+        {
+            Vg.DeleteImage(imageId);
+        }
+    }
+
+    void IMewVGGlWindowInterop.RunWithCurrentContext(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        _gl.MakeCurrent(_display);
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            _gl.ReleaseCurrent();
+        }
+    }
 
     public void Dispose()
     {

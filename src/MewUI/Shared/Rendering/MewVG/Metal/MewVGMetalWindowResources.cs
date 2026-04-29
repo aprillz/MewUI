@@ -5,7 +5,7 @@ using Aprillz.MewVG.Interop;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed class MewVGMetalWindowResources : IDisposable
+internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGMetalWindowInterop
 {
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
     private static readonly nint ClsMTLTextureDescriptor = ObjCRuntime.GetClass("MTLTextureDescriptor");
@@ -27,6 +27,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     private static readonly nint SelSetTextureType = Metal.Sel.SetTextureType;
     private static readonly nint SelSetSampleCount = Metal.Sel.SetSampleCount;
 
+    private const ulong MTLTextureUsageShaderRead = 1ul << 0;
     // MTLTextureUsageRenderTarget = 1 << 2
     private const ulong MTLTextureUsageRenderTarget = 1ul << 2;
     // MTLStorageModePrivate = 2
@@ -189,7 +190,55 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         return _msaaColorTexture;
     }
 
-    private nint CreateTexture(MTLPixelFormat format, int widthPx, int heightPx, int sampleCount)
+    nint IMewVGMetalWindowInterop.DeviceHandle => Device;
+
+    nint IMewVGMetalWindowInterop.CommandQueueHandle => CommandQueue;
+
+    public nint CreateSharedTexture(int widthPx, int heightPx)
+    {
+        if (_disposed)
+        {
+            return 0;
+        }
+
+        using var pool = new AutoReleasePool();
+        return CreateTexture(
+            MTLPixelFormat.BGRA8Unorm,
+            Math.Max(1, widthPx),
+            Math.Max(1, heightPx),
+            sampleCount: 0,
+            usage: MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead);
+    }
+
+    public static void ReleaseTexture(ref nint texture)
+        => ReleaseIfNotNull(ref texture);
+
+    void IMewVGMetalWindowInterop.ReleaseSharedTexture(ref nint texture)
+        => ReleaseTexture(ref texture);
+
+    int IMewVGExternalImageInterop.CreateExternalImage(nint handle, int pixelWidth, int pixelHeight)
+    {
+        if (_disposed)
+        {
+            return 0;
+        }
+
+        using var pool = new AutoReleasePool();
+        return MewVGMetalExternalImageBridge.CreateExternalImage(Vg, handle, pixelWidth, pixelHeight);
+    }
+
+    void IMewVGExternalImageInterop.DeleteExternalImage(int imageId)
+    {
+        if (_disposed || imageId == 0)
+        {
+            return;
+        }
+
+        using var pool = new AutoReleasePool();
+        Vg.DeleteImage(imageId);
+    }
+
+    private nint CreateTexture(MTLPixelFormat format, int widthPx, int heightPx, int sampleCount, ulong usage = MTLTextureUsageRenderTarget)
     {
         if (ClsMTLTextureDescriptor == 0 || SelTexture2DDescriptorWithPixelFormat == 0)
         {
@@ -213,7 +262,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         // Configure usage/storage for render target.
         if (SelSetUsage != 0)
         {
-            ObjCRuntime.SendMessageNoReturn(desc, SelSetUsage, (UInt64)MTLTextureUsageRenderTarget);
+            ObjCRuntime.SendMessageNoReturn(desc, SelSetUsage, (UInt64)usage);
         }
 
         if (SelSetStorageMode != 0)

@@ -4,7 +4,7 @@ using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed class MewVGWindowResources : IDisposable
+internal sealed class MewVGWindowResources : IDisposable, IMewVGGlWindowInterop
 {
     /// <summary>
     /// MSAA sample count. 1 = no MSAA, 4 or 8 for hardware multisampling.
@@ -62,6 +62,48 @@ internal sealed class MewVGWindowResources : IDisposable
     public void SwapBuffers(nint hdc, nint hwnd) => _gl.SwapBuffers(hdc, hwnd);
 
     public void SetSwapInterval(int interval) => _gl.SetSwapInterval(interval);
+
+    int IMewVGExternalImageInterop.CreateExternalImage(nint handle, int pixelWidth, int pixelHeight)
+        => Vg.CreateImageFromHandle(
+            checked((int)handle),
+            pixelWidth,
+            pixelHeight,
+            NVGimageFlags.FlipY | NVGimageFlags.Premultiplied | NVGimageFlags.NoDelete);
+
+    void IMewVGExternalImageInterop.DeleteExternalImage(int imageId)
+    {
+        if (imageId != 0)
+        {
+            Vg.DeleteImage(imageId);
+        }
+    }
+
+    void IMewVGGlWindowInterop.RunWithCurrentContext(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        nint hdc = User32.GetDC(_hwnd);
+        if (hdc == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _gl.MakeCurrent(hdc);
+            action();
+        }
+        finally
+        {
+            _gl.ReleaseCurrent();
+            User32.ReleaseDC(_hwnd, hdc);
+        }
+    }
 
     public void Dispose()
     {

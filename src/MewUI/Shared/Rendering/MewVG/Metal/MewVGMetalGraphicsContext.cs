@@ -38,10 +38,13 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     private readonly MewVGMetalWindowResources _resources;
 
-    private readonly nint _drawable;
-    private readonly nint _commandBuffer;
-    private readonly nint _encoder;
-    private readonly bool _beganFrame;
+    private nint _drawable;
+    private nint _drawableTexture;
+    private nint _stencilTexture;
+    private nint _msaaColorTexture;
+    private nint _commandBuffer;
+    private nint _encoder;
+    private bool _beganFrame;
 
     public MewVGMetalGraphicsContext(
         nint hwnd,
@@ -77,29 +80,14 @@ internal sealed partial class MewVGMetalGraphicsContext
             return;
         }
 
-        _commandBuffer = ObjCRuntime.SendMessage(resources.CommandQueue, SelCommandBuffer);
-        if (_commandBuffer == 0)
+        _drawableTexture = drawableTexture;
+        _stencilTexture = resources.EnsureStencilTexture(_viewportWidthPx, _viewportHeightPx);
+        _msaaColorTexture = resources.EnsureMsaaColorTexture(_viewportWidthPx, _viewportHeightPx);
+
+        if (!BeginSegment(clearColor: true))
         {
             return;
         }
-
-        RetainIfNotNull(_commandBuffer);
-
-        nint stencilTex = resources.EnsureStencilTexture(_viewportWidthPx, _viewportHeightPx);
-        nint msaaColorTex = resources.EnsureMsaaColorTexture(_viewportWidthPx, _viewportHeightPx);
-        nint passDesc = CreateRenderPass(drawableTexture, stencilTex, msaaColorTex);
-        if (passDesc == 0)
-        {
-            return;
-        }
-
-        _encoder = ObjCRuntime.SendMessage(_commandBuffer, SelRenderCommandEncoderWithDescriptor, passDesc);
-        if (_encoder == 0)
-        {
-            return;
-        }
-
-        RetainIfNotNull(_encoder);
 
         _vg.SetRenderEncoder(_encoder, _commandBuffer);
         _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
@@ -122,20 +110,14 @@ internal sealed partial class MewVGMetalGraphicsContext
 
         try
         {
-            if (_encoder != 0 && _commandBuffer != 0 && _drawable != 0 && _beganFrame)
+            if (_drawable != 0 && _beganFrame)
             {
                 _vg.EndFrame();
-
-                ObjCRuntime.SendMessageNoReturn(_encoder, SelEndEncoding);
-                ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelCommit);
-                ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelWaitUntilScheduled);
-                ObjCRuntime.SendMessageNoReturn(_drawable, SelPresent);
+                CommitCurrentSegment(presentDrawable: true, waitUntilScheduled: true);
             }
-            else if (_encoder != 0)
+            else
             {
-                // Safety: if we ever created an encoder but didn't reach a normal frame end,
-                // ensure it's properly ended before it can be released by ARC/autorelease pools.
-                ObjCRuntime.SendMessageNoReturn(_encoder, SelEndEncoding);
+                CommitCurrentSegment(presentDrawable: false, waitUntilScheduled: false);
             }
         }
         finally
@@ -152,13 +134,19 @@ internal sealed partial class MewVGMetalGraphicsContext
                 }
             }
 
-            ReleaseIfNotNull(_encoder);
-            ReleaseIfNotNull(_commandBuffer);
             ReleaseIfNotNull(_drawable);
+            _drawable = 0;
+            _drawableTexture = 0;
+            _stencilTexture = 0;
+            _msaaColorTexture = 0;
         }
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint msaaColorTexture)
+    private static nint CreateRenderPass(
+        nint drawableTexture,
+        nint stencilTexture,
+        nint msaaColorTexture,
+        MTLLoadAction colorLoadAction)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -182,7 +170,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             {
                 // Render into the MSAA texture, resolve to the drawable.
                 ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, msaaColorTexture);
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)colorLoadAction);
                 ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.MultisampleResolve);
                 if (SelSetResolveTexture != 0)
                 {
@@ -192,7 +180,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             else
             {
                 ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, drawableTexture);
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)colorLoadAction);
                 ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.Store);
             }
 
@@ -624,6 +612,75 @@ internal sealed partial class MewVGMetalGraphicsContext
     }
 
     #endregion
+
+    private bool BeginSegment(bool clearColor)
+    {
+        if (_drawable == 0 || _drawableTexture == 0)
+        {
+            return false;
+        }
+
+        _commandBuffer = ObjCRuntime.SendMessage(_resources.CommandQueue, SelCommandBuffer);
+        if (_commandBuffer == 0)
+        {
+            return false;
+        }
+
+        RetainIfNotNull(_commandBuffer);
+
+        nint passDesc = CreateRenderPass(
+            _drawableTexture,
+            _stencilTexture,
+            _msaaColorTexture,
+            clearColor ? MTLLoadAction.Clear : MTLLoadAction.Load);
+
+        if (passDesc == 0)
+        {
+            ReleaseIfNotNull(_commandBuffer);
+            _commandBuffer = 0;
+            return false;
+        }
+
+        _encoder = ObjCRuntime.SendMessage(_commandBuffer, SelRenderCommandEncoderWithDescriptor, passDesc);
+        if (_encoder == 0)
+        {
+            ReleaseIfNotNull(_commandBuffer);
+            _commandBuffer = 0;
+            return false;
+        }
+
+        RetainIfNotNull(_encoder);
+        _vg.SetRenderEncoder(_encoder, _commandBuffer);
+        return true;
+    }
+
+    private void CommitCurrentSegment(bool presentDrawable, bool waitUntilScheduled)
+    {
+        if (_encoder != 0)
+        {
+            ObjCRuntime.SendMessageNoReturn(_encoder, SelEndEncoding);
+            ReleaseIfNotNull(_encoder);
+            _encoder = 0;
+        }
+
+        if (_commandBuffer != 0)
+        {
+            ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelCommit);
+
+            if (waitUntilScheduled)
+            {
+                ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelWaitUntilScheduled);
+            }
+
+            ReleaseIfNotNull(_commandBuffer);
+            _commandBuffer = 0;
+        }
+
+        if (presentDrawable && _drawable != 0)
+        {
+            ObjCRuntime.SendMessageNoReturn(_drawable, SelPresent);
+        }
+    }
 
     private readonly struct AutoReleasePool : IDisposable
     {

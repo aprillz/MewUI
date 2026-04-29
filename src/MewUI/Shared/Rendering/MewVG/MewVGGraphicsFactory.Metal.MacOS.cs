@@ -74,4 +74,22 @@ public sealed partial class MewVGGraphicsFactory
         renderTarget = new MewVGMetalBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
         handled = true;
     }
+
+    partial void TryResolveWindowResources(nint windowHandle, ref bool handled, ref IDisposable? resources)
+    {
+        if (handled)
+        {
+            return;
+        }
+
+        foreach (var entry in _windows)
+        {
+            if (entry.Value is MewVGMetalWindowResources metal && metal.Hwnd == windowHandle)
+            {
+                resources = entry.Value;
+                handled = true;
+                return;
+            }
+        }
+    }
 }

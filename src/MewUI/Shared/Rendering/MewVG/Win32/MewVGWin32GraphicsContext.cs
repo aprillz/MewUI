@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.OpenGL;

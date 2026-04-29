@@ -7,11 +7,11 @@ using Aprillz.MewVG.Tess;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 #if MEWUI_MEWVG_MACOS
-internal sealed partial class MewVGMetalGraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGMetalGraphicsContext : GraphicsContextBase, IMewVGExternalImageContext
 #elif MEWUI_MEWVG_X11
-internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase, IMewVGExternalImageContext
 #else
-internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase, IMewVGExternalImageContext
 #endif
 {
 #if MEWUI_MEWVG_MACOS
@@ -535,6 +535,24 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
     #region Image Helpers
 
+    private void PrepareExternalImageDraw()
+    {
+        _vg.GlobalAlpha(_globalAlpha);
+
+        if (_clipBoundsWorld.HasValue)
+        {
+            var clip = _clipBoundsWorld.Value;
+            _vg.SetTransformMatrix(Matrix3x2.Identity);
+            _vg.Scissor((float)clip.X, (float)clip.Y, (float)clip.Width, (float)clip.Height);
+        }
+        else
+        {
+            _vg.ResetScissor();
+        }
+
+        _vg.SetTransformMatrix(_transform);
+    }
+
     private void DrawImagePattern(int imageId, Rect destRect, float alpha, Rect? sourceRect, int imageWidthPx, int imageHeightPx)
     {
         if (destRect.Width <= 0 || destRect.Height <= 0)
@@ -580,6 +598,12 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.FillPaint(paint);
         _vg.Fill();
         _vg.ShapeAntiAlias(true);
+    }
+
+    void IMewVGExternalImageContext.DrawExternalImage(int imageId, Rect destRect, int imageWidthPx, int imageHeightPx)
+    {
+        PrepareExternalImageDraw();
+        DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: null, imageWidthPx, imageHeightPx);
     }
 
     private NVGimageFlags GetImageFlags()
