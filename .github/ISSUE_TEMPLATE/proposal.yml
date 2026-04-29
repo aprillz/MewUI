@@ -1,0 +1,65 @@
+name: Proposal
+description: Propose a behavior change, API change, or design idea.
+title: "[Proposal]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for behavior changes, API proposals, and design discussions.
+
+        If the idea affects project direction, architecture, or public API, prior discussion is expected before implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: current-limitation
+    attributes:
+      label: Why the current approach is insufficient
+    validations:
+      required: true
+  - type: dropdown
+    id: change-type
+    attributes:
+      label: Type of change
+      options:
+        - Behavior change
+        - Public API change
+        - Architectural / abstraction change
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: Who would be affected and how?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or tradeoffs
+      description: Could this be solved in app code, customization, or an external library instead?
+    validations:
+      required: true
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Additional context
+      description: Mockups, code sketches, prior discussion links, or other context.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for existing issues and discussions first.
+          required: true
+        - label: I described why this belongs in MewUI core rather than only in app-level code.
+          required: true
