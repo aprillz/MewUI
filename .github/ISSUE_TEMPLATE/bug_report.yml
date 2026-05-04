@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible bug in MewUI.
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug.
+
+        Please provide enough detail for reproduction and scope evaluation.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, .NET version, package version, backend, sample or app context.
+      placeholder: Windows 11, .NET 10, Aprillz.MewUI 0.x, Direct2D
+    validations:
+      required: true
+  - type: textarea
+    id: repro-steps
+    attributes:
+      label: Reproduction steps
+      description: List the exact steps to reproduce the issue.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Scroll ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: minimal-repro
+    attributes:
+      label: Minimal repro / code / screenshots / logs
+      description: Include the smallest possible sample, screenshots, or logs if available.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched for existing issues and did not find a duplicate.
+          required: true
+        - label: I included enough information to reproduce or investigate the problem.
+          required: true
