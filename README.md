@@ -252,12 +252,17 @@ If neither is available in `PATH`, MewUI throws:
 - [Custom Controls](docs/CustomControls.md)
 
 ---
+## 🤝 Community
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](.github/CODE_OF_CONDUCT.md)
+
+---
 ## 🧭 Roadmap (TODO)
 
 **Platforms**
 - [ ] Linux/Wayland
-- [x] macOS
 
 **Tooling**
-- [x] Hot Reload
+- [x] Hot Reload (experimental)
 - [ ] Design-time preview
