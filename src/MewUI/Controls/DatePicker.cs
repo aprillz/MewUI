@@ -32,8 +32,8 @@ public sealed class DatePicker : DropDownBase
             MewPropertyOptions.AffectsRender,
             static (self, _, _) => self._cachedHeaderText = null);
 
-    public static readonly MewProperty<System.Globalization.Calendar?> CalendarSystemProperty =
-        MewProperty<System.Globalization.Calendar?>.Register<DatePicker>(nameof(CalendarSystem), null,
+    public static readonly MewProperty<bool> UseGregorianCalendarProperty =
+        MewProperty<bool>.Register<DatePicker>(nameof(UseGregorianCalendar), false,
             MewPropertyOptions.AffectsRender,
             static (self, _, _) => self._cachedHeaderText = null);
 
@@ -76,15 +76,15 @@ public sealed class DatePicker : DropDownBase
     }
 
     /// <summary>
-    /// Gets or sets the calendar system used for date calculations
-    /// (e.g. <see cref="System.Globalization.PersianCalendar"/>).
-    /// If <see langword="null"/>, the calendar of <see cref="DisplayCulture"/>
+    /// Gets or sets whether the Gregorian calendar is used for date calculations,
+    /// regardless of the <see cref="DisplayCulture"/> setting.
+    /// When <see langword="false"/> (default), the calendar of <see cref="DisplayCulture"/>
     /// (or <see cref="CultureInfo.CurrentCulture"/>) is used.
     /// </summary>
-    public System.Globalization.Calendar? CalendarSystem
+    public bool UseGregorianCalendar
     {
-        get => GetValue(CalendarSystemProperty);
-        set => SetValue(CalendarSystemProperty, value);
+        get => GetValue(UseGregorianCalendarProperty);
+        set => SetValue(UseGregorianCalendarProperty, value);
     }
 
     /// <summary>Raised when the selected date changes.</summary>
@@ -104,7 +104,7 @@ public sealed class DatePicker : DropDownBase
         {
             FirstDayOfWeek = FirstDayOfWeek,
             DisplayCulture = DisplayCulture,
-            CalendarSystem = CalendarSystem,
+            UseGregorianCalendar = UseGregorianCalendar,
             StyleName = BuiltInStyles.DatePickerPopup,
         };
 
@@ -129,7 +129,7 @@ public sealed class DatePicker : DropDownBase
 
         _calendar.FirstDayOfWeek = FirstDayOfWeek;
         _calendar.DisplayCulture = DisplayCulture;
-        _calendar.CalendarSystem = CalendarSystem;
+        _calendar.UseGregorianCalendar = UseGregorianCalendar;
     }
 
     protected override void OnIsDropDownOpenChanged(bool oldValue, bool newValue)
@@ -196,12 +196,23 @@ public sealed class DatePicker : DropDownBase
         {
             var date = SelectedDate.Value;
             var fmt = DateFormat;
-            var culture = DisplayCulture ?? CultureInfo.CurrentCulture;
+            var baseCulture = DisplayCulture ?? CultureInfo.CurrentCulture;
             if (_cachedHeaderText == null || _cachedHeaderDate != date || _cachedHeaderFormat != fmt)
             {
                 _cachedHeaderDate = date;
                 _cachedHeaderFormat = fmt;
-                _cachedHeaderText = date.ToDateTime(TimeOnly.MinValue).ToString(fmt, culture);
+                CultureInfo formatCulture;
+                if (UseGregorianCalendar && baseCulture.Calendar is not System.Globalization.GregorianCalendar)
+                {
+                    var cloned = (CultureInfo)baseCulture.Clone();
+                    cloned.DateTimeFormat.Calendar = new System.Globalization.GregorianCalendar();
+                    formatCulture = cloned;
+                }
+                else
+                {
+                    formatCulture = baseCulture;
+                }
+                _cachedHeaderText = date.ToDateTime(TimeOnly.MinValue).ToString(fmt, formatCulture);
             }
             text = _cachedHeaderText;
             textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;

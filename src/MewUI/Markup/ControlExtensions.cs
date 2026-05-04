@@ -3190,11 +3190,12 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the calendar system used for date calculations (e.g. PersianCalendar).
+    /// Sets whether the Gregorian calendar is used for date calculations,
+    /// regardless of the <see cref="Calendar.DisplayCulture"/> setting.
     /// </summary>
-    public static Calendar CalendarSystem(this Calendar calendar, System.Globalization.Calendar? calendarSystem)
+    public static Calendar UseGregorianCalendar(this Calendar calendar, bool value = true)
     {
-        calendar.CalendarSystem = calendarSystem;
+        calendar.UseGregorianCalendar = value;
         return calendar;
     }
 
@@ -3260,11 +3261,12 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the calendar system used for date calculations (e.g. PersianCalendar).
+    /// Sets whether the Gregorian calendar is used for date calculations,
+    /// regardless of the <see cref="DatePicker.DisplayCulture"/> setting.
     /// </summary>
-    public static DatePicker CalendarSystem(this DatePicker datePicker, System.Globalization.Calendar? calendarSystem)
+    public static DatePicker UseGregorianCalendar(this DatePicker datePicker, bool value = true)
     {
-        datePicker.CalendarSystem = calendarSystem;
+        datePicker.UseGregorianCalendar = value;
         return datePicker;
     }
 

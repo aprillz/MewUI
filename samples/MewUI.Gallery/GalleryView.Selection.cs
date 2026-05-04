@@ -79,15 +79,28 @@ partial class GalleryView
                         .Spacing(8)
                         .Children(
                             new ComboBox()
-                                .Items(["Default", "Gregorian Calendar", "Persian Calendar"])
+                                .Items(["Default", "Persian (fa-IR)", "Arabic (ar-SA)", "Hebrew (he-IL)", "Japanese (ja-JP)", "Korean (ko-KR)", "Taiwan (zh-TW)", "Thai (th-TH)"])
                                 .SelectedIndex(0)
                                 .OnSelectionChanged(x => {
-                                    calendar.CalendarSystem = x switch {
-                                        "Gregorian Calendar" => new System.Globalization.GregorianCalendar(),
-                                        "Persian Calendar" => new System.Globalization.PersianCalendar(),
-                                        _ => null
+                                    var culture = x switch {
+                                        "Persian (fa-IR)"  => System.Globalization.CultureInfo.GetCultureInfo("fa-IR"),
+                                        "Arabic (ar-SA)"   => System.Globalization.CultureInfo.GetCultureInfo("ar-SA"),
+                                        "Hebrew (he-IL)"   => System.Globalization.CultureInfo.GetCultureInfo("he-IL"),
+                                        "Japanese (ja-JP)" => System.Globalization.CultureInfo.GetCultureInfo("ja-JP"),
+                                        "Korean (ko-KR)"   => System.Globalization.CultureInfo.GetCultureInfo("ko-KR"),
+                                        "Taiwan (zh-TW)"   => System.Globalization.CultureInfo.GetCultureInfo("zh-TW"),
+                                        "Thai (th-TH)"     => System.Globalization.CultureInfo.GetCultureInfo("th-TH"),
+                                        _ => (System.Globalization.CultureInfo?)null
                                     };
-                                    datePicker.CalendarSystem = calendar.CalendarSystem;
+                                    calendar.DisplayCulture = culture;
+                                    datePicker.DisplayCulture = culture;
+                                }),
+
+                        new CheckBox()
+                                .Content("Gregorian")
+                                .OnCheckedChanged(v => {
+                                    calendar.UseGregorianCalendar = v == true;
+                                    datePicker.UseGregorianCalendar = v == true;
                                 }),
 
                             new TextBlock()

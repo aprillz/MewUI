@@ -72,8 +72,8 @@ public sealed class Calendar : Control, IVisualTreeHost
             MewPropertyOptions.AffectsRender,
             static (self, _, _) => self.InvalidateHeaderCache());
 
-    public static readonly MewProperty<System.Globalization.Calendar?> CalendarSystemProperty =
-        MewProperty<System.Globalization.Calendar?>.Register<Calendar>(nameof(CalendarSystem), null,
+    public static readonly MewProperty<bool> UseGregorianCalendarProperty =
+        MewProperty<bool>.Register<Calendar>(nameof(UseGregorianCalendar), false,
             MewPropertyOptions.AffectsRender,
             static (self, _, _) => self.InvalidateHeaderCache());
 
@@ -162,15 +162,15 @@ public sealed class Calendar : Control, IVisualTreeHost
     }
 
     /// <summary>
-    /// Gets or sets the calendar system used for date calculations
-    /// (e.g. <see cref="System.Globalization.PersianCalendar"/>).
-    /// If <see langword="null"/>, the calendar of <see cref="DisplayCulture"/>
+    /// Gets or sets whether the Gregorian calendar is used for date calculations,
+    /// regardless of the <see cref="DisplayCulture"/> setting.
+    /// When <see langword="false"/> (default), the calendar of <see cref="DisplayCulture"/>
     /// (or <see cref="CultureInfo.CurrentCulture"/>) is used.
     /// </summary>
-    public System.Globalization.Calendar? CalendarSystem
+    public bool UseGregorianCalendar
     {
-        get => GetValue(CalendarSystemProperty);
-        set => SetValue(CalendarSystemProperty, value);
+        get => GetValue(UseGregorianCalendarProperty);
+        set => SetValue(UseGregorianCalendarProperty, value);
     }
 
     public override bool Focusable => true;
@@ -209,8 +209,10 @@ public sealed class Calendar : Control, IVisualTreeHost
     private CultureInfo GetEffectiveCulture() =>
         DisplayCulture ?? CultureInfo.CurrentCulture;
 
+    private static readonly System.Globalization.GregorianCalendar _sharedGregorianCalendar = new();
+
     private System.Globalization.Calendar GetEffectiveCalendar() =>
-        CalendarSystem ?? GetEffectiveCulture().Calendar;
+        UseGregorianCalendar ? _sharedGregorianCalendar : GetEffectiveCulture().Calendar;
 
     private static DateTime ToDateTimeForCal(DateOnly d) =>
         d.ToDateTime(TimeOnly.MinValue);
