@@ -220,7 +220,7 @@ public abstract class Control : FrameworkElement
     }
 
     /// <summary>
-    /// Sets the pressed state. Change notification drives <see cref="InvalidateVisualState"/>
+    /// Sets the pressed state. Change notification drives <see cref="UIElement.InvalidateVisualState"/>
     /// and <see cref="Element.InvalidateVisual"/> via the property's AffectsVisualState/AffectsRender flags.
     /// </summary>
     protected void SetPressed(bool pressed) => SetValue(IsPressedPropertyKey, pressed);

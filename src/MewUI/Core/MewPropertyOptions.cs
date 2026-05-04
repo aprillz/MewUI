@@ -23,7 +23,7 @@ public enum MewPropertyOptions
     BindsTwoWayByDefault = 1 << 3,
 
     /// <summary>
-    /// Value changes trigger <see cref="UIElement.InvalidateVisualState"/>, queuing the
+    /// Value changes trigger <see cref="Controls.UIElement.InvalidateVisualState"/>, queuing the
     /// element for visual-state reconciliation at the start of the next layout/render pass.
     /// Use for properties that feed into <see cref="Controls.Control.ComputeVisualState"/>
     /// (e.g. IsEnabled, IsMouseOver, IsFocused, IsPressed).
