@@ -56,4 +56,19 @@ public sealed partial class MewVGGraphicsFactory
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
         => new OpenGLMeasurementContext(dpi);
 
+    partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget)
+    {
+        if (handled)
+        {
+            return;
+        }
+
+        renderTarget = new OpenGLBitmapRenderTarget(
+            pixelWidth,
+            pixelHeight,
+            dpiScale,
+            hasAlpha);
+        handled = true;
+    }
+
 }

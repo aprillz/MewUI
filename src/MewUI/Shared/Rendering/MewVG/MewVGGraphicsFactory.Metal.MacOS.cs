@@ -64,7 +64,7 @@ public sealed partial class MewVGGraphicsFactory
         handled = true;
     }
 
-    static partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, ref bool handled, ref IBitmapRenderTarget? renderTarget)
+    partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget)
     {
         if (handled)
         {

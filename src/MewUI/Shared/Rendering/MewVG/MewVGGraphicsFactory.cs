@@ -94,7 +94,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
     {
         IBitmapRenderTarget? rt = null;
         bool handled = false;
-        TryCreateBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, ref handled, ref rt);
+        TryCreateBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, true, ref handled, ref rt);
         if (handled && rt != null)
         {
             return rt;
@@ -133,7 +133,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
 
     static partial void TryReleaseWindowResources(nint hwnd);
 
-    static partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, ref bool handled, ref IBitmapRenderTarget? renderTarget);
+    partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget);
 
     static partial void TryGetPreferredSurfaceKind(ref bool handled, ref WindowSurfaceKind kind);
 

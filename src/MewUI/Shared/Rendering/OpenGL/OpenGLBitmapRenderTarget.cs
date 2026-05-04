@@ -26,7 +26,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     private byte[]? _uploadBuffer;
     private Action? _releaseAction;
 
-    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale)
+    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -35,7 +35,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         PixelWidth = pixelWidth;
         PixelHeight = pixelHeight;
         DpiScale = dpiScale;
-
+        HasAlpha = hasAlpha;
         // Allocate CPU-side pixel buffer
         _pixels = new byte[pixelWidth * pixelHeight * 4];
     }
@@ -73,6 +73,13 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     /// the FBO color attachment, producing premultiplied output.</summary>
     public bool IsPremultiplied => true;
 
+    /// <summary>
+    /// Mirrors the alpha-channel hint from construction. Consumers reading these pixels via
+    /// <see cref="IPixelBufferSource"/> use this to skip alpha scans for opaque RTs (video
+    /// frame target etc.).
+    /// </summary>
+    public bool HasAlpha { get; }
+
     public byte[] CopyPixels()
     {
         if (_disposed)
@@ -102,10 +109,30 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             return;
         }
 
-        byte b = color.B;
-        byte g = color.G;
-        byte r = color.R;
+        // This RT reports IsPremultiplied=true (FBO output convention), so consumers
+        // sample without re-multiplying RGB by alpha. We must therefore store the
+        // pre-multiplied bytes here — otherwise Color.Transparent (= 0x00FFFFFF =
+        // straight (R=255,G=255,B=255,A=0)) leaks into NVG src-over blending as
+        // saturated white, painting opaque white anywhere the caller intended a
+        // fully transparent fill (visible as a white wheel background on X11).
         byte a = color.A;
+        byte b, g, r;
+        if (a == 0xFF)
+        {
+            b = color.B;
+            g = color.G;
+            r = color.R;
+        }
+        else if (a == 0)
+        {
+            b = g = r = 0;
+        }
+        else
+        {
+            b = (byte)((color.B * a + 127) / 255);
+            g = (byte)((color.G * a + 127) / 255);
+            r = (byte)((color.R * a + 127) / 255);
+        }
 
         for (int i = 0; i < _pixels.Length; i += 4)
         {

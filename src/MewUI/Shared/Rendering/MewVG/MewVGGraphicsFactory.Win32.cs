@@ -76,14 +76,14 @@ public sealed partial class MewVGGraphicsFactory
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
         => new GdiMeasurementContext(User32.GetDC(0), dpi);
 
-    static partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, ref bool handled, ref IBitmapRenderTarget? renderTarget)
+    partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget)
     {
         if (handled)
         {
             return;
         }
 
-        renderTarget = new OpenGLBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
+        renderTarget = new OpenGLBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
         handled = true;
     }
 

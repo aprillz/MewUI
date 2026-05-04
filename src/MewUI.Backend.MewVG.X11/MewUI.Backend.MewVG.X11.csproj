@@ -38,6 +38,7 @@
 
     <!-- OpenGL shared (GLX context, text cache, image utilities, measurement) -->
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLBitmapRenderTarget.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.X11.cs" LinkBase="Rendering\OpenGL" />
