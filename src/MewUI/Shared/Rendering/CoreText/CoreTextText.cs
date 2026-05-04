@@ -43,12 +43,109 @@ internal static unsafe partial class CoreTextText
         int stride = checked(widthPx * 4);
         var data = new byte[checked(stride * heightPx)];
 
+        if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
+                          color, horizontalAlignment, verticalAlignment,
+                          wrapping, wrapWidthPx, trimming, data))
+        {
+            return new TextBitmap(1, 1, new byte[4]);
+        }
+
+        return new TextBitmap(widthPx, heightPx, data);
+    }
+
+    /// <summary>
+    /// Rasterizes text into a caller-supplied buffer, avoiding the per-call <c>byte[]</c>
+    /// allocation that <see cref="Rasterize"/> incurs. Used by owner-keyed text caches that
+    /// reuse a single buffer per TextBlock instance even when the text content mutates.
+    /// </summary>
+    /// <remarks>
+    /// <c>destBuffer</c> receives BGRA premultiplied pixels and must be at least
+    /// <c>(widthPx + aaExtra) * heightPx * 4</c> bytes, where <c>aaExtra = ceil(dpi / 96 * 2)</c>;
+    /// bytes beyond the rasterized region are not modified. <c>actualWidthPx</c> receives the
+    /// AA-extended bitmap width — the same value <see cref="TextBitmap.WidthPx"/> would have on
+    /// the equivalent <see cref="Rasterize"/> call — used for both the GPU upload extent and the
+    /// image-pattern UV math. Returns false on any failure (bad font, empty text, buffer too
+    /// small, CG init fail).
+    /// </remarks>
+    public static bool RasterizeInto(
+        CoreTextFont font,
+        ReadOnlySpan<char> text,
+        int widthPx,
+        int heightPx,
+        uint dpi,
+        Color color,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment,
+        TextWrapping wrapping,
+        int wrapWidthPx,
+        TextTrimming trimming,
+        byte[] destBuffer,
+        out int actualWidthPx,
+        out int actualHeightPx)
+    {
+        actualWidthPx = 0;
+        actualHeightPx = 0;
+        ArgumentNullException.ThrowIfNull(destBuffer);
+
+        widthPx = Math.Max(1, widthPx);
+        heightPx = Math.Max(1, heightPx);
+
+        var ctFont = font.GetFontRef(dpi);
+        if (text.IsEmpty || ctFont == 0)
+        {
+            return false;
+        }
+
+        int alignWidthPx = widthPx;
+        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2);
+        widthPx += aaExtra;
+
+        int stride = checked(widthPx * 4);
+        int required = checked(stride * heightPx);
+        if (destBuffer.Length < required)
+        {
+            return false;
+        }
+
+        if (!RasterizeCore(ctFont, text, widthPx, heightPx, alignWidthPx,
+                          color, horizontalAlignment, verticalAlignment,
+                          wrapping, wrapWidthPx, trimming, destBuffer))
+        {
+            return false;
+        }
+
+        actualWidthPx = widthPx;
+        actualHeightPx = heightPx;
+        return true;
+    }
+
+    /// <summary>
+    /// Shared rasterization core used by both <see cref="Rasterize"/> and
+    /// <see cref="RasterizeInto"/>. <paramref name="data"/> may be larger than
+    /// <c>widthPx * heightPx * 4</c>; only the leading region is written.
+    /// </summary>
+    private static bool RasterizeCore(
+        nint ctFont,
+        ReadOnlySpan<char> text,
+        int widthPx,
+        int heightPx,
+        int alignWidthPx,
+        Color color,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment,
+        TextWrapping wrapping,
+        int wrapWidthPx,
+        TextTrimming trimming,
+        byte[] data)
+    {
+        int stride = widthPx * 4;
+
         fixed (byte* pData = data)
         {
             var colorspace = CGColorSpaceCreateDeviceRGB();
             if (colorspace == 0)
             {
-                return new TextBitmap(1, 1, new byte[4]);
+                return false;
             }
 
             var ctx = CGBitmapContextCreate(pData, (nuint)widthPx, (nuint)heightPx, 8, (nuint)stride, colorspace, kCGBitmapInfo);
@@ -56,7 +153,7 @@ internal static unsafe partial class CoreTextText
 
             if (ctx == 0)
             {
-                return new TextBitmap(1, 1, new byte[4]);
+                return false;
             }
 
             try
@@ -195,7 +292,7 @@ internal static unsafe partial class CoreTextText
                     }
                 }
 
-                return new TextBitmap(widthPx, heightPx, data);
+                return true;
             }
             finally
             {
@@ -269,6 +366,26 @@ internal static unsafe partial class CoreTextText
         {
             return;
         }
+
+        // Reset text matrix to identity. CTLineDraw (used by DrawLineGlyphsWithFallback for
+        // lines containing glyphs not in the base font, e.g. '→' U+2192) is documented to
+        // advance the text position to the start of the next line as it draws — that
+        // position is the tx/ty components of the text matrix. CGContextSaveGState does NOT
+        // preserve the text matrix on macOS (it's not in the gstate save set per Apple's
+        // documented list), so the residual translation from a previous fallback line
+        // leaks into subsequent CTFontDrawGlyphs calls, shifting every glyph by the prior
+        // line's end-X. Visual artifact: lines after the fallback line render at the right
+        // edge of the fallback line's last character.
+        //
+        // Identity is the correct reset value for our usage:
+        //   - scale (a=1, d=1): CT fonts apply their own size; text matrix scale must be 1.
+        //   - skew (b=0, c=0): italic is a font attribute, not a text-matrix concern.
+        //   - translation (tx=0, ty=0): we want absolute positions from the `pPos` array
+        //     and the explicit CGContextSetTextPosition() in the fallback path to apply
+        //     directly, with no residual offset.
+        // It also matches the CGContext's default text matrix at construction time, so
+        // the first call is a no-op and subsequent calls just clean up after fallback paths.
+        CGContextSetTextMatrix(ctx, CGAffineTransform.Identity);
 
         int count = text.Length;
         Span<ushort> glyphs = count <= 1024 ? stackalloc ushort[count] : new ushort[count];
@@ -450,32 +567,16 @@ internal static unsafe partial class CoreTextText
             return 0;
         }
 
-        int count = text.Length;
-        Span<ushort> glyphs = count <= 1024 ? stackalloc ushort[count] : new ushort[count];
-        Span<CGSize> advances = count <= 1024 ? stackalloc CGSize[count] : new CGSize[count];
-
-        fixed (char* pChars = text)
-        fixed (ushort* pGlyphs = glyphs)
-        fixed (CGSize* pAdv = advances)
-        {
-            if (!CTFontGetGlyphsForCharacters(ctFont, pChars, pGlyphs, (nuint)count))
-            {
-                return MeasureRunWidthWithFallback(ctFont, text);
-            }
-
-            _ = CTFontGetAdvancesForGlyphs(ctFont, CTFontOrientationHorizontal, pGlyphs, pAdv, (nuint)count);
-
-            double width = 0;
-            for (int i = 0; i < count; i++)
-            {
-                // Skip low surrogates — CTFont maps the surrogate pair to one glyph on the
-                // high surrogate slot; the low surrogate slot contains glyph 0 with zero advance.
-                if (i > 0 && char.IsLowSurrogate(text[i]))
-                    continue;
-                width += pAdv[i].width;
-            }
-            return width;
-        }
+        // Always go through CTLine. The previous fast path summed per-glyph advances from
+        // CTFontGetAdvancesForGlyphs, which ignores kerning pairs (and any other
+        // OpenType GPOS positioning). Visible mismatch: prefix MeasureText with kerning
+        // applied vs glyph extent without — produced extra inter-glyph gaps after kerned
+        // pairs (e.g. Arial 'Te' on macOS rendered T+e ~5 px apart at 48 px instead of
+        // the kerned 0 px). CTLine respects kerning + ligatures + GSUB/GPOS the same way
+        // GDI's GetTextExtentPoint32 / DirectWrite's IDWriteTextLayout do. The single-
+        // line measurement cost is dominated by CFAttributedString allocation; for the
+        // typical SVG text-run sizes this is negligible compared to glyph rasterization.
+        return MeasureRunWidthWithFallback(ctFont, text);
     }
 
     /// <summary>
@@ -732,6 +833,25 @@ internal static unsafe partial class CoreTextText
 
     [LibraryImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
     private static partial void CGContextSetTextPosition(nint context, double x, double y);
+
+    [LibraryImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
+    private static partial void CGContextSetTextMatrix(nint context, CGAffineTransform t);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct CGAffineTransform
+    {
+        public readonly double a, b, c, d, tx, ty;
+        public CGAffineTransform(double a, double b, double c, double d, double tx, double ty)
+        {
+            this.a = a;
+            this.b = b;
+            this.c = c;
+            this.d = d;
+            this.tx = tx;
+            this.ty = ty;
+        }
+        public static readonly CGAffineTransform Identity = new(1, 0, 0, 1, 0, 0);
+    }
 
     [LibraryImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
     private static partial void CGContextSaveGState(nint context);
