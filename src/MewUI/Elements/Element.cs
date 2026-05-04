@@ -197,7 +197,11 @@ public abstract class Element : MewObject
     /// </remarks>
     public virtual void InvalidateMeasure()
     {
-        if (IsMeasureDirty) return;
+        if (IsMeasureDirty)
+        {
+            Parent?.InvalidateMeasure();
+            return;
+        }
         IsMeasureDirty = true;
         IsArrangeDirty = true;
         Parent?.InvalidateMeasure();
@@ -230,12 +234,21 @@ public abstract class Element : MewObject
     /// Invalidates the Arrange pass, causing a re-arrange on next layout.
     /// </summary>
     /// <remarks>
-    /// Idempotent per dirty cycle; cascades into <see cref="ISubtreeInvalidationHost"/> subtrees
-    /// so private composition re-arranges instead of short-circuiting on unchanged bounds.
+    /// Mirrors <see cref="InvalidateMeasure"/>: even when this node is already dirty, the
+    /// upward propagation is re-issued so a parent that cleared its own dirty flag mid-pass
+    /// (e.g. a child re-dirtying after the parent's <c>ArrangeCore</c> finished arranging it)
+    /// still gets notified. Without this, ScrollIntoView-style re-arrange requests issued
+    /// during a parent's Arrange would silently drop. Cascades into
+    /// <see cref="ISubtreeInvalidationHost"/> subtrees so private composition re-arranges
+    /// instead of short-circuiting on unchanged bounds.
     /// </remarks>
     public virtual void InvalidateArrange()
     {
-        if (IsArrangeDirty) return;
+        if (IsArrangeDirty)
+        {
+            Parent?.InvalidateArrange();
+            return;
+        }
         IsArrangeDirty = true;
         Parent?.InvalidateArrange();
 
