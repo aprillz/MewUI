@@ -1,3 +1,4 @@
+using System.Globalization;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -8,12 +9,12 @@ namespace Aprillz.MewUI.Controls;
 public sealed class DatePicker : DropDownBase
 {
     private Calendar? _calendar;
-    private DateTime? _cachedHeaderDate;
+    private DateOnly? _cachedHeaderDate;
     private string? _cachedHeaderFormat;
     private string? _cachedHeaderText;
 
-    public static readonly MewProperty<DateTime?> SelectedDateProperty =
-        MewProperty<DateTime?>.Register<DatePicker>(nameof(SelectedDate), null,
+    public static readonly MewProperty<DateOnly?> SelectedDateProperty =
+        MewProperty<DateOnly?>.Register<DatePicker>(nameof(SelectedDate), null,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.BindsTwoWayByDefault,
             static (self, oldValue, newValue) => self.OnSelectedDatePropertyChanged(oldValue, newValue));
 
@@ -26,8 +27,18 @@ public sealed class DatePicker : DropDownBase
     public static readonly MewProperty<DayOfWeek> FirstDayOfWeekProperty =
         MewProperty<DayOfWeek>.Register<DatePicker>(nameof(FirstDayOfWeek), DayOfWeek.Sunday);
 
+    public static readonly MewProperty<CultureInfo?> DisplayCultureProperty =
+        MewProperty<CultureInfo?>.Register<DatePicker>(nameof(DisplayCulture), null,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self._cachedHeaderText = null);
+
+    public static readonly MewProperty<System.Globalization.Calendar?> CalendarSystemProperty =
+        MewProperty<System.Globalization.Calendar?>.Register<DatePicker>(nameof(CalendarSystem), null,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self._cachedHeaderText = null);
+
     /// <summary>Gets or sets the selected date.</summary>
-    public DateTime? SelectedDate
+    public DateOnly? SelectedDate
     {
         get => GetValue(SelectedDateProperty);
         set => SetValue(SelectedDateProperty, value);
@@ -54,10 +65,32 @@ public sealed class DatePicker : DropDownBase
         set => SetValue(FirstDayOfWeekProperty, value);
     }
 
-    /// <summary>Raised when the selected date changes.</summary>
-    public event Action<DateTime?>? SelectedDateChanged;
+    /// <summary>
+    /// Gets or sets the culture used for display (month/day names, number formatting).
+    /// If <see langword="null"/>, <see cref="CultureInfo.CurrentCulture"/> is used.
+    /// </summary>
+    public CultureInfo? DisplayCulture
+    {
+        get => GetValue(DisplayCultureProperty);
+        set => SetValue(DisplayCultureProperty, value);
+    }
 
-    private void OnSelectedDatePropertyChanged(DateTime? oldValue, DateTime? newValue)
+    /// <summary>
+    /// Gets or sets the calendar system used for date calculations
+    /// (e.g. <see cref="System.Globalization.PersianCalendar"/>).
+    /// If <see langword="null"/>, the calendar of <see cref="DisplayCulture"/>
+    /// (or <see cref="CultureInfo.CurrentCulture"/>) is used.
+    /// </summary>
+    public System.Globalization.Calendar? CalendarSystem
+    {
+        get => GetValue(CalendarSystemProperty);
+        set => SetValue(CalendarSystemProperty, value);
+    }
+
+    /// <summary>Raised when the selected date changes.</summary>
+    public event Action<DateOnly?>? SelectedDateChanged;
+
+    private void OnSelectedDatePropertyChanged(DateOnly? oldValue, DateOnly? newValue)
     {
         if (_calendar != null)
             _calendar.SelectedDate = newValue;
@@ -70,6 +103,8 @@ public sealed class DatePicker : DropDownBase
         _calendar = new Calendar
         {
             FirstDayOfWeek = FirstDayOfWeek,
+            DisplayCulture = DisplayCulture,
+            CalendarSystem = CalendarSystem,
             StyleName = BuiltInStyles.DatePickerPopup,
         };
 
@@ -93,6 +128,8 @@ public sealed class DatePicker : DropDownBase
         if (_calendar == null) return;
 
         _calendar.FirstDayOfWeek = FirstDayOfWeek;
+        _calendar.DisplayCulture = DisplayCulture;
+        _calendar.CalendarSystem = CalendarSystem;
     }
 
     protected override void OnIsDropDownOpenChanged(bool oldValue, bool newValue)
@@ -114,7 +151,7 @@ public sealed class DatePicker : DropDownBase
 
     protected override UIElement GetPopupFocusTarget(UIElement popup) => popup;
 
-    private void OnCalendarSelectedDateChanged(DateTime? date)
+    private void OnCalendarSelectedDateChanged(DateOnly? date)
     {
         // Sync value during navigation (keyboard arrows) without closing popup.
         if (date.HasValue)
@@ -123,7 +160,7 @@ public sealed class DatePicker : DropDownBase
         }
     }
 
-    private void OnCalendarDateActivated(DateTime date)
+    private void OnCalendarDateActivated(DateOnly date)
     {
         // Commit action (mouse click or Enter key) — close popup.
         SelectedDate = date;
@@ -135,7 +172,7 @@ public sealed class DatePicker : DropDownBase
         var headerHeight = ResolveHeaderHeight();
 
         // Measure a representative date string to determine width
-        string sample = DateTime.Today.ToString(DateFormat);
+        string sample = DateOnly.FromDateTime(DateTime.Today).ToString(DateFormat);
         using var measure = BeginTextMeasurement();
         var textSize = measure.Context.MeasureText(sample, measure.Font);
 
@@ -159,11 +196,12 @@ public sealed class DatePicker : DropDownBase
         {
             var date = SelectedDate.Value;
             var fmt = DateFormat;
+            var culture = DisplayCulture ?? CultureInfo.CurrentCulture;
             if (_cachedHeaderText == null || _cachedHeaderDate != date || _cachedHeaderFormat != fmt)
             {
                 _cachedHeaderDate = date;
                 _cachedHeaderFormat = fmt;
-                _cachedHeaderText = date.ToString(fmt);
+                _cachedHeaderText = date.ToDateTime(TimeOnly.MinValue).ToString(fmt, culture);
             }
             text = _cachedHeaderText;
             textColor = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;

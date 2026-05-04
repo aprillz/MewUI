@@ -3138,7 +3138,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the selected date.
     /// </summary>
-    public static Calendar SelectedDate(this Calendar calendar, DateTime? date)
+    public static Calendar SelectedDate(this Calendar calendar, DateOnly? date)
     {
         calendar.SelectedDate = date;
         return calendar;
@@ -3147,7 +3147,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the display date (visible month/year).
     /// </summary>
-    public static Calendar DisplayDate(this Calendar calendar, DateTime date)
+    public static Calendar DisplayDate(this Calendar calendar, DateOnly date)
     {
         calendar.DisplayDate = date;
         return calendar;
@@ -3183,16 +3183,34 @@ public static class ControlExtensions
     /// <summary>
     /// Adds a selected date changed event handler.
     /// </summary>
-    public static Calendar OnSelectedDateChanged(this Calendar calendar, Action<DateTime?> handler)
+    public static Calendar OnSelectedDateChanged(this Calendar calendar, Action<DateOnly?> handler)
     {
         calendar.SelectedDateChanged += handler;
         return calendar;
     }
 
     /// <summary>
+    /// Sets the calendar system used for date calculations (e.g. PersianCalendar).
+    /// </summary>
+    public static Calendar CalendarSystem(this Calendar calendar, System.Globalization.Calendar? calendarSystem)
+    {
+        calendar.CalendarSystem = calendarSystem;
+        return calendar;
+    }
+
+    /// <summary>
+    /// Sets the culture used for display (month/day names, number formatting).
+    /// </summary>
+    public static Calendar DisplayCulture(this Calendar calendar, System.Globalization.CultureInfo? culture)
+    {
+        calendar.DisplayCulture = culture;
+        return calendar;
+    }
+
+    /// <summary>
     /// Binds the selected date to an observable value.
     /// </summary>
-    public static Calendar BindSelectedDate(this Calendar calendar, ObservableValue<DateTime?> source)
+    public static Calendar BindSelectedDate(this Calendar calendar, ObservableValue<DateOnly?> source)
     {
         ArgumentNullException.ThrowIfNull(calendar);
         ArgumentNullException.ThrowIfNull(source);
@@ -3208,7 +3226,7 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the selected date.
     /// </summary>
-    public static DatePicker SelectedDate(this DatePicker datePicker, DateTime? date)
+    public static DatePicker SelectedDate(this DatePicker datePicker, DateOnly? date)
     {
         datePicker.SelectedDate = date;
         return datePicker;
@@ -3242,9 +3260,27 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the calendar system used for date calculations (e.g. PersianCalendar).
+    /// </summary>
+    public static DatePicker CalendarSystem(this DatePicker datePicker, System.Globalization.Calendar? calendarSystem)
+    {
+        datePicker.CalendarSystem = calendarSystem;
+        return datePicker;
+    }
+
+    /// <summary>
+    /// Sets the culture used for display (month/day names, number formatting).
+    /// </summary>
+    public static DatePicker DisplayCulture(this DatePicker datePicker, System.Globalization.CultureInfo? culture)
+    {
+        datePicker.DisplayCulture = culture;
+        return datePicker;
+    }
+
+    /// <summary>
     /// Adds a selected date changed event handler.
     /// </summary>
-    public static DatePicker OnSelectedDateChanged(this DatePicker datePicker, Action<DateTime?> handler)
+    public static DatePicker OnSelectedDateChanged(this DatePicker datePicker, Action<DateOnly?> handler)
     {
         datePicker.SelectedDateChanged += handler;
         return datePicker;
@@ -3253,7 +3289,7 @@ public static class ControlExtensions
     /// <summary>
     /// Binds the selected date to an observable value.
     /// </summary>
-    public static DatePicker BindSelectedDate(this DatePicker datePicker, ObservableValue<DateTime?> source)
+    public static DatePicker BindSelectedDate(this DatePicker datePicker, ObservableValue<DateOnly?> source)
     {
         ArgumentNullException.ThrowIfNull(datePicker);
         ArgumentNullException.ThrowIfNull(source);

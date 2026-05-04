@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
+    DatePicker datePicker = null!;
+
     private FrameworkElement SelectionPage()
     {
         var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
@@ -72,8 +74,25 @@ partial class GalleryView
                         new Calendar()
                             .Ref(out calendar),
 
-                        new TextBlock()
-                            .Bind(TextBlock.TextProperty, calendar, Calendar.SelectedDateProperty, x => $"Selected: {x:yyyy-MM-dd}")
+                        new StackPanel()
+                        .Horizontal()
+                        .Spacing(8)
+                        .Children(
+                            new ComboBox()
+                                .Items(["Default", "Gregorian Calendar", "Persian Calendar"])
+                                .SelectedIndex(0)
+                                .OnSelectionChanged(x => {
+                                    calendar.CalendarSystem = x switch {
+                                        "Gregorian Calendar" => new System.Globalization.GregorianCalendar(),
+                                        "Persian Calendar" => new System.Globalization.PersianCalendar(),
+                                        _ => null
+                                    };
+                                    datePicker.CalendarSystem = calendar.CalendarSystem;
+                                }),
+
+                            new TextBlock()
+                                .Bind(TextBlock.TextProperty, calendar, Calendar.SelectedDateProperty, x => $"Selected: {x:yyyy-MM-dd}")
+                        )
                     )
             ),
 
@@ -84,7 +103,7 @@ partial class GalleryView
                     .Spacing(8)
                     .Children(
                         new DatePicker().Placeholder("Select a date..."),
-                        new DatePicker().SelectedDate(DateTime.Today),
+                        new DatePicker().Ref(out datePicker).SelectedDate(DateOnly.FromDateTime(DateTime.Today)),
                         new DatePicker().Placeholder("Disabled").Disable()
                     ),
                 minWidth: 250

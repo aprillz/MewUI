@@ -31,7 +31,7 @@ public sealed class Calendar : Control, IVisualTreeHost
     private readonly Button _headerButton; // "March 2026" — click to switch mode
 
     // Cached header text
-    private DateTime _cachedHeaderDate;
+    private DateOnly _cachedHeaderDate;
     private CalendarMode _cachedHeaderMode = (CalendarMode)(-1);
 
     // Cached cell rects for hit testing
@@ -45,13 +45,13 @@ public sealed class Calendar : Control, IVisualTreeHost
     private IFont? _dowFont;
     private uint _cellFontDpi;
 
-    public static readonly MewProperty<DateTime?> SelectedDateProperty =
-        MewProperty<DateTime?>.Register<Calendar>(nameof(SelectedDate), null,
+    public static readonly MewProperty<DateOnly?> SelectedDateProperty =
+        MewProperty<DateOnly?>.Register<Calendar>(nameof(SelectedDate), null,
             MewPropertyOptions.AffectsRender,
             static (self, oldValue, newValue) => self.OnSelectedDateChanged(oldValue, newValue));
 
-    public static readonly MewProperty<DateTime> DisplayDateProperty =
-        MewProperty<DateTime>.Register<Calendar>(nameof(DisplayDate), DateTime.Today,
+    public static readonly MewProperty<DateOnly> DisplayDateProperty =
+        MewProperty<DateOnly>.Register<Calendar>(nameof(DisplayDate), DateOnly.FromDateTime(DateTime.Today),
             MewPropertyOptions.AffectsRender);
 
     public static readonly MewProperty<CalendarMode> DisplayModeProperty =
@@ -66,6 +66,16 @@ public sealed class Calendar : Control, IVisualTreeHost
     public static readonly MewProperty<bool> IsTodayHighlightedProperty =
         MewProperty<bool>.Register<Calendar>(nameof(IsTodayHighlighted), true,
             MewPropertyOptions.AffectsRender);
+
+    public static readonly MewProperty<CultureInfo?> DisplayCultureProperty =
+        MewProperty<CultureInfo?>.Register<Calendar>(nameof(DisplayCulture), null,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.InvalidateHeaderCache());
+
+    public static readonly MewProperty<System.Globalization.Calendar?> CalendarSystemProperty =
+        MewProperty<System.Globalization.Calendar?>.Register<Calendar>(nameof(CalendarSystem), null,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.InvalidateHeaderCache());
 
     public Calendar()
     {
@@ -107,14 +117,14 @@ public sealed class Calendar : Control, IVisualTreeHost
     }
 
     /// <summary>Gets or sets the selected date.</summary>
-    public DateTime? SelectedDate
+    public DateOnly? SelectedDate
     {
         get => GetValue(SelectedDateProperty);
         set => SetValue(SelectedDateProperty, value);
     }
 
     /// <summary>Gets or sets the month/year currently displayed.</summary>
-    public DateTime DisplayDate
+    public DateOnly DisplayDate
     {
         get => GetValue(DisplayDateProperty);
         set => SetValue(DisplayDateProperty, value);
@@ -141,18 +151,40 @@ public sealed class Calendar : Control, IVisualTreeHost
         set => SetValue(IsTodayHighlightedProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the culture used for display (month/day names, number formatting).
+    /// If <see langword="null"/>, <see cref="CultureInfo.CurrentCulture"/> is used.
+    /// </summary>
+    public CultureInfo? DisplayCulture
+    {
+        get => GetValue(DisplayCultureProperty);
+        set => SetValue(DisplayCultureProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the calendar system used for date calculations
+    /// (e.g. <see cref="System.Globalization.PersianCalendar"/>).
+    /// If <see langword="null"/>, the calendar of <see cref="DisplayCulture"/>
+    /// (or <see cref="CultureInfo.CurrentCulture"/>) is used.
+    /// </summary>
+    public System.Globalization.Calendar? CalendarSystem
+    {
+        get => GetValue(CalendarSystemProperty);
+        set => SetValue(CalendarSystemProperty, value);
+    }
+
     public override bool Focusable => true;
 
     /// <summary>Raised when <see cref="SelectedDate"/> changes (keyboard navigation or click).</summary>
-    public event Action<DateTime?>? SelectedDateChanged;
+    public event Action<DateOnly?>? SelectedDateChanged;
 
     /// <summary>Raised when a date is activated by mouse click or Enter key (commit action).</summary>
-    public event Action<DateTime>? DateActivated;
+    public event Action<DateOnly>? DateActivated;
 
     /// <summary>Raised when <see cref="DisplayMode"/> changes.</summary>
     public event Action<CalendarMode>? DisplayModeChanged;
 
-    private void OnSelectedDateChanged(DateTime? oldValue, DateTime? newValue)
+    private void OnSelectedDateChanged(DateOnly? oldValue, DateOnly? newValue)
     {
         if (newValue.HasValue)
         {
@@ -166,6 +198,60 @@ public sealed class Calendar : Control, IVisualTreeHost
     {
         DisplayModeChanged?.Invoke(newValue);
     }
+
+    private void InvalidateHeaderCache()
+    {
+        _cachedHeaderMode = (CalendarMode)(-1);
+    }
+
+    #region Calendar Helpers
+
+    private CultureInfo GetEffectiveCulture() =>
+        DisplayCulture ?? CultureInfo.CurrentCulture;
+
+    private System.Globalization.Calendar GetEffectiveCalendar() =>
+        CalendarSystem ?? GetEffectiveCulture().Calendar;
+
+    private static DateTime ToDateTimeForCal(DateOnly d) =>
+        d.ToDateTime(TimeOnly.MinValue);
+
+    private DateOnly FirstOfCalendarMonth(int calYear, int calMonth) =>
+        DateOnly.FromDateTime(new DateTime(calYear, calMonth, 1, GetEffectiveCalendar()));
+
+    /// <summary>
+    /// Returns a <see cref="DateTimeFormatInfo"/> whose <see cref="DateTimeFormatInfo.Calendar"/>
+    /// matches <see cref="GetEffectiveCalendar"/>, cloning only when necessary.
+    /// </summary>
+    private DateTimeFormatInfo GetEffectiveDateTimeFormat()
+    {
+        var culture = GetEffectiveCulture();
+        var cal = GetEffectiveCalendar();
+        var dtf = culture.DateTimeFormat;
+        if (dtf.Calendar.GetType() == cal.GetType())
+            return dtf;
+
+        dtf = (DateTimeFormatInfo)dtf.Clone();
+        try { dtf.Calendar = cal; }
+        catch { /* fall back to culture DTF if calendar not compatible */ }
+        return dtf;
+    }
+
+    private string GetCalendarMonthName(int calYear, int calMonth, bool abbreviated)
+    {
+        var cal = GetEffectiveCalendar();
+        try
+        {
+            var dtf = GetEffectiveDateTimeFormat();
+            var dt = new DateTime(calYear, calMonth, 1, cal);
+            return dt.ToString(abbreviated ? "MMM" : "MMMM", dtf);
+        }
+        catch
+        {
+            return calMonth.ToString();
+        }
+    }
+
+    #endregion
 
     #region Layout
 
@@ -307,12 +393,18 @@ public sealed class Calendar : Control, IVisualTreeHost
         _cachedHeaderDate = display;
         _cachedHeaderMode = mode;
 
+        var cal = GetEffectiveCalendar();
+        var culture = GetEffectiveCulture();
+        var dt = ToDateTimeForCal(display);
+        int calYear = cal.GetYear(dt);
+        int calMonth = cal.GetMonth(dt);
+
         var label = (TextBlock)_headerButton.Content!;
         label.Text = mode switch
         {
-            CalendarMode.Month => display.ToString("Y", CultureInfo.CurrentCulture),
-            CalendarMode.Year => display.ToString("yyyy", CultureInfo.CurrentCulture),
-            CalendarMode.Decade => $"{display.Year / 10 * 10}–{display.Year / 10 * 10 + 9}",
+            CalendarMode.Month => $"{GetCalendarMonthName(calYear, calMonth, abbreviated: false)} {calYear}",
+            CalendarMode.Year => calYear.ToString(culture),
+            CalendarMode.Decade => $"{calYear / 10 * 10}\u2013{calYear / 10 * 10 + 9}",
             _ => string.Empty,
         };
     }
@@ -322,12 +414,17 @@ public sealed class Calendar : Control, IVisualTreeHost
         var theme = Theme;
         var palette = theme.Palette;
         var font = GetCellFont();
-        var today = DateTime.Today;
+        var cal = GetEffectiveCalendar();
+        var culture = GetEffectiveCulture();
         double dpiScale = GetDpi() / 96.0;
         double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
         double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
         var display = DisplayDate;
         var selected = SelectedDate;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var displayDt = ToDateTimeForCal(display);
+        int calYear = cal.GetYear(displayDt);
+        int calMonth = cal.GetMonth(displayDt);
 
         // Day of week headers
         var inner = GetInnerBounds();
@@ -338,7 +435,7 @@ public sealed class Calendar : Control, IVisualTreeHost
         for (int i = 0; i < DaysPerWeek; i++)
         {
             var dow = (DayOfWeek)(((int)fdow + i) % DaysPerWeek);
-            string dayName = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(dow);
+            string dayName = culture.DateTimeFormat.GetAbbreviatedDayName(dow);
             if (dayName.Length > 2) dayName = dayName[..2];
 
             var rect = new Rect(
@@ -352,17 +449,21 @@ public sealed class Calendar : Control, IVisualTreeHost
         }
 
         // Day cells
-        var firstOfMonth = new DateTime(display.Year, display.Month, 1);
-        int startDow = ((int)firstOfMonth.DayOfWeek - (int)fdow + DaysPerWeek) % DaysPerWeek;
+        var firstOfMonth = FirstOfCalendarMonth(calYear, calMonth);
+        int startDow = ((int)cal.GetDayOfWeek(ToDateTimeForCal(firstOfMonth)) - (int)fdow + DaysPerWeek) % DaysPerWeek;
         var startDate = firstOfMonth.AddDays(-startDow);
 
         for (int i = 0; i < MonthCells; i++)
         {
             var date = startDate.AddDays(i);
+            var dateDt = ToDateTimeForCal(date);
+            int datCalYear = cal.GetYear(dateDt);
+            int datCalMonth = cal.GetMonth(dateDt);
+            int datCalDay = cal.GetDayOfMonth(dateDt);
             var cellRect = _cellRects[i];
-            bool isCurrentMonth = date.Month == display.Month && date.Year == display.Year;
+            bool isCurrentMonth = datCalYear == calYear && datCalMonth == calMonth;
             bool isToday = IsTodayHighlighted && date == today;
-            bool isSelected = selected.HasValue && date == selected.Value.Date;
+            bool isSelected = selected.HasValue && date == selected.Value;
             bool isHot = i == _hotCellIndex;
 
             var unit = Math.Min(cellRect.Width, cellRect.Height);
@@ -392,7 +493,7 @@ public sealed class Calendar : Control, IVisualTreeHost
                     ? palette.WindowText
                     : palette.DisabledText;
 
-            context.DrawText(date.Day.ToString(), cellRect, font, textColor,
+            context.DrawText(datCalDay.ToString(), cellRect, font, textColor,
                 TextAlignment.Center, TextAlignment.Center);
         }
     }
@@ -402,26 +503,34 @@ public sealed class Calendar : Control, IVisualTreeHost
         var theme = Theme;
         var palette = theme.Palette;
         var font = GetCellFont();
+        var cal = GetEffectiveCalendar();
         var display = DisplayDate;
         var selected = SelectedDate;
+        var displayDt = ToDateTimeForCal(display);
+        int calYear = cal.GetYear(displayDt);
+        int monthsInYear = cal.GetMonthsInYear(calYear);
+        int todayCalYear = cal.GetYear(DateTime.Today);
+        int todayCalMonth = cal.GetMonth(DateTime.Today);
         double dpiScale = GetDpi() / 96.0;
         double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
         double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
 
         for (int i = 0; i < YearDecadeCells; i++)
         {
+            int month = i + 1;
+            if (month > monthsInYear) continue;
+
             var cellRect = _cellRects[i];
 
             var unit = Math.Min(cellRect.Width, cellRect.Height) - 2;
             var circleRect = new Rect(cellRect.X + (cellRect.Width - unit) / 2, cellRect.Y + (cellRect.Height - unit) / 2, unit, unit);
             snappedRadius = unit / 2.0;
 
-            int month = i + 1;
-            bool isSelected = selected.HasValue &&
-                              selected.Value.Year == display.Year &&
-                              selected.Value.Month == month;
+            bool isSelected = selected.HasValue
+                && cal.GetYear(ToDateTimeForCal(selected.Value)) == calYear
+                && cal.GetMonth(ToDateTimeForCal(selected.Value)) == month;
             bool isHot = i == _hotCellIndex;
-            bool isCurrent = DateTime.Today.Year == display.Year && DateTime.Today.Month == month;
+            bool isCurrent = todayCalYear == calYear && todayCalMonth == month;
 
             if (isSelected)
             {
@@ -438,7 +547,7 @@ public sealed class Calendar : Control, IVisualTreeHost
             }
 
             var textColor = isSelected ? palette.AccentText : palette.WindowText;
-            string label = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(month);
+            string label = GetCalendarMonthName(calYear, month, abbreviated: true);
 
             context.DrawText(label, cellRect, font, textColor,
                 TextAlignment.Center, TextAlignment.Center);
@@ -450,9 +559,14 @@ public sealed class Calendar : Control, IVisualTreeHost
         var theme = Theme;
         var palette = theme.Palette;
         var font = GetCellFont();
+        var cal = GetEffectiveCalendar();
         var display = DisplayDate;
         var selected = SelectedDate;
-        int decadeStart = display.Year / 10 * 10;
+        int calYear = cal.GetYear(ToDateTimeForCal(display));
+        int decadeStart = calYear / 10 * 10;
+        int todayCalYear = cal.GetYear(DateTime.Today);
+        int minCalYear = cal.GetYear(cal.MinSupportedDateTime);
+        int maxCalYear = cal.GetYear(cal.MaxSupportedDateTime);
         double dpiScale = GetDpi() / 96.0;
         double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
         double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
@@ -461,11 +575,12 @@ public sealed class Calendar : Control, IVisualTreeHost
         {
             var cellRect = _cellRects[i];
             int year = decadeStart - 1 + i; // decade: -1 to +10
-            bool isInDecade = year >= decadeStart && year < decadeStart + 10;
-            bool isSelected = selected.HasValue && selected.Value.Year == year;
+            bool isYearValid = year >= minCalYear && year <= maxCalYear;
+            bool isInDecade = isYearValid && year >= decadeStart && year < decadeStart + 10;
+            bool isSelected = isYearValid && selected.HasValue
+                && cal.GetYear(ToDateTimeForCal(selected.Value)) == year;
             bool isHot = i == _hotCellIndex;
-            bool isCurrent = DateTime.Today.Year == year;
-
+            bool isCurrent = isYearValid && todayCalYear == year;
 
             var unit = Math.Min(cellRect.Width, cellRect.Height) - 2;
             var circleRect = new Rect(cellRect.X + (cellRect.Width - unit) / 2, cellRect.Y + (cellRect.Height - unit) / 2, unit, unit);
@@ -502,32 +617,36 @@ public sealed class Calendar : Control, IVisualTreeHost
 
     private void OnPrevClick()
     {
+        var cal = GetEffectiveCalendar();
+        var dt = ToDateTimeForCal(DisplayDate);
         switch (DisplayMode)
         {
             case CalendarMode.Month:
-                DisplayDate = DisplayDate.AddMonths(-1);
+                DisplayDate = DateOnly.FromDateTime(cal.AddMonths(dt, -1));
                 break;
             case CalendarMode.Year:
-                DisplayDate = DisplayDate.AddYears(-1);
+                DisplayDate = DateOnly.FromDateTime(cal.AddYears(dt, -1));
                 break;
             case CalendarMode.Decade:
-                DisplayDate = DisplayDate.AddYears(-10);
+                DisplayDate = DateOnly.FromDateTime(cal.AddYears(dt, -10));
                 break;
         }
     }
 
     private void OnNextClick()
     {
+        var cal = GetEffectiveCalendar();
+        var dt = ToDateTimeForCal(DisplayDate);
         switch (DisplayMode)
         {
             case CalendarMode.Month:
-                DisplayDate = DisplayDate.AddMonths(1);
+                DisplayDate = DateOnly.FromDateTime(cal.AddMonths(dt, 1));
                 break;
             case CalendarMode.Year:
-                DisplayDate = DisplayDate.AddYears(1);
+                DisplayDate = DateOnly.FromDateTime(cal.AddYears(dt, 1));
                 break;
             case CalendarMode.Decade:
-                DisplayDate = DisplayDate.AddYears(10);
+                DisplayDate = DateOnly.FromDateTime(cal.AddYears(dt, 10));
                 break;
         }
     }
@@ -605,37 +724,45 @@ public sealed class Calendar : Control, IVisualTreeHost
 
     private void HandleCellActivated(int cellIndex)
     {
+        var cal = GetEffectiveCalendar();
         switch (DisplayMode)
         {
             case CalendarMode.Month:
             {
-                var firstOfMonth = new DateTime(DisplayDate.Year, DisplayDate.Month, 1);
-                int startDow = ((int)firstOfMonth.DayOfWeek - (int)FirstDayOfWeek + DaysPerWeek) % DaysPerWeek;
+                int calYear = cal.GetYear(ToDateTimeForCal(DisplayDate));
+                int calMonth = cal.GetMonth(ToDateTimeForCal(DisplayDate));
+                var firstOfMonth = FirstOfCalendarMonth(calYear, calMonth);
+                int startDow = ((int)cal.GetDayOfWeek(ToDateTimeForCal(firstOfMonth)) - (int)FirstDayOfWeek + DaysPerWeek) % DaysPerWeek;
                 var date = firstOfMonth.AddDays(cellIndex - startDow);
-                SelectedDate = date.Date;
-                // Navigate to the selected date's month if different
-                if (date.Month != DisplayDate.Month || date.Year != DisplayDate.Year)
-                    DisplayDate = new DateTime(date.Year, date.Month, 1);
-                DateActivated?.Invoke(date.Date);
+                SelectedDate = date;
+                int datCalYear = cal.GetYear(ToDateTimeForCal(date));
+                int datCalMonth = cal.GetMonth(ToDateTimeForCal(date));
+                if (datCalMonth != calMonth || datCalYear != calYear)
+                    DisplayDate = FirstOfCalendarMonth(datCalYear, datCalMonth);
+                DateActivated?.Invoke(date);
                 break;
             }
             case CalendarMode.Year:
             {
                 int month = cellIndex + 1;
-                if (month >= 1 && month <= 12)
+                int calYear = cal.GetYear(ToDateTimeForCal(DisplayDate));
+                if (month >= 1 && month <= cal.GetMonthsInYear(calYear))
                 {
-                    DisplayDate = new DateTime(DisplayDate.Year, month, 1);
+                    DisplayDate = FirstOfCalendarMonth(calYear, month);
                     DisplayMode = CalendarMode.Month;
                 }
                 break;
             }
             case CalendarMode.Decade:
             {
-                int decadeStart = DisplayDate.Year / 10 * 10;
+                int calYear = cal.GetYear(ToDateTimeForCal(DisplayDate));
+                int decadeStart = calYear / 10 * 10;
                 int year = decadeStart - 1 + cellIndex;
-                if (year >= 1 && year <= 9999)
+                int minCalYear = cal.GetYear(cal.MinSupportedDateTime);
+                int maxCalYear = cal.GetYear(cal.MaxSupportedDateTime);
+                if (year >= minCalYear && year <= maxCalYear)
                 {
-                    DisplayDate = new DateTime(year, DisplayDate.Month, 1);
+                    DisplayDate = FirstOfCalendarMonth(year, cal.GetMonth(ToDateTimeForCal(DisplayDate)));
                     DisplayMode = CalendarMode.Year;
                 }
                 break;
@@ -666,6 +793,7 @@ public sealed class Calendar : Control, IVisualTreeHost
 
     private void HandleMonthKeyDown(KeyEventArgs e)
     {
+        var cal = GetEffectiveCalendar();
         var current = SelectedDate ?? DisplayDate;
 
         switch (e.Key)
@@ -687,21 +815,30 @@ public sealed class Calendar : Control, IVisualTreeHost
                 e.Handled = true;
                 break;
             case Key.PageUp:
-                SelectedDate = current.AddMonths(-1);
+                SelectedDate = DateOnly.FromDateTime(cal.AddMonths(ToDateTimeForCal(current), -1));
                 e.Handled = true;
                 break;
             case Key.PageDown:
-                SelectedDate = current.AddMonths(1);
+                SelectedDate = DateOnly.FromDateTime(cal.AddMonths(ToDateTimeForCal(current), 1));
                 e.Handled = true;
                 break;
             case Key.Home:
-                SelectedDate = new DateTime(current.Year, current.Month, 1);
+            {
+                int calYear = cal.GetYear(ToDateTimeForCal(current));
+                int calMonth = cal.GetMonth(ToDateTimeForCal(current));
+                SelectedDate = FirstOfCalendarMonth(calYear, calMonth);
                 e.Handled = true;
                 break;
+            }
             case Key.End:
-                SelectedDate = new DateTime(current.Year, current.Month, DateTime.DaysInMonth(current.Year, current.Month));
+            {
+                int calYear = cal.GetYear(ToDateTimeForCal(current));
+                int calMonth = cal.GetMonth(ToDateTimeForCal(current));
+                int daysInMonth = cal.GetDaysInMonth(calYear, calMonth);
+                SelectedDate = new DateOnly(calYear, calMonth, daysInMonth, cal);
                 e.Handled = true;
                 break;
+            }
             case Key.Enter:
             case Key.Space:
                 if (SelectedDate.HasValue)
@@ -755,10 +892,12 @@ public sealed class Calendar : Control, IVisualTreeHost
 
     private void NavigateDisplayDate(int offset)
     {
+        var cal = GetEffectiveCalendar();
+        var dt = ToDateTimeForCal(DisplayDate);
         if (DisplayMode == CalendarMode.Year)
-            DisplayDate = DisplayDate.AddMonths(offset);
+            DisplayDate = DateOnly.FromDateTime(cal.AddMonths(dt, offset));
         else if (DisplayMode == CalendarMode.Decade)
-            DisplayDate = DisplayDate.AddYears(offset);
+            DisplayDate = DateOnly.FromDateTime(cal.AddYears(dt, offset));
     }
 
     #endregion
