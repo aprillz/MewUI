@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Rendering;
 /// <summary>
 /// Render target for offscreen bitmap rendering.
 /// Implementations manage platform-specific resources.
-/// Use <see cref="IGraphicsFactory.CreateBitmapRenderTarget"/> to create instances.
+/// Use <see cref="IRenderDevice.CreateSurface"/> to create instances.
 /// </summary>
 public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDisposable
 {

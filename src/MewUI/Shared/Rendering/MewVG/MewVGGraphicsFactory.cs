@@ -197,7 +197,14 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     public IRenderEffectDevice? Effects => null;
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
-        => RenderDeviceFactoryHelpers.CreateSurface(this, descriptor);
+        => new BitmapRenderTargetSurfaceAdapter(
+            CreateBitmapRenderTarget(
+                descriptor.PixelWidth,
+                descriptor.PixelHeight,
+                descriptor.DpiScale,
+                descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha)),
+            descriptor,
+            ownsTarget: true);
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
         => RenderDeviceFactoryHelpers.CreateContext(this, surface);
@@ -279,8 +286,8 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     /// Activates the platform-specific worker rendering context on the calling thread
     /// (Win32/X11: shared GL HGLRC; macOS Metal: no-op since MTLDevice is thread-free).
     /// Returns an <see cref="IDisposable"/> that releases the activation when disposed.
-    /// Required wrapper for any worker thread that intends to call <see cref="CreateContext(IRenderTarget)"/>
-    /// or <see cref="IGraphicsFactory.CreateOffscreenRenderTarget"/>.
+    /// Required wrapper for any worker thread that intends to call <see cref="IRenderDevice.CreateSurface"/>
+    /// or <see cref="IRenderDevice.CreateContext(IRenderSurface)"/>.
     /// </summary>
     public IDisposable AcquireBackgroundRenderScope() => AcquireBackgroundRenderScopeCore();
 

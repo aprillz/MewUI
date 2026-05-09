@@ -531,7 +531,21 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IRenderEffectDevice? Effects => null;
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
-        => RenderDeviceFactoryHelpers.CreateSurface(this, descriptor);
+    {
+        var target = RenderDeviceFactoryHelpers.RequiresCpuBitmap(descriptor)
+            ? CreateBitmapRenderTarget(
+                descriptor.PixelWidth,
+                descriptor.PixelHeight,
+                descriptor.DpiScale,
+                descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha))
+            : CreateOffscreenRenderTarget(
+                descriptor.PixelWidth,
+                descriptor.PixelHeight,
+                descriptor.DpiScale,
+                descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
+
+        return new BitmapRenderTargetSurfaceAdapter(target, descriptor, ownsTarget: true);
+    }
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
         => RenderDeviceFactoryHelpers.CreateContext(this, surface);

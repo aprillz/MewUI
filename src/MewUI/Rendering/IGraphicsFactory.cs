@@ -155,43 +155,6 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     IGraphicsContext CreateMeasurementContext(uint dpi);
 
     /// <summary>
-    /// Creates a bitmap render target for offscreen rendering.
-    /// </summary>
-    /// <param name="pixelWidth">Width in pixels.</param>
-    /// <param name="pixelHeight">Height in pixels.</param>
-    /// <param name="dpiScale">DPI scale factor (default 1.0 for 96 DPI).</param>
-    /// <param name="hasAlpha">
-    /// True when the rendered content has a meaningful alpha channel. Default true preserves
-    /// alpha-aware blending for arbitrary content. Pass false when the consumer guarantees
-    /// every pixel is opaque (video frames, opaque image thumbnails, etc.) — backends use
-    /// this to pick <c>ALPHA_MODE.IGNORE</c> over <c>PREMULTIPLIED</c> on the underlying
-    /// GPU bitmap, skipping per-fragment blend math, and to bypass alpha scans on CPU
-    /// upload paths.
-    /// </param>
-    /// <returns>A bitmap render target with platform-appropriate resources.</returns>
-    IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true);
-
-    /// <summary>
-    /// Creates a render target intended for transient offscreen passes (SVG filter source
-    /// layers, scratch buffers, etc.). Backends that support a true GPU pipeline return a
-    /// GPU-resident target so subsequent effect / image-filter operations can stay on-GPU
-    /// end-to-end (no CPU readback). Backends without a GPU path fall back to the same
-    /// surface as <see cref="CreateBitmapRenderTarget"/>.
-    /// </summary>
-    /// <param name="pixelWidth">Width in pixels.</param>
-    /// <param name="pixelHeight">Height in pixels.</param>
-    /// <param name="dpiScale">DPI scale factor (default 1.0 for 96 DPI).</param>
-    /// <param name="hasAlpha">See <see cref="CreateBitmapRenderTarget"/>.</param>
-    /// <remarks>
-    /// Default implementation forwards to <see cref="CreateBitmapRenderTarget"/>. The D2D
-    /// backend overrides to return a GPU-only <c>ID2D1Bitmap1</c> when the shared device
-    /// initializes successfully; the OpenGL / MewVG backend already returns FBO-backed
-    /// targets from <see cref="CreateBitmapRenderTarget"/>, so no override is needed.
-    /// </remarks>
-    IBitmapRenderTarget CreateOffscreenRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
-        => CreateBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
-
-    /// <summary>
     /// Creates an executor for evaluating <see cref="ImageFilter"/> graphs. The default
     /// returns a CPU reference implementation; backends override to return GPU-accelerated
     /// executors that internally chain CPU fallback for unsupported nodes.
@@ -215,13 +178,13 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     /// current per thread). Backends with thread-free APIs (D2D MULTI_THREADED, Metal,
     /// GDI memory DCs) return a no-op disposable.
     /// <para/>
-    /// Use this from worker threads that call <see cref="CreateContext"/> /
-    /// <see cref="CreateOffscreenRenderTarget"/>:
+    /// Use this from worker threads that call <see cref="IRenderDevice.CreateSurface"/> /
+    /// <see cref="IRenderDevice.CreateContext(IRenderSurface)"/>:
     /// <code>
     /// await Task.Run(() =&gt; {
     ///     using var _ = factory.AcquireBackgroundRenderScope();
-    ///     var target = factory.CreateOffscreenRenderTarget(...);
-    ///     using var ctx = factory.CreateContext(target);
+    ///     var surface = factory.CreateSurface(...);
+    ///     using var ctx = factory.CreateContext(surface);
     ///     // draw...
     /// });
     /// </code>

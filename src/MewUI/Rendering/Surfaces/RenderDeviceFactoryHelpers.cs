@@ -4,25 +4,6 @@ namespace Aprillz.MewUI.Rendering;
 
 internal static class RenderDeviceFactoryHelpers
 {
-    public static IRenderSurface CreateSurface(IGraphicsFactory factory, RenderSurfaceDescriptor descriptor)
-    {
-        ArgumentNullException.ThrowIfNull(factory);
-
-        var target = RequiresCpuBitmap(descriptor)
-            ? factory.CreateBitmapRenderTarget(
-                descriptor.PixelWidth,
-                descriptor.PixelHeight,
-                descriptor.DpiScale,
-                descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha))
-            : factory.CreateOffscreenRenderTarget(
-                descriptor.PixelWidth,
-                descriptor.PixelHeight,
-                descriptor.DpiScale,
-                descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
-
-        return new BitmapRenderTargetSurfaceAdapter(target, descriptor, ownsTarget: true);
-    }
-
     public static IGraphicsContext CreateContext(IGraphicsFactory factory, IRenderSurface surface)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -91,7 +72,7 @@ internal static class RenderDeviceFactoryHelpers
             : RenderOperation.Completed;
     }
 
-    private static bool RequiresCpuBitmap(RenderSurfaceDescriptor descriptor)
+    public static bool RequiresCpuBitmap(RenderSurfaceDescriptor descriptor)
     {
         var caps = descriptor.RequiredCapabilities;
         return caps.HasFlag(SurfaceCapabilities.CpuWritable)

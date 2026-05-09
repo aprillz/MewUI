@@ -163,7 +163,14 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
     public IRenderEffectDevice? Effects => null;
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
-        => RenderDeviceFactoryHelpers.CreateSurface(this, descriptor);
+        => new BitmapRenderTargetSurfaceAdapter(
+            CreateBitmapRenderTarget(
+                descriptor.PixelWidth,
+                descriptor.PixelHeight,
+                descriptor.DpiScale,
+                descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha)),
+            descriptor,
+            ownsTarget: true);
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
         => RenderDeviceFactoryHelpers.CreateContext(this, surface);
