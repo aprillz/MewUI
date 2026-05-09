@@ -147,30 +147,6 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     IImage CreateImageFromPixelSource(IPixelBufferSource source);
 
     /// <summary>
-    /// Creates an image backed by an externally-managed GPU texture. The supplied
-    /// <see cref="IExternalLockedTexture"/> implements the Acquire/Release contract; the
-    /// backend invokes those at frame boundaries so the external owner can perform any
-    /// API-specific lock/sync (WGL_NV_DX_interop, IOSurface borrowing, fence wait).
-    /// </summary>
-    /// <remarks>
-    /// Default implementation throws <see cref="NotSupportedException"/>. Backends that
-    /// support cross-API zero-copy (currently MewVG GL/Metal) override to return a
-    /// wrapper that participates in the per-frame Acquire/Release tracking.
-    /// </remarks>
-    IImage CreateImageFromExternalTexture(IExternalLockedTexture texture)
-        => throw new NotSupportedException(
-            $"{GetType().Name} does not support external locked textures.");
-
-    /// <summary>
-    /// Creates an image backed by an external sample source. This is the generalized
-    /// form of <see cref="CreateImageFromExternalTexture"/> and leaves room for
-    /// multi-plane/video/effect inputs. The default implementation adapts the existing
-    /// <see cref="IExternalLockedTexture"/> path.
-    /// </summary>
-    IImage CreateImageFromExternalSource(IExternalSampleSource source)
-        => CreateImageView(source);
-
-    /// <summary>
     /// Creates a graphics context for the specified render target.
     /// The returned context is not yet started; call
     /// <see cref="IGraphicsContext.BeginFrame"/> before drawing.

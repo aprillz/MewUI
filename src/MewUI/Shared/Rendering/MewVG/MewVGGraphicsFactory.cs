@@ -112,7 +112,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
         return true;
     }
 
-    public IImage CreateImageFromExternalTexture(IExternalLockedTexture texture)
+    private IImage CreateExternalLockedTextureImage(IExternalLockedTexture texture)
         => new MewVGExternalLockedImage(texture);
 
     public IImageFilterExecutor CreateImageFilterExecutor()
@@ -212,7 +212,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     {
         if (source is ExternalLockedTextureSampleSource locked)
         {
-            return CreateImageFromExternalTexture(locked.Texture);
+            return CreateExternalLockedTextureImage(locked.Texture);
         }
 
         throw new NotSupportedException(

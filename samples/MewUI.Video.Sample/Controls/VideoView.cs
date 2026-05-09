@@ -197,7 +197,7 @@ public sealed class VideoView : FrameworkElement
     /// Path eligibility is gated by OS (Windows-only — macOS/X11 don't have D3D11),
     /// frame metadata (must be hardware-decoded with a D3D11 texture and device), and
     /// driver capability (WGL_NV_DX_interop must load on the active GL context). If
-    /// the backend doesn't override <c>CreateImageFromExternalSource</c> (D2D, GDI),
+    /// the backend doesn't support external sample image views (D2D, GDI),
     /// it throws <see cref="NotSupportedException"/> which we treat as "use CPU path".
     /// </remarks>
     private IImage? TryCreateZeroCopyImage(IGraphicsFactory factory, VideoFrame frame)
