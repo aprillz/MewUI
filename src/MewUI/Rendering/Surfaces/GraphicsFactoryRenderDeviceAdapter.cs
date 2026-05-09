@@ -47,16 +47,16 @@ public sealed class GraphicsFactoryRenderDeviceAdapter : IRenderDevice
     {
         if (surface is BitmapRenderTargetSurfaceAdapter bitmapSurface)
         {
-            return _factory.CreateImageFromPixelSource(bitmapSurface.Target);
-        }
-
-        if (surface is IPixelBufferSource pixelSource)
-        {
-            return _factory.CreateImageFromPixelSource(pixelSource);
+            return CreateImageView(bitmapSurface.Target);
         }
 
         throw new NotSupportedException(
             $"{GetType().Name} can only create image views for pixel-backed surfaces.");
+    }
+
+    public IImage CreateImageView(IPixelBufferSource source)
+    {
+        return _factory.CreateImageFromPixelSource(source ?? throw new ArgumentNullException(nameof(source)));
     }
 
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)

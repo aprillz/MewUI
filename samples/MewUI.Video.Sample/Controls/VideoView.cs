@@ -159,7 +159,7 @@ public sealed class VideoView : FrameworkElement
             // WGL_NV_DX_interop, or registration failed (FFmpeg may output texture arrays
             // that the basic GL_TEXTURE_2D wrap path can't address — a known limitation
             // we accept while the zero-copy path matures).
-            image = factory.CreateImageFromPixelSource(frame);
+            image = factory.AsRenderDevice().CreateImageView(frame);
             _interopTexture = null;
             _activeGlInteropEntry = null;
 
