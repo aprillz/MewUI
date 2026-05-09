@@ -48,6 +48,8 @@ public readonly record struct RenderEffectParameter(
 
 public sealed class RenderEffectInputSet
 {
+    public static RenderEffectInputSet Empty { get; } = new([]);
+
     private readonly ReadOnlyCollection<RenderEffectInput> _inputs;
 
     public RenderEffectInputSet(IEnumerable<RenderEffectInput> inputs)
@@ -60,6 +62,8 @@ public sealed class RenderEffectInputSet
 
 public sealed class RenderEffectParameterSet
 {
+    public static RenderEffectParameterSet Empty { get; } = new([]);
+
     private readonly ReadOnlyCollection<RenderEffectParameter> _parameters;
 
     public RenderEffectParameterSet(IEnumerable<RenderEffectParameter> parameters)
@@ -86,4 +90,58 @@ public interface IRenderEffectDevice
         RenderEffectInputSet inputs,
         RenderEffectParameterSet parameters,
         IRenderSurface output);
+}
+
+public static class RenderEffectDeviceExtensions
+{
+    public static bool TryCompile(
+        this IRenderEffectDevice? device,
+        ShaderModuleDescriptor descriptor,
+        out ICompiledRenderEffect? effect)
+    {
+        effect = null;
+        if (device is null || !device.Supports(descriptor.Format))
+        {
+            return false;
+        }
+
+        try
+        {
+            effect = device.Compile(descriptor);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    public static bool TryExecute(
+        this IRenderEffectDevice? device,
+        ICompiledRenderEffect effect,
+        RenderEffectInputSet? inputs,
+        RenderEffectParameterSet? parameters,
+        IRenderSurface output,
+        out IRenderOperation operation)
+    {
+        operation = RenderOperation.Completed;
+        if (device is null || !device.Supports(effect.Module.Format))
+        {
+            return false;
+        }
+
+        try
+        {
+            operation = device.Execute(
+                effect,
+                inputs ?? RenderEffectInputSet.Empty,
+                parameters ?? RenderEffectParameterSet.Empty,
+                output);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
 }
