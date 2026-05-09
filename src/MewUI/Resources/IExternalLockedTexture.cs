@@ -8,8 +8,8 @@ namespace Aprillz.MewUI.Resources;
 /// </summary>
 /// <remarks>
 /// <para>
-/// External code (sample, library) implements this and registers it with a backend via
-/// <c>IGraphicsFactory.CreateImageFromExternalTexture</c>. The backend invokes
+/// External code (sample, library) implements this and passes it through an
+/// <see cref="Rendering.IExternalSampleSource"/>. The backend invokes
 /// <see cref="Acquire"/> before the first draw of each frame that samples the texture
 /// and <see cref="Release"/> after the frame's draws have been flushed/committed.
 /// </para>

@@ -12,8 +12,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Created via <c>MewVGGraphicsFactory.CreateImageFromExternalTexture</c>. The wrapping
-/// caller (sample, library) owns the lifetime of the underlying
+/// Created from an external sample source. The wrapping caller (sample, library) owns the lifetime of the underlying
 /// <see cref="IExternalLockedTexture"/> — disposing this image releases the NVG
 /// bookkeeping but does NOT dispose the external texture.
 /// </para>

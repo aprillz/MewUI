@@ -9,6 +9,11 @@ public static class RenderDeviceCompatibilityExtensions
     public static IRenderDevice AsRenderDevice(this IGraphicsFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
+        if (factory is IRenderDevice renderDevice)
+        {
+            return renderDevice;
+        }
+
         return Devices.GetValue(factory, static f => new GraphicsFactoryRenderDeviceAdapter(f));
     }
 }

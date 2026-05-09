@@ -349,8 +349,8 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
 
 /// <summary>
 /// One frame's worth of CoreVideo→Metal wrapper state. Implements
-/// <see cref="IExternalLockedTexture"/> so MewVG's
-/// <c>CreateImageFromExternalTexture</c> can wrap the underlying MTLTexture as an
+/// <see cref="IExternalLockedTexture"/> so the render device's external sample path
+/// can wrap the underlying MTLTexture as an
 /// <c>IImage</c> with NoDelete semantics — zero-copy display from VideoToolbox decode
 /// to NanoVG sampling.
 /// </summary>

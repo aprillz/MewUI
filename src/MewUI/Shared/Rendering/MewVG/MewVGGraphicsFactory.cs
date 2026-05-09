@@ -6,11 +6,12 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
+public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
 {
     public static MewVGGraphicsFactory Instance => field ??= new MewVGGraphicsFactory();
 
     private readonly ConcurrentDictionary<nint, IDisposable> _windows = new();
+    private readonly RenderResourceCache _renderResourceCache = new();
 
     private MewVGGraphicsFactory() { }
 
@@ -191,8 +192,34 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
         throw new NotSupportedException("MewVG backend does not support bitmap render targets on this platform.");
     }
 
+    public IRenderResourceCache? ResourceCache => _renderResourceCache;
+
+    public IRenderEffectDevice? Effects => null;
+
+    public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
+        => RenderDeviceFactoryHelpers.CreateSurface(this, descriptor);
+
+    public IGraphicsContext CreateContext(IRenderSurface surface)
+        => RenderDeviceFactoryHelpers.CreateContext(this, surface);
+
+    public IImage CreateImageView(IRenderSurface surface)
+        => RenderDeviceFactoryHelpers.CreateImageView(this, surface);
+
+    public IImage CreateImageView(IPixelBufferSource source)
+        => CreateImageFromPixelSource(source);
+
+    public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
+        => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
+
+    public IRenderOperation RequestReadback(IRenderSurface source)
+        => RenderDeviceFactoryHelpers.RequestReadback(source);
+
+    public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
+
     public void Dispose()
     {
+        _renderResourceCache.Dispose();
+
         foreach (var (_, resources) in _windows)
             resources.Dispose();
         _windows.Clear();
@@ -244,7 +271,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IWindowReso
     /// Activates the platform-specific worker rendering context on the calling thread
     /// (Win32/X11: shared GL HGLRC; macOS Metal: no-op since MTLDevice is thread-free).
     /// Returns an <see cref="IDisposable"/> that releases the activation when disposed.
-    /// Required wrapper for any worker thread that intends to call <see cref="CreateContext"/>
+    /// Required wrapper for any worker thread that intends to call <see cref="CreateContext(IRenderTarget)"/>
     /// or <see cref="IGraphicsFactory.CreateOffscreenRenderTarget"/>.
     /// </summary>
     public IDisposable AcquireBackgroundRenderScope() => AcquireBackgroundRenderScopeCore();

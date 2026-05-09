@@ -9,7 +9,7 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IWindowResourceReleaser, IWindowSurfacePresenter, IWin32TransparencyCapabilities, IDisposable
+public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IWin32TransparencyCapabilities, IDisposable
 {
     public static Direct2DGraphicsFactory Instance => field ??= new Direct2DGraphicsFactory();
 
@@ -39,11 +39,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     private readonly Dictionary<nint, CachedWindowTarget> _windowTargets = new();
     private readonly Dictionary<nint, Direct2DBitmapRenderTarget> _layeredTargets = new();
     private readonly Dictionary<StrokeStyle, nint> _strokeStyles = new();
+    private readonly RenderResourceCache _renderResourceCache = new();
 
     private Direct2DGraphicsFactory() { }
 
     public void Dispose()
     {
+        _renderResourceCache.Dispose();
+
         lock (_rtLock)
         {
             foreach (var (_, entry) in _windowTargets)
@@ -525,6 +528,30 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         }
         return new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
     }
+
+    public IRenderResourceCache? ResourceCache => _renderResourceCache;
+
+    public IRenderEffectDevice? Effects => null;
+
+    public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
+        => RenderDeviceFactoryHelpers.CreateSurface(this, descriptor);
+
+    public IGraphicsContext CreateContext(IRenderSurface surface)
+        => RenderDeviceFactoryHelpers.CreateContext(this, surface);
+
+    public IImage CreateImageView(IRenderSurface surface)
+        => RenderDeviceFactoryHelpers.CreateImageView(this, surface);
+
+    public IImage CreateImageView(IPixelBufferSource source)
+        => CreateImageFromPixelSource(source);
+
+    public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
+        => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
+
+    public IRenderOperation RequestReadback(IRenderSurface source)
+        => RenderDeviceFactoryHelpers.RequestReadback(source);
+
+    public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
     public Filters.IImageFilterExecutor CreateImageFilterExecutor()
         => new Direct2DImageFilterExecutor(this);

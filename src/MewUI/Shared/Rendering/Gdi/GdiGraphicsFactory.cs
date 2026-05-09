@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics factory implementation.
 /// </summary>
-public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
+public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
 {
     public GraphicsBackend Backend => GraphicsBackend.Gdi;
 
@@ -22,6 +22,8 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
     public static GdiGraphicsFactory Instance => field ??= new GdiGraphicsFactory();
 
     private GdiGraphicsFactory() { }
+
+    private readonly RenderResourceCache _renderResourceCache = new();
 
     public bool IsDoubleBuffered { get; set; } = true;
 
@@ -158,8 +160,34 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
     public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
         => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
 
+    public IRenderResourceCache? ResourceCache => _renderResourceCache;
+
+    public IRenderEffectDevice? Effects => null;
+
+    public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
+        => RenderDeviceFactoryHelpers.CreateSurface(this, descriptor);
+
+    public IGraphicsContext CreateContext(IRenderSurface surface)
+        => RenderDeviceFactoryHelpers.CreateContext(this, surface);
+
+    public IImage CreateImageView(IRenderSurface surface)
+        => RenderDeviceFactoryHelpers.CreateImageView(this, surface);
+
+    public IImage CreateImageView(IPixelBufferSource source)
+        => CreateImageFromPixelSource(source);
+
+    public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
+        => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
+
+    public IRenderOperation RequestReadback(IRenderSurface source)
+        => RenderDeviceFactoryHelpers.RequestReadback(source);
+
+    public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
+
     public void Dispose()
     {
+        _renderResourceCache.Dispose();
+
         lock (_layeredLock)
         {
             foreach (var (_, layered) in _layeredTargets)

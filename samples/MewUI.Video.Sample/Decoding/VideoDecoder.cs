@@ -116,8 +116,8 @@ public sealed unsafe class VideoDecoder : IDisposable
             // Wire up the NV12→BGRA scale_vaapi filter so the decoded surface is
             // already in the format NVG expects when the display side imports it
             // via dma_buf. The filter is opaque (graph alloc / parsed config) so
-            // failure just falls through to the existing CPU path — the VideoView
-            // catches the missing GpuResource and drops to CreateImageFromPixelSource.
+            // failure just falls through to the existing CPU path. The VideoView
+            // catches the missing GpuResource and samples from the decoded pixel buffer.
             if (OperatingSystem.IsLinux() && _hardwareDecodeEnabled)
             {
                 TryInitVaapiFilterGraph();
