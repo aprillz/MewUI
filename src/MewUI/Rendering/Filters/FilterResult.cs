@@ -114,6 +114,8 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     private readonly IBitmapRenderTarget _target;
     private readonly IImage _image;
     private readonly Action<IBitmapRenderTarget>? _release;
+    private readonly ScratchRenderTargetLease? _lease;
+    private readonly Action<ScratchRenderTargetLease>? _releaseLease;
     private bool _disposed;
 
     public ScratchFilterResult(IBitmapRenderTarget target, IImage image, Rect bounds,
@@ -122,6 +124,16 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
         _target = target ?? throw new ArgumentNullException(nameof(target));
         _image = image ?? throw new ArgumentNullException(nameof(image));
         _release = release;
+        Bounds = bounds;
+    }
+
+    public ScratchFilterResult(ScratchRenderTargetLease lease, IImage image, Rect bounds,
+        Action<ScratchRenderTargetLease>? release)
+    {
+        _lease = lease ?? throw new ArgumentNullException(nameof(lease));
+        _target = lease.Target;
+        _image = image ?? throw new ArgumentNullException(nameof(image));
+        _releaseLease = release;
         Bounds = bounds;
     }
 
@@ -143,17 +155,25 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     {
         if (_disposed) return;
         _disposed = true;
-        _release?.Invoke(_target);
+        if (_lease is not null)
+        {
+            _releaseLease?.Invoke(_lease);
+        }
+        else
+        {
+            _release?.Invoke(_target);
+        }
     }
 
     /// <summary>Transfers ownership of the underlying target + image to the caller. After
     /// Detach, <see cref="Dispose"/> is a no-op (the pool release is suppressed). Caller
-    /// must dispose the returned target/image when done. Used by result-caching paths that
+    /// must dispose the returned surface/image when done. Used by result-caching paths that
     /// want to keep the scratch RT alive across frames without copying its pixels.</summary>
-    public (IBitmapRenderTarget Target, IImage Image)? Detach()
+    public (IRenderSurface Surface, IBitmapRenderTarget Target, IImage Image)? Detach()
     {
         if (_disposed) return null;
+        if (_lease is null) return null;
         _disposed = true;
-        return (_target, _image);
+        return (_lease.Surface, _target, _image);
     }
 }

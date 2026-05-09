@@ -48,7 +48,7 @@ public partial class SvgFilter
         // the same cache entry.
         public double EffectiveScaleX, EffectiveScaleY;
         public double FilterRegionWidth, FilterRegionHeight;
-        public IBitmapRenderTarget? Target;
+        public IRenderSurface? Surface;
         public IImage? OutputImage;
         public int OutputPixelWidth, OutputPixelHeight;
         public int SourcePixelWidth, SourcePixelHeight;
@@ -62,15 +62,15 @@ public partial class SvgFilter
                 && Math.Abs(FilterRegionWidth - regionWidth) < eps
                 && Math.Abs(FilterRegionHeight - regionHeight) < eps
                 && OutputImage is not null
-                && Target is not null;
+                && Surface is not null;
         }
 
         public void Dispose()
         {
             OutputImage?.Dispose();
-            Target?.Dispose();
+            Surface?.Dispose();
             OutputImage = null;
-            Target = null;
+            Surface = null;
         }
     }
 
@@ -441,7 +441,7 @@ public partial class SvgFilter
         {
             return;
         }
-        var (target, image) = detached.Value;
+        var (surface, _, image) = detached.Value;
 
         var entry = new FilterCacheEntry
         {
@@ -449,7 +449,7 @@ public partial class SvgFilter
             EffectiveScaleY = effectiveScaleY,
             FilterRegionWidth = regionWidth,
             FilterRegionHeight = regionHeight,
-            Target = target,
+            Surface = surface,
             OutputImage = image,
             OutputPixelWidth = pw,
             OutputPixelHeight = ph,

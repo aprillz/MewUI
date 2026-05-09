@@ -52,9 +52,9 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
 
     public ScratchFilterResult AcquireScratch(int pixelWidth, int pixelHeight, Rect bounds)
     {
-        var target = _pool.Rent(pixelWidth, pixelHeight);
-        var image = Factory.CreateImageFromPixelSource(target);
-        return new ScratchFilterResult(target, image, bounds, t =>
+        var lease = _pool.RentLease(pixelWidth, pixelHeight);
+        var image = Factory.AsRenderDevice().CreateImageView(lease.Surface);
+        return new ScratchFilterResult(lease, image, bounds, l =>
         {
             // Defer the pool return until the image's backend-side GPU/NVG handles are
             // actually released. Backends that wrap a scratch RT zero-copy with NVG (MewVG
@@ -65,14 +65,14 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
             // races a render). When the backend accepts the deferred callback, image.Dispose
             // queues for the post-flush drain that fires it; otherwise (CPU bitmap, D2D copy)
             // we fall back to the original immediate-return path.
-            if (image.TrySetPostReleaseCallback(() => _pool.Return(t)))
+            if (image.TrySetPostReleaseCallback(() => _pool.Return(l)))
             {
                 image.Dispose();
             }
             else
             {
                 image.Dispose();
-                _pool.Return(t);
+                _pool.Return(l);
             }
         });
     }
