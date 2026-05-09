@@ -21,4 +21,6 @@ public interface IRenderDevice : IDisposable
     IRenderOperation FlushAsyncWork();
 
     IRenderResourceCache? ResourceCache { get; }
+
+    IRenderEffectDevice? Effects { get; }
 }

@@ -16,6 +16,8 @@ public sealed class GraphicsFactoryRenderDeviceAdapter : IRenderDevice
 
     public IRenderResourceCache? ResourceCache => _resourceCache;
 
+    public IRenderEffectDevice? Effects => null;
+
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
     {
         var target = RequiresCpuBitmap(descriptor)
