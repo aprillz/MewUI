@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering;
 /// Implementations manage platform-specific resources.
 /// Use <see cref="IRenderDevice.CreateSurface"/> to create instances.
 /// </summary>
-public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDisposable
+public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable
 {
     /// <summary>
     /// Gets the pixel width. Resolves ambiguity between IRenderTarget and IPixelBufferSource.
@@ -20,6 +20,21 @@ public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDispo
     new int PixelHeight { get; }
 
     /// <summary>
+    /// Gets the DPI scale factor. Resolves ambiguity between IRenderTarget and IRenderSurface.
+    /// </summary>
+    new double DpiScale { get; }
+
+    /// <summary>
+    /// Gets the stride in bytes per row. Resolves ambiguity between IPixelBufferSource and ICpuPixelSurface.
+    /// </summary>
+    new int StrideBytes { get; }
+
+    /// <summary>
+    /// Gets the pixel version. Resolves ambiguity between IPixelBufferSource and IRenderSurface.
+    /// </summary>
+    new int Version { get; }
+
+    /// <summary>
     /// Gets the pixel format of the bitmap (always BGRA32).
     /// </summary>
     new BitmapPixelFormat PixelFormat { get; }
@@ -28,7 +43,7 @@ public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDispo
     /// Copies the rendered pixels to a new array.
     /// </summary>
     /// <returns>A copy of the pixel buffer in BGRA32 format, or empty array if disposed.</returns>
-    byte[] CopyPixels();
+    new byte[] CopyPixels();
 
     /// <summary>
     /// Gets a span over the pixel buffer for direct access.
@@ -45,7 +60,7 @@ public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDispo
     /// Increments the version to signal that pixels have changed.
     /// Call this after modifying pixels via GetPixelSpan() or IGraphicsContext.
     /// </summary>
-    void IncrementVersion();
+    new void IncrementVersion();
 
     /// <summary>
     /// <see langword="true"/> if pixels in this target are stored with
@@ -61,4 +76,78 @@ public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDispo
     /// direction of the format mismatch.
     /// </summary>
     new bool IsPremultiplied => false;
+
+    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
+        ? RenderPixelFormat.Bgra8888Premultiplied
+        : RenderPixelFormat.Bgra8888;
+
+    double IRenderSurface.DpiScale => DpiScale;
+
+    SurfaceUsage IRenderSurface.Usage =>
+        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+
+    SurfaceCapabilities IRenderSurface.Capabilities
+    {
+        get
+        {
+            var capabilities =
+                SurfaceCapabilities.Renderable |
+                SurfaceCapabilities.CpuReadable |
+                SurfaceCapabilities.CpuWritable |
+                SurfaceCapabilities.Alpha;
+
+            if (IsPremultiplied)
+            {
+                capabilities |= SurfaceCapabilities.Premultiplied;
+            }
+
+            if (LockMode == LockMode.Readback)
+            {
+                capabilities |= SurfaceCapabilities.DeferredReadback;
+            }
+
+            if (this is IGpuTextureSource)
+            {
+                capabilities |= SurfaceCapabilities.GpuSampleable;
+            }
+
+            return capabilities;
+        }
+    }
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    int ICpuPixelSurface.StrideBytes => StrideBytes;
+
+    byte[] ICpuPixelSurface.CopyPixels() => CopyPixels();
+
+    void ICpuPixelSurface.IncrementVersion() => IncrementVersion();
+
+    bool IRenderSurface.IsDisposed => false;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return RenderOperation.Completed;
+    }
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return true;
+    }
 }

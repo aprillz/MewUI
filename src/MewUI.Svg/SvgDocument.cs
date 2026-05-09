@@ -98,12 +98,11 @@ public sealed class SvgDocument
             pixelWidth,
             pixelHeight,
             debugName: "SvgDocumentRasterize"));
-        if (surface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+        if (surface is not IBitmapRenderTarget target)
         {
             throw new NotSupportedException($"{nameof(SvgDocument)} rasterization requires a bitmap-backed render surface.");
         }
 
-        var target = bitmapSurface.Target;
         target.Clear(Color.Transparent);
         using (var ctx = renderDevice.CreateContext(surface))
             Render(ctx, new Rect(0, 0, pixelWidth, pixelHeight));

@@ -90,9 +90,9 @@ public sealed class ScratchRenderTargetPool : IDisposable
             _dpiScale,
             debugName: nameof(ScratchRenderTargetPool)));
 
-        if (surface is BitmapRenderTargetSurfaceAdapter bitmapSurface)
+        if (surface is IBitmapRenderTarget bitmapTarget)
         {
-            var lease = new ScratchRenderTargetLease(surface, bitmapSurface.Target);
+            var lease = new ScratchRenderTargetLease(surface, bitmapTarget);
             _leases[lease.Target] = lease;
             return lease;
         }

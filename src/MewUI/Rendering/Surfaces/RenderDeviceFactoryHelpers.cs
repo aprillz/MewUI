@@ -8,22 +8,22 @@ internal static class RenderDeviceFactoryHelpers
     {
         ArgumentNullException.ThrowIfNull(factory);
 
-        if (surface is BitmapRenderTargetSurfaceAdapter bitmapSurface)
+        if (surface is IBitmapRenderTarget bitmapTarget)
         {
-            return factory.CreateContext(bitmapSurface.Target);
+            return factory.CreateContext(bitmapTarget);
         }
 
         throw new NotSupportedException(
-            $"{factory.GetType().Name} can only create contexts for {nameof(BitmapRenderTargetSurfaceAdapter)} instances.");
+            $"{factory.GetType().Name} can only create contexts for bitmap-backed render surfaces.");
     }
 
     public static IImage CreateImageView(IGraphicsFactory factory, IRenderSurface surface)
     {
         ArgumentNullException.ThrowIfNull(factory);
 
-        if (surface is BitmapRenderTargetSurfaceAdapter bitmapSurface)
+        if (surface is IBitmapRenderTarget bitmapTarget)
         {
-            return factory.CreateImageView((IPixelBufferSource)bitmapSurface.Target);
+            return factory.CreateImageView((IPixelBufferSource)bitmapTarget);
         }
 
         throw new NotSupportedException(

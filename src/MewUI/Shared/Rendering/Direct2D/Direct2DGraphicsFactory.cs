@@ -544,7 +544,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 descriptor.DpiScale,
                 descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
 
-        return new BitmapRenderTargetSurfaceAdapter(target, descriptor, ownsTarget: true);
+        return target;
     }
 
     public IGraphicsContext CreateContext(IRenderSurface surface)

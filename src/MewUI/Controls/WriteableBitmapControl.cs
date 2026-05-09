@@ -122,14 +122,14 @@ public class WriteableBitmapControl : Control
                     pixelHeight,
                     scale,
                     debugName: nameof(WriteableBitmapControl)));
-                if (_surface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+                if (_surface is not IBitmapRenderTarget bitmapTarget)
                 {
                     _surface.Dispose();
                     _surface = null;
                     throw new NotSupportedException($"{nameof(WriteableBitmapControl)} requires a bitmap-backed render surface.");
                 }
 
-                _renderTarget = bitmapSurface.Target;
+                _renderTarget = bitmapTarget;
                 _image = null;
 
                 // Let derived class initialize the bitmap

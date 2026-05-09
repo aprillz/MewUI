@@ -352,12 +352,11 @@ public sealed class SvgView : FrameworkElement
                     request.PixelHeight,
                     request.EffectiveScale,
                     debugName: "SvgViewCache"));
-                if (surface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+                if (surface is not IBitmapRenderTarget target)
                 {
                     surface.Dispose();
                     throw new NotSupportedException($"{nameof(SvgView)} cache rebuild requires a bitmap-backed render surface.");
                 }
-                var target = bitmapSurface.Target;
                 long tCreateRT = sw.ElapsedTicks;
                 try
                 {

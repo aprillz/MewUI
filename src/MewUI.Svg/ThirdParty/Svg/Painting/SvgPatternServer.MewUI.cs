@@ -158,12 +158,11 @@ public partial class SvgPatternServer
                     pixelHeight,
                     dpiScale: 1.0,
                     debugName: "SvgPatternTile"));
-                if (newSurface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+                if (newSurface is not IBitmapRenderTarget newTarget)
                 {
                     newSurface.Dispose();
                     throw new NotSupportedException($"{nameof(SvgPatternServer)} requires bitmap-backed pattern tile surfaces.");
                 }
-                var newTarget = bitmapSurface.Target;
                 try
                 {
                     newTarget.Clear(Aprillz.MewUI.Color.Transparent);

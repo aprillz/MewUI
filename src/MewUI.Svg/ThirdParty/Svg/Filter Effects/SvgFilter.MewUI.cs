@@ -262,11 +262,10 @@ public partial class SvgFilter
             pixelHeight,
             Math.Max(1.0, Math.Min(effectiveLogicalToPixelX, effectiveLogicalToPixelY)),
             debugName: "SvgFilterSourceLayer"));
-        if (sourceSurface is not BitmapRenderTargetSurfaceAdapter sourceBitmapSurface)
+        if (sourceSurface is not IBitmapRenderTarget sourceLayer)
         {
             throw new NotSupportedException($"{nameof(SvgFilter)} currently requires bitmap-backed filter source layers.");
         }
-        var sourceLayer = sourceBitmapSurface.Target;
         sourceLayer.Clear(Aprillz.MewUI.Color.Transparent);
         long tCreateRT = sw.ElapsedTicks;
 

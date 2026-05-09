@@ -305,7 +305,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         // Borrow a Direct2DGraphicsContext for the dst (binds its DC RT, BeginDraw); we
         // use the QI'd DeviceContext to upload source pixels as an effect input bitmap and
         // render the effect output into the dst DC RT, which commits to its DIB.
-        using var dstCtx = (Direct2DGraphicsContext)_factory.CreateContext(dstDib);
+        using var dstCtx = (Direct2DGraphicsContext)_factory.CreateContext((IRenderTarget)dstDib);
         dstCtx.BeginFrame(dstDib);
         bool committed = false;
         try
