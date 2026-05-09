@@ -96,7 +96,7 @@ public sealed partial class MewVGGraphicsFactory
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
         => new GdiMeasurementContext(User32.GetDC(0), dpi);
 
-    partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget)
+    partial void TryCreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget)
     {
         if (handled)
         {

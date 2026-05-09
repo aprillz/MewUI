@@ -407,7 +407,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         {
             throw new ArgumentException(
                 $"BitmapRenderTarget was created by a different backend. " +
-                $"Use {nameof(CreateBitmapRenderTarget)} from the same factory.",
+                $"Use {nameof(CreateSurface)} from the same factory.",
                 nameof(target));
         }
 
@@ -494,11 +494,10 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return ctx;
     }
 
-    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
+    private IBitmapRenderTarget CreateCpuBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
         => new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
 
-    /// <inheritdoc />
-    /// <remarks>
+    /// <summary>
     /// Returns a GPU-resident <see cref="Direct2DGpuBitmapRenderTarget"/> when the shared
     /// device context is available, falling back to the DIB-backed
     /// <see cref="Direct2DBitmapRenderTarget"/> otherwise. The GPU path keeps filter graphs
@@ -507,8 +506,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     /// executors call <c>Lock</c>, in which case the lock release path also writes the
     /// modified buffer back to the GPU via <c>CopyFromMemory</c> so subsequent effects see
     /// the up-to-date pixels.
-    /// </remarks>
-    public IBitmapRenderTarget CreateOffscreenRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
+    /// </summary>
+    private IBitmapRenderTarget CreateOffscreenSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
     {
         if (SharedFilterDeviceContext != 0)
         {
@@ -533,12 +532,12 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
     {
         var target = RenderDeviceFactoryHelpers.RequiresCpuBitmap(descriptor)
-            ? CreateBitmapRenderTarget(
+            ? CreateCpuBitmapSurfaceTarget(
                 descriptor.PixelWidth,
                 descriptor.PixelHeight,
                 descriptor.DpiScale,
                 descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha))
-            : CreateOffscreenRenderTarget(
+            : CreateOffscreenSurfaceTarget(
                 descriptor.PixelWidth,
                 descriptor.PixelHeight,
                 descriptor.DpiScale,

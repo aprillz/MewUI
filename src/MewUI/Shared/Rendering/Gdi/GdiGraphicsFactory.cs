@@ -136,7 +136,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         {
             throw new ArgumentException(
                 $"BitmapRenderTarget was created by a different backend. " +
-                $"Use {nameof(CreateBitmapRenderTarget)} from the same factory.",
+                $"Use {nameof(CreateSurface)} from the same factory.",
                 nameof(target));
         }
 
@@ -155,7 +155,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         return new GdiMeasurementContext(hdc, dpi);
     }
 
-    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
+    private IBitmapRenderTarget CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
         => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
 
     public IRenderResourceCache? ResourceCache => _renderResourceCache;
@@ -163,7 +163,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
     public IRenderEffectDevice? Effects => null;
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
-        => CreateBitmapRenderTarget(
+        => CreateBitmapSurfaceTarget(
             descriptor.PixelWidth,
             descriptor.PixelHeight,
             descriptor.DpiScale,

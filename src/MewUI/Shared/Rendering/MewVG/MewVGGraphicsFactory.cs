@@ -179,11 +179,11 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     public IGraphicsContext CreateMeasurementContext(uint dpi)
         => CreateMeasurementContextCore(dpi);
 
-    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
+    private IBitmapRenderTarget CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
     {
         IBitmapRenderTarget? rt = null;
         bool handled = false;
-        TryCreateBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha, ref handled, ref rt);
+        TryCreateBitmapSurfaceTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha, ref handled, ref rt);
         if (handled && rt != null)
         {
             return rt;
@@ -197,7 +197,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     public IRenderEffectDevice? Effects => null;
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
-        => CreateBitmapRenderTarget(
+        => CreateBitmapSurfaceTarget(
             descriptor.PixelWidth,
             descriptor.PixelHeight,
             descriptor.DpiScale,
@@ -261,7 +261,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
 
     partial void TryReleaseWindowResources(nint hwnd);
 
-    partial void TryCreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget);
+    partial void TryCreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget);
 
     partial void TryGetImageDisposeHandler(ref Action<MewVGImage>? handler);
 
