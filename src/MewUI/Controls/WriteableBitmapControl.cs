@@ -15,6 +15,7 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class WriteableBitmapControl : Control
 {
+    private IRenderSurface? _surface;
     private IBitmapRenderTarget? _renderTarget;
     private IImage? _image;
     private bool _needsRender;
@@ -110,11 +111,25 @@ public class WriteableBitmapControl : Control
         {
             if (sizeChanged)
             {
-                _renderTarget?.Dispose();
                 _image?.Dispose();
+                _surface?.Dispose();
+                _renderTarget = null;
 
                 var factory = GetGraphicsFactory();
-                _renderTarget = factory.CreateBitmapRenderTarget(pixelWidth, pixelHeight, scale);
+                var renderDevice = factory.AsRenderDevice();
+                _surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuBitmap(
+                    pixelWidth,
+                    pixelHeight,
+                    scale,
+                    debugName: nameof(WriteableBitmapControl)));
+                if (_surface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+                {
+                    _surface.Dispose();
+                    _surface = null;
+                    throw new NotSupportedException($"{nameof(WriteableBitmapControl)} requires a bitmap-backed render surface.");
+                }
+
+                _renderTarget = bitmapSurface.Target;
                 _image = null;
 
                 // Let derived class initialize the bitmap
@@ -122,7 +137,7 @@ public class WriteableBitmapControl : Control
                 _needsRender = true;
             }
 
-            if (_renderTarget == null)
+            if (_renderTarget == null || _surface == null)
                 return;
 
             // Call OnRenderBitmap if needed
@@ -133,7 +148,7 @@ public class WriteableBitmapControl : Control
                 // Vector graphics phase (context active — BeginDraw/EndDraw scope)
                 if (UseBitmapGraphicsContext)
                 {
-                    using var renderCtx = GetGraphicsFactory().CreateContext(_renderTarget);
+                    using var renderCtx = GetGraphicsFactory().AsRenderDevice().CreateContext(_surface);
                     OnRenderBitmap(renderCtx);
                 }
                 // Context disposed: EndDraw complete — safe for direct pixel access
@@ -154,8 +169,7 @@ public class WriteableBitmapControl : Control
         // and updates internally via version tracking.
         if (_image == null)
         {
-            var factory = GetGraphicsFactory();
-            _image = factory.CreateImageFromPixelSource(_renderTarget);
+            _image = GetGraphicsFactory().AsRenderDevice().CreateImageView(_surface);
         }
 
         // Draw the bitmap to the screen
@@ -177,7 +191,8 @@ public class WriteableBitmapControl : Control
         _image?.Dispose();
         _image = null;
 
-        _renderTarget?.Dispose();
+        _surface?.Dispose();
+        _surface = null;
         _renderTarget = null;
     }
 
