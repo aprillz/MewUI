@@ -256,8 +256,17 @@ public partial class SvgFilter
         // Source layer rendering: 1 user unit → effectiveLogicalToPixel pixels. Set the
         // bitmap's reported DpiScale to the same value so internally-DPI-aware rendering
         // (e.g. backend stroke snapping) sees a consistent device-pixel-per-DIP ratio.
-        using var sourceLayer = offscreenFactory.CreateOffscreenRenderTarget(pixelWidth, pixelHeight,
-            dpiScale: Math.Max(1.0, Math.Min(effectiveLogicalToPixelX, effectiveLogicalToPixelY)));
+        var renderDevice = offscreenFactory.AsRenderDevice();
+        using var sourceSurface = renderDevice.CreateSurface(RenderSurfaceDescriptor.FilterIntermediate(
+            pixelWidth,
+            pixelHeight,
+            Math.Max(1.0, Math.Min(effectiveLogicalToPixelX, effectiveLogicalToPixelY)),
+            debugName: "SvgFilterSourceLayer"));
+        if (sourceSurface is not BitmapRenderTargetSurfaceAdapter sourceBitmapSurface)
+        {
+            throw new NotSupportedException($"{nameof(SvgFilter)} currently requires bitmap-backed filter source layers.");
+        }
+        var sourceLayer = sourceBitmapSurface.Target;
         sourceLayer.Clear(Aprillz.MewUI.Color.Transparent);
         long tCreateRT = sw.ElapsedTicks;
 
@@ -298,7 +307,7 @@ public partial class SvgFilter
         if (graph is null)
         {
             // No primitives — draw the source layer as-is.
-            outputImage = offscreenFactory.CreateImageFromPixelSource(sourceLayer);
+            outputImage = renderDevice.CreateImageView(sourceSurface);
             outputSourceRect = new Rect(0, 0, sourceLayer.PixelWidth, sourceLayer.PixelHeight);
             try
             {
@@ -311,7 +320,7 @@ public partial class SvgFilter
         // Factory returns the backend's best executor (GPU shader path on OpenGL, CPU on
         // backends without a dedicated implementation). Each GPU executor internally chains
         // the CPU executor as fallback for nodes it doesn't accelerate.
-        using var sourceImage = offscreenFactory.CreateImageFromPixelSource(sourceLayer);
+        using var sourceImage = renderDevice.CreateImageView(sourceSurface);
         // The source layer was rasterized at filterRegion × effectiveLogicalToPixel pixels
         // (clamped by the executor's MaxInputScale hint above). Filter parameters in user/DIP
         // units must be multiplied by the same scale to land in source-pixel space.
