@@ -208,6 +208,17 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     public IImage CreateImageView(IPixelBufferSource source)
         => CreateImageFromPixelSource(source);
 
+    public IImage CreateImageView(IExternalSampleSource source)
+    {
+        if (source is ExternalLockedTextureSampleSource locked)
+        {
+            return CreateImageFromExternalTexture(locked.Texture);
+        }
+
+        throw new NotSupportedException(
+            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
+    }
+
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
 

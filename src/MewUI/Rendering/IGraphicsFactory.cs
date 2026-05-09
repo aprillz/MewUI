@@ -168,15 +168,7 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     /// <see cref="IExternalLockedTexture"/> path.
     /// </summary>
     IImage CreateImageFromExternalSource(IExternalSampleSource source)
-    {
-        if (source is ExternalLockedTextureSampleSource locked)
-        {
-            return CreateImageFromExternalTexture(locked.Texture);
-        }
-
-        throw new NotSupportedException(
-            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
-    }
+        => CreateImageView(source);
 
     /// <summary>
     /// Creates a graphics context for the specified render target.

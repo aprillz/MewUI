@@ -14,6 +14,8 @@ public interface IRenderDevice
 
     IImage CreateImageView(IPixelBufferSource source);
 
+    IImage CreateImageView(IExternalSampleSource source);
+
     bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes);
 
     IRenderOperation RequestReadback(IRenderSurface source);

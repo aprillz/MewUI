@@ -231,7 +231,7 @@ public sealed class VideoView : FrameworkElement
         try
         {
             var texture = new VaapiDmaBufTexture(vaapi.VaDisplay, vaapi.VaSurfaceId, frame.Width, frame.Height);
-            var image = factory.CreateImageFromExternalSource(texture.AsExternalSampleSource(ExternalSampleSourceKind.OpenGLTexture));
+            var image = factory.CreateImageView(texture.AsExternalSampleSource(ExternalSampleSourceKind.OpenGLTexture));
             UpdatePresentationPath("gpu zero-copy (vaapi dma_buf → egl → gl)");
             if (!_firstPresentedFrameLogged)
             {
@@ -250,7 +250,7 @@ public sealed class VideoView : FrameworkElement
     {
         try
         {
-            var image = factory.CreateImageFromExternalSource(vtTexture.AsExternalSampleSource(ExternalSampleSourceKind.MetalTexture));
+            var image = factory.CreateImageView(vtTexture.AsExternalSampleSource(ExternalSampleSourceKind.MetalTexture));
             UpdatePresentationPath("gpu zero-copy (videotoolbox iosurface → metal)");
             if (!_firstPresentedFrameLogged)
             {
@@ -377,7 +377,7 @@ public sealed class VideoView : FrameworkElement
         }
 
         var interopTexture = new WglDxInteropTexture(d3d11.DeviceHandle, d3d11.TextureHandle, width, height);
-        var image = factory.CreateImageFromExternalSource(interopTexture.AsExternalSampleSource(ExternalSampleSourceKind.OpenGLTexture));
+        var image = factory.CreateImageView(interopTexture.AsExternalSampleSource(ExternalSampleSourceKind.OpenGLTexture));
         cached = new CachedGlInteropEntry(interopTexture, image);
         _glInteropCache.Add(d3d11.TextureHandle, cached);
         return cached;
