@@ -167,6 +167,23 @@ public interface IGraphicsFactory : IDisposable
             $"{GetType().Name} does not support external locked textures.");
 
     /// <summary>
+    /// Creates an image backed by an external sample source. This is the generalized
+    /// form of <see cref="CreateImageFromExternalTexture"/> and leaves room for
+    /// multi-plane/video/effect inputs. The default implementation adapts the existing
+    /// <see cref="IExternalLockedTexture"/> path.
+    /// </summary>
+    IImage CreateImageFromExternalSource(IExternalSampleSource source)
+    {
+        if (source is ExternalLockedTextureSampleSource locked)
+        {
+            return CreateImageFromExternalTexture(locked.Texture);
+        }
+
+        throw new NotSupportedException(
+            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
+    }
+
+    /// <summary>
     /// Creates a graphics context for the specified render target.
     /// The returned context is not yet started; call
     /// <see cref="IGraphicsContext.BeginFrame"/> before drawing.
