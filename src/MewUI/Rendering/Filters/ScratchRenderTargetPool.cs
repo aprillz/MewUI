@@ -18,9 +18,10 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// </remarks>
 public sealed class ScratchRenderTargetPool : IDisposable
 {
-    private readonly IGraphicsFactory _factory;
+    private readonly IRenderDevice _device;
     private readonly double _dpiScale;
     private readonly Dictionary<(int Width, int Height), Stack<IBitmapRenderTarget>> _buckets = new();
+    private readonly Dictionary<IBitmapRenderTarget, IRenderSurface> _surfaces = new();
     private bool _disposed;
 
     /// <summary>
@@ -30,8 +31,13 @@ public sealed class ScratchRenderTargetPool : IDisposable
     public int MaxPerBucket { get; init; } = 4;
 
     public ScratchRenderTargetPool(IGraphicsFactory factory, double dpiScale)
+        : this(factory?.AsRenderDevice() ?? throw new ArgumentNullException(nameof(factory)), dpiScale)
     {
-        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    }
+
+    public ScratchRenderTargetPool(IRenderDevice device, double dpiScale)
+    {
+        _device = device ?? throw new ArgumentNullException(nameof(device));
         _dpiScale = dpiScale > 0 ? dpiScale : 1.0;
     }
 
@@ -63,7 +69,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
                 var target = stack.Pop();
                 if (target is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
                 {
-                    target.Dispose();
+                    DisposeTarget(target);
                     continue;
                 }
 
@@ -72,9 +78,23 @@ public sealed class ScratchRenderTargetPool : IDisposable
         }
 
         // Filter scratch buffers benefit from the GPU pipeline when the backend supports
-        // it (Direct2D's shared device, MewVG's FBO). CreateOffscreenRenderTarget routes
-        // to the optimal RT type per backend; default impl falls back to the regular bitmap.
-        return _factory.CreateOffscreenRenderTarget(w, h, _dpiScale);
+        // it (Direct2D's shared device, MewVG's FBO). The compatibility device routes to
+        // the existing factory methods today, while keeping allocation policy centralized.
+        var surface = _device.CreateSurface(RenderSurfaceDescriptor.FilterIntermediate(
+            w,
+            h,
+            _dpiScale,
+            debugName: nameof(ScratchRenderTargetPool)));
+
+        if (surface is BitmapRenderTargetSurfaceAdapter bitmapSurface)
+        {
+            _surfaces[bitmapSurface.Target] = surface;
+            return bitmapSurface.Target;
+        }
+
+        surface.Dispose();
+        throw new NotSupportedException(
+            $"{nameof(ScratchRenderTargetPool)} currently requires bitmap-backed render surfaces.");
     }
 
     /// <summary>
@@ -86,13 +106,13 @@ public sealed class ScratchRenderTargetPool : IDisposable
         if (target is null) return;
         if (_disposed)
         {
-            target.Dispose();
+            DisposeTarget(target);
             return;
         }
 
         if (target is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
         {
-            target.Dispose();
+            DisposeTarget(target);
             return;
         }
 
@@ -105,7 +125,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
 
         if (stack.Count >= MaxPerBucket)
         {
-            target.Dispose();
+            DisposeTarget(target);
             return;
         }
 
@@ -121,21 +141,20 @@ public sealed class ScratchRenderTargetPool : IDisposable
         {
             while (stack.Count > 0)
             {
-                stack.Pop().Dispose();
+                DisposeTarget(stack.Pop());
             }
         }
         _buckets.Clear();
     }
 
-    private static int NextPow2(int value)
+    private void DisposeTarget(IBitmapRenderTarget target)
     {
-        if (value <= 1) return 1;
-        value--;
-        value |= value >> 1;
-        value |= value >> 2;
-        value |= value >> 4;
-        value |= value >> 8;
-        value |= value >> 16;
-        return value + 1;
+        if (_surfaces.Remove(target, out var surface))
+        {
+            surface.Dispose();
+            return;
+        }
+
+        target.Dispose();
     }
 }
