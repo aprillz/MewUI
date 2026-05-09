@@ -20,7 +20,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
     private byte[]? _lockBuffer;
     private Action? _releaseAction;
 
-    public GdiBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default)
+    public GdiBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -30,6 +30,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
         PixelHeight = pixelHeight;
         DpiScale = dpiScale;
         PresentationMode = presentationMode;
+        HasAlpha = hasAlpha;
 
         // Create memory DC
         var screenDc = User32.GetDC(0);
@@ -73,6 +74,13 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
     /// about alpha read this back as premultiplied.
     /// </summary>
     public bool IsPremultiplied => true;
+
+    /// <summary>
+    /// Mirrors the alpha-channel hint from construction. Consumers reading these pixels via
+    /// <see cref="IPixelBufferSource"/> use this to skip alpha scans for opaque RTs (e.g.
+    /// a video frame target).
+    /// </summary>
+    public bool HasAlpha { get; }
 
     /// <summary>
     /// Gets the memory device context for rendering.

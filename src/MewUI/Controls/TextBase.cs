@@ -345,6 +345,8 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         return _editor.GetSelectionRange();
     }
 
+    protected bool IsSelectionActive => IsFocused && FindVisualRoot() is Window { IsActive: true };
+
     protected virtual string NormalizeText(string text)
     {
         text ??= string.Empty;

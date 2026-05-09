@@ -128,6 +128,21 @@ internal static unsafe class D2D1VTable
         return fn(rt, &tag1, &tag2);
     }
 
+    /// <summary>
+    /// ID2D1RenderTarget::Flush — submits all batched drawing commands to the GPU. Required
+    /// before <see cref="CopyFromBitmap"/> or <c>MapBitmap</c> on a bitmap that this DC has
+    /// pending writes to: without it, the readback may capture pre-flush state. Calls within
+    /// an active BeginDraw block are legal — this is the documented escape hatch for
+    /// mid-frame readback.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Flush(ID2D1RenderTarget* rt)
+    {
+        ulong tag1 = 0, tag2 = 0;
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, ulong*, ulong*, int>)(rt->lpVtbl[42]);
+        return fn(rt, &tag1, &tag2);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Clear(ID2D1RenderTarget* rt, in D2D1_COLOR_F color)
     {
@@ -143,6 +158,16 @@ internal static unsafe class D2D1VTable
     {
         var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, float, float, void>)(rt->lpVtbl[51]);
         fn(rt, dpiX, dpiY);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void GetDpi(ID2D1RenderTarget* rt, out float dpiX, out float dpiY)
+    {
+        float x, y;
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, float*, float*, void>)(rt->lpVtbl[52]);
+        fn(rt, &x, &y);
+        dpiX = x;
+        dpiY = y;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -397,6 +422,25 @@ internal static unsafe class D2D1VTable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateSharedBitmap(
+        ID2D1RenderTarget* rt,
+        in Guid riid,
+        nint data,
+        in D2D1_BITMAP_PROPERTIES props,
+        out nint bitmap)
+    {
+        nint bmp = 0;
+        fixed (Guid* pIid = &riid)
+        fixed (D2D1_BITMAP_PROPERTIES* pProps = &props)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, Guid*, nint, D2D1_BITMAP_PROPERTIES*, nint*, int>)(rt->lpVtbl[6]);
+            int hr = fn(rt, pIid, data, pProps, &bmp);
+            bitmap = bmp;
+            return hr;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void DrawBitmap(
         ID2D1RenderTarget* rt,
         nint bitmap,
@@ -410,6 +454,26 @@ internal static unsafe class D2D1VTable
         {
             var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, nint, D2D1_RECT_F*, float, D2D1_BITMAP_INTERPOLATION_MODE, D2D1_RECT_F*, void>)(rt->lpVtbl[26]);
             fn(rt, bitmap, pDest, opacity, interpolationMode, pSrc);
+        }
+    }
+
+    // ID2D1RenderTarget vtbl[7]: CreateBitmapBrush
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateBitmapBrush(
+        ID2D1RenderTarget* rt,
+        nint bitmap,
+        in D2D1_BITMAP_BRUSH_PROPERTIES bitmapBrushProps,
+        in D2D1_BRUSH_PROPERTIES brushProps,
+        out nint bitmapBrush)
+    {
+        nint b = 0;
+        fixed (D2D1_BITMAP_BRUSH_PROPERTIES* pBmp = &bitmapBrushProps)
+        fixed (D2D1_BRUSH_PROPERTIES* pBrush = &brushProps)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, nint, D2D1_BITMAP_BRUSH_PROPERTIES*, D2D1_BRUSH_PROPERTIES*, nint*, int>)(rt->lpVtbl[7]);
+            int hr = fn(rt, bitmap, pBmp, pBrush, &b);
+            bitmapBrush = b;
+            return hr;
         }
     }
 
@@ -503,6 +567,346 @@ internal static unsafe class D2D1VTable
         }
     }
 
+    // ----------------------------------------------------------------------
+    // ID2D1DeviceContext (extends ID2D1RenderTarget) — for the built-in effect
+    // pipeline used by the Direct2D image-filter executor.
+    // Vtable layout (after IUnknown/Resource/RenderTarget):
+    //   [57] CreateBitmap (D2D1_BITMAP_PROPERTIES1)
+    //   [62] CreateBitmapFromDxgiSurface
+    //   [63] CreateEffect
+    //   [74] SetTarget
+    //   [83] DrawImage
+    //   [86] PushLayer (LAYER_PARAMETERS1)  ← already used
+    // ----------------------------------------------------------------------
+
+    /// <summary>ID2D1DeviceContext::CreateBitmap (vtbl 57). Allocates a D2D bitmap, optionally
+    /// initialized from <paramref name="sourceData"/> (BGRA premultiplied, <paramref name="pitch"/>
+    /// bytes per row).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateBitmap1(
+        ID2D1DeviceContext* dc,
+        D2D1_SIZE_U size,
+        ReadOnlySpan<byte> sourceData,
+        uint pitch,
+        in D2D1_BITMAP_PROPERTIES1 properties,
+        out nint bitmap)
+    {
+        nint b = 0;
+        fixed (D2D1_BITMAP_PROPERTIES1* pProps = &properties)
+        {
+            if (sourceData.IsEmpty)
+            {
+                var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, D2D1_SIZE_U, void*, uint, D2D1_BITMAP_PROPERTIES1*, nint*, int>)(dc->lpVtbl[57]);
+                int hr = fn(dc, size, null, 0, pProps, &b);
+                bitmap = b;
+                return hr;
+            }
+            else
+            {
+                fixed (byte* pData = sourceData)
+                {
+                    var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, D2D1_SIZE_U, void*, uint, D2D1_BITMAP_PROPERTIES1*, nint*, int>)(dc->lpVtbl[57]);
+                    int hr = fn(dc, size, pData, pitch, pProps, &b);
+                    bitmap = b;
+                    return hr;
+                }
+            }
+        }
+    }
+
+    /// <summary>ID2D1DeviceContext::CreateEffect (vtbl 63).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateEffect(ID2D1DeviceContext* dc, in Guid clsid, out nint effect)
+    {
+        nint e = 0;
+        fixed (Guid* pClsid = &clsid)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, Guid*, nint*, int>)(dc->lpVtbl[63]);
+            int hr = fn(dc, pClsid, &e);
+            effect = e;
+            return hr;
+        }
+    }
+
+    /// <summary>ID2D1DeviceContext::CreateBitmapFromDxgiSurface (vtbl 62). Wraps a DXGI
+    /// surface as a targetable bitmap on the same D2D device.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateBitmapFromDxgiSurface(
+        ID2D1DeviceContext* dc,
+        nint dxgiSurface,
+        in D2D1_BITMAP_PROPERTIES1 properties,
+        out nint bitmap)
+    {
+        nint b = 0;
+        fixed (D2D1_BITMAP_PROPERTIES1* pProps = &properties)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, nint, D2D1_BITMAP_PROPERTIES1*, nint*, int>)(dc->lpVtbl[62]);
+            int hr = fn(dc, dxgiSurface, pProps, &b);
+            bitmap = b;
+            return hr;
+        }
+    }
+
+    /// <summary>ID2D1DeviceContext::SetTarget (vtbl 74). Switches the active render target —
+    /// effects render into whatever the device context currently targets.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void SetTarget(ID2D1DeviceContext* dc, nint imageTarget)
+    {
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, nint, void>)(dc->lpVtbl[74]);
+        fn(dc, imageTarget);
+    }
+
+    /// <summary>ID2D1DeviceContext::GetTarget (vtbl 75). Used to save/restore the previous
+    /// target around an effects pass.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void GetTarget(ID2D1DeviceContext* dc, out nint imageTarget)
+    {
+        nint t = 0;
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, nint*, void>)(dc->lpVtbl[75]);
+        fn(dc, &t);
+        imageTarget = t;
+    }
+
+    /// <summary>ID2D1DeviceContext::DrawImage (vtbl 83). Renders <paramref name="image"/>
+    /// (a bitmap or an effect output) into the current target.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void DrawImage(
+        ID2D1DeviceContext* dc,
+        nint image,
+        D2D1_INTERPOLATION_MODE interpolationMode = D2D1_INTERPOLATION_MODE.LINEAR,
+        D2D1_COMPOSITE_MODE compositeMode = D2D1_COMPOSITE_MODE.SOURCE_OVER)
+    {
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, nint, D2D1_POINT_2F*, D2D1_RECT_F*, D2D1_INTERPOLATION_MODE, D2D1_COMPOSITE_MODE, void>)(dc->lpVtbl[83]);
+        fn(dc, image, null, null, interpolationMode, compositeMode);
+    }
+
+    /// <summary>ID2D1DeviceContext::DrawBitmap (vtbl 85). The DC overload — supports
+    /// <see cref="D2D1_INTERPOLATION_MODE.HIGH_QUALITY_CUBIC"/> and other GPU-side
+    /// down-sampling modes that the legacy ID2D1RenderTarget::DrawBitmap (vtbl 26) lacks.
+    /// Use this when the active target is a DeviceContext and ImageScaleQuality demands
+    /// better quality than LINEAR — avoids the manual CPU mip pyramid path.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void DrawBitmap(
+        ID2D1DeviceContext* dc,
+        nint bitmap,
+        in D2D1_RECT_F destinationRectangle,
+        float opacity,
+        D2D1_INTERPOLATION_MODE interpolationMode,
+        in D2D1_RECT_F sourceRectangle)
+    {
+        fixed (D2D1_RECT_F* dst = &destinationRectangle)
+        fixed (D2D1_RECT_F* src = &sourceRectangle)
+        {
+            var fn = (delegate* unmanaged[Stdcall]<ID2D1DeviceContext*, nint, D2D1_RECT_F*, float, D2D1_INTERPOLATION_MODE, D2D1_RECT_F*, void*, void>)(dc->lpVtbl[85]);
+            fn(dc, bitmap, dst, opacity, interpolationMode, src, null);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // ID2D1Bitmap1 (inherits ID2D1Bitmap → ID2D1Resource → IUnknown)
+    //   [0-2]  IUnknown
+    //   [3]    GetFactory (Resource)
+    //   [4-7]  GetSize / GetPixelSize / GetPixelFormat / GetDpi (Bitmap)
+    //   [8]    CopyFromBitmap (Bitmap)
+    //   [9]    CopyFromRenderTarget (Bitmap)
+    //   [10]   CopyFromMemory (Bitmap)
+    //   [11]   GetColorContext (Bitmap1)
+    //   [12]   GetOptions (Bitmap1)
+    //   [13]   GetSurface (Bitmap1)
+    //   [14]   Map (Bitmap1)
+    //   [15]   Unmap (Bitmap1)
+    // ----------------------------------------------------------------------
+
+    /// <summary>ID2D1Bitmap::CopyFromBitmap (vtbl 8). Copies a region from a source bitmap
+    /// to <paramref name="dstBitmap"/>. The destination point and source rectangle are null,
+    /// so the full bitmap is copied. Both bitmaps must be on the same device.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CopyFromBitmap(nint dstBitmap, nint srcBitmap)
+    {
+        var vtbl = *(void***)dstBitmap;
+        var fn = (delegate* unmanaged[Stdcall]<nint, D2D1_POINT_2U*, nint, D2D1_RECT_U*, int>)(vtbl[8]);
+        return fn(dstBitmap, null, srcBitmap, null);
+    }
+
+    /// <summary>ID2D1Bitmap::CopyFromMemory (vtbl 10). Uploads CPU-side pixel data into a
+    /// GPU bitmap. <paramref name="srcData"/> is the source buffer (must contain at least
+    /// <c>height * pitch</c> bytes covering the destination rect). The destination rect is
+    /// passed as null so the entire bitmap is uploaded. Used by the GPU bitmap target's
+    /// writeback path so CPU executors can Lock+modify pixels and have the changes
+    /// propagate back to the GPU surface for downstream effects.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CopyFromMemory(nint dstBitmap, ReadOnlySpan<byte> srcData, uint pitch)
+    {
+        var vtbl = *(void***)dstBitmap;
+        var fn = (delegate* unmanaged[Stdcall]<nint, D2D1_RECT_U*, void*, uint, int>)(vtbl[10]);
+        fixed (byte* p = srcData)
+        {
+            return fn(dstBitmap, null, p, pitch);
+        }
+    }
+
+    /// <summary>ID2D1Bitmap1::Map (vtbl 14). Bitmap must have been created with
+    /// <see cref="D2D1_BITMAP_OPTIONS.CPU_READ"/>. <paramref name="mapped"/> receives a
+    /// pointer into staging memory plus row pitch.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int MapBitmap(nint bitmap, D2D1_MAP_OPTIONS options, out D2D1_MAPPED_RECT mapped)
+    {
+        D2D1_MAPPED_RECT m = default;
+        var vtbl = *(void***)bitmap;
+        var fn = (delegate* unmanaged[Stdcall]<nint, D2D1_MAP_OPTIONS, D2D1_MAPPED_RECT*, int>)(vtbl[14]);
+        int hr = fn(bitmap, options, &m);
+        mapped = m;
+        return hr;
+    }
+
+    /// <summary>ID2D1Bitmap1::Unmap (vtbl 15). Releases the staging mapping.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int UnmapBitmap(nint bitmap)
+    {
+        var vtbl = *(void***)bitmap;
+        var fn = (delegate* unmanaged[Stdcall]<nint, int>)(vtbl[15]);
+        return fn(bitmap);
+    }
+
+    // ----------------------------------------------------------------------
+    // ID2D1Effect inherits ID2D1Properties (which inherits IUnknown).
+    //
+    // ID2D1Properties layout (d2d1_1.h):
+    //   [0-2]  IUnknown
+    //   [3]    GetPropertyCount
+    //   [4]    GetPropertyName
+    //   [5]    GetPropertyNameLength
+    //   [6]    GetType
+    //   [7]    GetPropertyIndex
+    //   [8]    SetValueByName
+    //   [9]    SetValue (UINT32 index, D2D1_PROPERTY_TYPE type, BYTE* data, UINT32 size)
+    //   [10]   GetValueByName
+    //   [11]   GetValue
+    //   [12]   GetValueSize
+    //   [13]   GetSubProperties
+    //
+    // ID2D1Effect extension:
+    //   [14]   SetInput
+    //   [15]   SetInputCount
+    //   [16]   GetInput
+    //   [17]   GetInputCount
+    //   [18]   GetOutput
+    //
+    // (The SetValue/GetValue untyped overloads exposed in C++ are inline helpers, not vtable
+    //  entries — including them in the count is the easy mis-indexing trap.)
+    // ----------------------------------------------------------------------
+
+    /// <summary>ID2D1Properties::SetValue (vtbl 9) — by index, typed.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetEffectValue(nint effect, uint index, D2D1_PROPERTY_TYPE type, ReadOnlySpan<byte> data)
+    {
+        fixed (byte* pData = data)
+        {
+            var vtbl = *(void***)effect;
+            var fn = (delegate* unmanaged[Stdcall]<nint, uint, D2D1_PROPERTY_TYPE, void*, uint, int>)(vtbl[9]);
+            return fn(effect, index, type, pData, (uint)data.Length);
+        }
+    }
+
+    /// <summary>Convenience: set a float-typed property (e.g. Gaussian blur stdDeviation).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetEffectValueFloat(nint effect, uint index, float value)
+    {
+        return SetEffectValue(effect, index, D2D1_PROPERTY_TYPE.FLOAT,
+            new ReadOnlySpan<byte>(&value, sizeof(float)));
+    }
+
+    /// <summary>Convenience: set an enum-typed property.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetEffectValueEnum(nint effect, uint index, uint value)
+    {
+        return SetEffectValue(effect, index, D2D1_PROPERTY_TYPE.ENUM,
+            new ReadOnlySpan<byte>(&value, sizeof(uint)));
+    }
+
+    /// <summary>ID2D1Effect::SetInput (vtbl 14).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void SetEffectInput(nint effect, uint index, nint image, bool invalidate = true)
+    {
+        var vtbl = *(void***)effect;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, nint, int, void>)(vtbl[14]);
+        fn(effect, index, image, invalidate ? 1 : 0);
+    }
+
+    /// <summary>ID2D1Effect::GetOutput (vtbl 18). Returns an ID2D1Image that, when drawn,
+    /// produces the effect's output. Caller releases.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void GetEffectOutput(nint effect, out nint image)
+    {
+        nint img = 0;
+        var vtbl = *(void***)effect;
+        var fn = (delegate* unmanaged[Stdcall]<nint, nint*, void>)(vtbl[18]);
+        fn(effect, &img);
+        image = img;
+    }
+
+    /// <summary>ID2D1Effect::SetInputCount (vtbl 15). ID2D1Effect inherits ID2D1Properties
+    /// (vtbl 3..13: 11 property methods); the Effect-specific slots start at 14:
+    /// SetInput=14, SetInputCount=15, GetInput=16, GetInputCount=17, GetOutput=18.
+    /// Wrong index here = ExecutionEngineException on call (mis-typed function pointer).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetEffectInputCount(nint effect, uint inputCount)
+    {
+        var vtbl = *(void***)effect;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, int>)(vtbl[15]);
+        return fn(effect, inputCount);
+    }
+
+    /// <summary>Convenience: set a 4×5 color matrix property (e.g. ColorMatrix's COLOR_MATRIX).
+    /// D2D1_MATRIX_5X4_F is laid out as 5 columns × 4 rows = 20 floats, row-major. Direct2D
+    /// expects [R'_R, R'_G, R'_B, R'_A, R'_offset, G'_R, ...] which matches the
+    /// <c>ColorMatrixFilter.Matrix</c> layout (row 0 → R', row 1 → G', etc.).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetEffectValueMatrix5x4(nint effect, uint index, ReadOnlySpan<float> matrix20)
+    {
+        if (matrix20.Length != 20) throw new ArgumentException("matrix must have 20 entries");
+        fixed (float* p = matrix20)
+        {
+            return SetEffectValue(effect, index, D2D1_PROPERTY_TYPE.MATRIX_5X4,
+                new ReadOnlySpan<byte>(p, 20 * sizeof(float)));
+        }
+    }
+
+    /// <summary>Convenience: set a 3×2 affine transform matrix property (e.g. AffineTransform's
+    /// TRANSFORM_MATRIX). 6 floats, row-major same as <c>D2D1_MATRIX_3X2_F</c>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int SetEffectValueMatrix3x2(nint effect, uint index, in D2D1_MATRIX_3X2_F matrix)
+    {
+        fixed (D2D1_MATRIX_3X2_F* p = &matrix)
+        {
+            return SetEffectValue(effect, index, D2D1_PROPERTY_TYPE.MATRIX_3X2,
+                new ReadOnlySpan<byte>(p, sizeof(D2D1_MATRIX_3X2_F)));
+        }
+    }
+
+    // ID2D1Factory1 vtbl[17]: CreateDevice — builds an ID2D1Device for the GPU pipeline.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateDevice(ID2D1Factory* factory, nint dxgiDevice, out nint d2dDevice)
+    {
+        nint d = 0;
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1Factory*, nint, nint*, int>)(factory->lpVtbl[17]);
+        int hr = fn(factory, dxgiDevice, &d);
+        d2dDevice = d;
+        return hr;
+    }
+
+    // ID2D1Device vtbl[4] (after IUnknown[3] + Resource[1]): CreateDeviceContext
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int CreateDeviceContext(nint d2dDevice, uint options, out nint deviceContext)
+    {
+        nint dc = 0;
+        var vtbl = *(void***)d2dDevice;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)(vtbl[4]);
+        int hr = fn(d2dDevice, options, &dc);
+        deviceContext = dc;
+        return hr;
+    }
+
     // ID2D1Factory1 vtbl[18]: CreateStrokeStyle (with D2D1_STROKE_STYLE_PROPERTIES1)
     // Requires factory created with IID_ID2D1Factory1.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -562,6 +966,19 @@ internal static unsafe class D2D1VTable
         var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, D2D1_MATRIX_3X2_F*, void>)(rt->lpVtbl[31]);
         fn(rt, &matrix);
         return matrix;
+    }
+
+    // ID2D1RenderTarget vtbl[50]: GetPixelFormat. Used by callers that need the bound
+    // surface's alpha mode (e.g. text antialias-mode selection — ClearType requires
+    // ALPHA_MODE.IGNORE). Return-by-value struct uses the COM hidden-pointer convention,
+    // matching <see cref="GetTransform"/>.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static D2D1_PIXEL_FORMAT GetPixelFormat(ID2D1RenderTarget* rt)
+    {
+        D2D1_PIXEL_FORMAT pf = default;
+        var fn = (delegate* unmanaged[Stdcall]<ID2D1RenderTarget*, D2D1_PIXEL_FORMAT*, void>)(rt->lpVtbl[50]);
+        fn(rt, &pf);
+        return pf;
     }
 
     // ID2D1RenderTarget vtbl[22]: DrawGeometry

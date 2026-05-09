@@ -1,58 +1,82 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.FreeType;
 using Aprillz.MewUI.Rendering.OpenGL;
+using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 internal sealed partial class MewVGX11GraphicsContext
 {
-    private readonly nint _display;
-    private readonly nint _window;
-    private readonly MewVGX11WindowResources _resources;
+    private readonly IX11FrameSession _frameSession;
+    private readonly MewVGTextCache _textCache;
 
-    public MewVGX11GraphicsContext(
-        nint display,
-        nint window,
-        int pixelWidth,
-        int pixelHeight,
-        double dpiScale,
-        MewVGX11WindowResources resources)
+    private MewVGX11GraphicsContext(IX11FrameSession frameSession)
     {
-        _display = display;
-        _window = window;
-        _resources = resources;
-        _vg = resources.Vg;
+        _frameSession = frameSession;
+        _vg = frameSession.Vg;
+        _textCache = frameSession.TextCache;
+    }
 
-        _dpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
+    internal static MewVGX11GraphicsContext CreateForWindow(
+        MewVGX11WindowResources resources,
+        IMewVGOffscreenSurfaceProvider offscreenProvider)
+        => new(new X11WindowFrameSession(resources, offscreenProvider));
 
-        _viewportWidthPx = Math.Max(1, pixelWidth);
-        _viewportHeightPx = Math.Max(1, pixelHeight);
-        _viewportWidthDip = _viewportWidthPx / DpiScale;
-        _viewportHeightDip = _viewportHeightPx / DpiScale;
+    internal static MewVGX11GraphicsContext CreateForOffscreen(
+        MewVGGlOffscreenSurface offscreen,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        OpenGLBitmapRenderTarget bitmapTarget)
+        => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, bitmapTarget));
+
+    internal void SetTarget(nint display, nint window)
+    {
+        if (_frameSession is X11WindowFrameSession windowSession)
+        {
+            windowSession.SetTarget(display, window);
+        }
     }
 
     partial void BeginFramePlatform()
     {
-        _resources.MakeCurrent(_display);
-        GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+        try
+        {
+            _frameSession.BeginFrame();
 
-        _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
-        _vg.ResetTransform();
-        _vg.ResetScissor();
+            GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+
+            _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
+            _vg.ResetTransform();
+            _vg.ResetScissor();
+        }
+        catch
+        {
+            _frameSession.AbortFrame();
+            throw;
+        }
     }
 
+            // Flushed lazily by Lock/CopyPixels/GetPixelSpan. See Win32 EndFrame
+            // comment for the rationale (folds N per-element sync barriers into 0–1).
     partial void EndFramePlatform()
     {
-        _vg.EndFrame();
-        _resources.SetSwapInterval(GetSwapInterval());
-        _resources.SwapBuffers(_display, _window);
-        _resources.ReleaseCurrent();
+        try
+        {
+            _frameSession.BindFrameTarget();
+            GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
+
+            _vg.EndFrame();
+            _frameSession.EndFrame();
+        }
+        catch
+        {
+            _frameSession.AbortFrame();
+            throw;
+        }
     }
 
-    protected override void OnDispose()
+    partial void DestroyPlatform()
     {
-        if (_disposed) return;
-        _disposed = true;
+        _frameSession.DisposeContext(this);
     }
 
     private static int GetSwapInterval()
@@ -152,7 +176,7 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)wrapping,
             (int)trimming));
 
-        if (!_resources.TextCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, out var entry))
         {
             var bmp = FreeTypeText.Rasterize(
                 text,
@@ -164,7 +188,7 @@ internal sealed partial class MewVGX11GraphicsContext
                 verticalAlignment,
                 wrapping,
                 trimming);
-            entry = _resources.TextCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, ref bmp);
         }
 
         if (entry.ImageId == 0)
@@ -304,7 +328,7 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming));
 
-        if (!_resources.TextCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, out var entry))
         {
             var bmp = FreeTypeText.Rasterize(
                 text,
@@ -316,7 +340,7 @@ internal sealed partial class MewVGX11GraphicsContext
                 format.VerticalAlignment,
                 format.Wrapping,
                 format.Trimming);
-            entry = _resources.TextCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -342,6 +366,16 @@ internal sealed partial class MewVGX11GraphicsContext
     {
         ArgumentNullException.ThrowIfNull(image);
 
+        if (image is MewVGExternalLockedImage extImage)
+        {
+            EnsureExternalAcquired(extImage.Texture);
+            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: null,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
+
         if (image is not MewVGImage vgImage)
         {
             throw new ArgumentException("Image must be a MewVGImage.", nameof(image));
@@ -359,6 +393,16 @@ internal sealed partial class MewVGX11GraphicsContext
     protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
         ArgumentNullException.ThrowIfNull(image);
+
+        if (image is MewVGExternalLockedImage extImage)
+        {
+            EnsureExternalAcquired(extImage.Texture);
+            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
 
         if (image is not MewVGImage vgImage)
         {
@@ -404,4 +448,158 @@ internal sealed partial class MewVGX11GraphicsContext
     }
 
     private readonly record struct PixelRect(int Left, int Top, int Width, int Height);
+
+    private interface IX11FrameSession
+    {
+        NanoVGGL Vg { get; }
+        MewVGTextCache TextCache { get; }
+        void BeginFrame();
+        void BindFrameTarget();
+        void EndFrame();
+        void AbortFrame();
+        void DisposeContext(MewVGX11GraphicsContext context);
+    }
+
+    private sealed class X11WindowFrameSession : IX11FrameSession
+    {
+        private readonly MewVGX11WindowResources _resources;
+        private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+        private nint _display;
+        private nint _window;
+
+        public X11WindowFrameSession(MewVGX11WindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider)
+        {
+            _resources = resources;
+            _offscreenProvider = offscreenProvider;
+        }
+
+        public NanoVGGL Vg => _resources.Vg;
+        public MewVGTextCache TextCache => _resources.TextCache;
+
+        public void SetTarget(nint display, nint window)
+        {
+            _display = display;
+            _window = window;
+        }
+
+        public void BeginFrame()
+        {
+            _resources.MakeCurrent(_display);
+            _offscreenProvider.EnterSession();
+        }
+
+        public void BindFrameTarget()
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+
+        public void EndFrame()
+        {
+            _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
+            // Outermost session — drain FBO disposals only after every NVG (window + nested
+            // offscreen) has flushed; nested sessions wrap scratch FBO textures via
+            // CreateImageFromHandle and the outer's queued draws still reference them.
+            if (_offscreenProvider.ExitSession())
+            {
+                _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
+            }
+            TextCache.ReleasePendingDeletes();
+            _resources.SetSwapInterval(GetSwapInterval());
+            _resources.SwapBuffers(_display, _window);
+            _resources.ReleaseCurrent();
+        }
+
+        public void AbortFrame()
+        {
+            _offscreenProvider.ExitSession();
+            _resources.ReleaseCurrent();
+        }
+
+        public void DisposeContext(MewVGX11GraphicsContext context)
+            => _resources.InvalidateCachedContext(context);
+    }
+
+    private sealed class X11OffscreenFrameSession : IX11FrameSession
+    {
+        private readonly MewVGGlOffscreenSurface _offscreen;
+        private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+        private readonly OpenGLBitmapRenderTarget _bitmapTarget;
+
+        public X11OffscreenFrameSession(
+            MewVGGlOffscreenSurface offscreen,
+            IMewVGOffscreenSurfaceProvider offscreenProvider,
+            OpenGLBitmapRenderTarget bitmapTarget)
+        {
+            _offscreen = offscreen;
+            _offscreenProvider = offscreenProvider;
+            _bitmapTarget = bitmapTarget;
+        }
+
+        public NanoVGGL Vg => _offscreen.Vg;
+        public MewVGTextCache TextCache => _offscreen.TextCache;
+
+        public void BeginFrame()
+        {
+            _offscreenProvider.EnterSession();
+            PrepareBitmapTarget(_offscreenProvider, _bitmapTarget);
+        }
+
+        public void BindFrameTarget()
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _bitmapTarget.Fbo);
+
+        public void EndFrame()
+        {
+            _bitmapTarget.RequestDeferredReadback();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+            // Per-NVG drain — only this offscreen NVG's pending image-id deletions, on its
+            // own thread inside its EndFrame. Avoids racing the window NVG mid-frame.
+            _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            if (_offscreenProvider.ExitSession())
+            {
+                _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
+            }
+        }
+
+        public void AbortFrame()
+        {
+            _offscreenProvider.ExitSession();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+        }
+
+        public void DisposeContext(MewVGX11GraphicsContext context)
+            => _offscreenProvider.ReturnSurface(_offscreen);
+    }
+
+    private static void PrepareBitmapTarget(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLBitmapRenderTarget bitmapTarget)
+    {
+        // Don't drain pending target disposals here — see Win32 PrepareBitmapTarget for
+        // the rationale. Drain happens at the outermost session's EndFrame instead.
+        bitmapTarget.InitializeFbo();
+        if (!bitmapTarget.IsFboInitialized || bitmapTarget.Fbo == 0)
+        {
+            throw new PlatformNotSupportedException("OpenGL FBOs are required for X11 bitmap rendering.");
+        }
+
+        // Record the GLXContext that owns the FBO/RB handles — see Win32 path for
+        // rationale (FBOs are not shared via glXCreateContext share, only textures).
+        bitmapTarget.RecordCreationContext(LibGL.glXGetCurrentContext());
+
+        OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, bitmapTarget.Fbo);
+
+        // Force colormask + stencil mask to "all writes enabled" before clear. NanoVG's
+        // path-fill flush sets colormask=(F,F,F,F) for the stencil-marking pass; if its
+        // restore at flush end is incomplete, the next glClear leaves alpha untouched
+        // (= undefined / 0xFF on a fresh texture), producing opaque-black filter
+        // results in transparent regions. See Win32 PrepareBitmapTarget.
+        GL.ColorMask(true, true, true, true);
+        GL.ClearColor(0f, 0f, 0f, 0f);
+
+        uint clearMask = GL.GL_COLOR_BUFFER_BIT;
+        if (bitmapTarget.HasStencil)
+        {
+            GL.StencilMask(0xFF);
+            GL.ClearStencil(0);
+            clearMask |= GL.GL_STENCIL_BUFFER_BIT;
+        }
+
+        GL.Clear(clearMask);
+    }
 }

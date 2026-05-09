@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -64,7 +64,10 @@
     <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
-  
+
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
+
   <ItemGroup>
     <None Include="..\..\assets\logo\logo_c-256.png" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\assets\images\april.jpg" CopyToOutputDirectory="PreserveNewest" />

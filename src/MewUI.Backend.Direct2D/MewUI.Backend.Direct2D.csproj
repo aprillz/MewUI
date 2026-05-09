@@ -19,6 +19,8 @@
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Ole32.cs" LinkBase="Native"/>
+    <Compile Include="..\MewUI\Shared\Native\Win32\Dxgi.cs" LinkBase="Native"/>
+    <Compile Include="..\MewUI\Shared\Native\Win32\Dcomp.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Direct2D\**\*.cs" LinkBase="Native\Direct2D"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite"/>

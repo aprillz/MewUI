@@ -115,7 +115,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
                 throw new ArgumentException("GDI backend requires a Win32 HDC window surface.", nameof(target));
             }
 
-            return CreateContextCore(win32Surface.Hwnd, win32Surface.Hdc, windowTarget.DpiScale);
+            return CreateContextCore(win32Surface.Hwnd, win32Surface.Hdc, windowTarget.DpiScale, win32Surface.TransparentComposition);
         }
 
         if (target is GdiBitmapRenderTarget bitmapTarget)
@@ -143,9 +143,9 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         throw new NotSupportedException($"Unsupported render target type: {target.GetType().Name}");
     }
 
-    private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale)
+    private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale, bool transparentComposition = false)
         => IsDoubleBuffered
-        ? GdiPlusGraphicsContext.CreateDoubleBuffered(hwnd, hdc, dpiScale, ImageScaleQuality)
+        ? GdiPlusGraphicsContext.CreateDoubleBuffered(hwnd, hdc, dpiScale, ImageScaleQuality, transparentComposition)
         : new GdiPlusGraphicsContext(hwnd, hdc, dpiScale, ImageScaleQuality);
 
 
@@ -155,8 +155,8 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         return new GdiMeasurementContext(hdc, dpi);
     }
 
-    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0)
-        => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
+    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0, bool hasAlpha = true)
+        => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
 
     public void Dispose()
     {

@@ -505,6 +505,11 @@ public sealed class MacOSPlatformHost : IPlatformHost
                     continue;
                 }
 
+                if (TryHandleSystemKeyEvent(type, ev, windowKey))
+                {
+                    continue;
+                }
+
                 bool forwardToCocoa = type != 10 && type != 11;
                 if (forwardToCocoa && backend != null && !backend.IsEnabled && IsMouseEvent(type))
                 {
@@ -606,6 +611,11 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 continue;
             }
 
+            if (TryHandleSystemKeyEvent(type, ev, windowKey))
+            {
+                continue;
+            }
+
             bool forwardToCocoa = type != 10 && type != 11;
             if (forwardToCocoa && backend != null && !backend.IsEnabled && IsMouseEvent(type))
             {
@@ -693,6 +703,11 @@ public sealed class MacOSPlatformHost : IPlatformHost
             return;
         }
 
+        if (TryHandleSystemKeyEvent(type, ev, windowKey))
+        {
+            return;
+        }
+
         bool forwardToCocoa = type != 10 && type != 11;
         if (forwardToCocoa && backend != null && !backend.IsEnabled && IsMouseEvent(type))
         {
@@ -721,6 +736,28 @@ public sealed class MacOSPlatformHost : IPlatformHost
         {
             _windows.Values.FirstOrDefault()?.ProcessNSEvent(ev);
         }
+    }
+
+    private bool TryHandleSystemKeyEvent(int type, nint ev, nint windowKey)
+    {
+        // NSEventTypeKeyDown = 10. Keep keyUp and text input in MewUI, but let AppKit handle
+        // selected system shortcuts such as "Move focus to next window" (Cmd+`).
+        if (type != 10)
+        {
+            return false;
+        }
+
+        if (!MacOSInterop.TryHandleSystemKeyEvent(ev))
+        {
+            return false;
+        }
+
+        if (windowKey != 0)
+        {
+            _lastInputWindow = windowKey;
+        }
+
+        return true;
     }
 
     private static bool IsMouseEvent(int type)

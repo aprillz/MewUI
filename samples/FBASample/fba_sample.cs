@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.15.1
+#:package Aprillz.MewUI@0.15.0
 
 using System.Diagnostics;
 
@@ -77,24 +77,33 @@ window = new Window()
                             .DockBottom(),
 
                         new TabControl()
-                            .VerticalScroll(ScrollMode.Auto)
+                            .Padding(0)
                             .TabItems(
                                 new TabItem()
                                     .Header("Controls")
                                     .Content(
-                                        NormalControls()
+                                        new ScrollViewer()
+                                            .Padding(8)
+                                            .VerticalScroll(ScrollMode.Auto)
+                                            .Content(NormalControls())
                                     ),
 
 		                        new TabItem()
 		                            .Header("Commanding")
 		                            .Content(
-		                                CommandingSamples()
+		                                new ScrollViewer()
+		                                    .Padding(8)
+		                                    .VerticalScroll(ScrollMode.Auto)
+		                                    .Content(CommandingSamples())
 		                            ),
 
 		                        new TabItem()
 		                            .Header("Binding")
 		                            .Content(
-		                                BindSamples()
+		                                new ScrollViewer()
+		                                    .Padding(8)
+		                                    .VerticalScroll(ScrollMode.Auto)
+		                                    .Content(BindSamples())
 		                            )
                                 )
                         )

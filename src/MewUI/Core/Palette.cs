@@ -171,7 +171,7 @@ public sealed class Palette
     private Color ComputePlaceholderText(Color baseColor, Color textColor)
     {
         var isDark = IsDarkBackground(baseColor);
-        return textColor.WithAlpha(isDark ? (byte)192 : (byte)160);
+        return textColor.WithAlpha(isDark ? (byte)192 : (byte)192);
     }
 
     private static Color ComputeDisabledControlBackground(Color baseColor, Color controlBackground, Color foreground)

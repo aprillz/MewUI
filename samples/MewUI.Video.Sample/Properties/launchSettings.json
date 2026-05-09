@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "Direct2D": {
+      "commandName": "Project"
+    },
+    "NanoVG": {
+      "commandName": "Project",
+      "commandLineArgs": "--vg"
+    },
+    "GDI": {
+      "commandName": "Project",
+      "commandLineArgs": "--gdi"
+    }
+  }
+}

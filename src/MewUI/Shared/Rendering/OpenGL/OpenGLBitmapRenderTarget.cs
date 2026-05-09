@@ -7,10 +7,15 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// OpenGL implementation of IBitmapRenderTarget using FBO (Framebuffer Object).
 /// Provides offscreen rendering with CPU-side pixel buffer access.
 /// </summary>
-internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
+internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget, IGLTextureSource
 {
-    private readonly byte[] _pixels;
+    // Lazily allocated — only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
+    // actually requests pixel bytes. The pure GPU-only path (MewVGImage zero-copy via
+    // CreateImageFromHandle) never touches this. At 100 source layers × ~5 MB each per
+    // frame, eager allocation here was ~500 MB of GC churn for memory that nothing read.
+    private byte[]? _pixels;
     private readonly object _gate = new();
+    private readonly Action<OpenGLBitmapRenderTarget>? _glDisposeRequested;
     private int _version;
     private bool _disposed;
 
@@ -21,12 +26,35 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     private uint _stencilRenderbuffer;
     private bool _fboInitialized;
     private bool _hasStencil;
+    // HGLRC / GLXContext that created the FBO + texture + RB. Required by the
+    // background-rebuild path because FBOs and renderbuffers are NOT shared across
+    // contexts via wglShareLists / glXCreateContext (only textures, buffers, shaders
+    // are). When the offscreen provider drains pending disposals it must release
+    // these GL handles under the same context that created them; doing it under a
+    // sibling context (e.g. worker FBO drained by UI's window context) makes the
+    // glDelete* call a silent no-op, leaking the FBO. The provider's drain filters
+    // by this field.
+    private nint _creationContext;
+    // Set by GPU writers (blur shader, NVG render) to signal that the FBO contents are
+    // newer than the CPU-side _pixels mirror. Cleared by the next readback. Used to defer
+    // glReadPixels until something actually requests the CPU bytes — folding 100 sync
+    // points (one per filter) into 0 or 1 across a render pass with N filtered elements.
+    private bool _fboNewerThanCpu;
 
     private byte[]? _lockBuffer;
     private byte[]? _uploadBuffer;
     private Action? _releaseAction;
+    // External retain count for the FBO color texture, used by the SVG filter scratch path
+    // (via IGpuTextureSource.RetainGpuHandle). MewVGImage takes a retain when it wraps our
+    // texture zero-copy with NVG's NoDelete flag, so the texture stays alive through the
+    // consumer's NVG flush even if Dispose runs first. ReleaseGpuHandle decrements; when it
+    // reaches 0 and Dispose was already called, the GL resource release fires.
+    private int _externalRetainCount;
+    private bool _disposeDeferredForRetain;
 
-    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
+    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale,
+        Action<OpenGLBitmapRenderTarget>? glDisposeRequested = null,
+        bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -36,8 +64,13 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         PixelHeight = pixelHeight;
         DpiScale = dpiScale;
         HasAlpha = hasAlpha;
-        // Allocate CPU-side pixel buffer
-        _pixels = new byte[pixelWidth * pixelHeight * 4];
+        _glDisposeRequested = glDisposeRequested;
+        // _pixels left null — see EnsurePixelBuffer.
+    }
+
+    private byte[] EnsurePixelBuffer()
+    {
+        return _pixels ??= new byte[PixelWidth * PixelHeight * 4];
     }
 
     public int PixelWidth { get; }
@@ -69,9 +102,25 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
 
     internal bool HasStencil => _hasStencil;
 
+    /// <summary>HGLRC / GLXContext that owns the FBO + RB handles. The offscreen
+    /// provider's deferred-disposal drain uses this to skip targets whose owning
+    /// context is not currently active (FBOs/RBs are NOT shared across contexts
+    /// even with wglShareLists). 0 if FBO not yet initialized.</summary>
+    internal nint CreationContext => _creationContext;
+
+    /// <summary>Records the GL context handle that was current when
+    /// <see cref="InitializeFbo"/> ran. Called by the platform's PrepareBitmapTarget
+    /// (Win32: wglGetCurrentContext; X11: glXGetCurrentContext) after
+    /// <see cref="InitializeFbo"/> succeeds.</summary>
+    internal void RecordCreationContext(nint context) => _creationContext = context;
+
     /// <summary>NanoVG renders with SRC_ALPHA / ONE_MINUS_SRC_ALPHA blending into
     /// the FBO color attachment, producing premultiplied output.</summary>
     public bool IsPremultiplied => true;
+
+    /// <summary>FBO color attachment — <see cref="Lock"/> issues glReadPixels (sync barrier)
+    /// to populate the CPU mirror.</summary>
+    public LockMode LockMode => LockMode.Readback;
 
     /// <summary>
     /// Mirrors the alpha-channel hint from construction. Consumers reading these pixels via
@@ -80,6 +129,16 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     /// </summary>
     public bool HasAlpha { get; }
 
+    // IGLTextureSource — exposes the FBO color texture for zero-copy NoDelete wrapping.
+    uint IGLTextureSource.TextureId => _disposed || !_fboInitialized ? 0u : _texture;
+    nint IGLTextureSource.ShareGroup => _creationContext;
+    void IGLTextureSource.ConfigureWrap(bool repeatX, bool repeatY)
+        => ConfigureGpuTextureWrap((nint)_texture, repeatX, repeatY);
+
+    // IGpuTextureSource — GL FBOs store row 0 at the bottom of the image (bottom-up).
+    // Consumers that mix FBO output with top-down sources flip V at sample time.
+    bool IGpuTextureSource.YFlipped => true;
+
     public byte[] CopyPixels()
     {
         if (_disposed)
@@ -87,8 +146,10 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             return Array.Empty<byte>();
         }
 
-        var copy = new byte[_pixels.Length];
-        Buffer.BlockCopy(_pixels, 0, copy, 0, _pixels.Length);
+        FlushFboReadbackIfNeeded();
+        var pixels = EnsurePixelBuffer();
+        var copy = new byte[pixels.Length];
+        Buffer.BlockCopy(pixels, 0, copy, 0, pixels.Length);
         return copy;
     }
 
@@ -99,7 +160,8 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             return Span<byte>.Empty;
         }
 
-        return _pixels.AsSpan();
+        FlushFboReadbackIfNeeded();
+        return EnsurePixelBuffer().AsSpan();
     }
 
     public void Clear(Color color)
@@ -109,30 +171,22 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             return;
         }
 
-        // This RT reports IsPremultiplied=true (FBO output convention), so consumers
-        // sample without re-multiplying RGB by alpha. We must therefore store the
-        // pre-multiplied bytes here — otherwise Color.Transparent (= 0x00FFFFFF =
-        // straight (R=255,G=255,B=255,A=0)) leaks into NVG src-over blending as
-        // saturated white, painting opaque white anywhere the caller intended a
-        // fully transparent fill (visible as a white wheel background on X11).
+        // No CPU-side state to clear when no one has touched it yet — the FBO is cleared
+        // separately by the GL pipeline (PrepareBitmapTarget → glClear). Skipping allocation
+        // here is the main GC win.
+        if (_pixels is null)
+        {
+            IncrementVersion();
+            return;
+        }
+
+        // Raw byte write (no premultiply). The premultiply variant was tried for the
+        // X11 ColorPicker white-halo issue but suspected to break AllowsTransparency
+        // layered windows on Win32. Reverted pending root-cause analysis on both fronts.
+        byte b = color.B;
+        byte g = color.G;
+        byte r = color.R;
         byte a = color.A;
-        byte b, g, r;
-        if (a == 0xFF)
-        {
-            b = color.B;
-            g = color.G;
-            r = color.R;
-        }
-        else if (a == 0)
-        {
-            b = g = r = 0;
-        }
-        else
-        {
-            b = (byte)((color.B * a + 127) / 255);
-            g = (byte)((color.G * a + 127) / 255);
-            r = (byte)((color.R * a + 127) / 255);
-        }
 
         for (int i = 0; i < _pixels.Length; i += 4)
         {
@@ -145,6 +199,70 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         IncrementVersion();
     }
 
+    /// <inheritdoc cref="IGpuTextureSource.GetTextureHandle"/>
+    public nint GetTextureHandle()
+    {
+        // Only valid after InitializeFbo has been called and FBO is healthy. Consumers
+        // (MewVGImage) use this to skip the readback + re-upload round-trip.
+        return _disposed || !_fboInitialized ? 0 : (nint)_texture;
+    }
+
+    /// <inheritdoc cref="IGpuTextureSource.ConfigureGpuTextureWrap"/>
+    public void ConfigureGpuTextureWrap(nint handle, bool repeatX, bool repeatY)
+    {
+        // FBO color attachment is created with GL_CLAMP_TO_EDGE (right for filter sampling,
+        // wrong for tiled image-brush use). Force the wrap mode here so the next sampler that
+        // binds this texture (NVG image-brush draw) actually tiles. Persistent state mutation
+        // is OK — other consumers (filter executor) bind their own samplers and don't depend
+        // on a specific wrap default.
+        if (handle == 0 || handle != (nint)_texture || _disposed) return;
+        int wrapS = repeatX ? (int)GL_REPEAT : (int)GL.GL_CLAMP_TO_EDGE;
+        int wrapT = repeatY ? (int)GL_REPEAT : (int)GL.GL_CLAMP_TO_EDGE;
+        GL.BindTexture(GL.GL_TEXTURE_2D, _texture);
+        GL.TexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, wrapS);
+        GL.TexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, wrapT);
+        GL.BindTexture(GL.GL_TEXTURE_2D, 0);
+    }
+
+    private const uint GL_REPEAT = 0x2901;
+
+    /// <inheritdoc cref="IGpuTextureSource.RetainGpuHandle"/>
+    public bool RetainGpuHandle(nint handle)
+    {
+        // GL textures aren't ARC-counted by the driver; we maintain our own count to
+        // delay GL resource release until every NoDelete-wrap consumer has flushed.
+        if (handle == 0 || handle != (nint)_texture) return false;
+        Interlocked.Increment(ref _externalRetainCount);
+        return true;
+    }
+
+    /// <inheritdoc cref="IGpuTextureSource.ReleaseGpuHandle"/>
+    public void ReleaseGpuHandle(nint handle)
+    {
+        if (handle == 0 || handle != (nint)_texture) return;
+        int remaining = Interlocked.Decrement(ref _externalRetainCount);
+        if (remaining < 0)
+        {
+            // Defensive: extra release without a matching retain.
+            Interlocked.Increment(ref _externalRetainCount);
+            return;
+        }
+        if (remaining == 0 && _disposeDeferredForRetain)
+        {
+            // Deferred Dispose was waiting on the last retain — finish it now via the
+            // queue so the GL release runs under the owning context.
+            _disposeDeferredForRetain = false;
+            if (_glDisposeRequested is { } hook)
+            {
+                hook(this);
+            }
+            else
+            {
+                ReleaseGLResources();
+            }
+        }
+    }
+
     public PixelBufferLock Lock()
     {
         Monitor.Enter(_gate);
@@ -154,13 +272,15 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             throw new ObjectDisposedException(nameof(OpenGLBitmapRenderTarget));
         }
 
-        int size = _pixels.Length;
+        FlushFboReadbackIfNeeded();
+        var pixels = EnsurePixelBuffer();
+        int size = pixels.Length;
         if (_lockBuffer == null || _lockBuffer.Length != size)
         {
             _lockBuffer = new byte[size];
         }
 
-        Buffer.BlockCopy(_pixels, 0, _lockBuffer, 0, size);
+        Buffer.BlockCopy(pixels, 0, _lockBuffer, 0, size);
 
         _releaseAction ??= () => Monitor.Exit(_gate);
 
@@ -181,7 +301,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         Interlocked.Increment(ref _version);
     }
 
-    public unsafe void Dispose()
+    public void Dispose()
     {
         if (_disposed)
         {
@@ -190,35 +310,73 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
 
         _disposed = true;
 
-        // Note: FBO/texture cleanup requires a GL context to be current.
-        // If called without context (e.g., during GC), resources may leak.
-        // For proper cleanup, the factory should track and cleanup resources.
+        int retainSnapshot = Volatile.Read(ref _externalRetainCount);
+
+        // If the FBO color texture is still externally retained (e.g. a MewVGImage wrapped
+        // it zero-copy with NoDelete and the consumer's NVG flush hasn't run yet), defer
+        // GL release until the last ReleaseGpuHandle drops the count to zero. Releasing
+        // here would delete a texture NVG is about to bind for setFragmentTexture.
+        if (retainSnapshot > 0)
+        {
+            _disposeDeferredForRetain = true;
+            return;
+        }
+
+        // GL resources (FBO, texture, renderbuffer) live in whichever context
+        // created them — typically the offscreen context on Win32. Deleting
+        // them against the wrong current context (e.g., the main window's)
+        // silently fails AND corrupts that context's object namespace. Queue
+        // the release so the owning context can drain it under its own
+        // wglMakeCurrent scope; if no queuing hook is attached, fall back to
+        // releasing under whatever context is current (best-effort only — may
+        // leak if none is active).
         if (_fboInitialized)
         {
-            if (_fbo != 0)
+            if (_glDisposeRequested is { } hook)
             {
-                uint fbo = _fbo;
-                OpenGLExt.DeleteFramebuffers(1, &fbo);
-                _fbo = 0;
+                hook(this);
             }
-
-            if (_stencilRenderbuffer != 0)
+            else
             {
-                uint rb = _stencilRenderbuffer;
-                OpenGLExt.DeleteRenderbuffers(1, &rb);
-                _stencilRenderbuffer = 0;
+                ReleaseGLResources();
             }
-
-            if (_texture != 0)
-            {
-                uint tex = _texture;
-                GL.DeleteTextures(1, ref tex);
-                _texture = 0;
-            }
-
-            _hasStencil = false;
-            _fboInitialized = false;
         }
+    }
+
+    /// <summary>
+    /// Releases the FBO, texture, and renderbuffer. The caller must ensure
+    /// the GL context that created these resources is current.
+    /// </summary>
+    internal unsafe void ReleaseGLResources()
+    {
+        if (!_fboInitialized)
+        {
+            return;
+        }
+
+        if (_fbo != 0)
+        {
+            uint fbo = _fbo;
+            OpenGLExt.DeleteFramebuffers(1, &fbo);
+            _fbo = 0;
+        }
+
+        if (_stencilRenderbuffer != 0)
+        {
+            uint rb = _stencilRenderbuffer;
+            OpenGLExt.DeleteRenderbuffers(1, &rb);
+            _stencilRenderbuffer = 0;
+        }
+
+        if (_texture != 0)
+        {
+            uint tex = _texture;
+            GL.DeleteTextures(1, ref tex);
+            _texture = 0;
+        }
+
+        _hasStencil = false;
+        _fboInitialized = false;
     }
 
     /// <summary>
@@ -325,6 +483,36 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     }
 
     /// <summary>
+    /// Marks the FBO contents as newer than the CPU pixel mirror. Use after a GPU write
+    /// (e.g. <see cref="OpenGL.OpenGLGaussianBlur"/>) instead of an immediate readback —
+    /// the next CPU consumer of <c>_pixels</c> (Lock / CopyPixels / GetPixelSpan) flushes
+    /// it via <see cref="FlushFboReadbackIfNeeded"/>. Folds N per-filter sync points into
+    /// at most one when many GPU passes feed a single CPU consumer.
+    /// </summary>
+    internal void RequestDeferredReadback()
+    {
+        _fboNewerThanCpu = true;
+    }
+
+    /// <summary>
+    /// If a GPU write has been deferred, performs the readback now. Must be called on the
+    /// GL render thread. Called from CPU-pixel consumers below.
+    /// </summary>
+    private void FlushFboReadbackIfNeeded()
+    {
+        if (!_fboNewerThanCpu) return;
+        if (!_fboInitialized || _fbo == 0)
+        {
+            _fboNewerThanCpu = false;
+            return;
+        }
+        // ReadbackFromFbo binds GL_READ_FRAMEBUFFER itself; capture-restore not needed here
+        // because callers (Lock/CopyPixels/GetPixelSpan) don't promise a stable binding.
+        ReadbackFromFbo();
+        _fboNewerThanCpu = false;
+    }
+
+    /// <summary>
     /// Reads pixels from the FBO back to CPU buffer. Must be called with GL context current
     /// and FBO bound.
     /// </summary>
@@ -335,18 +523,19 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             return;
         }
 
+        var pixels = EnsurePixelBuffer();
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_READ_FRAMEBUFFER, _fbo);
 
-        fixed (byte* p = _pixels)
+        fixed (byte* p = pixels)
         {
             GL.ReadPixels(0, 0, PixelWidth, PixelHeight, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, (nint)p);
         }
 
         // OpenGL reads with bottom-left origin, flip vertically
-        FlipVertical();
+        FlipVertical(pixels);
 
         // Convert RGBA to BGRA
-        ConvertRgbaToBgra();
+        ImagePixelUtils.ConvertRgbaToBgraInPlace(pixels);
 
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_READ_FRAMEBUFFER, 0);
     }
@@ -356,13 +545,16 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
     /// </summary>
     internal unsafe void UploadToFbo()
     {
-        if (_disposed || !_fboInitialized || _texture == 0)
+        if (_disposed || !_fboInitialized || _texture == 0 || _pixels is null)
         {
+            // No CPU bytes ever populated → nothing to upload (the FBO content is the
+            // source of truth for the pure GPU path).
             return;
         }
 
+        var pixels = _pixels;
         // Convert BGRA→RGBA + flip vertically into cached upload buffer
-        int size = _pixels.Length;
+        int size = pixels.Length;
         if (_uploadBuffer == null || _uploadBuffer.Length != size)
         {
             _uploadBuffer = new byte[size];
@@ -375,10 +567,10 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             int dstOffset = (PixelHeight - 1 - y) * stride;
             for (int i = 0; i < stride; i += 4)
             {
-                _uploadBuffer[dstOffset + i] = _pixels[srcOffset + i + 2];     // R
-                _uploadBuffer[dstOffset + i + 1] = _pixels[srcOffset + i + 1]; // G
-                _uploadBuffer[dstOffset + i + 2] = _pixels[srcOffset + i];     // B
-                _uploadBuffer[dstOffset + i + 3] = _pixels[srcOffset + i + 3]; // A
+                _uploadBuffer[dstOffset + i] = pixels[srcOffset + i + 2];     // R
+                _uploadBuffer[dstOffset + i + 1] = pixels[srcOffset + i + 1]; // G
+                _uploadBuffer[dstOffset + i + 2] = pixels[srcOffset + i];     // B
+                _uploadBuffer[dstOffset + i + 3] = pixels[srcOffset + i + 3]; // A
             }
         }
 
@@ -391,7 +583,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
         GL.BindTexture(GL.GL_TEXTURE_2D, 0);
     }
 
-    private void FlipVertical()
+    private void FlipVertical(byte[] pixels)
     {
         int stride = PixelWidth * 4;
         var temp = new byte[stride];
@@ -402,12 +594,9 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget
             int topOffset = y * stride;
             int bottomOffset = (PixelHeight - 1 - y) * stride;
 
-            Buffer.BlockCopy(_pixels, topOffset, temp, 0, stride);
-            Buffer.BlockCopy(_pixels, bottomOffset, _pixels, topOffset, stride);
-            Buffer.BlockCopy(temp, 0, _pixels, bottomOffset, stride);
+            Buffer.BlockCopy(pixels, topOffset, temp, 0, stride);
+            Buffer.BlockCopy(pixels, bottomOffset, pixels, topOffset, stride);
+            Buffer.BlockCopy(temp, 0, pixels, bottomOffset, stride);
         }
     }
-
-    private void ConvertRgbaToBgra()
-        => ImagePixelUtils.ConvertRgbaToBgraInPlace(_pixels);
 }

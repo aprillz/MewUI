@@ -201,8 +201,8 @@ internal sealed class jpeg_inverse_dct
     private ComponentBuffer m_componentBuffer;
 
     /* buffers data between passes */
-    private int[] m_workspace = new int[System.Math.Max(JpegConstants.DCTSIZE2, 8 * 16)];
-    private float[] m_fworkspace = new float[System.Math.Max(JpegConstants.DCTSIZE2, 8 * 16)];
+    private int[] m_workspace = new int[Math.Max(JpegConstants.DCTSIZE2, 8 * 16)];
+    private float[] m_fworkspace = new float[Math.Max(JpegConstants.DCTSIZE2, 8 * 16)];
 
     public jpeg_inverse_dct(jpeg_decompress_struct cinfo)
     {

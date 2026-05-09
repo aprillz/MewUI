@@ -135,8 +135,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
         };
         User32.ShowWindow(Handle, cmd);
 
-        // WS_POPUP | WS_THICKFRAME windows may have incorrect WINDOWPLACEMENT after
-        // WM_GETMINMAXINFO overrides the maximized bounds. Explicitly restore saved bounds.
+        // Transparent popup windows keep WS_THICKFRAME for native resize tracking, but
+        // WM_NCCALCSIZE removes the visible non-client frame. Restore saved bounds
+        // explicitly because WM_GETMINMAXINFO overrides the maximized bounds.
         if (state == Controls.WindowState.Normal && _allowsTransparency)
         {
             var rb = Window.RestoreBounds;
@@ -462,7 +463,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         int clientH = (int)Math.Round(heightDip * dpiScale);
 
         int windowW, windowH;
-        if (_extendTitleBarHeight > 0)
+        if (_allowsTransparency || _extendTitleBarHeight > 0)
         {
             // WM_NCCALCSIZE removes non-client area → client = window.
             windowW = clientW;
@@ -570,12 +571,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case 0x0083: // WM_NCCALCSIZE
-                if (_extendTitleBarHeight > 0 && wParam != 0)
+                if ((_allowsTransparency || _extendTitleBarHeight > 0) && wParam != 0)
                 {
-                    // Remove the default non-client area (title bar) by not deflating the rect.
+                    // Remove the default non-client area by not deflating the rect.
+                    // For transparent windows this keeps client-origin == window-origin while
+                    // preserving WS_THICKFRAME for native resize hit-test/tracking behavior.
                     // When maximized, Windows extends the window by the resize border size beyond
                     // the monitor edges. Compensate by inflating inward by the frame thickness.
-                    if (Window.WindowState == Controls.WindowState.Maximized)
+                    if (!_allowsTransparency && Window.WindowState == Controls.WindowState.Maximized)
                     {
                         int frame = User32.GetSystemMetrics(92 /* SM_CXPADDEDBORDER */)
                                   + User32.GetSystemMetrics(33 /* SM_CYSIZEFRAME */);
@@ -755,7 +758,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         var rect = new RECT(0, 0, (int)(Window.Width * dpiScale), (int)(Window.Height * dpiScale));
         uint style = GetWindowStyle();
-        Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, 0, initialDpi);
+        if (!Window.AllowsTransparency)
+        {
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, 0, initialDpi);
+        }
 
         var (x, y) = ResolveInitialPosition(rect.Width, rect.Height, initialDpi);
 
@@ -798,7 +804,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
             Window.RaiseDpiChanged(oldDpi, actualDpi);
             SetClientSize(Window.Width, Window.Height);
             var updatedRect = new RECT(0, 0, (int)Math.Round(Window.Width * Window.DpiScale), (int)Math.Round(Window.Height * Window.DpiScale));
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref updatedRect, style, false, exStyle, actualDpi);
+            if (!Window.AllowsTransparency)
+            {
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref updatedRect, style, false, exStyle, actualDpi);
+            }
             var (updatedX, updatedY) = ResolveInitialPosition(updatedRect.Width, updatedRect.Height, actualDpi);
             User32.SetWindowPos(Handle, 0, updatedX, updatedY, 0, 0, 0x0001 | 0x0004 | 0x0010);
             // Force layout recalculation with the correct DPI before first paint
@@ -948,7 +957,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
             (int)Math.Round(Window.Width * Window.DpiScale),
             (int)Math.Round(Window.Height * Window.DpiScale));
 
-        Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, exStyle, dpi);
+        if (!Window.AllowsTransparency)
+        {
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, exStyle, dpi);
+        }
         var (x, y) = ResolveInitialPosition(rect.Width, rect.Height, dpi);
 
         const uint SWP_NOSIZE = 0x0001;
@@ -1168,18 +1180,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private uint GetWindowStyle()
     {
-        // Per-pixel transparency (UpdateLayeredWindow path) cannot use the default system non-client
-        // chrome. Use a borderless popup-style window so the client area matches the window bounds;
-        // otherwise UpdateLayeredWindow positioning and input alignment break because
-        // client-origin != window-origin.
+        // Per-pixel transparency cannot use the default visible non-client chrome because
+        // layered presentation and input routing both use client coordinates. Keep
+        // WS_THICKFRAME for native resize tracking, then remove the actual non-client
+        // frame in WM_NCCALCSIZE so client-origin == window-origin.
         if (Window.AllowsTransparency)
         {
-            // IMPORTANT:
-            // - Do NOT add WS_THICKFRAME here. Even with WS_POPUP, a sizing border makes the client
-            //   origin differ from the window origin. Our layered-present path renders the client
-            //   into a bitmap of client size, so any border would reintroduce hit-test/render offsets.
-            // - If we later want native edge resizing, implement it via a custom hit test / sizing
-            //   strategy instead of relying on the system non-client frame.
             return WindowStyles.WS_POPUP | WindowStyles.WS_SYSMENU | WindowStyles.WS_THICKFRAME;
         }
 
@@ -1205,13 +1211,39 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private uint GetWindowExStyle()
     {
         uint exStyle = 0;
-        if (Window.AllowsTransparency || Window.Opacity < 0.999)
+        if (Window.AllowsTransparency)
         {
+            // GPU-surface transparency (D2D + DXGI swap-chain) requires the window to be
+            // created without a redirection bitmap so DWM composes the swap-chain output
+            // with per-pixel alpha. WS_EX_NOREDIRECTIONBITMAP must be set at CreateWindow
+            // time and cannot be toggled later.
+            if (ResolveTransparencyMode() == Win32TransparencyMode.Surface)
+            {
+                exStyle |= WindowStylesEx.WS_EX_NOREDIRECTIONBITMAP;
+            }
+            else
+            {
+                exStyle |= WindowStylesEx.WS_EX_LAYERED;
+            }
+        }
+        else if (Window.Opacity < 0.999)
+        {
+            // Window-wide opacity (no per-pixel alpha) uses the classic WS_EX_LAYERED +
+            // SetLayeredWindowAttributes(LWA_ALPHA) path regardless of backend.
             exStyle |= WindowStylesEx.WS_EX_LAYERED;
         }
 
         return exStyle;
     }
+
+    /// <summary>
+    /// Resolves the backend's preferred Win32 transparency strategy. Backends that don't
+    /// implement <see cref="IWin32TransparencyCapabilities"/> default to
+    /// <see cref="Win32TransparencyMode.Bitmap"/> — the existing layered-DIB path.
+    /// </summary>
+    private Win32TransparencyMode ResolveTransparencyMode()
+        => (Window.GraphicsFactory as IWin32TransparencyCapabilities)?.TransparencyMode
+           ?? Win32TransparencyMode.Bitmap;
 
     private void ApplyResizeMode()
     {
@@ -1253,13 +1285,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
         try
         {
             NeedsRender = false;
-            if (_allowsTransparency)
+            if (_allowsTransparency && ResolveTransparencyMode() == Win32TransparencyMode.Bitmap)
             {
-                // Layered windows are updated via UpdateLayeredWindow.
+                // Layered (DIB) windows are updated via UpdateLayeredWindow — paint DC isn't used.
                 RenderNowCore();
             }
             else
             {
+                // Default and Surface paths both render via Window.RenderFrame; Surface mode
+                // marks the HDC surface as transparent so the backend selects an alpha-aware
+                // present (D2D: PREMULTIPLIED swap-chain).
                 Window.RenderFrame(GetHdcSurface(hdc));
             }
         }
@@ -1295,7 +1330,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private void RenderNowCore()
     {
-        if (_allowsTransparency)
+        // Bitmap-mode transparency goes through UpdateLayeredWindow — no HDC required.
+        if (_allowsTransparency && ResolveTransparencyMode() == Win32TransparencyMode.Bitmap)
         {
             RenderNowLayered();
             _ = User32.ValidateRect(Handle, 0);
@@ -1352,10 +1388,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
         int pixelWidth = Math.Max(1, (int)Math.Ceiling(clientSize.Width * Window.DpiScale));
         int pixelHeight = Math.Max(1, (int)Math.Ceiling(clientSize.Height * Window.DpiScale));
         double dpiScale = Window.DpiScale > 0 ? Window.DpiScale : 1.0;
+        // Surface-mode transparent windows (WS_EX_NOREDIRECTIONBITMAP + GPU swap-chain)
+        // need the backend to pick a premultiplied-alpha present path. We mark the surface
+        // here so D2D's CreateContextCore selects the swap-chain transparent target.
+        bool transparent = _allowsTransparency
+            && ResolveTransparencyMode() == Win32TransparencyMode.Surface;
 
-        if (_cachedHdcSurface?.Matches(hdc, pixelWidth, pixelHeight, dpiScale) != true)
+        if (_cachedHdcSurface?.Matches(hdc, pixelWidth, pixelHeight, dpiScale, transparent) != true)
         {
-            _cachedHdcSurface = new Win32HdcSurface(Handle, hdc, pixelWidth, pixelHeight, dpiScale, TransparentComposition: false);
+            _cachedHdcSurface = new Win32HdcSurface(Handle, hdc, pixelWidth, pixelHeight, dpiScale, TransparentComposition: transparent);
         }
         return _cachedHdcSurface;
     }
@@ -1367,8 +1408,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         public nint Handle => Hwnd;
 
-        public bool Matches(nint hdc, int pixelWidth, int pixelHeight, double dpiScale) =>
-            Hdc == hdc && PixelWidth == pixelWidth && PixelHeight == pixelHeight && DpiScale == dpiScale;
+        public bool Matches(nint hdc, int pixelWidth, int pixelHeight, double dpiScale, bool transparentComposition) =>
+            Hdc == hdc && PixelWidth == pixelWidth && PixelHeight == pixelHeight && DpiScale == dpiScale
+            && TransparentComposition == transparentComposition;
     }
 
     private void EnsureLayeredStyleIfNeeded()
@@ -1384,9 +1426,19 @@ internal sealed class Win32WindowBackend : IWindowBackend
         const uint SWP_NOZORDER = 0x0004;
         const uint SWP_FRAMECHANGED = 0x0020;
 
-        bool needsLayered = _allowsTransparency || _opacity < 0.999;
-
         uint exStyle = (uint)User32.GetWindowLongPtr(Handle, GWL_EXSTYLE).ToInt64();
+        bool hasNoRedirection = (exStyle & WindowStylesEx.WS_EX_NOREDIRECTIONBITMAP) != 0;
+
+        // Surface-mode (NOREDIRECTIONBITMAP) windows are fixed at creation; do not toggle
+        // WS_EX_LAYERED on/off — that bit is only meaningful when the window has a
+        // redirection surface, and switching transparency strategy on the fly requires a
+        // window recreate which is outside this hook's contract.
+        if (hasNoRedirection)
+        {
+            return;
+        }
+
+        bool needsLayered = _allowsTransparency || _opacity < 0.999;
         bool hasLayered = (exStyle & WindowStylesEx.WS_EX_LAYERED) != 0;
 
         if (needsLayered == hasLayered)
@@ -1427,7 +1479,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return;
         }
 
-        if (Window.GraphicsFactory is not IWindowSurfacePresenter)
+        // Bitmap-mode (UpdateLayeredWindow) requires IWindowSurfacePresenter; Surface-mode
+        // (NOREDIRECTIONBITMAP + GPU swap-chain) renders through the standard HDC path so
+        // the presenter capability isn't needed.
+        if (ResolveTransparencyMode() == Win32TransparencyMode.Bitmap
+            && Window.GraphicsFactory is not IWindowSurfacePresenter)
         {
             throw new PlatformNotSupportedException("Per-pixel transparency on Win32 requires a graphics backend that supports window surfaces.");
         }
@@ -1464,8 +1520,6 @@ internal sealed class Win32WindowBackend : IWindowBackend
         double dpiScale = dpi / 96.0;
         if (dpiScale <= 0) dpiScale = 1.0;
 
-        uint style = GetWindowStyle();
-
         // For transparent (WS_POPUP | WS_THICKFRAME) windows, the OS extends the maximized
         // window beyond the work area by the frame thickness. Override ptMaxPosition/ptMaxSize
         // so the maximized window exactly fills the work area with no frame overshoot.
@@ -1493,7 +1547,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
             var minRect = new RECT(0, 0,
                 minW > 0 ? (int)Math.Ceiling(minW * dpiScale) : 0,
                 minH > 0 ? (int)Math.Ceiling(minH * dpiScale) : 0);
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, style, false, 0, dpi);
+            if (!_allowsTransparency)
+            {
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, GetWindowStyle(), false, 0, dpi);
+            }
 
             if (minW > 0) info->ptMinTrackSize.x = minRect.Width;
             if (minH > 0) info->ptMinTrackSize.y = minRect.Height;
@@ -1504,7 +1561,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
             var maxRect = new RECT(0, 0,
                 !double.IsPositiveInfinity(maxW) ? (int)Math.Ceiling(maxW * dpiScale) : 0,
                 !double.IsPositiveInfinity(maxH) ? (int)Math.Ceiling(maxH * dpiScale) : 0);
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, style, false, 0, dpi);
+            if (!_allowsTransparency)
+            {
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, GetWindowStyle(), false, 0, dpi);
+            }
 
             if (!double.IsPositiveInfinity(maxW)) info->ptMaxTrackSize.x = maxRect.Width;
             if (!double.IsPositiveInfinity(maxH)) info->ptMaxTrackSize.y = maxRect.Height;

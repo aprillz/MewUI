@@ -12,7 +12,7 @@ public static class BuiltInAccent
         new BuiltInAccentPair(Color.FromRgb(236, 90, 161),  Color.FromRgb(244, 112, 174)), // Pink
         new BuiltInAccentPair(Color.FromRgb(236, 92, 86),   Color.FromRgb(244, 110, 104)), // Red
         new BuiltInAccentPair(Color.FromRgb(240, 140, 56),  Color.FromRgb(248, 156, 74)),  // Orange
-        new BuiltInAccentPair(Color.FromRgb(245, 204, 67),  Color.FromRgb(250, 214, 90)),  // Yellow
+        new BuiltInAccentPair(Color.FromRgb(255, 201, 76),  Color.FromRgb(250, 214, 90)),  // Yellow
         new BuiltInAccentPair(Color.FromRgb(132, 192, 79),  Color.FromRgb(150, 204, 98)),  // Green
         new BuiltInAccentPair(Color.FromRgb(150, 150, 150), Color.FromRgb(165, 165, 165)), // Gray
     ];

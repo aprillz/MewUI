@@ -28,14 +28,21 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.Metal.MacOS.cs" LinkBase="Rendering\MewVG" />
 
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGExternalLockedImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\IMetalTextureSource.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MetalGaussianBlur.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MetalImageFilterExecutor.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalBitmapRenderTarget.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalGraphicsContext.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalMeasurementContext.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalOffscreenManager.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalTextCache.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalWindowResources.cs" LinkBase="Rendering\MewVG" />
 
+    <Compile Include="..\MewUI\Shared\Rendering\TextBitmap.cs" LinkBase="Rendering" />
+    <Compile Include="..\MewUI\Shared\Rendering\TextCacheKey.cs" LinkBase="Rendering" />
     <Compile Include="..\MewUI\Shared\Rendering\CoreText\*.cs" LinkBase="Rendering\CoreText" />
     <Compile Include="..\MewUI\Shared\Native\MacOS\Structs\CGGeometry.cs" LinkBase="Native\Structs" />
   </ItemGroup>

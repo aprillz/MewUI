@@ -16,11 +16,21 @@ public enum BitmapPixelFormat
 /// <param name="HeightPx">Bitmap height in pixels.</param>
 /// <param name="PixelFormat">Pixel format of <paramref name="Data"/>.</param>
 /// <param name="Data">Pixel data buffer.</param>
+/// <param name="HasAlpha">
+/// True when the source format carries a meaningful alpha channel (PNG with alpha, ICO,
+/// 32-bit BMP, etc.). False for opaque-only formats (JPEG, RGB PNG, sub-32-bit BMP).
+/// Backends use this to skip per-pixel alpha scans (the conservative "is everything 0xFF?"
+/// premultiply check) and to select <c>D2D1_ALPHA_MODE.IGNORE</c> over <c>PREMULTIPLIED</c>,
+/// which lets the GPU skip blend math entirely.
+/// Default <c>true</c> preserves the previous straight-alpha-aware behavior for legacy
+/// callers that don't set the flag.
+/// </param>
 public readonly record struct DecodedBitmap(
     int WidthPx,
     int HeightPx,
     BitmapPixelFormat PixelFormat,
-    byte[] Data)
+    byte[] Data,
+    bool HasAlpha = true)
 {
     /// <summary>
     /// Gets the stride in bytes per row.

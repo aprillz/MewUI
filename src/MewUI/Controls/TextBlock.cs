@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Controls.Text;
 
 namespace Aprillz.MewUI.Controls;
@@ -269,10 +270,27 @@ public partial class TextBlock : FrameworkElement, IDisposable
         {
             return;
         }
-        var layout = _textStore.EnsureRenderLayout(context, Text, Bounds);
+        TextLayout? layout;
+        using (ProfilerMarkers.TextLayout.Auto())
+        {
+            layout = _textStore.EnsureRenderLayout(context, Text, Bounds);
+        }
         if (layout == null) return;
         layout.EffectiveBounds = Bounds;
-        context.DrawTextLayout(Text, _textStore.Format, layout, Foreground);
+        using (ProfilerMarkers.TextDraw.Auto())
+        {
+            context.DrawTextLayout(Text, _textStore.Format, layout, Foreground, owner: this);
+        }
+        OnRenderTextDecorations(context, _textStore.Format, layout, Text, Bounds);
+    }
+
+    protected virtual void OnRenderTextDecorations(
+        IGraphicsContext context,
+        TextFormat format,
+        TextLayout layout,
+        string text,
+        Rect bounds)
+    {
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)

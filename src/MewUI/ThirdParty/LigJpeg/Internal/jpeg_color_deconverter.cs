@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This file contains output colorspace conversion routines.
  */
 

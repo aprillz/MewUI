@@ -211,6 +211,41 @@ internal static unsafe class MacOSInterop
         _pasteboardTypeString = ObjC.CreateNSString("public.utf8-plain-text");
     }
 
+    public static bool TryHandleSystemKeyEvent(nint ev)
+    {
+        if (ev == 0)
+        {
+            return false;
+        }
+
+        EnsureApplicationInitialized();
+        // Cmd+` is usually the system "Move focus to next window" shortcut. It is handled by
+        // NSApplication's event path, not reliably by an explicit menu action selector.
+        if (IsCommandGraveKey(ev))
+        {
+            SendEvent(ev);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsCommandGraveKey(nint ev)
+    {
+        const ulong shiftModifier = 1UL << 17;
+        const ulong controlModifier = 1UL << 18;
+        const ulong optionModifier = 1UL << 19;
+        const ulong commandModifier = 1UL << 20;
+        const ulong relevantModifiers = shiftModifier | controlModifier | optionModifier | commandModifier;
+        const int ansiGraveKeyCode = 0x32;
+
+        var modifiers = GetEventModifierFlags(ev);
+        return GetEventKeyCode(ev) == ansiGraveKeyCode
+            && (modifiers & commandModifier) != 0
+            && (modifiers & (controlModifier | optionModifier)) == 0
+            && (modifiers & relevantModifiers) is commandModifier or (commandModifier | shiftModifier);
+    }
+
     public static bool TrySetClipboardText(string text)
     {
         EnsureApplicationInitialized();

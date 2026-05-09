@@ -2126,6 +2126,13 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
         }
 
+        // Release graphics resources BEFORE XDestroyWindow. The GL teardown calls
+        // glXMakeCurrent + GL.DeleteTextures to free the context's tracked textures and
+        // text cache; both internally validate the bound drawable. If the X window is
+        // already destroyed, glXMakeCurrent on the dead drawable triggers BadDrawable
+        // (X_GetGeometry, opcode 14) on WSLg's GLX implementation, even though the
+        // process otherwise exits cleanly. Destroying GL state first keeps the drawable
+        // valid for the unbind call.
         try
         {
             Window.ReleaseWindowGraphicsResources(handle);

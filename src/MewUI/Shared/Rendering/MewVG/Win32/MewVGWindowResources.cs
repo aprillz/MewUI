@@ -21,6 +21,32 @@ internal sealed class MewVGWindowResources : IDisposable
 
     public bool SupportsBgra => _gl.SupportsBgra;
 
+    private MewVGWin32GraphicsContext? _cachedContext;
+
+    internal MewVGWin32GraphicsContext GetOrCreateContext(IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc)
+    {
+        var context = _cachedContext ??= MewVGWin32GraphicsContext.CreateForWindow(this, offscreenProvider, hwnd, hdc);
+        context.SetWindowTarget(hwnd, hdc);
+        return context;
+    }
+
+    /// <summary>
+    /// Drops the cached graphics context reference. Called when the context is
+    /// disposed externally (e.g. on window resize) so the next
+    /// <see cref="GetOrCreateContext"/> creates a fresh instance instead of
+    /// handing out the dead one; the dead context's pooled
+    /// <c>_saveStack</c> has already been returned to <c>CollectionPool</c>,
+    /// and reusing it would let an offscreen context Rent the same instance
+    /// and share state.
+    /// </summary>
+    internal void InvalidateCachedContext(MewVGWin32GraphicsContext ctx)
+    {
+        if (ReferenceEquals(_cachedContext, ctx))
+        {
+            _cachedContext = null;
+        }
+    }
+
     private MewVGWindowResources(nint hwnd, WglOpenGLWindowResources gl, NanoVGGL vg)
     {
         _hwnd = hwnd;
@@ -29,14 +55,15 @@ internal sealed class MewVGWindowResources : IDisposable
         TextCache = new MewVGTextCache(vg);
     }
 
-    public static MewVGWindowResources Create(nint hwnd, nint hdc)
+    public static MewVGWindowResources Create(nint hwnd, nint hdc, nint shareContext = 0)
     {
         // NanoVG uses stencil for AA and clipping; request a stencil buffer when selecting pixel format.
         var gl = WglOpenGLWindowResources.Create(hwnd, hdc,
             new WglOpenGLWindowResources.WglPixelFormatOptions(
                 PreferredMsaaSamples: MsaaSampleCount,
                 DepthBits: 0,
-                StencilBits: Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits)));
+                StencilBits: Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits)),
+            shareContext);
         gl.MakeCurrent(hdc);
         try
         {
@@ -71,6 +98,9 @@ internal sealed class MewVGWindowResources : IDisposable
         }
 
         _disposed = true;
+
+        _cachedContext?.Dispose();
+        _cachedContext = null;
 
         if (_hwnd != 0)
         {

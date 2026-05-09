@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Controls.Text;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -11,6 +12,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     private const double ShortcutColumnGap = 12;
     private readonly ScrollBar _vBar;
     private readonly ScrollController _scroll = new();
+    private readonly MenuTextLayoutCache _textLayouts = new();
     private double _extentHeight;
     private double _viewportHeight;
     private double _verticalOffset;
@@ -111,6 +113,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     public void AddItem(string text, Action? onClick = null, bool isEnabled = true, KeyGesture? shortcut = null)
     {
         Menu.Item(text, onClick, isEnabled, shortcut);
+        _textLayouts.Invalidate();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -119,6 +122,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         ArgumentNullException.ThrowIfNull(subMenu);
         Menu.SubMenu(text, subMenu, isEnabled, shortcut);
+        _textLayouts.Invalidate();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -127,6 +131,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         ArgumentNullException.ThrowIfNull(entry);
         Menu.Add(entry);
+        _textLayouts.Invalidate();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -144,6 +149,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     public void AddSeparator()
     {
         Menu.Separator();
+        _textLayouts.Invalidate();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -219,6 +225,7 @@ public sealed class ContextMenu : Control, IPopupOwner
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
+        _textLayouts.Invalidate();
 
         if (ItemPadding == oldTheme.Metrics.ItemPadding)
         {
@@ -275,6 +282,8 @@ public sealed class ContextMenu : Control, IPopupOwner
 
 
         using var measure = BeginTextMeasurement();
+        var textFormat = CreateMenuTextFormat(measure.Font, TextAlignment.Left, TextAlignment.Center);
+        var shortcutFormat = CreateMenuTextFormat(measure.Font, TextAlignment.Right, TextAlignment.Center);
 
         _maxTextWidth = 0;
         _maxShortcutWidth = 0;
@@ -292,14 +301,14 @@ public sealed class ContextMenu : Control, IPopupOwner
             if (entry is MenuItem item)
             {
                 var text = GetDisplayText(item);
-                var size = string.IsNullOrEmpty(text) ? Size.Empty : measure.Context.MeasureText(text, measure.Font);
+                var size = _textLayouts.Measure(measure.Context, text, textFormat, double.PositiveInfinity);
                 _maxTextWidth = Math.Max(_maxTextWidth, size.Width);
 
                 var shortcutText = item.Shortcut?.ToDisplayString();
                 if (!string.IsNullOrEmpty(shortcutText))
                 {
                     _hasAnyShortcut = true;
-                    var shortcutSize = measure.Context.MeasureText(shortcutText, measure.Font);
+                    var shortcutSize = _textLayouts.Measure(measure.Context, shortcutText, shortcutFormat, double.PositiveInfinity);
                     _maxShortcutWidth = Math.Max(_maxShortcutWidth, shortcutSize.Width);
                 }
 
@@ -790,8 +799,9 @@ public sealed class ContextMenu : Control, IPopupOwner
             return;
         }
 
-        using var measure = BeginTextMeasurement();
-        var font = measure.Font;
+        var font = GetFont();
+        var textFormat = CreateMenuTextFormat(font, TextAlignment.Left, TextAlignment.Center);
+        var shortcutFormat = CreateMenuTextFormat(font, TextAlignment.Right, TextAlignment.Center);
 
         context.Save();
         context.SetClip(LayoutRounding.MakeClipRect(contentBounds, dpiScale));
@@ -848,15 +858,24 @@ public sealed class ContextMenu : Control, IPopupOwner
                 var textRect = new Rect(textLeft, paddedRow.Y, Math.Max(0, textRight - textLeft), paddedRow.Height);
                 var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
                 var parsed = item.GetParsedText();
-                AccessKeyRenderer.DrawParsed(context, parsed.displayText, parsed.underlineIndex, textRect, font, fg, showAccessKeys, dpiScale: GetDpi() / 96.0);
+                var textLayout = _textLayouts.EnsureRenderLayout(context, parsed.displayText, textFormat, textRect);
+                if (textLayout != null)
+                {
+                    var metrics = _textLayouts.GetUnderlineMetrics(context, parsed.displayText, parsed.underlineIndex, textFormat, textLayout);
+                    AccessKeyRenderer.DrawParsed(context, parsed.displayText, parsed.underlineIndex, textRect, textFormat, textLayout, fg, showAccessKeys, GetDpi() / 96.0, metrics);
+                }
 
                 if (_hasAnyShortcut && !string.IsNullOrEmpty(item.Shortcut?.ToDisplayString()))
                 {
+                    var shortcutText = item.Shortcut?.ToDisplayString() ?? string.Empty;
                     double shortcutRight = paddedRow.Right - chevronReserved;
                     double shortcutLeft = shortcutRight - _maxShortcutWidth;
                     var shortcutRect = new Rect(shortcutLeft, paddedRow.Y, Math.Max(0, shortcutRight - shortcutLeft), paddedRow.Height);
-                    context.DrawText(item.Shortcut?.ToDisplayString(), shortcutRect, font, fg,
-                        TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
+                    var shortcutLayout = _textLayouts.EnsureRenderLayout(context, shortcutText, shortcutFormat, shortcutRect);
+                    if (shortcutLayout != null)
+                    {
+                        context.DrawTextLayout(shortcutText, shortcutFormat, shortcutLayout, fg);
+                    }
                 }
 
                 if (item.SubMenu != null)
@@ -880,5 +899,42 @@ public sealed class ContextMenu : Control, IPopupOwner
         {
             _vBar.Render(context);
         }
+    }
+
+    private static TextFormat CreateMenuTextFormat(
+        IFont font,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment)
+        => new()
+        {
+            Font = font,
+            HorizontalAlignment = horizontalAlignment,
+            VerticalAlignment = verticalAlignment,
+            Wrapping = TextWrapping.NoWrap,
+            Trimming = TextTrimming.None
+        };
+
+    protected override void OnMewPropertyChanged(MewProperty property)
+    {
+        if (property.Id == FontFamilyProperty.Id ||
+            property.Id == FontSizeProperty.Id ||
+            property.Id == FontWeightProperty.Id)
+        {
+            _textLayouts.Invalidate();
+        }
+
+        base.OnMewPropertyChanged(property);
+    }
+
+    protected override void OnDpiChanged(uint oldDpi, uint newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        _textLayouts.Invalidate();
+    }
+
+    protected override void OnFontCacheInvalidated(MewProperty property)
+    {
+        base.OnFontCacheInvalidated(property);
+        _textLayouts.Invalidate();
     }
 }

@@ -73,3 +73,54 @@ public interface IRadialGradientBrush : IGradientBrush
     /// <summary>Gets the Y radius of the gradient ellipse.</summary>
     double RadiusY { get; }
 }
+
+/// <summary>
+/// How an image brush extends its image beyond a single tile.
+/// </summary>
+public enum TileMode
+{
+    /// <summary>Do not tile — fill outside the image's destination rect is transparent.</summary>
+    None,
+
+    /// <summary>Repeat the tile on both axes.</summary>
+    Tile,
+
+    /// <summary>Repeat on X axis only; Y axis is clamped/transparent.</summary>
+    TileX,
+
+    /// <summary>Repeat on Y axis only; X axis is clamped/transparent.</summary>
+    TileY,
+}
+
+/// <summary>
+/// A brush that fills a region by tiling an image.
+/// <para>
+/// The image is drawn into <see cref="DestinationRect"/>; outside that rect the
+/// image is repeated according to <see cref="TileMode"/>. <see cref="SourceRect"/>
+/// selects which part of the image is used as the tile (full image by default).
+/// </para>
+/// </summary>
+public interface IImageBrush : IBrush
+{
+    /// <summary>Gets the image that provides the tile.</summary>
+    IImage Image { get; }
+
+    /// <summary>Gets the region within <see cref="Image"/> to use as the tile (in DIPs, image coordinates).</summary>
+    Rect SourceRect { get; }
+
+    /// <summary>Gets the destination rectangle for one tile (in DIPs, local coordinates).</summary>
+    Rect DestinationRect { get; }
+
+    /// <summary>Gets how the tile extends beyond <see cref="DestinationRect"/>.</summary>
+    TileMode TileMode { get; }
+
+    /// <summary>Gets the overall opacity multiplier applied to the tile.</summary>
+    double Opacity { get; }
+
+    /// <summary>
+    /// Gets an optional transform applied to the tile geometry before rendering,
+    /// or <see langword="null"/> for no additional transform. SVG <c>patternTransform</c>
+    /// maps here.
+    /// </summary>
+    Matrix3x2? Transform { get; }
+}

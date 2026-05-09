@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Svg</AssemblyName>
+    <PackageId>$(MewUITitle).Svg</PackageId>
+    <DefineConstants>$(DefineConstants);NO_SDC</DefineConstants>
+    <Nullable>disable</Nullable>
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+    <Description>SVG rendering support for $(MewUITitle). Pure managed implementation via System.Xml.Linq — no System.Drawing dependency, NativeAOT compatible.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsTrimmable>true</IsTrimmable>
+    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+  </PropertyGroup>
+
+  <!-- Keep ThirdParty core logic, but exclude System.Drawing rendering partials for incremental MewUI replacements. -->
+  <ItemGroup>
+    <Compile Remove="Internal\**\*.cs" />
+    <Compile Remove="SvgDocument.cs" />
+    <Compile Remove="ThirdParty\Svg\**\*.Drawing.cs" />
+    <Compile Remove="ThirdParty\Svg\Painting\GenericBoundable.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ExCSS" Version="4.3.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ThirdParty\Svg\Resources\svg11.dtd">
+      <LogicalName>Svg.Resources.svg11.dtd</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+</Project>

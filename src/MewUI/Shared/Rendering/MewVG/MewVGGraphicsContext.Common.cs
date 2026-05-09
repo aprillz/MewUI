@@ -20,7 +20,15 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     private NanoVGGL _vg;
 #endif
 
-    private readonly Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)> _saveStack = new();
+    private readonly Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)> _saveStack =
+        CollectionPool<Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)>>.Rent();
+
+    // Tracks IExternalLockedTexture instances Acquire'd during the current frame. Each is
+    // Acquire'd at most once per frame (DrawImage may sample the same external image
+    // multiple times) and Release'd at frame end (after platform-specific flush/swap so
+    // the GPU has finished sampling). Capacity is per-frame max; reused across frames
+    // via Clear in OnBeginFrame.
+    private readonly List<Aprillz.MewUI.Resources.IExternalLockedTexture> _acquiredExternalsThisFrame = new();
     private float _globalAlpha = 1f;
     private bool _textPixelSnap = true;
     private Matrix3x2 _transform = Matrix3x2.Identity;
@@ -29,8 +37,6 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     private double _viewportHeightDip;
     private int _viewportWidthPx;
     private int _viewportHeightPx;
-    private bool _disposed;
-
     // Frozen PathGeometry → object-space tessellation cache (static: shared across
     // windows, survives per-frame context recreation; ConditionalWeakTable ephemeron
     // semantics auto-collect entries when PathGeometry key is GC'd)
@@ -60,6 +66,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _transform = Matrix3x2.Identity;
         _clipBoundsWorld = null;
         _saveStack.Clear();
+        _acquiredExternalsThisFrame.Clear();
 
         BeginFramePlatform();
     }
@@ -68,6 +75,39 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     {
         EndFramePlatform();
         _saveStack.Clear();
+        if (_acquiredExternalsThisFrame.Count > 0)
+        {
+            foreach (var t in _acquiredExternalsThisFrame)
+            {
+                t.Release();
+            }
+            _acquiredExternalsThisFrame.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Acquires <paramref name="texture"/> if not already acquired in this frame. The
+    /// platform's DrawImage path calls this before issuing the NVG draw that samples the
+    /// external texture. Idempotent within a frame: a single Acquire covers any number of
+    /// DrawImage calls referencing the same texture.
+    /// </summary>
+    private void EnsureExternalAcquired(Aprillz.MewUI.Resources.IExternalLockedTexture texture)
+    {
+        for (int i = 0; i < _acquiredExternalsThisFrame.Count; i++)
+        {
+            if (ReferenceEquals(_acquiredExternalsThisFrame[i], texture))
+            {
+                return;
+            }
+        }
+        texture.Acquire();
+        _acquiredExternalsThisFrame.Add(texture);
+    }
+
+    protected override void OnDispose()
+    {
+        CollectionPool<Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)>>.Return(_saveStack);
+        DestroyPlatform();
     }
 
     /// <summary>
@@ -79,6 +119,11 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     /// Platform-specific per-frame cleanup (vg.EndFrame, swap buffers, release context, etc.).
     /// </summary>
     partial void EndFramePlatform();
+
+    /// <summary>
+    /// Platform-specific permanent resource cleanup (delete GL context, etc.).
+    /// </summary>
+    partial void DestroyPlatform();
 
     #region State Management
 
@@ -137,6 +182,21 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             (float)rect.Width,
             (float)rect.Height,
             radius);
+        _vg.Clip();
+    }
+
+    protected override void SetClipPathCore(PathGeometry path)
+    {
+        var bounds = path.GetBounds();
+        var worldClip = TransformRectToWorldAABB(bounds);
+        _clipBoundsWorld = IntersectClipBounds(_clipBoundsWorld, worldClip);
+
+        var clip = _clipBoundsWorld.Value;
+        _vg.SetTransformMatrix(Matrix3x2.Identity);
+        _vg.Scissor((float)clip.X, (float)clip.Y, (float)clip.Width, (float)clip.Height);
+        _vg.SetTransformMatrix(_transform);
+
+        ReplayNvgPathCommands(path, path.FillRule);
         _vg.Clip();
     }
 
@@ -292,6 +352,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
     public override void DrawPath(PathGeometry path, Color color, double thickness = 1)
     {
+        RecordDrawPath();
         if (path == null || color.A == 0 || thickness <= 0)
         {
             return;
@@ -308,6 +369,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
     public override void FillPath(PathGeometry path, Color color, FillRule fillRule)
     {
+        RecordFillPath();
         if (path == null || color.A == 0)
         {
             return;
@@ -432,6 +494,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
     public override void DrawPath(PathGeometry path, IPen pen)
     {
+        RecordDrawPath();
         if (path == null || pen.Thickness <= 0) return;
 
         if (pen.StrokeStyle.IsDashed)
@@ -450,6 +513,15 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     public override void FillRectangle(Rect rect, IBrush brush)
     {
         if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
+        if (brush is IImageBrush imageBrush)
+        {
+            _vg.ShapeAntiAlias(false);
+            _vg.BeginPath();
+            _vg.Rect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height);
+            if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
+            _vg.ShapeAntiAlias(true);
+            return;
+        }
         if (brush is not IGradientBrush gradient) return;
 
         _vg.ShapeAntiAlias(false);
@@ -463,11 +535,19 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
     {
         if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
+        if (brush is IImageBrush imageBrush)
+        {
+            float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
+            _vg.BeginPath();
+            _vg.RoundedRect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height, radius);
+            if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
+            return;
+        }
         if (brush is not IGradientBrush gradient) return;
 
-        float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
+        float r = (float)Math.Max(0, Math.Min(radiusX, radiusY));
         _vg.BeginPath();
-        _vg.RoundedRect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height, radius);
+        _vg.RoundedRect((float)rect.X, (float)rect.Y, (float)rect.Width, (float)rect.Height, r);
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, rect);
         _vg.Fill();
     }
@@ -475,12 +555,21 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     public override void FillEllipse(Rect bounds, IBrush brush)
     {
         if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
+        if (brush is IImageBrush imageBrush)
+        {
+            float cx = (float)(bounds.X + bounds.Width * 0.5);
+            float cy = (float)(bounds.Y + bounds.Height * 0.5);
+            _vg.BeginPath();
+            _vg.Ellipse(cx, cy, (float)(bounds.Width * 0.5), (float)(bounds.Height * 0.5));
+            if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
+            return;
+        }
         if (brush is not IGradientBrush gradient) return;
 
-        float cx = (float)(bounds.X + bounds.Width * 0.5);
-        float cy = (float)(bounds.Y + bounds.Height * 0.5);
+        float ecx = (float)(bounds.X + bounds.Width * 0.5);
+        float ecy = (float)(bounds.Y + bounds.Height * 0.5);
         _vg.BeginPath();
-        _vg.Ellipse(cx, cy, (float)(bounds.Width * 0.5), (float)(bounds.Height * 0.5));
+        _vg.Ellipse(ecx, ecy, (float)(bounds.Width * 0.5), (float)(bounds.Height * 0.5));
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, bounds);
         _vg.Fill();
     }
@@ -490,13 +579,80 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
     public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
     {
+        if (brush is not ISolidColorBrush)
+        {
+            RecordFillPath();
+        }
         if (path == null) return;
         if (brush is ISolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
+        if (brush is IImageBrush imageBrush)
+        {
+            ReplayNvgPathCommands(path, fillRule);
+            if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
+            return;
+        }
         if (brush is not IGradientBrush gradient) return;
 
         ReplayNvgPathCommands(path, fillRule);
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, NvgStrokeHelper.ComputePathBounds(path));
         _vg.Fill();
+    }
+
+    /// <summary>
+    /// Applies an <see cref="IImageBrush"/> as the current NanoVG fill paint. Returns false
+    /// when the brush cannot be rendered by this backend (e.g. image is not a <see cref="MewVGImage"/>).
+    /// The tile is realized via <see cref="NanoVG.ImagePattern"/>, which takes a pre-flag'd
+    /// NVG texture (RepeatX/RepeatY set at texture creation) and a paint transform that
+    /// positions one tile and sets its size; NanoVG then wraps UVs via GL_REPEAT.
+    /// </summary>
+    private bool ApplyImageBrushPaint(IImageBrush imageBrush)
+    {
+        if (imageBrush.Image is not MewVGImage mewImage)
+        {
+            return false;
+        }
+
+        var flags = GetImageFlags() | NVGimageFlags.Premultiplied;
+        if (imageBrush.TileMode is TileMode.Tile or TileMode.TileX)
+        {
+            flags |= NVGimageFlags.RepeatX;
+        }
+        if (imageBrush.TileMode is TileMode.Tile or TileMode.TileY)
+        {
+            flags |= NVGimageFlags.RepeatY;
+        }
+
+        int imageId = mewImage.GetOrCreateImageId(_vg, flags);
+        if (imageId == 0)
+        {
+            return false;
+        }
+
+        var dst = imageBrush.DestinationRect;
+        float patternX = (float)dst.X;
+        float patternY = (float)dst.Y;
+        float patternW = (float)dst.Width;
+        float patternH = (float)dst.Height;
+        float angle = 0f;
+
+        if (imageBrush.Transform is { } t)
+        {
+            // Decompose into translate + rotation + per-axis scale (ignores shear).
+            // NanoVG's ImagePattern supports all three natively: translate via (cx,cy),
+            // rotate via angle, scale by folding into (w,h).
+            float scaleX = MathF.Sqrt(t.M11 * t.M11 + t.M12 * t.M12);
+            float scaleY = MathF.Sqrt(t.M21 * t.M21 + t.M22 * t.M22);
+            angle = MathF.Atan2(t.M12, t.M11);
+            patternW *= scaleX;
+            patternH *= scaleY;
+            patternX += t.M31;
+            patternY += t.M32;
+        }
+
+        float opacity = (float)imageBrush.Opacity;
+        var paint = _vg.ImagePattern(patternX, patternY, patternW, patternH, angle, imageId, opacity);
+        _vg.FillPaint(paint);
+        return true;
     }
 
     public override void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius,
@@ -671,24 +827,22 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
 
     /// <summary>
-    /// Sets NanoVG stroke width compensated for the current transform scale.
-    /// NanoVG's Stroke() internally multiplies by GetAverageScale, but MewUI's
-    /// convention (matching GDI/D2D/WPF) is that stroke width is transform-independent.
+    /// Sets NanoVG stroke width with device-pixel snapping. The thickness is in DIP
+    /// (input units); NanoVG applies the current transform (user × dpi) on its side,
+    /// so we round to whole device pixels at total scale and convert back to DIP for
+    /// NVG to multiply through. Result: stroke scales with transform like Skia/WPF/SVG
+    /// while remaining crisp on fractional DPI.
     /// </summary>
     private void NvgStrokeWidth(float thickness)
     {
-        thickness = QuantizeStrokeDip(thickness);
+        if (thickness <= 0) { _vg.StrokeWidth(0); return; }
         float sx = MathF.Sqrt(_transform.M11 * _transform.M11 + _transform.M12 * _transform.M12);
         float sy = MathF.Sqrt(_transform.M21 * _transform.M21 + _transform.M22 * _transform.M22);
         float avgScale = (sx + sy) * 0.5f;
-        _vg.StrokeWidth(avgScale > 0.001f ? thickness / avgScale : thickness);
-    }
-
-    private float QuantizeStrokeDip(float thickness)
-    {
-        if (thickness <= 0) return 0;
-        float snappedPx = MathF.Max(1, MathF.Round(thickness * (float)DpiScale));
-        return snappedPx / (float)DpiScale;
+        float totalScale = avgScale * (float)DpiScale;
+        if (totalScale < 0.001f) { _vg.StrokeWidth(thickness); return; }
+        float snappedPx = MathF.Max(1, MathF.Round(thickness * totalScale));
+        _vg.StrokeWidth(snappedPx / totalScale);
     }
 
     #endregion

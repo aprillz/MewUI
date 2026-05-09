@@ -57,6 +57,44 @@ internal readonly struct D2D1_BITMAP_PROPERTIES(D2D1_PIXEL_FORMAT pixelFormat, f
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_POINT_2U(uint x, uint y)
+{
+    public readonly uint x = x;
+    public readonly uint y = y;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_RECT_U(uint left, uint top, uint right, uint bottom)
+{
+    public readonly uint left = left;
+    public readonly uint top = top;
+    public readonly uint right = right;
+    public readonly uint bottom = bottom;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct D2D1_MAPPED_RECT
+{
+    public uint pitch;
+    public nint bits;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_BITMAP_PROPERTIES1(
+    D2D1_PIXEL_FORMAT pixelFormat,
+    float dpiX,
+    float dpiY,
+    D2D1_BITMAP_OPTIONS bitmapOptions,
+    nint colorContext)
+{
+    public readonly D2D1_PIXEL_FORMAT pixelFormat = pixelFormat;
+    public readonly float dpiX = dpiX;
+    public readonly float dpiY = dpiY;
+    public readonly D2D1_BITMAP_OPTIONS bitmapOptions = bitmapOptions;
+    public readonly nint colorContext = colorContext;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct D2D1_RENDER_TARGET_PROPERTIES(
     D2D1_RENDER_TARGET_TYPE type,
     D2D1_PIXEL_FORMAT pixelFormat,
@@ -191,6 +229,17 @@ internal readonly struct D2D1_BRUSH_PROPERTIES(float opacity, D2D1_MATRIX_3X2_F 
     public readonly D2D1_MATRIX_3X2_F transform = transform;
 
     public static D2D1_BRUSH_PROPERTIES Default => new(1.0f, D2D1_MATRIX_3X2_F.Identity);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct D2D1_BITMAP_BRUSH_PROPERTIES(
+    D2D1_EXTEND_MODE extendModeX,
+    D2D1_EXTEND_MODE extendModeY,
+    D2D1_BITMAP_INTERPOLATION_MODE interpolationMode)
+{
+    public readonly D2D1_EXTEND_MODE extendModeX = extendModeX;
+    public readonly D2D1_EXTEND_MODE extendModeY = extendModeY;
+    public readonly D2D1_BITMAP_INTERPOLATION_MODE interpolationMode = interpolationMode;
 }
 
 [StructLayout(LayoutKind.Sequential)]

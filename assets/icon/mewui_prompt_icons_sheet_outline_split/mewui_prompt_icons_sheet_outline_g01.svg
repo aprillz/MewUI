@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="128px" height="128px" viewBox="0 0 256 256" xml:space="preserve"><g><linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="119.6606" y1="464.041" x2="119.6606" y2="256.041" gradientTransform="matrix(1 0 0 -1 8.3398 488.04)">
+		<stop offset="0" style="stop-color:#F5F6F9" />
+		<stop offset="1" style="stop-color:#E4E7EE" />
+	</linearGradient>
+	<circle fill="url(#SVGID_1_)" stroke="#8A909B" stroke-width="4" cx="128" cy="128" r="86" />
+	<path fill="#6A6F78" d="M128,149c-3.313,0-6-2.687-6-6c0-12.01,6.202-18.654,15.53-24.897c7.381-5.549,10.47-9.04,10.47-16.103   c0-8.505-6.28-14-16-14c-8.972,0-15,5.626-15,14c0,3.313-2.687,6-6,6s-6-2.687-6-6c0-15.065,11.355-26,27-26   c16.486,0,28,10.691,28,26c0,13.16-7.285,19.713-15.4,25.8c-0.089,0.067-0.18,0.131-0.272,0.192C136.316,133.333,134,136.7,134,143   C134,146.313,131.313,149,128,149z M120,176c0,4.418,3.582,8,8,8s8-3.582,8-8s-3.582-8-8-8S120,171.582,120,176z" />
+</g></svg>

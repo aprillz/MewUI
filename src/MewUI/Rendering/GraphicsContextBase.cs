@@ -18,6 +18,20 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     private int _drawCalls;
     private int _cullCount;
+    private int _saveCount;
+    private int _restoreCount;
+    private int _clipCount;
+    private int _drawLineCount;
+    private int _drawRectangleCount;
+    private int _fillRectangleCount;
+    private int _drawRoundedRectangleCount;
+    private int _fillRoundedRectangleCount;
+    private int _drawEllipseCount;
+    private int _fillEllipseCount;
+    private int _drawPathCount;
+    private int _fillPathCount;
+    private int _drawTextCount;
+    private int _drawImageCount;
 
     /// <summary>Whether a frame is currently active (between BeginFrame and EndFrame).</summary>
     protected bool IsActive { get; private set; }
@@ -31,6 +45,22 @@ public abstract class GraphicsContextBase : IGraphicsContext
     /// <summary>Draw/fill calls skipped by viewport culling this frame.</summary>
     public int CullCount => _cullCount;
 
+    public RenderPrimitiveStats PrimitiveStats => new(
+        _saveCount,
+        _restoreCount,
+        _clipCount,
+        _drawLineCount,
+        _drawRectangleCount,
+        _fillRectangleCount,
+        _drawRoundedRectangleCount,
+        _fillRoundedRectangleCount,
+        _drawEllipseCount,
+        _fillEllipseCount,
+        _drawPathCount,
+        _fillPathCount,
+        _drawTextCount,
+        _drawImageCount);
+
     /// <summary>
     /// Starts a new frame for the given render target. Resets base cull state
     /// and calls <see cref="OnBeginFrame"/>. If a frame is already active,
@@ -43,6 +73,20 @@ public abstract class GraphicsContextBase : IGraphicsContext
         _cullStack.Clear();
         _drawCalls = 0;
         _cullCount = 0;
+        _saveCount = 0;
+        _restoreCount = 0;
+        _clipCount = 0;
+        _drawLineCount = 0;
+        _drawRectangleCount = 0;
+        _fillRectangleCount = 0;
+        _drawRoundedRectangleCount = 0;
+        _fillRoundedRectangleCount = 0;
+        _drawEllipseCount = 0;
+        _fillEllipseCount = 0;
+        _drawPathCount = 0;
+        _fillPathCount = 0;
+        _drawTextCount = 0;
+        _drawImageCount = 0;
         IsActive = true;
         OnBeginFrame(target);
     }
@@ -73,12 +117,14 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public void Save()
     {
+        _saveCount++;
         _cullStack.Push(_cullRect);
         SaveCore();
     }
 
     public void Restore()
     {
+        _restoreCount++;
         if (_cullStack.Count > 0)
             _cullRect = _cullStack.Pop();
         RestoreCore();
@@ -86,14 +132,23 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public void SetClip(Rect rect)
     {
+        _clipCount++;
         _cullRect = _cullRect.Intersect(rect);
         SetClipCore(rect);
     }
 
     public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY)
     {
+        _clipCount++;
         _cullRect = _cullRect.Intersect(rect);
         SetClipRoundedRectCore(rect, radiusX, radiusY);
+    }
+
+    public void SetClipPath(PathGeometry path)
+    {
+        _clipCount++;
+        _cullRect = _cullRect.Intersect(path.GetBounds());
+        SetClipPathCore(path);
     }
 
     public void Translate(double dx, double dy)
@@ -141,15 +196,26 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public void ResetClip()
     {
+        _clipCount++;
         _cullRect = InfiniteCullRect;
         ResetClipCore();
     }
 
     public void IntersectClip(Rect rect)
     {
+        _clipCount++;
         _cullRect = _cullRect.Intersect(rect);
         IntersectClipCore(rect);
     }
+
+    /// <summary>
+    /// Returns the current cull rect in local (pre-transform) coords as a clip-bound query
+    /// when finite, or <see langword="null"/> when no constraining clip is in effect (e.g.
+    /// after <see cref="SetTransform"/> / <see cref="Rotate"/> / <see cref="ResetClip"/>
+    /// which all reset the cull tracker to the infinite sentinel).
+    /// </summary>
+    public virtual Rect? GetClipBoundsLocal() =>
+        _cullRect.Equals(InfiniteCullRect) ? null : _cullRect;
 
     protected abstract void SaveCore();
 
@@ -158,6 +224,8 @@ public abstract class GraphicsContextBase : IGraphicsContext
     protected abstract void SetClipCore(Rect rect);
 
     protected abstract void SetClipRoundedRectCore(Rect rect, double radiusX, double radiusY);
+
+    protected abstract void SetClipPathCore(PathGeometry path);
 
     protected abstract void TranslateCore(double dx, double dy);
 
@@ -181,6 +249,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public void DrawLine(Point start, Point end, Color color, double thickness = 1)
     {
+        _drawLineCount++;
         double halfT = thickness * 0.5;
         var lineBounds = new Rect(
             Math.Min(start.X, end.X) - halfT,
@@ -193,36 +262,42 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public void DrawRectangle(Rect rect, Color color, double thickness = 1)
     {
+        _drawRectangleCount++;
         if (IsCulled(rect)) return;
         DrawRectangleCore(rect, color, thickness, false);
     }
 
     public void FillRectangle(Rect rect, Color color)
     {
+        _fillRectangleCount++;
         if (IsCulled(rect)) return;
         FillRectangleCore(rect, color);
     }
 
     public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color, double thickness = 1)
     {
+        _drawRoundedRectangleCount++;
         if (IsCulled(rect)) return;
         DrawRoundedRectangleCore(rect, radiusX, radiusY, color, thickness);
     }
 
     public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Color color)
     {
+        _fillRoundedRectangleCount++;
         if (IsCulled(rect)) return;
         FillRoundedRectangleCore(rect, radiusX, radiusY, color);
     }
 
     public void DrawEllipse(Rect bounds, Color color, double thickness = 1)
     {
+        _drawEllipseCount++;
         if (IsCulled(bounds)) return;
         DrawEllipseCore(bounds, color, thickness);
     }
 
     public void FillEllipse(Rect bounds, Color color)
     {
+        _fillEllipseCount++;
         if (IsCulled(bounds)) return;
         FillEllipseCore(bounds, color);
     }
@@ -240,6 +315,10 @@ public abstract class GraphicsContextBase : IGraphicsContext
     protected abstract void DrawEllipseCore(Rect bounds, Color color, double thickness = 1);
 
     protected abstract void FillEllipseCore(Rect bounds, Color color);
+
+    protected void RecordDrawPath() => _drawPathCount++;
+
+    protected void RecordFillPath() => _fillPathCount++;
 
     #endregion
 
@@ -265,12 +344,25 @@ public abstract class GraphicsContextBase : IGraphicsContext
     public abstract void DrawTextLayout(ReadOnlySpan<char> text,
         TextFormat format, TextLayout layout, Color color);
 
+    /// <summary>
+    /// Owner-aware overload. <paramref name="owner"/> is an opaque identity (typically the
+    /// calling control instance, or a per-region marker for multi-region controls) used by
+    /// backends with owner-keyed text caches to reuse the same rasterization buffer and GPU
+    /// texture across renders even when the text content mutates. Backends that don't
+    /// benefit from owner-keying (Direct2D, GDI) inherit this default which discards
+    /// <paramref name="owner"/> and forwards to the parameterless overload.
+    /// </summary>
+    public virtual void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color, object? owner)
+        => DrawTextLayout(text, format, layout, color);
+
     public void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
         TextAlignment horizontalAlignment = TextAlignment.Left,
         TextAlignment verticalAlignment = TextAlignment.Top,
         TextWrapping wrapping = TextWrapping.NoWrap,
         TextTrimming trimming = TextTrimming.None)
     {
+        _drawTextCount++;
         if (IsCulled(bounds)) return;
 
         // Cap-height centering: shift text so the cap-height midpoint aligns with
@@ -304,12 +396,14 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public void DrawImage(IImage image, Rect destRect)
     {
+        _drawImageCount++;
         if (IsCulled(destRect)) return;
         DrawImageCore(image, destRect);
     }
 
     public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
     {
+        _drawImageCount++;
         if (IsCulled(destRect)) return;
         DrawImageCore(image, destRect, sourceRect);
     }
@@ -378,17 +472,20 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public virtual void DrawLine(Point start, Point end, IPen pen)
     {
+        _drawLineCount++;
         if (pen.Brush is ISolidColorBrush s) DrawLineCore(start, end, s.Color, pen.Thickness);
     }
 
     public virtual void DrawRectangle(Rect rect, IPen pen)
     {
+        _drawRectangleCount++;
         if (IsCulled(rect)) return;
         if (pen.Brush is ISolidColorBrush s) DrawRectangleCore(rect, s.Color, pen.Thickness, false);
     }
 
     public virtual void FillRectangle(Rect rect, IBrush brush)
     {
+        _fillRectangleCount++;
         if (IsCulled(rect)) return;
         if (brush is ISolidColorBrush s) FillRectangleCore(rect, s.Color);
         else if (brush is IGradientBrush g) FillRectangleCore(rect, g.GetRepresentativeColor());
@@ -396,12 +493,14 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public virtual void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
     {
+        _drawRoundedRectangleCount++;
         if (IsCulled(rect)) return;
         if (pen.Brush is ISolidColorBrush s) DrawRoundedRectangleCore(rect, radiusX, radiusY, s.Color, pen.Thickness);
     }
 
     public virtual void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
     {
+        _fillRoundedRectangleCount++;
         if (IsCulled(rect)) return;
         if (brush is ISolidColorBrush s) FillRoundedRectangleCore(rect, radiusX, radiusY, s.Color);
         else if (brush is IGradientBrush g) FillRoundedRectangleCore(rect, radiusX, radiusY, g.GetRepresentativeColor());
@@ -409,12 +508,14 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public virtual void DrawEllipse(Rect bounds, IPen pen)
     {
+        _drawEllipseCount++;
         if (IsCulled(bounds)) return;
         if (pen.Brush is ISolidColorBrush s) DrawEllipseCore(bounds, s.Color, pen.Thickness);
     }
 
     public virtual void FillEllipse(Rect bounds, IBrush brush)
     {
+        _fillEllipseCount++;
         if (IsCulled(bounds)) return;
         if (brush is ISolidColorBrush s) FillEllipseCore(bounds, s.Color);
         else if (brush is IGradientBrush g) FillEllipseCore(bounds, g.GetRepresentativeColor());
@@ -556,6 +657,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
         if (IsCulled(rect)) return;
 
+        _drawRoundedRectangleCount++;
         var half = QuantizeHalfStroke(thickness, DpiScale);
 
         DrawRoundedRectangleCore(
@@ -577,6 +679,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
         }
 
         if (IsCulled(rect)) return;
+        _drawRectangleCount++;
         DrawRectangleCore(rect, color, thickness, true);
     }
 
@@ -592,6 +695,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
         }
 
         if (IsCulled(bounds)) return;
+        _drawEllipseCount++;
         var half = QuantizeHalfStroke(thickness, DpiScale);
         var full = half * 2;
         DrawEllipseCore(

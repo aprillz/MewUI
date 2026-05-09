@@ -163,7 +163,12 @@ internal sealed class BmpDecoder : IImageDecoder
             }
         }
 
-        bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst);
+        // 1/4/8/24-bit BMPs are forced opaque (the loader writes 0xFF to every alpha byte).
+        // 32-bit BI_RGB technically has an "X" byte, not alpha — but we copy it through as
+        // alpha, so callers may have placed real values there. Treat 32-bit as alpha-bearing
+        // to be safe; the rest can take the opaque fast path.
+        bool hasAlpha = bpp == 32;
+        bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst, hasAlpha);
         return true;
     }
 

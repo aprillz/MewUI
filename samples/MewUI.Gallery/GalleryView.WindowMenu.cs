@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
@@ -134,10 +136,13 @@ partial class GalleryView
             manualPositionStatus.Value = $"Manual: opening at ({left}, {top})";
 
             Window manual = null!;
+            var cancelClose = new ObservableValue<bool>(false);
 
             new Window()
                 .Ref(out manual)
                 .Resizable(360, 180)
+                .OnClosed(() => Console.WriteLine("Window closed"))
+                .OnClosing(e => { e.Cancel = cancelClose.Value; Console.WriteLine($"Window closing"); })
                 .StartManualPosition(left, top)
                 .OnBuild(x => x
                     .Title("StartupManualPosition sample")
@@ -152,6 +157,9 @@ partial class GalleryView
                                 new TextBlock()
                                     .FontSize(11)
                                     .Text("Use this sample to verify startup manual placement against the requested DIP coordinates."),
+                                new CheckBox()
+                                    .BindIsChecked(cancelClose)
+                                    .Content("Cancel Close"),
                                 new Button()
                                     .Content("Close")
                                     .OnClick(() => x.Close())
@@ -159,16 +167,16 @@ partial class GalleryView
                     )
                 );
 
-            try
-            {
-                manual.Show();
-                manualPositionStatus.Value = $"Manual: shown at requested ({left}, {top})";
-            }
-            catch (Exception ex)
-            {
-                manualPositionStatus.Value = $"Manual: error ({ex.GetType().Name})";
-            }
+        try
+        {
+            manual.Show();
+            manualPositionStatus.Value = $"Manual: shown at requested ({left}, {top})";
         }
+        catch (Exception ex)
+        {
+            manualPositionStatus.Value = $"Manual: error ({ex.GetType().Name})";
+        }
+    }
 
         return CardGrid(
             MenusCard(),
@@ -280,47 +288,47 @@ partial class GalleryView
                                     .Content("Open Files...")
                                     .OnClick(() =>
                                     {
-                                        var files = FileDialog.OpenFiles(new OpenFileDialogOptions
-                                        {
-                                            Owner = window.Handle,
-                                            Filter = "All Files (*.*)|*.*"
-                                        });
+        var files = FileDialog.OpenFiles(new OpenFileDialogOptions
+        {
+            Owner = window.Handle,
+            Filter = "All Files (*.*)|*.*"
+        });
 
-                                        if (files is null || files.Length == 0)
-                                        {
-                                            openFilesStatus.Value = "Open Files: canceled";
-                                        }
-                                        else if (files.Length == 1)
-                                        {
-                                            openFilesStatus.Value = $"Open Files: {files[0]}";
-                                        }
-                                        else
-                                        {
-                                            openFilesStatus.Value = $"Open Files: {files.Length} files";
-                                        }
-                                    }),
+        if (files is null || files.Length == 0)
+        {
+            openFilesStatus.Value = "Open Files: canceled";
+        }
+        else if (files.Length == 1)
+        {
+            openFilesStatus.Value = $"Open Files: {files[0]}";
+        }
+        else
+        {
+            openFilesStatus.Value = $"Open Files: {files.Length} files";
+        }
+    }),
                                 new Button()
                                     .Content("Save File...")
                                     .OnClick(() =>
                                     {
-                                        var file = FileDialog.SaveFile(new SaveFileDialogOptions
-                                        {
-                                            Owner = window.Handle,
-                                            Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
-                                            FileName = "demo.txt"
-                                        });
-                                        saveFileStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
-                                    }),
+        var file = FileDialog.SaveFile(new SaveFileDialogOptions
+        {
+            Owner = window.Handle,
+            Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+            FileName = "demo.txt"
+        });
+        saveFileStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
+    }),
                                 new Button()
                                     .Content("Select Folder...")
                                     .OnClick(() =>
                                     {
-                                        var folder = FileDialog.SelectFolder(new FolderDialogOptions
-                                        {
-                                            Owner = window.Handle
-                                        });
-                                        folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
-                                    })
+        var folder = FileDialog.SelectFolder(new FolderDialogOptions
+        {
+            Owner = window.Handle
+        });
+        folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
+    })
                             ),
 
                         new TextBlock()

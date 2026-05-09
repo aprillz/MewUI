@@ -9,8 +9,9 @@ internal sealed class StaticPixelBufferSource : IPixelBufferSource
     public int StrideBytes => PixelWidth * 4;
     public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
     public int Version => 0;
+    public bool HasAlpha { get; }
 
-    public StaticPixelBufferSource(int widthPx, int heightPx, byte[] bgra)
+    public StaticPixelBufferSource(int widthPx, int heightPx, byte[] bgra, bool hasAlpha = true)
     {
         if (widthPx <= 0)
         {
@@ -31,6 +32,7 @@ internal sealed class StaticPixelBufferSource : IPixelBufferSource
         PixelWidth = widthPx;
         PixelHeight = heightPx;
         _bgra = bgra;
+        HasAlpha = hasAlpha;
     }
 
     public PixelBufferLock Lock() =>

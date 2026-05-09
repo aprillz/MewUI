@@ -14,7 +14,7 @@ partial class GalleryView
 
     private FrameworkElement SimpleGridViewCard()
     {
-        var gridItems = Enumerable.Range(1, 64)
+        var gridItems = Enumerable.Range(1, 1_000)
             .Select(i => new SimpleGridRow(i, $"Item {i}", (i % 6) switch { 1 => "Warning", 2 => "Error", _ => "Normal" }))
             .ToArray();
         GridView simple = null!;
@@ -90,7 +90,7 @@ partial class GalleryView
         var summaryText = new ObservableValue<string>("Rows: -");
         var selectedText = new ObservableValue<string>("Selected: (none)");
 
-        var all = Enumerable.Range(1, 800)
+        var all = Enumerable.Range(1, 100)
             .Select(i => new ComplexGridRow(
                 id: i,
                 name: $"User {i:00}",
@@ -345,7 +345,6 @@ partial class GalleryView
                     .Bind(
                         build: _ => new ComboBox()
                             .Items(["User", "Admin", "Guest"])
-                            .Padding(6, 0)
                             .CenterVertical(),
                         bind: (view, item) => ((ComboBox)view).BindSelectedIndex(item.RoleIndex)),
 

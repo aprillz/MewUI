@@ -96,7 +96,7 @@ public abstract class SingleLineTextBase : TextBase
             GetDpi(),
             DocumentVersion,
             CaretPosition,
-            HasSelection,
+            HasSelection && IsSelectionActive,
             selStart,
             selEnd,
             Document.Length,

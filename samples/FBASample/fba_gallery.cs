@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.15.1
+#:package Aprillz.MewUI@0.15.0
 
 using System.Collections.ObjectModel;
 using System.Net.Http;
@@ -2120,7 +2120,9 @@ class NativeCustomWindow : Window
 
         _titleBar.MouseDoubleClick += e =>
         {
-            if (e.Button == MouseButton.Left && CanMaximize)
+            if (e.Button == MouseButton.Left
+                && CanMaximize
+                && !IsInTitleBarSideArea(e.GetPosition(_titleBar)))
             {
                 if (WindowState == WindowState.Maximized) Restore();
                 else Maximize();
@@ -2192,6 +2194,22 @@ class NativeCustomWindow : Window
         _titleBar.IsVisible = hasExtend;
         _controlButtons.IsVisible = !HasNativeChromeButtons;
         _titleBar.Padding = NativeChromeButtonInset;
+    }
+
+    bool IsInTitleBarSideArea(Point pointInTitleBar)
+    {
+        return GetBoundsInTitleBar(_leftArea).Contains(pointInTitleBar)
+            || GetBoundsInTitleBar(_rightArea).Contains(pointInTitleBar);
+    }
+
+    Rect GetBoundsInTitleBar(FrameworkElement element)
+    {
+        if (element.Bounds.Width <= 0 || element.Bounds.Height <= 0)
+        {
+            return Rect.Empty;
+        }
+
+        return element.TranslateRect(new Rect(0, 0, element.Bounds.Width, element.Bounds.Height), _titleBar);
     }
 
     void OnWindowStateVisualUpdate()
@@ -2291,7 +2309,7 @@ sealed class ConfettiOverlay : FrameworkElement
 
     public void StopRain() => _isRaining = false;
     public void StopCannons() { _cq.Clear(); _cannonAcc = 0; }
-    public void Clear() { _isRaining = false; _cq.Clear(); _cannonAcc = 0; _p.Clear(); StopTimer(); InvalidateVisual(); }
+    public new void Clear() { _isRaining = false; _cq.Clear(); _cannonAcc = 0; _p.Clear(); StopTimer(); InvalidateVisual(); }
 
     protected override void OnRender(IGraphicsContext ctx)
     {

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This file contains upsampling routines.
  *
  * Upsampling input data is counted in "row groups".  A row group

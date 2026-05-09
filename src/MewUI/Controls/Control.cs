@@ -658,7 +658,12 @@ public abstract class Control : FrameworkElement
         {
             _font?.Dispose();
             _font = null;
+            OnFontCacheInvalidated(property);
         }
+    }
+
+    protected virtual void OnFontCacheInvalidated(MewProperty property)
+    {
     }
 
     protected TextMeasurementScope BeginTextMeasurement()

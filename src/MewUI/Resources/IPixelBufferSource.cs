@@ -40,6 +40,28 @@ public interface IPixelBufferSource
     bool IsPremultiplied => false;
 
     /// <summary>
+    /// Whether the buffer carries a meaningful alpha channel. False means every pixel is
+    /// fully opaque by construction (JPEG decode, opaque PNG, 24-bit BMP, etc.).
+    /// </summary>
+    /// <remarks>
+    /// Backends use this to skip per-pixel alpha scans (the conservative "is every byte
+    /// 0xFF?" check that runs before premultiply) and to select <c>ALPHA_MODE.IGNORE</c>
+    /// over <c>PREMULTIPLIED</c> on the GPU image, which avoids the per-fragment blend math.
+    /// Default <c>true</c> is the safe choice — it preserves alpha-aware blending for any
+    /// source that hasn't explicitly opted out.
+    /// </remarks>
+    bool HasAlpha => true;
+
+    /// <summary>
+    /// Mechanism by which <see cref="Lock"/> exposes the pixel buffer. Default
+    /// <see cref="LockMode.Direct"/> for CPU-resident sources; GPU-resident sources
+    /// (Direct2D GPU bitmap, OpenGL FBO, Metal texture) override to
+    /// <see cref="LockMode.Readback"/> so deferred consumers can detect the sync barrier
+    /// before invoking <c>Lock</c>.
+    /// </summary>
+    LockMode LockMode => LockMode.Direct;
+
+    /// <summary>
     /// Monotonically increasing version. Backends can use this to detect changes.
     /// </summary>
     int Version { get; }
@@ -120,7 +142,7 @@ public sealed class PixelBufferLock : IDisposable
     /// </summary>
     public PixelRegion? DirtyRegion { get; }
 
-    internal PixelBufferLock(
+    public PixelBufferLock(
         byte[] buffer,
         int pixelWidth,
         int pixelHeight,

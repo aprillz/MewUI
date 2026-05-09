@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "Direct2D": {
+      "commandName": "Project"
+    },
+    "GL": {
+      "commandName": "Project",
+      "commandLineArgs": "--vg"
+    },
+    "GDI": {
+      "commandName": "Project",
+      "commandLineArgs": "--gdi"
+    }
+  }
+}

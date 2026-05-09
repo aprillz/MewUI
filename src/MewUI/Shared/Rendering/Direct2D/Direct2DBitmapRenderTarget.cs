@@ -1,4 +1,6 @@
 using Aprillz.MewUI.Native;
+using Aprillz.MewUI.Native.Com;
+using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Resources;
 
@@ -8,7 +10,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// Direct2D implementation of IBitmapRenderTarget.
 /// Uses DIB section + DC render target for offscreen rendering.
 /// </summary>
-internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32HdcSource
+internal sealed unsafe class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32HdcSource
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -17,10 +19,19 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
     private int _version;
     private bool _disposed;
 
+    // The DC render target paired with our HDC + DIB. Lifetime is tied to this object —
+    // RAII: we create lazily on first request, hold for as long as the bitmap is alive,
+    // and release in Dispose. No factory-side cache (which previously leaked one DC RT
+    // per transient filter source layer because each RT has a unique HDC, growing the
+    // dict unboundedly until D2D / GPU memory OOMed).
+    private nint _dcRenderTarget;
+    private int _dcRenderTargetGeneration;
+    private static int s_generationCounter;
+
     private byte[]? _lockBuffer;
     private Action? _releaseAction;
 
-    public Direct2DBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale)
+    public Direct2DBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -29,6 +40,7 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
         PixelWidth = pixelWidth;
         PixelHeight = pixelHeight;
         DpiScale = dpiScale;
+        HasAlpha = hasAlpha;
 
         // Create memory DC
         var screenDc = User32.GetDC(0);
@@ -68,6 +80,13 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
     /// straight to avoid double-divide artifacts at semi-transparent edges.
     /// </summary>
     public bool IsPremultiplied => false;
+
+    /// <summary>
+    /// Mirrors the alpha-channel hint from construction. Consumers that upload these pixels
+    /// into a GPU image (e.g. <see cref="Direct2DImage"/>) read this to skip the alpha scan
+    /// and pick <c>ALPHA_MODE.IGNORE</c> for opaque sources (video frames etc.).
+    /// </summary>
+    public bool HasAlpha { get; }
 
     nint IWin32HdcSource.Hdc => Hdc;
 
@@ -175,6 +194,60 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
         Interlocked.Increment(ref _version);
     }
 
+
+    /// <summary>Returns the DC render target bound to this bitmap's HDC, creating it on
+    /// first request. The DC RT lives for the bitmap's lifetime and is released in
+    /// <see cref="Dispose"/>. <paramref name="d2dFactory"/> is the
+    /// <c>ID2D1Factory</c> pointer that creates the DC RT (we don't own it; the caller
+    /// keeps it alive). The generation field changes only when the underlying handle
+    /// changes (currently never within a single bitmap RT lifetime), letting consumers
+    /// cache resources keyed against it.</summary>
+    internal (nint RenderTarget, int Generation) GetOrCreateDcRenderTarget(nint d2dFactory)
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(Direct2DBitmapRenderTarget));
+        }
+
+        if (_dcRenderTarget != 0)
+        {
+            // BindDC must be called per BeginDraw cycle — the existing pattern. Only the
+            // first BindDC binds the surface; subsequent calls simply confirm the binding
+            // and clear any prior draw state. Cheap.
+            var rebindRect = new RECT(0, 0, PixelWidth, PixelHeight);
+            int rebindHr = D2D1VTable.BindDC((ID2D1DCRenderTarget*)_dcRenderTarget, Hdc, ref rebindRect);
+            if (rebindHr >= 0)
+            {
+                return (_dcRenderTarget, _dcRenderTargetGeneration);
+            }
+            // BindDC failed — release and recreate below.
+            ComHelpers.Release(_dcRenderTarget);
+            _dcRenderTarget = 0;
+        }
+
+        var pixelFormat = new D2D1_PIXEL_FORMAT(D2D1.DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE.PREMULTIPLIED);
+        float dpi = (float)(96.0 * DpiScale);
+        var rtProps = new D2D1_RENDER_TARGET_PROPERTIES(D2D1_RENDER_TARGET_TYPE.DEFAULT, pixelFormat, dpi, dpi, 0, 0);
+
+        int hr = D2D1VTable.CreateDcRenderTarget((ID2D1Factory*)d2dFactory, ref rtProps, out _dcRenderTarget);
+        if (hr < 0 || _dcRenderTarget == 0)
+        {
+            throw new InvalidOperationException($"CreateDcRenderTarget failed: 0x{hr:X8}");
+        }
+
+        var rect = new RECT(0, 0, PixelWidth, PixelHeight);
+        hr = D2D1VTable.BindDC((ID2D1DCRenderTarget*)_dcRenderTarget, Hdc, ref rect);
+        if (hr < 0)
+        {
+            ComHelpers.Release(_dcRenderTarget);
+            _dcRenderTarget = 0;
+            throw new InvalidOperationException($"ID2D1DCRenderTarget::BindDC failed: 0x{hr:X8}");
+        }
+
+        _dcRenderTargetGeneration = Interlocked.Increment(ref s_generationCounter);
+        return (_dcRenderTarget, _dcRenderTargetGeneration);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -183,6 +256,14 @@ internal sealed class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32Hd
         }
 
         _disposed = true;
+
+        // DC RT must be released BEFORE the HDC it's bound to is destroyed; otherwise
+        // D2D's later cleanup hits an invalid HDC.
+        if (_dcRenderTarget != 0)
+        {
+            ComHelpers.Release(_dcRenderTarget);
+            _dcRenderTarget = 0;
+        }
 
         if (_oldBitmap != 0 && Hdc != 0)
         {

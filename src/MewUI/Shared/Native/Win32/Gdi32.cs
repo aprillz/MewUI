@@ -24,6 +24,16 @@ internal static partial class Gdi32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool RestoreDC(nint hdc, int nSavedDC);
 
+    [LibraryImport(LibraryName)]
+    public static partial int SetGraphicsMode(nint hdc, int iMode);
+
+    [LibraryImport(LibraryName)]
+    public static partial int GetGraphicsMode(nint hdc);
+
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWorldTransform(nint hdc, ref XFORM lpxf);
+
     #endregion
 
     #region Pixel Format / SwapBuffers (OpenGL)

@@ -18,6 +18,19 @@ internal static unsafe class ComHelpers
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static uint AddRef(nint ptr)
+    {
+        if (ptr == 0)
+        {
+            return 0;
+        }
+
+        var vtbl = *(nint**)ptr;
+        var addRef = (delegate* unmanaged[Stdcall]<nint, uint>)vtbl[1];
+        return addRef(ptr);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int QueryInterface(nint ptr, in Guid riid, out nint ppvObject)
     {
         nint result = 0;

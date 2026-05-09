@@ -37,7 +37,7 @@ internal sealed class TextBoxView
         uint dpi,
         int documentVersion,
         int caretPosition,
-        bool hasSelection,
+        bool shouldDrawSelection,
         int selectionStart,
         int selectionEnd,
         int textLength,
@@ -81,7 +81,7 @@ internal sealed class TextBoxView
 
         var visible = text[startCol..endCol];
 
-        if (hasSelection)
+        if (shouldDrawSelection)
         {
             int s = Math.Max(selectionStart, startCol);
             int t = Math.Min(selectionEnd, endCol);

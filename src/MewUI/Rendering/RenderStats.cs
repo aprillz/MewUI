@@ -3,8 +3,13 @@ namespace Aprillz.MewUI.Rendering;
 /// <summary>
 /// Per-frame rendering statistics captured after each render pass.
 /// </summary>
-public readonly record struct RenderStats(int DrawCalls, int CullCount)
+public readonly record struct RenderStats(int DrawCalls, int CullCount, RenderPrimitiveStats PrimitiveStats)
 {
+    public RenderStats(int drawCalls, int cullCount)
+        : this(drawCalls, cullCount, default)
+    {
+    }
+
     /// <summary>Draw calls that were actually rendered.</summary>
     public int RenderedCalls => DrawCalls - CullCount;
 

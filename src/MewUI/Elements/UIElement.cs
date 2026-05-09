@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Diagnostics;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -375,9 +376,12 @@ public abstract partial class UIElement : Element
             return;
         }
 
-        ResolveVisualState(snap: false);
-        OnRender(context);
-        RenderSubtree(context);
+        using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this))
+        {
+            ResolveVisualState(snap: false);
+            OnRender(context);
+            RenderSubtree(context);
+        }
     }
 
     /// <summary>

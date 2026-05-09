@@ -1,5 +1,6 @@
 #if DEBUG
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
@@ -9,25 +10,134 @@ public partial class Window
     private Adorner? _debugInspectorAdorner;
     private DebugInspectorOverlay? _debugInspectorOverlay;
     private DebugVisualTreeWindow? _debugVisualTreeWindow;
+    private Adorner? _debugPerformanceAdorner;
+    private DebugPerformanceOverlay? _debugPerformanceOverlay;
+    private DebugProfilerWindow? _debugProfilerWindow;
 
 #if DEBUG
     public void DevToolsToggleInspector() => ToggleDebugInspector();
 
     public void DevToolsToggleVisualTree() => ToggleDebugVisualTree();
 
+    public void DevToolsTogglePerformanceMonitor() => ToggleDebugPerformanceMonitor();
+
+    public void DevToolsToggleProfiler() => ToggleDebugProfilerWindow();
+
     public bool DevToolsInspectorIsOpen => _debugInspectorAdorner != null;
 
     public bool DevToolsVisualTreeIsOpen => _debugVisualTreeWindow != null;
 
+    public bool DevToolsPerformanceMonitorIsOpen => _debugPerformanceAdorner != null;
+
+    public bool DevToolsProfilerIsOpen => _debugProfilerWindow != null;
+
     public event Action<bool>? DevToolsInspectorOpenChanged;
 
     public event Action<bool>? DevToolsVisualTreeOpenChanged;
+
+    public event Action<bool>? DevToolsPerformanceMonitorOpenChanged;
+
+    public event Action<bool>? DevToolsProfilerOpenChanged;
 #endif
 
     private void InitializeDebugDevTools()
     {
         KeyBindings.Add(new KeyBinding(new KeyGesture(Key.I, ModifierKeys.Primary | ModifierKeys.Shift), ToggleDebugInspector));
         KeyBindings.Add(new KeyBinding(new KeyGesture(Key.T, ModifierKeys.Primary | ModifierKeys.Shift), ToggleDebugVisualTree));
+        KeyBindings.Add(new KeyBinding(new KeyGesture(Key.P, ModifierKeys.Primary | ModifierKeys.Shift), ToggleDebugPerformanceMonitor));
+        KeyBindings.Add(new KeyBinding(new KeyGesture(Key.P, ModifierKeys.Primary | ModifierKeys.Shift | ModifierKeys.Alt), ToggleDebugProfilerWindow));
+    }
+
+    private void UpdateDebugProfilerEnabled()
+    {
+        PerformanceProfiler.Instance.IsEnabled = _debugPerformanceAdorner != null || _debugProfilerWindow != null;
+    }
+
+    private void ToggleDebugPerformanceMonitor()
+    {
+        if (_debugPerformanceAdorner != null)
+        {
+            AdornerLayer.Remove(_debugPerformanceAdorner);
+            _debugPerformanceAdorner = null;
+            _debugPerformanceOverlay = null;
+            UpdateDebugProfilerEnabled();
+            RequestLayout();
+            RequestRender();
+#if DEBUG
+            DevToolsPerformanceMonitorOpenChanged?.Invoke(false);
+#endif
+            return;
+        }
+
+        _debugPerformanceOverlay = new DebugPerformanceOverlay(this)
+        {
+            IsHitTestVisible = false,
+            IsVisible = true,
+        };
+
+        _debugPerformanceAdorner = new Adorner(this, _debugPerformanceOverlay)
+        {
+            IsHitTestVisible = false,
+            IsVisible = true,
+        };
+
+        AdornerLayer.Add(_debugPerformanceAdorner);
+        UpdateDebugProfilerEnabled();
+        RequestRender();
+#if DEBUG
+        DevToolsPerformanceMonitorOpenChanged?.Invoke(true);
+#endif
+    }
+
+    private void ToggleDebugProfilerWindow()
+    {
+        if (_debugProfilerWindow != null)
+        {
+            try
+            {
+                _debugProfilerWindow.Close();
+            }
+            catch { }
+            _debugProfilerWindow = null;
+            UpdateDebugProfilerEnabled();
+#if DEBUG
+            DevToolsProfilerOpenChanged?.Invoke(false);
+#endif
+            return;
+        }
+
+        var profilerWindow = new DebugProfilerWindow(this);
+        _debugProfilerWindow = profilerWindow;
+        UpdateDebugProfilerEnabled();
+
+        profilerWindow.Closed += () =>
+        {
+            if (ReferenceEquals(_debugProfilerWindow, profilerWindow))
+            {
+                _debugProfilerWindow = null;
+                UpdateDebugProfilerEnabled();
+#if DEBUG
+                DevToolsProfilerOpenChanged?.Invoke(false);
+#endif
+            }
+        };
+
+        Closed += CloseProfilerOnOwnerClose;
+        void CloseProfilerOnOwnerClose()
+        {
+            Closed -= CloseProfilerOnOwnerClose;
+            try { _debugProfilerWindow?.Close(); } catch { }
+            _debugProfilerWindow = null;
+            UpdateDebugProfilerEnabled();
+#if DEBUG
+            DevToolsProfilerOpenChanged?.Invoke(false);
+#endif
+        }
+
+        profilerWindow.Show();
+#if DEBUG
+        DevToolsProfilerOpenChanged?.Invoke(true);
+#endif
     }
 
     private void ToggleDebugInspector()
@@ -256,6 +366,7 @@ public partial class Window
             => $"[{r.X:0.#},{r.Y:0.#} {r.Width:0.#}x{r.Height:0.#}]";
     }
 
+
     private sealed class DebugVisualTreeWindow : Window
     {
         private readonly Window _target;
@@ -277,6 +388,7 @@ public partial class Window
 
         public DebugVisualTreeWindow(Window target)
         {
+            ExcludeFromProfiler = true;
             _target = target;
 
             Title = "Live Visual Tree";

@@ -119,7 +119,6 @@ public sealed class MessageBoxWindow : Window
                 Text = _detail!,
                 IsReadOnly = true,
                 Wrap = true,
-                FontSize = 12,
                 IsVisible = false,
             };
 

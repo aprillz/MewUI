@@ -565,7 +565,7 @@ public sealed class MultiLineTextBox : TextBase
                 ReadOnlySpan<char> visible = lineSpan[startCol..endCol];
 
                 var lineRect = new Rect(drawX, y, 1_000_000, lineHeight);
-                RenderSelectionForRow(context, font, theme, start, startCol, visible, y, drawX);
+                RenderSelectionForRow(context, font, theme, start, startCol, visible, y, drawX, IsSelectionActive);
                 context.DrawText(visible, lineRect, font, textColor, TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap);
 
                 // Composition underline (attribute-based)
@@ -644,7 +644,7 @@ public sealed class MultiLineTextBox : TextBase
                 ReadOnlySpan<char> rowText = segStart < segEnd ? fullLine.AsSpan(segStart, segEnd - segStart) : ReadOnlySpan<char>.Empty;
 
                 var rowRect = new Rect(contentBounds.X, yWrap, wrapWidth, lineHeight);
-                RenderSelectionForRow(context, font, theme, lineStart, segStart, rowText, yWrap, contentBounds.X, lineMeasure);
+                RenderSelectionForRow(context, font, theme, lineStart, segStart, rowText, yWrap, contentBounds.X, IsSelectionActive, lineMeasure);
                 context.DrawText(rowText, rowRect, font, textColor, TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap);
 
                 // Composition underline (wrap mode, attribute-based)
@@ -1027,6 +1027,7 @@ public sealed class MultiLineTextBox : TextBase
         ReadOnlySpan<char> rowText,
         double y,
         double xBase,
+        bool isSelectionActive,
         MultiLineTextView.CachedLineMeasure? fullLineMeasure = null)
     {
         if (!HasSelection || rowText.IsEmpty)
@@ -1063,7 +1064,10 @@ public sealed class MultiLineTextBox : TextBase
             selW = context.MeasureText(rowText[relS..relT], font).Width;
         }
 
-        context.FillRectangle(new Rect(xBase + beforeW, y, selW, GetLineHeight()), theme.Palette.SelectionBackground);
+        if (isSelectionActive)
+        {
+            context.FillRectangle(new Rect(xBase + beforeW, y, selW, GetLineHeight()), theme.Palette.SelectionBackground);
+        }
     }
 
     private void DrawCaretForWrappedRow(

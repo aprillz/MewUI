@@ -77,7 +77,8 @@ partial class GalleryView : UserControl
                 Section("Shapes", ShapesPage()),
                 Section("Icons", IconsPage()),
                 Section("Transitions", TransitionsPage()),
-                Section("Overlay", OverlayPage())
+                Section("Overlay", OverlayPage()),
+                Section("Threading", ThreadingPage())
             );
     }
 }

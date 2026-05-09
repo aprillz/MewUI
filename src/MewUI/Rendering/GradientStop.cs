@@ -80,6 +80,25 @@ public static class GradientBrushHelper
     public static Color GetRepresentativeColor(this IGradientBrush brush)
         => Sample(brush.Stops, 0.5);
 
+    /// <summary>
+    /// Converts a gradient geometry point from its declared units into user-space
+    /// coordinates.  For <see cref="GradientUnits.ObjectBoundingBox"/>, <paramref name="p"/>
+    /// is treated as a fraction of <paramref name="objectBounds"/>; otherwise it is
+    /// returned unchanged.
+    /// </summary>
+    public static Point ResolveGradientPoint(Point p, GradientUnits units, Rect objectBounds)
+        => units == GradientUnits.ObjectBoundingBox
+            ? new Point(objectBounds.X + p.X * objectBounds.Width, objectBounds.Y + p.Y * objectBounds.Height)
+            : p;
+
+    /// <summary>
+    /// Converts a gradient length from its declared units into user-space length.
+    /// For <see cref="GradientUnits.ObjectBoundingBox"/> the value is multiplied by
+    /// <paramref name="objectExtent"/>; otherwise it is returned unchanged.
+    /// </summary>
+    public static double ResolveGradientLength(double value, GradientUnits units, double objectExtent)
+        => units == GradientUnits.ObjectBoundingBox ? value * objectExtent : value;
+
     private static Color Lerp(Color a, Color b, double t)
     {
         double u = 1.0 - t;

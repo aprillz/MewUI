@@ -85,6 +85,49 @@ internal sealed class LinearGradientBrush : ILinearGradientBrush
 }
 
 /// <summary>
+/// Backend-agnostic image brush used as a DIM fallback. Backends that support
+/// tile-pattern rendering should override the factory method to return a native wrapper.
+/// The fallback does not actually tile — callers should check for backend-specific types.
+/// </summary>
+internal sealed class ImageBrush : IImageBrush
+{
+    private readonly IDisposable[]? _ownedResources;
+    private bool _disposed;
+
+    public IImage Image { get; }
+    public Rect SourceRect { get; }
+    public Rect DestinationRect { get; }
+    public TileMode TileMode { get; }
+    public double Opacity { get; }
+    public Matrix3x2? Transform { get; }
+
+    public ImageBrush(
+        IImage image, Rect sourceRect, Rect destinationRect,
+        TileMode tileMode, double opacity, Matrix3x2? transform,
+        IDisposable[]? ownedResources = null)
+    {
+        Image = image;
+        SourceRect = sourceRect;
+        DestinationRect = destinationRect;
+        TileMode = tileMode;
+        Opacity = opacity;
+        Transform = transform;
+        _ownedResources = ownedResources;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_ownedResources is { } resources)
+        {
+            foreach (var r in resources) r.Dispose();
+        }
+    }
+}
+
+/// <summary>
 /// Backend-agnostic radial gradient brush used as a DIM fallback.
 /// Backends that support gradient rendering should override the factory method.
 /// </summary>

@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="128px" height="128px" viewBox="0 0 256 256" xml:space="preserve"><g><linearGradient id="SVGID_8_" gradientUnits="userSpaceOnUse" x1="128" y1="104.3564" x2="128" y2="-92.5697">
+		<stop offset="0" style="stop-color:#B275F0" />
+		<stop offset="1" style="stop-color:#7A45D4" />
+	</linearGradient>
+	<path fill="url(#SVGID_8_)" stroke="#5E32AE" stroke-width="4" stroke-linejoin="round" d="M81.496,63.438L55.199,46.75   c-9.095-5.504-19.696,3.474-15.816,13.959l12.16,34.411 M174.504,63.438l26.297-16.687c9.094-5.505,19.696,3.473,15.816,13.958   l-12.16,34.411" />
+	
+		<linearGradient id="SVGID_9_" gradientUnits="userSpaceOnUse" x1="-648.3403" y1="202.0391" x2="-648.3403" y2="6.0402" gradientTransform="matrix(1 0 0 -1 776.3398 232.0391)">
+		<stop offset="0" style="stop-color:#B275F0" />
+		<stop offset="1" style="stop-color:#7A45D4" />
+	</linearGradient>
+	<circle fill="url(#SVGID_9_)" stroke="#5E32AE" stroke-width="4" cx="128" cy="136" r="86" />
+	<path fill="#FBF7FF" d="M128,159c-3.313,0-6-2.687-6-6c0-12.01,6.202-18.654,15.529-24.897C144.911,122.553,148,119.063,148,112   c0-8.505-6.28-14-16-14c-8.972,0-15,5.626-15,14c0,3.313-2.687,6-6,6s-6-2.687-6-6c0-15.065,11.355-26,27-26   c16.486,0,28,10.691,28,26c0,13.16-7.284,19.714-15.4,25.8c-0.089,0.066-0.179,0.131-0.271,0.192   C136.316,143.333,134,146.699,134,153C134,156.313,131.313,159,128,159z M120,186c0,4.418,3.582,8,8,8s8-3.582,8-8s-3.582-8-8-8   S120,181.582,120,186z" />
+</g></svg>

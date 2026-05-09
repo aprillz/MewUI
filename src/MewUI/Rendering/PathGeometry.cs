@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 namespace Aprillz.MewUI.Rendering;
@@ -77,8 +78,11 @@ public sealed class PathGeometry : IFreezable
         get => _fillRule;
         set
         {
-            FreezableHelper.ThrowIfFrozen(this);
-            _fillRule = value;
+            if (_fillRule != value)
+            {
+                FreezableHelper.ThrowIfFrozen(this);
+                _fillRule = value;
+            }
         }
     }
     private FillRule _fillRule = FillRule.NonZero;
@@ -357,6 +361,52 @@ public sealed class PathGeometry : IFreezable
             _lastX = other._lastX;
             _lastY = other._lastY;
         }
+    }
+
+    /// <summary>
+    /// Returns a new <see cref="PathGeometry"/> with every command's coordinates transformed
+    /// by <paramref name="matrix"/>. Cubic Béziers are affine-invariant, so transforming the
+    /// control points is exact. Use this to bake a stretch/scale matrix into the geometry
+    /// when subsequent draws need to be transform-independent — e.g. so that <c>Stroke</c>
+    /// thickness (which under MewUI's Model D scales with the active context transform)
+    /// stays in element-DIP regardless of the bake. Returns <c>this</c> if the matrix is the
+    /// identity. Cheap; consider caching at the call site if invoked per-frame on a hot path.
+    /// </summary>
+    public PathGeometry Transform(Matrix3x2 matrix)
+    {
+        if (matrix.IsIdentity) return this;
+
+        var result = new PathGeometry { FillRule = _fillRule };
+        foreach (var cmd in Commands)
+        {
+            switch (cmd.Type)
+            {
+                case PathCommandType.MoveTo:
+                {
+                    var p = Vector2.Transform(new Vector2((float)cmd.X0, (float)cmd.Y0), matrix);
+                    result.MoveTo(p.X, p.Y);
+                    break;
+                }
+                case PathCommandType.LineTo:
+                {
+                    var p = Vector2.Transform(new Vector2((float)cmd.X0, (float)cmd.Y0), matrix);
+                    result.LineTo(p.X, p.Y);
+                    break;
+                }
+                case PathCommandType.BezierTo:
+                {
+                    var c1 = Vector2.Transform(new Vector2((float)cmd.X0, (float)cmd.Y0), matrix);
+                    var c2 = Vector2.Transform(new Vector2((float)cmd.X1, (float)cmd.Y1), matrix);
+                    var pe = Vector2.Transform(new Vector2((float)cmd.X2, (float)cmd.Y2), matrix);
+                    result.BezierTo(c1.X, c1.Y, c2.X, c2.Y, pe.X, pe.Y);
+                    break;
+                }
+                case PathCommandType.Close:
+                    result.Close();
+                    break;
+            }
+        }
+        return result;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+//#define MINIMAL
 using System.Diagnostics;
 
 using Aprillz.MewUI;
@@ -19,6 +20,8 @@ using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewU
 Window window = null!;
 TextBlock backendText = null!;
 TextBlock themeText = null!;
+GalleryView gallery = null!;
+
 ObservableValue<ThemeVariant> themeMode = new(ThemeVariant.System);
 
 var fpsText = new ObservableValue<string>("FPS: -");
@@ -29,12 +32,32 @@ var maxFpsEnabled = new ObservableValue<bool>(false);
 
 var currentAccent = ThemeManager.DefaultAccent;
 
+#if !MINIMAL
 var logo = ImageSource.FromFile(GalleryView.CombineBaseDirectory("Resources", "logo_h-1280.png"));
+#endif
 
 var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() => CheckFPS(ref fpsFrames));
+Application.DispatcherUnhandledException += e =>
+{
+    Console.WriteLine(e.Exception.ToString());
+    e.Handled = true;
+};
+
 Application
     .Create()
-    //.UseMetrics(ThemeMetrics.Default with { ControlCornerRadius = 10, ControlBorderThickness = 2 })
+    //.UseMetrics(ThemeMetrics.Default with
+    //{
+    //ControlCornerRadius = 0,
+    //ControlBorderThickness = 2,
+    //ControlBorderThickness = 0.5
+    //})
+    //.UseSeed(ThemeSeed.DefaultLight with
+    //{
+    //    WindowBackground = ThemeSeed.DefaultLight.WindowBackground.Lerp(ThemeSeed.DefaultLight.WindowText, 0.015)
+    //}, ThemeSeed.DefaultDark with
+    //{
+    //    WindowBackground = ThemeSeed.DefaultDark.WindowBackground.Lerp(ThemeSeed.DefaultDark.WindowText, 0.01)
+    //})
     .UseAccent(Accent.Purple)
     .BuildMainWindow(() =>
     new Window()
@@ -49,20 +72,28 @@ Application
                     .Margin(8)
                     .Children(
                         TopBar()
-                        .DockTop(),
+#if !MINIMAL
+                            .DockTop(),
 
-                    new GalleryView(window)
-                )
-        )
+                        new GalleryView(window)
+                            .Ref(out gallery)
+#endif
+                    )
+            )
             .OnLoaded(() =>
             {
                 window.Icon = icon;
                 Application.Current.ThemeModeChanged += () => themeMode.Value = Application.Current.ThemeMode;
-                UpdateTopBar(); 
+                UpdateTopBar();
                 timer.Start();
+                Debug.WriteLine($"Loaded: {stopwatch.Elapsed.TotalSeconds:0.00}s)");
             })
             .OnClosed(() => maxFpsEnabled.Value = false)
-            .OnFirstFrameRendered(() => stopwatch.Stop())
+            .OnFirstFrameRendered(() =>
+            {
+                stopwatch.Stop();
+                Debug.WriteLine($"First: {stopwatch.Elapsed.TotalSeconds:0.00}s)");
+            })
             .OnFrameRendered(() =>
             {
                 if (!fpsStopwatch.IsRunning)
@@ -72,25 +103,34 @@ Application
                     return;
                 }
 
-            fpsFrames++;
-            CheckFPS(ref fpsFrames);
-
-                var stats = window.LastFrameStats;
-                cullText.Value = $"Draw: {stats.DrawCalls} | Cull: {stats.CullCount} ({stats.CullRatio:P0})";
+                fpsFrames++;
+                if (CheckFPS(ref fpsFrames))
+                {
+                    var stats = window.LastFrameStats;
+                    cullText.Value = $"Draw: {stats.DrawCalls} | Cull: {stats.CullCount} ({stats.CullRatio:P0})";
+                }
             })
         )
     )
     .Run();
 
 
-void CheckFPS(ref int fpsFrames)
+bool CheckFPS(ref int fpsFrames)
 {
     double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
     if (elapsed >= 1.0)
     {
-        fpsText.Value = $"FPS: {(fpsFrames <= 1 ? 0 : fpsFrames) / elapsed:0.0}";
+        var fps = $"FPS: {(fpsFrames <= 1 ? 0 : fpsFrames) / elapsed:0.0}";
+        fpsText.Value = fps;
+        Debug.WriteLine(fps);
         fpsFrames = 0;
         fpsStopwatch.Restart();
+
+        return true;
+    }
+    else
+    {
+        return false;
     }
 }
 
@@ -105,19 +145,25 @@ FrameworkElement TopBar() => new Border()
                     .Horizontal()
                     .Spacing(8)
                     .Children(
+#if !MINIMAL
                         new Image()
                             .Source(logo)
                             .ImageScaleQuality(ImageScaleQuality.HighQuality)
                             .Width(300)
                             .Height(80)
                             .CenterVertical(),
+#endif
 
                         new StackPanel()
                             .Vertical()
                             .Spacing(2)
                             .Children(
                                 new TextBlock()
+#if MINIMAL
+                                    .Text("Hello, MewUI!")
+#else 
                                     .Text("Aprillz.MewUI Gallery")
+#endif
                                     .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
                                     .FontSize(18)
                                     .SemiBold(),
@@ -142,8 +188,13 @@ FrameworkElement TopBar() => new Border()
                                     .Ref(out themeText)
                                     .CenterVertical(),
 
-                                AccentPicker()
-                            ),
+                                AccentPicker(),
+
+                                new ToggleButton()
+                                    .IsChecked()
+                                    .Content("Toggle")
+                                    .OnCheckedChanged(x => gallery.IsEnabled(x))
+                                ),
 
                         new StackPanel()
                             .Horizontal()

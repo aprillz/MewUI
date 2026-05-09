@@ -45,5 +45,20 @@ public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, IDispo
     /// Increments the version to signal that pixels have changed.
     /// Call this after modifying pixels via GetPixelSpan() or IGraphicsContext.
     /// </summary>
-    void IncrementVersion();     
+    void IncrementVersion();
+
+    /// <summary>
+    /// <see langword="true"/> if pixels in this target are stored with
+    /// premultiplied alpha (the channel values are pre-scaled by alpha so
+    /// that a half-opacity white reads back as <c>(128, 128, 128, 128)</c>);
+    /// <see langword="false"/> when the target stores straight alpha
+    /// (half-opacity white reads back as <c>(255, 255, 255, 128)</c>).
+    /// <para/>
+    /// Consumers that mix or convolve pixels (e.g. a Gaussian blur for SVG
+    /// filters) must know which space the data lives in: premultiplied pixels
+    /// are linear-blendable as-is, while straight pixels need to be
+    /// premultiplied first or edges become darker / brighter depending on the
+    /// direction of the format mismatch.
+    /// </summary>
+    new bool IsPremultiplied => false;
 }

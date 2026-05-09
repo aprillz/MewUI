@@ -89,6 +89,7 @@ internal static class GL
     public static void Hint(uint target, uint mode) => GLNative.Hint(target, mode);
     public static void ClearColor(float red, float green, float blue, float alpha) => GLNative.ClearColor(red, green, blue, alpha);
     public static void Clear(uint mask) => GLNative.Clear(mask);
+    public static void Finish() => GLNative.Finish();
     public static void LineWidth(float width) => GLNative.LineWidth(width);
     public static void Begin(uint mode) => GLNative.Begin(mode);
     public static void End() => GLNative.End();

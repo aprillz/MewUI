@@ -3,6 +3,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Defines the settings for a CoreWebView2.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class CoreWebView2Settings : IDisposable
 {
     private ComObject<ICoreWebView2Settings>? _settingsObj;

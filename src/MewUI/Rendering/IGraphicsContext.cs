@@ -55,6 +55,12 @@ namespace Aprillz.MewUI.Rendering
         void SetClipRoundedRect(Rect rect, double radiusX, double radiusY);
 
         /// <summary>
+        /// Intersects the current clip with the interior of <paramref name="path"/>.
+        /// Inside/outside is determined by <see cref="PathGeometry.FillRule"/>.
+        /// </summary>
+        void SetClipPath(PathGeometry path);
+
+        /// <summary>
         /// Translates the origin of the coordinate system.
         /// </summary>
         void Translate(double dx, double dy);
@@ -104,6 +110,14 @@ namespace Aprillz.MewUI.Rendering
         /// Equivalent to <see cref="SetClip"/> when no clip has been set.
         /// </summary>
         void IntersectClip(Rect rect);
+
+        /// <summary>
+        /// Returns the axis-aligned bounding box of the current clip in <em>local</em>
+        /// (pre-transform) coordinates, or <see langword="null"/> when no clip is active.
+        /// Used by offscreen passes (e.g. SVG filter source rasterization) to skip rendering
+        /// portions that will never reach the final composite.
+        /// </summary>
+        Rect? GetClipBoundsLocal() => null;
 
         #endregion
 
@@ -248,6 +262,19 @@ namespace Aprillz.MewUI.Rendering
         /// Draw phase — must not re-measure or re-compute layout.
         /// </summary>
         void DrawTextLayout(ReadOnlySpan<char> text, TextFormat format, TextLayout layout, Color color);
+
+        /// <summary>
+        /// Owner-aware overload. <paramref name="owner"/> is an opaque identity (typically the
+        /// calling control) used by backends with owner-keyed text caches to reuse the same
+        /// rasterization buffer and GPU texture across renders even when the text content
+        /// mutates. The default implementation discards <paramref name="owner"/> and forwards
+        /// to <see cref="DrawTextLayout(ReadOnlySpan{char}, TextFormat, TextLayout, Color)"/>;
+        /// backends that don't benefit from the optimization (Direct2D, GDI) simply inherit
+        /// the default. A <see langword="null"/> owner is equivalent to the default — falls back
+        /// to content-keyed caching.
+        /// </summary>
+        void DrawTextLayout(ReadOnlySpan<char> text, TextFormat format, TextLayout layout, Color color, object? owner)
+            => DrawTextLayout(text, format, layout, color);
 
         /// <summary>
         /// Draws text within the specified bounds with alignment options.

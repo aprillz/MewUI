@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This file contains the decompression postprocessing controller.
  * This controller manages the upsampling, color conversion, and color
  * quantization/reduction steps; specifically, it controls the buffering
@@ -96,7 +96,7 @@ struct jpeg_d_post_controller
                     {
                         if (m_virtualStrip == null)
                         {
-                            m_virtualStrip = System.GC.AllocateUninitializedArray<byte[]>(m_strip_height);
+                            m_virtualStrip = GC.AllocateUninitializedArray<byte[]>(m_strip_height);
                         }
 
                         m_whole_image!.CopyRowsTo(m_virtualStrip, 0, m_strip_height);
@@ -195,7 +195,7 @@ struct jpeg_d_post_controller
         {
             if (m_virtualStrip == null)
             {
-                m_virtualStrip = System.GC.AllocateUninitializedArray<byte[]>(m_strip_height);
+                m_virtualStrip = GC.AllocateUninitializedArray<byte[]>(m_strip_height);
             }
 
             m_whole_image!.CopyRowsTo(m_virtualStrip, m_starting_row, m_strip_height);
@@ -237,7 +237,7 @@ struct jpeg_d_post_controller
         {
             if (m_virtualStrip == null)
             {
-                m_virtualStrip = System.GC.AllocateUninitializedArray<byte[]>(m_strip_height);
+                m_virtualStrip = GC.AllocateUninitializedArray<byte[]>(m_strip_height);
             }
 
             m_whole_image!.CopyRowsTo(m_virtualStrip, m_starting_row, m_strip_height);

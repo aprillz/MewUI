@@ -79,7 +79,7 @@ partial class GalleryView
                 Color.FromRgb(180, 120, 220), Color.FromRgb(240, 140, 100),
                 Color.FromRgb(130, 200, 200), Color.FromRgb(200, 140, 170),
             };
-            var wrapItems = Enumerable.Range(0, 4800).Select(i => $"Tile {i + 1}").ToArray();
+            var wrapItems = Enumerable.Range(0, 1000).Select(i => $"Tile {i + 1}").ToArray();
 
             var selectedText = new TextBlock { Text = "Selected: (none)" };
 

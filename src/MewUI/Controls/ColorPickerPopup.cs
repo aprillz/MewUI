@@ -344,8 +344,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             context.FillRectangle(trackRect, brush);
             context.Restore();
 
-            context.DrawRoundedRectangle(trackRect, radius, radius, Theme.Palette.ControlBorder, 1, strokeInset: true);
-
             double alphaFraction = _state.A / 255.0;
             double thumbCx, thumbCy;
             if (_orientation == Orientation.Horizontal)
@@ -440,7 +438,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
     /// Color wheel with an outer hue ring and an inner SV triangle.
     /// Reads and writes HSV through <see cref="State"/>.
     /// </summary>
-    private sealed class Wheel : WriteableBitmapControl
+    private sealed class Wheel : FrameworkElement
     {
         private const double PaddingDip = 8;
         private const float RingWidthRatio = 0.12f;
@@ -453,6 +451,9 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         private bool _triangleDirty = true;
         private float _lastRenderedHue = float.NaN;
 
+        private WriteableBitmap? _bitmap;
+        private IImage? _image;
+
         private float _cx, _cy;
         private float _outerR;
         private float _innerR;
@@ -462,7 +463,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         {
             _state = state;
             _state.Changed += OnStateChanged;
-            UseBitmapGraphicsContext = false;
         }
 
         internal void Detach() => _state.Changed -= OnStateChanged;
@@ -473,7 +473,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             {
                 _hueRingDirty = true;
                 _triangleDirty = true;
-                InvalidateBitmap();
             }
             InvalidateVisual();
         }
@@ -481,39 +480,56 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         protected override Size MeasureContent(Size availableSize)
             => new(DefaultSizeDip, DefaultSizeDip);
 
-        protected override void OnBitmapSizeChanged(int pixelWidth, int pixelHeight)
+        private void EnsureBitmap()
         {
+            var bounds = Bounds;
             double scale = GetDpi() / 96.0;
+            int pw = Math.Max(1, (int)Math.Ceiling(bounds.Width * scale));
+            int ph = Math.Max(1, (int)Math.Ceiling(bounds.Height * scale));
+
+            if (_bitmap != null && _bitmap.PixelWidth == pw && _bitmap.PixelHeight == ph)
+            {
+                return;
+            }
+
+            _image?.Dispose();
+            _bitmap?.Dispose();
+            _bitmap = new WriteableBitmap(pw, ph);
+            _image = GetGraphicsFactory().CreateImageFromPixelSource(_bitmap);
+
             float pad = (float)(PaddingDip * scale);
-
-            float diameter = Math.Min(pixelWidth, pixelHeight) - pad * 2;
-            if (diameter <= 0) return;
-
-            _cx = pixelWidth * 0.5f;
-            _cy = pixelHeight * 0.5f;
-            _outerR = diameter * 0.5f;
-            _innerR = _outerR * (1f - RingWidthRatio);
-            _triR = _innerR - 4f * (float)scale;
+            float diameter = Math.Min(pw, ph) - pad * 2;
+            if (diameter <= 0)
+            {
+                _outerR = 0;
+            }
+            else
+            {
+                _cx = pw * 0.5f;
+                _cy = ph * 0.5f;
+                _outerR = diameter * 0.5f;
+                _innerR = _outerR * (1f - RingWidthRatio);
+                _triR = _innerR - 4f * (float)scale;
+            }
 
             _hueRingDirty = true;
             _triangleDirty = true;
         }
 
-        protected override void OnRenderPixels()
+        private void UpdatePixelsIfDirty()
         {
-            if (_outerR <= 0) return;
+            if (_bitmap == null || _outerR <= 0) return;
             if (!_hueRingDirty && !_triangleDirty) return;
 
-            using var wctx = LockForWrite();
+            using var wctx = _bitmap.LockForWrite();
             var pixels = wctx.PixelsUInt32;
             int w = wctx.PixelWidth;
             int h = wctx.PixelHeight;
-            bool premultiplied = wctx.IsPremultiplied;
 
             if (_hueRingDirty)
             {
                 wctx.Clear(Color.Transparent);
-                GenerateHueRing(pixels, w, h, premultiplied);
+                GenerateHueRing(pixels, w, h);
                 _hueRingDirty = false;
             }
             else
@@ -521,9 +537,18 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
                 ClearInnerCircle(pixels, w, h);
             }
 
-            GenerateTriangle(pixels, w, h, premultiplied);
+            GenerateTriangle(pixels, w, h);
             _triangleDirty = false;
             _lastRenderedHue = _state.H;
+        }
+
+        protected override void OnDispose()
+        {
+            base.OnDispose();
+            _image?.Dispose();
+            _image = null;
+            _bitmap?.Dispose();
+            _bitmap = null;
         }
 
         private void ClearInnerCircle(Span<uint> pixels, int w, int h)
@@ -543,7 +568,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             }
         }
 
-        private void GenerateHueRing(Span<uint> pixels, int w, int h, bool premultiplied)
+        private void GenerateHueRing(Span<uint> pixels, int w, int h)
         {
             int minY = Math.Max(0, (int)(_cy - _outerR) - 1);
             int maxY = Math.Min(h - 1, (int)(_cy + _outerR) + 1);
@@ -584,12 +609,12 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
 
                     var c = HsvColor.HueToRgb(hue);
                     byte a = (byte)(alpha * 255f);
-                    pixels[offset + px] = premultiplied ? PackPremulBgra(c.R, c.G, c.B, a) : PackBgra(c.R, c.G, c.B, a);
+                    pixels[offset + px] = PackBgra(c.R, c.G, c.B, a);
                 }
             }
         }
 
-        private void GenerateTriangle(Span<uint> pixels, int w, int h, bool premultiplied)
+        private void GenerateTriangle(Span<uint> pixels, int w, int h)
         {
             float hueRad = _state.H / 180f * MathF.PI;
             GetTriangleVertices(hueRad, out float x0, out float y0, out float x1, out float y1, out float x2, out float y2);
@@ -650,9 +675,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
                     byte rb = (byte)Math.Clamp(r, 0f, 255f);
                     byte gb = (byte)Math.Clamp(g, 0f, 255f);
                     byte bb = (byte)Math.Clamp(b, 0f, 255f);
-                    pixels[offset + px] = premultiplied
-                        ? PackPremulBgra(rb, gb, bb, alpha)
-                        : PackBgra(rb, gb, bb, alpha);
+                    pixels[offset + px] = PackBgra(rb, gb, bb, alpha);
                 }
             }
         }
@@ -662,8 +685,18 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             base.OnRender(context);
 
             var bounds = Bounds;
-            if (bounds.Width <= 0 || bounds.Height <= 0 || _outerR <= 0)
+            if (bounds.Width <= 0 || bounds.Height <= 0)
                 return;
+
+            EnsureBitmap();
+            UpdatePixelsIfDirty();
+
+            if (_image != null && _outerR > 0)
+            {
+                context.DrawImage(_image, bounds);
+            }
+
+            if (_outerR <= 0) return;
 
             double scale = GetDpi() / 96.0;
             float hueRad = _state.H / 180f * MathF.PI;
@@ -860,21 +893,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
 
         private static uint PackBgra(byte r, byte g, byte b, byte a)
             => (uint)(b | (g << 8) | (r << 16) | (a << 24));
-
-        // GDI's HBITMAP-backed RT reports IsPremultiplied=true so its downstream AlphaBlend
-        // path skips the premultiply step. Direct pixel writers must therefore feed it RGB
-        // already scaled by alpha — otherwise low-alpha edges (the AA-soft circle/triangle
-        // boundaries here) bleed in at full RGB intensity, producing the bright fringe we
-        // saw around the SV-triangle apex on the GDI backend.
-        private static uint PackPremulBgra(byte r, byte g, byte b, byte a)
-        {
-            if (a == 0xFF) return PackBgra(r, g, b, a);
-            if (a == 0) return 0;
-            byte pr = (byte)((r * a + 127) / 255);
-            byte pg = (byte)((g * a + 127) / 255);
-            byte pb = (byte)((b * a + 127) / 255);
-            return (uint)(pb | (pg << 8) | (pr << 16) | (a << 24));
-        }
     }
 
     /// <summary>

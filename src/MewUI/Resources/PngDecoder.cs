@@ -88,9 +88,13 @@ internal sealed class PngDecoder : IImageDecoder
                     return false; // no Adam7 yet
                 }
 
-                if (bitDepth != 8)
+                // 8-bit for all color types; 1/2/4-bit only for grayscale(0) / indexed(3).
+                bool ok8 = bitDepth == 8;
+                bool okSub = (bitDepth == 1 || bitDepth == 2 || bitDepth == 4)
+                    && (colorType == 0 || colorType == 3);
+                if (!ok8 && !okSub)
                 {
-                    return false; // keep it simple (fast path)
+                    return false;
                 }
 
                 // Support: grayscale(0), rgb(2), indexed(3), grayscale+alpha(4), rgba(6)
@@ -132,7 +136,7 @@ internal sealed class PngDecoder : IImageDecoder
             return false;
         }
 
-        int srcBpp = colorType switch
+        int channels = colorType switch
         {
             0 => 1,
             2 => 3,
@@ -141,7 +145,7 @@ internal sealed class PngDecoder : IImageDecoder
             6 => 4,
             _ => 0
         };
-        if (srcBpp == 0)
+        if (channels == 0)
         {
             return false;
         }
@@ -151,9 +155,12 @@ internal sealed class PngDecoder : IImageDecoder
             return false;
         }
 
-        int rowBytes = checked(width * srcBpp);
+        int bitsPerPixel = channels * bitDepth;
+        int rowBytes = checked((width * bitsPerPixel + 7) / 8);
+        // PNG filter spec: bpp is bytes per pixel rounded up to 1 when < 1 byte.
+        int filterBpp = Math.Max(1, bitsPerPixel / 8);
         int expected = checked(height * (1 + rowBytes));
-
+        // TODO: Need optimize allocation
         byte[] inflated;
         try
         {
@@ -170,12 +177,26 @@ internal sealed class PngDecoder : IImageDecoder
         }
 
         byte[] raw = new byte[checked(height * rowBytes)];
-        Unfilter(inflated, raw, width, height, srcBpp, rowBytes);
+        Unfilter(inflated, raw, width, height, filterBpp, rowBytes);
+
+        if (bitDepth < 8)
+        {
+            // Expand packed rows to 1 byte per sample.
+            // Grayscale: scale 0..(2^n-1) to 0..255 via bit replication.
+            // Indexed:   keep raw index (palette lookup handles mapping).
+            raw = ExpandSubByteRows(raw, width, height, bitDepth, scaleToByte: colorType == 0);
+        }
 
         byte[] dst = new byte[checked(width * height * 4)];
         DecodeToBgra(dst, raw, width, height, colorType, palette, paletteAlpha);
 
-        bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst);
+        // PNG carries alpha when color type is 4 (gray+alpha) or 6 (RGBA), or when an
+        // indexed image (3) ships a tRNS chunk with per-entry alpha. Every other case
+        // (gray-only, RGB, indexed without tRNS) is fully opaque by construction.
+        bool hasAlpha = colorType == 4 || colorType == 6
+                        || (colorType == 3 && paletteAlpha != null);
+
+        bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst, hasAlpha);
         return true;
     }
 
@@ -249,6 +270,30 @@ internal sealed class PngDecoder : IImageDecoder
             src += rowBytes;
             dst += rowBytes;
         }
+    }
+
+    private static byte[] ExpandSubByteRows(byte[] packed, int width, int height, int bitDepth, bool scaleToByte)
+    {
+        int rowBytes = (width * bitDepth + 7) / 8;
+        byte[] result = new byte[checked(width * height)];
+        int mask = (1 << bitDepth) - 1;
+        // 0xFF / (2^n - 1) is exact for n ∈ {1,2,4}: 255, 85, 17. Bit replication.
+        int scale = scaleToByte ? (255 / mask) : 1;
+        int dst = 0;
+        for (int y = 0; y < height; y++)
+        {
+            int rowStart = y * rowBytes;
+            int bitPos = 0;
+            for (int x = 0; x < width; x++)
+            {
+                int byteIdx = rowStart + (bitPos >> 3);
+                int shift = 8 - bitDepth - (bitPos & 7);
+                int v = (packed[byteIdx] >> shift) & mask;
+                result[dst++] = (byte)(v * scale);
+                bitPos += bitDepth;
+            }
+        }
+        return result;
     }
 
     private static byte Paeth(byte a, byte b, byte c)

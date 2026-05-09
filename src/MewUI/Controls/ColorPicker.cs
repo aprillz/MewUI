@@ -127,23 +127,19 @@ public sealed class ColorPicker : DropDownBase
             return;
 
         var state = CurrentVisualState;
-        var color = state.IsEnabled ? SelectedColor : SelectedColor.WithAlpha(128);
+        var color = SelectedColor;
 
-        if (ShowAlpha)
+        if (ShowAlpha && color.A != 255)
         {
             context.Save();
             context.SetClipRoundedRect(swatchRect, 2, 2);
             AlphaCheckerboard.Fill(context, swatchRect, Theme.IsDark);
             context.Restore();
-        }
-        else
-        {
-            context.FillRoundedRectangle(swatchRect, 2, 2, Color.FromRgb(255, 255, 255));
-        }
+        } 
 
         context.FillRoundedRectangle(swatchRect, 2, 2, color);
 
-        context.DrawRoundedRectangle(swatchRect, 2, 2, Theme.Palette.ControlBorder, 1, strokeInset: true);
+        //context.DrawRoundedRectangle(swatchRect, 2, 2, Theme.Palette.ControlBorder, 1, strokeInset: true);
     }
 
     protected override Rect CalculatePopupBounds(Window window, UIElement popup)

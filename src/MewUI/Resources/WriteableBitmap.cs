@@ -39,6 +39,15 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
 
     /// <summary>
+    /// Whether this bitmap is expected to carry alpha. Set at construction time —
+    /// callers that know their content is opaque (video frames, photo decoders, etc.)
+    /// can pass <c>false</c> so backends pick <c>ALPHA_MODE.IGNORE</c> on the GPU side
+    /// and skip per-pixel alpha scans on upload. Default <c>true</c> preserves alpha
+    /// for general-purpose use.
+    /// </summary>
+    public bool HasAlpha { get; }
+
+    /// <summary>
     /// Monotonically increasing version. Incremented after any committed write.
     /// </summary>
     public int Version => Volatile.Read(ref _version);
@@ -54,7 +63,13 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// <param name="widthPx">Bitmap width in pixels.</param>
     /// <param name="heightPx">Bitmap height in pixels.</param>
     /// <param name="clear"><see langword="true"/> to clear the buffer to zero; otherwise leaves it uninitialized.</param>
-    public WriteableBitmap(int widthPx, int heightPx, bool clear = true)
+    /// <param name="hasAlpha">
+    /// <see langword="false"/> when callers guarantee every pixel is opaque (video frames,
+    /// JPEG-derived content, etc.) — backends use this to pick <c>ALPHA_MODE.IGNORE</c>
+    /// over <c>PREMULTIPLIED</c> and skip the per-pixel alpha scan on upload. Default
+    /// <see langword="true"/> preserves alpha for general-purpose drawing.
+    /// </param>
+    public WriteableBitmap(int widthPx, int heightPx, bool clear = true, bool hasAlpha = true)
     {
         if (widthPx <= 0)
         {
@@ -68,6 +83,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
 
         PixelWidth = widthPx;
         PixelHeight = heightPx;
+        HasAlpha = hasAlpha;
         _bgra = GC.AllocateUninitializedArray<byte>(checked(widthPx * heightPx * 4));
 
         if (clear)
@@ -95,6 +111,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
 
         PixelWidth = bitmap.WidthPx;
         PixelHeight = bitmap.HeightPx;
+        HasAlpha = bitmap.HasAlpha;
         _bgra = bitmap.Data ?? throw new ArgumentNullException(nameof(bitmap));
         if (_bgra.Length != PixelWidth * PixelHeight * 4)
         {

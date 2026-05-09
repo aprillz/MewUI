@@ -10,12 +10,12 @@ internal sealed class Direct2DImage : IImage
     private const uint DXGI_FORMAT_B8G8R8A8_UNORM = 87;
 
     private readonly IPixelBufferSource _pixels;
+    private readonly bool _hasAlpha;  // false → skip premultiply scan, use ALPHA_MODE.IGNORE
     private int _pixelsVersion = -1;
     private byte[]? _premultiplied;
-    private List<byte[]>? _mipBuffers;
     private nint _renderTarget;
     private int _renderTargetGeneration;
-    private List<nint>? _mipBitmaps;
+    private nint _bitmap;
     private bool _disposed;
 
     public int PixelWidth { get; }
@@ -30,8 +30,9 @@ internal sealed class Direct2DImage : IImage
 
         PixelWidth = bmp.WidthPx;
         PixelHeight = bmp.HeightPx;
-        _pixels = new StaticPixelBufferSource(bmp.WidthPx, bmp.HeightPx, bmp.Data);
+        _pixels = new StaticPixelBufferSource(bmp.WidthPx, bmp.HeightPx, bmp.Data, bmp.HasAlpha);
         _pixelsVersion = _pixels.Version;
+        _hasAlpha = bmp.HasAlpha;
     }
 
     public Direct2DImage(IPixelBufferSource source)
@@ -46,219 +47,129 @@ internal sealed class Direct2DImage : IImage
         PixelHeight = source.PixelHeight;
         _pixels = source;
         _pixelsVersion = source.Version;
+        _hasAlpha = source.HasAlpha;
     }
 
     public nint GetOrCreateBitmap(nint renderTarget, int renderTargetGeneration)
-        => GetOrCreateBitmapForMip(renderTarget, renderTargetGeneration, mipLevel: 0);
-
-    internal nint GetOrCreateBitmapForMip(nint renderTarget, int renderTargetGeneration, int mipLevel)
     {
         if (_disposed || renderTarget == 0)
         {
             return 0;
         }
 
+        // GPU fast path via the ID2DTextureSource backend marker. When the source exposes
+        // a native ID2D1Bitmap1* tied to the same device context as the consumer's render
+        // target, we return that bitmap directly — no Lock readback, no CPU premultiply,
+        // no CreateBitmap upload. SvgView's offscreen render targets and SVG filter
+        // outputs hit this when both share the factory's shared filter device context
+        // (filter cache → SvgView render = pure GPU draw, zero CPU touch).
+        //
+        // Cross-backend sources (GL FBO, Metal texture, etc.) don't implement
+        // ID2DTextureSource — the cast naturally fails and we fall through to the CPU
+        // readback path below.
+        if (_pixels is ID2DTextureSource d2dSource
+            && d2dSource.OwningDeviceContext == renderTarget
+            && d2dSource.NativeBitmap is var nativeBitmap and not 0)
+        {
+            return nativeBitmap;
+        }
+
         int v = _pixels.Version;
-        if (_pixelsVersion != v)
+        bool versionChanged = _pixelsVersion != v;
+        if (versionChanged)
         {
             _pixelsVersion = v;
             _premultiplied = null;
-            _mipBuffers = null;
-
-            ReleaseMipBitmaps();
+            ReleaseBitmap();
             _renderTarget = 0;
             _renderTargetGeneration = 0;
         }
 
         if (_renderTarget != 0 && (_renderTarget != renderTarget || _renderTargetGeneration != renderTargetGeneration))
         {
-            ReleaseMipBitmaps();
+            ReleaseBitmap();
             _renderTarget = 0;
             _renderTargetGeneration = 0;
         }
 
-        if (mipLevel < 0)
+        if (_bitmap != 0 && _renderTarget == renderTarget && _renderTargetGeneration == renderTargetGeneration)
         {
-            throw new ArgumentOutOfRangeException(nameof(mipLevel));
+            return _bitmap;
         }
 
-        EnsureMipBuffers(mipLevel);
-        if (_mipBuffers == null || _mipBuffers.Count <= mipLevel)
-        {
-            return 0;
-        }
-
-        EnsureMipBitmapsCapacity(mipLevel);
-        if (_mipBitmaps != null && _mipBitmaps.Count > mipLevel)
-        {
-            nint existing = _mipBitmaps[mipLevel];
-            if (existing != 0 && _renderTarget == renderTarget && _renderTargetGeneration == renderTargetGeneration)
-            {
-                return existing;
-            }
-        }
-
-        if (_renderTarget == 0)
-        {
-            _renderTarget = renderTarget;
-            _renderTargetGeneration = renderTargetGeneration;
-        }
-
-        var buffer = _mipBuffers[mipLevel];
-        if (buffer.Length == 0)
+        EnsurePremultiplied();
+        if (_premultiplied is null || _premultiplied.Length == 0)
         {
             return 0;
         }
 
-        (int mipWidth, int mipHeight) = GetMipSize(mipLevel);
+        _renderTarget = renderTarget;
+        _renderTargetGeneration = renderTargetGeneration;
 
+        // Opaque sources get ALPHA_MODE.IGNORE so the GPU skips the per-fragment blend math
+        // (no source × srcAlpha + dst × (1 - srcAlpha)). Sources with alpha keep the standard
+        // PREMULTIPLIED mode that D2D requires for straight blending.
+        var alphaMode = _hasAlpha ? D2D1_ALPHA_MODE.PREMULTIPLIED : D2D1_ALPHA_MODE.IGNORE;
         var props = new D2D1_BITMAP_PROPERTIES(
-            pixelFormat: new D2D1_PIXEL_FORMAT(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE.PREMULTIPLIED),
+            pixelFormat: new D2D1_PIXEL_FORMAT(DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode),
             dpiX: 96,
             dpiY: 96);
 
-        nint bmpHandle = 0;
         unsafe
         {
-            fixed (byte* p = buffer)
+            fixed (byte* p = _premultiplied)
             {
                 int hr = D2D1VTable.CreateBitmap(
                     (ID2D1RenderTarget*)renderTarget,
-                    new D2D1_SIZE_U((uint)mipWidth, (uint)mipHeight),
+                    new D2D1_SIZE_U((uint)PixelWidth, (uint)PixelHeight),
                     srcData: (nint)p,
-                    pitch: (uint)(mipWidth * 4),
+                    pitch: (uint)(PixelWidth * 4),
                     props: props,
-                    bitmap: out bmpHandle);
+                    bitmap: out _bitmap);
 
-                if (hr < 0 || bmpHandle == 0)
+                if (hr < 0 || _bitmap == 0)
                 {
                     throw new InvalidOperationException($"ID2D1RenderTarget::CreateBitmap failed: 0x{hr:X8}");
                 }
             }
         }
 
-        if (_mipBitmaps != null)
-        {
-            _mipBitmaps[mipLevel] = bmpHandle;
-        }
-        return bmpHandle;
+        return _bitmap;
     }
 
-    private (int width, int height) GetMipSize(int mipLevel)
+    private void EnsurePremultiplied()
     {
-        int divisor = 1 << Math.Min(mipLevel, 30);
-        int w = Math.Max(1, (PixelWidth + divisor - 1) / divisor);
-        int h = Math.Max(1, (PixelHeight + divisor - 1) / divisor);
-        return (w, h);
-    }
+        if (_disposed || _premultiplied != null) return;
 
-    private void EnsureMipBuffers(int mipLevel)
-    {
-        if (_disposed)
+        using var l = _pixels.Lock();
+        if (l.Buffer.Length == 0)
         {
+            _premultiplied = Array.Empty<byte>();
             return;
         }
 
-        _mipBuffers ??= new List<byte[]>();
-        if (_mipBuffers.Count == 0)
+        // Opaque sources skip both the premultiply scan and the conservative "is every byte
+        // 0xFF?" check — there's no alpha to multiply. The bitmap is created with
+        // ALPHA_MODE.IGNORE, so D2D treats the high byte as undefined regardless of contents.
+        if (!_hasAlpha)
         {
-            using var l = _pixels.Lock();
-            if (l.Buffer.Length == 0)
-            {
-                _mipBuffers.Add(Array.Empty<byte>());
-                return;
-            }
-
-            // D2D's BGRA8 format requires PREMULTIPLIED alpha mode (STRAIGHT is rejected by
-            // ID2D1RenderTarget::CreateBitmap with WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT). So if
-            // the source is already premultiplied (offscreen RT — the hot path) we use the
-            // buffer directly; only straight-alpha sources (PNG decode, raw bytes) pay the
-            // CPU premultiply cost, and there's no way around it without a GPU effect pass.
-            _premultiplied = _pixels.IsPremultiplied ? l.Buffer : PremultiplyIfNeeded(l.Buffer);
-            _mipBuffers.Add(_premultiplied);
-        }
-
-        int srcW = PixelWidth;
-        int srcH = PixelHeight;
-        for (int i = 1; i <= mipLevel; i++)
-        {
-            if (_mipBuffers.Count > i)
-            {
-                srcW = Math.Max(1, (srcW + 1) / 2);
-                srcH = Math.Max(1, (srcH + 1) / 2);
-                continue;
-            }
-
-            var src = _mipBuffers[i - 1];
-            var dst = Downsample2x(src, srcW, srcH, out int dstW, out int dstH);
-            _mipBuffers.Add(dst);
-            srcW = dstW;
-            srcH = dstH;
-        }
-    }
-
-    private static byte[] Downsample2x(byte[] src, int srcWidth, int srcHeight, out int dstWidth, out int dstHeight)
-    {
-        dstWidth = Math.Max(1, (srcWidth + 1) / 2);
-        dstHeight = Math.Max(1, (srcHeight + 1) / 2);
-
-        var dst = new byte[dstWidth * dstHeight * 4];
-
-        unsafe
-        {
-            fixed (byte* srcPtr = src)
-            fixed (byte* dstPtr = dst)
-            {
-                int srcStride = srcWidth * 4;
-                int dstStride = dstWidth * 4;
-                GdiSimdDispatcher.Downsample2xBoxPremultipliedBgra(
-                    srcPtr,
-                    srcStride,
-                    srcWidth,
-                    srcHeight,
-                    dstPtr,
-                    dstStride,
-                    dstWidth,
-                    dstHeight);
-            }
-        }
-
-        return dst;
-    }
-
-    private void EnsureMipBitmapsCapacity(int mipLevel)
-    {
-        _mipBitmaps ??= new List<nint>();
-        while (_mipBitmaps.Count <= mipLevel)
-        {
-            _mipBitmaps.Add(0);
-        }
-    }
-
-    private void ReleaseMipBitmaps()
-    {
-        if (_mipBitmaps == null)
-        {
+            _premultiplied = l.Buffer;
             return;
         }
 
-        foreach (var bmp in _mipBitmaps)
-        {
-            ComHelpers.Release(bmp);
-        }
-
-        _mipBitmaps.Clear();
+        // D2D's BGRA8 format requires PREMULTIPLIED alpha mode (STRAIGHT is rejected by
+        // ID2D1RenderTarget::CreateBitmap with WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT). If the
+        // source is already premultiplied (offscreen RT — the hot path) we use the buffer
+        // directly; only straight-alpha sources (PNG decode, raw bytes) pay the CPU
+        // premultiply cost.
+        _premultiplied = _pixels.IsPremultiplied ? l.Buffer : PremultiplyIfNeeded(l.Buffer);
     }
 
     private static byte[] PremultiplyIfNeeded(byte[] bgra)
     {
-        // Fast path: if no alpha < 255, return original buffer.
         for (int i = 3; i < bgra.Length; i += 4)
         {
-            if (bgra[i] != 0xFF)
-            {
-                return Premultiply(bgra);
-            }
+            if (bgra[i] != 0xFF) return Premultiply(bgra);
         }
         return bgra;
     }
@@ -268,6 +179,15 @@ internal sealed class Direct2DImage : IImage
         var dst = new byte[bgra.Length];
         GdiSimdDispatcher.PremultiplyBgra(bgra, dst);
         return dst;
+    }
+
+    private void ReleaseBitmap()
+    {
+        if (_bitmap != 0)
+        {
+            ComHelpers.Release(_bitmap);
+            _bitmap = 0;
+        }
     }
 
     ~Direct2DImage() => ReleaseNativeHandles();
@@ -280,16 +200,10 @@ internal sealed class Direct2DImage : IImage
 
     private void ReleaseNativeHandles()
     {
-        if (_disposed)
-        {
-            return;
-        }
-
+        if (_disposed) return;
         _disposed = true;
-
-        ReleaseMipBitmaps();
+        ReleaseBitmap();
         _renderTarget = 0;
         _premultiplied = null;
-        _mipBuffers = null;
     }
 }

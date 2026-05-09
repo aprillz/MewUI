@@ -16,6 +16,19 @@ internal sealed class MewVGX11WindowResources : IDisposable
 
     public bool SupportsBgra => _gl.SupportsBgra;
 
+    private MewVGX11GraphicsContext? _cachedContext;
+
+    internal MewVGX11GraphicsContext GetOrCreateContext(IMewVGOffscreenSurfaceProvider offscreenProvider)
+        => _cachedContext ??= MewVGX11GraphicsContext.CreateForWindow(this, offscreenProvider);
+
+    internal void InvalidateCachedContext(MewVGX11GraphicsContext context)
+    {
+        if (ReferenceEquals(_cachedContext, context))
+        {
+            _cachedContext = null;
+        }
+    }
+
     private MewVGX11WindowResources(nint display, GlxOpenGLWindowResources gl, NanoVGGL vg)
     {
         _display = display;
@@ -24,12 +37,14 @@ internal sealed class MewVGX11WindowResources : IDisposable
         TextCache = new MewVGTextCache(vg);
     }
 
-    public static MewVGX11WindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo)
+    public static MewVGX11WindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo, nint shareContext = 0)
     {
-        DiagLog.Write($"MewVG X11 create: display=0x{display.ToInt64():X} window=0x{window.ToInt64():X}");
+        DiagLog.Write($"MewVG X11 create: display=0x{display.ToInt64():X} window=0x{window.ToInt64():X} share=0x{shareContext.ToInt64():X}");
 
         // NanoVG uses stencil for AA and clipping; request a stencil buffer via GLX visual info.
-        var gl = GlxOpenGLWindowResources.Create(display, window, visualInfo);
+        // shareContext = factory's worker GLX context, so worker-rendered FBO textures are
+        // sample-able from this window context (background SVG rebuild handoff).
+        var gl = GlxOpenGLWindowResources.Create(display, window, visualInfo, shareContext);
         gl.MakeCurrent(display);
         try
         {
@@ -59,6 +74,9 @@ internal sealed class MewVGX11WindowResources : IDisposable
         }
 
         _disposed = true;
+
+        _cachedContext?.Dispose();
+        _cachedContext = null;
 
         _gl.MakeCurrent(_display);
 

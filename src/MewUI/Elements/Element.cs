@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Diagnostics;
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -141,7 +142,11 @@ public abstract class Element : MewObject
             return;
         }
 
-        var measured = MeasureCore(availableSize);
+        Size measured;
+        using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Measure))
+        {
+            measured = MeasureCore(availableSize);
+        }
 
         var clamped = new Size(
             double.IsPositiveInfinity(availableSize.Width)
@@ -175,7 +180,10 @@ public abstract class Element : MewObject
         }
 
         Bounds = arrangedRect;
-        ArrangeCore(arrangedRect);
+        using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Arrange))
+        {
+            ArrangeCore(arrangedRect);
+        }
         IsArrangeDirty = false;
     }
 

@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 
@@ -107,24 +109,33 @@ public abstract class Shape : FrameworkElement
 
         var geoBounds = geometry.GetBounds();
 
-        context.Save();
-
+        // Match WPF's Path/Shape semantics: Stretch operates on the geometry (so its baked
+        // path coordinates fit the element bounds), while Stroke is applied at the Path
+        // level on top of that — meaning StrokeThickness stays in element-DIP regardless
+        // of the stretch factor. We achieve this by baking the stretch into a transformed
+        // geometry instead of pushing a Scale transform onto the context (which, under the
+        // Model D scale-with-transform stroke contract, would also scale the stroke).
+        PathGeometry renderGeometry;
         if (Stretch != Stretch.None && geoBounds.Width > 0 && geoBounds.Height > 0)
         {
             ComputeStretchTransform(geoBounds, bounds, Stretch,
                 out double scaleX, out double scaleY, out double offsetX, out double offsetY);
-            context.Translate(offsetX, offsetY);
-            context.Scale(scaleX, scaleY);
-            context.Translate(-geoBounds.X, -geoBounds.Y);
+            // [Translate(offset)] × [Scale] × [Translate(-geoOrigin)]
+            var bake =
+                Matrix3x2.CreateTranslation((float)-geoBounds.X, (float)-geoBounds.Y) *
+                Matrix3x2.CreateScale((float)scaleX, (float)scaleY) *
+                Matrix3x2.CreateTranslation((float)offsetX, (float)offsetY);
+            renderGeometry = geometry.Transform(bake);
         }
         else
         {
-            // Position geometry at the element's bounds origin (context is in window coordinates).
-            context.Translate(bounds.X - geoBounds.X, bounds.Y - geoBounds.Y);
+            var bake = Matrix3x2.CreateTranslation(
+                (float)(bounds.X - geoBounds.X), (float)(bounds.Y - geoBounds.Y));
+            renderGeometry = geometry.Transform(bake);
         }
 
         if (Fill != null)
-            context.FillPath(geometry, Fill);
+            context.FillPath(renderGeometry, Fill);
 
         if (Stroke != null && StrokeThickness > 0)
         {
@@ -144,10 +155,8 @@ public abstract class Shape : FrameworkElement
                 _cachedPenStyle = style;
             }
 
-            context.DrawPath(geometry, _cachedPen);
+            context.DrawPath(renderGeometry, _cachedPen);
         }
-
-        context.Restore();
     }
 
     private static void ComputeStretchTransform(

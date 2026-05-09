@@ -4,6 +4,7 @@ namespace Aprillz.MewUI.Controls;
 /// Represents a WebView2 browser instance. This class wraps the underlying ICoreWebView2 COM interface
 /// and provides a C#-friendly API.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class CoreWebView2
 {
     private readonly IComObject<ICoreWebView2> _coreWebView2;
