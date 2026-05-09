@@ -247,7 +247,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     IImage IImageSource.CreateImage(IGraphicsFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        return factory.AsRenderDevice().CreateImageView(this);
+        return factory.CreateImageView(this);
     }
 
     PixelBufferLock IPixelBufferSource.Lock()

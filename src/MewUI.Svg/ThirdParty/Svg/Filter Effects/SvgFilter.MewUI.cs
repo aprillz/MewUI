@@ -256,7 +256,7 @@ public partial class SvgFilter
         // Source layer rendering: 1 user unit → effectiveLogicalToPixel pixels. Set the
         // bitmap's reported DpiScale to the same value so internally-DPI-aware rendering
         // (e.g. backend stroke snapping) sees a consistent device-pixel-per-DIP ratio.
-        var renderDevice = offscreenFactory.AsRenderDevice();
+        var renderDevice = offscreenFactory;
         using var sourceSurface = renderDevice.CreateSurface(RenderSurfaceDescriptor.FilterIntermediate(
             pixelWidth,
             pixelHeight,

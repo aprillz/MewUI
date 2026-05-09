@@ -31,7 +31,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
     public int MaxPerBucket { get; init; } = 4;
 
     public ScratchRenderTargetPool(IGraphicsFactory factory, double dpiScale)
-        : this(factory?.AsRenderDevice() ?? throw new ArgumentNullException(nameof(factory)), dpiScale)
+        : this((IRenderDevice)(factory ?? throw new ArgumentNullException(nameof(factory))), dpiScale)
     {
     }
 

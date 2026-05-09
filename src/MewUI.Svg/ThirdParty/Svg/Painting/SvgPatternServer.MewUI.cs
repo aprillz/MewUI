@@ -152,7 +152,7 @@ public partial class SvgPatternServer
                 _cachedTileImage = null;
                 _cachedTileSurface = null;
 
-                var renderDevice = factory.AsRenderDevice();
+                var renderDevice = factory;
                 var newSurface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CachedImage(
                     pixelWidth,
                     pixelHeight,

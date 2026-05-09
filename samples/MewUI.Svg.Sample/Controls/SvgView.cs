@@ -346,7 +346,7 @@ public sealed class SvgView : FrameworkElement
                 // shared filter device. D2D MULTI_THREADED factory permits this from a
                 // worker thread; GDI's HDC operations are HDC-local so concurrent
                 // workers with their own targets don't collide either.
-                var renderDevice = factory.AsRenderDevice();
+                var renderDevice = factory;
                 var surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CachedImage(
                     request.PixelWidth,
                     request.PixelHeight,

@@ -116,7 +116,7 @@ public class WriteableBitmapControl : Control
                 _renderTarget = null;
 
                 var factory = GetGraphicsFactory();
-                var renderDevice = factory.AsRenderDevice();
+                var renderDevice = factory;
                 _surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuBitmap(
                     pixelWidth,
                     pixelHeight,
@@ -148,7 +148,7 @@ public class WriteableBitmapControl : Control
                 // Vector graphics phase (context active — BeginDraw/EndDraw scope)
                 if (UseBitmapGraphicsContext)
                 {
-                    using var renderCtx = GetGraphicsFactory().AsRenderDevice().CreateContext(_surface);
+                    using var renderCtx = GetGraphicsFactory().CreateContext(_surface);
                     OnRenderBitmap(renderCtx);
                 }
                 // Context disposed: EndDraw complete — safe for direct pixel access
@@ -169,7 +169,7 @@ public class WriteableBitmapControl : Control
         // and updates internally via version tracking.
         if (_image == null)
         {
-            _image = GetGraphicsFactory().AsRenderDevice().CreateImageView(_surface);
+            _image = GetGraphicsFactory().CreateImageView(_surface);
         }
 
         // Draw the bitmap to the screen

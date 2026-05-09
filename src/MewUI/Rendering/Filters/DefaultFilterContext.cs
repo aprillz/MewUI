@@ -53,7 +53,7 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
     public ScratchFilterResult AcquireScratch(int pixelWidth, int pixelHeight, Rect bounds)
     {
         var lease = _pool.RentLease(pixelWidth, pixelHeight);
-        var image = Factory.AsRenderDevice().CreateImageView(lease.Surface);
+        var image = Factory.CreateImageView(lease.Surface);
         return new ScratchFilterResult(lease, image, bounds, l =>
         {
             // Defer the pool return until the image's backend-side GPU/NVG handles are

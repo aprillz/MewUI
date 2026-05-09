@@ -93,7 +93,7 @@ public sealed class SvgDocument
     /// </summary>
     public WriteableBitmap Rasterize(IGraphicsFactory factory, int pixelWidth, int pixelHeight)
     {
-        var renderDevice = factory.AsRenderDevice();
+        var renderDevice = factory;
         using var surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuBitmap(
             pixelWidth,
             pixelHeight,
@@ -121,6 +121,6 @@ public sealed class SvgDocument
     public IImage CreateImage(IGraphicsFactory factory, int pixelWidth, int pixelHeight)
     {
         var bitmap = Rasterize(factory, pixelWidth, pixelHeight);
-        return factory.AsRenderDevice().CreateImageView(bitmap);
+        return factory.CreateImageView(bitmap);
     }
 }

@@ -190,7 +190,7 @@ public sealed class ImageSource : IImageSource
         {
             try
             {
-                return factory.AsRenderDevice().CreateImageView(pixels);
+                return factory.CreateImageView(pixels);
             }
             catch (NotSupportedException)
             {
