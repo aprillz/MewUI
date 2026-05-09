@@ -92,8 +92,6 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
             : throw new NotSupportedException(
                 $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
 
-    public IImage CreateImageFromPixelSource(IPixelBufferSource source) => new GdiImage(source);
-
     /// <summary>
     /// Creates an empty 32-bit ARGB image.
     /// </summary>
@@ -174,7 +172,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         => RenderDeviceFactoryHelpers.CreateImageView(this, surface);
 
     public IImage CreateImageView(IPixelBufferSource source)
-        => CreateImageFromPixelSource(source);
+        => new GdiImage(source);
 
     public IImage CreateImageView(IExternalSampleSource source)
         => throw new NotSupportedException(

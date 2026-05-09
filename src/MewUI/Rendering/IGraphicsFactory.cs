@@ -141,12 +141,6 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     IImage CreateImageFromBytes(byte[] data);
 
     /// <summary>
-    /// Creates an image backed by a versioned pixel source (e.g. <see cref="WriteableBitmap"/>).
-    /// Backends should reflect updates when the source's <see cref="IPixelBufferSource.Version"/> changes.
-    /// </summary>
-    IImage CreateImageFromPixelSource(IPixelBufferSource source);
-
-    /// <summary>
     /// Creates a graphics context for the specified render target.
     /// The returned context is not yet started; call
     /// <see cref="IGraphicsContext.BeginFrame"/> before drawing.

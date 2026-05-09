@@ -42,7 +42,7 @@ internal static class RenderDeviceFactoryHelpers
 
         if (surface is BitmapRenderTargetSurfaceAdapter bitmapSurface)
         {
-            return factory.CreateImageFromPixelSource(bitmapSurface.Target);
+            return factory.CreateImageView((IPixelBufferSource)bitmapSurface.Target);
         }
 
         throw new NotSupportedException(

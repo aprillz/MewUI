@@ -70,7 +70,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
             : throw new NotSupportedException(
                 $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
 
-    public IImage CreateImageFromPixelSource(IPixelBufferSource source)
+    public IImage CreateImageView(IPixelBufferSource source)
     {
         if (UseAsyncPboUpload && QualifiesForPboUpload(source))
         {
@@ -204,9 +204,6 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
 
     public IImage CreateImageView(IRenderSurface surface)
         => RenderDeviceFactoryHelpers.CreateImageView(this, surface);
-
-    public IImage CreateImageView(IPixelBufferSource source)
-        => CreateImageFromPixelSource(source);
 
     public IImage CreateImageView(IExternalSampleSource source)
     {

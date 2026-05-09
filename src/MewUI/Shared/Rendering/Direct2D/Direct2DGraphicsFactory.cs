@@ -353,9 +353,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             : throw new NotSupportedException(
                 $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
 
-    public IImage CreateImageFromPixelSource(IPixelBufferSource source) =>
-        new Direct2DImage(source);
-
     /// <summary>
     /// Wraps an externally-created native <c>ID2D1Bitmap*</c> as an <see cref="IImage"/>.
     /// Intended for cross-API interop scenarios where the caller produced the bitmap on
@@ -543,7 +540,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         => RenderDeviceFactoryHelpers.CreateImageView(this, surface);
 
     public IImage CreateImageView(IPixelBufferSource source)
-        => CreateImageFromPixelSource(source);
+        => new Direct2DImage(source);
 
     public IImage CreateImageView(IExternalSampleSource source)
         => throw new NotSupportedException(
