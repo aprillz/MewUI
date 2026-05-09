@@ -93,9 +93,19 @@ public sealed class SvgDocument
     /// </summary>
     public WriteableBitmap Rasterize(IGraphicsFactory factory, int pixelWidth, int pixelHeight)
     {
-        using var target = factory.CreateBitmapRenderTarget(pixelWidth, pixelHeight, 1.0);
+        var renderDevice = factory.AsRenderDevice();
+        using var surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuBitmap(
+            pixelWidth,
+            pixelHeight,
+            debugName: "SvgDocumentRasterize"));
+        if (surface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+        {
+            throw new NotSupportedException($"{nameof(SvgDocument)} rasterization requires a bitmap-backed render surface.");
+        }
+
+        var target = bitmapSurface.Target;
         target.Clear(Color.Transparent);
-        using (var ctx = factory.CreateContext(target))
+        using (var ctx = renderDevice.CreateContext(surface))
             Render(ctx, new Rect(0, 0, pixelWidth, pixelHeight));
 
         var bitmap = new WriteableBitmap(pixelWidth, pixelHeight, clear: false);
