@@ -22,7 +22,7 @@ public partial class SvgPatternServer
     private double _cachedTileBoundsH;
     private SvgViewBox _cachedTileViewBox;
     private SvgCoordinateUnits _cachedTilePatternContentUnits;
-    private IBitmapRenderTarget? _cachedTileTarget;
+    private IRenderSurface? _cachedTileSurface;
     private IImage? _cachedTileImage;
 
     /// <summary>
@@ -133,7 +133,7 @@ public partial class SvgPatternServer
                 ? renderer.GetBoundable().Bounds
                 : default;
             bool cacheHit = _cachedTileImage is not null
-                && _cachedTileTarget is not null
+                && _cachedTileSurface is not null
                 && _cachedTilePixelWidth == pixelWidth
                 && _cachedTilePixelHeight == pixelHeight
                 && _cachedTileScaleX == width
@@ -148,16 +148,27 @@ public partial class SvgPatternServer
             if (!cacheHit)
             {
                 _cachedTileImage?.Dispose();
-                _cachedTileTarget?.Dispose();
+                _cachedTileSurface?.Dispose();
                 _cachedTileImage = null;
-                _cachedTileTarget = null;
+                _cachedTileSurface = null;
 
-                var newTarget = factory.CreateBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale: 1.0);
+                var renderDevice = factory.AsRenderDevice();
+                var newSurface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CachedImage(
+                    pixelWidth,
+                    pixelHeight,
+                    dpiScale: 1.0,
+                    debugName: "SvgPatternTile"));
+                if (newSurface is not BitmapRenderTargetSurfaceAdapter bitmapSurface)
+                {
+                    newSurface.Dispose();
+                    throw new NotSupportedException($"{nameof(SvgPatternServer)} requires bitmap-backed pattern tile surfaces.");
+                }
+                var newTarget = bitmapSurface.Target;
                 try
                 {
                     newTarget.Clear(Aprillz.MewUI.Color.Transparent);
 
-                    using (var tileContext = factory.CreateContext(newTarget))
+                    using (var tileContext = renderDevice.CreateContext(newSurface))
                     {
                         tileContext.BeginFrame(newTarget);
                         try
@@ -186,8 +197,8 @@ public partial class SvgPatternServer
                         }
                     }
 
-                    _cachedTileImage = factory.CreateImageFromPixelSource(newTarget);
-                    _cachedTileTarget = newTarget;
+                    _cachedTileImage = renderDevice.CreateImageView(newSurface);
+                    _cachedTileSurface = newSurface;
                     _cachedTilePixelWidth = pixelWidth;
                     _cachedTilePixelHeight = pixelHeight;
                     _cachedTileScaleX = width;
@@ -198,11 +209,11 @@ public partial class SvgPatternServer
                     _cachedTileBoundsY = contentBoundsForOBB.Y;
                     _cachedTileBoundsW = contentBoundsForOBB.Width;
                     _cachedTileBoundsH = contentBoundsForOBB.Height;
-                    newTarget = null!;
+                    newSurface = null!;
                 }
                 finally
                 {
-                    newTarget?.Dispose();
+                    newSurface?.Dispose();
                 }
             }
 
