@@ -121,6 +121,6 @@ public sealed class SvgDocument
     public IImage CreateImage(IGraphicsFactory factory, int pixelWidth, int pixelHeight)
     {
         var bitmap = Rasterize(factory, pixelWidth, pixelHeight);
-        return factory.CreateImageFromPixelSource(bitmap);
+        return factory.AsRenderDevice().CreateImageView(bitmap);
     }
 }

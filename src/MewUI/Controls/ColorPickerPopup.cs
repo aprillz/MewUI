@@ -495,7 +495,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             _image?.Dispose();
             _bitmap?.Dispose();
             _bitmap = new WriteableBitmap(pw, ph);
-            _image = GetGraphicsFactory().CreateImageFromPixelSource(_bitmap);
+            _image = GetGraphicsFactory().AsRenderDevice().CreateImageView(_bitmap);
 
             float pad = (float)(PaddingDip * scale);
             float diameter = Math.Min(pw, ph) - pad * 2;
@@ -1228,4 +1228,3 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
     }
 
 }
-

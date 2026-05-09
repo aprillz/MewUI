@@ -62,7 +62,7 @@ public class PixelCanvas : FrameworkElement
         _image?.Dispose();
         _bitmap?.Dispose();
         _bitmap = new WriteableBitmap(pw, ph);
-        _image = GetGraphicsFactory().CreateImageFromPixelSource(_bitmap);
+        _image = GetGraphicsFactory().AsRenderDevice().CreateImageView(_bitmap);
 
         using var ctx = _bitmap.LockForWrite();
         ctx.Clear(Color.White);
