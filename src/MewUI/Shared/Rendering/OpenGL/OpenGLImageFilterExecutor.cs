@@ -11,7 +11,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// <see cref="OpenGLGaussianBlur"/> shader; everything else delegates to the CPU fallback.
 /// </summary>
 /// <remarks>
-/// The executor reaches into <see cref="FilterResult.UnderlyingTarget"/> to obtain the
+/// The executor reaches into <see cref="FilterResult.UnderlyingSurface"/> to obtain the
 /// backend's <see cref="OpenGLBitmapRenderTarget"/> and runs the shader with both source and
 /// destination FBOs — so input is never mutated and we avoid the readback / re-upload that
 /// plagued the older capability-based approach. When the input or scratch isn't an OpenGL
@@ -73,7 +73,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
             // Need both input and scratch backed by OpenGLBitmapRenderTargets so we can run
             // the GLSL pass directly against their FBOs. If either isn't OpenGL (e.g. a CPU
             // fallback produced a generic IBitmapRenderTarget), bail to the fallback.
-            if (input.UnderlyingTarget is not OpenGLBitmapRenderTarget glSource) return null;
+            if (input.UnderlyingSurface is not OpenGLBitmapRenderTarget glSource) return null;
 
             // Source must have a valid FBO with content — true for the SvgFilter source layer
             // (rendered into the FBO and ReadbackFromFbo'd at EndFrame). Not true for results
@@ -81,7 +81,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
             if (!glSource.IsFboInitialized || glSource.Fbo == 0 || glSource.Texture == 0) return null;
 
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (scratch.UnderlyingTarget is not OpenGLBitmapRenderTarget glDest) return null;
+            if (scratch.UnderlyingSurface is not OpenGLBitmapRenderTarget glDest) return null;
 
             // Lazy FBO init — pool gives back a fresh RT whose GPU resources haven't been
             // created yet (no BeginFrame has run on it). We're inside the main render path

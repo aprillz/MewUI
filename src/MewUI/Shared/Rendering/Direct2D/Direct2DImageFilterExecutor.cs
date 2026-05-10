@@ -135,7 +135,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         // pre-multiply by ctx.LogicalToPixelScale so D2D's internal × DpiScale lands at the
         // true pixel σ — matching Metal's `σ × LogicalToPixelScale` formulation regardless
         // of the clamp.
-        double bitmapDpiScaleX = input.UnderlyingTarget?.DpiScale ?? 1.0;
+        double bitmapDpiScaleX = input.UnderlyingSurface?.DpiScale ?? 1.0;
         double bitmapDpiScaleY = bitmapDpiScaleX;
         double sigmaXDip = b.SigmaX * (ctx.LogicalToPixelScaleX / Math.Max(1e-9, bitmapDpiScaleX));
         double sigmaYDip = b.SigmaY * (ctx.LogicalToPixelScaleY / Math.Max(1e-9, bitmapDpiScaleY));
@@ -156,8 +156,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
 
             // Fast path: both ends GPU-resident. Run effect directly src.Bitmap → dst.Bitmap.
-            if (input.UnderlyingTarget is Direct2DGpuBitmapRenderTarget srcGpu &&
-                scratch.UnderlyingTarget is Direct2DGpuBitmapRenderTarget dstGpu &&
+            if (input.UnderlyingSurface is Direct2DGpuBitmapRenderTarget srcGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
                 if (!RunGpuOnlyBlur(sharedDc, srcGpu, dstGpu, sigma))
@@ -171,8 +171,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
             // Slow path: DIB-backed ends. Upload source pixels, run effect, render into
             // scratch's DC RT (which commits to its DIB).
-            if (input.UnderlyingTarget is Direct2DBitmapRenderTarget srcDib &&
-                scratch.UnderlyingTarget is Direct2DBitmapRenderTarget dstDib)
+            if (input.UnderlyingSurface is Direct2DBitmapRenderTarget srcDib &&
+                scratch.UnderlyingSurface is Direct2DBitmapRenderTarget dstDib)
             {
                 if (!RunDibRoundtripBlur(srcDib, dstDib, sigma))
                 {
@@ -399,9 +399,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         try
         {
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (input.UnderlyingTarget is Direct2DGpuBitmapRenderTarget srcGpu &&
+            if (input.UnderlyingSurface is Direct2DGpuBitmapRenderTarget srcGpu &&
                 srcGpu.IsDeviceCurrent &&
-                scratch.UnderlyingTarget is Direct2DGpuBitmapRenderTarget dstGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
@@ -442,9 +442,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         try
         {
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (input.UnderlyingTarget is Direct2DGpuBitmapRenderTarget srcGpu &&
+            if (input.UnderlyingSurface is Direct2DGpuBitmapRenderTarget srcGpu &&
                 srcGpu.IsDeviceCurrent &&
-                scratch.UnderlyingTarget is Direct2DGpuBitmapRenderTarget dstGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
@@ -488,11 +488,11 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             int pw = Math.Max(fg.PixelWidth, bg.PixelWidth);
             int ph = Math.Max(fg.PixelHeight, bg.PixelHeight);
             scratch = ctx.AcquireScratch(pw, ph, fg.Bounds);
-            if (fg.UnderlyingTarget is Direct2DGpuBitmapRenderTarget fgGpu &&
+            if (fg.UnderlyingSurface is Direct2DGpuBitmapRenderTarget fgGpu &&
                 fgGpu.IsDeviceCurrent &&
-                bg.UnderlyingTarget is Direct2DGpuBitmapRenderTarget bgGpu &&
+                bg.UnderlyingSurface is Direct2DGpuBitmapRenderTarget bgGpu &&
                 bgGpu.IsDeviceCurrent &&
-                scratch.UnderlyingTarget is Direct2DGpuBitmapRenderTarget dstGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
@@ -549,7 +549,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             if (sharedDc == 0) return null;
 
             ScratchFilterResult? scratch = ctx.AcquireScratch(pw, ph, heldInputs[0].Bounds);
-            if (scratch is null || scratch.UnderlyingTarget is not Direct2DGpuBitmapRenderTarget dstGpu)
+            if (scratch is null || scratch.UnderlyingSurface is not Direct2DGpuBitmapRenderTarget dstGpu)
             {
                 scratch?.Dispose();
                 return null;
@@ -609,7 +609,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             D2D1VTable.Clear((ID2D1RenderTarget*)sharedDc, new D2D1_COLOR_F(0, 0, 0, 0));
             for (int i = 0; i < inputs.Count; i++)
             {
-                if (inputs[i].UnderlyingTarget is not Direct2DGpuBitmapRenderTarget srcGpu || !srcGpu.IsDeviceCurrent) { ok = false; break; }
+                if (inputs[i].UnderlyingSurface is not Direct2DGpuBitmapRenderTarget srcGpu || !srcGpu.IsDeviceCurrent) { ok = false; break; }
                 D2D1VTable.DrawImage((ID2D1DeviceContext*)sharedDc, srcGpu.Bitmap,
                     D2D1_INTERPOLATION_MODE.LINEAR, D2D1_COMPOSITE_MODE.SOURCE_OVER);
             }

@@ -21,7 +21,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// a Metal scratch, encode the pass.
 /// </para>
 /// <para>
-/// The executor reaches into <see cref="FilterResult.UnderlyingTarget"/> to obtain the
+/// The executor reaches into <see cref="FilterResult.UnderlyingSurface"/> to obtain the
 /// backend's <see cref="MewVGMetalBitmapRenderTarget"/> — when either input or scratch isn't
 /// Metal-backed (e.g. a <see cref="FloodFilter"/> result built by the CPU executor), the GPU
 /// path bails for that node. Cross-backend handoff goes through <see cref="FilterResult.ReadPixels"/>.
@@ -71,7 +71,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
     /// whose color texture is realized — required precondition before sampling on the GPU.
     /// </summary>
     internal static bool LooksLikeMetalSource(FilterResult result)
-        => result.UnderlyingTarget is MewVGMetalBitmapRenderTarget metal
+        => result.UnderlyingSurface is MewVGMetalBitmapRenderTarget metal
            && metal.ColorTexture != 0;
 
     private FilterResult? TryGpuBlur(BlurFilter b, IImageFilterContext ctx)
@@ -91,7 +91,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
         bool ownsResult = false;
         try
         {
-            if (input.UnderlyingTarget is not MewVGMetalBitmapRenderTarget metalSource) return null;
+            if (input.UnderlyingSurface is not MewVGMetalBitmapRenderTarget metalSource) return null;
             if (metalSource.ColorTexture == 0) return null;
 
             nint device = _offscreenProvider.TryGetDefaultDevice();
@@ -101,7 +101,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
             if (queue == 0) return null;
 
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (scratch.UnderlyingTarget is not MewVGMetalBitmapRenderTarget metalDest) return null;
+            if (scratch.UnderlyingSurface is not MewVGMetalBitmapRenderTarget metalDest) return null;
 
             // Lazy GPU-texture init — pool gives back a fresh RT whose MTLTexture hasn't been
             // created yet (no offscreen frame has run on it). MPS needs the destination

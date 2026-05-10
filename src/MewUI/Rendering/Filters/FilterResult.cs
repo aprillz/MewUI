@@ -52,9 +52,15 @@ public abstract class FilterResult : IDisposable
     public abstract bool IsPremultiplied { get; }
 
     /// <summary>
-    /// The underlying bitmap render target if this result is backed by one (Borrowed/Scratch).
+    /// The underlying render surface if this result is backed by one (Borrowed/Scratch).
     /// Returns <see langword="null"/> for backend-specific results that wrap native handles only.
     /// Used by GPU executors to access backend-specific resources (e.g. OpenGL FBO/texture).
+    /// </summary>
+    public abstract IRenderSurface? UnderlyingSurface { get; }
+
+    /// <summary>
+    /// Bitmap view of <see cref="UnderlyingSurface"/> when the result is backed by a bitmap-capable
+    /// surface. CPU fallback paths use this while filter internals migrate to surface capabilities.
     /// </summary>
     public abstract IBitmapRenderTarget? UnderlyingTarget { get; }
 
@@ -70,10 +76,12 @@ public sealed class BorrowedFilterResult : FilterResult
 {
     private readonly IImage _image;
     private readonly IBitmapRenderTarget? _pixelSource;
+    private readonly IRenderSurface? _surface;
 
-    public BorrowedFilterResult(IImage image, Rect bounds, IBitmapRenderTarget? pixelSource = null)
+    public BorrowedFilterResult(IImage image, Rect bounds, IRenderSurface? surface = null, IBitmapRenderTarget? pixelSource = null)
     {
         _image = image ?? throw new ArgumentNullException(nameof(image));
+        _surface = surface ?? pixelSource;
         _pixelSource = pixelSource;
         Bounds = bounds;
         PixelWidth = image.PixelWidth;
@@ -84,6 +92,7 @@ public sealed class BorrowedFilterResult : FilterResult
     public override int PixelHeight { get; }
     public override Rect Bounds { get; }
     public override bool IsPremultiplied => _pixelSource?.IsPremultiplied ?? false;
+    public override IRenderSurface? UnderlyingSurface => _surface;
     public override IBitmapRenderTarget? UnderlyingTarget => _pixelSource;
 
     public override IImage AsImage() => _image;
@@ -111,6 +120,7 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
 {
     IBitmapRenderTarget IPixelTargetAccess.Target => _target;
 
+    private readonly IRenderSurface _surface;
     private readonly IBitmapRenderTarget _target;
     private readonly IImage _image;
     private readonly Action<IBitmapRenderTarget>? _release;
@@ -122,6 +132,7 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
         Action<IBitmapRenderTarget>? release)
     {
         _target = target ?? throw new ArgumentNullException(nameof(target));
+        _surface = target;
         _image = image ?? throw new ArgumentNullException(nameof(image));
         _release = release;
         Bounds = bounds;
@@ -131,7 +142,8 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
         Action<ScratchRenderTargetLease>? release)
     {
         _lease = lease ?? throw new ArgumentNullException(nameof(lease));
-        _target = lease.Target;
+        _surface = lease.Surface;
+        _target = lease.BitmapTarget;
         _image = image ?? throw new ArgumentNullException(nameof(image));
         _releaseLease = release;
         Bounds = bounds;
@@ -141,6 +153,7 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     public override int PixelHeight => _target.PixelHeight;
     public override Rect Bounds { get; }
     public override bool IsPremultiplied => _target.IsPremultiplied;
+    public override IRenderSurface? UnderlyingSurface => _surface;
     public override IBitmapRenderTarget? UnderlyingTarget => _target;
 
     public override IImage AsImage() => _image;

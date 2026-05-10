@@ -21,7 +21,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
     private readonly IRenderDevice _device;
     private readonly double _dpiScale;
     private readonly Dictionary<(int Width, int Height), Stack<ScratchRenderTargetLease>> _buckets = new();
-    private readonly Dictionary<IBitmapRenderTarget, ScratchRenderTargetLease> _leases = new();
+    private readonly Dictionary<IRenderSurface, ScratchRenderTargetLease> _leases = new();
     private bool _disposed;
 
     /// <summary>
@@ -54,8 +54,11 @@ public sealed class ScratchRenderTargetPool : IDisposable
     /// cost of more cache entries — acceptable, as filter graphs typically reuse a single
     /// size for the duration of the source layer.
     /// </remarks>
+    public IRenderSurface RentSurface(int pixelWidth, int pixelHeight)
+        => RentLease(pixelWidth, pixelHeight).Surface;
+
     public IBitmapRenderTarget Rent(int pixelWidth, int pixelHeight)
-        => RentLease(pixelWidth, pixelHeight).Target;
+        => RentLease(pixelWidth, pixelHeight).BitmapTarget;
 
     public ScratchRenderTargetLease RentLease(int pixelWidth, int pixelHeight)
     {
@@ -93,7 +96,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
         if (surface is IBitmapRenderTarget bitmapTarget)
         {
             var lease = new ScratchRenderTargetLease(surface, bitmapTarget);
-            _leases[lease.Target] = lease;
+            _leases[lease.Surface] = lease;
             return lease;
         }
 
@@ -109,9 +112,15 @@ public sealed class ScratchRenderTargetPool : IDisposable
     public void Return(IBitmapRenderTarget target)
     {
         if (target is null) return;
-        if (!_leases.TryGetValue(target, out var lease))
+        Return((IRenderSurface)target);
+    }
+
+    public void Return(IRenderSurface surface)
+    {
+        if (surface is null) return;
+        if (!_leases.TryGetValue(surface, out var lease))
         {
-            target.Dispose();
+            surface.Dispose();
             return;
         }
 
@@ -121,7 +130,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
     public void Return(ScratchRenderTargetLease lease)
     {
         if (lease is null) return;
-        var target = lease.Target;
+        var target = lease.BitmapTarget;
         if (_disposed)
         {
             DisposeLease(lease);
@@ -167,7 +176,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
 
     private void DisposeLease(ScratchRenderTargetLease lease)
     {
-        _leases.Remove(lease.Target);
+        _leases.Remove(lease.Surface);
         lease.Dispose();
     }
 }
@@ -179,12 +188,14 @@ public sealed class ScratchRenderTargetLease : IDisposable
     internal ScratchRenderTargetLease(IRenderSurface surface, IBitmapRenderTarget target)
     {
         Surface = surface ?? throw new ArgumentNullException(nameof(surface));
-        Target = target ?? throw new ArgumentNullException(nameof(target));
+        BitmapTarget = target ?? throw new ArgumentNullException(nameof(target));
     }
 
     public IRenderSurface Surface { get; }
 
-    public IBitmapRenderTarget Target { get; }
+    public IBitmapRenderTarget BitmapTarget { get; }
+
+    public IBitmapRenderTarget Target => BitmapTarget;
 
     public void Dispose()
     {

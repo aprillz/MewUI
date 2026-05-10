@@ -21,7 +21,7 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
 
     public DefaultFilterContext(IBitmapRenderTarget sourceLayer, IImage sourceImage, Rect sourceBounds,
         IGraphicsFactory factory, double logicalToPixelScaleX = 1.0, double logicalToPixelScaleY = 1.0)
-        : this(new BorrowedFilterResult(sourceImage, sourceBounds, sourceLayer), sourceBounds, factory,
+        : this(new BorrowedFilterResult(sourceImage, sourceBounds, sourceLayer, sourceLayer), sourceBounds, factory,
                new ScratchRenderTargetPool(factory, sourceLayer.DpiScale), ownsPool: true,
                logicalToPixelScaleX, logicalToPixelScaleY)
     {
@@ -84,7 +84,11 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
         // it as borrowed so the sub-context's lifecycle doesn't double-dispose.
         var borrowed = newSource is BorrowedFilterResult br
             ? br
-            : new BorrowedFilterResult(newSource.AsImage(), newSource.Bounds);
+            : new BorrowedFilterResult(
+                newSource.AsImage(),
+                newSource.Bounds,
+                newSource.UnderlyingSurface,
+                newSource.UnderlyingTarget);
         return new DefaultFilterContext(borrowed, newSource.Bounds, Factory, _pool, ownsPool: false,
             LogicalToPixelScaleX, LogicalToPixelScaleY);
     }
