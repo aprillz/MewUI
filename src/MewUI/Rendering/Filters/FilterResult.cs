@@ -58,12 +58,6 @@ public abstract class FilterResult : IDisposable
     /// </summary>
     public abstract IRenderSurface? UnderlyingSurface { get; }
 
-    /// <summary>
-    /// Bitmap view of <see cref="UnderlyingSurface"/> when the result is backed by a bitmap-capable
-    /// surface. CPU fallback paths use this while filter internals migrate to surface capabilities.
-    /// </summary>
-    public abstract IBitmapRenderTarget? UnderlyingTarget { get; }
-
     public abstract void Dispose();
 }
 
@@ -93,7 +87,6 @@ public sealed class BorrowedFilterResult : FilterResult
     public override Rect Bounds { get; }
     public override bool IsPremultiplied => _pixelSource?.IsPremultiplied ?? false;
     public override IRenderSurface? UnderlyingSurface => _surface;
-    public override IBitmapRenderTarget? UnderlyingTarget => _pixelSource;
 
     public override IImage AsImage() => _image;
 
@@ -154,7 +147,6 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     public override Rect Bounds { get; }
     public override bool IsPremultiplied => _target.IsPremultiplied;
     public override IRenderSurface? UnderlyingSurface => _surface;
-    public override IBitmapRenderTarget? UnderlyingTarget => _target;
 
     public override IImage AsImage() => _image;
 
@@ -182,11 +174,11 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     /// Detach, <see cref="Dispose"/> is a no-op (the pool release is suppressed). Caller
     /// must dispose the returned surface/image when done. Used by result-caching paths that
     /// want to keep the scratch RT alive across frames without copying its pixels.</summary>
-    public (IRenderSurface Surface, IBitmapRenderTarget Target, IImage Image)? Detach()
+    public (IRenderSurface Surface, IImage Image)? Detach()
     {
         if (_disposed) return null;
         if (_lease is null) return null;
         _disposed = true;
-        return (_lease.Surface, _target, _image);
+        return (_lease.Surface, _image);
     }
 }

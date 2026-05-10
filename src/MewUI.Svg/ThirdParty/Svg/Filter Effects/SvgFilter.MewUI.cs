@@ -440,7 +440,7 @@ public partial class SvgFilter
         {
             return;
         }
-        var (surface, _, image) = detached.Value;
+        var (surface, image) = detached.Value;
 
         var entry = new FilterCacheEntry
         {

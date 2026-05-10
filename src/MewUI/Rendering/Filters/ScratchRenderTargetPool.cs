@@ -73,7 +73,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
             while (stack.Count > 0)
             {
                 var lease = stack.Pop();
-                var target = lease.Target;
+                var target = lease.BitmapTarget;
                 if (target is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
                 {
                     DisposeLease(lease);
@@ -194,8 +194,6 @@ public sealed class ScratchRenderTargetLease : IDisposable
     public IRenderSurface Surface { get; }
 
     public IBitmapRenderTarget BitmapTarget { get; }
-
-    public IBitmapRenderTarget Target => BitmapTarget;
 
     public void Dispose()
     {

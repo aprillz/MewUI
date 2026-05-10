@@ -79,17 +79,9 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
 
     public IImageFilterContext WithSource(FilterResult newSource)
     {
-        // Sub-context shares the pool but replaces the source. We don't own the new source
-        // (it came from upstream graph evaluation and the caller will dispose it) — wrap
-        // it as borrowed so the sub-context's lifecycle doesn't double-dispose.
-        var borrowed = newSource is BorrowedFilterResult br
-            ? br
-            : new BorrowedFilterResult(
-                newSource.AsImage(),
-                newSource.Bounds,
-                newSource.UnderlyingSurface,
-                newSource.UnderlyingTarget);
-        return new DefaultFilterContext(borrowed, newSource.Bounds, Factory, _pool, ownsPool: false,
+        // Sub-context shares the pool but replaces the source. We don't own or dispose the
+        // source; the upstream graph result stays responsible for its lifetime.
+        return new DefaultFilterContext(newSource, newSource.Bounds, Factory, _pool, ownsPool: false,
             LogicalToPixelScaleX, LogicalToPixelScaleY);
     }
 
