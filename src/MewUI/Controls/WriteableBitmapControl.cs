@@ -117,7 +117,7 @@ public class WriteableBitmapControl : Control
 
                 var factory = GetGraphicsFactory();
                 var renderDevice = factory;
-                _surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuBitmap(
+                _surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuPixels(
                     pixelWidth,
                     pixelHeight,
                     scale,

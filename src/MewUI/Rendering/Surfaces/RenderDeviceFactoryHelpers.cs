@@ -46,7 +46,7 @@ internal static class RenderDeviceFactoryHelpers
             : RenderOperation.Completed;
     }
 
-    public static bool RequiresCpuBitmap(RenderSurfaceDescriptor descriptor)
+    public static bool RequiresCpuPixels(RenderSurfaceDescriptor descriptor)
     {
         var caps = descriptor.RequiredCapabilities;
         return caps.HasFlag(SurfaceCapabilities.CpuWritable)

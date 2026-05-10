@@ -531,7 +531,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
     {
-        var target = RenderDeviceFactoryHelpers.RequiresCpuBitmap(descriptor)
+        var target = RenderDeviceFactoryHelpers.RequiresCpuPixels(descriptor)
             ? CreateCpuPixelSurface(
                 descriptor.PixelWidth,
                 descriptor.PixelHeight,

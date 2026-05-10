@@ -94,7 +94,7 @@ public sealed class SvgDocument
     public WriteableBitmap Rasterize(IGraphicsFactory factory, int pixelWidth, int pixelHeight)
     {
         var renderDevice = factory;
-        using var surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuBitmap(
+        using var surface = renderDevice.CreateSurface(RenderSurfaceDescriptor.CpuPixels(
             pixelWidth,
             pixelHeight,
             debugName: "SvgDocumentRasterize"));

@@ -10,7 +10,7 @@ public readonly record struct RenderSurfaceDescriptor(
     SurfaceLifetimeHint LifetimeHint = SurfaceLifetimeHint.Frame,
     string? DebugName = null)
 {
-    public static RenderSurfaceDescriptor CpuBitmap(
+    public static RenderSurfaceDescriptor CpuPixels(
         int pixelWidth,
         int pixelHeight,
         double dpiScale = 1.0,
