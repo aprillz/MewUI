@@ -44,7 +44,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     private byte[]? _lockBuffer;
     private byte[]? _uploadBuffer;
     private Action? _releaseAction;
-    // External retain count for the FBO color texture, used by the SVG filter scratch path
+    // External retain count for the FBO color texture, used by zero-copy scratch-surface paths
     // (via IGpuTextureSource.RetainGpuHandle). MewVGImage takes a retain when it wraps our
     // texture zero-copy with NVG's NoDelete flag, so the texture stays alive through the
     // consumer's NVG flush even if Dispose runs first. ReleaseGpuHandle decrements; when it

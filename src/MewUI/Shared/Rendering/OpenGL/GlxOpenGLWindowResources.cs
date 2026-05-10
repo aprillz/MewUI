@@ -188,7 +188,7 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
 
     /// <summary>Create a window's GLX context, optionally sharing texture/buffer
     /// namespaces with <paramref name="shareContext"/> (the factory's worker GLX
-    /// context). Required for the background SVG rebuild pipeline so worker-rendered
+    /// context). Required for the background offscreen render pipeline so worker-rendered
     /// FBO textures are sample-able from the window context. shareContext = 0 means
     /// no sharing (standalone usage).</summary>
     public static GlxOpenGLWindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo, nint shareContext)

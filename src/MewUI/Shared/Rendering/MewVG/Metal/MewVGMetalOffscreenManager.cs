@@ -5,12 +5,12 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
 /// Provides a pool of <see cref="NanoVGMetal"/> instances bound to a shared
-/// <c>MTLDevice</c>, so SVG offscreen passes (filter / pattern tile / SvgView
+/// <c>MTLDevice</c>, so offscreen passes (filter / pattern tile / cached view
 /// bitmap cache) can render into a pixel surface's MTLTexture without
 /// disturbing the window's own NVG state.
 /// </summary>
 /// <remarks>
-/// <b>Pool semantics</b>: nested offscreen passes (e.g. an SvgView bitmap
+/// <b>Pool semantics</b>: nested offscreen passes (e.g. a cached bitmap
 /// cache renders the document, which in turn invokes a Pattern brush that
 /// needs its own offscreen tile) require independent NVG instances — calling
 /// <c>nvgBeginFrame</c> on the inner pass would otherwise reset the outer

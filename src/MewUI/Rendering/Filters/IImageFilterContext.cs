@@ -32,7 +32,7 @@ public interface IImageFilterContext
     /// <summary>
     /// Conversion factor from filter input coordinates (logical/DIP) to source-layer
     /// pixel coordinates along X. Matches the effective scale at which the input was
-    /// rasterized into <see cref="Source"/> (= user transform × DPI for SVG filters).
+    /// rasterized into <see cref="Source"/> (= user transform x DPI for image filters).
     /// Executors multiply per-axis filter parameters specified in input units (Blur sigma,
     /// Offset dx) by this factor before applying GPU/CPU passes so that filter radii track
     /// the current transform like Skia/WPF effects.

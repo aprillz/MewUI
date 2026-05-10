@@ -1,6 +1,6 @@
 namespace Aprillz.MewUI.Rendering;
 
-internal interface IReusableScratchRenderTarget
+internal interface IReusableScratchSurface
 {
     bool CanReturnToPool { get; }
 }

@@ -43,7 +43,7 @@ internal sealed class MewVGX11WindowResources : IDisposable
 
         // NanoVG uses stencil for AA and clipping; request a stencil buffer via GLX visual info.
         // shareContext = factory's worker GLX context, so worker-rendered FBO textures are
-        // sample-able from this window context (background SVG rebuild handoff).
+        // sample-able from this window context (background offscreen handoff).
         var gl = GlxOpenGLWindowResources.Create(display, window, visualInfo, shareContext);
         gl.MakeCurrent(display);
         try

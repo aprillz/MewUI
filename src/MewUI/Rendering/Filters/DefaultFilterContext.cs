@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// </remarks>
 public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
 {
-    private readonly ScratchRenderTargetPool _pool;
+    private readonly ScratchSurfacePool _pool;
     private readonly bool _ownsPool;
     private readonly FilterResult _source;
     private bool _disposed;
@@ -20,13 +20,13 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
     public DefaultFilterContext(IRenderSurface sourceLayer, IImage sourceImage, Rect sourceBounds,
         IGraphicsFactory factory, double logicalToPixelScaleX = 1.0, double logicalToPixelScaleY = 1.0)
         : this(new BorrowedFilterResult(sourceImage, sourceBounds, sourceLayer, sourceLayer as ICpuPixelSurface), sourceBounds, factory,
-               new ScratchRenderTargetPool(factory, sourceLayer.DpiScale), ownsPool: true,
+               new ScratchSurfacePool(factory, sourceLayer.DpiScale), ownsPool: true,
                logicalToPixelScaleX, logicalToPixelScaleY)
     {
     }
 
     private DefaultFilterContext(FilterResult source, Rect sourceBounds, IGraphicsFactory factory,
-        ScratchRenderTargetPool pool, bool ownsPool,
+        ScratchSurfacePool pool, bool ownsPool,
         double logicalToPixelScaleX, double logicalToPixelScaleY)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));

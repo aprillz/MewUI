@@ -57,7 +57,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         // step, MewVGWindowResources.GetOrCreateContext keeps handing out the
         // disposed context after a window resize. Reusing it is doubly broken:
         // its _saveStack has already been Returned to the pool, so any later
-        // Rent (e.g. by an SVG offscreen context creation) hands back the
+        // Rent (e.g. by an offscreen context creation) hands back the
         // same Stack instance and the two contexts end up sharing state.
         _frameSession.DisposeContext(this);
 
@@ -627,7 +627,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public void EndFrame()
         {
             // Deferred — Lock/CopyPixels/GetPixelSpan flush lazily. Avoids 100s of sync
-            // barriers per frame when many SVG filtered elements each create their own
+            // barriers per frame when many filtered elements each create their own
             // source layer (each EndFrame here was a glReadPixels + flip + RGBA→BGRA pass).
             _pixelSurface.RequestDeferredReadback();
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
@@ -659,10 +659,10 @@ internal sealed partial class MewVGWin32GraphicsContext
     {
         // Don't drain pending target disposals here. NVG defers its draw commands until the
         // OUTER frame's EndFrame, and the pending queue holds textures (e.g. blur scratch
-        // FBOs) that prior SVG filters wrapped via CreateImageFromHandle in the deferred
+        // FBOs) that prior filter passes wrapped via CreateImageFromHandle in the deferred
         // batch. Draining at offscreen-session BeginFrame deletes those textures while NVG
         // still has draw commands referencing them → samples garbage at flush time
-        // (visible as horizontal stripes / wrong patches in filtered SVG output).
+        // (visible as horizontal stripes / wrong patches in filtered output).
         // The drain now happens after each session's EndFrame (post-NVG-flush).
         pixelSurface.InitializeFbo();
         if (!pixelSurface.IsFboInitialized || pixelSurface.Fbo == 0)

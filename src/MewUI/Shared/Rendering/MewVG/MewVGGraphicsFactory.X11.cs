@@ -15,7 +15,7 @@ public sealed partial class MewVGGraphicsFactory
         new MewVGGlOffscreenSurfaceProvider(LibGL.glXGetCurrentContext, "MewVG X11");
 
     // -------------------------------------------------------------------------
-    // Shared worker GLX context (background SVG rebuild support).
+    // Shared worker GLX context (background offscreen render support).
     // Mirrors the Win32 hidden-window worker context — a single GLX context
     // share-listed with all window contexts, made current on worker threads
     // for offscreen FBO rendering. _workerActivationLock now serializes only

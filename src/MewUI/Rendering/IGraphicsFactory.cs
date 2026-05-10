@@ -162,7 +162,7 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     IImageFilterExecutor CreateImageFilterExecutor() => new CpuImageFilterExecutor();
 
     /// <summary>
-    /// Serializes worker-thread <c>SvgFilter</c> offline render units against UI
+    /// Serializes worker-thread offline render units against UI
     /// window frames. The MewVG OpenGL backend overrides this to acquire the same
     /// mutex its UI window <c>BeginFrame</c> / <c>EndFrame</c> path holds, so the
     /// filter offline render and UI render don't overlap on share-listed GL

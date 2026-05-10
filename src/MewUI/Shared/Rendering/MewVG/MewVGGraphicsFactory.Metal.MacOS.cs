@@ -101,11 +101,11 @@ public sealed partial class MewVGGraphicsFactory
         // bound to the system-default MTLDevice. Metal textures created on
         // any pool instance are sample-able from the window's NVG because
         // they share the device. Borrow gives this pass its own NVG so
-        // nested offscreen (e.g. SvgView cache ??Pattern ??Filter) does not
+        // nested offscreen (e.g. cache -> pattern -> filter) does not
         // have inner BeginFrame stomping outer's state. No drawable is
         // acquired and no Present runs; the context blits the pixel surface's
         // own MTLTexture back into its CPU pixel buffer at EndFrame
-        // so SVG filter / pattern uploads see the rendered output.
+        // so filter / pattern uploads see the rendered output.
         var offscreenResources = _offscreenProvider.AcquireSurface();
         context = MewVGMetalGraphicsContext.CreateForOffscreen(offscreenResources, pixelSurface, _offscreenProvider);
         handled = true;

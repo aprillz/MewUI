@@ -129,7 +129,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
         // D2D1GaussianBlur StandardDeviation is in DIPs — D2D scales by the source bitmap's
         // own DpiScale internally to land in pixel space. The bitmap's DpiScale is set by
-        // SvgFilter (clamped to ≥ 1.0); when LogicalToPixelScale < 1.0 (zoom < 1×), the
+        // filter source layer (clamped to >= 1.0); when LogicalToPixelScale < 1.0 (zoom < 1x), the
         // bitmap's DpiScale is clamped to 1.0 while the actual pixel raster is sub-DIP, so
         // passing raw σ_DIP makes D2D over-blur. Pre-divide by the bitmap's reported DPI and
         // pre-multiply by ctx.LogicalToPixelScale so D2D's internal × DpiScale lands at the
@@ -340,7 +340,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     // Reset DC transform — Direct2DGraphicsContext.BeginFrame doesn't push
                     // identity to the native DC at frame start (only resets the C# field),
                     // so any transform left over from previous use of this DC RT (e.g.,
-                    // SVG element rendered before our filter pass) would shift the effect
+                    // source content rendered before our filter pass) would shift the effect
                     // output's drawn position on dst.
                     D2D1VTable.SetTransform(rt, D2D1_MATRIX_3X2_F.Identity);
                     D2D1VTable.Clear(rt, new D2D1_COLOR_F(0, 0, 0, 0));
@@ -406,7 +406,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
                 // D2D D2D1_MATRIX_5X4_F is 5 rows × 4 cols (output channel = column,
-                // input source/offset = row), but ColorMatrixFilter.Matrix is the SVG
+                // input source/offset = row), but ColorMatrixFilter.Matrix is the source
                 // convention: 4 rows × 5 cols (output channel = row, input source = col).
                 // Transpose into a stackalloc'd Span — 80 bytes, no per-call heap alloc.
                 float[] svgMatrix = cm.Matrix;
@@ -519,9 +519,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     private FilterResult? TryGpuMerge(MergeFilter m, IImageFilterContext ctx)
     {
-        // SVG feMerge: render each input bitmap into the output, bottom-to-top, with
+        // Merge filter: render each input bitmap into the output, bottom-to-top, with
         // SOURCE_OVER. Implement directly via DrawImage(SOURCE_OVER) chained per input
-        // — this matches SVG's exact semantics and avoids D2D1Composite's input-rect
+        // - this matches ordered source-over semantics and avoids D2D1Composite's input-rect
         // output-bounds quirks (where fg pixels outside input0's bbox can get cropped).
         System.Diagnostics.Debug.WriteLine($"[D2DMerge] inputs={m.InputList.Count}");
         if (m.InputList.Count == 0) return ctx.Source;

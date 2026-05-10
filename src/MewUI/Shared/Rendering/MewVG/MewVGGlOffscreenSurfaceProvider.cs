@@ -26,7 +26,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     int ReleasePendingImages();
 
     /// <summary>Tracks render-session nesting. Pending FBO target disposals only drain
-    /// when the outermost session ends, since nested sessions (e.g. SVG filter source
+    /// when the outermost session ends, since nested sessions (e.g. filter source
     /// layers) may have wrapped scratch FBO textures via CreateImageFromHandle into the
     /// outer NVG's deferred draw queue — those textures must outlive the outer flush.</summary>
     void EnterSession();

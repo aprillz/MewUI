@@ -25,7 +25,7 @@ internal sealed class MewVGImage : IImage
     // for setFragmentTexture, which dereferences the freed object on commit (SIGSEGV).
     private nint _retainedGpuHandle;
     // Optional callback invoked by ReleaseImagesImmediate after all NVG image-ids and the
-    // retained GPU handle have been released. Used by the SVG filter scratch path to defer
+    // retained GPU handle have been released. Used by zero-copy scratch paths to defer
     // returning a pooled render surface until the in-flight NVG draws referencing it
     // have flushed — without this the pool can hand the same RT to the next filter node in
     // the same eval, which then MPS-overwrites the ColorTexture while a queued draw still
@@ -38,7 +38,7 @@ internal sealed class MewVGImage : IImage
     /// <inheritdoc cref="IImage.TrySetPostReleaseCallback"/>
     public bool TrySetPostReleaseCallback(Action callback)
     {
-        // Last write wins — the SVG filter scratch path sets this exactly once per
+        // Last write wins: zero-copy scratch paths set this exactly once per
         // MewVGImage instance before disposing, so the simple assignment is sufficient.
         _postReleaseCallback = callback;
         return true;
@@ -133,7 +133,7 @@ internal sealed class MewVGImage : IImage
         // Zero-copy fast path: if the source exposes a live GPU texture (FBO color
         // attachment for GL, MTLTexture for Metal), wrap it directly. Skips the
         // readback + RGBA conversion + re-upload round-trip that's the dominant cost
-        // when an SVG document has many filtered elements (each blur would otherwise hit
+        // when a scene has many filtered elements (each blur would otherwise hit
         // a glReadPixels / getBytes sync barrier per filter — 100 filters ≈ 1 s of stalls).
         // NoDelete tells NVG the texture is externally owned (we keep it alive in the
         // pixel surface), so DeleteImage only drops NVG's bookkeeping record.

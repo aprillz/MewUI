@@ -90,9 +90,10 @@ public sealed unsafe partial class Direct2DGraphicsFactory
 
     // Reference count for nested BeginDraw on the shared filter DC. D2D doesn't support
     // nesting BeginDraw on the same device context - once BeginDraw is active you must
-    // EndDraw before the next BeginDraw. But our pipeline naturally nests: SvgView opens
-    // a frame on the shared DC (its offscreen GPU bitmap), then SvgFilter creates another
-    // GPU bitmap (source layer) and opens another frame on the same shared DC. The inner
+    // EndDraw before the next BeginDraw. But the offscreen pipeline naturally nests: an
+    // outer pass opens a frame on the shared DC (its offscreen GPU pixel surface), then an
+    // inner filter pass creates another GPU pixel surface and opens another frame on the
+    // same shared DC. The inner
     // pass switches the DC's target via SetTarget but does NOT issue a fresh BeginDraw -
     // the outer BeginDraw is still active and covers all draws regardless of bound target.
     // EnterSharedDcDraw returns true only on the outermost entry; ExitSharedDcDraw returns
@@ -106,7 +107,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
         => Interlocked.Decrement(ref _sharedDcDrawDepth) == 0;
 
     // Guards EnsureFilterDeviceContext against concurrent first-use from multiple threads
-    // (UI thread first paint vs SvgView background rebuild). Without this, two threads can
+    // (UI thread first paint vs background offscreen rebuild). Without this, two threads can
     // both observe the GPU chain as uninitialized and each call D3D11CreateDevice,
     // leaking the loser's device.
     private readonly object _filterDeviceInitLock = new();

@@ -2,40 +2,40 @@ namespace Aprillz.MewUI.Rendering.Filters;
 
 /// <summary>
 /// Per-context scratch <see cref="IRenderSurface"/> pool. Filter graphs allocate intermediate
-/// RTs per node (Blur, ColorMatrix, etc.); without pooling, a 5-node DAG on a 1024² source
+/// surfaces per node (Blur, ColorMatrix, etc.); without pooling, a 5-node DAG on a 1024px source
 /// allocates 20 MB just for scratches every frame. The pool keeps a small set of recently-used
-/// targets per (width, height, dpi) bucket and hands them back on rent.
+/// surfaces per (width, height, dpi) bucket and hands them back on rent.
 /// </summary>
 /// <remarks>
-/// Sizing policy: rents return a target whose dimensions are at least the requested ones,
-/// drawn from the largest bucket that satisfies the request. Over-sized rents are acceptable —
+/// Sizing policy: rents return a surface whose dimensions are at least the requested ones,
+/// drawn from the largest bucket that satisfies the request. Over-sized rents are acceptable:
 /// the consumer renders into the requested viewport and ignores the extra pixels. This keeps
 /// the bucket count bounded (one per power-of-two extent) instead of one-per-exact-dimension.
 /// <para/>
 /// Lifetime: a pool is owned by an <see cref="IImageFilterContext"/> instance. When the context
-/// is disposed the pool releases all retained targets. No cross-context sharing — different
+/// is disposed the pool releases all retained surfaces. No cross-context sharing: different
 /// graph evaluations use independent pools to avoid synchronization on the rent path.
 /// </remarks>
-public sealed class ScratchRenderTargetPool : IDisposable
+public sealed class ScratchSurfacePool : IDisposable
 {
     private readonly IRenderDevice _device;
     private readonly double _dpiScale;
-    private readonly Dictionary<(int Width, int Height), Stack<ScratchRenderTargetLease>> _buckets = new();
-    private readonly Dictionary<IRenderSurface, ScratchRenderTargetLease> _leases = new();
+    private readonly Dictionary<(int Width, int Height), Stack<ScratchSurfaceLease>> _buckets = new();
+    private readonly Dictionary<IRenderSurface, ScratchSurfaceLease> _leases = new();
     private bool _disposed;
 
     /// <summary>
-    /// Maximum retained targets per bucket. Beyond this, returned targets are disposed
+    /// Maximum retained surfaces per bucket. Beyond this, returned surfaces are disposed
     /// immediately. Keeps memory bounded under "many one-shot" workloads.
     /// </summary>
     public int MaxPerBucket { get; init; } = 4;
 
-    public ScratchRenderTargetPool(IGraphicsFactory factory, double dpiScale)
+    public ScratchSurfacePool(IGraphicsFactory factory, double dpiScale)
         : this((IRenderDevice)(factory ?? throw new ArgumentNullException(nameof(factory))), dpiScale)
     {
     }
 
-    public ScratchRenderTargetPool(IRenderDevice device, double dpiScale)
+    public ScratchSurfacePool(IRenderDevice device, double dpiScale)
     {
         _device = device ?? throw new ArgumentNullException(nameof(device));
         _dpiScale = dpiScale > 0 ? dpiScale : 1.0;
@@ -51,12 +51,12 @@ public sealed class ScratchRenderTargetPool : IDisposable
     /// stride for the actual width, so a 100-wide source written into a 128-wide scratch
     /// buffer via flat <see cref="System.Span{T}.CopyTo"/> smears the source rows into
     /// arbitrary scratch rows. Exact-size buckets eliminate the impedance mismatch at the
-    /// cost of more cache entries — acceptable, as filter graphs typically reuse a single
+    /// cost of more cache entries; acceptable, as filter graphs typically reuse a single
     /// size for the duration of the source layer.
     /// </remarks>
-    public ScratchRenderTargetLease RentLease(int pixelWidth, int pixelHeight)
+    public ScratchSurfaceLease RentLease(int pixelWidth, int pixelHeight)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(ScratchRenderTargetPool));
+        if (_disposed) throw new ObjectDisposedException(nameof(ScratchSurfacePool));
 
         int w = Math.Max(1, pixelWidth);
         int h = Math.Max(1, pixelHeight);
@@ -67,7 +67,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
             while (stack.Count > 0)
             {
                 var lease = stack.Pop();
-                if (lease.Surface is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
+                if (lease.Surface is IReusableScratchSurface reusable && !reusable.CanReturnToPool)
                 {
                     DisposeLease(lease);
                     continue;
@@ -84,18 +84,18 @@ public sealed class ScratchRenderTargetPool : IDisposable
             w,
             h,
             _dpiScale,
-            debugName: nameof(ScratchRenderTargetPool)));
+            debugName: nameof(ScratchSurfacePool)));
 
         if (surface is ICpuPixelSurface pixels)
         {
-            var lease = new ScratchRenderTargetLease(surface, pixels);
+            var lease = new ScratchSurfaceLease(surface, pixels);
             _leases[lease.Surface] = lease;
             return lease;
         }
 
         surface.Dispose();
         throw new NotSupportedException(
-            $"{nameof(ScratchRenderTargetPool)} currently requires CPU-readable render surfaces.");
+            $"{nameof(ScratchSurfacePool)} currently requires CPU-readable render surfaces.");
     }
 
     public void Return(IRenderSurface surface)
@@ -110,7 +110,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
         Return(lease);
     }
 
-    public void Return(ScratchRenderTargetLease lease)
+    public void Return(ScratchSurfaceLease lease)
     {
         if (lease is null) return;
         if (_disposed)
@@ -119,7 +119,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
             return;
         }
 
-        if (lease.Surface is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
+        if (lease.Surface is IReusableScratchSurface reusable && !reusable.CanReturnToPool)
         {
             DisposeLease(lease);
             return;
@@ -128,7 +128,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
         var key = (lease.Surface.PixelWidth, lease.Surface.PixelHeight);
         if (!_buckets.TryGetValue(key, out var stack))
         {
-            stack = new Stack<ScratchRenderTargetLease>();
+            stack = new Stack<ScratchSurfaceLease>();
             _buckets[key] = stack;
         }
 
@@ -156,18 +156,18 @@ public sealed class ScratchRenderTargetPool : IDisposable
         _buckets.Clear();
     }
 
-    private void DisposeLease(ScratchRenderTargetLease lease)
+    private void DisposeLease(ScratchSurfaceLease lease)
     {
         _leases.Remove(lease.Surface);
         lease.Dispose();
     }
 }
 
-public sealed class ScratchRenderTargetLease : IDisposable
+public sealed class ScratchSurfaceLease : IDisposable
 {
     private bool _disposed;
 
-    internal ScratchRenderTargetLease(IRenderSurface surface, ICpuPixelSurface pixels)
+    internal ScratchSurfaceLease(IRenderSurface surface, ICpuPixelSurface pixels)
     {
         Surface = surface ?? throw new ArgumentNullException(nameof(surface));
         Pixels = pixels ?? throw new ArgumentNullException(nameof(pixels));

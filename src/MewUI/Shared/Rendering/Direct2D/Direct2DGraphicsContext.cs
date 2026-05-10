@@ -159,8 +159,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
     // True when this context's BeginGpuPixelSurfaceFrame was the outermost entry on the shared
     // DC and therefore issued the BeginDraw. OnEndFrame uses this to decide whether to
-    // issue the matching EndDraw. Nested entries (SvgFilter source layer inside SvgView
-    // render) skip both — they only swap the DC's target, leaving the outer BeginDraw
+    // issue the matching EndDraw. Nested offscreen entries skip both: they only swap the
+    // DC's target, leaving the outer BeginDraw
     // active to cover all draws.
     private bool _calledBeginDrawOnSharedDc;
 
@@ -232,9 +232,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _clipBoundsWorld = null;
 
         // Only the outermost BeginGpuPixelSurfaceFrame issues BeginDraw — D2D rejects nested
-        // BeginDraw on the same DC with WRONG_STATE. Inner passes (e.g. SvgFilter source
-        // layer rendered while SvgView's outer pass is still drawing into its own GPU
-        // pixel surface on the same shared DC) just swap the DC's target via SetTarget;
+        // BeginDraw on the same DC with WRONG_STATE. Inner filter/source passes rendered
+        // while the outer pass is still drawing into its own GPU pixel surface on the same
+        // shared DC just swap the DC's target via SetTarget;
         // the outer BeginDraw covers their draws too.
         _calledBeginDrawOnSharedDc = _ownerFactory.EnterSharedDcDraw();
         if (_calledBeginDrawOnSharedDc)
@@ -354,8 +354,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 }
                 // Restore the DC's DPI to whatever the parent pass had set. Without this,
                 // the inner GPU pass's DPI leaks into the outer pass's draws and either
-                // shrinks or expands them (e.g. SvgFilter source layer at DPI 1× leaving
-                // the DC at 1× when SvgView's outer pass continues at 6× expectation).
+                // shrinks or expands them (e.g. an inner source layer at DPI 1x leaving
+                // the DC at 1x when the outer pass continues with a 6x expectation).
                 if (_previousDcDpiX > 0 && _previousDcDpiY > 0)
                 {
                     D2D1VTable.SetDpi((ID2D1RenderTarget*)_renderTarget, _previousDcDpiX, _previousDcDpiY);
@@ -1717,7 +1717,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         // the full D2D1_INTERPOLATION_MODE enum. Default → HIGH_QUALITY_CUBIC: D2D
         // handles down-sampling on the GPU (no CPU mip pyramid, no per-pixel cost the
         // caller pays). HIGH_QUALITY_CUBIC over LINEAR is single-digit microseconds for
-        // typical SVG-cache-sized bitmaps and removes the aliasing seen on zoom-out /
+        // typical cached-image-sized bitmaps and removes the aliasing seen on zoom-out /
         // window-shrink where cache pixels > target pixels. Fast keeps NEAREST for the
         // pan-responsiveness opt-out callers use during interaction.
         if (_deviceContext != 0)

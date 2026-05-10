@@ -22,7 +22,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// shared DC.
 /// </remarks>
 internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, ID2DTextureSource
-    , IReusableScratchRenderTarget
+    , IReusableScratchSurface
 {
     private readonly Direct2DGraphicsFactory _factory;
     private readonly object _gate = new();
@@ -128,7 +128,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     internal bool IsDeviceCurrent
         => !_disposed && !_deviceLost && _bitmap != 0;
 
-    bool IReusableScratchRenderTarget.CanReturnToPool => IsDeviceCurrent;
+    bool IReusableScratchSurface.CanReturnToPool => IsDeviceCurrent;
 
     // ID2DTextureSource — exposes the GPU bitmap via the backend marker so D2D consumers
     // can short-circuit the CPU readback path when source and consumer share a device.
@@ -168,7 +168,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
             // every Lock caller in the codebase is read-only (Direct2DImage's mip rebuild
             // for instance), and the unconditional version bump created a feedback loop:
             // each draw triggered Lock → version++ → next draw saw version mismatch →
-            // re-readback → Lock → ... [SvgView pan with stable cache logged a SLOW mip
+            // re-readback → Lock → ... [cached-image pan with stable cache logged a SLOW mip
             // rebuild every frame]. CPU-side mutations now go through an explicit
             // <see cref="CommitWritesFromBuffer"/> API which the (currently nonexistent)
             // mutating consumers would call. Add it back the day a CPU executor needs it.

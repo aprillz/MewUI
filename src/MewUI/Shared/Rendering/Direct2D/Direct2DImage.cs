@@ -60,9 +60,9 @@ internal sealed class Direct2DImage : IImage
         // GPU fast path via the ID2DTextureSource backend marker. When the source exposes
         // a native ID2D1Bitmap1* tied to the same device context as the consumer's render
         // target, we return that bitmap directly — no Lock readback, no CPU premultiply,
-        // no CreateBitmap upload. SvgView's offscreen render targets and SVG filter
+        // no CreateBitmap upload. Offscreen render surfaces and image filter
         // outputs hit this when both share the factory's shared filter device context
-        // (filter cache → SvgView render = pure GPU draw, zero CPU touch).
+        // (filter cache -> offscreen render = pure GPU draw, zero CPU touch).
         //
         // Cross-backend sources (GL FBO, Metal texture, etc.) don't implement
         // ID2DTextureSource — the cast naturally fails and we fall through to the CPU

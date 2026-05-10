@@ -65,7 +65,7 @@ public interface IGpuTextureSource : IPixelBufferSource
     /// Adds a reference to the underlying GPU handle so its lifetime extends past this
     /// source's <see cref="System.IDisposable.Dispose"/>. Required for safe NoDelete-style
     /// zero-copy wrapping when the source's lifetime is tighter than the consumer's
-    /// (e.g. an SVG filter scratch render target rented per filter pass while the
+    /// (e.g. a scratch surface rented per filter pass while the
     /// consumer's command buffer hasn't yet committed). Must be paired with
     /// <see cref="ReleaseGpuHandle"/>. Returns false when the source doesn't support
     /// retain (default).

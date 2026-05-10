@@ -114,7 +114,7 @@ namespace Aprillz.MewUI.Rendering
         /// <summary>
         /// Returns the axis-aligned bounding box of the current clip in <em>local</em>
         /// (pre-transform) coordinates, or <see langword="null"/> when no clip is active.
-        /// Used by offscreen passes (e.g. SVG filter source rasterization) to skip rendering
+        /// Used by offscreen passes to skip rendering
         /// portions that will never reach the final composite.
         /// </summary>
         Rect? GetClipBoundsLocal() => null;

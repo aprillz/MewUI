@@ -105,7 +105,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         // rendering (offscreen RT created on a worker thread, presented on the UI thread).
         // SINGLE_THREADED is faster (no locks) but caller must guarantee single-threaded
         // access across the entire D2D resource graph — incompatible with our worker-
-        // rendered SvgView pattern.
+        // rendered pattern tile.
         // Try ID2D1Factory1 (Windows 8+) for D2D1_STROKE_TRANSFORM_TYPE_FIXED support.
         int hr = D2D1.D2D1CreateFactory(D2D1_FACTORY_TYPE.MULTI_THREADED, D2D1.IID_ID2D1Factory1, 0, out _d2dFactory);
         if (hr >= 0 && _d2dFactory != 0)

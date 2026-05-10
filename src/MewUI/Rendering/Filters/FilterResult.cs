@@ -116,12 +116,12 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     private readonly IRenderSurface _surface;
     private readonly ICpuPixelSurface _pixels;
     private readonly IImage _image;
-    private readonly ScratchRenderTargetLease _lease;
-    private readonly Action<ScratchRenderTargetLease>? _releaseLease;
+    private readonly ScratchSurfaceLease _lease;
+    private readonly Action<ScratchSurfaceLease>? _releaseLease;
     private bool _disposed;
 
-    public ScratchFilterResult(ScratchRenderTargetLease lease, IImage image, Rect bounds,
-        Action<ScratchRenderTargetLease>? release)
+    public ScratchFilterResult(ScratchSurfaceLease lease, IImage image, Rect bounds,
+        Action<ScratchSurfaceLease>? release)
     {
         _lease = lease ?? throw new ArgumentNullException(nameof(lease));
         _surface = lease.Surface;

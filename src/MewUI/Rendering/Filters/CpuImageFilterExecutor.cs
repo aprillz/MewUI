@@ -16,7 +16,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// In that case the GPU result is read back via <see cref="FilterResult.ReadPixels"/> and
 /// processed on CPU; subsequent GPU nodes re-upload the CPU result.</item>
 /// </list>
-/// Correctness over speed: this is the reference implementation for SVG filter spec compliance,
+/// Correctness over speed: this is the reference implementation for image filter semantics,
 /// not the perf path. GPU executors should match its output bit-exactly (within sRGB rounding).
 /// </remarks>
 public sealed class CpuImageFilterExecutor : IImageFilterExecutor
@@ -24,7 +24,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
     /// <inheritdoc />
     /// <remarks>
     /// CPU Gaussian on a transform-upscaled buffer is the perf killer (1440×1440 σ=80 ≈ 5 s).
-    /// Cap at 1.0 so the SvgFilter rasterizes the source layer at 100% logical resolution;
+    /// Cap at 1.0 so the source layer rasterizes at 100% logical resolution;
     /// the backend's hardware bilinear path stretches the small filter result up to the
     /// final display rect during DrawImage essentially for free, and the visual difference
     /// is negligible since blur output is low-frequency.
@@ -102,7 +102,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             // upscaled (e.g. 1440×1440, σ=80, kernel radius 240 → ~2 GOps × 2 axes = seconds).
             // Downsample to 100% logical size before blur. We DON'T upsample back — the
             // scratch is emitted at the downsampled dimensions and the final DrawImage at
-            // the SvgFilter site stretches it to filterRegion using the backend's hardware
+            // the caller stretches it to the filter region using the backend's hardware
             // bilinear path (D2D/GDI/MewVG), which is essentially free vs a CPU upsample
             // pass. NOTE: this means the result has fewer pixels than the source layer.
             // Downstream filter nodes that align by raw pixel index (Composite/Merge's
@@ -162,7 +162,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             int h = input.PixelHeight;
             byte[] working = pixels.IsEmpty ? new byte[w * h * 4] : pixels.ToArray();
 
-            // SVG feColorMatrix operates on straight (un-premultiplied) values per spec.
+            // Color matrix filters operate on straight (un-premultiplied) values.
             if (input.IsPremultiplied)
             {
                 UnpremultiplyInPlace(working);
@@ -227,7 +227,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
     private FilterResult RenderMerge(MergeFilter m, IImageFilterContext ctx)
     {
-        // SVG feMerge: each input source-over the accumulated result, in document order.
+        // Merge filters source-over each input onto the accumulated result in order.
         // Sequence: result_0 = inputs[0]; result_i = source_over(inputs[i], result_{i-1}).
         if (m.InputList.Count == 0)
         {

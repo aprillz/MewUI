@@ -175,7 +175,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             _beganFrame = false;
 
             // Main frame only: NVG.Flush has just consumed any draw calls
-            // that referenced images disposed mid-frame (SvgFilter composites
+            // that referenced images disposed mid-frame (filter composites
             // and LRU-evicted text glyph atlases). Now it's safe to actually
             // delete their MTLTextures.
             _frameSession.ReleasePendingFrameResources();

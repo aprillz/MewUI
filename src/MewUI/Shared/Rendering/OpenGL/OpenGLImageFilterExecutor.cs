@@ -75,7 +75,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
             // fallback produced a generic CPU surface), bail to the fallback.
             if (input.UnderlyingSurface is not OpenGLPixelRenderSurface glSource) return null;
 
-            // Source must have a valid FBO with content — true for the SvgFilter source layer
+            // Source must have a valid FBO with content for GPU-side filter execution
             // (rendered into the FBO and ReadbackFromFbo'd at EndFrame). Not true for results
             // assembled by the CPU executor; those need GPU upload first, which we punt on.
             if (!glSource.IsFboInitialized || glSource.Fbo == 0 || glSource.Texture == 0) return null;

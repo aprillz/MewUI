@@ -21,7 +21,7 @@ public sealed partial class MewVGGraphicsFactory
     /// <summary>
     /// The specific pixel surface that the layered-window present is rendering
     /// INTO. Set by <see cref="MewVGWin32LayeredPresenter.Present"/>. Distinguishes
-    /// the window's primary draw target from any scratch FBO that an SVG filter
+    /// the window's primary draw target from any scratch FBO that a nested filter
     /// or pattern may create during the same render pass; those scratch
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
@@ -77,7 +77,7 @@ public sealed partial class MewVGGraphicsFactory
             throw new ArgumentException("MewVG (Win32) requires a Win32 HDC window surface.", nameof(surface));
         }
 
-        // Share textures/buffers with the worker context so background SVG rebuild
+        // Share textures/buffers with the worker context so background offscreen render
         // tasks (Task.Run) can hand off FBO textures to this window for sampling.
         return MewVGWindowResources.Create(win32.Hwnd, win32.Hdc, SharedWorkerContext);
     }
@@ -133,7 +133,7 @@ public sealed partial class MewVGGraphicsFactory
         var hwnd = _pixelSurfacePresentHwnd;
         var hdc = _pixelSurfacePresentHdc;
         // Layered window's primary pixel surface is the one passed to Present;
-        // anything else (SVG filter / pattern scratch FBOs) must use the
+        // anything else (filter / pattern scratch FBOs) must use the
         // single-context offscreen path so its NVG.BeginFrame doesn't reset
         // the layered window's shared NVG mid-render.
         bool isLayeredPresentTarget = hwnd != 0 && hdc != 0
@@ -145,7 +145,7 @@ public sealed partial class MewVGGraphicsFactory
             // pooled NVG instance bound to that same context. No
             // wglMakeCurrent roundtrip occurs, so main's GL state cannot be
             // disturbed by the offscreen pass. Borrow gives this pass its own
-            // NVG so nested offscreen (e.g. SvgView cache -> Pattern -> Filter)
+            // NVG so nested offscreen (e.g. cache -> pattern -> filter)
             // does not have inner BeginFrame stomping outer's state.
             var offscreenResources = _offscreenProvider.AcquireSurface();
             var offscreenContext = MewVGWin32GraphicsContext.CreateForOffscreen(
@@ -221,7 +221,7 @@ public sealed partial class MewVGGraphicsFactory
     }
 
     // -------------------------------------------------------------------------
-    // Shared worker GL context (background SVG rebuild support).
+    // Shared worker GL context (background offscreen render support).
     //
     // A single hidden-window GL context that worker threads activate to render
     // offscreen FBOs concurrently with the UI thread. All window contexts
@@ -238,7 +238,7 @@ public sealed partial class MewVGGraphicsFactory
     // shared HGLRC from multiple threads is a race: a context can only be current
     // on ONE thread at a time, and a second thread's wglMakeCurrent either fails
     // or invalidates the first thread's binding (driver-dependent). Without
-    // serialization, two SvgView rebuilds dispatched concurrently to the
+    // serialization, two background rebuilds dispatched concurrently to the
     // ThreadPool intermittently produce black filter output (the second worker
     // steals the context mid-render). Held for the lifetime of each
     // <see cref="Win32WorkerContextScope"/>.
