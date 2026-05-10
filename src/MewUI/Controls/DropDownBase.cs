@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Rendering;
 
 
@@ -239,7 +240,10 @@ public abstract class DropDownBase : Control, IPopupOwner
         var innerHeaderRect = headerRect.Deflate(new Thickness(borderInset));
 
         ArrowForeground = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-        RenderHeaderContent(context, headerRect, innerHeaderRect);
+        using (PerformanceProfiler.Instance.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this))
+        {
+            RenderHeaderContent(context, headerRect, innerHeaderRect);
+        }
 
         DrawArrow(context, innerHeaderRect, ArrowForeground, IsDropDownOpen);
 

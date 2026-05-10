@@ -1926,7 +1926,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     }
 
-    internal void RenderFrameToSurface(IBitmapRenderTarget surface)
+    internal void RenderFrameToSurface(IRenderSurface surface)
     {
         if (surface == null)
         {
@@ -1958,7 +1958,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         // Render surfaces are one-shot (different target instance per call).
         // Window-targeted contexts are cached so backends can pool per-frame state.
-        bool oneShot = target is IBitmapRenderTarget;
+        bool oneShot = target is IRenderSurface;
         IGraphicsContext context = oneShot
             ? GraphicsFactory.CreateContext(target)
             : (_renderContext ??= GraphicsFactory.CreateContext(target));
@@ -2082,15 +2082,35 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
 
             if (context is GraphicsContextBase gcb)
-                LastFrameStats = new RenderStats(gcb.DrawCallCount, gcb.CullCount);
+                LastFrameStats = new RenderStats(gcb.DrawCallCount, gcb.CullCount, gcb.PrimitiveStats);
         }
         finally
         {
             // EndFrame must run even if rendering throws so backend GPU/COM state is closed.
             // For oneShot contexts, Dispose must also run to return pooled collections.
-            try { context.EndFrame(); }
+            phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
+            try
+            {
+                bool presentWait = Application.IsRunning && Application.Current.RenderLoopSettings.VSyncEnabled;
+                using (frameTiming.Enabled ? (presentWait ? ProfilerMarkers.Present.Auto() : ProfilerMarkers.EndFrame.Auto()) : default)
+                {
+                    context.EndFrame();
+                }
+            }
             finally { if (oneShot) context.Dispose(); }
+            if (frameTiming.Enabled)
+            {
+                frameTiming.EndFrameTicks += Stopwatch.GetTimestamp() - phaseStart;
+                if (Application.IsRunning && Application.Current.RenderLoopSettings.VSyncEnabled)
+                {
+                    frameTiming.PresentTicks += frameTiming.EndFrameTicks;
+                    frameTiming.EndFrameTicks = 0;
+                }
+            }
         }
+
+        profiler.CommitFrame(ref frameTiming, _lastLayoutPerformanceStats, LastFrameStats.DrawCalls, LastFrameStats.CullCount, LastFrameStats.PrimitiveStats);
+        LastFramePerformanceStats = profiler.LatestFrame;
 
         if (!_firstFrameRenderedRaised)
         {
