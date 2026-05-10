@@ -393,14 +393,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             return CreateContextCore(win32Surface.Hwnd, windowTarget.DpiScale, win32Surface.TransparentComposition);
         }
 
-        if (target is Direct2DPixelRenderSurface bitmapTarget)
+        if (target is Direct2DPixelRenderSurface surfaceTarget)
         {
-            return CreateBitmapContext(bitmapTarget);
+            return CreatePixelSurfaceContext(surfaceTarget);
         }
 
         if (target is Direct2DGpuPixelRenderSurface gpuTarget)
         {
-            return CreateGpuBitmapContext(gpuTarget);
+            return CreateGpuPixelSurfaceContext(gpuTarget);
         }
 
         if (target is ICpuPixelSurface)
@@ -442,7 +442,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return ctx;
     }
 
-    private IGraphicsContext CreateBitmapContext(Direct2DPixelRenderSurface target)
+    private IGraphicsContext CreatePixelSurfaceContext(Direct2DPixelRenderSurface target)
     {
         EnsureInitialized();
 
@@ -467,7 +467,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     /// <see cref="Direct2DGpuPixelRenderSurface"/>, using the shared filter device context
     /// + <c>SetTarget</c> instead of a DC render target — keeps the filter pipeline on-GPU
     /// end-to-end.</summary>
-    private IGraphicsContext CreateGpuBitmapContext(Direct2DGpuPixelRenderSurface target)
+    private IGraphicsContext CreateGpuPixelSurfaceContext(Direct2DGpuPixelRenderSurface target)
     {
         EnsureInitialized();
 
@@ -494,7 +494,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return ctx;
     }
 
-    private IRenderSurface CreateCpuBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
+    private IRenderSurface CreateCpuPixelSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
         => new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha);
 
     /// <summary>
@@ -532,7 +532,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
     {
         var target = RenderDeviceFactoryHelpers.RequiresCpuBitmap(descriptor)
-            ? CreateCpuBitmapSurfaceTarget(
+            ? CreateCpuPixelSurface(
                 descriptor.PixelWidth,
                 descriptor.PixelHeight,
                 descriptor.DpiScale,
