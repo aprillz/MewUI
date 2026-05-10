@@ -7,6 +7,112 @@ namespace Aprillz.MewUI;
 
 partial class Window
 {
+#if DEBUG
+    private Adorner? _performanceAdorner;
+    private DebugPerformanceOverlay? _performanceOverlay;
+    private DebugProfilerWindow? _profilerWindow;
+
+    public bool PerformanceMonitorIsOpen => _performanceAdorner != null;
+
+    public bool ProfilerIsOpen => _profilerWindow != null;
+
+    public event Action<bool>? PerformanceMonitorOpenChanged;
+
+    public event Action<bool>? ProfilerOpenChanged;
+
+    /// <summary>
+    /// Registers profiler-related key bindings (Ctrl/Cmd+Shift+P for the perf overlay,
+    /// Ctrl/Cmd+Shift+Alt+P for the timeline window). Called from <see cref="Window"/>'s
+    /// constructor alongside the inspector/visual-tree DevTools bindings; kept separate
+    /// from <c>InitializeDebugDevTools</c> so profiler concerns live wholly in this file.
+    /// </summary>
+    private void InitializeDebugPerformanceProfiler()
+    {
+        KeyBindings.Add(new KeyBinding(new KeyGesture(Key.P, ModifierKeys.Primary | ModifierKeys.Shift), TogglePerformanceMonitor));
+        KeyBindings.Add(new KeyBinding(new KeyGesture(Key.P, ModifierKeys.Primary | ModifierKeys.Shift | ModifierKeys.Alt), ToggleProfiler));
+    }
+
+    private void UpdateProfilerEnabled()
+    {
+        PerformanceProfiler.Instance.IsEnabled = _performanceAdorner != null || _profilerWindow != null;
+    }
+
+    public void TogglePerformanceMonitor()
+    {
+        if (_performanceAdorner != null)
+        {
+            AdornerLayer.Remove(_performanceAdorner);
+            _performanceAdorner = null;
+            _performanceOverlay = null;
+            UpdateProfilerEnabled();
+            RequestLayout();
+            RequestRender();
+            PerformanceMonitorOpenChanged?.Invoke(false);
+            return;
+        }
+
+        _performanceOverlay = new DebugPerformanceOverlay(this)
+        {
+            IsHitTestVisible = false,
+            IsVisible = true,
+        };
+
+        _performanceAdorner = new Adorner(this, _performanceOverlay)
+        {
+            IsHitTestVisible = false,
+            IsVisible = true,
+        };
+
+        AdornerLayer.Add(_performanceAdorner);
+        UpdateProfilerEnabled();
+        RequestRender();
+        PerformanceMonitorOpenChanged?.Invoke(true);
+    }
+
+    public void ToggleProfiler()
+    {
+        if (_profilerWindow != null)
+        {
+            try
+            {
+                _profilerWindow.Close();
+            }
+            catch { }
+            _profilerWindow = null;
+            UpdateProfilerEnabled();
+            ProfilerOpenChanged?.Invoke(false);
+            return;
+        }
+
+        var profilerWindow = new DebugProfilerWindow(this);
+        _profilerWindow = profilerWindow;
+        UpdateProfilerEnabled();
+
+        profilerWindow.Closed += () =>
+        {
+            if (ReferenceEquals(_profilerWindow, profilerWindow))
+            {
+                _profilerWindow = null;
+                UpdateProfilerEnabled();
+                ProfilerOpenChanged?.Invoke(false);
+            }
+        };
+
+        Closed += CloseProfilerOnOwnerClose;
+        void CloseProfilerOnOwnerClose()
+        {
+            Closed -= CloseProfilerOnOwnerClose;
+            try { _profilerWindow?.Close(); } catch { }
+            _profilerWindow = null;
+            UpdateProfilerEnabled();
+            ProfilerOpenChanged?.Invoke(false);
+        }
+
+        profilerWindow.Show();
+        ProfilerOpenChanged?.Invoke(true);
+    }
+#endif
+
     private sealed class DebugPerformanceOverlay : Control
     {
         private readonly Window _window;
