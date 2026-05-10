@@ -118,7 +118,7 @@ public sealed class BorrowedFilterResult : FilterResult
 /// </summary>
 public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
 {
-    IBitmapRenderTarget IPixelTargetAccess.Target => _target;
+    ICpuPixelSurface IPixelTargetAccess.Target => _target;
 
     private readonly IRenderSurface _surface;
     private readonly IBitmapRenderTarget _target;

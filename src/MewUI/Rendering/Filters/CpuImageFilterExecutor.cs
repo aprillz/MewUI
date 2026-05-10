@@ -336,16 +336,10 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
     private static void CopyToScratch(ScratchFilterResult scratch, byte[] pixels, int width, int height)
     {
-        // Pull the underlying target via a hack — ScratchFilterResult stores it privately.
-        // We expose the buffer through ReadPixels, then copy via the IBitmapRenderTarget's
-        // GetPixelSpan. Since ScratchFilterResult.AsImage() wraps the same target, we can
-        // get to the target via the brush/image internals — but cleaner is to just use
-        // ReadPixels' span as a writable view via the underlying target.
-        //
-        // Workaround: cast through public API. ScratchFilterResult.ReadPixels returns the
-        // target's GetPixelSpan() which is writable — we copy in-place.
+        // Write through the internal CPU pixel surface hook without exposing mutable pixels
+        // on the public FilterResult API.
         var target = ((IPixelTargetAccess)scratch).Target;
-        var dest = target.GetPixelSpan();
+        var dest = target.GetWritablePixelSpan();
         int needed = Math.Min(pixels.Length, dest.Length);
         pixels.AsSpan(0, needed).CopyTo(dest);
         target.IncrementVersion();
@@ -355,11 +349,11 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
     {
         var target = ((IPixelTargetAccess)scratch).Target;
         byte a = color.A;
-        bool premultiply = target.IsPremultiplied;
+        bool premultiply = scratch.IsPremultiplied;
         byte b = premultiply ? (byte)((color.B * a + 127) / 255) : color.B;
         byte g = premultiply ? (byte)((color.G * a + 127) / 255) : color.G;
         byte r = premultiply ? (byte)((color.R * a + 127) / 255) : color.R;
-        var span = target.GetPixelSpan();
+        var span = target.GetWritablePixelSpan();
         for (int i = 0; i + 3 < span.Length; i += 4)
         {
             span[i + 0] = b;
@@ -750,10 +744,10 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
 /// <summary>
 /// Internal hook that lets <see cref="CpuImageFilterExecutor"/> reach into a
-/// <see cref="ScratchFilterResult"/>'s underlying <see cref="IBitmapRenderTarget"/> to write
+/// <see cref="ScratchFilterResult"/>'s underlying CPU pixel surface to write
 /// pixels directly. Avoids exposing the target on the public <see cref="FilterResult"/> API.
 /// </summary>
 internal interface IPixelTargetAccess
 {
-    IBitmapRenderTarget Target { get; }
+    ICpuPixelSurface Target { get; }
 }
