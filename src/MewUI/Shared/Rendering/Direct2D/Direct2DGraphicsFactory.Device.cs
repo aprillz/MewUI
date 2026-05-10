@@ -34,7 +34,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
     private nint _d2dDevice;
     private nint _filterDeviceContext;
     private GpuDeviceState _gpuDeviceState;
-    private readonly List<WeakReference<Direct2DGpuBitmapRenderTarget>> _trackedGpuBitmapTargets = [];
+    private readonly List<WeakReference<Direct2DGpuPixelRenderSurface>> _trackedGpuBitmapTargets = [];
 
     /// <summary>Shared <c>ID2D1DeviceContext*</c> for filter pipeline GPU bitmaps and
     /// effects. Returns 0 if the GPU pipeline isn't available (caller should fall back to
@@ -291,7 +291,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
         || hr == DXGI_ERROR_DEVICE_HUNG
         || hr == DXGI_ERROR_DEVICE_RESET;
 
-    internal void RegisterGpuBitmapTarget(Direct2DGpuBitmapRenderTarget target)
+    internal void RegisterGpuBitmapTarget(Direct2DGpuPixelRenderSurface target)
     {
         lock (_filterDeviceInitLock)
         {
@@ -303,7 +303,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
                 }
             }
 
-            _trackedGpuBitmapTargets.Add(new WeakReference<Direct2DGpuBitmapRenderTarget>(target));
+            _trackedGpuBitmapTargets.Add(new WeakReference<Direct2DGpuPixelRenderSurface>(target));
         }
     }
 

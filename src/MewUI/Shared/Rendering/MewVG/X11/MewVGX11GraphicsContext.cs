@@ -25,7 +25,7 @@ internal sealed partial class MewVGX11GraphicsContext
     internal static MewVGX11GraphicsContext CreateForOffscreen(
         MewVGGlOffscreenSurface offscreen,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
-        OpenGLBitmapRenderTarget bitmapTarget)
+        OpenGLPixelRenderSurface bitmapTarget)
         => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, bitmapTarget));
 
     internal void SetTarget(nint display, nint window)
@@ -521,12 +521,12 @@ internal sealed partial class MewVGX11GraphicsContext
     {
         private readonly MewVGGlOffscreenSurface _offscreen;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
-        private readonly OpenGLBitmapRenderTarget _bitmapTarget;
+        private readonly OpenGLPixelRenderSurface _bitmapTarget;
 
         public X11OffscreenFrameSession(
             MewVGGlOffscreenSurface offscreen,
             IMewVGOffscreenSurfaceProvider offscreenProvider,
-            OpenGLBitmapRenderTarget bitmapTarget)
+            OpenGLPixelRenderSurface bitmapTarget)
         {
             _offscreen = offscreen;
             _offscreenProvider = offscreenProvider;
@@ -568,7 +568,7 @@ internal sealed partial class MewVGX11GraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static void PrepareBitmapTarget(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLBitmapRenderTarget bitmapTarget)
+    private static void PrepareBitmapTarget(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface bitmapTarget)
     {
         // Don't drain pending target disposals here — see Win32 PrepareBitmapTarget for
         // the rationale. Drain happens at the outermost session's EndFrame instead.

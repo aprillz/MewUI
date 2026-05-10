@@ -36,7 +36,7 @@ internal sealed partial class MewVGWin32GraphicsContext
     internal static MewVGWin32GraphicsContext CreateForOffscreen(
         MewVGGlOffscreenSurface offscreen,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
-        OpenGLBitmapRenderTarget bitmapTarget,
+        OpenGLPixelRenderSurface bitmapTarget,
         nint hdc)
         => new(new OffscreenBitmapFrameSession(offscreen, offscreenProvider, bitmapTarget, hdc));
 
@@ -45,7 +45,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         nint hwnd,
         nint hdc,
-        OpenGLBitmapRenderTarget bitmapTarget)
+        OpenGLPixelRenderSurface bitmapTarget)
         => new(new WindowBitmapFrameSession(resources, offscreenProvider, hwnd, hdc, bitmapTarget));
 
     internal void SetWindowTarget(nint hwnd, nint hdc)
@@ -536,9 +536,9 @@ internal sealed partial class MewVGWin32GraphicsContext
         private readonly MewVGWindowResources _resources;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private readonly nint _hdc;
-        private readonly OpenGLBitmapRenderTarget _bitmapTarget;
+        private readonly OpenGLPixelRenderSurface _bitmapTarget;
 
-        public WindowBitmapFrameSession(MewVGWindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc, OpenGLBitmapRenderTarget bitmapTarget)
+        public WindowBitmapFrameSession(MewVGWindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc, OpenGLPixelRenderSurface bitmapTarget)
         {
             _resources = resources;
             _offscreenProvider = offscreenProvider;
@@ -597,12 +597,12 @@ internal sealed partial class MewVGWin32GraphicsContext
     {
         private readonly MewVGGlOffscreenSurface _offscreen;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
-        private readonly OpenGLBitmapRenderTarget _bitmapTarget;
+        private readonly OpenGLPixelRenderSurface _bitmapTarget;
 
         public OffscreenBitmapFrameSession(
             MewVGGlOffscreenSurface offscreen,
             IMewVGOffscreenSurfaceProvider offscreenProvider,
-            OpenGLBitmapRenderTarget bitmapTarget,
+            OpenGLPixelRenderSurface bitmapTarget,
             nint hdc)
         {
             _offscreen = offscreen;
@@ -655,7 +655,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static void PrepareBitmapTarget(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLBitmapRenderTarget bitmapTarget)
+    private static void PrepareBitmapTarget(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface bitmapTarget)
     {
         // Don't drain pending target disposals here. NVG defers its draw commands until the
         // OUTER frame's EndFrame, and the pending queue holds textures (e.g. blur scratch

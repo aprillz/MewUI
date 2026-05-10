@@ -98,7 +98,7 @@ public sealed class SvgDocument
             pixelWidth,
             pixelHeight,
             debugName: "SvgDocumentRasterize"));
-        if (surface is not IBitmapRenderTarget target)
+        if (surface is not IPixelRenderSurface target)
         {
             throw new NotSupportedException($"{nameof(SvgDocument)} rasterization requires a bitmap-backed render surface.");
         }

@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
 /// GPU separable Gaussian blur via Apple's Metal Performance Shaders (MPS) on
-/// <see cref="MewVGMetalBitmapRenderTarget"/>. Wraps <c>MPSImageGaussianBlur</c>'s
+/// <see cref="MewVGMetalPixelRenderSurface"/>. Wraps <c>MPSImageGaussianBlur</c>'s
 /// <c>encodeToCommandBuffer:sourceTexture:destinationTexture:</c> entry point.
 /// </summary>
 /// <remarks>

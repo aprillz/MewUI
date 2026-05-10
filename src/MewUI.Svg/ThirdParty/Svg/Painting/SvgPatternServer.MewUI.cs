@@ -158,7 +158,7 @@ public partial class SvgPatternServer
                     pixelHeight,
                     dpiScale: 1.0,
                     debugName: "SvgPatternTile"));
-                if (newSurface is not IBitmapRenderTarget newTarget)
+                if (newSurface is not IPixelRenderSurface newTarget)
                 {
                     newSurface.Dispose();
                     throw new NotSupportedException($"{nameof(SvgPatternServer)} requires bitmap-backed pattern tile surfaces.");

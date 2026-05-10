@@ -8,12 +8,12 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// GPU-only D2D bitmap target — wraps an <c>ID2D1Bitmap1</c> created with
 /// <c>D2D1_BITMAP_OPTIONS.TARGET</c>. No GDI DIB section is allocated; pixels live
 /// exclusively in GPU memory and are sampled by effects / drawn directly via the
-/// shared device context. Counterpart of MewVG's <c>OpenGLBitmapRenderTarget</c>.
+/// shared device context. Counterpart of MewVG's <c>OpenGLPixelRenderSurface</c>.
 /// </summary>
 /// <remarks>
 /// Used by <see cref="Direct2DImageFilterExecutor"/> for source layers and scratch
 /// buffers when the active backend supports the GPU pipeline. Falls back to the
-/// DIB-backed <see cref="Direct2DBitmapRenderTarget"/> for layered window compositing
+/// DIB-backed <see cref="Direct2DPixelRenderSurface"/> for layered window compositing
 /// (which legitimately needs CPU access to the pixels).
 /// <para/>
 /// Lifetime: the wrapped <c>ID2D1Bitmap1</c> is created against the factory's shared
@@ -21,7 +21,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// is undefined in D2D, so all filter operations on this target must go through the same
 /// shared DC.
 /// </remarks>
-internal sealed unsafe class Direct2DGpuBitmapRenderTarget : IBitmapRenderTarget, ID2DTextureSource
+internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelRenderSurface, ID2DTextureSource
     , IReusableScratchRenderTarget
 {
     private readonly Direct2DGraphicsFactory _factory;
@@ -34,7 +34,7 @@ internal sealed unsafe class Direct2DGpuBitmapRenderTarget : IBitmapRenderTarget
     private bool _deviceLost;
     private bool _disposed;
 
-    public Direct2DGpuBitmapRenderTarget(Direct2DGraphicsFactory factory, int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
+    public Direct2DGpuPixelRenderSurface(Direct2DGraphicsFactory factory, int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
@@ -133,7 +133,7 @@ internal sealed unsafe class Direct2DGpuBitmapRenderTarget : IBitmapRenderTarget
         Monitor.Enter(_gate);
         try
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(Direct2DGpuBitmapRenderTarget));
+            if (_disposed) throw new ObjectDisposedException(nameof(Direct2DGpuPixelRenderSurface));
             ThrowIfStaleDevice();
             var bytes = ReadbackToBufferUnderLock();
             // Read-only release: just drop the gate. We previously did an unconditional

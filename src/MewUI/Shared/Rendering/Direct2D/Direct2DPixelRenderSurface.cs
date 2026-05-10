@@ -7,10 +7,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
 /// <summary>
-/// Direct2D implementation of IBitmapRenderTarget.
+/// Direct2D implementation of IPixelRenderSurface.
 /// Uses DIB section + DC render target for offscreen rendering.
 /// </summary>
-internal sealed unsafe class Direct2DBitmapRenderTarget : IBitmapRenderTarget, IWin32HdcSource
+internal sealed unsafe class Direct2DPixelRenderSurface : IPixelRenderSurface, IWin32HdcSource
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -31,7 +31,7 @@ internal sealed unsafe class Direct2DBitmapRenderTarget : IBitmapRenderTarget, I
     private byte[]? _lockBuffer;
     private Action? _releaseAction;
 
-    public Direct2DBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
+    public Direct2DPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -158,7 +158,7 @@ internal sealed unsafe class Direct2DBitmapRenderTarget : IBitmapRenderTarget, I
         if (_disposed)
         {
             Monitor.Exit(_gate);
-            throw new ObjectDisposedException(nameof(Direct2DBitmapRenderTarget));
+            throw new ObjectDisposedException(nameof(Direct2DPixelRenderSurface));
         }
 
         int size = PixelWidth * PixelHeight * 4;
@@ -206,7 +206,7 @@ internal sealed unsafe class Direct2DBitmapRenderTarget : IBitmapRenderTarget, I
     {
         if (_disposed)
         {
-            throw new ObjectDisposedException(nameof(Direct2DBitmapRenderTarget));
+            throw new ObjectDisposedException(nameof(Direct2DPixelRenderSurface));
         }
 
         if (_dcRenderTarget != 0)

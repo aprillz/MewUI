@@ -34,7 +34,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\IMetalTextureSource.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MetalGaussianBlur.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MetalImageFilterExecutor.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalBitmapRenderTarget.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalPixelRenderSurface.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalGraphicsContext.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalMeasurementContext.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalOffscreenManager.cs" LinkBase="Rendering\MewVG" />

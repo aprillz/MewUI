@@ -1942,7 +1942,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     }
 
-    internal void RenderFrameToBitmap(IBitmapRenderTarget bitmapTarget)
+    internal void RenderFrameToBitmap(IPixelRenderSurface bitmapTarget)
     {
         if (bitmapTarget == null)
         {
@@ -1974,7 +1974,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         // Bitmap targets are one-shot (different target instance per call).
         // Window-targeted contexts are cached so backends can pool per-frame state.
-        bool oneShot = target is IBitmapRenderTarget;
+        bool oneShot = target is IPixelRenderSurface;
         IGraphicsContext context = oneShot
             ? GraphicsFactory.CreateContext(target)
             : (_renderContext ??= GraphicsFactory.CreateContext(target));

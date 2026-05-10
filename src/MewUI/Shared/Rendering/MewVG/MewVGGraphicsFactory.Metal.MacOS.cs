@@ -75,7 +75,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        renderTarget = new MewVGMetalBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
+        renderTarget = new MewVGMetalPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha);
         handled = true;
     }
 
@@ -92,7 +92,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        if (target is not MewVGMetalBitmapRenderTarget bitmapTarget)
+        if (target is not MewVGMetalPixelRenderSurface bitmapTarget)
         {
             return;
         }

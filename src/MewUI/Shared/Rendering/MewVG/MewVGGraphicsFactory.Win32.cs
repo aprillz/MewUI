@@ -26,7 +26,7 @@ public sealed partial class MewVGGraphicsFactory
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
-    [ThreadStatic] private static IBitmapRenderTarget? _bitmapPresentTarget;
+    [ThreadStatic] private static IPixelRenderSurface? _bitmapPresentTarget;
 #pragma warning restore CS0649
     public GraphicsBackend Backend => GraphicsBackend.OpenGL;
 
@@ -103,7 +103,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        renderTarget = new OpenGLBitmapRenderTarget(
+        renderTarget = new OpenGLPixelRenderSurface(
             pixelWidth,
             pixelHeight,
             dpiScale,
@@ -125,7 +125,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        if (target is not OpenGLBitmapRenderTarget bitmapTarget)
+        if (target is not OpenGLPixelRenderSurface bitmapTarget)
         {
             return;
         }
@@ -489,7 +489,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
     private readonly Func<nint> _getShareContext;
     private readonly object _lock = new();
-    private readonly Dictionary<nint, OpenGLBitmapRenderTarget> _layeredTargets = new();
+    private readonly Dictionary<nint, OpenGLPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<nint, Win32LayeredBitmap> _layeredStagingTargets = new();
     private readonly Dictionary<nint, MewVGWindowResources> _layeredWindowResources = new();
 
@@ -499,7 +499,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
         _getShareContext = getShareContext;
     }
 
-    internal readonly record struct LayeredRenderContext(nint Hwnd, nint Hdc, OpenGLBitmapRenderTarget RenderTarget);
+    internal readonly record struct LayeredRenderContext(nint Hwnd, nint Hdc, OpenGLPixelRenderSurface RenderTarget);
 
     internal bool Present(Window window, IWin32LayeredWindowSurface surface, double opacity, Action<LayeredRenderContext> render)
     {
@@ -633,7 +633,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
         srcBgra.Slice(0, byteCount).CopyTo(dstBgra);
     }
 
-    private OpenGLBitmapRenderTarget GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private OpenGLPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_lock)
         {
@@ -650,7 +650,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
                 old.Dispose();
             }
 
-            var created = new OpenGLBitmapRenderTarget(
+            var created = new OpenGLPixelRenderSurface(
                 pixelWidth,
                 pixelHeight,
                 dpiScale,

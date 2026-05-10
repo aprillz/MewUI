@@ -13,11 +13,11 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// <remarks>
 /// Two execution paths, picked per call:
 /// <list type="bullet">
-/// <item><b>Zero-copy</b>: when src AND scratch are <see cref="Direct2DGpuBitmapRenderTarget"/>
+/// <item><b>Zero-copy</b>: when src AND scratch are <see cref="Direct2DGpuPixelRenderSurface"/>
 ///   (GPU-resident bitmaps on the shared DC), the effect runs straight from src to dst with
 ///   no CPU touch. Mirrors MewVG's FBO→FBO blur path.</item>
 /// <item><b>CPU round-trip</b>: when ends are DIB-backed
-///   <see cref="Direct2DBitmapRenderTarget"/>, source pixels are CPU-premultiplied,
+///   <see cref="Direct2DPixelRenderSurface"/>, source pixels are CPU-premultiplied,
 ///   uploaded to a transient <c>ID2D1Bitmap1</c>, run through the effect, and the output
 ///   is rendered into the scratch DC RT (which commits to its DIB). Two CPU passes per
 ///   filter, but the GPU still does the kernel — orders of magnitude faster than running
@@ -80,7 +80,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.OPTIMIZATION, (uint)D2D1_GAUSSIANBLUR_OPTIMIZATION.QUALITY);
     }
 
-    private static byte[] ReadAndPremultiply(Direct2DBitmapRenderTarget rt)
+    private static byte[] ReadAndPremultiply(Direct2DPixelRenderSurface rt)
     {
         var span = rt.GetPixelSpan();
         var copy = new byte[span.Length];
@@ -101,7 +101,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         return copy;
     }
 
-    private static void UnpremultiplyDib(Direct2DBitmapRenderTarget rt)
+    private static void UnpremultiplyDib(Direct2DPixelRenderSurface rt)
     {
         var span = rt.GetPixelSpan();
         for (int i = 0; i + 3 < span.Length; i += 4)
@@ -156,8 +156,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
 
             // Fast path: both ends GPU-resident. Run effect directly src.Bitmap → dst.Bitmap.
-            if (input.UnderlyingSurface is Direct2DGpuBitmapRenderTarget srcGpu &&
-                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
+            if (input.UnderlyingSurface is Direct2DGpuPixelRenderSurface srcGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
                 if (!RunGpuOnlyBlur(sharedDc, srcGpu, dstGpu, sigma))
@@ -171,8 +171,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
             // Slow path: DIB-backed ends. Upload source pixels, run effect, render into
             // scratch's DC RT (which commits to its DIB).
-            if (input.UnderlyingSurface is Direct2DBitmapRenderTarget srcDib &&
-                scratch.UnderlyingSurface is Direct2DBitmapRenderTarget dstDib)
+            if (input.UnderlyingSurface is Direct2DPixelRenderSurface srcDib &&
+                scratch.UnderlyingSurface is Direct2DPixelRenderSurface dstDib)
             {
                 if (!RunDibRoundtripBlur(srcDib, dstDib, sigma))
                 {
@@ -198,7 +198,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             }
         }
     }
-    private bool RunGpuOnlyBlur(nint sharedDc, Direct2DGpuBitmapRenderTarget srcGpu, Direct2DGpuBitmapRenderTarget dstGpu, float sigma)
+    private bool RunGpuOnlyBlur(nint sharedDc, Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu, float sigma)
     {
         if (DebugLogs)
             System.Diagnostics.Debug.WriteLine($"[D2DBlur] GPU path src={srcGpu.PixelWidth}x{srcGpu.PixelHeight} σ={sigma:F2}");
@@ -294,7 +294,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         return true;
     }
 
-    private bool RunDibRoundtripBlur(Direct2DBitmapRenderTarget srcDib, Direct2DBitmapRenderTarget dstDib, float sigma)
+    private bool RunDibRoundtripBlur(Direct2DPixelRenderSurface srcDib, Direct2DPixelRenderSurface dstDib, float sigma)
     {
         if (DebugLogs)
             System.Diagnostics.Debug.WriteLine($"[D2DBlur] DIB path src={srcDib.PixelWidth}x{srcDib.PixelHeight} σ={sigma:F2}");
@@ -399,9 +399,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         try
         {
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (input.UnderlyingSurface is Direct2DGpuBitmapRenderTarget srcGpu &&
+            if (input.UnderlyingSurface is Direct2DGpuPixelRenderSurface srcGpu &&
                 srcGpu.IsDeviceCurrent &&
-                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
@@ -442,9 +442,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         try
         {
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (input.UnderlyingSurface is Direct2DGpuBitmapRenderTarget srcGpu &&
+            if (input.UnderlyingSurface is Direct2DGpuPixelRenderSurface srcGpu &&
                 srcGpu.IsDeviceCurrent &&
-                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
@@ -488,11 +488,11 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             int pw = Math.Max(fg.PixelWidth, bg.PixelWidth);
             int ph = Math.Max(fg.PixelHeight, bg.PixelHeight);
             scratch = ctx.AcquireScratch(pw, ph, fg.Bounds);
-            if (fg.UnderlyingSurface is Direct2DGpuBitmapRenderTarget fgGpu &&
+            if (fg.UnderlyingSurface is Direct2DGpuPixelRenderSurface fgGpu &&
                 fgGpu.IsDeviceCurrent &&
-                bg.UnderlyingSurface is Direct2DGpuBitmapRenderTarget bgGpu &&
+                bg.UnderlyingSurface is Direct2DGpuPixelRenderSurface bgGpu &&
                 bgGpu.IsDeviceCurrent &&
-                scratch.UnderlyingSurface is Direct2DGpuBitmapRenderTarget dstGpu &&
+                scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
@@ -549,7 +549,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             if (sharedDc == 0) return null;
 
             ScratchFilterResult? scratch = ctx.AcquireScratch(pw, ph, heldInputs[0].Bounds);
-            if (scratch is null || scratch.UnderlyingSurface is not Direct2DGpuBitmapRenderTarget dstGpu)
+            if (scratch is null || scratch.UnderlyingSurface is not Direct2DGpuPixelRenderSurface dstGpu)
             {
                 scratch?.Dispose();
                 return null;
@@ -583,7 +583,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     /// <summary>Renders <paramref name="inputs"/> into <paramref name="dstGpu"/> bottom-to-top
     /// with SOURCE_OVER. All inputs assumed to share the source coordinate frame.</summary>
-    private bool CompositeBitmapsIntoTarget(nint sharedDc, IReadOnlyList<FilterResult> inputs, Direct2DGpuBitmapRenderTarget dstGpu)
+    private bool CompositeBitmapsIntoTarget(nint sharedDc, IReadOnlyList<FilterResult> inputs, Direct2DGpuPixelRenderSurface dstGpu)
     {
         // EnterSharedDcDraw — see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
         bool issuedBeginDraw = _factory.EnterSharedDcDraw();
@@ -609,7 +609,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             D2D1VTable.Clear((ID2D1RenderTarget*)sharedDc, new D2D1_COLOR_F(0, 0, 0, 0));
             for (int i = 0; i < inputs.Count; i++)
             {
-                if (inputs[i].UnderlyingSurface is not Direct2DGpuBitmapRenderTarget srcGpu || !srcGpu.IsDeviceCurrent) { ok = false; break; }
+                if (inputs[i].UnderlyingSurface is not Direct2DGpuPixelRenderSurface srcGpu || !srcGpu.IsDeviceCurrent) { ok = false; break; }
                 D2D1VTable.DrawImage((ID2D1DeviceContext*)sharedDc, srcGpu.Bitmap,
                     D2D1_INTERPOLATION_MODE.LINEAR, D2D1_COMPOSITE_MODE.SOURCE_OVER);
             }
@@ -639,7 +639,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     /// Mirrors the DC state save/restore + BeginDraw bracketing of <see cref="RunGpuOnlyBlur"/>
     /// so multiple effects compose cleanly without leaking transform/dpi/target between them.</summary>
     private bool RunGpuSingleInputEffect(nint sharedDc, Guid effectClsid,
-        Direct2DGpuBitmapRenderTarget srcGpu, Direct2DGpuBitmapRenderTarget dstGpu,
+        Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu,
         Action<nint> configureEffect)
     {
         int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)sharedDc, effectClsid, out nint effect);
@@ -658,8 +658,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     /// <summary>Applies a 2-input D2D effect (e.g. Composite). Input slots: 0=destination/bg, 1=source/fg.</summary>
     private bool RunGpuTwoInputEffect(nint sharedDc, Guid effectClsid,
-        Direct2DGpuBitmapRenderTarget input0, Direct2DGpuBitmapRenderTarget input1,
-        Direct2DGpuBitmapRenderTarget dstGpu, Action<nint> configureEffect)
+        Direct2DGpuPixelRenderSurface input0, Direct2DGpuPixelRenderSurface input1,
+        Direct2DGpuPixelRenderSurface dstGpu, Action<nint> configureEffect)
     {
         int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)sharedDc, effectClsid, out nint effect);
         if (hr < 0 || effect == 0) return false;
@@ -679,7 +679,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     /// <summary>DC-state-aware DrawImage(effectOutput → dstGpu.Bitmap). Matches RunGpuOnlyBlur's
     /// state handling: save/swap target, identity-transform + clear + DrawImage, restore.</summary>
-    private bool DrawEffectIntoBitmap(nint sharedDc, nint effect, Direct2DGpuBitmapRenderTarget dstGpu)
+    private bool DrawEffectIntoBitmap(nint sharedDc, nint effect, Direct2DGpuPixelRenderSurface dstGpu)
     {
         D2D1VTable.GetEffectOutput(effect, out nint effectImage);
         if (effectImage == 0) return false;

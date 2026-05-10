@@ -118,7 +118,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
             return CreateContextCore(win32Surface.Hwnd, win32Surface.Hdc, windowTarget.DpiScale, win32Surface.TransparentComposition);
         }
 
-        if (target is GdiBitmapRenderTarget bitmapTarget)
+        if (target is GdiPixelRenderSurface bitmapTarget)
         {
             // Use target's Hdc directly - no wrapper needed
             return new GdiPlusGraphicsContext(
@@ -132,10 +132,10 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
                 bitmapTarget: bitmapTarget);
         }
 
-        if (target is IBitmapRenderTarget)
+        if (target is IPixelRenderSurface)
         {
             throw new ArgumentException(
-                $"BitmapRenderTarget was created by a different backend. " +
+                $"PixelRenderSurface was created by a different backend. " +
                 $"Use {nameof(CreateSurface)} from the same factory.",
                 nameof(target));
         }
@@ -156,7 +156,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
     }
 
     private IRenderSurface CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
-        => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
+        => new GdiPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
 
     public IRenderResourceCache? ResourceCache => _renderResourceCache;
 
@@ -238,7 +238,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
     }
 
     private readonly object _layeredLock = new();
-    private readonly Dictionary<nint, GdiBitmapRenderTarget> _layeredTargets = new();
+    private readonly Dictionary<nint, GdiPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<nint, Win32LayeredBitmap> _layeredStagingTargets = new();
 
     public bool Present(Window window, IWindowSurface surface, double opacity)
@@ -297,7 +297,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         return true;
     }
 
-    private GdiBitmapRenderTarget GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private GdiPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_layeredLock)
         {
@@ -314,7 +314,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
                 old.Dispose();
             }
 
-            var created = new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, presentationMode: GdiPresentationMode.PerPixelAlpha);
+            var created = new GdiPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, presentationMode: GdiPresentationMode.PerPixelAlpha);
             _layeredTargets[hwnd] = created;
             return created;
         }

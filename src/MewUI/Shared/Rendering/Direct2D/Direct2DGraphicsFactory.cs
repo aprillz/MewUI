@@ -37,7 +37,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     private readonly object _rtLock = new();
     private readonly Dictionary<nint, CachedWindowTarget> _windowTargets = new();
-    private readonly Dictionary<nint, Direct2DBitmapRenderTarget> _layeredTargets = new();
+    private readonly Dictionary<nint, Direct2DPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<StrokeStyle, nint> _strokeStyles = new();
     private readonly RenderResourceCache _renderResourceCache = new();
 
@@ -393,20 +393,20 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             return CreateContextCore(win32Surface.Hwnd, windowTarget.DpiScale, win32Surface.TransparentComposition);
         }
 
-        if (target is Direct2DBitmapRenderTarget bitmapTarget)
+        if (target is Direct2DPixelRenderSurface bitmapTarget)
         {
             return CreateBitmapContext(bitmapTarget);
         }
 
-        if (target is Direct2DGpuBitmapRenderTarget gpuTarget)
+        if (target is Direct2DGpuPixelRenderSurface gpuTarget)
         {
             return CreateGpuBitmapContext(gpuTarget);
         }
 
-        if (target is IBitmapRenderTarget)
+        if (target is IPixelRenderSurface)
         {
             throw new ArgumentException(
-                $"BitmapRenderTarget was created by a different backend. " +
+                $"PixelRenderSurface was created by a different backend. " +
                 $"Use {nameof(CreateSurface)} from the same factory.",
                 nameof(target));
         }
@@ -442,7 +442,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return ctx;
     }
 
-    private IGraphicsContext CreateBitmapContext(Direct2DBitmapRenderTarget target)
+    private IGraphicsContext CreateBitmapContext(Direct2DPixelRenderSurface target)
     {
         EnsureInitialized();
 
@@ -458,16 +458,16 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             onRecreateTarget: null,
             onPresentTarget: null,
             ownsRenderTarget: false,
-            resolveRenderTarget: t => ((Direct2DBitmapRenderTarget)t).GetOrCreateDcRenderTarget(d2dFactory));
+            resolveRenderTarget: t => ((Direct2DPixelRenderSurface)t).GetOrCreateDcRenderTarget(d2dFactory));
         return ctx;
     }
 
     /// <summary>Builds a graphics context for a GPU-resident bitmap target. The context's
     /// <c>OnBeginFrame</c> branches into <c>BeginGpuBitmapFrame</c> when the target is a
-    /// <see cref="Direct2DGpuBitmapRenderTarget"/>, using the shared filter device context
+    /// <see cref="Direct2DGpuPixelRenderSurface"/>, using the shared filter device context
     /// + <c>SetTarget</c> instead of a DC render target — keeps the filter pipeline on-GPU
     /// end-to-end.</summary>
-    private IGraphicsContext CreateGpuBitmapContext(Direct2DGpuBitmapRenderTarget target)
+    private IGraphicsContext CreateGpuBitmapContext(Direct2DGpuPixelRenderSurface target)
     {
         EnsureInitialized();
 
@@ -495,12 +495,12 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     }
 
     private IRenderSurface CreateCpuBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
-        => new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
+        => new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha);
 
     /// <summary>
-    /// Returns a GPU-resident <see cref="Direct2DGpuBitmapRenderTarget"/> when the shared
+    /// Returns a GPU-resident <see cref="Direct2DGpuPixelRenderSurface"/> when the shared
     /// device context is available, falling back to the DIB-backed
-    /// <see cref="Direct2DBitmapRenderTarget"/> otherwise. The GPU path keeps filter graphs
+    /// <see cref="Direct2DPixelRenderSurface"/> otherwise. The GPU path keeps filter graphs
     /// fully on-GPU (CreateBitmap1 with TARGET option → effects sample directly →
     /// downstream draws via SetTarget + DrawImage); the only readback happens when CPU
     /// executors call <c>Lock</c>, in which case the lock release path also writes the
@@ -513,7 +513,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         {
             try
             {
-                return new Direct2DGpuBitmapRenderTarget(this, pixelWidth, pixelHeight, dpiScale, hasAlpha);
+                return new Direct2DGpuPixelRenderSurface(this, pixelWidth, pixelHeight, dpiScale, hasAlpha);
             }
             catch
             {
@@ -522,7 +522,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 // but it renders.
             }
         }
-        return new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
+        return new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha);
     }
 
     public IRenderResourceCache? ResourceCache => _renderResourceCache;
@@ -626,7 +626,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return true;
     }
 
-    private Direct2DBitmapRenderTarget GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private Direct2DPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_rtLock)
         {
@@ -643,7 +643,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 old.Dispose();
             }
 
-            var created = new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
+            var created = new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale);
             _layeredTargets[hwnd] = created;
             return created;
         }

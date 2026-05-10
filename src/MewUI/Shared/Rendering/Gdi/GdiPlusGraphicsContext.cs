@@ -17,7 +17,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
     private readonly ImageScaleQuality _imageScaleQuality;
-    private readonly GdiBitmapRenderTarget? _bitmapTarget;
+    private readonly GdiPixelRenderSurface? _bitmapTarget;
 
     private readonly int _pixelWidth;
     private readonly int _pixelHeight;
@@ -89,7 +89,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         double dpiScale,
         ImageScaleQuality imageScaleQuality,
         bool ownsDc = false,
-        GdiBitmapRenderTarget? bitmapTarget = null)
+        GdiPixelRenderSurface? bitmapTarget = null)
     {
         _hwnd = hwnd;
         Hdc = hdc;

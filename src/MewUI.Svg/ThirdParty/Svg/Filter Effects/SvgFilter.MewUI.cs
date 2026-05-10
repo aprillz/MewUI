@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Rendering;
@@ -262,7 +262,7 @@ public partial class SvgFilter
             pixelHeight,
             Math.Max(1.0, Math.Min(effectiveLogicalToPixelX, effectiveLogicalToPixelY)),
             debugName: "SvgFilterSourceLayer"));
-        if (sourceSurface is not IBitmapRenderTarget sourceLayer)
+        if (sourceSurface is not IPixelRenderSurface sourceLayer)
         {
             throw new NotSupportedException($"{nameof(SvgFilter)} currently requires bitmap-backed filter source layers.");
         }

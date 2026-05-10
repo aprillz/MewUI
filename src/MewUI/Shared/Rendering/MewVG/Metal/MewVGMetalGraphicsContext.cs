@@ -68,7 +68,7 @@ internal sealed partial class MewVGMetalGraphicsContext
     /// </summary>
     internal static MewVGMetalGraphicsContext CreateForOffscreen(
         MewVGMetalOffscreenSurface offscreen,
-        MewVGMetalBitmapRenderTarget target,
+        MewVGMetalPixelRenderSurface target,
         MewVGMetalOffscreenSurfaceProvider offscreenProvider)
         => new(new MetalOffscreenFrameSession(offscreen, target, offscreenProvider));
 
@@ -270,12 +270,12 @@ internal sealed partial class MewVGMetalGraphicsContext
     private sealed class MetalOffscreenFrameSession : IMetalFrameSession
     {
         private readonly MewVGMetalOffscreenSurface _offscreen;
-        private readonly MewVGMetalBitmapRenderTarget _target;
+        private readonly MewVGMetalPixelRenderSurface _target;
         private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider;
 
         public MetalOffscreenFrameSession(
             MewVGMetalOffscreenSurface offscreen,
-            MewVGMetalBitmapRenderTarget target,
+            MewVGMetalPixelRenderSurface target,
             MewVGMetalOffscreenSurfaceProvider offscreenProvider)
         {
             _offscreen = offscreen;

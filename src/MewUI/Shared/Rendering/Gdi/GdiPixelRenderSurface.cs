@@ -5,10 +5,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
-/// GDI implementation of IBitmapRenderTarget.
+/// GDI implementation of IPixelRenderSurface.
 /// Manages DIB section and memory DC for offscreen rendering.
 /// </summary>
-internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
+internal sealed class GdiPixelRenderSurface : IPixelRenderSurface
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -20,7 +20,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
     private byte[]? _lockBuffer;
     private Action? _releaseAction;
 
-    public GdiBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default, bool hasAlpha = true)
+    public GdiPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -154,7 +154,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
         if (_disposed)
         {
             Monitor.Exit(_gate);
-            throw new ObjectDisposedException(nameof(GdiBitmapRenderTarget));
+            throw new ObjectDisposedException(nameof(GdiPixelRenderSurface));
         }
 
         int size = PixelWidth * PixelHeight * 4;

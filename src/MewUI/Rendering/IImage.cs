@@ -29,7 +29,7 @@ public interface IImage : IDisposable
     /// the equivalent cleanup itself after <c>Dispose</c>.
     /// <para/>
     /// Used by <c>DefaultFilterContext.AcquireScratch</c> to delay returning the scratch
-    /// <see cref="IBitmapRenderTarget"/> to its pool until any zero-copy NVG draw
+    /// <see cref="IPixelRenderSurface"/> to its pool until any zero-copy NVG draw
     /// referencing the underlying texture has flushed — without this, the next acquire in
     /// the same filter eval can recycle the RT and overwrite the texture mid-flight,
     /// surfacing as cross-filter content bleed when UI invalidate races a render.

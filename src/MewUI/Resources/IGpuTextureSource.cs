@@ -88,7 +88,7 @@ public interface IGpuTextureSource : IPixelBufferSource
     /// </summary>
     /// <remarks>
     /// Default no-op — only sources whose backing GPU texture's wrap mode actually matters
-    /// (currently <c>OpenGLBitmapRenderTarget</c>) override. Future cleanup may move this
+    /// (currently <c>OpenGLPixelRenderSurface</c>) override. Future cleanup may move this
     /// to <c>IGLTextureSource.ConfigureWrap</c> since wrap mode is GL-specific; kept here
     /// for now so backend-agnostic consumers (MewVGImage) can call without GL marker cast.
     /// </remarks>

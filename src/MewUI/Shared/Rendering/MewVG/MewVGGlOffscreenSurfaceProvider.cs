@@ -7,7 +7,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
 {
     MewVGGlOffscreenSurface AcquireSurface();
     void ReturnSurface(MewVGGlOffscreenSurface surface);
-    void QueueTargetDisposal(OpenGLBitmapRenderTarget target);
+    void QueueTargetDisposal(OpenGLPixelRenderSurface target);
     void ReleasePendingTargetsUnderCurrentContext();
     void QueueImageDisposal(MewVGImage image);
 
@@ -59,7 +59,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
     // not be dequeued and released by the UI thread (running under the window
     // HGLRC), since FBOs aren't shared. Walking the list lets us pick out only the
     // entries whose owning context matches the current one.
-    private readonly List<OpenGLBitmapRenderTarget> _pendingTargetDisposal = new();
+    private readonly List<OpenGLPixelRenderSurface> _pendingTargetDisposal = new();
     // Per-NVG queue: each NVG drains only its own bucket from its EndFrame on the thread
     // that owns it. NanoVG instance state (image table, draw queue, transform stack) is not
     // thread-safe — calling vg.DeleteImage on a NVG that's mid-frame on another thread
@@ -156,7 +156,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    public void QueueTargetDisposal(OpenGLBitmapRenderTarget target)
+    public void QueueTargetDisposal(OpenGLPixelRenderSurface target)
     {
         if (target is null)
         {
@@ -188,7 +188,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
         while (true)
         {
-            OpenGLBitmapRenderTarget? target = null;
+            OpenGLPixelRenderSurface? target = null;
             lock (_lock)
             {
                 // Find the first pending target whose creation context matches the
@@ -309,7 +309,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
     {
         List<MewVGGlOffscreenSurface> surfaces = new();
         List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> imageEntries = new();
-        List<OpenGLBitmapRenderTarget> targets = new();
+        List<OpenGLPixelRenderSurface> targets = new();
 
         lock (_lock)
         {

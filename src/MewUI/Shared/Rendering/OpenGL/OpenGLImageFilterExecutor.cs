@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// </summary>
 /// <remarks>
 /// The executor reaches into <see cref="FilterResult.UnderlyingSurface"/> to obtain the
-/// backend's <see cref="OpenGLBitmapRenderTarget"/> and runs the shader with both source and
+/// backend's <see cref="OpenGLPixelRenderSurface"/> and runs the shader with both source and
 /// destination FBOs — so input is never mutated and we avoid the readback / re-upload that
 /// plagued the older capability-based approach. When the input or scratch isn't an OpenGL
 /// target (e.g. a <see cref="FloodFilter"/> result built by the CPU executor), we fall back
@@ -70,10 +70,10 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
         bool ownsResult = false;
         try
         {
-            // Need both input and scratch backed by OpenGLBitmapRenderTargets so we can run
+            // Need both input and scratch backed by OpenGLPixelRenderSurfaces so we can run
             // the GLSL pass directly against their FBOs. If either isn't OpenGL (e.g. a CPU
-            // fallback produced a generic IBitmapRenderTarget), bail to the fallback.
-            if (input.UnderlyingSurface is not OpenGLBitmapRenderTarget glSource) return null;
+            // fallback produced a generic IPixelRenderSurface), bail to the fallback.
+            if (input.UnderlyingSurface is not OpenGLPixelRenderSurface glSource) return null;
 
             // Source must have a valid FBO with content — true for the SvgFilter source layer
             // (rendered into the FBO and ReadbackFromFbo'd at EndFrame). Not true for results
@@ -81,7 +81,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
             if (!glSource.IsFboInitialized || glSource.Fbo == 0 || glSource.Texture == 0) return null;
 
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
-            if (scratch.UnderlyingSurface is not OpenGLBitmapRenderTarget glDest) return null;
+            if (scratch.UnderlyingSurface is not OpenGLPixelRenderSurface glDest) return null;
 
             // Lazy FBO init — pool gives back a fresh RT whose GPU resources haven't been
             // created yet (no BeginFrame has run on it). We're inside the main render path

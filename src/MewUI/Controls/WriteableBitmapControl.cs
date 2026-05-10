@@ -9,14 +9,14 @@ namespace Aprillz.MewUI.Controls;
 /// Provides infrastructure for pixel-based custom rendering with automatic
 /// buffer management and DPI-aware sizing.
 ///
-/// All rendering happens on a single IBitmapRenderTarget buffer:
+/// All rendering happens on a single IPixelRenderSurface buffer:
 /// - Direct pixel manipulation via LockForWrite()
 /// - Vector graphics via OnRenderBitmap(IGraphicsContext)
 /// </summary>
 public class WriteableBitmapControl : Control
 {
     private IRenderSurface? _surface;
-    private IBitmapRenderTarget? _renderTarget;
+    private IPixelRenderSurface? _renderTarget;
     private IImage? _image;
     private bool _needsRender;
     private bool _isRendering;
@@ -122,7 +122,7 @@ public class WriteableBitmapControl : Control
                     pixelHeight,
                     scale,
                     debugName: nameof(WriteableBitmapControl)));
-                if (_surface is not IBitmapRenderTarget bitmapTarget)
+                if (_surface is not IPixelRenderSurface bitmapTarget)
                 {
                     _surface.Dispose();
                     _surface = null;
@@ -210,7 +210,7 @@ public class WriteableBitmapControl : Control
     public readonly ref struct WriteContext
     {
         private readonly WriteableBitmapControl _control;
-        private readonly IBitmapRenderTarget _target;
+        private readonly IPixelRenderSurface _target;
 
         public int Width => _target.PixelWidth;
         public int Height => _target.PixelHeight;
@@ -231,7 +231,7 @@ public class WriteableBitmapControl : Control
         /// </summary>
         public bool IsPremultiplied => _target.IsPremultiplied;
 
-        internal WriteContext(WriteableBitmapControl control, IBitmapRenderTarget target)
+        internal WriteContext(WriteableBitmapControl control, IPixelRenderSurface target)
         {
             _control = control;
             _target = target;

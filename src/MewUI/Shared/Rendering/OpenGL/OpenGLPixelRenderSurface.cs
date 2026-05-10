@@ -4,10 +4,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
 /// <summary>
-/// OpenGL implementation of IBitmapRenderTarget using FBO (Framebuffer Object).
+/// OpenGL implementation of IPixelRenderSurface using FBO (Framebuffer Object).
 /// Provides offscreen rendering with CPU-side pixel buffer access.
 /// </summary>
-internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget, IGLTextureSource
+internal sealed class OpenGLPixelRenderSurface : IPixelRenderSurface, IGLTextureSource
 {
     // Lazily allocated — only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
     // actually requests pixel bytes. The pure GPU-only path (MewVGImage zero-copy via
@@ -15,7 +15,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget, IGLTexture
     // frame, eager allocation here was ~500 MB of GC churn for memory that nothing read.
     private byte[]? _pixels;
     private readonly object _gate = new();
-    private readonly Action<OpenGLBitmapRenderTarget>? _glDisposeRequested;
+    private readonly Action<OpenGLPixelRenderSurface>? _glDisposeRequested;
     private int _version;
     private bool _disposed;
 
@@ -52,8 +52,8 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget, IGLTexture
     private int _externalRetainCount;
     private bool _disposeDeferredForRetain;
 
-    public OpenGLBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale,
-        Action<OpenGLBitmapRenderTarget>? glDisposeRequested = null,
+    public OpenGLPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale,
+        Action<OpenGLPixelRenderSurface>? glDisposeRequested = null,
         bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
@@ -269,7 +269,7 @@ internal sealed class OpenGLBitmapRenderTarget : IBitmapRenderTarget, IGLTexture
         if (_disposed)
         {
             Monitor.Exit(_gate);
-            throw new ObjectDisposedException(nameof(OpenGLBitmapRenderTarget));
+            throw new ObjectDisposedException(nameof(OpenGLPixelRenderSurface));
         }
 
         FlushFboReadbackIfNeeded();

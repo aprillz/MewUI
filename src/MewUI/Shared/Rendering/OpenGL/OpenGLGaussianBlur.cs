@@ -3,7 +3,7 @@ using Aprillz.MewUI.Native;
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
 /// <summary>
-/// GPU separable Gaussian blur for <see cref="OpenGLBitmapRenderTarget"/>. Uses a
+/// GPU separable Gaussian blur for <see cref="OpenGLPixelRenderSurface"/>. Uses a
 /// 2-pass GLSL shader (horizontal then vertical), bouncing off a shared scratch FBO
 /// sized to the largest target seen so far. Compiled once per process and reused.
 /// </summary>
@@ -264,7 +264,7 @@ void main() {{
     /// Returns false when the shader pipeline is unavailable, program creation failed, or
     /// either target has no GPU resources.
     /// </summary>
-    public static bool TryApply(OpenGLBitmapRenderTarget source, OpenGLBitmapRenderTarget dest,
+    public static bool TryApply(OpenGLPixelRenderSurface source, OpenGLPixelRenderSurface dest,
         double sigmaX, double sigmaY)
     {
         if (source.Texture == 0 || dest.Fbo == 0 || dest.Texture == 0) return false;

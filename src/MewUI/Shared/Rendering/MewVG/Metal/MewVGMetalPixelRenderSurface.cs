@@ -9,10 +9,10 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// GPU-backed bitmap render target for the Metal backend. Holds a
 /// shared-storage MTLTexture so an offscreen <see cref="MewVGMetalGraphicsContext"/>
 /// can render into it directly, then exposes the rendered pixels through the
-/// CPU-side <see cref="IBitmapRenderTarget"/> surface (used by SVG filter /
+/// CPU-side <see cref="IPixelRenderSurface"/> surface (used by SVG filter /
 /// pattern uploads, WriteableBitmap-backed controls, etc.).
 /// </summary>
-internal sealed unsafe partial class MewVGMetalBitmapRenderTarget : IBitmapRenderTarget, IMetalTextureSource
+internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelRenderSurface, IMetalTextureSource
 {
     // -[MTLTexture getBytes:bytesPerRow:fromRegion:mipmapLevel:]
     // MTLRegion is 48 bytes (3 NSInteger origin + 3 NSInteger size). On both
@@ -121,7 +121,7 @@ internal sealed unsafe partial class MewVGMetalBitmapRenderTarget : IBitmapRende
     /// <summary>Depth/stencil texture matching the color size; private storage.</summary>
     public nint StencilTexture { get; private set; }
 
-    public MewVGMetalBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
+    public MewVGMetalPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -322,7 +322,7 @@ internal sealed unsafe partial class MewVGMetalBitmapRenderTarget : IBitmapRende
         if (_disposed)
         {
             Monitor.Exit(_gate);
-            throw new ObjectDisposedException(nameof(MewVGMetalBitmapRenderTarget));
+            throw new ObjectDisposedException(nameof(MewVGMetalPixelRenderSurface));
         }
 
         FlushPendingReadbackIfNeeded();

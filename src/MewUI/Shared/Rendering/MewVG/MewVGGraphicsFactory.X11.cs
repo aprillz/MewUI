@@ -201,7 +201,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        renderTarget = new OpenGLBitmapRenderTarget(
+        renderTarget = new OpenGLPixelRenderSurface(
             pixelWidth,
             pixelHeight,
             dpiScale,
@@ -223,7 +223,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        if (target is not OpenGLBitmapRenderTarget bitmapTarget)
+        if (target is not OpenGLPixelRenderSurface bitmapTarget)
         {
             return;
         }

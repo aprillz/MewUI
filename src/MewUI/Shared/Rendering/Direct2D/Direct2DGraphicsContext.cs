@@ -78,7 +78,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _clipStack = RentClipStack();
     }
 
-    // GPU bitmap target mode: when the active target is a Direct2DGpuBitmapRenderTarget,
+    // GPU bitmap target mode: when the active target is a Direct2DGpuPixelRenderSurface,
     // we render via the factory's shared filter device context (no DC RT, no DIB), with the
     // GPU bitmap set as the device target via dc.SetTarget. Subsequent draws and any effect
     // pass land directly on GPU memory — full zero-copy parity with MewVG's FBO path.
@@ -93,7 +93,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     {
         _dpiScale = target.DpiScale;
 
-        if (target is Direct2DGpuBitmapRenderTarget gpuTarget)
+        if (target is Direct2DGpuPixelRenderSurface gpuTarget)
         {
             BeginGpuBitmapFrame(gpuTarget);
             return;
@@ -164,7 +164,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     // active to cover all draws.
     private bool _calledBeginDrawOnSharedDc;
 
-    private void BeginGpuBitmapFrame(Direct2DGpuBitmapRenderTarget gpuTarget)
+    private void BeginGpuBitmapFrame(Direct2DGpuPixelRenderSurface gpuTarget)
     {
         // Release any device context held from a previous BeginFrame on this same context
         // instance — keeps refcounting balanced when the context is reused across frames.
