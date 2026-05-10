@@ -158,18 +158,18 @@ public partial class SvgPatternServer
                     pixelHeight,
                     dpiScale: 1.0,
                     debugName: "SvgPatternTile"));
-                if (newSurface is not IPixelRenderSurface newTarget)
+                if (newSurface is not ICpuPixelSurface newPixels)
                 {
                     newSurface.Dispose();
-                    throw new NotSupportedException($"{nameof(SvgPatternServer)} requires bitmap-backed pattern tile surfaces.");
+                    throw new NotSupportedException($"{nameof(SvgPatternServer)} requires CPU-writable pattern tile surfaces.");
                 }
                 try
                 {
-                    newTarget.Clear(Aprillz.MewUI.Color.Transparent);
+                    newPixels.Clear(Aprillz.MewUI.Color.Transparent);
 
                     using (var tileContext = renderDevice.CreateContext(newSurface))
                     {
-                        tileContext.BeginFrame(newTarget);
+                        tileContext.BeginFrame(newSurface);
                         try
                         {
                             using var tileRenderer = new MewSvgRenderer(factory, tileContext);

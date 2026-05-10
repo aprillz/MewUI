@@ -352,21 +352,21 @@ public sealed class SvgView : FrameworkElement
                     request.PixelHeight,
                     request.EffectiveScale,
                     debugName: "SvgViewCache"));
-                if (surface is not IPixelRenderSurface target)
+                if (surface is not ICpuPixelSurface pixels)
                 {
                     surface.Dispose();
-                    throw new NotSupportedException($"{nameof(SvgView)} cache rebuild requires a bitmap-backed render surface.");
+                    throw new NotSupportedException($"{nameof(SvgView)} cache rebuild requires a CPU-writable render surface.");
                 }
                 long tCreateRT = sw.ElapsedTicks;
                 try
                 {
-                    target.Clear(Color.Transparent);
+                    pixels.Clear(Color.Transparent);
                     long tClear = sw.ElapsedTicks;
                     long tBegin, tRender, tEnd;
                     using (var bmpContext = renderDevice.CreateContext(surface))
                     {
                         long tCtx = sw.ElapsedTicks;
-                        bmpContext.BeginFrame(target);
+                        bmpContext.BeginFrame(surface);
                         tBegin = sw.ElapsedTicks;
                         try
                         {
@@ -383,7 +383,7 @@ public sealed class SvgView : FrameworkElement
 #if DEBUG
                         double f = 1000.0 / Stopwatch.Frequency;
                         Console.WriteLine(
-                            $"[SvgViewCache] target={target.GetType().Name} {request.PixelWidth}x{request.PixelHeight} | " +
+                            $"[SvgViewCache] target={surface.GetType().Name} {request.PixelWidth}x{request.PixelHeight} | " +
                             $"createRT={(tCreateRT - tStart) * f:F1}ms " +
                             $"clear={(tClear - tCreateRT) * f:F1} " +
                             $"createCtx={(tCtx - tClear) * f:F1} " +

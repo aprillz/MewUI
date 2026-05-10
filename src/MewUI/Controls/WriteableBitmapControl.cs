@@ -9,14 +9,14 @@ namespace Aprillz.MewUI.Controls;
 /// Provides infrastructure for pixel-based custom rendering with automatic
 /// buffer management and DPI-aware sizing.
 ///
-/// All rendering happens on a single IPixelRenderSurface buffer:
+/// All rendering happens on a single CPU-writable render surface buffer:
 /// - Direct pixel manipulation via LockForWrite()
 /// - Vector graphics via OnRenderBitmap(IGraphicsContext)
 /// </summary>
 public class WriteableBitmapControl : Control
 {
     private IRenderSurface? _surface;
-    private IPixelRenderSurface? _renderTarget;
+    private ICpuPixelSurface? _pixels;
     private IImage? _image;
     private bool _needsRender;
     private bool _isRendering;
@@ -24,12 +24,12 @@ public class WriteableBitmapControl : Control
     /// <summary>
     /// Gets the pixel width of the current render target.
     /// </summary>
-    protected int PixelWidth => _renderTarget?.PixelWidth ?? 0;
+    protected int PixelWidth => _pixels?.PixelWidth ?? 0;
 
     /// <summary>
     /// Gets the pixel height of the current render target.
     /// </summary>
-    protected int PixelHeight => _renderTarget?.PixelHeight ?? 0;
+    protected int PixelHeight => _pixels?.PixelHeight ?? 0;
 
     /// <summary>
     /// Locks the render target for direct pixel manipulation.
@@ -37,10 +37,10 @@ public class WriteableBitmapControl : Control
     /// </summary>
     protected WriteContext LockForWrite()
     {
-        if (_renderTarget == null)
+        if (_pixels == null)
             throw new InvalidOperationException("Render target not initialized. Call from OnBitmapSizeChanged or later.");
 
-        return new WriteContext(this, _renderTarget);
+        return new WriteContext(this, _pixels);
     }
 
     /// <summary>
@@ -102,9 +102,9 @@ public class WriteableBitmapControl : Control
             return;
 
         // Check if we need to recreate the render target
-        bool sizeChanged = _renderTarget == null ||
-                          _renderTarget.PixelWidth != pixelWidth ||
-                          _renderTarget.PixelHeight != pixelHeight;
+        bool sizeChanged = _surface == null ||
+                          _surface.PixelWidth != pixelWidth ||
+                          _surface.PixelHeight != pixelHeight;
 
         _isRendering = true;
         try
@@ -113,7 +113,7 @@ public class WriteableBitmapControl : Control
             {
                 _image?.Dispose();
                 _surface?.Dispose();
-                _renderTarget = null;
+                _pixels = null;
 
                 var factory = GetGraphicsFactory();
                 var renderDevice = factory;
@@ -122,14 +122,14 @@ public class WriteableBitmapControl : Control
                     pixelHeight,
                     scale,
                     debugName: nameof(WriteableBitmapControl)));
-                if (_surface is not IPixelRenderSurface bitmapTarget)
+                if (_surface is not ICpuPixelSurface pixels)
                 {
                     _surface.Dispose();
                     _surface = null;
-                    throw new NotSupportedException($"{nameof(WriteableBitmapControl)} requires a bitmap-backed render surface.");
+                    throw new NotSupportedException($"{nameof(WriteableBitmapControl)} requires a CPU-writable render surface.");
                 }
 
-                _renderTarget = bitmapTarget;
+                _pixels = pixels;
                 _image = null;
 
                 // Let derived class initialize the bitmap
@@ -137,7 +137,7 @@ public class WriteableBitmapControl : Control
                 _needsRender = true;
             }
 
-            if (_renderTarget == null || _surface == null)
+            if (_pixels == null || _surface == null)
                 return;
 
             // Call OnRenderBitmap if needed
@@ -181,7 +181,7 @@ public class WriteableBitmapControl : Control
 
     private void IncrementRenderTargetVersion()
     {
-        _renderTarget?.IncrementVersion();
+        _pixels?.IncrementVersion();
     }
 
     protected override void OnDispose()
@@ -193,7 +193,7 @@ public class WriteableBitmapControl : Control
 
         _surface?.Dispose();
         _surface = null;
-        _renderTarget = null;
+        _pixels = null;
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -210,7 +210,7 @@ public class WriteableBitmapControl : Control
     public readonly ref struct WriteContext
     {
         private readonly WriteableBitmapControl _control;
-        private readonly IPixelRenderSurface _target;
+        private readonly ICpuPixelSurface _target;
 
         public int Width => _target.PixelWidth;
         public int Height => _target.PixelHeight;
@@ -219,8 +219,8 @@ public class WriteableBitmapControl : Control
         public int Stride => _target.PixelWidth * 4;
         public int StrideBytes => _target.PixelWidth * 4;
 
-        public Span<byte> PixelsBgra32 => _target.GetPixelSpan();
-        public Span<uint> PixelsUInt32 => MemoryMarshal.Cast<byte, uint>(_target.GetPixelSpan());
+        public Span<byte> PixelsBgra32 => _target.GetWritablePixelSpan();
+        public Span<uint> PixelsUInt32 => MemoryMarshal.Cast<byte, uint>(_target.GetWritablePixelSpan());
 
         /// <summary>
         /// Whether the underlying buffer expects pre-multiplied BGRA. Backends differ (GDI's
@@ -229,9 +229,9 @@ public class WriteableBitmapControl : Control
         /// RGBA into a premultiplied RT shows up as bright halos on alpha-soft edges (the
         /// downstream blit then assumes RGB is already alpha-scaled and skips the divide).
         /// </summary>
-        public bool IsPremultiplied => _target.IsPremultiplied;
+        public bool IsPremultiplied => _target.Capabilities.HasFlag(SurfaceCapabilities.Premultiplied);
 
-        internal WriteContext(WriteableBitmapControl control, IPixelRenderSurface target)
+        internal WriteContext(WriteableBitmapControl control, ICpuPixelSurface target)
         {
             _control = control;
             _target = target;

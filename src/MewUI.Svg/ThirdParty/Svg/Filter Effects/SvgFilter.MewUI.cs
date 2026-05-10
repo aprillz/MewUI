@@ -262,17 +262,17 @@ public partial class SvgFilter
             pixelHeight,
             Math.Max(1.0, Math.Min(effectiveLogicalToPixelX, effectiveLogicalToPixelY)),
             debugName: "SvgFilterSourceLayer"));
-        if (sourceSurface is not IPixelRenderSurface sourceLayer)
+        if (sourceSurface is not ICpuPixelSurface sourcePixels)
         {
-            throw new NotSupportedException($"{nameof(SvgFilter)} currently requires bitmap-backed filter source layers.");
+            throw new NotSupportedException($"{nameof(SvgFilter)} currently requires CPU-writable filter source layers.");
         }
-        sourceLayer.Clear(Aprillz.MewUI.Color.Transparent);
+        sourcePixels.Clear(Aprillz.MewUI.Color.Transparent);
         long tCreateRT = sw.ElapsedTicks;
 
         // 1. Render the element into the source layer.
-        using (var context = offscreenFactory.CreateContext(sourceLayer))
+        using (var context = offscreenFactory.CreateContext(sourceSurface))
         {
-            context.BeginFrame(sourceLayer);
+            context.BeginFrame(sourceSurface);
             try
             {
                 using var offscreenRenderer = new MewSvgRenderer(offscreenFactory, context);
@@ -307,7 +307,7 @@ public partial class SvgFilter
         {
             // No primitives — draw the source layer as-is.
             outputImage = renderDevice.CreateImageView(sourceSurface);
-            outputSourceRect = new Rect(0, 0, sourceLayer.PixelWidth, sourceLayer.PixelHeight);
+            outputSourceRect = new Rect(0, 0, sourceSurface.PixelWidth, sourceSurface.PixelHeight);
             try
             {
                 DrawFilterResult(renderer, outputImage, filterRegion, outputSourceRect);
@@ -326,7 +326,7 @@ public partial class SvgFilter
         using var ctx = new DefaultFilterContext(
             sourceSurface,
             sourceImage,
-            sourceBounds: new Rect(0, 0, sourceLayer.PixelWidth, sourceLayer.PixelHeight),
+            sourceBounds: new Rect(0, 0, sourceSurface.PixelWidth, sourceSurface.PixelHeight),
             offscreenFactory,
             logicalToPixelScaleX: effectiveLogicalToPixelX,
             logicalToPixelScaleY: effectiveLogicalToPixelY);
@@ -336,7 +336,7 @@ public partial class SvgFilter
         long tExec = sw.ElapsedTicks;
 
         DrawFilterResult(renderer, result.AsImage(),
-            GetResultDestination(filterRegion, result.Bounds, sourceLayer.PixelWidth, sourceLayer.PixelHeight),
+            GetResultDestination(filterRegion, result.Bounds, sourceSurface.PixelWidth, sourceSurface.PixelHeight),
             new Rect(0, 0, result.PixelWidth, result.PixelHeight));
         long tDraw = sw.ElapsedTicks;
 
@@ -350,7 +350,7 @@ public partial class SvgFilter
             TrySnapshotIntoCache(element, offscreenFactory, result,
                 effectiveLogicalToPixelX, effectiveLogicalToPixelY,
                 filterRegion.Width, filterRegion.Height,
-                sourceLayer.PixelWidth, sourceLayer.PixelHeight);
+                sourceSurface.PixelWidth, sourceSurface.PixelHeight);
         }
         long tEnd = sw.ElapsedTicks;
         sw.Stop();

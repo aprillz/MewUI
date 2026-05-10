@@ -593,7 +593,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         double dpiScale = win32Surface.DpiScale <= 0 ? 1.0 : win32Surface.DpiScale;
 
         var target = GetOrCreateLayeredTarget(hwnd, w, h, dpiScale);
-        window.RenderFrameToBitmap(target);
+        window.RenderFrameToSurface(target);
 
         // NOTE: UpdateLayeredWindow interprets pptDst as the WINDOW top-left in screen coordinates.
         // Passing ClientToScreen(0,0) will move the window every time we present (drift), because

@@ -202,7 +202,7 @@ public sealed partial class MewVGGraphicsFactory
                 _bitmapPresentTarget = ctx.RenderTarget;
                 try
                 {
-                    window.RenderFrameToBitmap(ctx.RenderTarget);
+                    window.RenderFrameToSurface(ctx.RenderTarget);
                 }
                 finally
                 {

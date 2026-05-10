@@ -1942,18 +1942,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     }
 
-    internal void RenderFrameToBitmap(IPixelRenderSurface bitmapTarget)
+    internal void RenderFrameToSurface(IRenderSurface surface)
     {
-        if (bitmapTarget == null)
+        if (surface == null)
         {
-            throw new ArgumentNullException(nameof(bitmapTarget));
+            throw new ArgumentNullException(nameof(surface));
         }
 
         var clientSizeDip = new Size(
-            bitmapTarget.PixelWidth / Math.Max(1.0, bitmapTarget.DpiScale),
-            bitmapTarget.PixelHeight / Math.Max(1.0, bitmapTarget.DpiScale));
+            surface.PixelWidth / Math.Max(1.0, surface.DpiScale),
+            surface.PixelHeight / Math.Max(1.0, surface.DpiScale));
 
-        RenderFrameCore(bitmapTarget, clientSizeDip);
+        RenderFrameCore(surface, clientSizeDip);
     }
 
     private void RenderFrameCore(IRenderTarget target, Size clientSize)
@@ -1972,9 +1972,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             frameTiming.AnimationTicks += Stopwatch.GetTimestamp() - phaseStart;
         }
 
-        // Bitmap targets are one-shot (different target instance per call).
+        // Render surfaces are one-shot (different target instance per call).
         // Window-targeted contexts are cached so backends can pool per-frame state.
-        bool oneShot = target is IPixelRenderSurface;
+        bool oneShot = target is IRenderSurface;
         IGraphicsContext context = oneShot
             ? GraphicsFactory.CreateContext(target)
             : (_renderContext ??= GraphicsFactory.CreateContext(target));

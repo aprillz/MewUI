@@ -98,17 +98,17 @@ public sealed class SvgDocument
             pixelWidth,
             pixelHeight,
             debugName: "SvgDocumentRasterize"));
-        if (surface is not IPixelRenderSurface target)
+        if (surface is not ICpuPixelSurface pixels)
         {
-            throw new NotSupportedException($"{nameof(SvgDocument)} rasterization requires a bitmap-backed render surface.");
+            throw new NotSupportedException($"{nameof(SvgDocument)} rasterization requires a CPU-readable render surface.");
         }
 
-        target.Clear(Color.Transparent);
+        pixels.Clear(Color.Transparent);
         using (var ctx = renderDevice.CreateContext(surface))
             Render(ctx, new Rect(0, 0, pixelWidth, pixelHeight));
 
         var bitmap = new WriteableBitmap(pixelWidth, pixelHeight, clear: false);
-        bitmap.WritePixels(0, 0, pixelWidth, pixelHeight, target.CopyPixels(), pixelWidth * 4);
+        bitmap.WritePixels(0, 0, pixelWidth, pixelHeight, pixels.CopyPixels(), pixelWidth * 4);
         return bitmap;
     }
 

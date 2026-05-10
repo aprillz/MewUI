@@ -258,7 +258,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         double dpiScale = win32Surface.DpiScale <= 0 ? 1.0 : win32Surface.DpiScale;
 
         var target = GetOrCreateLayeredTarget(hwnd, w, h, dpiScale);
-        window.RenderFrameToBitmap(target);
+        window.RenderFrameToSurface(target);
 
         // UpdateLayeredWindow expects premultiplied BGRA. The GDI pipeline already renders premultiplied
         // into the bitmap target; only fix up missing alpha from legacy GDI text/bitblt paths.

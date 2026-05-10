@@ -52,11 +52,6 @@ public interface IPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDe
     Span<byte> GetPixelSpan();
 
     /// <summary>
-    /// Clears the pixel buffer to the specified color.
-    /// </summary>
-    void Clear(Color color);
-
-    /// <summary>
     /// Increments the version to signal that pixels have changed.
     /// Call this after modifying pixels via GetPixelSpan() or IGraphicsContext.
     /// </summary>
