@@ -26,7 +26,7 @@ public sealed partial class MewVGGraphicsFactory
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
-    [ThreadStatic] private static IPixelRenderSurface? _bitmapPresentTarget;
+    [ThreadStatic] private static OpenGLPixelRenderSurface? _bitmapPresentTarget;
 #pragma warning restore CS0649
     public GraphicsBackend Backend => GraphicsBackend.OpenGL;
 

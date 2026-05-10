@@ -132,10 +132,10 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
                 bitmapTarget: bitmapTarget);
         }
 
-        if (target is IPixelRenderSurface)
+        if (target is ICpuPixelSurface)
         {
             throw new ArgumentException(
-                $"PixelRenderSurface was created by a different backend. " +
+                $"Render surface was created by a different backend. " +
                 $"Use {nameof(CreateSurface)} from the same factory.",
                 nameof(target));
         }
