@@ -88,36 +88,15 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
     /// </summary>
     public bool HasAlpha { get; }
 
-    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
-        ? RenderPixelFormat.Bgra8888Premultiplied
-        : RenderPixelFormat.Bgra8888;
+    RenderPixelFormat IRenderSurface.Format => RenderSurfaceDefaults.GetBgraFormat(IsPremultiplied);
 
-    SurfaceUsage IRenderSurface.Usage =>
-        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+    SurfaceUsage IRenderSurface.Usage => RenderSurfaceDefaults.PixelSurfaceUsage;
 
-    SurfaceCapabilities IRenderSurface.Capabilities
-    {
-        get
-        {
-            var capabilities =
-                SurfaceCapabilities.Renderable |
-                SurfaceCapabilities.CpuReadable |
-                SurfaceCapabilities.CpuWritable |
-                SurfaceCapabilities.Alpha;
-
-            if (IsPremultiplied)
-            {
-                capabilities |= SurfaceCapabilities.Premultiplied;
-            }
-
-            if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
-            {
-                capabilities |= SurfaceCapabilities.DeferredReadback;
-            }
-
-            return capabilities;
-        }
-    }
+    SurfaceCapabilities IRenderSurface.Capabilities =>
+        RenderSurfaceDefaults.GetPixelSurfaceCapabilities(
+            IsPremultiplied,
+            ((IPixelBufferSource)this).LockMode == LockMode.Readback,
+            gpuSampleable: false);
 
     ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
 
@@ -130,24 +109,14 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
     bool IDeferredCpuReadableSurface.HasPendingReadback => ((IPixelBufferSource)this).LockMode == LockMode.Readback;
 
     IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
-    {
-        if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
-        {
-            _ = CopyPixels();
-        }
-
-        return RenderOperation.Completed;
-    }
+        => RenderSurfaceDefaults.RequestReadback(
+            ((IPixelBufferSource)this).LockMode == LockMode.Readback,
+            CopyPixels);
 
     bool IDeferredCpuReadableSurface.TryFlushReadback()
-    {
-        if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
-        {
-            _ = CopyPixels();
-        }
-
-        return true;
-    }
+        => RenderSurfaceDefaults.TryFlushReadback(
+            ((IPixelBufferSource)this).LockMode == LockMode.Readback,
+            CopyPixels);
 
     nint IWin32HdcSource.Hdc => Hdc;
 

@@ -129,41 +129,15 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     /// </summary>
     public bool HasAlpha { get; }
 
-    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
-        ? RenderPixelFormat.Bgra8888Premultiplied
-        : RenderPixelFormat.Bgra8888;
+    RenderPixelFormat IRenderSurface.Format => RenderSurfaceDefaults.GetBgraFormat(IsPremultiplied);
 
-    SurfaceUsage IRenderSurface.Usage =>
-        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+    SurfaceUsage IRenderSurface.Usage => RenderSurfaceDefaults.PixelSurfaceUsage;
 
-    SurfaceCapabilities IRenderSurface.Capabilities
-    {
-        get
-        {
-            var capabilities =
-                SurfaceCapabilities.Renderable |
-                SurfaceCapabilities.CpuReadable |
-                SurfaceCapabilities.CpuWritable |
-                SurfaceCapabilities.Alpha;
-
-            if (IsPremultiplied)
-            {
-                capabilities |= SurfaceCapabilities.Premultiplied;
-            }
-
-            if (LockMode == LockMode.Readback)
-            {
-                capabilities |= SurfaceCapabilities.DeferredReadback;
-            }
-
-            if (this is IGpuTextureSource)
-            {
-                capabilities |= SurfaceCapabilities.GpuSampleable;
-            }
-
-            return capabilities;
-        }
-    }
+    SurfaceCapabilities IRenderSurface.Capabilities =>
+        RenderSurfaceDefaults.GetPixelSurfaceCapabilities(
+            IsPremultiplied,
+            LockMode == LockMode.Readback,
+            this is IGpuTextureSource);
 
     ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
 
@@ -176,24 +150,10 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     bool IDeferredCpuReadableSurface.HasPendingReadback => LockMode == LockMode.Readback;
 
     IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
-    {
-        if (LockMode == LockMode.Readback)
-        {
-            _ = CopyPixels();
-        }
-
-        return RenderOperation.Completed;
-    }
+        => RenderSurfaceDefaults.RequestReadback(LockMode == LockMode.Readback, CopyPixels);
 
     bool IDeferredCpuReadableSurface.TryFlushReadback()
-    {
-        if (LockMode == LockMode.Readback)
-        {
-            _ = CopyPixels();
-        }
-
-        return true;
-    }
+        => RenderSurfaceDefaults.TryFlushReadback(LockMode == LockMode.Readback, CopyPixels);
 
     // IGLTextureSource — exposes the FBO color texture for zero-copy NoDelete wrapping.
     uint IGLTextureSource.TextureId => _disposed || !_fboInitialized ? 0u : _texture;
