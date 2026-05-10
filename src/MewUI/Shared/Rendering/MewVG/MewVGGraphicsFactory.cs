@@ -204,10 +204,10 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
             descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
-        => surface is IBitmapRenderTarget bitmapTarget
-            ? CreateContext((IRenderTarget)bitmapTarget)
+        => surface.Capabilities.HasFlag(SurfaceCapabilities.Renderable)
+            ? CreateContext((IRenderTarget)surface)
             : throw new NotSupportedException(
-                $"{GetType().Name} can only create contexts for bitmap-backed render surfaces.");
+                $"{GetType().Name} can only create contexts for renderable surfaces.");
 
     public IImage CreateImageView(IRenderSurface surface)
         => surface is IPixelBufferSource pixelSource

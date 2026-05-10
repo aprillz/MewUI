@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering;
 /// Implementations manage platform-specific resources.
 /// Use <see cref="IRenderDevice.CreateSurface"/> to create instances.
 /// </summary>
-public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable
+public interface IBitmapRenderTarget : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable
 {
     /// <summary>
     /// Gets the pixel width. Resolves ambiguity between IRenderTarget and IPixelBufferSource.
@@ -81,7 +81,7 @@ public interface IBitmapRenderTarget : IRenderTarget, IPixelBufferSource, ICpuPi
         ? RenderPixelFormat.Bgra8888Premultiplied
         : RenderPixelFormat.Bgra8888;
 
-    double IRenderSurface.DpiScale => DpiScale;
+    double IRenderTarget.DpiScale => DpiScale;
 
     SurfaceUsage IRenderSurface.Usage =>
         SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;

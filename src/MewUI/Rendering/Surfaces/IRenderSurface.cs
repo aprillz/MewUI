@@ -1,13 +1,7 @@
 namespace Aprillz.MewUI.Rendering;
 
-public interface IRenderSurface : IDisposable
+public interface IRenderSurface : IRenderTarget, IDisposable
 {
-    int PixelWidth { get; }
-
-    int PixelHeight { get; }
-
-    double DpiScale { get; }
-
     RenderPixelFormat Format { get; }
 
     SurfaceUsage Usage { get; }
