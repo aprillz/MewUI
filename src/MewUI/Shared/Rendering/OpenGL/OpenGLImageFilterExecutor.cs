@@ -72,7 +72,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
         {
             // Need both input and scratch backed by OpenGLPixelRenderSurfaces so we can run
             // the GLSL pass directly against their FBOs. If either isn't OpenGL (e.g. a CPU
-            // fallback produced a generic IPixelRenderSurface), bail to the fallback.
+            // fallback produced a generic CPU surface), bail to the fallback.
             if (input.UnderlyingSurface is not OpenGLPixelRenderSurface glSource) return null;
 
             // Source must have a valid FBO with content — true for the SvgFilter source layer

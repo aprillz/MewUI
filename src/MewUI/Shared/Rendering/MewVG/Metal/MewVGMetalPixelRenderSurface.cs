@@ -6,13 +6,13 @@ using Aprillz.MewVG.Interop;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
-/// GPU-backed bitmap render target for the Metal backend. Holds a
+/// GPU-backed pixel render surface for the Metal backend. Holds a
 /// shared-storage MTLTexture so an offscreen <see cref="MewVGMetalGraphicsContext"/>
 /// can render into it directly, then exposes the rendered pixels through the
-/// CPU-side <see cref="IPixelRenderSurface"/> surface (used by SVG filter /
+/// CPU-readable pixel surface (used by SVG filter /
 /// pattern uploads, WriteableBitmap-backed controls, etc.).
 /// </summary>
-internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelRenderSurface, IMetalTextureSource
+internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IMetalTextureSource
 {
     // -[MTLTexture getBytes:bytesPerRow:fromRegion:mipmapLevel:]
     // MTLRegion is 48 bytes (3 NSInteger origin + 3 NSInteger size). On both
@@ -159,6 +159,72 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelRender
     /// <see cref="IPixelBufferSource"/> use this to skip alpha scans for opaque RTs.
     /// </summary>
     public bool HasAlpha { get; }
+
+    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
+        ? RenderPixelFormat.Bgra8888Premultiplied
+        : RenderPixelFormat.Bgra8888;
+
+    SurfaceUsage IRenderSurface.Usage =>
+        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+
+    SurfaceCapabilities IRenderSurface.Capabilities
+    {
+        get
+        {
+            var capabilities =
+                SurfaceCapabilities.Renderable |
+                SurfaceCapabilities.CpuReadable |
+                SurfaceCapabilities.CpuWritable |
+                SurfaceCapabilities.Alpha;
+
+            if (IsPremultiplied)
+            {
+                capabilities |= SurfaceCapabilities.Premultiplied;
+            }
+
+            if (LockMode == LockMode.Readback)
+            {
+                capabilities |= SurfaceCapabilities.DeferredReadback;
+            }
+
+            if (this is IGpuTextureSource)
+            {
+                capabilities |= SurfaceCapabilities.GpuSampleable;
+            }
+
+            return capabilities;
+        }
+    }
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    bool IRenderSurface.IsDisposed => _disposed;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return RenderOperation.Completed;
+    }
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return true;
+    }
 
     // MTLDevice the textures were allocated on. Captured by EnsureGpuTextures so
     // IMetalTextureSource consumers can verify device match before zero-copy sampling.

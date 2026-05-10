@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI.Rendering.Filters;
 
 /// <summary>
-/// Per-context scratch <see cref="IPixelRenderSurface"/> pool. Filter graphs allocate intermediate
+/// Per-context scratch <see cref="IRenderSurface"/> pool. Filter graphs allocate intermediate
 /// RTs per node (Blur, ColorMatrix, etc.); without pooling, a 5-node DAG on a 1024² source
 /// allocates 20 MB just for scratches every frame. The pool keeps a small set of recently-used
 /// targets per (width, height, dpi) bucket and hands them back on rent.
@@ -47,7 +47,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
     /// </summary>
     /// <remarks>
     /// Earlier revision rounded up to power-of-2 to bound bucket count, but that broke
-    /// pixel layout in callers: <see cref="IPixelRenderSurface.GetPixelSpan"/> reports
+    /// pixel layout in callers: <see cref="ICpuPixelSurface.GetWritablePixelSpan"/> reports
     /// stride for the actual width, so a 100-wide source written into a 128-wide scratch
     /// buffer via flat <see cref="System.Span{T}.CopyTo"/> smears the source rows into
     /// arbitrary scratch rows. Exact-size buckets eliminate the impedance mismatch at the

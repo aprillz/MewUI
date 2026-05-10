@@ -7,10 +7,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
 /// <summary>
-/// Direct2D implementation of IPixelRenderSurface.
+/// Direct2D pixel render surface.
 /// Uses DIB section + DC render target for offscreen rendering.
 /// </summary>
-internal sealed unsafe class Direct2DPixelRenderSurface : IPixelRenderSurface, IWin32HdcSource
+internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IWin32HdcSource
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -87,6 +87,67 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelRenderSurface, I
     /// and pick <c>ALPHA_MODE.IGNORE</c> for opaque sources (video frames etc.).
     /// </summary>
     public bool HasAlpha { get; }
+
+    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
+        ? RenderPixelFormat.Bgra8888Premultiplied
+        : RenderPixelFormat.Bgra8888;
+
+    SurfaceUsage IRenderSurface.Usage =>
+        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+
+    SurfaceCapabilities IRenderSurface.Capabilities
+    {
+        get
+        {
+            var capabilities =
+                SurfaceCapabilities.Renderable |
+                SurfaceCapabilities.CpuReadable |
+                SurfaceCapabilities.CpuWritable |
+                SurfaceCapabilities.Alpha;
+
+            if (IsPremultiplied)
+            {
+                capabilities |= SurfaceCapabilities.Premultiplied;
+            }
+
+            if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
+            {
+                capabilities |= SurfaceCapabilities.DeferredReadback;
+            }
+
+            return capabilities;
+        }
+    }
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    bool IRenderSurface.IsDisposed => _disposed;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => ((IPixelBufferSource)this).LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+    {
+        if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return RenderOperation.Completed;
+    }
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+    {
+        if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return true;
+    }
 
     nint IWin32HdcSource.Hdc => Hdc;
 

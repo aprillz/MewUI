@@ -26,7 +26,7 @@ internal sealed class MewVGImage : IImage
     private nint _retainedGpuHandle;
     // Optional callback invoked by ReleaseImagesImmediate after all NVG image-ids and the
     // retained GPU handle have been released. Used by the SVG filter scratch path to defer
-    // returning a pooled IPixelRenderSurface until the in-flight NVG draws referencing it
+    // returning a pooled render surface until the in-flight NVG draws referencing it
     // have flushed — without this the pool can hand the same RT to the next filter node in
     // the same eval, which then MPS-overwrites the ColorTexture while a queued draw still
     // points at it via NoDelete (visible as cross-filter / cross-frame content bleed).
@@ -141,7 +141,7 @@ internal sealed class MewVGImage : IImage
         if (mtlTex != 0)
         {
             // Take an explicit retain on the source's GPU texture before NVG starts referencing
-            // it via NoDelete. The source (typically a scratch IPixelRenderSurface) may be
+            // it via NoDelete. The source (typically a scratch render surface) may be
             // disposed before the consumer's command buffer commits — the retain keeps the
             // texture alive until ReleaseImagesImmediate runs, which the offscreen provider
             // drains AFTER the frame's command buffer has been submitted.

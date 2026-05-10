@@ -5,10 +5,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
-/// GDI implementation of IPixelRenderSurface.
+/// GDI pixel render surface.
 /// Manages DIB section and memory DC for offscreen rendering.
 /// </summary>
-internal sealed class GdiPixelRenderSurface : IPixelRenderSurface
+internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -81,6 +81,67 @@ internal sealed class GdiPixelRenderSurface : IPixelRenderSurface
     /// a video frame target).
     /// </summary>
     public bool HasAlpha { get; }
+
+    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
+        ? RenderPixelFormat.Bgra8888Premultiplied
+        : RenderPixelFormat.Bgra8888;
+
+    SurfaceUsage IRenderSurface.Usage =>
+        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+
+    SurfaceCapabilities IRenderSurface.Capabilities
+    {
+        get
+        {
+            var capabilities =
+                SurfaceCapabilities.Renderable |
+                SurfaceCapabilities.CpuReadable |
+                SurfaceCapabilities.CpuWritable |
+                SurfaceCapabilities.Alpha;
+
+            if (IsPremultiplied)
+            {
+                capabilities |= SurfaceCapabilities.Premultiplied;
+            }
+
+            if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
+            {
+                capabilities |= SurfaceCapabilities.DeferredReadback;
+            }
+
+            return capabilities;
+        }
+    }
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    bool IRenderSurface.IsDisposed => _disposed;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => ((IPixelBufferSource)this).LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+    {
+        if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return RenderOperation.Completed;
+    }
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+    {
+        if (((IPixelBufferSource)this).LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Gets the memory device context for rendering.

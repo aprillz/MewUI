@@ -21,7 +21,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// is undefined in D2D, so all filter operations on this target must go through the same
 /// shared DC.
 /// </remarks>
-internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelRenderSurface, ID2DTextureSource
+internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, ID2DTextureSource
     , IReusableScratchRenderTarget
 {
     private readonly Direct2DGraphicsFactory _factory;
@@ -98,6 +98,72 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelRenderSurface
     /// this to skip premultiply scans and select <c>ALPHA_MODE.IGNORE</c> for opaque sources.
     /// </summary>
     public bool HasAlpha { get; }
+
+    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
+        ? RenderPixelFormat.Bgra8888Premultiplied
+        : RenderPixelFormat.Bgra8888;
+
+    SurfaceUsage IRenderSurface.Usage =>
+        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+
+    SurfaceCapabilities IRenderSurface.Capabilities
+    {
+        get
+        {
+            var capabilities =
+                SurfaceCapabilities.Renderable |
+                SurfaceCapabilities.CpuReadable |
+                SurfaceCapabilities.CpuWritable |
+                SurfaceCapabilities.Alpha;
+
+            if (IsPremultiplied)
+            {
+                capabilities |= SurfaceCapabilities.Premultiplied;
+            }
+
+            if (LockMode == LockMode.Readback)
+            {
+                capabilities |= SurfaceCapabilities.DeferredReadback;
+            }
+
+            if (this is IGpuTextureSource)
+            {
+                capabilities |= SurfaceCapabilities.GpuSampleable;
+            }
+
+            return capabilities;
+        }
+    }
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    bool IRenderSurface.IsDisposed => _disposed;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return RenderOperation.Completed;
+    }
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return true;
+    }
 
     internal bool IsDeviceCurrent
         => !_disposed && !_deviceLost && _bitmap != 0;

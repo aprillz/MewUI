@@ -4,10 +4,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
 /// <summary>
-/// OpenGL implementation of IPixelRenderSurface using FBO (Framebuffer Object).
+/// OpenGL pixel render surface using FBO (Framebuffer Object).
 /// Provides offscreen rendering with CPU-side pixel buffer access.
 /// </summary>
-internal sealed class OpenGLPixelRenderSurface : IPixelRenderSurface, IGLTextureSource
+internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IGLTextureSource
 {
     // Lazily allocated — only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
     // actually requests pixel bytes. The pure GPU-only path (MewVGImage zero-copy via
@@ -128,6 +128,72 @@ internal sealed class OpenGLPixelRenderSurface : IPixelRenderSurface, IGLTexture
     /// frame target etc.).
     /// </summary>
     public bool HasAlpha { get; }
+
+    RenderPixelFormat IRenderSurface.Format => IsPremultiplied
+        ? RenderPixelFormat.Bgra8888Premultiplied
+        : RenderPixelFormat.Bgra8888;
+
+    SurfaceUsage IRenderSurface.Usage =>
+        SurfaceUsage.Offscreen | SurfaceUsage.ImageSource | SurfaceUsage.ReadbackSource;
+
+    SurfaceCapabilities IRenderSurface.Capabilities
+    {
+        get
+        {
+            var capabilities =
+                SurfaceCapabilities.Renderable |
+                SurfaceCapabilities.CpuReadable |
+                SurfaceCapabilities.CpuWritable |
+                SurfaceCapabilities.Alpha;
+
+            if (IsPremultiplied)
+            {
+                capabilities |= SurfaceCapabilities.Premultiplied;
+            }
+
+            if (LockMode == LockMode.Readback)
+            {
+                capabilities |= SurfaceCapabilities.DeferredReadback;
+            }
+
+            if (this is IGpuTextureSource)
+            {
+                capabilities |= SurfaceCapabilities.GpuSampleable;
+            }
+
+            return capabilities;
+        }
+    }
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    bool IRenderSurface.IsDisposed => _disposed;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return RenderOperation.Completed;
+    }
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+    {
+        if (LockMode == LockMode.Readback)
+        {
+            _ = CopyPixels();
+        }
+
+        return true;
+    }
 
     // IGLTextureSource — exposes the FBO color texture for zero-copy NoDelete wrapping.
     uint IGLTextureSource.TextureId => _disposed || !_fboInitialized ? 0u : _texture;
