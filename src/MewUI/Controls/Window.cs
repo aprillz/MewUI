@@ -26,8 +26,6 @@ public sealed class ClosingEventArgs
 /// </summary>
 public partial class Window : ContentControl, ILayoutRoundingHost
 {
-    private static long _nextProfilerSourceId;
-
     private readonly DispatcherMergeKey _layoutMergeKey = new(DispatcherPriority.Layout);
     private readonly DispatcherMergeKey _renderMergeKey = new(DispatcherPriority.Render);
 
@@ -48,8 +46,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Action? _cachedInvalidateBackend;
     private Action? _cachedLayoutAndRender;
     private LayoutPerformanceStats _lastLayoutPerformanceStats;
-    private readonly long _profilerSourceId = Interlocked.Increment(ref _nextProfilerSourceId);
-    private bool _excludeFromProfiler;
 
     /// <summary>
     /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
@@ -89,14 +85,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal UIElement? CapturedElement => _capturedElement;
 
     internal bool HasMouseCapture => _capturedElement != null;
-
-    internal long ProfilerSourceId => _profilerSourceId;
-
-    internal bool ExcludeFromProfiler
-    {
-        get => _excludeFromProfiler;
-        set => _excludeFromProfiler = value;
-    }
 
     internal void ClearMouseCaptureState()
     {
@@ -937,11 +925,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Gets the rendering statistics from the most recent frame.
     /// </summary>
     public RenderStats LastFrameStats { get; private set; }
-
-    /// <summary>
-    /// Gets the performance statistics from the most recent profiled frame.
-    /// </summary>
-    public FramePerformanceStats LastFramePerformanceStats { get; private set; }
 
     /// <summary>
     /// Preview (tunneling) keyboard events for the whole window.
