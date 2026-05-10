@@ -155,7 +155,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         return new GdiMeasurementContext(hdc, dpi);
     }
 
-    private IBitmapRenderTarget CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
+    private IRenderSurface CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
         => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
 
     public IRenderResourceCache? ResourceCache => _renderResourceCache;

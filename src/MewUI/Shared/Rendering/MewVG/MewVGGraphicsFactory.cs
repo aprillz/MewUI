@@ -179,9 +179,9 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
     public IGraphicsContext CreateMeasurementContext(uint dpi)
         => CreateMeasurementContextCore(dpi);
 
-    private IBitmapRenderTarget CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
+    private IRenderSurface CreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
     {
-        IBitmapRenderTarget? rt = null;
+        IRenderSurface? rt = null;
         bool handled = false;
         TryCreateBitmapSurfaceTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha, ref handled, ref rt);
         if (handled && rt != null)
@@ -267,7 +267,7 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
 
     partial void TryReleaseWindowResources(nint hwnd);
 
-    partial void TryCreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IBitmapRenderTarget? renderTarget);
+    partial void TryCreateBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IRenderSurface? renderTarget);
 
     partial void TryGetImageDisposeHandler(ref Action<MewVGImage>? handler);
 

@@ -494,7 +494,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return ctx;
     }
 
-    private IBitmapRenderTarget CreateCpuBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
+    private IRenderSurface CreateCpuBitmapSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
         => new Direct2DBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, hasAlpha);
 
     /// <summary>
@@ -507,7 +507,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     /// modified buffer back to the GPU via <c>CopyFromMemory</c> so subsequent effects see
     /// the up-to-date pixels.
     /// </summary>
-    private IBitmapRenderTarget CreateOffscreenSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
+    private IRenderSurface CreateOffscreenSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
     {
         if (SharedFilterDeviceContext != 0)
         {
