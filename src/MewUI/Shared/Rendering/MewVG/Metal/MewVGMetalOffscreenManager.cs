@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// <summary>
 /// Provides a pool of <see cref="NanoVGMetal"/> instances bound to a shared
 /// <c>MTLDevice</c>, so SVG offscreen passes (filter / pattern tile / SvgView
-/// bitmap cache) can render into a bitmap target's MTLTexture without
+/// bitmap cache) can render into a pixel surface's MTLTexture without
 /// disturbing the window's own NVG state.
 /// </summary>
 /// <remarks>
@@ -222,7 +222,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
         if (entries.Count == 0)
         {
             // No NVG image-ids — nothing to defer; release inline so the post-release
-            // callback (e.g. scratch RT pool return) still fires.
+            // callback (e.g. scratch surface pool return) still fires.
             image.ReleaseImagesImmediate();
             return;
         }

@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI.Rendering.Filters;
 
 /// <summary>
-/// Default <see cref="IImageFilterContext"/> for graph evaluation. Owns the scratch RT pool
+/// Default <see cref="IImageFilterContext"/> for graph evaluation. Owns the scratch surface pool
 /// and tracks the current source layer (replaceable via <see cref="WithSource"/> for
 /// <see cref="ComposeFilter"/> sub-evaluations).
 /// </summary>
@@ -55,7 +55,7 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
         return new ScratchFilterResult(lease, image, bounds, l =>
         {
             // Defer the pool return until the image's backend-side GPU/NVG handles are
-            // actually released. Backends that wrap a scratch RT zero-copy with NVG (MewVG
+            // actually released. Backends that wrap a scratch surface zero-copy with NVG (MewVG
             // Metal / GL) have an in-flight draw queue that must flush before the RT can be
             // recycled — otherwise the next AcquireScratch in the same eval hands back the
             // same RT and the next filter node's GPU write overwrites the texture while a

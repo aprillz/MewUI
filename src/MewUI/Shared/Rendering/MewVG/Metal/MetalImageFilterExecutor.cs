@@ -67,7 +67,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
     }
 
     /// <summary>
-    /// True when <paramref name="result"/>'s underlying target is a Metal-backed bitmap RT
+    /// True when <paramref name="result"/>'s underlying target is a Metal-backed pixel surface
     /// whose color texture is realized — required precondition before sampling on the GPU.
     /// </summary>
     internal static bool LooksLikeMetalSource(FilterResult result)

@@ -74,7 +74,7 @@ public sealed class ColorMatrixFilter(float[] matrix4x5, ImageFilter? input = nu
 
 /// <summary>
 /// Translates the input image by (<see cref="Dx"/>, <see cref="Dy"/>) DIPs. Backends can fold
-/// this into adjacent passes via UV offset rather than allocating a separate scratch RT.
+/// this into adjacent passes via UV offset rather than allocating a separate scratch surface.
 /// </summary>
 public sealed class OffsetFilter(double dx, double dy, ImageFilter? input = null) : ImageFilter
 {

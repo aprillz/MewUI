@@ -127,7 +127,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             }
 
             var output = ctx.AcquireScratch(blurW, blurH, inputResult.Bounds);
-            // Match the scratch RT's pixel contract — backends like the D2D DIB report
+            // Match the scratch surface's pixel contract — backends like the D2D DIB report
             // IsPremultiplied=false, meaning their pixel buffer must contain straight-alpha
             // bytes. We blurred in premultiplied space for correctness, so unpremultiply
             // back before writing if the scratch expects straight. Otherwise the next

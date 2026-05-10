@@ -92,7 +92,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        if (target is not MewVGMetalPixelRenderSurface bitmapTarget)
+        if (target is not MewVGMetalPixelRenderSurface pixelSurface)
         {
             return;
         }
@@ -103,11 +103,11 @@ public sealed partial class MewVGGraphicsFactory
         // they share the device. Borrow gives this pass its own NVG so
         // nested offscreen (e.g. SvgView cache ??Pattern ??Filter) does not
         // have inner BeginFrame stomping outer's state. No drawable is
-        // acquired and no Present runs ??the context blits the bitmap
-        // target's own MTLTexture back into its CPU pixel buffer at EndFrame
+        // acquired and no Present runs; the context blits the pixel surface's
+        // own MTLTexture back into its CPU pixel buffer at EndFrame
         // so SVG filter / pattern uploads see the rendered output.
         var offscreenResources = _offscreenProvider.AcquireSurface();
-        context = MewVGMetalGraphicsContext.CreateForOffscreen(offscreenResources, bitmapTarget, _offscreenProvider);
+        context = MewVGMetalGraphicsContext.CreateForOffscreen(offscreenResources, pixelSurface, _offscreenProvider);
         handled = true;
     }
 

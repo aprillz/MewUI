@@ -34,9 +34,9 @@ public sealed unsafe partial class Direct2DGraphicsFactory
     private nint _d2dDevice;
     private nint _filterDeviceContext;
     private GpuDeviceState _gpuDeviceState;
-    private readonly List<WeakReference<Direct2DGpuPixelRenderSurface>> _trackedGpuBitmapTargets = [];
+    private readonly List<WeakReference<Direct2DGpuPixelRenderSurface>> _trackedGpuPixelSurfaces = [];
 
-    /// <summary>Shared <c>ID2D1DeviceContext*</c> for filter pipeline GPU bitmaps and
+    /// <summary>Shared <c>ID2D1DeviceContext*</c> for filter pipeline GPU surfaces and
     /// effects. Returns 0 if the GPU pipeline isn't available (caller should fall back to
     /// DIB-backed rendering).</summary>
     /// <remarks>
@@ -252,7 +252,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory
                 return false;
             }
 
-            InvalidateTrackedGpuBitmapTargets();
+            InvalidateTrackedGpuPixelSurfaces();
             _gpuDeviceState = GpuDeviceState.Lost;
             shouldInvalidateFactoryTargets = true;
         }
@@ -291,33 +291,33 @@ public sealed unsafe partial class Direct2DGraphicsFactory
         || hr == DXGI_ERROR_DEVICE_HUNG
         || hr == DXGI_ERROR_DEVICE_RESET;
 
-    internal void RegisterGpuBitmapTarget(Direct2DGpuPixelRenderSurface target)
+    internal void RegisterGpuPixelSurface(Direct2DGpuPixelRenderSurface target)
     {
         lock (_filterDeviceInitLock)
         {
-            for (int i = _trackedGpuBitmapTargets.Count - 1; i >= 0; i--)
+            for (int i = _trackedGpuPixelSurfaces.Count - 1; i >= 0; i--)
             {
-                if (!_trackedGpuBitmapTargets[i].TryGetTarget(out _))
+                if (!_trackedGpuPixelSurfaces[i].TryGetTarget(out _))
                 {
-                    _trackedGpuBitmapTargets.RemoveAt(i);
+                    _trackedGpuPixelSurfaces.RemoveAt(i);
                 }
             }
 
-            _trackedGpuBitmapTargets.Add(new WeakReference<Direct2DGpuPixelRenderSurface>(target));
+            _trackedGpuPixelSurfaces.Add(new WeakReference<Direct2DGpuPixelRenderSurface>(target));
         }
     }
 
-    private void InvalidateTrackedGpuBitmapTargets()
+    private void InvalidateTrackedGpuPixelSurfaces()
     {
-        for (int i = _trackedGpuBitmapTargets.Count - 1; i >= 0; i--)
+        for (int i = _trackedGpuPixelSurfaces.Count - 1; i >= 0; i--)
         {
-            if (_trackedGpuBitmapTargets[i].TryGetTarget(out var target))
+            if (_trackedGpuPixelSurfaces[i].TryGetTarget(out var target))
             {
                 target.NotifyDeviceLost();
                 continue;
             }
 
-            _trackedGpuBitmapTargets.RemoveAt(i);
+            _trackedGpuPixelSurfaces.RemoveAt(i);
         }
     }
 

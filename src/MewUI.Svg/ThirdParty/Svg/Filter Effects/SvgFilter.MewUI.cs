@@ -82,7 +82,7 @@ public partial class SvgFilter
     public void ApplyFilter(SvgVisualElement element, ISvgRenderer renderer, Action<ISvgRenderer> renderMethod)
     {
         // TEMP DIAGNOSTIC: bypass the entire filter pipeline (no source layer alloc, no
-        // offscreen ctx, no scratch RT, no filter graph eval) and just render the element
+        // offscreen ctx, no scratch surface, no filter graph eval) and just render the element
         // straight into the outer renderer. If the cross-frame corruption disappears with
         // this on, the bug lives somewhere in the filter pipeline (texture wrap lifetime,
         // pool reuse, NVG-state interleave) — not in generic SVG concurrent rendering.
@@ -342,7 +342,7 @@ public partial class SvgFilter
 
         // Snapshot the result into a cache-owned RT so subsequent frames at the same
         // (scale, region) hit the early DrawImage path. The result FilterResult holds a
-        // pooled scratch RT that's about to be released; we copy its pixels (and create
+        // pooled scratch surface that's about to be released; we copy its pixels (and create
         // a fresh IImage backed by our own RT) so the cached entry remains valid after
         // result.Dispose returns the scratch.
         if (CacheEnabled)
@@ -426,7 +426,7 @@ public partial class SvgFilter
         // where the win is largest (per-call setup overhead dominates).
         if ((long)pw * ph > MaxCacheEntryPixelArea) return;
 
-        // Zero-copy: detach the result's underlying scratch RT (and matching IImage) and
+        // Zero-copy: detach the result's underlying scratch surface (and matching IImage) and
         // hand them to the cache. The pool release is suppressed inside Detach so the RT
         // stays alive across frames; cache eviction disposes the RT explicitly. Pixels are
         // not copied — cache hits re-use the exact buffer the filter wrote into. Only

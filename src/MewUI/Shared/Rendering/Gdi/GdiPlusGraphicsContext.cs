@@ -17,7 +17,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
     private readonly ImageScaleQuality _imageScaleQuality;
-    private readonly GdiPixelRenderSurface? _bitmapTarget;
+    private readonly GdiPixelRenderSurface? _pixelSurface;
 
     private readonly int _pixelWidth;
     private readonly int _pixelHeight;
@@ -89,7 +89,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         double dpiScale,
         ImageScaleQuality imageScaleQuality,
         bool ownsDc = false,
-        GdiPixelRenderSurface? bitmapTarget = null)
+        GdiPixelRenderSurface? pixelSurface = null)
     {
         _hwnd = hwnd;
         Hdc = hdc;
@@ -97,7 +97,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         _pixelHeight = pixelHeight;
         _ownsDc = ownsDc;
         _imageScaleQuality = imageScaleQuality;
-        _bitmapTarget = bitmapTarget;
+        _pixelSurface = pixelSurface;
 
         _dpiScale = dpiScale;
         _stateManager = new GdiStateManager(hdc, dpiScale);
@@ -332,9 +332,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void Clear(Color color)
     {
-        if (_bitmapTarget != null)
+        if (_pixelSurface != null)
         {
-            _bitmapTarget.Clear(color);
+            _pixelSurface.Clear(color);
         }
         else if (_hwnd != 0)
         {
@@ -1128,7 +1128,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (!hasTextTransform && (_bitmapTarget != null || color.A < 255 || EnableAlphaTextHint))
+        if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(drawBounds, wrapping);
             uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
@@ -1148,7 +1148,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
             PerPixelAlphaTextRenderer.DrawText(
                 Hdc,
-                _bitmapTarget,
+                _pixelSurface,
                 _surfacePool,
                 text,
                 r,
@@ -1289,7 +1289,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (!hasTextTransform && (_bitmapTarget != null || color.A < 255 || EnableAlphaTextHint))
+        if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(bounds, wrapping);
             uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
@@ -1309,7 +1309,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
             PerPixelAlphaTextRenderer.DrawText(
                 Hdc,
-                _bitmapTarget,
+                _pixelSurface,
                 _surfacePool,
                 text,
                 r,

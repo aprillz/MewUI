@@ -20,7 +20,7 @@ internal sealed class MewVGImage : IImage
     private bool _deferred;
     // Currently-retained zero-copy GPU handle (Metal MTLTexture today; could extend to GL).
     // Held until ReleaseImagesImmediate so the wrapped texture outlives any in-flight draw
-    // command buffer that referenced it via NoDelete — without this, a scratch RT disposed
+    // command buffer that referenced it via NoDelete; without this, a scratch surface disposed
     // mid-frame can free the texture while NVG-Metal still has a NoDelete pointer queued
     // for setFragmentTexture, which dereferences the freed object on commit (SIGSEGV).
     private nint _retainedGpuHandle;
@@ -136,7 +136,7 @@ internal sealed class MewVGImage : IImage
         // when an SVG document has many filtered elements (each blur would otherwise hit
         // a glReadPixels / getBytes sync barrier per filter — 100 filters ≈ 1 s of stalls).
         // NoDelete tells NVG the texture is externally owned (we keep it alive in the
-        // bitmap RT), so DeleteImage only drops NVG's bookkeeping record.
+        // pixel surface), so DeleteImage only drops NVG's bookkeeping record.
         nint mtlTex = _gpuSource?.GetTextureHandle() ?? 0;
         if (mtlTex != 0)
         {
@@ -200,7 +200,7 @@ internal sealed class MewVGImage : IImage
             // FlipY: GL texture sampling is bottom-up in normalized texcoords, but the FBO
             // was rendered with NVG's top-left origin convention. Without FlipY, the wrapped
             // image appears upside-down.
-            // NoDelete: the texture is owned by the bitmap RT (FBO color attachment) — NVG
+            // NoDelete: the texture is owned by the pixel surface (FBO color attachment). NVG
             // must release only its own bookkeeping record on DeleteImage, not the texture.
             //
             // Wrap mode: NVG's CreateImageFromHandle stores the Repeat flags but does NOT
@@ -331,7 +331,7 @@ internal sealed class MewVGImage : IImage
     /// Final-stage cleanup that runs once every NVG entry has been released (either via
     /// per-NVG drain or inline immediate release). Marks the image disposed, releases the
     /// retained zero-copy GPU handle, and fires the post-release callback (typically the
-    /// scratch RT pool return).
+    /// scratch surface pool return).
     /// </summary>
     private void FinalizeRelease()
     {
@@ -340,7 +340,7 @@ internal sealed class MewVGImage : IImage
 
         // Now that NVG has dropped its NoDelete bookkeeping for the wrapped textures,
         // release the explicit retain we took during the zero-copy wrap. Safe even when the
-        // source itself is disposed — ReleaseGpuHandle on the bitmap RT only forwards to
+        // source itself is disposed; ReleaseGpuHandle on the pixel surface only forwards to
         // objc_release, which is independent of the wrapper's lifecycle.
         if (_retainedGpuHandle != 0)
         {
@@ -348,10 +348,10 @@ internal sealed class MewVGImage : IImage
             _retainedGpuHandle = 0;
         }
 
-        // Fire the post-release callback (e.g. scratch RT pool return) AFTER NVG handles
-        // and the retained texture are released — at this point every NVG that had an
+        // Fire the post-release callback (e.g. scratch surface pool return) AFTER NVG handles
+        // and the retained texture are released; at this point every NVG that had an
         // image-id for our texture has run through DeleteImage on its own thread, so the
-        // bitmap RT's color attachment is no longer referenced by any NVG draw queue.
+        // pixel surface's color attachment is no longer referenced by any NVG draw queue.
         if (_postReleaseCallback is { } cb)
         {
             _postReleaseCallback = null;

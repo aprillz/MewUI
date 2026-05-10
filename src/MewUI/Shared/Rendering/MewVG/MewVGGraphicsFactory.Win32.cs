@@ -16,17 +16,17 @@ public sealed partial class MewVGGraphicsFactory
         new MewVGGlOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext, "MewVG Win32");
 
 #pragma warning disable CS0649
-    [ThreadStatic] private static nint _bitmapPresentHwnd;
-    [ThreadStatic] private static nint _bitmapPresentHdc;
+    [ThreadStatic] private static nint _pixelSurfacePresentHwnd;
+    [ThreadStatic] private static nint _pixelSurfacePresentHdc;
     /// <summary>
-    /// The specific bitmap target that the layered-window present is rendering
+    /// The specific pixel surface that the layered-window present is rendering
     /// INTO. Set by <see cref="MewVGWin32LayeredPresenter.Present"/>. Distinguishes
     /// the window's primary draw target from any scratch FBO that an SVG filter
     /// or pattern may create during the same render pass; those scratch
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
-    [ThreadStatic] private static OpenGLPixelRenderSurface? _bitmapPresentTarget;
+    [ThreadStatic] private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
 #pragma warning restore CS0649
     public GraphicsBackend Backend => GraphicsBackend.OpenGL;
 
@@ -125,19 +125,19 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        if (target is not OpenGLPixelRenderSurface bitmapTarget)
+        if (target is not OpenGLPixelRenderSurface pixelSurface)
         {
             return;
         }
 
-        var hwnd = _bitmapPresentHwnd;
-        var hdc = _bitmapPresentHdc;
-        // Layered window's primary bitmap target is the one passed to Present;
+        var hwnd = _pixelSurfacePresentHwnd;
+        var hdc = _pixelSurfacePresentHdc;
+        // Layered window's primary pixel surface is the one passed to Present;
         // anything else (SVG filter / pattern scratch FBOs) must use the
         // single-context offscreen path so its NVG.BeginFrame doesn't reset
         // the layered window's shared NVG mid-render.
         bool isLayeredPresentTarget = hwnd != 0 && hdc != 0
-            && ReferenceEquals(_bitmapPresentTarget, bitmapTarget);
+            && ReferenceEquals(_pixelSurfacePresentTarget, pixelSurface);
         if (!isLayeredPresentTarget)
         {
             // Single-context offscreen: stay on whatever HGLRC is currently
@@ -151,7 +151,7 @@ public sealed partial class MewVGGraphicsFactory
             var offscreenContext = MewVGWin32GraphicsContext.CreateForOffscreen(
                 offscreenResources,
                 _offscreenProvider,
-                bitmapTarget,
+                pixelSurface,
                 OpenGL32.wglGetCurrentDC());
             context = offscreenContext;
             handled = true;
@@ -159,7 +159,7 @@ public sealed partial class MewVGGraphicsFactory
         }
 
         var resources = LayeredPresenter.GetOrCreateWindowResources(hwnd, hdc);
-        // Layered bitmap rendering creates a fresh context per Present call so the caller
+        // Layered pixel-surface rendering creates a fresh context per Present call so the caller
         // can Dispose() it as a one-shot. Heavy resources (NanoVGGL,
         // text cache) live on MewVGWindowResources and are reused.
         context = MewVGWin32GraphicsContext.CreateForLayeredWindow(
@@ -167,7 +167,7 @@ public sealed partial class MewVGGraphicsFactory
             _offscreenProvider,
             hwnd,
             hdc,
-            bitmapTarget);
+            pixelSurface);
         handled = true;
     }
 
@@ -197,18 +197,18 @@ public sealed partial class MewVGGraphicsFactory
             opacity,
             render: ctx =>
             {
-                _bitmapPresentHwnd = ctx.Hwnd;
-                _bitmapPresentHdc = ctx.Hdc;
-                _bitmapPresentTarget = ctx.RenderTarget;
+                _pixelSurfacePresentHwnd = ctx.Hwnd;
+                _pixelSurfacePresentHdc = ctx.Hdc;
+                _pixelSurfacePresentTarget = ctx.RenderTarget;
                 try
                 {
                     window.RenderFrameToSurface(ctx.RenderTarget);
                 }
                 finally
                 {
-                    _bitmapPresentTarget = null;
-                    _bitmapPresentHwnd = 0;
-                    _bitmapPresentHdc = 0;
+                    _pixelSurfacePresentTarget = null;
+                    _pixelSurfacePresentHwnd = 0;
+                    _pixelSurfacePresentHdc = 0;
                 }
             });
     }
@@ -454,7 +454,7 @@ public sealed partial class MewVGGraphicsFactory
     /// <summary>Cross-backend entrypoint for <see cref="IGraphicsFactory.AcquireConcurrentRenderUnit"/>.
     /// No-op on the MewVG GL backend: UI ↔ worker serialization is no longer enforced at
     /// the frame-bracket level (the previous broad mutex was removed). The remaining
-    /// concurrent-access concern — scratch RT pool reuse mid-flight — is handled in
+    /// concurrent-access concern — scratch surface pool reuse mid-flight — is handled in
     /// <c>DefaultFilterContext.AcquireScratch</c> via <c>IImage.TrySetPostReleaseCallback</c>,
     /// which defers pool return until the consumer's NVG draw queue has flushed.
     /// Worker-vs-worker MakeCurrent serialization still happens inside the worker context

@@ -109,7 +109,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     internal nint CreationContext => _creationContext;
 
     /// <summary>Records the GL context handle that was current when
-    /// <see cref="InitializeFbo"/> ran. Called by the platform's PrepareBitmapTarget
+    /// <see cref="InitializeFbo"/> ran. Called by the platform's PreparePixelSurface
     /// (Win32: wglGetCurrentContext; X11: glXGetCurrentContext) after
     /// <see cref="InitializeFbo"/> succeeds.</summary>
     internal void RecordCreationContext(nint context) => _creationContext = context;
@@ -197,8 +197,8 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
             return;
         }
 
-        // No CPU-side state to clear when no one has touched it yet — the FBO is cleared
-        // separately by the GL pipeline (PrepareBitmapTarget → glClear). Skipping allocation
+        // No CPU-side state to clear when no one has touched it yet. The FBO is cleared
+        // separately by the GL pipeline (PreparePixelSurface -> glClear). Skipping allocation
         // here is the main GC win.
         if (_pixels is null)
         {

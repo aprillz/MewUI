@@ -25,8 +25,8 @@ internal sealed partial class MewVGX11GraphicsContext
     internal static MewVGX11GraphicsContext CreateForOffscreen(
         MewVGGlOffscreenSurface offscreen,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
-        OpenGLPixelRenderSurface bitmapTarget)
-        => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, bitmapTarget));
+        OpenGLPixelRenderSurface pixelSurface)
+        => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, pixelSurface));
 
     internal void SetTarget(nint display, nint window)
     {
@@ -521,16 +521,16 @@ internal sealed partial class MewVGX11GraphicsContext
     {
         private readonly MewVGGlOffscreenSurface _offscreen;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
-        private readonly OpenGLPixelRenderSurface _bitmapTarget;
+        private readonly OpenGLPixelRenderSurface _pixelSurface;
 
         public X11OffscreenFrameSession(
             MewVGGlOffscreenSurface offscreen,
             IMewVGOffscreenSurfaceProvider offscreenProvider,
-            OpenGLPixelRenderSurface bitmapTarget)
+            OpenGLPixelRenderSurface pixelSurface)
         {
             _offscreen = offscreen;
             _offscreenProvider = offscreenProvider;
-            _bitmapTarget = bitmapTarget;
+            _pixelSurface = pixelSurface;
         }
 
         public NanoVGGL Vg => _offscreen.Vg;
@@ -539,15 +539,15 @@ internal sealed partial class MewVGX11GraphicsContext
         public void BeginFrame()
         {
             _offscreenProvider.EnterSession();
-            PrepareBitmapTarget(_offscreenProvider, _bitmapTarget);
+            PreparePixelSurface(_offscreenProvider, _pixelSurface);
         }
 
         public void BindFrameTarget()
-            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _bitmapTarget.Fbo);
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _pixelSurface.Fbo);
 
         public void EndFrame()
         {
-            _bitmapTarget.RequestDeferredReadback();
+            _pixelSurface.RequestDeferredReadback();
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
             // Per-NVG drain — only this offscreen NVG's pending image-id deletions, on its
             // own thread inside its EndFrame. Avoids racing the window NVG mid-frame.
@@ -568,32 +568,32 @@ internal sealed partial class MewVGX11GraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static void PrepareBitmapTarget(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface bitmapTarget)
+    private static void PreparePixelSurface(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface pixelSurface)
     {
-        // Don't drain pending target disposals here — see Win32 PrepareBitmapTarget for
+        // Don't drain pending target disposals here — see Win32 PreparePixelSurface for
         // the rationale. Drain happens at the outermost session's EndFrame instead.
-        bitmapTarget.InitializeFbo();
-        if (!bitmapTarget.IsFboInitialized || bitmapTarget.Fbo == 0)
+        pixelSurface.InitializeFbo();
+        if (!pixelSurface.IsFboInitialized || pixelSurface.Fbo == 0)
         {
-            throw new PlatformNotSupportedException("OpenGL FBOs are required for X11 bitmap rendering.");
+            throw new PlatformNotSupportedException("OpenGL FBOs are required for X11 pixel-surface rendering.");
         }
 
         // Record the GLXContext that owns the FBO/RB handles — see Win32 path for
         // rationale (FBOs are not shared via glXCreateContext share, only textures).
-        bitmapTarget.RecordCreationContext(LibGL.glXGetCurrentContext());
+        pixelSurface.RecordCreationContext(LibGL.glXGetCurrentContext());
 
-        OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, bitmapTarget.Fbo);
+        OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, pixelSurface.Fbo);
 
         // Force colormask + stencil mask to "all writes enabled" before clear. NanoVG's
         // path-fill flush sets colormask=(F,F,F,F) for the stencil-marking pass; if its
         // restore at flush end is incomplete, the next glClear leaves alpha untouched
         // (= undefined / 0xFF on a fresh texture), producing opaque-black filter
-        // results in transparent regions. See Win32 PrepareBitmapTarget.
+        // results in transparent regions. See Win32 PreparePixelSurface.
         GL.ColorMask(true, true, true, true);
         GL.ClearColor(0f, 0f, 0f, 0f);
 
         uint clearMask = GL.GL_COLOR_BUFFER_BIT;
-        if (bitmapTarget.HasStencil)
+        if (pixelSurface.HasStencil)
         {
             GL.StencilMask(0xFF);
             GL.ClearStencil(0);

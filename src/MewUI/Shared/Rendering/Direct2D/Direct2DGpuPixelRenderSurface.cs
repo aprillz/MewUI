@@ -5,7 +5,7 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
 /// <summary>
-/// GPU-only D2D bitmap target — wraps an <c>ID2D1Bitmap1</c> created with
+/// GPU-only D2D pixel surface — wraps an <c>ID2D1Bitmap1</c> created with
 /// <c>D2D1_BITMAP_OPTIONS.TARGET</c>. No GDI DIB section is allocated; pixels live
 /// exclusively in GPU memory and are sampled by effects / drawn directly via the
 /// shared device context. Counterpart of MewVG's <c>OpenGLPixelRenderSurface</c>.
@@ -75,7 +75,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
             throw new InvalidOperationException($"ID2D1DeviceContext::CreateBitmap (TARGET) failed: 0x{hr:X8}");
         }
 
-        _factory.RegisterGpuBitmapTarget(this);
+        _factory.RegisterGpuPixelSurface(this);
     }
 
     public int PixelWidth { get; }
@@ -300,7 +300,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     {
         if (!IsDeviceCurrent)
         {
-            throw new InvalidOperationException("GPU bitmap target is stale after Direct2D device loss. Recreate the render target.");
+            throw new InvalidOperationException("GPU pixel surface is stale after Direct2D device loss. Recreate the render surface.");
         }
     }
 

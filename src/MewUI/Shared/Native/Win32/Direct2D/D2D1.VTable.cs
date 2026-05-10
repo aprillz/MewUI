@@ -731,7 +731,7 @@ internal static unsafe class D2D1VTable
     /// <summary>ID2D1Bitmap::CopyFromMemory (vtbl 10). Uploads CPU-side pixel data into a
     /// GPU bitmap. <paramref name="srcData"/> is the source buffer (must contain at least
     /// <c>height * pitch</c> bytes covering the destination rect). The destination rect is
-    /// passed as null so the entire bitmap is uploaded. Used by the GPU bitmap target's
+    /// passed as null so the entire bitmap is uploaded. Used by the GPU pixel surface's
     /// writeback path so CPU executors can Lock+modify pixels and have the changes
     /// propagate back to the GPU surface for downstream effects.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

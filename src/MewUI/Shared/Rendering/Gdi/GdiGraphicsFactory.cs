@@ -118,18 +118,18 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
             return CreateContextCore(win32Surface.Hwnd, win32Surface.Hdc, windowTarget.DpiScale, win32Surface.TransparentComposition);
         }
 
-        if (target is GdiPixelRenderSurface bitmapTarget)
+        if (target is GdiPixelRenderSurface pixelSurface)
         {
             // Use target's Hdc directly - no wrapper needed
             return new GdiPlusGraphicsContext(
                 hwnd: 0,
-                hdc: bitmapTarget.Hdc,
-                pixelWidth: bitmapTarget.PixelWidth,
-                pixelHeight: bitmapTarget.PixelHeight,
-                dpiScale: bitmapTarget.DpiScale,
+                hdc: pixelSurface.Hdc,
+                pixelWidth: pixelSurface.PixelWidth,
+                pixelHeight: pixelSurface.PixelHeight,
+                dpiScale: pixelSurface.DpiScale,
                 imageScaleQuality: ImageScaleQuality,
                 ownsDc: false,
-                bitmapTarget: bitmapTarget);
+                pixelSurface: pixelSurface);
         }
 
         if (target is ICpuPixelSurface)
@@ -261,7 +261,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         window.RenderFrameToSurface(target);
 
         // UpdateLayeredWindow expects premultiplied BGRA. The GDI pipeline already renders premultiplied
-        // into the bitmap target; only fix up missing alpha from legacy GDI text/bitblt paths.
+        // into the pixel surface; only fix up missing alpha from legacy GDI text/bitblt paths.
         var staging = GetOrCreateLayeredStagingTarget(hwnd, w, h, dpiScale);
         CopyWithAlphaFix(target.GetPixelSpan(), staging.GetPixelSpan());
 

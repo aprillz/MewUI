@@ -446,8 +446,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     {
         EnsureInitialized();
 
-        // The DC render target lifetime tracks the bitmap RT itself (RAII). The context
-        // calls back into the RT for the (HDC-bound) DC RT handle each frame.
+        // The DC render target lifetime tracks the pixel surface itself (RAII). The context
+        // calls back into the surface for the HDC-bound DC render target handle each frame.
         var d2dFactory = _d2dFactory;
         var ctx = new Direct2DGraphicsContext(
             this,
@@ -462,8 +462,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return ctx;
     }
 
-    /// <summary>Builds a graphics context for a GPU-resident bitmap target. The context's
-    /// <c>OnBeginFrame</c> branches into <c>BeginGpuBitmapFrame</c> when the target is a
+    /// <summary>Builds a graphics context for a GPU-resident pixel surface. The context's
+    /// <c>OnBeginFrame</c> branches into <c>BeginGpuPixelSurfaceFrame</c> when the target is a
     /// <see cref="Direct2DGpuPixelRenderSurface"/>, using the shared filter device context
     /// + <c>SetTarget</c> instead of a DC render target — keeps the filter pipeline on-GPU
     /// end-to-end.</summary>
@@ -659,8 +659,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
             if (_layeredTargets.Remove(hwnd, out var layered))
             {
-                // The bitmap RT owns its own DC render target now (RAII) — disposing the
-                // bitmap releases the DC RT in lockstep.
+                // The pixel surface owns its own DC render target now (RAII), so disposing
+                // the surface releases the DC render target in lockstep.
                 layered.Dispose();
             }
         }

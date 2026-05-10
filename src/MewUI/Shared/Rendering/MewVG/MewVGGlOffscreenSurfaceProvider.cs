@@ -234,7 +234,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         if (entries.Count == 0)
         {
             // No NVG image-ids attached — nothing to defer; release inline so the
-            // post-release callback (e.g. scratch RT pool return) still fires.
+            // post-release callback (e.g. scratch surface pool return) still fires.
             image.ReleaseImagesImmediate();
             return;
         }

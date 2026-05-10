@@ -22,7 +22,7 @@ public sealed partial class MewVGGraphicsFactory
     // worker-vs-worker MakeCurrent (a single shared GLX context can only be
     // current on one thread at a time). UI render and worker scope no longer
     // share the lock — the previous broad UI mutex was removed, with the
-    // scratch RT pool reuse race instead handled at DefaultFilterContext via
+    // scratch surface pool reuse race instead handled at DefaultFilterContext via
     // IImage.TrySetPostReleaseCallback.
     // -------------------------------------------------------------------------
 
@@ -223,7 +223,7 @@ public sealed partial class MewVGGraphicsFactory
             return;
         }
 
-        if (target is not OpenGLPixelRenderSurface bitmapTarget)
+        if (target is not OpenGLPixelRenderSurface pixelSurface)
         {
             return;
         }
@@ -232,7 +232,7 @@ public sealed partial class MewVGGraphicsFactory
         context = MewVGX11GraphicsContext.CreateForOffscreen(
             offscreenResources,
             _offscreenProvider,
-            bitmapTarget);
+            pixelSurface);
         handled = true;
     }
 

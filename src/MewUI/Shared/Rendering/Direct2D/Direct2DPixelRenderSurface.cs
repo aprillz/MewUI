@@ -225,12 +225,12 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
     }
 
 
-    /// <summary>Returns the DC render target bound to this bitmap's HDC, creating it on
-    /// first request. The DC RT lives for the bitmap's lifetime and is released in
+    /// <summary>Returns the DC render target bound to this surface's HDC, creating it on
+    /// first request. The DC render target lives for the surface's lifetime and is released in
     /// <see cref="Dispose"/>. <paramref name="d2dFactory"/> is the
     /// <c>ID2D1Factory</c> pointer that creates the DC RT (we don't own it; the caller
     /// keeps it alive). The generation field changes only when the underlying handle
-    /// changes (currently never within a single bitmap RT lifetime), letting consumers
+    /// changes (currently never within a single pixel surface lifetime), letting consumers
     /// cache resources keyed against it.</summary>
     internal (nint RenderTarget, int Generation) GetOrCreateDcRenderTarget(nint d2dFactory)
     {

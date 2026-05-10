@@ -48,7 +48,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     /// <summary>CPU-side pixel mirror, lazily allocated. Only populated when a CPU consumer
     /// (Lock / CopyPixels / GetPixelSpan / EndFrame readback) actually needs the bytes —
-    /// for the Metal pipeline, the source layer / scratch RT round-trip lives entirely on
+    /// for the Metal pipeline, the source layer / scratch surface round-trip lives entirely on
     /// GPU (MTLTexture → MPS → MTLTexture → NVG sample), so a pure-GPU consumer chain
     /// never allocates this 4 × W × H buffer (32 MB for a 4096 × 2000 RT).</summary>
     private byte[]? _pixels;

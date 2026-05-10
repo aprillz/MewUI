@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// <summary>
 /// Output of <see cref="IImageFilterExecutor.Execute"/>. Wraps a backend's intermediate image
 /// with explicit ownership semantics so callers can <c>using</c>-dispose without worrying about
-/// whether the result aliases a borrowed source layer or a scratch RT from the pool.
+/// whether the result aliases a borrowed source layer or a scratch surface from the pool.
 /// </summary>
 /// <remarks>
 /// Three concrete shapes:
@@ -155,7 +155,7 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     /// <summary>Transfers ownership of the underlying target + image to the caller. After
     /// Detach, <see cref="Dispose"/> is a no-op (the pool release is suppressed). Caller
     /// must dispose the returned surface/image when done. Used by result-caching paths that
-    /// want to keep the scratch RT alive across frames without copying its pixels.</summary>
+    /// want to keep the scratch surface alive across frames without copying its pixels.</summary>
     public (IRenderSurface Surface, IImage Image)? Detach()
     {
         if (_disposed) return null;
