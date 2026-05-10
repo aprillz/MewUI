@@ -67,8 +67,7 @@ public sealed class ScratchRenderTargetPool : IDisposable
             while (stack.Count > 0)
             {
                 var lease = stack.Pop();
-                var target = lease.BitmapTarget;
-                if (target is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
+                if (lease.Surface is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
                 {
                     DisposeLease(lease);
                     continue;
@@ -87,16 +86,16 @@ public sealed class ScratchRenderTargetPool : IDisposable
             _dpiScale,
             debugName: nameof(ScratchRenderTargetPool)));
 
-        if (surface is IBitmapRenderTarget bitmapTarget)
+        if (surface is ICpuPixelSurface pixels)
         {
-            var lease = new ScratchRenderTargetLease(surface, bitmapTarget);
+            var lease = new ScratchRenderTargetLease(surface, pixels);
             _leases[lease.Surface] = lease;
             return lease;
         }
 
         surface.Dispose();
         throw new NotSupportedException(
-            $"{nameof(ScratchRenderTargetPool)} currently requires bitmap-backed render surfaces.");
+            $"{nameof(ScratchRenderTargetPool)} currently requires CPU-readable render surfaces.");
     }
 
     public void Return(IRenderSurface surface)
@@ -114,20 +113,19 @@ public sealed class ScratchRenderTargetPool : IDisposable
     public void Return(ScratchRenderTargetLease lease)
     {
         if (lease is null) return;
-        var target = lease.BitmapTarget;
         if (_disposed)
         {
             DisposeLease(lease);
             return;
         }
 
-        if (target is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
+        if (lease.Surface is IReusableScratchRenderTarget reusable && !reusable.CanReturnToPool)
         {
             DisposeLease(lease);
             return;
         }
 
-        var key = (target.PixelWidth, target.PixelHeight);
+        var key = (lease.Surface.PixelWidth, lease.Surface.PixelHeight);
         if (!_buckets.TryGetValue(key, out var stack))
         {
             stack = new Stack<ScratchRenderTargetLease>();
@@ -169,15 +167,15 @@ public sealed class ScratchRenderTargetLease : IDisposable
 {
     private bool _disposed;
 
-    internal ScratchRenderTargetLease(IRenderSurface surface, IBitmapRenderTarget target)
+    internal ScratchRenderTargetLease(IRenderSurface surface, ICpuPixelSurface pixels)
     {
         Surface = surface ?? throw new ArgumentNullException(nameof(surface));
-        BitmapTarget = target ?? throw new ArgumentNullException(nameof(target));
+        Pixels = pixels ?? throw new ArgumentNullException(nameof(pixels));
     }
 
     public IRenderSurface Surface { get; }
 
-    public IBitmapRenderTarget BitmapTarget { get; }
+    public ICpuPixelSurface Pixels { get; }
 
     public void Dispose()
     {

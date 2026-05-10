@@ -125,7 +125,7 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     {
         _lease = lease ?? throw new ArgumentNullException(nameof(lease));
         _surface = lease.Surface;
-        _pixels = lease.BitmapTarget;
+        _pixels = lease.Pixels;
         _image = image ?? throw new ArgumentNullException(nameof(image));
         _releaseLease = release;
         Bounds = bounds;
