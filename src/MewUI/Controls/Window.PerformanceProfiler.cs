@@ -652,9 +652,12 @@ partial class Window
 
         private bool TryHighlightSampleTarget(ProfilerSample sample)
         {
+#if DEBUG
             if (sample.Target is not { } element)
             {
-                return false;
+#endif
+            return false;
+#if DEBUG
             }
 
             if (_target._debugInspectorOverlay == null)
@@ -670,6 +673,7 @@ partial class Window
             _target._debugInspectorOverlay.HighlightedElement = element;
             _target.RequestRender();
             return true;
+#endif
         }
 
         private void DrawDetails(IGraphicsContext context, Rect rect)
