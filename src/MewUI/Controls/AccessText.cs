@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Diagnostics;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -94,24 +95,26 @@ internal sealed class AccessText : TextBlock
         _registeredWindow = null;
     }
 
-    protected override void OnRender(IGraphicsContext context)
+    protected override void OnRenderTextDecorations(
+        IGraphicsContext context,
+        TextFormat format,
+        TextLayout layout,
+        string text,
+        Rect bounds)
     {
-        base.OnRender(context);
-
-        if (UnderlineIndex < 0 || string.IsNullOrEmpty(Text))
+        if (UnderlineIndex < 0 || string.IsNullOrEmpty(text))
             return;
 
         if (!GetValue(Window.ShowAccessKeysProperty))
             return;
 
-        var text = Text;
         if (UnderlineIndex >= text.Length)
             return;
 
-        AccessKeyRenderer.DrawUnderline(
-            context, text, UnderlineIndex, Bounds,
-            EnsureFont(GetGraphicsFactory()), Foreground,
-            TextAlignment, VerticalTextAlignment,
-            GetDpi() / 96.0);
+        using (ProfilerMarkers.AccessTextUnderline.Auto())
+        {
+            var metrics = AccessKeyRenderer.MeasureUnderline(context, text, UnderlineIndex, format, layout);
+            AccessKeyRenderer.DrawUnderline(context, bounds, format, metrics, Foreground, GetDpi() / 96.0);
+        }
     }
 }

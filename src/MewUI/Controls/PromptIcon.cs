@@ -189,37 +189,62 @@ public sealed class PromptIcon : FrameworkElement
 
     private static void DrawShield(IGraphicsContext context, Rect bounds)
     {
-        BeginSourceRect(context, ShieldOutline.GetBounds(), bounds, 1.0, Stretch.Uniform);
-        try
-        {
-            context.FillPath(ShieldLeft, _brushShieldLeft!);
-            context.FillPath(ShieldRight, _brushShieldRight!);
-            context.DrawPath(ShieldOutline, _penShieldOutline!);
-        }
-        finally
-        {
-            context.Restore();
-        }
+        // Shield gradient brushes (_brushShieldLeft/Right) have endpoints in the icon's
+        // source 256×256 coordinate system. Push the source-rect transform around the fill
+        // so the gradient is interpreted in source space, then draw the stroke from the
+        // baked geometry in element-DIP space (so stroke thickness stays at StrokeThickness
+        // DIP regardless of the source→bounds scale under Model D).
+        var sourceBounds = ShieldOutline.GetBounds();
+        var bake = ComputeSourceRectMatrix(sourceBounds, bounds, 1.0, Stretch.Uniform);
+
+        context.Save();
+        ApplySourceRectTransform(context, sourceBounds, bounds, 1.0, Stretch.Uniform);
+        context.FillPath(ShieldLeft, _brushShieldLeft!);
+        context.FillPath(ShieldRight, _brushShieldRight!);
+        context.Restore();
+
+        context.DrawPath(ShieldOutline.Transform(bake), _penShieldOutline!);
     }
 
     private static void DrawCrash(IGraphicsContext context, Rect bounds)
     {
-        BeginSourceRect(context, new Rect(38, 38, 180, 186), bounds, 1.0, Stretch.Uniform);
-        try
-        {
-            context.FillPath(CrashHorn, _brushCrashHorn!);
-            context.DrawPath(CrashHorn, _penCrashHorn!);
-            context.FillPath(CrashBody, _brushCrashBody!);
-            context.DrawPath(CrashBody, _penCrashBody!);
-            DrawGeometry(context, QuestionGlyph, new Rect(42, 50, 172, 172), _brushCrashGlyph, null, 0.628, Stretch.Uniform);
-        }
-        finally
-        {
-            context.Restore();
-        }
+        // Same split as Shield: source-space gradient brushes need the transform during fill,
+        // strokes draw from baked geometry to keep thickness in element-DIP.
+        var sourceBounds = new Rect(38, 38, 180, 186);
+        var bake = ComputeSourceRectMatrix(sourceBounds, bounds, 1.0, Stretch.Uniform);
+
+        context.Save();
+        ApplySourceRectTransform(context, sourceBounds, bounds, 1.0, Stretch.Uniform);
+        context.FillPath(CrashHorn, _brushCrashHorn!);
+        context.FillPath(CrashBody, _brushCrashBody!);
+        context.Restore();
+
+        context.DrawPath(CrashHorn.Transform(bake), _penCrashHorn!);
+        context.DrawPath(CrashBody.Transform(bake), _penCrashBody!);
+
+        // Inner glyph uses a solid brush (no gradient), so the bake-only path is fine.
+        DrawGeometry(context, QuestionGlyph, new Rect(42, 50, 172, 172), _brushCrashGlyph, null, 0.628, Stretch.Uniform, parentBake: bake);
     }
 
-    private static void DrawGeometry(IGraphicsContext context, PathGeometry geometry, Rect bounds, IBrush? brush, IPen? pen, double scale, Stretch stretch)
+    /// <summary>
+    /// Pushes the same source-rect transform that <see cref="ComputeSourceRectMatrix"/>
+    /// computes onto the context. Used for fill calls where the brush expects source-space
+    /// coordinates (e.g. linear gradients with hardcoded source-coordinate endpoints).
+    /// </summary>
+    private static void ApplySourceRectTransform(IGraphicsContext context, Rect sourceBounds, Rect bounds, double scale, Stretch stretch)
+    {
+        var targetRect = new Rect(
+            bounds.X + (bounds.Width * (1.0 - scale)) * 0.5,
+            bounds.Y + (bounds.Height * (1.0 - scale)) * 0.5,
+            bounds.Width * scale,
+            bounds.Height * scale);
+        ComputeStretchTransform(sourceBounds, targetRect, stretch, out var sx, out var sy, out var tx, out var ty);
+        context.Translate(tx, ty);
+        context.Scale(sx, sy);
+        context.Translate(-sourceBounds.X, -sourceBounds.Y);
+    }
+
+    private static void DrawGeometry(IGraphicsContext context, PathGeometry geometry, Rect bounds, IBrush? brush, IPen? pen, double scale, Stretch stretch, System.Numerics.Matrix3x2? parentBake = null)
     {
         var geoBounds = geometry.GetBounds();
         if (geoBounds.Width <= 0 || geoBounds.Height <= 0)
@@ -227,37 +252,32 @@ public sealed class PromptIcon : FrameworkElement
             return;
         }
 
-        var targetRect = new Rect(
-            bounds.X + (bounds.Width * (1.0 - scale)) * 0.5,
-            bounds.Y + (bounds.Height * (1.0 - scale)) * 0.5,
-            bounds.Width * scale,
-            bounds.Height * scale);
-
-        ComputeStretchTransform(geoBounds, targetRect, stretch, out var sx, out var sy, out var tx, out var ty);
-
-        context.Save();
-        try
+        var bake = ComputeSourceRectMatrix(geoBounds, bounds, scale, stretch);
+        // Caller may already be inside a baked source rect (e.g. Crash: glyph nested under
+        // body's source rect). Compose so the inner geometry still ends up in window DIPs.
+        if (parentBake.HasValue)
         {
-            context.Translate(tx, ty);
-            context.Scale(sx, sy);
-            context.Translate(-geoBounds.X, -geoBounds.Y);
-            if (brush != null)
-            {
-                context.FillPath(geometry, brush);
-            }
-
-            if (pen != null)
-            {
-                context.DrawPath(geometry, pen);
-            }
+            bake *= parentBake.Value;
         }
-        finally
+        var transformed = geometry.Transform(bake);
+        if (brush != null)
         {
-            context.Restore();
+            context.FillPath(transformed, brush);
+        }
+        if (pen != null)
+        {
+            context.DrawPath(transformed, pen);
         }
     }
 
-    private static void BeginSourceRect(IGraphicsContext context, Rect sourceBounds, Rect bounds, double scale, Stretch stretch)
+    /// <summary>
+    /// Builds the matrix that maps coordinates in <paramref name="sourceBounds"/> into
+    /// <paramref name="bounds"/> shrunken by <paramref name="scale"/> and aligned by
+    /// <paramref name="stretch"/>. Used to bake the source-rect transform into a geometry
+    /// so subsequent <c>DrawPath</c> draws don't pick up the transform on the context (and
+    /// thus don't scale the stroke under Model D).
+    /// </summary>
+    private static System.Numerics.Matrix3x2 ComputeSourceRectMatrix(Rect sourceBounds, Rect bounds, double scale, Stretch stretch)
     {
         var targetRect = new Rect(
             bounds.X + (bounds.Width * (1.0 - scale)) * 0.5,
@@ -267,10 +287,11 @@ public sealed class PromptIcon : FrameworkElement
 
         ComputeStretchTransform(sourceBounds, targetRect, stretch, out var sx, out var sy, out var tx, out var ty);
 
-        context.Save();
-        context.Translate(tx, ty);
-        context.Scale(sx, sy);
-        context.Translate(-sourceBounds.X, -sourceBounds.Y);
+        // [Translate(-sourceOrigin)] × [Scale] × [Translate(target)]
+        return
+            System.Numerics.Matrix3x2.CreateTranslation((float)-sourceBounds.X, (float)-sourceBounds.Y) *
+            System.Numerics.Matrix3x2.CreateScale((float)sx, (float)sy) *
+            System.Numerics.Matrix3x2.CreateTranslation((float)tx, (float)ty);
     }
 
     private static ILinearGradientBrush VertGrad(IGraphicsFactory factory, Rect bounds, Color start, Color end)
