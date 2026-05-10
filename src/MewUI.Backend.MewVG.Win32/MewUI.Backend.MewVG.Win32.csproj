@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\build\MewUI.Common.props" />
 
@@ -29,7 +29,9 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsContext.Common.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.Win32.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGlOffscreenSurfaceProvider.cs" LinkBase="Rendering\MewVG" />
 
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGExternalLockedImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGGLBootstrap.cs" LinkBase="Rendering\MewVG" />
@@ -37,11 +39,18 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGWindowResources.cs" LinkBase="Rendering\MewVG" />
 
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IGLTextureSource.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
-    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLBitmapRenderTarget.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLPixelRenderSurface.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLGaussianBlur.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLImageFilterExecutor.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextRasterizer.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglDxInteropTexture.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploader.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploaderPool.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLPboExt.cs" LinkBase="Native" />
 
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiFont.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiMeasurementContext.cs" LinkBase="Rendering\Gdi" />
@@ -51,6 +60,7 @@
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\OpenGL32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\WglDxInterop.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
     <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\GL.Win32.cs" LinkBase="Native" />

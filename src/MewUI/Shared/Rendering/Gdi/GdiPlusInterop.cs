@@ -192,6 +192,9 @@ internal static partial class GdiPlusInterop
     public static partial int GdipSetLineWrapMode(nint brush, WrapMode wrapMode);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetLineTransform(nint brush, nint matrix);
+
+    [LibraryImport("gdiplus.dll")]
     private static unsafe partial int GdipSetLinePresetBlend(
         nint brush, uint* blend, float* positions, int count);
 
@@ -206,13 +209,29 @@ internal static partial class GdiPlusInterop
     public static partial int GdipAddPathEllipse(nint path, float x, float y, float width, float height);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipTransformPath(nint path, nint matrix);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipCreatePathGradientFromPath(nint path, out nint brush);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipCreateTexture2(
+        nint image,
+        WrapMode wrapMode,
+        float x, float y, float width, float height,
+        out nint texture);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipSetTextureTransform(nint texture, nint matrix);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipSetPathGradientCenterPoint(nint brush, ref PointF point);
 
     [LibraryImport("gdiplus.dll")]
     public static partial int GdipSetPathGradientWrapMode(nint brush, WrapMode wrapMode);
+
+    [LibraryImport("gdiplus.dll")]
+    public static partial int GdipMultiplyPathGradientTransform(nint brush, nint matrix, MatrixOrder order);
 
     [LibraryImport("gdiplus.dll")]
     private static unsafe partial int GdipSetPathGradientPresetBlend(

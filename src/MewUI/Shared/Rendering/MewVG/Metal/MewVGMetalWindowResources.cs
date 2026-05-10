@@ -9,11 +9,9 @@ internal sealed class MewVGMetalWindowResources : IDisposable
 {
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
     private static readonly nint ClsMTLTextureDescriptor = ObjCRuntime.GetClass("MTLTextureDescriptor");
-
     private static readonly nint SelAlloc = ObjCRuntime.Selectors.alloc;
     private static readonly nint SelInit = ObjCRuntime.Selectors.init;
     private static readonly nint SelRelease = ObjCRuntime.Selectors.release;
-
     private static readonly nint SelNewCommandQueue = ObjCRuntime.RegisterSelector("newCommandQueue");
     private static readonly nint SelSetDevice = ObjCRuntime.RegisterSelector("setDevice:");
     private static readonly nint SelSetPixelFormat = ObjCRuntime.RegisterSelector("setPixelFormat:");
@@ -51,6 +49,28 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     public nint CommandQueue { get; }
     public NanoVGMetal Vg { get; }
     public MewVGMetalTextCache TextCache { get; }
+
+    private MewVGMetalGraphicsContext? _cachedContext;
+
+    internal MewVGMetalGraphicsContext GetOrCreateContext(MewVGMetalOffscreenSurfaceProvider offscreenProvider)
+        => _cachedContext ??= MewVGMetalGraphicsContext.CreateForWindow(this, offscreenProvider);
+
+    /// <summary>
+    /// Drops the cached graphics context reference when the context is
+    /// disposed externally (e.g. on window resize). Without this, the next
+    /// <see cref="GetOrCreateContext"/> hands out the dead context whose
+    /// pooled <c>_saveStack</c> has already been returned to
+    /// <c>CollectionPool</c> ??a subsequent Rent then aliases the same
+    /// Stack between two contexts and they corrupt each other's state.
+    /// (Same root cause as the Win32 fix in <c>MewVGWindowResources</c>.)
+    /// </summary>
+    internal void InvalidateCachedContext(MewVGMetalGraphicsContext ctx)
+    {
+        if (ReferenceEquals(_cachedContext, ctx))
+        {
+            _cachedContext = null;
+        }
+    }
 
     private MewVGMetalWindowResources(nint hwnd, nint layer, nint device, nint commandQueue, NanoVGMetal vg)
     {
@@ -105,12 +125,6 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         if (SelSetFramebufferOnly != 0)
         {
             ObjCRuntime.SendMessageNoReturn(metalLayer, SelSetFramebufferOnly, (UInt64)1);
-        }
-
-        // Live-resize jitter fix: ensure presentation is synchronized with the resize transaction.
-        if (SelSetPresentsWithTransaction != 0)
-        {
-            ObjCRuntime.SendMessageNoReturn(metalLayer, SelSetPresentsWithTransaction, (UInt64)1);
         }
 
         if (SelSetAllowsNextDrawableTimeout != 0)
@@ -251,6 +265,9 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         }
 
         _disposed = true;
+
+        _cachedContext?.Dispose();
+        _cachedContext = null;
 
         ReleaseIfNotNull(ref _stencilTexture);
         ReleaseIfNotNull(ref _msaaColorTexture);

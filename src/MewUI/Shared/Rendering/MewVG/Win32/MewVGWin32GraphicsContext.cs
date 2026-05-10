@@ -1,95 +1,120 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.OpenGL;
+using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 internal sealed partial class MewVGWin32GraphicsContext
 {
-    private readonly nint _hwnd;
-    private readonly nint _hdc;
-    private readonly MewVGWindowResources _resources;
-    private readonly OpenGLBitmapRenderTarget? _bitmapTarget;
-    private readonly bool _swapOnDispose;
+    private readonly IWin32FrameSession _frameSession;
+    private readonly MewVGTextCache _textCache;
+    private GdiMeasurementContext? _measureContext;
 
-    public MewVGWin32GraphicsContext(
+    private MewVGWin32GraphicsContext(IWin32FrameSession frameSession)
+    {
+        _frameSession = frameSession;
+        _vg = frameSession.Vg;
+        _textCache = frameSession.TextCache;
+    }
+
+    internal static MewVGWin32GraphicsContext CreateForWindow(
+        MewVGWindowResources resources,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        nint hwnd,
+        nint hdc)
+        => new(new WindowBackbufferFrameSession(resources, offscreenProvider, hwnd, hdc));
+
+    /// <summary>
+    /// Builds a graphics context that renders into a pixel surface (FBO) while
+    /// piggybacking on the WGL context that is already current on the calling
+    /// thread. The supplied <paramref name="offscreen"/> resources must have
+    /// been borrowed via
+    /// <see cref="IMewVGOffscreenSurfaceProvider.AcquireSurface"/>; the
+    /// context takes ownership and returns it to the provider on Dispose.
+    /// </summary>
+    internal static MewVGWin32GraphicsContext CreateForOffscreen(
+        MewVGGlOffscreenSurface offscreen,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        OpenGLPixelRenderSurface pixelSurface,
+        nint hdc)
+        => new(new OffscreenPixelSurfaceFrameSession(offscreen, offscreenProvider, pixelSurface, hdc));
+
+    internal static MewVGWin32GraphicsContext CreateForLayeredWindow(
+        MewVGWindowResources resources,
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
         nint hwnd,
         nint hdc,
-        int pixelWidth,
-        int pixelHeight,
-        double dpiScale,
-        MewVGWindowResources resources,
-        OpenGLBitmapRenderTarget? bitmapTarget = null)
+        OpenGLPixelRenderSurface pixelSurface)
+        => new(new WindowPixelSurfaceFrameSession(resources, offscreenProvider, hwnd, hdc, pixelSurface));
+
+    internal void SetWindowTarget(nint hwnd, nint hdc)
+        => (_frameSession as WindowBackbufferFrameSession)?.SetTarget(hwnd, hdc);
+
+    partial void DestroyPlatform()
     {
-        _hwnd = hwnd;
-        _hdc = hdc;
-        _resources = resources;
-        _vg = resources.Vg;
-        _bitmapTarget = bitmapTarget;
-        _swapOnDispose = bitmapTarget == null;
+        // Drop the resources' cached reference to this instance. Without this
+        // step, MewVGWindowResources.GetOrCreateContext keeps handing out the
+        // disposed context after a window resize. Reusing it is doubly broken:
+        // its _saveStack has already been Returned to the pool, so any later
+        // Rent (e.g. by an offscreen context creation) hands back the
+        // same Stack instance and the two contexts end up sharing state.
+        _frameSession.DisposeContext(this);
 
-        _dpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
-
-        _viewportWidthPx = Math.Max(1, pixelWidth);
-        _viewportHeightPx = Math.Max(1, pixelHeight);
-        _viewportWidthDip = _viewportWidthPx / DpiScale;
-        _viewportHeightDip = _viewportHeightPx / DpiScale;
+        // Return our borrowed offscreen NVG to the pool so a sibling or
+        // subsequent offscreen pass can reuse it. Done after the NVG's frame
+        // has fully ended (OnEndFrame was called before OnDispose).
     }
 
     partial void BeginFramePlatform()
     {
-        _resources.MakeCurrent(_hdc);
-
-        if (_bitmapTarget != null)
+        // Main rendering: take ownership of the WGL context for this frame.
+        // Offscreen rendering: caller already has the main context current;
+        // reuse it so there is no wglMakeCurrent roundtrip.
+        try
         {
-            _bitmapTarget.InitializeFbo();
-            if (!_bitmapTarget.IsFboInitialized || _bitmapTarget.Fbo == 0)
-            {
-                _resources.ReleaseCurrent();
-                throw new PlatformNotSupportedException("OpenGL FBOs are required for Win32 layered window presentation.");
-            }
+            _frameSession.BeginFrame();
 
-            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _bitmapTarget.Fbo);
+            GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
 
-            // Clear FBO to transparent black before rendering.
-            // NanoVG's blending (SRC_ALPHA, ONE_MINUS_SRC_ALPHA) cannot overwrite with alpha=0,
-            // so a hardware clear is required for proper layered window transparency.
-            GL.ClearColor(0f, 0f, 0f, 0f);
-            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+            _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
+            _vg.ResetTransform();
+            _vg.ResetScissor();
         }
-
-        GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
-
-        _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
-        _vg.ResetTransform();
-        _vg.ResetScissor();
+        catch
+        {
+            _frameSession.AbortFrame();
+            throw;
+        }
     }
 
     partial void EndFramePlatform()
     {
-        _vg.EndFrame();
+        _measureContext?.Dispose();
+        _measureContext = null;
 
-        if (_bitmapTarget != null)
+        // NanoVG.Flush rebinds program / VAO / textures unconditionally, but
+        // does NOT touch glViewport or the framebuffer binding. Restore both
+        // to OUR target before flushing so nested offscreen passes (which
+        // bind their own FBO and unbind to 0 on EndFrame) cannot leave us
+        // flushing into the wrong target. Without this, an outer pass whose
+        // BeginFrame bound FBO_A, then ran an inner pass that ended with
+        // FBO=0, would Flush into the default backbuffer (or a tiny inner
+        // viewport), losing every queued outer draw.
+        try
         {
-            _bitmapTarget.ReadbackFromFbo();
-            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
-            _resources.ReleaseCurrent();
-            return;
-        }
+            _frameSession.BindFrameTarget();
+            GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
 
-        if (_swapOnDispose)
+            _vg.EndFrame();
+
+            _frameSession.EndFrame();
+        }
+        catch
         {
-            _resources.SetSwapInterval(GetSwapInterval());
-            _resources.SwapBuffers(_hdc, _hwnd);
+            _frameSession.AbortFrame();
+            throw;
         }
-
-        _resources.ReleaseCurrent();
-    }
-
-    protected override void OnDispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
     }
 
     private static int GetSwapInterval()
@@ -172,12 +197,12 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)horizontalAlignment, (int)verticalAlignment,
             (int)wrapping, (int)trimming));
 
-        if (!_resources.TextCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, out var entry))
         {
             var bmp = OpenGLTextRasterizer.Rasterize(
-                _hdc, gdiFont, text, widthPx, heightPx, color,
+                _frameSession.Hdc, gdiFont, text, widthPx, heightPx, color,
                 horizontalAlignment, verticalAlignment, wrapping, trimming);
-            entry = _resources.TextCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -187,17 +212,14 @@ internal sealed partial class MewVGWin32GraphicsContext
         DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
     }
 
+    private GdiMeasurementContext EnsureMeasureContext()
+        => _measureContext ??= new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
+
     private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font)
-    {
-        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
-        return measure.MeasureText(text, font);
-    }
+        => EnsureMeasureContext().MeasureText(text, font);
 
     private Size MeasureTextCore(ReadOnlySpan<char> text, IFont font, double maxWidth)
-    {
-        using var measure = new GdiMeasurementContext(User32.GetDC(0), (uint)Math.Round(DpiScale * 96));
-        return measure.MeasureText(text, font, maxWidth);
-    }
+        => EnsureMeasureContext().MeasureText(text, font, maxWidth);
 
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font)
         => MeasureTextCore(text, font);
@@ -321,10 +343,10 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming));
 
-        if (!_resources.TextCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, out var entry))
         {
             var bmp = OpenGLTextRasterizer.Rasterize(
-                _hdc,
+                _frameSession.Hdc,
                 gdiFont,
                 text,
                 widthPx,
@@ -334,7 +356,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 format.VerticalAlignment,
                 format.Wrapping,
                 format.Trimming);
-            entry = _resources.TextCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -360,6 +382,16 @@ internal sealed partial class MewVGWin32GraphicsContext
     {
         ArgumentNullException.ThrowIfNull(image);
 
+        if (image is MewVGExternalLockedImage extImage)
+        {
+            EnsureExternalAcquired(extImage.Texture);
+            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: null,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
+
         if (image is not MewVGImage vgImage)
         {
             throw new ArgumentException("Image must be a MewVGImage.", nameof(image));
@@ -377,6 +409,16 @@ internal sealed partial class MewVGWin32GraphicsContext
     protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
         ArgumentNullException.ThrowIfNull(image);
+
+        if (image is MewVGExternalLockedImage extImage)
+        {
+            EnsureExternalAcquired(extImage.Texture);
+            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
 
         if (image is not MewVGImage vgImage)
         {
@@ -422,4 +464,237 @@ internal sealed partial class MewVGWin32GraphicsContext
     }
 
     private readonly record struct PixelRect(int Left, int Top, int Width, int Height);
+
+    private interface IWin32FrameSession
+    {
+        NanoVGGL Vg { get; }
+        MewVGTextCache TextCache { get; }
+        nint Hdc { get; }
+        void BeginFrame();
+        void BindFrameTarget();
+        void EndFrame();
+        void AbortFrame();
+        void DisposeContext(MewVGWin32GraphicsContext context);
+    }
+
+    private sealed class WindowBackbufferFrameSession : IWin32FrameSession
+    {
+        private readonly MewVGWindowResources _resources;
+        private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+        private nint _hwnd;
+        private nint _hdc;
+
+        public WindowBackbufferFrameSession(MewVGWindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc)
+        {
+            _resources = resources;
+            _offscreenProvider = offscreenProvider;
+            _hwnd = hwnd;
+            _hdc = hdc;
+        }
+
+        public NanoVGGL Vg => _resources.Vg;
+        public MewVGTextCache TextCache => _resources.TextCache;
+        public nint Hdc => _hdc;
+
+        public void SetTarget(nint hwnd, nint hdc)
+        {
+            _hwnd = hwnd;
+            _hdc = hdc;
+        }
+
+        public void BeginFrame()
+        {
+            _resources.MakeCurrent(_hdc);
+        }
+
+        public void BindFrameTarget()
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+
+        public void EndFrame()
+        {
+            // Per-NVG drain only — we mustn't touch image-ids that belong to other NVG
+            // instances (e.g. worker offscreen NVGs currently mid-frame). Each NVG drains
+            // its own pending bucket from its own EndFrame on the thread that owns it.
+            _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
+            TextCache.ReleasePendingDeletes();
+            _resources.SetSwapInterval(GetSwapInterval());
+            _resources.SwapBuffers(_hdc, _hwnd);
+            _resources.ReleaseCurrent();
+        }
+
+        public void AbortFrame()
+        {
+            _resources.ReleaseCurrent();
+        }
+
+        public void DisposeContext(MewVGWin32GraphicsContext context)
+            => _resources.InvalidateCachedContext(context);
+    }
+
+    private sealed class WindowPixelSurfaceFrameSession : IWin32FrameSession
+    {
+        private readonly MewVGWindowResources _resources;
+        private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+        private readonly nint _hdc;
+        private readonly OpenGLPixelRenderSurface _pixelSurface;
+
+        public WindowPixelSurfaceFrameSession(MewVGWindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc, OpenGLPixelRenderSurface pixelSurface)
+        {
+            _resources = resources;
+            _offscreenProvider = offscreenProvider;
+            _hdc = hdc;
+            _pixelSurface = pixelSurface;
+        }
+
+        public NanoVGGL Vg => _resources.Vg;
+        public MewVGTextCache TextCache => _resources.TextCache;
+        public nint Hdc => _hdc;
+
+        public void BeginFrame()
+        {
+            _resources.MakeCurrent(_hdc);
+            _offscreenProvider.EnterSession();
+            PreparePixelSurface(_offscreenProvider, _pixelSurface);
+        }
+
+        public void BindFrameTarget()
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _pixelSurface.Fbo);
+
+        public void EndFrame()
+        {
+            // Eager readback — the layered-window present path consumes pixels via
+            // GetPixelSpan() **after** EndFrame returns, by which time ReleaseCurrent()
+            // has dropped the GL context. A deferred RequestDeferredReadback flag would
+            // then trigger glReadPixels with no current context — silently a no-op on
+            // most drivers — leaving the staging DIB zero-filled and the layered window
+            // fully transparent. The offscreen frame session can stay deferred (its
+            // consumer reads back under the same active context).
+            _pixelSurface.ReadbackFromFbo();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+            _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
+            bool outermost = _offscreenProvider.ExitSession();
+            if (outermost)
+            {
+                _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
+            }
+            TextCache.ReleasePendingDeletes();
+            _resources.ReleaseCurrent();
+        }
+
+        public void AbortFrame()
+        {
+            _offscreenProvider.ExitSession();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+            _resources.ReleaseCurrent();
+        }
+
+        public void DisposeContext(MewVGWin32GraphicsContext context)
+        {
+        }
+    }
+
+    private sealed class OffscreenPixelSurfaceFrameSession : IWin32FrameSession
+    {
+        private readonly MewVGGlOffscreenSurface _offscreen;
+        private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
+        private readonly OpenGLPixelRenderSurface _pixelSurface;
+
+        public OffscreenPixelSurfaceFrameSession(
+            MewVGGlOffscreenSurface offscreen,
+            IMewVGOffscreenSurfaceProvider offscreenProvider,
+            OpenGLPixelRenderSurface pixelSurface,
+            nint hdc)
+        {
+            _offscreen = offscreen;
+            _offscreenProvider = offscreenProvider;
+            _pixelSurface = pixelSurface;
+            Hdc = hdc;
+        }
+
+        public NanoVGGL Vg => _offscreen.Vg;
+        public MewVGTextCache TextCache => _offscreen.TextCache;
+        public nint Hdc { get; }
+
+        public void BeginFrame()
+        {
+            _offscreenProvider.EnterSession();
+            PreparePixelSurface(_offscreenProvider, _pixelSurface);
+        }
+
+        public void BindFrameTarget()
+            => OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, _pixelSurface.Fbo);
+
+        public void EndFrame()
+        {
+            // Deferred — Lock/CopyPixels/GetPixelSpan flush lazily. Avoids 100s of sync
+            // barriers per frame when many filtered elements each create their own
+            // source layer (each EndFrame here was a glReadPixels + flip + RGBA→BGRA pass).
+            _pixelSurface.RequestDeferredReadback();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+            // Drain pending image deletions queued against this offscreen NVG. We're inside
+            // its EndFrame on the thread that owns it — only safe time to call DeleteImage
+            // on this NVG instance without racing a concurrent BeginFrame...EndFrame on the
+            // window thread.
+            _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            bool outermost = _offscreenProvider.ExitSession();
+            if (outermost)
+            {
+                // Headless / standalone offscreen rendering case (no window wrapper). All
+                // NVG queues have flushed; safe to drain FBO disposals.
+                _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
+            }
+        }
+
+        public void AbortFrame()
+        {
+            _offscreenProvider.ExitSession();
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+        }
+
+        public void DisposeContext(MewVGWin32GraphicsContext context)
+            => _offscreenProvider.ReturnSurface(_offscreen);
+    }
+
+    private static void PreparePixelSurface(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface pixelSurface)
+    {
+        // Don't drain pending target disposals here. NVG defers its draw commands until the
+        // OUTER frame's EndFrame, and the pending queue holds textures (e.g. blur scratch
+        // FBOs) that prior filter passes wrapped via CreateImageFromHandle in the deferred
+        // batch. Draining at offscreen-session BeginFrame deletes those textures while NVG
+        // still has draw commands referencing them → samples garbage at flush time
+        // (visible as horizontal stripes / wrong patches in filtered output).
+        // The drain now happens after each session's EndFrame (post-NVG-flush).
+        pixelSurface.InitializeFbo();
+        if (!pixelSurface.IsFboInitialized || pixelSurface.Fbo == 0)
+        {
+            throw new PlatformNotSupportedException("OpenGL FBOs are required for Win32 pixel-surface rendering.");
+        }
+
+        // Record the HGLRC that owns the FBO/RB handles so deferred disposal can
+        // route the glDeleteFramebuffers / glDeleteRenderbuffers calls back to this
+        // same context (worker FBOs must not be released under the UI window context
+        // — different namespaces, silent no-op + leak).
+        pixelSurface.RecordCreationContext(OpenGL32.wglGetCurrentContext());
+
+        OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, pixelSurface.Fbo);
+
+        // Explicit colormask + stencil mask BEFORE clear: NanoVG_GL3's flush may have
+        // left these in a stencil-only-pass state (alpha or stencil writes disabled).
+        // glClear honors masks, so a sticky mask leaves alpha undefined / stencil
+        // untouched on a freshly allocated FBO — rendering as opaque-black filter
+        // results downstream when the alpha channel reads as 1 instead of 0. Setting
+        // (true,true,true,true) is cheap and a hard guarantee.
+        GL.ColorMask(true, true, true, true);
+        GL.ClearColor(0f, 0f, 0f, 0f);
+
+        uint clearMask = GL.GL_COLOR_BUFFER_BIT;
+        if (pixelSurface.HasStencil)
+        {
+            GL.StencilMask(0xFF);
+            GL.ClearStencil(0);
+            clearMask |= GL.GL_STENCIL_BUFFER_BIT;
+        }
+
+        GL.Clear(clearMask);
+    }
 }

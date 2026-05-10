@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Rendering.CoreText;
+using Aprillz.MewVG;
 using Aprillz.MewVG.Interop;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
@@ -22,7 +23,6 @@ internal sealed partial class MewVGMetalGraphicsContext
     private static readonly nint SelCommit = ObjCRuntime.RegisterSelector("commit");
     private static readonly nint SelWaitUntilScheduled = ObjCRuntime.RegisterSelector("waitUntilScheduled");
     private static readonly nint SelPresent = ObjCRuntime.RegisterSelector("present");
-
     private static readonly nint SelRenderPassDescriptor = ObjCRuntime.RegisterSelector("renderPassDescriptor");
     private static readonly nint SelColorAttachments = ObjCRuntime.RegisterSelector("colorAttachments");
     private static readonly nint SelObjectAtIndexedSubscript = ObjCRuntime.RegisterSelector("objectAtIndexedSubscript:");
@@ -35,77 +35,94 @@ internal sealed partial class MewVGMetalGraphicsContext
     private static readonly nint SelDepthAttachment = ObjCRuntime.RegisterSelector("depthAttachment");
     private static readonly nint SelSetClearDepth = ObjCRuntime.RegisterSelector("setClearDepth:");
     private static readonly nint SelSetResolveTexture = Metal.Sel.SetResolveTexture;
+    private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
+    private static readonly nint SelWaitUntilCompleted = ObjCRuntime.RegisterSelector("waitUntilCompleted");
 
-    private readonly MewVGMetalWindowResources _resources;
-
-    private readonly nint _metalLayer;
+    private readonly IMetalFrameSession _frameSession;
+    private readonly MewVGMetalTextCache _textCache;
 
     private nint _drawable;
     private nint _commandBuffer;
     private nint _encoder;
     private bool _beganFrame;
+    private nint _framePool; // Frame-spanning autorelease pool: created in BeginFrame, drained in EndFrame.
 
-    public MewVGMetalGraphicsContext(
-        nint hwnd,
-        nint metalLayer,
-        int pixelWidth,
-        int pixelHeight,
-        double dpiScale,
-        MewVGMetalWindowResources resources)
+    private MewVGMetalGraphicsContext(IMetalFrameSession frameSession)
     {
-        _resources = resources;
-        _vg = resources.Vg;
-        _metalLayer = metalLayer;
+        _frameSession = frameSession;
+        _vg = frameSession.Vg;
+        _textCache = frameSession.TextCache;
+    }
 
-        _dpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
-        _viewportWidthPx = Math.Max(1, pixelWidth);
-        _viewportHeightPx = Math.Max(1, pixelHeight);
-        _viewportWidthDip = _viewportWidthPx / DpiScale;
-        _viewportHeightDip = _viewportHeightPx / DpiScale;
+    internal static MewVGMetalGraphicsContext CreateForWindow(
+        MewVGMetalWindowResources resources,
+        MewVGMetalOffscreenSurfaceProvider offscreenProvider)
+        => new(new MetalWindowFrameSession(resources, offscreenProvider));
+
+    /// <summary>
+    /// Builds a graphics context that renders into <paramref name="target"/>'s
+    /// GPU MTLTexture instead of a window's <c>CAMetalLayer</c> drawable. The
+    /// supplied <paramref name="offscreen"/> surface must have been acquired
+    /// via <see cref="MewVGMetalOffscreenSurfaceProvider.AcquireSurface"/>; the
+    /// context takes ownership and returns it to the pool on Dispose.
+    /// </summary>
+    internal static MewVGMetalGraphicsContext CreateForOffscreen(
+        MewVGMetalOffscreenSurface offscreen,
+        MewVGMetalPixelRenderSurface target,
+        MewVGMetalOffscreenSurfaceProvider offscreenProvider)
+        => new(new MetalOffscreenFrameSession(offscreen, target, offscreenProvider));
+
+    partial void DestroyPlatform()
+    {
+        _frameSession.DisposeContext(this);
     }
 
     partial void BeginFramePlatform()
     {
-        using var pool = new AutoReleasePool();
+        // Drain any lingering pool from a previous frame, then create a fresh
+        // frame-spanning pool.  This pool lives until EndFramePlatform so that
+        // *all* autoreleased ObjC objects created during rendering (by Metal
+        // framework internals, NanoVG, or text rasterisation) are drained at
+        // the end of each frame instead of accumulating until the outer
+        // run-loop pool drains.
+        DrainFramePool();
+        _framePool = CreateFramePool();
 
-        _drawable = ObjCRuntime.SendMessage(_metalLayer, SelNextDrawable);
-        if (_drawable == 0)
-        {
-            // Leave encoder/cmdBuffer null; caller will simply get a no-op frame.
-            return;
-        }
+        _drawable = 0;
+        _commandBuffer = 0;
+        _encoder = 0;
+        _beganFrame = false;
 
-        RetainIfNotNull(_drawable);
-
-        nint drawableTexture = ObjCRuntime.SendMessage(_drawable, SelTexture);
-        if (drawableTexture == 0)
-        {
-            return;
-        }
-
-        _commandBuffer = ObjCRuntime.SendMessage(_resources.CommandQueue, SelCommandBuffer);
-        if (_commandBuffer == 0)
+        if (!_frameSession.TryBeginFrame(_viewportWidthPx, _viewportHeightPx, out var frame))
         {
             return;
         }
 
-        RetainIfNotNull(_commandBuffer);
+        _drawable = frame.Drawable;
 
-        nint stencilTex = _resources.EnsureStencilTexture(_viewportWidthPx, _viewportHeightPx);
-        nint msaaColorTex = _resources.EnsureMsaaColorTexture(_viewportWidthPx, _viewportHeightPx);
-        nint passDesc = CreateRenderPass(drawableTexture, stencilTex, msaaColorTex);
+        nint cmdBuf = ObjCRuntime.SendMessage(frame.CommandQueue, SelCommandBuffer);
+        if (cmdBuf == 0)
+        {
+            return;
+        }
+
+        RetainIfNotNull(cmdBuf);
+        _commandBuffer = cmdBuf;
+
+        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, frame.MsaaColorTexture);
         if (passDesc == 0)
         {
             return;
         }
 
-        _encoder = ObjCRuntime.SendMessage(_commandBuffer, SelRenderCommandEncoderWithDescriptor, passDesc);
-        if (_encoder == 0)
+        nint encoder = ObjCRuntime.SendMessage(_commandBuffer, SelRenderCommandEncoderWithDescriptor, passDesc);
+        if (encoder == 0)
         {
             return;
         }
 
-        RetainIfNotNull(_encoder);
+        RetainIfNotNull(encoder);
+        _encoder = encoder;
 
         _vg.SetRenderEncoder(_encoder, _commandBuffer);
         _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
@@ -116,30 +133,28 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     partial void EndFramePlatform()
     {
-        using var pool = new AutoReleasePool();
-        bool signalFrameCompleted = _beganFrame;
+        bool didRender = false;
 
         try
         {
-            if (_encoder != 0 && _commandBuffer != 0 && _drawable != 0 && _beganFrame)
+            if (_encoder != 0 && _commandBuffer != 0 && _beganFrame &&
+                (_frameSession.IsOffscreen || _drawable != 0))
             {
                 _vg.EndFrame();
+                didRender = true;
 
                 ObjCRuntime.SendMessageNoReturn(_encoder, SelEndEncoding);
                 ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelCommit);
-                ObjCRuntime.SendMessageNoReturn(_commandBuffer, SelWaitUntilScheduled);
-                ObjCRuntime.SendMessageNoReturn(_drawable, SelPresent);
+                _frameSession.AfterCommit(_commandBuffer, _drawable);
             }
             else if (_encoder != 0)
             {
-                // Safety: if we ever created an encoder but didn't reach a normal frame end,
-                // ensure it's properly ended before it can be released by ARC/autorelease pools.
                 ObjCRuntime.SendMessageNoReturn(_encoder, SelEndEncoding);
             }
         }
         finally
         {
-            if (signalFrameCompleted)
+            if (didRender)
             {
                 try
                 {
@@ -154,18 +169,161 @@ internal sealed partial class MewVGMetalGraphicsContext
             ReleaseIfNotNull(_encoder);
             ReleaseIfNotNull(_commandBuffer);
             ReleaseIfNotNull(_drawable);
-
             _encoder = 0;
             _commandBuffer = 0;
             _drawable = 0;
             _beganFrame = false;
+
+            // Main frame only: NVG.Flush has just consumed any draw calls
+            // that referenced images disposed mid-frame (filter composites
+            // and LRU-evicted text glyph atlases). Now it's safe to actually
+            // delete their MTLTextures.
+            _frameSession.ReleasePendingFrameResources();
+
+            // Drain the frame-spanning autorelease pool.
+            // This releases all autoreleased ObjC objects created since BeginFrame,
+            // preventing accumulation when the run-loop pool doesn't drain between
+            // high-frequency frame ticks (e.g. MaxFPS = 288).
+            DrainFramePool();
         }
     }
 
-    protected override void OnDispose()
+    private readonly record struct MetalFrame(
+        nint ColorTexture,
+        nint StencilTexture,
+        nint MsaaColorTexture,
+        nint CommandQueue,
+        nint Drawable);
+
+    private interface IMetalFrameSession
     {
-        if (_disposed) return;
-        _disposed = true;
+        NanoVGMetal Vg { get; }
+        MewVGMetalTextCache TextCache { get; }
+        bool IsOffscreen { get; }
+        bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame);
+        void AfterCommit(nint commandBuffer, nint drawable);
+        void ReleasePendingFrameResources();
+        void DisposeContext(MewVGMetalGraphicsContext context);
+    }
+
+    private sealed class MetalWindowFrameSession : IMetalFrameSession
+    {
+        private readonly MewVGMetalWindowResources _resources;
+        private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider;
+
+        public MetalWindowFrameSession(MewVGMetalWindowResources resources, MewVGMetalOffscreenSurfaceProvider offscreenProvider)
+        {
+            _resources = resources;
+            _offscreenProvider = offscreenProvider;
+        }
+
+        public NanoVGMetal Vg => _resources.Vg;
+        public MewVGMetalTextCache TextCache => _resources.TextCache;
+        public bool IsOffscreen => false;
+
+        public bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame)
+        {
+            frame = default;
+
+            nint drawable = ObjCRuntime.SendMessage(_resources.Layer, SelNextDrawable);
+            if (drawable == 0)
+            {
+                return false;
+            }
+
+            RetainIfNotNull(drawable);
+
+            nint colorTexture = ObjCRuntime.SendMessage(drawable, SelTexture);
+            if (colorTexture == 0)
+            {
+                ReleaseIfNotNull(drawable);
+                return false;
+            }
+
+            frame = new MetalFrame(
+                colorTexture,
+                _resources.EnsureStencilTexture(viewportWidthPx, viewportHeightPx),
+                _resources.EnsureMsaaColorTexture(viewportWidthPx, viewportHeightPx),
+                _resources.CommandQueue,
+                drawable);
+            return true;
+        }
+
+        public void AfterCommit(nint commandBuffer, nint drawable)
+        {
+            ObjCRuntime.SendMessageNoReturn(commandBuffer, SelWaitUntilScheduled);
+            ObjCRuntime.SendMessageNoReturn(drawable, SelPresent);
+        }
+
+        public void ReleasePendingFrameResources()
+        {
+            // Per-NVG drain: only delete image-ids belonging to the window's NVG. Worker
+            // offscreen NVG entries stay queued until the worker session's EndFrame.
+            _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
+            TextCache.ReleasePendingDeletes();
+        }
+
+        public void DisposeContext(MewVGMetalGraphicsContext context)
+            => _resources.InvalidateCachedContext(context);
+    }
+
+    private sealed class MetalOffscreenFrameSession : IMetalFrameSession
+    {
+        private readonly MewVGMetalOffscreenSurface _offscreen;
+        private readonly MewVGMetalPixelRenderSurface _target;
+        private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider;
+
+        public MetalOffscreenFrameSession(
+            MewVGMetalOffscreenSurface offscreen,
+            MewVGMetalPixelRenderSurface target,
+            MewVGMetalOffscreenSurfaceProvider offscreenProvider)
+        {
+            _offscreen = offscreen;
+            _target = target;
+            _offscreenProvider = offscreenProvider;
+        }
+
+        public NanoVGMetal Vg => _offscreen.Vg;
+        public MewVGMetalTextCache TextCache => _offscreen.TextCache;
+        public bool IsOffscreen => true;
+
+        public bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame)
+        {
+            _target.EnsureGpuTextures(_offscreen.Device);
+            frame = new MetalFrame(
+                _target.ColorTexture,
+                _target.StencilTexture,
+                0,
+                _offscreen.CommandQueue,
+                0);
+            return frame.ColorTexture != 0;
+        }
+
+        public void AfterCommit(nint commandBuffer, nint drawable)
+        {
+            // waitUntilCompleted is required: the rendered ColorTexture is consumed by the
+            // filter executor's MPS on a DIFFERENT command queue (filter queue vs offscreen
+            // surface queue). Cross-queue MTLTexture access without explicit sync races —
+            // MPS reads pre-render content. NVG's outer DrawImage consumer is also a fresh
+            // commandBuffer (typically window queue) — same cross-queue issue.
+            //
+            // What we DO defer is the much heavier MTLTexture → CPU getBytes (32 MB per
+            // 4096 × 2000 RT). CPU consumers (Lock / CopyPixels / GetPixelSpan) trigger it
+            // via FlushPendingReadbackIfNeeded; the pure-GPU consumer chain skips it.
+            ObjCRuntime.SendMessageNoReturn(commandBuffer, SelWaitUntilCompleted);
+            _target.RequestDeferredReadback(commandBuffer);
+        }
+
+        public void ReleasePendingFrameResources()
+        {
+            // Per-NVG drain for the offscreen NVG that just rendered. We're inside its
+            // EndFrame on the thread that owns it — only safe time to call DeleteImage on
+            // this NVG without racing the window NVG mid-frame on another thread.
+            _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+        }
+
+        public void DisposeContext(MewVGMetalGraphicsContext context)
+            => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
     private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint msaaColorTexture)
@@ -371,7 +529,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             drawY = LayoutRounding.RoundToPixel(drawY, DpiScale);
         }
 
-        if (!_resources.TextCache.TryGetOrCreate(
+        if (!_textCache.TryGetOrCreate(
                 ct,
                 text,
                 widthPx,
@@ -491,6 +649,14 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     public override void DrawTextLayout(ReadOnlySpan<char> text,
         TextFormat format, TextLayout layout, Color color)
+        => DrawTextLayoutCore(text, format, layout, color, owner: null);
+
+    public override void DrawTextLayout(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color, object? owner)
+        => DrawTextLayoutCore(text, format, layout, color, owner);
+
+    private void DrawTextLayoutCore(ReadOnlySpan<char> text,
+        TextFormat format, TextLayout layout, Color color, object? owner)
     {
         if (text.IsEmpty) return;
         if (format.Font is not CoreTextFont ct) return;
@@ -555,7 +721,12 @@ internal sealed partial class MewVGMetalGraphicsContext
             drawY = LayoutRounding.RoundToPixel(drawY, DpiScale);
         }
 
-        if (!_resources.TextCache.TryGetOrCreate(
+        int imageId;
+        int bitmapWidthPx;
+        int bitmapHeightPx;
+        bool ok = owner != null
+            ? _textCache.TryGetOrCreateOwned(
+                owner,
                 ct,
                 text,
                 widthPx,
@@ -566,9 +737,24 @@ internal sealed partial class MewVGMetalGraphicsContext
                 TextAlignment.Top,
                 format.Wrapping,
                 format.Trimming,
-                out int imageId,
-                out int bitmapWidthPx,
-                out int bitmapHeightPx))
+                out imageId,
+                out bitmapWidthPx,
+                out bitmapHeightPx)
+            : _textCache.TryGetOrCreate(
+                ct,
+                text,
+                widthPx,
+                heightPx,
+                (uint)Math.Round(DpiScale * 96.0),
+                color,
+                format.HorizontalAlignment,
+                TextAlignment.Top,
+                format.Wrapping,
+                format.Trimming,
+                out imageId,
+                out bitmapWidthPx,
+                out bitmapHeightPx);
+        if (!ok)
         {
             return;
         }
@@ -619,6 +805,16 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
+        if (image is MewVGExternalLockedImage extImage)
+        {
+            EnsureExternalAcquired(extImage.Texture);
+            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            if (extImageId == 0) return;
+            DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
+                image.PixelWidth, image.PixelHeight);
+            return;
+        }
+
         if (image is not MewVGImage mew)
         {
             return;
@@ -635,30 +831,24 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     #endregion
 
-    private readonly struct AutoReleasePool : IDisposable
+    private static nint CreateFramePool()
     {
-        private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
-        private static readonly nint SelRelease = ObjCRuntime.Selectors.release;
-        private readonly nint _pool;
-
-        public AutoReleasePool()
+        if (ClsNSAutoreleasePool == 0 || SelAlloc == 0 || SelInit == 0)
         {
-            if (ClsNSAutoreleasePool == 0)
-            {
-                _pool = 0;
-                return;
-            }
-
-            nint pool = ObjCRuntime.SendMessage(ClsNSAutoreleasePool, SelAlloc);
-            _pool = pool != 0 ? ObjCRuntime.SendMessage(pool, SelInit) : 0;
+            return 0;
         }
 
-        public void Dispose()
+        nint pool = ObjCRuntime.SendMessage(ClsNSAutoreleasePool, SelAlloc);
+        return pool != 0 ? ObjCRuntime.SendMessage(pool, SelInit) : 0;
+    }
+
+    private void DrainFramePool()
+    {
+        nint pool = _framePool;
+        if (pool != 0)
         {
-            if (_pool != 0)
-            {
-                ObjCRuntime.SendMessageNoReturn(_pool, SelRelease);
-            }
+            _framePool = 0;
+            ObjCRuntime.SendMessageNoReturn(pool, SelRelease);
         }
     }
 }

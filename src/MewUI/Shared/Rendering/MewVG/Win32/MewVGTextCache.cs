@@ -21,6 +21,7 @@ internal sealed class MewVGTextCache : IDisposable
     private readonly NanoVG _vg;
     private readonly Dictionary<MewVGTextCacheKey, LinkedListNode<CacheEntry>> _map = new();
     private readonly LinkedList<CacheEntry> _lru = new();
+    private readonly Queue<int> _pendingDeletes = new();
     private long _currentBytes;
     private bool _disposed;
 
@@ -66,9 +67,10 @@ internal sealed class MewVGTextCache : IDisposable
             return default;
         }
 
-        var rgba = new byte[bmp.Data.Length];
-        ImagePixelUtils.ConvertBgraToRgba(bmp.Data, rgba);
-        int imageId = _vg.CreateImageRGBA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Nearest, rgba);
+        // Source bitmap is BGRA — feed straight to NVG; GL backend uses GL_BGRA upload, no
+        // CPU swap. Backends without native BGRA fall back to a one-time conversion in
+        // NanoVG.CreateImageBGRA's default implementation.
+        int imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Nearest, bmp.Data);
         if (imageId == 0)
         {
             return default;
@@ -111,10 +113,40 @@ internal sealed class MewVGTextCache : IDisposable
             int imageId = last.Value.Entry.ImageId;
             if (imageId != 0)
             {
-                _vg.DeleteImage(imageId);
+                // Defer the actual glDeleteTextures: eviction happens during
+                // mid-frame text rendering (CreateImage), but the main NVG has
+                // already buffered draw calls referencing this imageId. Deleting
+                // the GL texture before NVG.Flush leaves those draws sampling a
+                // freed texture name — they render as opaque black, with a
+                // different set of text boxes affected each frame as the LRU
+                // boundary moves. The graphics context drains this queue right
+                // after Flush, when no draw call still references the IDs.
+                _pendingDeletes.Enqueue(imageId);
             }
 
             _currentBytes -= last.Value.Bytes;
+        }
+    }
+
+    /// <summary>
+    /// Releases NVG image handles whose deletion was deferred by
+    /// <see cref="EvictIfNeeded"/>. Must be called after the main NVG's
+    /// EndFrame/Flush so no pending draw call still references the IDs.
+    /// </summary>
+    public void ReleasePendingDeletes()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        while (_pendingDeletes.Count > 0)
+        {
+            int imageId = _pendingDeletes.Dequeue();
+            if (imageId != 0)
+            {
+                _vg.DeleteImage(imageId);
+            }
         }
     }
 

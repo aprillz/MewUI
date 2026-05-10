@@ -50,9 +50,21 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         => Create(hwnd, hdc, new WglPixelFormatOptions(
             PreferredMsaaSamples: Math.Max(0, GraphicsRuntimeOptions.PreferredMsaaSamples),
             DepthBits: 0,
-            StencilBits: 0));
+            StencilBits: 0), shareContext: 0);
 
     public static WglOpenGLWindowResources Create(nint hwnd, nint hdc, WglPixelFormatOptions options)
+        => Create(hwnd, hdc, options, shareContext: 0);
+
+    /// <summary>
+    /// Create a window's GL context, optionally sharing texture/buffer namespaces with
+    /// <paramref name="shareContext"/> (the factory's worker HGLRC). Sharing is the
+    /// foundation of the background-rebuild pipeline: a worker thread renders an SVG
+    /// FBO into a texture, the UI thread samples that same texture from the window
+    /// context. <c>wglShareLists</c> must be called before either context renders, so
+    /// we issue it immediately after <c>wglCreateContext</c> and before
+    /// <c>wglMakeCurrent</c>.
+    /// </summary>
+    public static WglOpenGLWindowResources Create(nint hwnd, nint hdc, WglPixelFormatOptions options, nint shareContext)
     {
         var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGlDoubleBuffered();
         pfd.cDepthBits = (byte)Math.Clamp(options.DepthBits, 0, 32);
@@ -101,6 +113,23 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         if (hglrc == 0)
         {
             throw new InvalidOperationException($"wglCreateContext failed: {Marshal.GetLastWin32Error()}");
+        }
+
+        // Share textures/buffers with the worker context (if provided). Must happen
+        // before either context starts rendering. Failure is non-fatal — the window
+        // context still works, but background-rebuild texture handoff will fall back
+        // to synchronous readback. Log it so we can spot it on Intel iGPU / mismatched
+        // pixel format cases.
+        bool shared = false;
+        if (shareContext != 0)
+        {
+            shared = OpenGL32.wglShareLists(shareContext, hglrc);
+            if (!shared && DiagLog.Enabled)
+            {
+                DiagLog.Write(
+                    $"[WGL] wglShareLists FAILED err={Marshal.GetLastWin32Error()} " +
+                    $"share=0x{shareContext.ToInt64():X} target=0x{hglrc.ToInt64():X}");
+            }
         }
 
         if (!OpenGL32.wglMakeCurrent(hdc, hglrc))

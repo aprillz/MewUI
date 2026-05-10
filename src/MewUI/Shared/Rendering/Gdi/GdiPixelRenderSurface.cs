@@ -5,10 +5,10 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
-/// GDI implementation of IBitmapRenderTarget.
+/// GDI pixel render surface.
 /// Manages DIB section and memory DC for offscreen rendering.
 /// </summary>
-internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
+internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable
 {
     private readonly nint _dibSection;
     private readonly nint _oldBitmap;
@@ -20,7 +20,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
     private byte[]? _lockBuffer;
     private Action? _releaseAction;
 
-    public GdiBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default)
+    public GdiPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale, GdiPresentationMode presentationMode = GdiPresentationMode.Default, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
@@ -30,6 +30,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
         PixelHeight = pixelHeight;
         DpiScale = dpiScale;
         PresentationMode = presentationMode;
+        HasAlpha = hasAlpha;
 
         // Create memory DC
         var screenDc = User32.GetDC(0);
@@ -73,6 +74,43 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
     /// about alpha read this back as premultiplied.
     /// </summary>
     public bool IsPremultiplied => true;
+
+    /// <summary>
+    /// Mirrors the alpha-channel hint from construction. Consumers reading these pixels via
+    /// <see cref="IPixelBufferSource"/> use this to skip alpha scans for opaque RTs (e.g.
+    /// a video frame target).
+    /// </summary>
+    public bool HasAlpha { get; }
+
+    RenderPixelFormat IRenderSurface.Format => RenderSurfaceDefaults.GetBgraFormat(IsPremultiplied);
+
+    SurfaceUsage IRenderSurface.Usage => RenderSurfaceDefaults.PixelSurfaceUsage;
+
+    SurfaceCapabilities IRenderSurface.Capabilities =>
+        RenderSurfaceDefaults.GetPixelSurfaceCapabilities(
+            IsPremultiplied,
+            ((IPixelBufferSource)this).LockMode == LockMode.Readback,
+            gpuSampleable: false);
+
+    ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
+
+    bool IRenderSurface.IsDisposed => _disposed;
+
+    ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
+
+    Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
+
+    bool IDeferredCpuReadableSurface.HasPendingReadback => ((IPixelBufferSource)this).LockMode == LockMode.Readback;
+
+    IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
+        => RenderSurfaceDefaults.RequestReadback(
+            ((IPixelBufferSource)this).LockMode == LockMode.Readback,
+            CopyPixels);
+
+    bool IDeferredCpuReadableSurface.TryFlushReadback()
+        => RenderSurfaceDefaults.TryFlushReadback(
+            ((IPixelBufferSource)this).LockMode == LockMode.Readback,
+            CopyPixels);
 
     /// <summary>
     /// Gets the memory device context for rendering.
@@ -146,7 +184,7 @@ internal sealed class GdiBitmapRenderTarget : IBitmapRenderTarget
         if (_disposed)
         {
             Monitor.Exit(_gate);
-            throw new ObjectDisposedException(nameof(GdiBitmapRenderTarget));
+            throw new ObjectDisposedException(nameof(GdiPixelRenderSurface));
         }
 
         int size = PixelWidth * PixelHeight * 4;

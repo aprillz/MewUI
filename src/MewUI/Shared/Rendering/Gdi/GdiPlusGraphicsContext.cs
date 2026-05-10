@@ -5,6 +5,8 @@ using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Rendering.Gdi.Core;
 
+using static Aprillz.MewUI.Rendering.GradientBrushHelper;
+
 namespace Aprillz.MewUI.Rendering.Gdi;
 
 /// <summary>
@@ -15,7 +17,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     private readonly nint _hwnd;
     private readonly bool _ownsDc;
     private readonly ImageScaleQuality _imageScaleQuality;
-    private readonly GdiBitmapRenderTarget? _bitmapTarget;
+    private readonly GdiPixelRenderSurface? _pixelSurface;
 
     private readonly int _pixelWidth;
     private readonly int _pixelHeight;
@@ -26,12 +28,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     private nint _graphics;
     private readonly Stack<GraphicsStateSnapshot> _states = CollectionPool<Stack<GraphicsStateSnapshot>>.Rent();
-    private bool _disposed;
     private readonly double _dpiScale;
 
     // Double-buffering (set only via CreateDoubleBuffered factory)
     private nint _screenDc;
     private BackBuffer? _backBuffer;
+    private bool _transparentComposition;
 
     public override double DpiScale => _dpiScale;
 
@@ -71,6 +73,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var ctx = new GdiPlusGraphicsContext(hwnd, backBuffer.MemDc, width, height, dpiScale, imageScaleQuality);
         ctx._screenDc = screenDc;
         ctx._backBuffer = backBuffer;
+        ctx._transparentComposition = transparentComposition;
         return ctx;
     }
 
@@ -86,7 +89,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         double dpiScale,
         ImageScaleQuality imageScaleQuality,
         bool ownsDc = false,
-        GdiBitmapRenderTarget? bitmapTarget = null)
+        GdiPixelRenderSurface? pixelSurface = null)
     {
         _hwnd = hwnd;
         Hdc = hdc;
@@ -94,7 +97,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         _pixelHeight = pixelHeight;
         _ownsDc = ownsDc;
         _imageScaleQuality = imageScaleQuality;
-        _bitmapTarget = bitmapTarget;
+        _pixelSurface = pixelSurface;
 
         _dpiScale = dpiScale;
         _stateManager = new GdiStateManager(hdc, dpiScale);
@@ -106,9 +109,6 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void OnEndFrame()
     {
-        if (_disposed) return;
-
-        // Surface pool holds per-frame AA scratch buffers; drop them so the next frame starts fresh.
         _surfacePool.Dispose();
 
         if (_graphics != 0)
@@ -117,13 +117,21 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             _graphics = 0;
         }
 
-        // Double-buffered: blit back buffer to screen so the frame is presented.
-        // Without this on a per-frame boundary, draws accumulate into the back buffer
-        // and never reach the window — only the final BitBlt at app shutdown ever shows.
+        // Double-buffered: blit back buffer to screen
         if (_backBuffer != null)
         {
-            Gdi32.BitBlt(_screenDc, 0, 0, _pixelWidth, _pixelHeight,
-                _backBuffer.MemDc, 0, 0, 0x00CC0020); // SRCCOPY
+            if (_transparentComposition)
+            {
+                // Use per-pixel alpha blit to preserve alpha channel for DWM backdrop composition.
+                Gdi32.AlphaBlend(_screenDc, 0, 0, _pixelWidth, _pixelHeight,
+                    _backBuffer.MemDc, 0, 0, _pixelWidth, _pixelHeight,
+                    Native.Structs.BLENDFUNCTION.SourceOver(255));
+            }
+            else
+            {
+                Gdi32.BitBlt(_screenDc, 0, 0, _pixelWidth, _pixelHeight,
+                    _backBuffer.MemDc, 0, 0, 0x00CC0020); // SRCCOPY
+            }
         }
 
         _states.Clear();
@@ -131,9 +139,6 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void OnDispose()
     {
-        if (_disposed) return;
-        _disposed = true;
-
         CollectionPool<Stack<GraphicsStateSnapshot>>.Return(_states);
 
         if (_ownsDc && Hdc != 0)
@@ -230,6 +235,38 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
+    protected override void SetClipPathCore(PathGeometry path)
+    {
+        var bounds = path.GetBounds();
+
+        // HDC text clip is rectangle-only; approximate with the path's bounding box.
+        _stateManager.SetClip(bounds);
+
+        if (!EnsureGraphics())
+        {
+            return;
+        }
+
+        var fillMode = path.FillRule == FillRule.EvenOdd
+            ? GdiPlusInterop.FillMode.Alternate
+            : GdiPlusInterop.FillMode.Winding;
+
+        if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            BuildGdipPath(gdipPath, path);
+            GdiPlusInterop.GdipSetClipPath(_graphics, gdipPath, GdiPlusInterop.CombineMode.Intersect);
+        }
+        finally
+        {
+            GdiPlusInterop.GdipDeletePath(gdipPath);
+        }
+    }
+
     protected override void TranslateCore(double dx, double dy)
     {
         _stateManager.Translate(dx, dy);
@@ -295,9 +332,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void Clear(Color color)
     {
-        if (_bitmapTarget != null)
+        if (_pixelSurface != null)
         {
-            _bitmapTarget.Clear(color);
+            _pixelSurface.Clear(color);
         }
         else if (_hwnd != 0)
         {
@@ -573,6 +610,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void DrawPath(PathGeometry path, Color color, double thickness = 1)
     {
+        RecordDrawPath();
         if (path == null || color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
@@ -607,6 +645,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void FillPath(PathGeometry path, Color color, FillRule fillRule)
     {
+        RecordFillPath();
         color = BlendGlobalAlpha(color);
         if (path == null || color.A == 0 || !EnsureGraphics())
         {
@@ -643,6 +682,26 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         {
             FillRectangle(rect, solid.Color); return;
         }
+        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        {
+            var (x, y) = ToDeviceCoords(rect.X, rect.Y);
+            float w = (float)(rect.Width * _dpiScale);
+            float h = (float)(rect.Height * _dpiScale);
+            if (w <= 0 || h <= 0) return;
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0) return;
+            try
+            {
+                GdiPlusInterop.GdipAddPathRectangle(path, (float)x, (float)y, w, h);
+                nint texBrush = CreateGdipTextureBrush(imageBrush);
+                if (texBrush != 0)
+                {
+                    try { GdiPlusInterop.GdipFillPath(_graphics, texBrush, path); }
+                    finally { GdiPlusInterop.GdipDeleteBrush(texBrush); }
+                }
+            }
+            finally { GdiPlusInterop.GdipDeletePath(path); }
+            return;
+        }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
@@ -665,6 +724,29 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         if (brush is ISolidColorBrush solid)
         {
             FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return;
+        }
+        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        {
+            var (x, y) = ToDeviceCoords(rect.X, rect.Y);
+            float w = (float)(rect.Width * _dpiScale);
+            float h = (float)(rect.Height * _dpiScale);
+            if (w <= 0 || h <= 0) return;
+            float ew = Math.Max(1f, (float)(radiusX * 2 * _dpiScale));
+            float eh = Math.Max(1f, (float)(radiusY * 2 * _dpiScale));
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0) return;
+            try
+            {
+                AddRoundedRectPathF(path, (float)x, (float)y, w, h, ew, eh);
+                GdiPlusInterop.GdipClosePathFigure(path);
+                nint texBrush = CreateGdipTextureBrush(imageBrush);
+                if (texBrush != 0)
+                {
+                    try { GdiPlusInterop.GdipFillPath(_graphics, texBrush, path); }
+                    finally { GdiPlusInterop.GdipDeleteBrush(texBrush); }
+                }
+            }
+            finally { GdiPlusInterop.GdipDeletePath(path); }
+            return;
         }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
@@ -691,6 +773,26 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         {
             FillEllipse(bounds, solid.Color); return;
         }
+        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        {
+            var (x, y) = ToDeviceCoords(bounds.X, bounds.Y);
+            float w = (float)(bounds.Width * _dpiScale);
+            float h = (float)(bounds.Height * _dpiScale);
+            if (w <= 0 || h <= 0) return;
+            if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0) return;
+            try
+            {
+                GdiPlusInterop.GdipAddPathEllipse(path, (float)x, (float)y, w, h);
+                nint texBrush = CreateGdipTextureBrush(imageBrush);
+                if (texBrush != 0)
+                {
+                    try { GdiPlusInterop.GdipFillPath(_graphics, texBrush, path); }
+                    finally { GdiPlusInterop.GdipDeleteBrush(texBrush); }
+                }
+            }
+            finally { GdiPlusInterop.GdipDeletePath(path); }
+            return;
+        }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(bounds.X, bounds.Y);
@@ -713,10 +815,31 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
     {
+        if (brush is not ISolidColorBrush)
+        {
+            RecordFillPath();
+        }
         if (path == null) return;
         if (brush is ISolidColorBrush solid)
         {
             FillPath(path, solid.Color, fillRule); return;
+        }
+        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        {
+            var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
+            if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0) return;
+            try
+            {
+                BuildGdipPath(gdipPath, path);
+                nint texBrush = CreateGdipTextureBrush(imageBrush);
+                if (texBrush != 0)
+                {
+                    try { GdiPlusInterop.GdipFillPath(_graphics, texBrush, gdipPath); }
+                    finally { GdiPlusInterop.GdipDeleteBrush(texBrush); }
+                }
+            }
+            finally { GdiPlusInterop.GdipDeletePath(gdipPath); }
+            return;
         }
         if (brush is IGradientBrush gradient && EnsureGraphics())
         {
@@ -822,6 +945,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void DrawPath(PathGeometry path, IPen pen)
     {
+        RecordDrawPath();
         if (path == null || pen.Thickness <= 0 || !EnsureGraphics()) return;
 
         float widthPx = QuantizeStrokePx(pen.Thickness);
@@ -993,18 +1117,20 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
 
         // GDI text bypasses GDI+ WorldTransform — apply transform manually.
-        bounds = TransformRect(bounds);
+        bool hasTextTransform = TryGetTextWorldTransform(out var textTransform);
+        var drawBounds = hasTextTransform ? bounds : TransformRect(bounds);
+        var cullBounds = hasTextTransform ? TransformRect(bounds) : drawBounds;
 
         // Early cull: skip if the bounds rect is entirely outside the current clip region.
-        var cullR = ToDeviceRect(bounds);
+        var cullR = ToDeviceRect(cullBounds);
         if (Gdi32.RectVisible(Hdc, ref cullR) == 0)
         {
             return;
         }
 
-        if (_bitmapTarget != null || color.A < 255 || EnableAlphaTextHint)
+        if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
         {
-            var r = GetTextLayoutRect(bounds, wrapping);
+            var r = GetTextLayoutRect(drawBounds, wrapping);
             uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
             int yOffsetPx = 0;
             int textHeightPx = 0;
@@ -1022,7 +1148,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
             PerPixelAlphaTextRenderer.DrawText(
                 Hdc,
-                _bitmapTarget,
+                _pixelSurface,
                 _surfacePool,
                 text,
                 r,
@@ -1038,12 +1164,23 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
-        var oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
+        int textState = 0;
+        nint oldFont = 0;
+        uint oldColor = 0;
 
         try
         {
-            var r = GetTextLayoutRect(bounds, wrapping);
+            if (hasTextTransform)
+            {
+                textState = Gdi32.SaveDC(Hdc);
+                Gdi32.SetGraphicsMode(Hdc, GdiConstants.GM_ADVANCED);
+                Gdi32.SetWorldTransform(Hdc, ref textTransform);
+            }
+
+            oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
+            oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
+
+            var r = GetTextLayoutRect(drawBounds, wrapping);
             uint format = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
             int yOffsetPx = 0;
             int textHeightPx = 0;
@@ -1080,8 +1217,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            Gdi32.SetTextColor(Hdc, oldColor);
-            Gdi32.SelectObject(Hdc, oldFont);
+            if (textState != 0)
+            {
+                Gdi32.RestoreDC(Hdc, textState);
+            }
+            else
+            {
+                Gdi32.SetTextColor(Hdc, oldColor);
+                Gdi32.SelectObject(Hdc, oldFont);
+            }
         }
     }
 
@@ -1134,16 +1278,18 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var trimming = format.Trimming;
 
         // GDI text bypasses GDI+ WorldTransform — apply transform manually.
-        var bounds = TransformRect(layout.EffectiveBounds);
+        bool hasTextTransform = TryGetTextWorldTransform(out var textTransform);
+        var bounds = hasTextTransform ? layout.EffectiveBounds : TransformRect(layout.EffectiveBounds);
+        var cullBounds = hasTextTransform ? TransformRect(layout.EffectiveBounds) : bounds;
 
         // Early cull: skip if the bounds rect is entirely outside the current clip region.
-        var cullR = ToDeviceRect(bounds);
+        var cullR = ToDeviceRect(cullBounds);
         if (Gdi32.RectVisible(Hdc, ref cullR) == 0)
         {
             return;
         }
 
-        if (_bitmapTarget != null || color.A < 255 || EnableAlphaTextHint)
+        if (!hasTextTransform && (_pixelSurface != null || color.A < 255 || EnableAlphaTextHint))
         {
             var r = GetTextLayoutRect(bounds, wrapping);
             uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
@@ -1163,7 +1309,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
             PerPixelAlphaTextRenderer.DrawText(
                 Hdc,
-                _bitmapTarget,
+                _pixelSurface,
                 _surfacePool,
                 text,
                 r,
@@ -1179,11 +1325,22 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        var oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
-        var oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
+        int textState = 0;
+        nint oldFont = 0;
+        uint oldColor = 0;
 
         try
         {
+            if (hasTextTransform)
+            {
+                textState = Gdi32.SaveDC(Hdc);
+                Gdi32.SetGraphicsMode(Hdc, GdiConstants.GM_ADVANCED);
+                Gdi32.SetWorldTransform(Hdc, ref textTransform);
+            }
+
+            oldFont = Gdi32.SelectObject(Hdc, gdiFont.GetHandle(GdiFontRenderMode.Default));
+            oldColor = Gdi32.SetTextColor(Hdc, color.ToCOLORREF());
+
             var r = GetTextLayoutRect(bounds, wrapping);
             uint gdiFormat = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
             int yOffsetPx = 0;
@@ -1221,8 +1378,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            Gdi32.SetTextColor(Hdc, oldColor);
-            Gdi32.SelectObject(Hdc, oldFont);
+            if (textState != 0)
+            {
+                Gdi32.RestoreDC(Hdc, textState);
+            }
+            else
+            {
+                Gdi32.SetTextColor(Hdc, oldColor);
+                Gdi32.SelectObject(Hdc, oldFont);
+            }
         }
     }
 
@@ -1235,6 +1399,27 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
 
         return clipState;
+    }
+
+    private bool TryGetTextWorldTransform(out XFORM xform)
+    {
+        var m = _stateManager.Transform;
+        if (m == Matrix3x2.Identity)
+        {
+            xform = default;
+            return false;
+        }
+
+        xform = new XFORM
+        {
+            eM11 = m.M11,
+            eM12 = m.M12,
+            eM21 = m.M21,
+            eM22 = m.M22,
+            eDx = (float)(m.M31 * _dpiScale),
+            eDy = (float)(m.M32 * _dpiScale)
+        };
+        return true;
     }
 
     private void RestoreTextClip(int clipState)
@@ -1815,10 +2000,22 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     }
 
 
+    /// <summary>
+    /// Returns the snapped stroke width in device pixels. The pen is created with
+    /// <c>Unit.Pixel</c> so this value is interpreted as raw device pixels, not subject
+    /// to GDI+ World Transform. We pre-multiply by the user transform's average scale
+    /// so the stroke scales with transform (matching Skia/WPF/SVG defaults) while
+    /// device-pixel snapping keeps the line crisp on fractional DPI/zoom.
+    /// </summary>
     private float QuantizeStrokePx(double thicknessDip)
     {
         if (thicknessDip <= 0) return 0;
-        return MathF.Max(1, MathF.Round((float)(thicknessDip * _dpiScale)));
+        var t = _stateManager.Transform;
+        float sx = MathF.Sqrt(t.M11 * t.M11 + t.M12 * t.M12);
+        float sy = MathF.Sqrt(t.M21 * t.M21 + t.M22 * t.M22);
+        float avgScale = (sx + sy) * 0.5f;
+        float totalScale = avgScale * (float)_dpiScale;
+        return MathF.Max(1, MathF.Round((float)thicknessDip * totalScale));
     }
 
     private int QuantizeLengthPx(double lengthDip)
@@ -1843,6 +2040,25 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     /// Creates a GDI+ gradient brush for use with pen creation.
     /// Caller must release the returned handle. Returns 0 on failure.
     /// </summary>
+    /// <summary>
+    /// Creates a GDI+ matrix from an SVG gradient transform (user-space), converted to device space.
+    /// Caller must release with GdipDeleteMatrix. Returns 0 when <paramref name="transform"/> is null.
+    /// </summary>
+    private nint CreateGdipGradientMatrix(Matrix3x2? transform)
+    {
+        if (transform is not Matrix3x2 gradientTransform) return 0;
+        float scale = (float)_dpiScale;
+        if (GdiPlusInterop.GdipCreateMatrix2(
+                gradientTransform.M11, gradientTransform.M12,
+                gradientTransform.M21, gradientTransform.M22,
+                gradientTransform.M31 * scale, gradientTransform.M32 * scale,
+                out nint matrix) != 0)
+        {
+            return 0;
+        }
+        return matrix;
+    }
+
     private nint CreateGdipGradientBrush(IGradientBrush brush, Rect objectBounds)
     {
         var stops = brush.Stops;
@@ -1878,6 +2094,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             if (GdiPlusInterop.GdipCreateLineBrush(ref gp1, ref gp2,
                     colors[0], colors[^1], wrapMode, out nint gradBrush) != 0 || gradBrush == 0) return 0;
             GdiPlusInterop.SetLinePresetBlend(gradBrush, colors, positions);
+            nint linearMatrix = CreateGdipGradientMatrix(brush.GradientTransform);
+            if (linearMatrix != 0)
+            {
+                try { GdiPlusInterop.GdipSetLineTransform(gradBrush, linearMatrix); }
+                finally { GdiPlusInterop.GdipDeleteMatrix(linearMatrix); }
+            }
             return gradBrush;
         }
 
@@ -1909,6 +2131,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             ReverseStops(colors, positions);
             GdiPlusInterop.SetPathGradientPresetBlend(gradBrush, colors, positions);
             GdiPlusInterop.GdipSetPathGradientWrapMode(gradBrush, wrapMode);
+            nint radialMatrix = CreateGdipGradientMatrix(brush.GradientTransform);
+            if (radialMatrix != 0)
+            {
+                try { GdiPlusInterop.GdipMultiplyPathGradientTransform(gradBrush, radialMatrix, GdiPlusInterop.MatrixOrder.Prepend); }
+                finally { GdiPlusInterop.GdipDeleteMatrix(radialMatrix); }
+            }
             return gradBrush;
         }
 
@@ -1921,6 +2149,77 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         positions.Reverse();
         for (int i = 0; i < positions.Length; i++)
             positions[i] = 1f - positions[i];
+    }
+
+    /// <summary>
+    /// Creates a GDI+ TextureBrush from an <see cref="IImageBrush"/>. The brush transform is
+    /// composed so that one tile appears at <c>DestinationRect</c> in logical coords, honoring
+    /// any SVG <c>patternTransform</c> and the context's DPI scale. Returns 0 when the image
+    /// is not a <see cref="GdiImage"/> (other backends' images are not renderable here).
+    /// Caller owns the returned brush handle and must delete it via <see cref="GdiPlusInterop.GdipDeleteBrush"/>.
+    /// </summary>
+    private nint CreateGdipTextureBrush(IImageBrush imageBrush)
+    {
+        if (imageBrush.Image is not GdiImage gdiImage) return 0;
+        gdiImage.EnsureUpToDate();
+
+        nint gpBitmap = gdiImage.GetGdiPlusBitmap();
+        if (gpBitmap == 0) return 0;
+
+        var tileMode = imageBrush.TileMode;
+        var wrapMode = tileMode switch
+        {
+            TileMode.None => GdiPlusInterop.WrapMode.Clamp,
+            _ => GdiPlusInterop.WrapMode.Tile,
+        };
+
+        // Use the full image as the tile. sourceRect semantics on the IImageBrush are in the
+        // image's DIP space (which for offscreen-rendered pattern tiles equals pixel space).
+        if (GdiPlusInterop.GdipCreateTexture2(
+                gpBitmap, wrapMode,
+                0f, 0f, gdiImage.PixelWidth, gdiImage.PixelHeight,
+                out nint texBrush) != 0 || texBrush == 0)
+        {
+            return 0;
+        }
+
+        // Compose the brush transform: bitmap-pixel → device-pixel (world coords for GDI+).
+        // Order: scale bitmap-px → logical DIPs (dst.W/imageW) → translate to dst.XY (logical)
+        //        → apply user patternTransform (logical) → scale to device (dpiScale).
+        var src = imageBrush.SourceRect;
+        var dst = imageBrush.DestinationRect;
+        float scaleX = gdiImage.PixelWidth > 0 ? (float)(dst.Width / gdiImage.PixelWidth) : 1f;
+        float scaleY = gdiImage.PixelHeight > 0 ? (float)(dst.Height / gdiImage.PixelHeight) : 1f;
+
+        var m =
+            System.Numerics.Matrix3x2.CreateTranslation(-(float)src.X, -(float)src.Y) *
+            System.Numerics.Matrix3x2.CreateScale(scaleX, scaleY) *
+            System.Numerics.Matrix3x2.CreateTranslation((float)dst.X, (float)dst.Y);
+
+        if (imageBrush.Transform.HasValue)
+        {
+            m *= imageBrush.Transform.Value;
+        }
+
+        m *= System.Numerics.Matrix3x2.CreateScale((float)_dpiScale);
+
+        // Seam avoidance — same reasoning as D2D backend: pixel-snap translate when axis-aligned,
+        // otherwise sub-pixel tile origins create visible seams at every tile boundary from
+        // interpolated AA-edge texels bleeding across the wrap.
+        bool axisAligned = m.M12 == 0f && m.M21 == 0f;
+        if (axisAligned)
+        {
+            m.M31 = MathF.Round(m.M31);
+            m.M32 = MathF.Round(m.M32);
+        }
+
+        if (GdiPlusInterop.GdipCreateMatrix2(m.M11, m.M12, m.M21, m.M22, m.M31, m.M32, out nint matrix) == 0 && matrix != 0)
+        {
+            try { GdiPlusInterop.GdipSetTextureTransform(texBrush, matrix); }
+            finally { GdiPlusInterop.GdipDeleteMatrix(matrix); }
+        }
+
+        return texBrush;
     }
 
     private void FillWithGradient(IGradientBrush brush, Rect objectBounds, Action<nint> fillAction, Rect fillBounds = default)
@@ -1963,6 +2262,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             try
             {
                 GdiPlusInterop.SetLinePresetBlend(gradBrush, colors, positions);
+                nint linearMatrix = CreateGdipGradientMatrix(brush.GradientTransform);
+                if (linearMatrix != 0)
+                {
+                    try { GdiPlusInterop.GdipSetLineTransform(gradBrush, linearMatrix); }
+                    finally { GdiPlusInterop.GdipDeleteMatrix(linearMatrix); }
+                }
                 fillAction(gradBrush);
             }
             finally { GdiPlusInterop.GdipDeleteBrush(gradBrush); }
@@ -1975,6 +2280,22 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             double ry = radial.RadiusY * (brush.GradientUnits == GradientUnits.ObjectBoundingBox ? objectBounds.Height : 1.0) * _dpiScale;
             if (rx <= 0 || ry <= 0) return;
 
+            // Expansion is computed in the gradient's CANONICAL space (cx/cy/rx/ry's
+            // space), but fillBounds is in user space. When the SVG gradient carries
+            // a non-identity gradientTransform, user space and canonical space differ,
+            // so corners must be mapped through the inverse gradientTransform first
+            // (otherwise the computed expansion is garbage and the path gradient can
+            // miss the geometry entirely — visible at low zoom where GDI+ flattens
+            // the ellipse path more coarsely, leaving large empty/tiled regions).
+            Matrix3x2 inverseGradTransform = Matrix3x2.Identity;
+            if (brush.GradientTransform is Matrix3x2 gt)
+            {
+                if (!Matrix3x2.Invert(gt, out inverseGradTransform))
+                {
+                    inverseGradTransform = Matrix3x2.Identity;
+                }
+            }
+
             double expansion = 1.0;
             if (fillBounds.Width > 0 && fillBounds.Height > 0)
             {
@@ -1985,8 +2306,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     [(fL, fT), (fR, fT), (fR, fB), (fL, fB)];
                 foreach (var (fx, fy) in corners)
                 {
-                    double dx = (fx - cx) / rx;
-                    double dy = (fy - cy) / ry;
+                    // Map (user*dpi) → (canonical*dpi). The inverse matrix's M11..M22
+                    // are dimensionless; M31/M32 live in user-space units, so scale
+                    // them by dpi to match the (*dpi) input.
+                    double canonicalX = inverseGradTransform.M11 * fx + inverseGradTransform.M21 * fy
+                        + inverseGradTransform.M31 * _dpiScale;
+                    double canonicalY = inverseGradTransform.M12 * fx + inverseGradTransform.M22 * fy
+                        + inverseGradTransform.M32 * _dpiScale;
+                    double dx = (canonicalX - cx) / rx;
+                    double dy = (canonicalY - cy) / ry;
                     double t = dx * dx + dy * dy;
                     if (t > maxT) maxT = t;
                 }
@@ -2001,15 +2329,39 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out nint ellipsePath) != 0 || ellipsePath == 0) return;
             try
             {
+                // Build the ellipse in the gradient's CANONICAL space × dpi.
                 GdiPlusInterop.GdipAddPathEllipse(ellipsePath,
                     (float)(cx - effRx), (float)(cy - effRy), (float)(effRx * 2), (float)(effRy * 2));
+
+                // Then bake gradientTransform into the path itself so the final path
+                // lives in user-space × dpi. This avoids relying on the path gradient's
+                // brush transform, which GDI+ rasterizes poorly when the canonical path
+                // is far from the geometry being filled (visible as missing/distorted
+                // fills at low zoom: GDI+ appears to flatten and sample the brush based
+                // on device-space bounds of the path, and when canonical-space coords
+                // are large and the fill uses a brush transform to compress them, the
+                // internal gradient texture is resolved at inadequate resolution).
+                nint pathMatrix = CreateGdipGradientMatrix(brush.GradientTransform);
+                if (pathMatrix != 0)
+                {
+                    try { GdiPlusInterop.GdipTransformPath(ellipsePath, pathMatrix); }
+                    finally { GdiPlusInterop.GdipDeleteMatrix(pathMatrix); }
+                }
 
                 if (GdiPlusInterop.GdipCreatePathGradientFromPath(ellipsePath, out nint gradBrush) != 0 || gradBrush == 0) return;
                 try
                 {
+                    // Transform the focal/origin point through the same gradientTransform
+                    // so it lives in user-space × dpi alongside the path.
                     var origin = ResolveGradientPoint(radial.GradientOrigin, brush.GradientUnits, objectBounds);
                     var (ox, oy) = ToDeviceCoords(origin.X, origin.Y);
-                    var centerPt = new GdiPlusInterop.PointF((float)ox, (float)oy);
+                    double uox = ox, uoy = oy;
+                    if (brush.GradientTransform is Matrix3x2 gtc)
+                    {
+                        uox = gtc.M11 * ox + gtc.M21 * oy + gtc.M31 * _dpiScale;
+                        uoy = gtc.M12 * ox + gtc.M22 * oy + gtc.M32 * _dpiScale;
+                    }
+                    var centerPt = new GdiPlusInterop.PointF((float)uox, (float)uoy);
                     GdiPlusInterop.GdipSetPathGradientCenterPoint(gradBrush, ref centerPt);
 
                     // GDI+ PathGradient preset blend: position 0 = boundary, 1 = center.
@@ -2045,6 +2397,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
                     GdiPlusInterop.SetPathGradientPresetBlend(gradBrush, revC, revP);
                     GdiPlusInterop.GdipSetPathGradientWrapMode(gradBrush, wrapMode);
+                    // Path is already in user-space × dpi; no brush transform needed.
                     fillAction(gradBrush);
                 }
                 finally { GdiPlusInterop.GdipDeleteBrush(gradBrush); }
@@ -2126,11 +2479,6 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
         return idx;
     }
-
-    private static Point ResolveGradientPoint(Point p, GradientUnits units, Rect objectBounds)
-        => units == GradientUnits.ObjectBoundingBox
-            ? new Point(objectBounds.X + p.X * objectBounds.Width, objectBounds.Y + p.Y * objectBounds.Height)
-            : p;
 
     private readonly struct GraphicsStateSnapshot
     {

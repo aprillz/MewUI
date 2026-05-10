@@ -11,7 +11,7 @@ internal static class PerPixelAlphaTextRenderer
 
     public static unsafe void DrawText(
         nint hdc,
-        GdiBitmapRenderTarget? bitmapTarget,
+        GdiPixelRenderSurface? pixelSurface,
         AaSurfacePool surfacePool,
         ReadOnlySpan<char> text,
         RECT targetRect,
@@ -43,7 +43,7 @@ internal static class PerPixelAlphaTextRenderer
             drawRect.bottom = drawRect.top + textHeightPx;
         }
 
-        if (bitmapTarget != null && IsOpaqueUnderText(bitmapTarget, drawRect))
+        if (pixelSurface != null && IsOpaqueUnderText(pixelSurface, drawRect))
         {
             DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format, wrapping, trimming, hAlign, vAlign);
             return;
@@ -151,11 +151,11 @@ internal static class PerPixelAlphaTextRenderer
         }
     }
 
-    private static bool IsOpaqueUnderText(GdiBitmapRenderTarget bitmapTarget, RECT r)
+    private static bool IsOpaqueUnderText(GdiPixelRenderSurface pixelSurface, RECT r)
     {
-        var span = bitmapTarget.GetPixelSpan();
-        int pw = bitmapTarget.PixelWidth;
-        int ph = bitmapTarget.PixelHeight;
+        var span = pixelSurface.GetPixelSpan();
+        int pw = pixelSurface.PixelWidth;
+        int ph = pixelSurface.PixelHeight;
         if (pw <= 0 || ph <= 0 || span.Length < pw * ph * 4)
         {
             return false;

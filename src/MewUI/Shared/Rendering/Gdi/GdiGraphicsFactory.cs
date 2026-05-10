@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics factory implementation.
 /// </summary>
-public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
+public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
 {
     public GraphicsBackend Backend => GraphicsBackend.Gdi;
 
@@ -22,6 +22,8 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
     public static GdiGraphicsFactory Instance => field ??= new GdiGraphicsFactory();
 
     private GdiGraphicsFactory() { }
+
+    private readonly RenderResourceCache _renderResourceCache = new();
 
     public bool IsDoubleBuffered { get; set; } = true;
 
@@ -90,8 +92,6 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
             : throw new NotSupportedException(
                 $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
 
-    public IImage CreateImageFromPixelSource(IPixelBufferSource source) => new GdiImage(source);
-
     /// <summary>
     /// Creates an empty 32-bit ARGB image.
     /// </summary>
@@ -115,37 +115,37 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
                 throw new ArgumentException("GDI backend requires a Win32 HDC window surface.", nameof(target));
             }
 
-            return CreateContextCore(win32Surface.Hwnd, win32Surface.Hdc, windowTarget.DpiScale);
+            return CreateContextCore(win32Surface.Hwnd, win32Surface.Hdc, windowTarget.DpiScale, win32Surface.TransparentComposition);
         }
 
-        if (target is GdiBitmapRenderTarget bitmapTarget)
+        if (target is GdiPixelRenderSurface pixelSurface)
         {
             // Use target's Hdc directly - no wrapper needed
             return new GdiPlusGraphicsContext(
                 hwnd: 0,
-                hdc: bitmapTarget.Hdc,
-                pixelWidth: bitmapTarget.PixelWidth,
-                pixelHeight: bitmapTarget.PixelHeight,
-                dpiScale: bitmapTarget.DpiScale,
+                hdc: pixelSurface.Hdc,
+                pixelWidth: pixelSurface.PixelWidth,
+                pixelHeight: pixelSurface.PixelHeight,
+                dpiScale: pixelSurface.DpiScale,
                 imageScaleQuality: ImageScaleQuality,
                 ownsDc: false,
-                bitmapTarget: bitmapTarget);
+                pixelSurface: pixelSurface);
         }
 
-        if (target is IBitmapRenderTarget)
+        if (target is ICpuPixelSurface)
         {
             throw new ArgumentException(
-                $"BitmapRenderTarget was created by a different backend. " +
-                $"Use {nameof(CreateBitmapRenderTarget)} from the same factory.",
+                $"Render surface was created by a different backend. " +
+                $"Use {nameof(CreateSurface)} from the same factory.",
                 nameof(target));
         }
 
         throw new NotSupportedException($"Unsupported render target type: {target.GetType().Name}");
     }
 
-    private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale)
+    private IGraphicsContext CreateContextCore(nint hwnd, nint hdc, double dpiScale, bool transparentComposition = false)
         => IsDoubleBuffered
-        ? GdiPlusGraphicsContext.CreateDoubleBuffered(hwnd, hdc, dpiScale, ImageScaleQuality)
+        ? GdiPlusGraphicsContext.CreateDoubleBuffered(hwnd, hdc, dpiScale, ImageScaleQuality, transparentComposition)
         : new GdiPlusGraphicsContext(hwnd, hdc, dpiScale, ImageScaleQuality);
 
 
@@ -155,11 +155,51 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         return new GdiMeasurementContext(hdc, dpi);
     }
 
-    public IBitmapRenderTarget CreateBitmapRenderTarget(int pixelWidth, int pixelHeight, double dpiScale = 1.0)
-        => new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale);
+    private IRenderSurface CreatePixelSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
+        => new GdiPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha: hasAlpha);
+
+    public IRenderResourceCache? ResourceCache => _renderResourceCache;
+
+    public IRenderEffectDevice? Effects => null;
+
+    public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor)
+        => CreatePixelSurface(
+            descriptor.PixelWidth,
+            descriptor.PixelHeight,
+            descriptor.DpiScale,
+            descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
+
+    public IGraphicsContext CreateContext(IRenderSurface surface)
+        => surface.Capabilities.HasFlag(SurfaceCapabilities.Renderable)
+            ? CreateContext((IRenderTarget)surface)
+            : throw new NotSupportedException(
+                $"{GetType().Name} can only create contexts for renderable surfaces.");
+
+    public IImage CreateImageView(IRenderSurface surface)
+        => surface is IPixelBufferSource pixelSource
+            ? CreateImageView(pixelSource)
+            : throw new NotSupportedException(
+                $"{GetType().Name} can only create image views for pixel-backed surfaces.");
+
+    public IImage CreateImageView(IPixelBufferSource source)
+        => new GdiImage(source);
+
+    public IImage CreateImageView(IExternalSampleSource source)
+        => throw new NotSupportedException(
+            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
+
+    public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
+        => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
+
+    public IRenderOperation RequestReadback(IRenderSurface source)
+        => RenderDeviceFactoryHelpers.RequestReadback(source);
+
+    public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
     public void Dispose()
     {
+        _renderResourceCache.Dispose();
+
         lock (_layeredLock)
         {
             foreach (var (_, layered) in _layeredTargets)
@@ -198,7 +238,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
     }
 
     private readonly object _layeredLock = new();
-    private readonly Dictionary<nint, GdiBitmapRenderTarget> _layeredTargets = new();
+    private readonly Dictionary<nint, GdiPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<nint, Win32LayeredBitmap> _layeredStagingTargets = new();
 
     public bool Present(Window window, IWindowSurface surface, double opacity)
@@ -218,10 +258,10 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         double dpiScale = win32Surface.DpiScale <= 0 ? 1.0 : win32Surface.DpiScale;
 
         var target = GetOrCreateLayeredTarget(hwnd, w, h, dpiScale);
-        window.RenderFrameToBitmap(target);
+        window.RenderFrameToSurface(target);
 
         // UpdateLayeredWindow expects premultiplied BGRA. The GDI pipeline already renders premultiplied
-        // into the bitmap target; only fix up missing alpha from legacy GDI text/bitblt paths.
+        // into the pixel surface; only fix up missing alpha from legacy GDI text/bitblt paths.
         var staging = GetOrCreateLayeredStagingTarget(hwnd, w, h, dpiScale);
         CopyWithAlphaFix(target.GetPixelSpan(), staging.GetPixelSpan());
 
@@ -257,7 +297,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
         return true;
     }
 
-    private GdiBitmapRenderTarget GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+    private GdiPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
     {
         lock (_layeredLock)
         {
@@ -274,7 +314,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IWindowResourceReleas
                 old.Dispose();
             }
 
-            var created = new GdiBitmapRenderTarget(pixelWidth, pixelHeight, dpiScale, presentationMode: GdiPresentationMode.PerPixelAlpha);
+            var created = new GdiPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, presentationMode: GdiPresentationMode.PerPixelAlpha);
             _layeredTargets[hwnd] = created;
             return created;
         }

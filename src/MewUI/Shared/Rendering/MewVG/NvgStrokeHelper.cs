@@ -1,4 +1,9 @@
 using Aprillz.MewVG;
+using System.Collections.Concurrent;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+
+using static Aprillz.MewUI.Rendering.GradientBrushHelper;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
@@ -8,6 +13,9 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// </summary>
 internal static class NvgStrokeHelper
 {
+    private const int GradientLutSize = 512;
+    private static readonly ConditionalWeakTable<NanoVG, ConcurrentDictionary<string, int>> GradientLutCache = new();
+
     public static void ApplyPenStyle(NanoVG vg, IPen pen)
     {
         vg.StrokeWidth((float)pen.Thickness);
@@ -66,26 +74,53 @@ internal static class NvgStrokeHelper
 
         if (gradient is ILinearGradientBrush linear)
         {
-            var sp = ResolveGradientPoint(linear.StartPoint, linear.GradientUnits, objectBounds);
-            var ep = ResolveGradientPoint(linear.EndPoint, linear.GradientUnits, objectBounds);
-            return vg.LinearGradient((float)sp.X, (float)sp.Y, (float)ep.X, (float)ep.Y, startColor, endColor);
+            var start = ResolveGradientPoint(linear.StartPoint, linear.GradientUnits, objectBounds);
+            var end = ResolveGradientPoint(linear.EndPoint, linear.GradientUnits, objectBounds);
+            var gradientTransform = linear.GradientTransform ?? Matrix3x2.Identity;
+            var image = GetOrCreateGradientLut(vg, linear.Stops);
+            if (image == 0)
+            {
+                return null;
+            }
+
+            return vg.GradientLinear(
+                in gradientTransform,
+                (float)start.X,
+                (float)start.Y,
+                (float)end.X,
+                (float)end.Y,
+                (int)linear.SpreadMethod,
+                image);
         }
 
         if (gradient is IRadialGradientBrush radial)
         {
-            // Use GradientOrigin as the NanoVG center (where offset=0 color appears).
-            // NanoVG doesn't support separate center vs focal point, so this is the best approximation.
-            var origin = ResolveGradientPoint(radial.GradientOrigin, radial.GradientUnits, objectBounds);
             var center = ResolveGradientPoint(radial.Center, radial.GradientUnits, objectBounds);
-            float outerRadius = (float)ResolveGradientLength(radial.RadiusX, radial.GradientUnits, objectBounds.Width);
+            var origin = ResolveGradientPoint(radial.GradientOrigin, radial.GradientUnits, objectBounds);
+            var radiusX = ResolveGradientLength(radial.RadiusX, radial.GradientUnits, objectBounds.Width);
+            var radiusY = ResolveGradientLength(radial.RadiusY, radial.GradientUnits, objectBounds.Height);
+            if (radiusX <= 1e-6 || radiusY <= 1e-6)
+            {
+                return null;
+            }
 
-            // If origin != center, extend the outer radius to cover the boundary ellipse from the origin.
-            float dx = (float)(origin.X - center.X);
-            float dy = (float)(origin.Y - center.Y);
-            float dist = MathF.Sqrt(dx * dx + dy * dy);
-            float adjustedRadius = outerRadius + dist;
+            var gradientTransform = radial.GradientTransform ?? Matrix3x2.Identity;
+            var image = GetOrCreateGradientLut(vg, radial.Stops);
+            if (image == 0)
+            {
+                return null;
+            }
 
-            return vg.RadialGradient((float)origin.X, (float)origin.Y, 0f, adjustedRadius, startColor, endColor);
+            return vg.GradientRadial(
+                in gradientTransform,
+                (float)center.X,
+                (float)center.Y,
+                (float)origin.X,
+                (float)origin.Y,
+                (float)radiusX,
+                (float)radiusY,
+                (int)radial.SpreadMethod,
+                image);
         }
 
         return null;
@@ -424,19 +459,52 @@ internal static class NvgStrokeHelper
         }
     }
 
-    private static Point ResolveGradientPoint(Point p, GradientUnits units, Rect bounds)
-    {
-        if (units == GradientUnits.ObjectBoundingBox)
-            return new Point(bounds.X + p.X * bounds.Width, bounds.Y + p.Y * bounds.Height);
-        return p;
-    }
-
-    private static double ResolveGradientLength(double value, GradientUnits units, double extent)
-    {
-        if (units == GradientUnits.ObjectBoundingBox)
-            return value * extent;
-        return value;
-    }
-
     private static NVGcolor ToNvgColor(Color c) => NVGcolor.RGBA(c.R, c.G, c.B, c.A);
+
+    private static int GetOrCreateGradientLut(NanoVG vg, IReadOnlyList<GradientStop> stops)
+    {
+        var cache = GradientLutCache.GetOrCreateValue(vg);
+        var key = BuildGradientStopsKey(stops, GradientLutSize);
+        return cache.GetOrAdd(key, _ =>
+        {
+            var pixels = BuildGradientLutPixels(stops, GradientLutSize);
+            return vg.CreateOwnedImageRGBA(GradientLutSize, 1, NVGimageFlags.Premultiplied, pixels);
+        });
+    }
+
+    private static string BuildGradientStopsKey(IReadOnlyList<GradientStop> stops, int lutSize)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.Append(lutSize).Append('|').Append(stops.Count);
+        for (var i = 0; i < stops.Count; i++)
+        {
+            var stop = stops[i];
+            builder.Append('|')
+                .Append(stop.Offset.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                .Append(':')
+                .Append(stop.Color.A).Append(',')
+                .Append(stop.Color.R).Append(',')
+                .Append(stop.Color.G).Append(',')
+                .Append(stop.Color.B);
+        }
+
+        return builder.ToString();
+    }
+
+    private static byte[] BuildGradientLutPixels(IReadOnlyList<GradientStop> stops, int lutSize)
+    {
+        var pixels = new byte[lutSize * 4];
+        for (var i = 0; i < lutSize; i++)
+        {
+            var t = lutSize == 1 ? 0.0 : i / (double)(lutSize - 1);
+            var c = Sample(stops, t);
+            var a = c.A / 255.0;
+            pixels[i * 4 + 0] = (byte)Math.Clamp((int)Math.Round(c.R * a), 0, 255);
+            pixels[i * 4 + 1] = (byte)Math.Clamp((int)Math.Round(c.G * a), 0, 255);
+            pixels[i * 4 + 2] = (byte)Math.Clamp((int)Math.Round(c.B * a), 0, 255);
+            pixels[i * 4 + 3] = c.A;
+        }
+
+        return pixels;
+    }
 }
