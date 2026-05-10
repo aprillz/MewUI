@@ -67,6 +67,8 @@ internal static class GLNative
 
     public static void Clear(uint mask) => OpenGL32.glClear(mask);
 
+    public static void Finish() => OpenGL32.glFinish();
+
     public static void LineWidth(float width) => OpenGL32.glLineWidth(width);
 
     public static void Begin(uint mode) => OpenGL32.glBegin(mode);

@@ -43,6 +43,8 @@ internal static partial class GLNative
 
     [LibraryImport(OpenGLLib, EntryPoint = "glClear")] public static partial void Clear(uint mask);
 
+    [LibraryImport(OpenGLLib, EntryPoint = "glFinish")] public static partial void Finish();
+
     [LibraryImport(OpenGLLib, EntryPoint = "glLineWidth")] public static partial void LineWidth(float width);
 
     [LibraryImport(OpenGLLib, EntryPoint = "glBegin")] public static partial void Begin(uint mode);

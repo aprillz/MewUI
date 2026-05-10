@@ -37,6 +37,9 @@ internal static partial class LibGL
     [LibraryImport(LibraryName)]
     public static partial void glXSwapBuffers(nint display, nint drawable);
 
+    [LibraryImport(LibraryName)]
+    public static partial nint glXGetCurrentContext();
+
     // GL core
     [LibraryImport(LibraryName)]
     public static partial void glViewport(int x, int y, int width, int height);
@@ -90,6 +93,9 @@ internal static partial class LibGL
     public static partial void glClear(uint mask);
 
     [LibraryImport(LibraryName)]
+    public static partial void glFinish();
+
+    [LibraryImport(LibraryName)]
     public static partial void glLineWidth(float width);
 
     [LibraryImport(LibraryName)]
@@ -124,6 +130,9 @@ internal static partial class LibGL
 
     [LibraryImport(LibraryName)]
     public static partial void glReadPixels(int x, int y, int width, int height, uint format, uint type, nint pixels);
+
+    [LibraryImport(LibraryName)]
+    public static partial void glPixelStorei(uint pname, int param);
 
     [LibraryImport(LibraryName)]
     public static partial nint glGetString(uint name);

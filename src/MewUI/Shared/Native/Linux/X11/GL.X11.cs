@@ -40,6 +40,8 @@ internal static class GLNative
 
     public static void Clear(uint mask) => LibGL.glClear(mask);
 
+    public static void Finish() => LibGL.glFinish();
+
     public static void LineWidth(float width) => LibGL.glLineWidth(width);
 
     public static void Begin(uint mode) => LibGL.glBegin(mode);

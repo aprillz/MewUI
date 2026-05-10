@@ -21,6 +21,16 @@ internal static partial class OpenGL32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool wglDeleteContext(nint hglrc);
 
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool wglShareLists(nint hglrc1, nint hglrc2);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint wglGetCurrentContext();
+
+    [LibraryImport(LibraryName)]
+    public static partial nint wglGetCurrentDC();
+
     // GL core (minimal subset; fixed-function pipeline)
     [LibraryImport(LibraryName)]
     public static partial void glViewport(int x, int y, int width, int height);
@@ -132,4 +142,10 @@ internal static partial class OpenGL32
 
     [LibraryImport(LibraryName)]
     public static partial uint glGetError();
+
+    [LibraryImport(LibraryName)]
+    public static partial void glFinish();
+
+    [LibraryImport(LibraryName)]
+    public static partial void glFlush();
 }
