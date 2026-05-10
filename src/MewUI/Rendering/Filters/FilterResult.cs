@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// Three concrete shapes:
 /// <list type="bullet">
 /// <item><see cref="BorrowedFilterResult"/> — points at a layer the caller owns. <see cref="Dispose"/> is no-op.</item>
-/// <item><see cref="ScratchFilterResult"/> — backed by an <see cref="IBitmapRenderTarget"/> rented
+/// <item><see cref="ScratchFilterResult"/> — backed by a rented render surface
 /// from the executor's scratch pool; <see cref="Dispose"/> returns it.</item>
 /// <item>Backend-specific subclasses — wrap native handles (<c>ID2D1Bitmap</c>, NVG image id),
 /// optionally with lazy CPU readback for cross-backend chain-of-responsibility fallback.</item>
@@ -46,7 +46,7 @@ public abstract class FilterResult : IDisposable
 
     /// <summary>
     /// <see langword="true"/> when the underlying pixels are in premultiplied alpha
-    /// (<see cref="IBitmapRenderTarget.IsPremultiplied"/>). Mirrored on the result so CPU
+    /// (<see cref="SurfaceCapabilities.Premultiplied"/>). Mirrored on the result so CPU
     /// fallback paths know how to interpret <see cref="ReadPixels"/> bytes.
     /// </summary>
     public abstract bool IsPremultiplied { get; }
@@ -69,10 +69,10 @@ public abstract class FilterResult : IDisposable
 public sealed class BorrowedFilterResult : FilterResult
 {
     private readonly IImage _image;
-    private readonly IBitmapRenderTarget? _pixelSource;
+    private readonly ICpuPixelSurface? _pixelSource;
     private readonly IRenderSurface? _surface;
 
-    public BorrowedFilterResult(IImage image, Rect bounds, IRenderSurface? surface = null, IBitmapRenderTarget? pixelSource = null)
+    public BorrowedFilterResult(IImage image, Rect bounds, IRenderSurface? surface = null, ICpuPixelSurface? pixelSource = null)
     {
         _image = image ?? throw new ArgumentNullException(nameof(image));
         _surface = surface ?? pixelSource;
@@ -85,7 +85,7 @@ public sealed class BorrowedFilterResult : FilterResult
     public override int PixelWidth { get; }
     public override int PixelHeight { get; }
     public override Rect Bounds { get; }
-    public override bool IsPremultiplied => _pixelSource?.IsPremultiplied ?? false;
+    public override bool IsPremultiplied => _pixelSource?.Capabilities.HasFlag(SurfaceCapabilities.Premultiplied) ?? false;
     public override IRenderSurface? UnderlyingSurface => _surface;
 
     public override IImage AsImage() => _image;
@@ -99,22 +99,22 @@ public sealed class BorrowedFilterResult : FilterResult
         }
 
         strideBytes = _pixelSource.StrideBytes;
-        return _pixelSource.GetPixelSpan();
+        return _pixelSource.GetReadOnlyPixelSpan();
     }
 
     public override void Dispose() { }
 }
 
 /// <summary>
-/// A <see cref="FilterResult"/> backed by a scratch <see cref="IBitmapRenderTarget"/> rented
-/// from a pool. <see cref="Dispose"/> returns the target via the supplied release callback.
+/// A <see cref="FilterResult"/> backed by a scratch render surface rented from a pool.
+/// <see cref="Dispose"/> returns the surface via the supplied release callback.
 /// </summary>
 public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
 {
-    ICpuPixelSurface IPixelTargetAccess.Target => _target;
+    ICpuPixelSurface IPixelTargetAccess.Target => _pixels;
 
     private readonly IRenderSurface _surface;
-    private readonly IBitmapRenderTarget _target;
+    private readonly ICpuPixelSurface _pixels;
     private readonly IImage _image;
     private readonly ScratchRenderTargetLease _lease;
     private readonly Action<ScratchRenderTargetLease>? _releaseLease;
@@ -125,24 +125,24 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     {
         _lease = lease ?? throw new ArgumentNullException(nameof(lease));
         _surface = lease.Surface;
-        _target = lease.BitmapTarget;
+        _pixels = lease.BitmapTarget;
         _image = image ?? throw new ArgumentNullException(nameof(image));
         _releaseLease = release;
         Bounds = bounds;
     }
 
-    public override int PixelWidth => _target.PixelWidth;
-    public override int PixelHeight => _target.PixelHeight;
+    public override int PixelWidth => _surface.PixelWidth;
+    public override int PixelHeight => _surface.PixelHeight;
     public override Rect Bounds { get; }
-    public override bool IsPremultiplied => _target.IsPremultiplied;
+    public override bool IsPremultiplied => _pixels.Capabilities.HasFlag(SurfaceCapabilities.Premultiplied);
     public override IRenderSurface? UnderlyingSurface => _surface;
 
     public override IImage AsImage() => _image;
 
     public override ReadOnlySpan<byte> ReadPixels(out int strideBytes)
     {
-        strideBytes = _target.StrideBytes;
-        return _target.GetPixelSpan();
+        strideBytes = _pixels.StrideBytes;
+        return _pixels.GetReadOnlyPixelSpan();
     }
 
     public override void Dispose()

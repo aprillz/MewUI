@@ -6,11 +6,9 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// <see cref="ComposeFilter"/> sub-evaluations).
 /// </summary>
 /// <remarks>
-/// Construction takes the source <see cref="IBitmapRenderTarget"/> directly so the context
-/// can wrap it as a <see cref="BorrowedFilterResult"/> with both <see cref="IImage"/> access
-/// (via <c>sourceImage</c>) and <see cref="ReadOnlySpan{Byte}"/> access (via the
-/// target's pixel buffer). This dual-access lets a CPU executor read the source bytes without
-/// the GPU readback that would be necessary if only an <see cref="IImage"/> were available.
+/// Construction takes the source <see cref="IRenderSurface"/> directly so the context can wrap
+/// it as a <see cref="BorrowedFilterResult"/> with both <see cref="IImage"/> access and optional
+/// CPU pixel access when the surface implements <see cref="ICpuPixelSurface"/>.
 /// </remarks>
 public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
 {
@@ -19,9 +17,9 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
     private readonly FilterResult _source;
     private bool _disposed;
 
-    public DefaultFilterContext(IBitmapRenderTarget sourceLayer, IImage sourceImage, Rect sourceBounds,
+    public DefaultFilterContext(IRenderSurface sourceLayer, IImage sourceImage, Rect sourceBounds,
         IGraphicsFactory factory, double logicalToPixelScaleX = 1.0, double logicalToPixelScaleY = 1.0)
-        : this(new BorrowedFilterResult(sourceImage, sourceBounds, sourceLayer, sourceLayer), sourceBounds, factory,
+        : this(new BorrowedFilterResult(sourceImage, sourceBounds, sourceLayer, sourceLayer as ICpuPixelSurface), sourceBounds, factory,
                new ScratchRenderTargetPool(factory, sourceLayer.DpiScale), ownsPool: true,
                logicalToPixelScaleX, logicalToPixelScaleY)
     {

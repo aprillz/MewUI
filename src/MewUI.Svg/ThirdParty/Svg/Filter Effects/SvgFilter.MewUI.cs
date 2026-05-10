@@ -324,7 +324,7 @@ public partial class SvgFilter
         // (clamped by the executor's MaxInputScale hint above). Filter parameters in user/DIP
         // units must be multiplied by the same scale to land in source-pixel space.
         using var ctx = new DefaultFilterContext(
-            sourceLayer,
+            sourceSurface,
             sourceImage,
             sourceBounds: new Rect(0, 0, sourceLayer.PixelWidth, sourceLayer.PixelHeight),
             offscreenFactory,
