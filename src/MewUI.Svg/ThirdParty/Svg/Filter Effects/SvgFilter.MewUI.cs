@@ -115,9 +115,31 @@ public partial class SvgFilter
         var scaleY = Math.Max(1e-6d, Math.Sqrt((currentTransform.M21 * currentTransform.M21) + (currentTransform.M22 * currentTransform.M22)));
         var dpiScale = Math.Max(1d, renderer.GraphicsContext.DpiScale);
 
+        // Element's own transform scale. SVG primitiveUnits="userSpaceOnUse" (the default)
+        // is interpreted by browsers as units in the user space *after* the filtered
+        // element's transforms are applied — so for a heavily-shrunk element like
+        // <g transform="matrix(0.069,…)"> the σ=14 in feGaussianBlur means 14 *local*
+        // units which display as 14 × 0.069 ≈ 1 parent-unit (visually ~1px blur). Using
+        // ancestor-only scale here treats σ=14 as 14 parent-units and produces the
+        // characteristic "thick black band" where browsers render almost no shadow
+        // (e.g. issue-084-02 beaker filter5994). Multiply ancestor scale by the
+        // element's self-transform scale so per-primitive σ/dx/dy convert to source-
+        // layer pixels at the same rate the geometry shrinks.
+        double selfScaleX = 1, selfScaleY = 1;
+        if (element.Transforms is { Count: > 0 } selfXforms)
+        {
+            var selfMatrix = selfXforms.GetMatrix();
+            double sx = Math.Sqrt(selfMatrix.M11 * selfMatrix.M11 + selfMatrix.M12 * selfMatrix.M12);
+            double sy = Math.Sqrt(selfMatrix.M21 * selfMatrix.M21 + selfMatrix.M22 * selfMatrix.M22);
+            if (sx > 0) selfScaleX = sx;
+            if (sy > 0) selfScaleY = sy;
+        }
+
         // Find max σ across this filter's primitives — needed both for halo region
         // inflation (so the SVG-specified region isn't tighter than 3σ) AND for the
         // visibility-clip below (so the halo can fade naturally past the visible cull).
+        // σ is scaled by selfScale so the inflation is in the same parent-space units
+        // filterRegion uses.
         double maxSigma = 0;
         foreach (var primChild in Children.OfType<SvgFilterPrimitive>())
         {
@@ -129,7 +151,7 @@ public partial class SvgFilter
                 if (sy > maxSigma) maxSigma = sy;
             }
         }
-        double sigmaPad = maxSigma * 3.0;
+        double sigmaPad = maxSigma * 3.0 * Math.Max(selfScaleX, selfScaleY);
 
         // σ-aware region inflation. SVG spec clips filter output at the filter region,
         // so a region narrower than 3σ produces a visibly hard rectangular boundary where
@@ -323,13 +345,19 @@ public partial class SvgFilter
         // The source layer was rasterized at filterRegion × effectiveLogicalToPixel pixels
         // (clamped by the executor's MaxInputScale hint above). Filter parameters in user/DIP
         // units must be multiplied by the same scale to land in source-pixel space.
+        // Self-transform scale is folded in here (only) so per-primitive σ/dx/dy convert
+        // to source-pixel units at the same rate the geometry was shrunk by the element's
+        // own transform — matches browser behavior on heavily-scaled filtered elements.
+        // The source-layer pixelWidth/Height above intentionally exclude selfScale: the
+        // bitmap covers filterRegion (in parent units) at the parent display rate, so the
+        // shrunk geometry rasterizes correctly inside it via renderMethod's PushTransforms.
         using var ctx = new DefaultFilterContext(
             sourceSurface,
             sourceImage,
             sourceBounds: new Rect(0, 0, sourceSurface.PixelWidth, sourceSurface.PixelHeight),
             offscreenFactory,
-            logicalToPixelScaleX: effectiveLogicalToPixelX,
-            logicalToPixelScaleY: effectiveLogicalToPixelY);
+            logicalToPixelScaleX: effectiveLogicalToPixelX * selfScaleX,
+            logicalToPixelScaleY: effectiveLogicalToPixelY * selfScaleY);
         long tCtxBuild = sw.ElapsedTicks;
 
         using var result = executor.Execute(graph, ctx);
@@ -514,15 +542,14 @@ public partial class SvgFilter
 
     private static Rect GetElementBounds(SvgVisualElement element, ISvgRenderer renderer)
     {
-        if (element is SvgGroup)
-        {
-            var path = element.Path(renderer);
-            if (path is { IsEmpty: false })
-            {
-                return path.GetBounds();
-            }
-        }
-
+        // Bounds (Group/Text/etc.) already applies the element's own Transforms via
+        // TransformedBounds, yielding the parent-space AABB the filter pipeline needs:
+        // ApplyFilter is invoked before PushTransforms, so the source layer is rasterized
+        // with the element's transform applied inside renderMethod, and filterRegion must
+        // be in that same parent space. The earlier SvgGroup-only branch returned
+        // Path(renderer).GetBounds() which is in element-local space (GetPaths does not
+        // bake child transforms either) — that mismatch let glyphs fall outside the
+        // source bitmap on the right/bottom (e.g. issue-084-02 "CHEMISTRY" → "CHEMISTR").
         return element.Bounds;
     }
 
