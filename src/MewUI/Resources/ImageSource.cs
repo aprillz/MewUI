@@ -169,7 +169,7 @@ public sealed class ImageSource : IImageSource
 
             _decodedBitmap = decoded;
             _decodedValid = true;
-            _decodedPixelSource = new StaticPixelBufferSource(decoded.WidthPx, decoded.HeightPx, decoded.Data);
+            _decodedPixelSource = new StaticPixelBufferSource(decoded.WidthPx, decoded.HeightPx, decoded.Data, decoded.HasAlpha);
             pixelSource = _decodedPixelSource;
             return true;
         }
