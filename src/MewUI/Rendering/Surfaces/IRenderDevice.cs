@@ -4,8 +4,6 @@ namespace Aprillz.MewUI.Rendering;
 
 public interface IRenderDevice
 {
-    GraphicsBackend Backend { get; }
-
     IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor);
 
     IGraphicsContext CreateContext(IRenderSurface surface);

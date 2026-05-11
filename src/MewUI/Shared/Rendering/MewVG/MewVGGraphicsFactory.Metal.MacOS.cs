@@ -7,7 +7,7 @@ public sealed partial class MewVGGraphicsFactory
 {
     private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider = new();
 
-    public GraphicsBackend Backend => GraphicsBackend.Metal;
+    public string Backend => "MewVG.MacOS";
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {

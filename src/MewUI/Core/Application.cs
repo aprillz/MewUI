@@ -156,7 +156,7 @@ public sealed class Application
     /// Gets the selected graphics backend used by windows/controls.
     /// This is derived from <see cref="DefaultGraphicsFactory"/> and exists mainly for diagnostics.
     /// </summary>
-    public static GraphicsBackend SelectedGraphicsBackend
+    public static string SelectedGraphicsBackend
     {
         get
         {
@@ -166,7 +166,7 @@ public sealed class Application
             }
             catch
             {
-                return GraphicsBackend.Unknown;
+                return "Unknown";
             }
         }
     }

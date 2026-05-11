@@ -28,7 +28,7 @@ public sealed partial class MewVGGraphicsFactory
     /// </summary>
     [ThreadStatic] private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
 #pragma warning restore CS0649
-    public GraphicsBackend Backend => GraphicsBackend.OpenGL;
+    public string Backend => "MewVG.Win32";
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
     private MewVGWin32LayeredPresenter? _layeredPresenterField;

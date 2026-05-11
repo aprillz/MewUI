@@ -13,7 +13,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 {
     public static Direct2DGraphicsFactory Instance => field ??= new Direct2DGraphicsFactory();
 
-    public GraphicsBackend Backend => GraphicsBackend.Direct2D;
+    public string Backend => "Direct2D";
 
     /// <summary>
     /// D2D presents transparent windows via a DXGI swap-chain (premultiplied alpha) attached

@@ -1,7 +1,6 @@
 using System.Numerics;
 
 using Aprillz.MewUI.Rendering.Filters;
-using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering;
 
@@ -11,6 +10,12 @@ namespace Aprillz.MewUI.Rendering;
 /// </summary>
 public interface IGraphicsFactory : IRenderDevice, IDisposable
 {
+    /// <summary>
+    /// Backend name matching the package suffix (<c>Aprillz.MewUI.Backend.&lt;Backend&gt;</c>).
+    /// Do not branch on this value.
+    /// </summary>
+    string Backend { get; }
+
     /// <summary>Creates a solid-color brush.</summary>
     /// <remarks>
     /// The default DIM returns a <see cref="SolidColorBrush"/> with no backend resources.

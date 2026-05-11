@@ -140,7 +140,7 @@ public sealed partial class MewVGGraphicsFactory
 
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
 
-    public GraphicsBackend Backend => GraphicsBackend.OpenGL;
+    public string Backend => "MewVG.X11";
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {

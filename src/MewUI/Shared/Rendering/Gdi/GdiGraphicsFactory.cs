@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// </summary>
 public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
 {
-    public GraphicsBackend Backend => GraphicsBackend.Gdi;
+    public string Backend => "Gdi";
 
     /// <summary>
     /// Gets the singleton instance of the GDI graphics factory.
