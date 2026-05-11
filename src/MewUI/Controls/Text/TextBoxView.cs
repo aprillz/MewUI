@@ -54,8 +54,8 @@ internal sealed class TextBoxView
                 double emptyLineTop = contentBounds.Y + (contentBounds.Height - emptyLineHeight) / 2;
                 var caretX = contentBounds.X - horizontalOffset;
                 context.DrawLine(
-                    new Point(caretX, emptyLineTop + 2),
-                    new Point(caretX, emptyLineTop + emptyLineHeight - 2),
+                    new Point(caretX, emptyLineTop),
+                    new Point(caretX, emptyLineTop + emptyLineHeight),
                     theme.Palette.WindowText, 1, pixelSnap: true);
             }
 
