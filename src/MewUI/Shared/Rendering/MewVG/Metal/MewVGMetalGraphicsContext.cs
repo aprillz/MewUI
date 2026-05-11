@@ -109,7 +109,13 @@ internal sealed partial class MewVGMetalGraphicsContext
         RetainIfNotNull(cmdBuf);
         _commandBuffer = cmdBuf;
 
-        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, frame.MsaaColorTexture);
+        // Ensure the NanoVG coverage-AA scratch attachment matches the viewport.
+        // The texture is owned by the renderer (single instance, resized on demand)
+        // and is attached as color[1] of the main render pass so transparent
+        // strokes/fills can write coverage and composite within one encoder.
+        nint coverageTexture = _vg.EnsureCoverageTexture(_viewportWidthPx, _viewportHeightPx);
+
+        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, frame.MsaaColorTexture, coverageTexture);
         if (passDesc == 0)
         {
             return;
@@ -124,7 +130,11 @@ internal sealed partial class MewVGMetalGraphicsContext
         RetainIfNotNull(encoder);
         _encoder = encoder;
 
-        _vg.SetRenderEncoder(_encoder, _commandBuffer);
+        // Pass the render-pass attachment textures so the Metal renderer can rebuild
+        // an equivalent encoder after a coverage-AA detour (transparent stroke/fill
+        // composite needs to switch to a coverage texture and back).
+        _vg.SetRenderEncoder(_encoder, _commandBuffer,
+            frame.ColorTexture, frame.StencilTexture, frame.MsaaColorTexture);
         _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
         _vg.ResetTransform();
         _vg.ResetScissor();
@@ -326,7 +336,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint msaaColorTexture)
+    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint msaaColorTexture, nint coverageTexture)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -365,6 +375,23 @@ internal sealed partial class MewVGMetalGraphicsContext
             }
 
             ObjCRuntime.SendMessageNoReturn(color0, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));
+        }
+
+        // colorAttachments[1] — coverage AA scratch (alpha8 / R8). Present so
+        // transparent stroke / fill calls can build coverage and composite within
+        // the same render encoder via FB fetch (no tile flush). Memoryless on
+        // Apple Silicon: never lands in DRAM. Cleared per frame so subsequent
+        // strokes on the same frame start from 0.
+        if (coverageTexture != 0)
+        {
+            nint color1 = colorAttachments != 0 ? ObjCRuntime.SendMessage(colorAttachments, SelObjectAtIndexedSubscript, (UInt64)1) : 0;
+            if (color1 != 0)
+            {
+                ObjCRuntime.SendMessageNoReturn(color1, SelSetTexture, coverageTexture);
+                ObjCRuntime.SendMessageNoReturn(color1, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+                ObjCRuntime.SendMessageNoReturn(color1, SelSetStoreAction, (UInt64)MTLStoreAction.DontCare);
+                ObjCRuntime.SendMessageNoReturn(color1, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));
+            }
         }
 
         if (stencilTexture != 0)
