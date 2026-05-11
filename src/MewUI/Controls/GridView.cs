@@ -1250,8 +1250,6 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             IsHitTestVisible = true;
         }
 
-        protected override bool InvalidateOnMouseOverChanged => true;
-
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);

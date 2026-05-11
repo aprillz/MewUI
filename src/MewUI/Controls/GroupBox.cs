@@ -7,11 +7,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class GroupBox : HeaderedContentControl
 {
-    /// <summary>
-    /// Gets whether to invalidate visual on mouse over changes.
-    /// </summary>
-    protected override bool InvalidateOnMouseOverChanged => false;
-
     public static readonly MewProperty<double> HeaderInsetProperty =
         MewProperty<double>.Register<GroupBox>(nameof(HeaderInset), 0.0,
             MewPropertyOptions.AffectsLayout);

@@ -72,8 +72,6 @@ public partial class Label : Control, IVisualTreeHost
             base.OnAccessKey();
     }
 
-    protected override bool InvalidateOnMouseOverChanged => false;
-
     /// <summary>
     /// Gets or sets the text content. Use underscore prefix to define an access key
     /// (e.g. "_Name" registers Alt+N). Use double underscore ("__") for a literal underscore.

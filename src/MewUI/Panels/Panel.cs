@@ -16,8 +16,6 @@ public abstract class Panel : FrameworkElement
     public static readonly MewProperty<bool> ClipToBoundsProperty =
         MewProperty<bool>.Register<Panel>(nameof(ClipToBounds), false, MewPropertyOptions.AffectsRender);
 
-    protected override bool InvalidateOnMouseOverChanged => false;
-
     /// <summary>
     /// Gets or sets the inner padding.
     /// </summary>

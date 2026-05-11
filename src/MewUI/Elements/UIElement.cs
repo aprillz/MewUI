@@ -154,9 +154,6 @@ public abstract partial class UIElement : Element
                 OnMouseLeave();
                 MouseLeave?.Invoke();
             }
-
-            if (InvalidateOnMouseOverChanged)
-                InvalidateVisual();
         }
         else if (property == CursorProperty)
         {
@@ -412,6 +409,8 @@ public abstract partial class UIElement : Element
         {
             window.RegisterVisualStateDirty(this);
         }
+
+        InvalidateVisual();
     }
 
     internal bool IsVisualStateDirty => _visualStateDirty;
@@ -486,13 +485,6 @@ public abstract partial class UIElement : Element
 
     internal void SetMouseOver(bool mouseOver)
         => PropertyStore.SetLocal(IsMouseOverProperty, mouseOver);
-
-    /// <summary>
-    /// Controls whether mouse-over changes trigger an <see cref="Element.InvalidateVisual"/>.
-    /// Container elements like panels can opt out to avoid redundant redraw on hover changes
-    /// when they don't have any hover-dependent visuals.
-    /// </summary>
-    protected virtual bool InvalidateOnMouseOverChanged => true;
 
     internal void SetMouseCaptured(bool captured)
         => PropertyStore.SetLocal(IsMouseCapturedProperty, captured);
