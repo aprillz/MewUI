@@ -5,7 +5,7 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Rendering.Gdi.Core;
 using Aprillz.MewUI.Rendering.Gdi.Sdf;
-using Aprillz.MewUI.Rendering.Gdi.Simd;
+using Aprillz.MewUI.Rendering.Simd;
 
 namespace Aprillz.MewUI.Rendering.Gdi.Rendering;
 
@@ -84,7 +84,7 @@ internal sealed class HybridShapeRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < height; py++)
                 {
@@ -138,7 +138,7 @@ internal sealed class HybridShapeRenderer
                     }
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally
@@ -240,7 +240,7 @@ internal sealed class HybridShapeRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < surfaceH; py++)
                 {
@@ -252,7 +252,7 @@ internal sealed class HybridShapeRenderer
                     if (xLeftOuter == 0 && xRightOuter == 0)
                     {
                         byte* rowPtr0 = basePtr + py * stride;
-                        GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr0, alphaRow, premulTable);
+                        SimdDispatcher.WritePremultipliedBgraRow(rowPtr0, alphaRow, premulTable);
                         continue;
                     }
 
@@ -353,7 +353,7 @@ internal sealed class HybridShapeRenderer
                     }
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally
@@ -530,7 +530,7 @@ internal sealed class HybridShapeRenderer
             }
 
             Span<uint> premulTable = stackalloc uint[256];
-            GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+            SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
             byte[]? rented = null;
             Span<byte> alphaRow = rxPx <= GdiRenderingConstants.StackAllocAlphaRowThreshold
@@ -600,7 +600,7 @@ internal sealed class HybridShapeRenderer
             }
 
             byte* rowPtr = basePtr + y * stride;
-            GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+            SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
         }
     }
 
@@ -655,7 +655,7 @@ internal sealed class HybridShapeRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < height; py++)
                 {
@@ -709,7 +709,7 @@ internal sealed class HybridShapeRenderer
                     }
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally
@@ -797,7 +797,7 @@ internal sealed class HybridShapeRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < surfaceH; py++)
                 {
@@ -810,7 +810,7 @@ internal sealed class HybridShapeRenderer
                     if (tOut <= 0)
                     {
                         byte* rowPtr0 = basePtr + py * stride;
-                        GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr0, alphaRow, premulTable);
+                        SimdDispatcher.WritePremultipliedBgraRow(rowPtr0, alphaRow, premulTable);
                         continue;
                     }
 
@@ -878,7 +878,7 @@ internal sealed class HybridShapeRenderer
                     }
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally
@@ -968,7 +968,7 @@ internal sealed class HybridShapeRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < height; py++)
                 {
@@ -980,7 +980,7 @@ internal sealed class HybridShapeRenderer
                     }
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally

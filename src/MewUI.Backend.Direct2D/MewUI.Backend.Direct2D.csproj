@@ -14,7 +14,6 @@
 
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Rendering\Direct2D\**\*.cs" LinkBase="Rendering\Direct2D"/>
-    <Compile Include="..\MewUI\Shared\Rendering\Gdi\Simd\*.cs" LinkBase="Rendering\Gdi\Simd"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native"/>

@@ -2,6 +2,7 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Rendering.Filters;
+using Aprillz.MewUI.Rendering.Simd;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
@@ -84,38 +85,14 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     {
         var span = rt.GetPixelSpan();
         var copy = new byte[span.Length];
-        span.CopyTo(copy);
-        for (int i = 0; i + 3 < copy.Length; i += 4)
-        {
-            byte a = copy[i + 3];
-            if (a == 0xFF) continue;
-            if (a == 0)
-            {
-                copy[i] = copy[i + 1] = copy[i + 2] = 0;
-                continue;
-            }
-            copy[i + 0] = (byte)((copy[i + 0] * a + 127) / 255);
-            copy[i + 1] = (byte)((copy[i + 1] * a + 127) / 255);
-            copy[i + 2] = (byte)((copy[i + 2] * a + 127) / 255);
-        }
+        SimdDispatcher.PremultiplyBgra(span, copy);
         return copy;
     }
 
     private static void UnpremultiplyDib(Direct2DPixelRenderSurface rt)
     {
         var span = rt.GetPixelSpan();
-        for (int i = 0; i + 3 < span.Length; i += 4)
-        {
-            byte a = span[i + 3];
-            if (a == 0xFF || a == 0) continue;
-            int half = a / 2;
-            int b0 = (span[i + 0] * 255 + half) / a;
-            int b1 = (span[i + 1] * 255 + half) / a;
-            int b2 = (span[i + 2] * 255 + half) / a;
-            span[i + 0] = b0 > 255 ? (byte)255 : (byte)b0;
-            span[i + 1] = b1 > 255 ? (byte)255 : (byte)b1;
-            span[i + 2] = b2 > 255 ? (byte)255 : (byte)b2;
-        }
+        SimdDispatcher.UnpremultiplyBgra(span, span);
     }
 
     private FilterResult? TryGpuBlur(BlurFilter b, IImageFilterContext ctx)

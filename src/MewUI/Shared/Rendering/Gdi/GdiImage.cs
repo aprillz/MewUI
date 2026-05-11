@@ -1,7 +1,7 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Resources;
-using Aprillz.MewUI.Rendering.Gdi.Simd;
+using Aprillz.MewUI.Rendering.Simd;
 
 namespace Aprillz.MewUI.Rendering.Gdi;
 
@@ -484,7 +484,7 @@ internal sealed class GdiImage : IImage
                     // Common case: 2x downsample in both dimensions.
                     if (fx == 2 && fy == 2)
                     {
-                        GdiSimdDispatcher.Downsample2xBoxPremultipliedBgra(
+                        SimdDispatcher.Downsample2xBoxPremultipliedBgra(
                             srcBase,
                             srcStrideBytes: PixelWidth * 4,
                             srcWidth: srcW,
@@ -565,7 +565,7 @@ internal sealed class GdiImage : IImage
                                 }
 
                                 byte* nextPtr = (byte*)nextBuffer;
-                                GdiSimdDispatcher.Downsample2xBoxPremultipliedBgra(
+                                SimdDispatcher.Downsample2xBoxPremultipliedBgra(
                                     workSrc,
                                     workStrideBytes,
                                     workW,
@@ -849,22 +849,8 @@ internal sealed class GdiImage : IImage
                     return;
                 }
 
-                byte* dst = (byte*)_bits;
-                int count = pixelData.Length;
-
-                for (int i = 0; i < count; i += 4)
-                {
-                    byte b = src[i + 0];
-                    byte g = src[i + 1];
-                    byte r = src[i + 2];
-                    byte a = src[i + 3];
-
-                    uint alpha = a;
-                    dst[i + 3] = a;
-                    dst[i + 0] = (byte)((b * alpha + 127) / 255);
-                    dst[i + 1] = (byte)((g * alpha + 127) / 255);
-                    dst[i + 2] = (byte)((r * alpha + 127) / 255);
-                }
+                var dstSpan = new Span<byte>((void*)_bits, pixelData.Length);
+                SimdDispatcher.PremultiplyBgra(pixelData, dstSpan);
             }
         }
     }

@@ -1,7 +1,7 @@
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Resources;
-using Aprillz.MewUI.Rendering.Gdi.Simd;
+using Aprillz.MewUI.Rendering.Simd;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
@@ -177,7 +177,7 @@ internal sealed class Direct2DImage : IImage
     private static byte[] Premultiply(ReadOnlySpan<byte> bgra)
     {
         var dst = new byte[bgra.Length];
-        GdiSimdDispatcher.PremultiplyBgra(bgra, dst);
+        SimdDispatcher.PremultiplyBgra(bgra, dst);
         return dst;
     }
 

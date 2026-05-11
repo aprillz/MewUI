@@ -1,4 +1,4 @@
-using System.Numerics;
+using Aprillz.MewUI.Rendering.Simd;
 
 namespace Aprillz.MewUI.Rendering.Filters;
 
@@ -557,46 +557,11 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         }
     }
 
-    private static unsafe void PremultiplyInPlace(byte[] pixels)
-    {
-        fixed (byte* basePtr = pixels)
-        {
-            byte* p = basePtr;
-            byte* end = basePtr + (pixels.Length & ~3);
-            while (p < end)
-            {
-                byte a = p[3];
-                if (a == 0xFF) { p += 4; continue; }
-                if (a == 0) { p[0] = p[1] = p[2] = 0; p += 4; continue; }
-                p[0] = (byte)((p[0] * a + 127) / 255);
-                p[1] = (byte)((p[1] * a + 127) / 255);
-                p[2] = (byte)((p[2] * a + 127) / 255);
-                p += 4;
-            }
-        }
-    }
+    private static void PremultiplyInPlace(byte[] pixels)
+        => SimdDispatcher.PremultiplyBgra(pixels, pixels);
 
-    private static unsafe void UnpremultiplyInPlace(byte[] pixels)
-    {
-        fixed (byte* basePtr = pixels)
-        {
-            byte* p = basePtr;
-            byte* end = basePtr + (pixels.Length & ~3);
-            while (p < end)
-            {
-                byte a = p[3];
-                if (a == 0xFF || a == 0) { p += 4; continue; }
-                int half = a / 2;
-                int v0 = (p[0] * 255 + half) / a;
-                int v1 = (p[1] * 255 + half) / a;
-                int v2 = (p[2] * 255 + half) / a;
-                p[0] = v0 > 255 ? (byte)255 : (byte)v0;
-                p[1] = v1 > 255 ? (byte)255 : (byte)v1;
-                p[2] = v2 > 255 ? (byte)255 : (byte)v2;
-                p += 4;
-            }
-        }
-    }
+    private static void UnpremultiplyInPlace(byte[] pixels)
+        => SimdDispatcher.UnpremultiplyBgra(pixels, pixels);
 
     // ─────────────────────────────────────────────────────────────────────
     // Composition primitives — all in premultiplied alpha

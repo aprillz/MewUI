@@ -15,7 +15,6 @@
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\*.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\Core\*.cs" LinkBase="Rendering\Gdi\Core" />
-    <Compile Include="..\MewUI\Shared\Rendering\Gdi\Simd\*.cs" LinkBase="Rendering\Gdi\Simd" />
     <Compile Include="..\MewUI\Shared\Native\Win32\User32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Gdi32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native" />
