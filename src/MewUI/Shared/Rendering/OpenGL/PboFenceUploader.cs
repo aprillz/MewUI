@@ -4,7 +4,7 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
 /// <summary>
-/// Wraps an <see cref="IPixelBufferSource"/> as an <see cref="IExternalLockedTexture"/>
+/// Wraps an <see cref="IPixelBufferSource"/> as an <see cref="IExternalRasterSource"/>
 /// whose backing GL texture is updated via PBO + fence sync. The producer's CPU pixel
 /// write becomes a memcpy into a driver-mapped PBO; the actual texture transfer runs
 /// as background DMA. The consuming GL backend waits on the fence (in <see cref="Acquire"/>)
@@ -25,7 +25,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// the render thread.
 /// </para>
 /// </remarks>
-internal sealed unsafe class PboFenceUploader : IExternalLockedTexture
+internal sealed unsafe class PboFenceUploader : IExternalRasterSource
 {
     private IPixelBufferSource _source;
     private readonly int _pixelWidth;
@@ -135,7 +135,13 @@ internal sealed unsafe class PboFenceUploader : IExternalLockedTexture
         _initialized = true;
     }
 
-    public void Acquire()
+    public IExternalRasterLease Acquire()
+    {
+        AcquireTexture();
+        return new GlLease(this);
+    }
+
+    private void AcquireTexture()
     {
         if (_disposed) return;
         EnsureInitialized();

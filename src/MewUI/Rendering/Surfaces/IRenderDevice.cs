@@ -12,7 +12,7 @@ public interface IRenderDevice
 
     IImage CreateImageView(IPixelBufferSource source);
 
-    IImage CreateImageView(IExternalSampleSource source);
+    IImage CreateImageView(IExternalRasterSource source);
 
     bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes);
 

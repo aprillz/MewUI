@@ -561,9 +561,9 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IImage CreateImageView(IPixelBufferSource source)
         => new Direct2DImage(source);
 
-    public IImage CreateImageView(IExternalSampleSource source)
+    public IImage CreateImageView(IExternalRasterSource source)
         => throw new NotSupportedException(
-            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
+            $"{GetType().Name} does not support external raster sources of type {source.GetType().Name}.");
 
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);

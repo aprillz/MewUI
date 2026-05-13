@@ -112,8 +112,8 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
         return true;
     }
 
-    private IImage CreateExternalLockedTextureImage(IExternalLockedTexture texture)
-        => new MewVGExternalLockedImage(texture);
+    private IImage CreateExternalRasterImage(IExternalRasterSource source)
+        => new MewVGExternalRasterImage(source);
 
     public IImageFilterExecutor CreateImageFilterExecutor()
     {
@@ -215,16 +215,8 @@ public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevi
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create image views for pixel-backed surfaces.");
 
-    public IImage CreateImageView(IExternalSampleSource source)
-    {
-        if (source is ExternalLockedTextureSampleSource locked)
-        {
-            return CreateExternalLockedTextureImage(locked.Texture);
-        }
-
-        throw new NotSupportedException(
-            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
-    }
+    public IImage CreateImageView(IExternalRasterSource source)
+        => CreateExternalRasterImage(source);
 
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);

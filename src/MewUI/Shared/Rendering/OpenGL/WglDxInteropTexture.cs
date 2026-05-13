@@ -6,9 +6,9 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 
 /// <summary>
 /// Wraps an external Direct3D 11 texture (typically an FFmpeg D3D11VA-decoded
-/// <c>ID3D11Texture2D</c>) as an <see cref="IExternalLockedTexture"/> for the
+/// <c>ID3D11Texture2D</c>) as an <see cref="IExternalRasterSource"/> for the
 /// MewVG GL backend, using the WGL_NV_DX_interop extension for zero-copy GPU
-/// sampling. Constructed once per source texture; lives until the consuming IImage
+/// texture reads. Constructed once per source texture; lives until the consuming IImage
 /// is disposed.
 /// </summary>
 /// <remarks>
@@ -34,7 +34,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// desktop drivers; spotty on Intel and remote-desktop sessions).
 /// </para>
 /// </remarks>
-public sealed unsafe class WglDxInteropTexture : IExternalLockedTexture
+public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
 {
     private static readonly object _sharedDeviceGate = new();
     private static readonly Dictionary<nint, SharedDeviceHandle> s_sharedDevices = [];

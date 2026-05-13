@@ -105,13 +105,12 @@ internal sealed class PboFenceUploaderPool : IDisposable
 }
 
 /// <summary>
-/// Thin <see cref="IExternalLockedTexture"/> wrapper that returns its inner
+/// Thin <see cref="IExternalRasterSource"/> wrapper that returns its inner
 /// <see cref="PboFenceUploader"/> to a pool on <see cref="Dispose"/> instead of
 /// destroying the underlying GL resources. Used by the factory so that an
-/// <see cref="MewVG.MewVGExternalLockedImage"/> with <c>ownsTexture: true</c>
-/// transparently routes the disposal to the pool.
+/// external raster image transparently routes the disposal to the pool.
 /// </summary>
-internal sealed class PooledPboTexture : IExternalLockedTexture
+internal sealed class PooledPboTexture : IExternalRasterSource
 {
     private PboFenceUploader? _inner;
     private readonly PboFenceUploaderPool _pool;
@@ -128,8 +127,8 @@ internal sealed class PooledPboTexture : IExternalLockedTexture
     public BitmapAlphaMode AlphaMode => _inner?.AlphaMode ?? BitmapAlphaMode.Ignore;
     public bool YFlipped => _inner?.YFlipped ?? false;
 
-    public void Acquire() => _inner?.Acquire();
-    public void Release() => _inner?.Release();
+    public IExternalRasterLease Acquire()
+        => _inner?.Acquire() ?? EmptyRasterLease.Instance;
 
     public void Dispose()
     {

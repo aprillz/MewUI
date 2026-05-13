@@ -23,12 +23,10 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     private readonly Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)> _saveStack =
         CollectionPool<Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)>>.Rent();
 
-    // Tracks IExternalLockedTexture instances Acquire'd during the current frame. Each is
-    // Acquire'd at most once per frame (DrawImage may sample the same external image
-    // multiple times) and Release'd at frame end (after platform-specific flush/swap so
-    // the GPU has finished sampling). Capacity is per-frame max; reused across frames
-    // via Clear in OnBeginFrame.
-    private readonly List<Aprillz.MewUI.Resources.IExternalLockedTexture> _acquiredExternalsThisFrame = new();
+    // Tracks external raster leases acquired during the current frame. Each source is
+    // acquired at most once per frame and the lease is disposed at frame end after the
+    // platform-specific flush/swap.
+    private readonly List<(IExternalRasterSource source, IExternalRasterLease lease)> _acquiredExternalsThisFrame = new();
     private float _globalAlpha = 1f;
     private bool _textPixelSnap = true;
     private Matrix3x2 _transform = Matrix3x2.Identity;
@@ -86,22 +84,23 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     }
 
     /// <summary>
-    /// Acquires <paramref name="texture"/> if not already acquired in this frame. The
+    /// Acquires <paramref name="source"/> if not already acquired in this frame. The
     /// platform's DrawImage path calls this before issuing the NVG draw that samples the
-    /// external texture. Idempotent within a frame: a single Acquire covers any number of
+    /// external texture. Idempotent within a frame: a single lease covers any number of
     /// DrawImage calls referencing the same texture.
     /// </summary>
-    private void EnsureExternalAcquired(Aprillz.MewUI.Resources.IExternalLockedTexture texture)
+    private IExternalRasterLease EnsureExternalAcquired(IExternalRasterSource source)
     {
         for (int i = 0; i < _acquiredExternalsThisFrame.Count; i++)
         {
-            if (ReferenceEquals(_acquiredExternalsThisFrame[i], texture))
+            if (ReferenceEquals(_acquiredExternalsThisFrame[i].source, source))
             {
-                return;
+                return _acquiredExternalsThisFrame[i].lease;
             }
         }
-        texture.Acquire();
-        _acquiredExternalsThisFrame.Add(texture);
+        var lease = source.Acquire();
+        _acquiredExternalsThisFrame.Add((source, lease));
+        return lease;
     }
 
     protected override void OnDispose()

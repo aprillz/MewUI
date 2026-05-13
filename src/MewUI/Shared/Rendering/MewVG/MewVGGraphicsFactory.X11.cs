@@ -323,7 +323,7 @@ public sealed partial class MewVGGraphicsFactory
         {
             // See Win32 partial for the pooling rationale — same applies on X11/GLX.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalLockedImage(new PooledPboTexture(uploader, _pboPool), ownsTexture: true);
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
         }
         catch
         {

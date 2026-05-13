@@ -832,10 +832,10 @@ internal sealed partial class MewVGMetalGraphicsContext
 
     protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
-        if (image is MewVGExternalLockedImage extImage)
+        if (image is MewVGExternalRasterImage extImage)
         {
-            EnsureExternalAcquired(extImage.Texture);
-            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            var lease = EnsureExternalAcquired(extImage.Source);
+            int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
             if (extImageId == 0) return;
             DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
                 image.PixelWidth, image.PixelHeight);
