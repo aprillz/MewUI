@@ -41,8 +41,8 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalTextCache.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalWindowResources.cs" LinkBase="Rendering\MewVG" />
 
-    <Compile Include="..\MewUI\Shared\Rendering\TextBitmap.cs" LinkBase="Rendering" />
-    <Compile Include="..\MewUI\Shared\Rendering\TextCacheKey.cs" LinkBase="Rendering" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextCacheKey.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\CoreText\*.cs" LinkBase="Rendering\CoreText" />
     <Compile Include="..\MewUI\Shared\Native\MacOS\Structs\CGGeometry.cs" LinkBase="Native\Structs" />
   </ItemGroup>
