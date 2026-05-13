@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace Aprillz.MewUI.Rendering.Gdi.Simd;
+namespace Aprillz.MewUI.Rendering.Simd;
 
 /// <summary>
 /// SSE2 optimized pixel processing operations.

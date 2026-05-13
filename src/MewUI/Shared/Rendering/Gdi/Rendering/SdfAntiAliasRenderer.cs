@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Rendering.Gdi.Core;
 using Aprillz.MewUI.Rendering.Gdi.Sdf;
-using Aprillz.MewUI.Rendering.Gdi.Simd;
+using Aprillz.MewUI.Rendering.Simd;
 
 namespace Aprillz.MewUI.Rendering.Gdi.Rendering;
 
@@ -72,14 +72,14 @@ internal sealed class SdfAntiAliasRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < height; py++)
                 {
                     RenderFilledRow(alphaRow, py, width, sdf, sampler, srcA, aaWidth);
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally
@@ -143,14 +143,14 @@ internal sealed class SdfAntiAliasRenderer
             try
             {
                 Span<uint> premulTable = stackalloc uint[256];
-                GdiSimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
+                SimdDispatcher.BuildPremultipliedBgraTable(premulTable, srcB, srcG, srcR);
 
                 for (int py = 0; py < height; py++)
                 {
                     RenderStrokeRow(alphaRow, py, width, outerSdf, innerSdf, sampler, srcA, aaWidth);
 
                     byte* rowPtr = basePtr + py * stride;
-                    GdiSimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
+                    SimdDispatcher.WritePremultipliedBgraRow(rowPtr, alphaRow, premulTable);
                 }
             }
             finally

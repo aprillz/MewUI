@@ -1,7 +1,7 @@
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
-namespace Aprillz.MewUI.Rendering.Gdi.Simd;
+namespace Aprillz.MewUI.Rendering.Simd;
 
 /// <summary>
 /// Detects and reports SIMD capabilities of the current CPU.
