@@ -1,5 +1,7 @@
 using System.Numerics;
 
+using Aprillz.MewUI.Rendering.Simd;
+
 namespace Aprillz.MewUI.Rendering.Filters;
 
 /// <summary>
@@ -423,7 +425,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         {
             byte* sp = srcPtr;
             byte* mp = midPtr;
-            System.Threading.Tasks.Parallel.For(0, height, y =>
+            Parallel.For(0, height, y =>
             {
                 byte* rowSrc = sp + y * srcRowBytes;
                 byte* rowDst = mp + y * midRowBytes;
@@ -457,7 +459,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         {
             byte* mp = midPtr;
             byte* dp = dstPtr;
-            System.Threading.Tasks.Parallel.For(0, outH, oy =>
+            Parallel.For(0, outH, oy =>
             {
                 byte* rowDst = dp + oy * dstRowBytes;
                 byte* colBase = mp + oy * factor * midRowBytes;
@@ -493,7 +495,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         // Parallelize across rows (or columns for vertical pass) — each output row only
         // reads from src and writes to its own dst row, no cross-thread dependency.
         // Doubles to triples throughput on 4+ core machines for blur-dominated frames.
-        System.Threading.Tasks.Parallel.For(0, height, y =>
+        Parallel.For(0, height, y =>
         {
             for (int x = 0; x < width; x++)
             {
@@ -539,64 +541,41 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
     private static void ApplyColorMatrix(byte[] pixels, float[] m)
     {
+        // m is row-major 4×5: [r' = m[0..4], g' = m[5..9], b' = m[10..14], a' = m[15..19]]
+        // Pre-pack matrix rows as Vector4 (RGBA weights) so Vector4.Dot can do the
+        // per-pixel mul-add in hardware (SSE4.1 DPPS / ARM64 vmulq + horizontal add).
+        var mR = new Vector4(m[0], m[1], m[2], m[3]);
+        var mG = new Vector4(m[5], m[6], m[7], m[8]);
+        var mB = new Vector4(m[10], m[11], m[12], m[13]);
+        var mA = new Vector4(m[15], m[16], m[17], m[18]);
+        float biasR = m[4], biasG = m[9], biasB = m[14], biasA = m[19];
+
         for (int i = 0; i + 3 < pixels.Length; i += 4)
         {
-            float b = pixels[i + 0] / 255f;
-            float g = pixels[i + 1] / 255f;
-            float r = pixels[i + 2] / 255f;
-            float a = pixels[i + 3] / 255f;
-            // m is row-major 4×5: [r' = m[0..4], g' = m[5..9], b' = m[10..14], a' = m[15..19]]
-            float nr = m[0] * r + m[1] * g + m[2] * b + m[3] * a + m[4];
-            float ng = m[5] * r + m[6] * g + m[7] * b + m[8] * a + m[9];
-            float nb = m[10] * r + m[11] * g + m[12] * b + m[13] * a + m[14];
-            float na = m[15] * r + m[16] * g + m[17] * b + m[18] * a + m[19];
-            pixels[i + 2] = (byte)Math.Clamp((int)Math.Round(nr * 255), 0, 255);
-            pixels[i + 1] = (byte)Math.Clamp((int)Math.Round(ng * 255), 0, 255);
-            pixels[i + 0] = (byte)Math.Clamp((int)Math.Round(nb * 255), 0, 255);
-            pixels[i + 3] = (byte)Math.Clamp((int)Math.Round(na * 255), 0, 255);
+            // Pixels are BGRA; matrix expects RGBA — swizzle on read.
+            var rgba = new Vector4(
+                pixels[i + 2],
+                pixels[i + 1],
+                pixels[i + 0],
+                pixels[i + 3]) * (1f / 255f);
+
+            float nr = Vector4.Dot(mR, rgba) + biasR;
+            float ng = Vector4.Dot(mG, rgba) + biasG;
+            float nb = Vector4.Dot(mB, rgba) + biasB;
+            float na = Vector4.Dot(mA, rgba) + biasA;
+
+            pixels[i + 2] = (byte)Math.Clamp((int)MathF.Round(nr * 255f), 0, 255);
+            pixels[i + 1] = (byte)Math.Clamp((int)MathF.Round(ng * 255f), 0, 255);
+            pixels[i + 0] = (byte)Math.Clamp((int)MathF.Round(nb * 255f), 0, 255);
+            pixels[i + 3] = (byte)Math.Clamp((int)MathF.Round(na * 255f), 0, 255);
         }
     }
 
-    private static unsafe void PremultiplyInPlace(byte[] pixels)
-    {
-        fixed (byte* basePtr = pixels)
-        {
-            byte* p = basePtr;
-            byte* end = basePtr + (pixels.Length & ~3);
-            while (p < end)
-            {
-                byte a = p[3];
-                if (a == 0xFF) { p += 4; continue; }
-                if (a == 0) { p[0] = p[1] = p[2] = 0; p += 4; continue; }
-                p[0] = (byte)((p[0] * a + 127) / 255);
-                p[1] = (byte)((p[1] * a + 127) / 255);
-                p[2] = (byte)((p[2] * a + 127) / 255);
-                p += 4;
-            }
-        }
-    }
+    private static void PremultiplyInPlace(byte[] pixels)
+        => SimdDispatcher.PremultiplyBgra(pixels, pixels);
 
-    private static unsafe void UnpremultiplyInPlace(byte[] pixels)
-    {
-        fixed (byte* basePtr = pixels)
-        {
-            byte* p = basePtr;
-            byte* end = basePtr + (pixels.Length & ~3);
-            while (p < end)
-            {
-                byte a = p[3];
-                if (a == 0xFF || a == 0) { p += 4; continue; }
-                int half = a / 2;
-                int v0 = (p[0] * 255 + half) / a;
-                int v1 = (p[1] * 255 + half) / a;
-                int v2 = (p[2] * 255 + half) / a;
-                p[0] = v0 > 255 ? (byte)255 : (byte)v0;
-                p[1] = v1 > 255 ? (byte)255 : (byte)v1;
-                p[2] = v2 > 255 ? (byte)255 : (byte)v2;
-                p += 4;
-            }
-        }
-    }
+    private static void UnpremultiplyInPlace(byte[] pixels)
+        => SimdDispatcher.UnpremultiplyBgra(pixels, pixels);
 
     // ─────────────────────────────────────────────────────────────────────
     // Composition primitives — all in premultiplied alpha
