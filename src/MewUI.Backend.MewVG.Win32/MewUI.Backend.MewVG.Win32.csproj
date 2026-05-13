@@ -34,10 +34,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGExternalLockedImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGGLBootstrap.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGWin32GraphicsContext.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGWindowResources.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\*.cs" LinkBase="Rendering\MewVG\Win32" />
 
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IGLTextureSource.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
@@ -49,7 +46,6 @@
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploader.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploaderPool.cs" LinkBase="Rendering\OpenGL" />
-    <Compile Include="..\MewUI\Shared\Native\OpenGLPboExt.cs" LinkBase="Native" />
 
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiFont.cs" LinkBase="Rendering\Gdi" />
     <Compile Include="..\MewUI\Shared\Rendering\Gdi\GdiMeasurementContext.cs" LinkBase="Rendering\Gdi" />
@@ -60,15 +56,16 @@
     <Compile Include="..\MewUI\Shared\Native\Win32\Win32Fonts.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\OpenGL32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\WglDxInterop.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
-    <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\Win32\GL.Win32.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\OpenGLExt.Win32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Kernel32.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Com\**\*.cs" LinkBase="Native\Com"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Structs\*.cs" LinkBase="Native\Structs" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Constants\*.cs" LinkBase="Native\Constants" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\GL.Win32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLPboExt.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
     <Compile Include="..\MewUI\Shared\Platform\Win32\Resources\*.cs" LinkBase="Resources" />
   </ItemGroup>
 

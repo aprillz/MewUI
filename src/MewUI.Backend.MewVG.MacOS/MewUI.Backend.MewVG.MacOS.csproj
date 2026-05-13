@@ -22,24 +22,15 @@
     <ProjectReference Include="..\MewUI\MewUI.csproj" />
   </ItemGroup>
 
-
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsContext.Common.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.Metal.MacOS.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsFactory.MacOS.cs" LinkBase="Rendering\MewVG" />
 
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGExternalLockedImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGImage.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\IMetalTextureSource.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MetalGaussianBlur.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MetalImageFilterExecutor.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalPixelRenderSurface.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalGraphicsContext.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalMeasurementContext.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalOffscreenManager.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalTextCache.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\Metal\MewVGMetalWindowResources.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\MacOS\*.cs" LinkBase="Rendering\MewVG" />
 
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common" />
     <Compile Include="..\MewUI\Shared\Rendering\Common\TextCacheKey.cs" LinkBase="Rendering\Common" />

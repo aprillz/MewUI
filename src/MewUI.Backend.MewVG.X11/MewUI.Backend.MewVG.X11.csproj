@@ -36,12 +36,8 @@
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\NvgStrokeHelper.cs" LinkBase="Rendering\MewVG" />
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\Win32\MewVGTextCache.cs" LinkBase="Rendering\MewVG" />
 
-    <!-- X11-specific MewVG files -->
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\MewVGGLBootstrapX11.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\MewVGX11GraphicsContext.cs" LinkBase="Rendering\MewVG" />
-    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\MewVGX11WindowResources.cs" LinkBase="Rendering\MewVG" />
+    <Compile Include="..\MewUI\Shared\Rendering\MewVG\X11\*.cs" LinkBase="Rendering\MewVG\X11" />
 
-    <!-- OpenGL shared (GLX context, text cache, image utilities, measurement) -->
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IGLTextureSource.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\IOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLPixelRenderSurface.cs" LinkBase="Rendering\OpenGL" />
@@ -52,21 +48,19 @@
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\GlxOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploader.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploaderPool.cs" LinkBase="Rendering\OpenGL" />
-    <Compile Include="..\MewUI\Shared\Native\OpenGLPboExt.cs" LinkBase="Native\OpenGLPboExt.cs" />
 
-    <!-- FreeType (text rendering on Linux) -->
     <Compile Include="..\MewUI\Shared\Rendering\FreeType\**\*.cs" LinkBase="Rendering\FreeType" />
 
-    <!-- X11 & GL native bindings -->
-    <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native\X11.cs" />
-    <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native\LibGL.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\GL.X11.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\Linux\X11\OpenGLExt.X11.cs" LinkBase="Native\OpenGLExt.X11.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\OpenGLExt.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\FreeType\**\*.cs" LinkBase="Native\FreeType" />
     <Compile Include="..\MewUI\Shared\Native\Linux\HarfBuzz\**\*.cs" LinkBase="Native\HarfBuzz" />
     <Compile Include="..\MewUI\Shared\Native\Linux\Fontconfig\**\*.cs" LinkBase="Native\Fontconfig" />
     <Compile Include="..\MewUI\Shared\Native\GL.Common.cs" LinkBase="Native" />
-    <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native\OpenGLExt.cs" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLPboExt.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\OpenGLExt.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
   </ItemGroup>
 
