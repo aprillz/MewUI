@@ -44,7 +44,6 @@
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLPixelRenderSurface.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLGaussianBlur.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLImageFilterExecutor.cs" LinkBase="Rendering\OpenGL" />
-    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextCache.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLTextRasterizer.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglDxInteropTexture.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\WglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
