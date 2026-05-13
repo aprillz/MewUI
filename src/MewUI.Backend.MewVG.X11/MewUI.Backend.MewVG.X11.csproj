@@ -23,8 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\MewUI\Shared\Rendering\TextBitmap.cs" LinkBase="Rendering" />
-    <Compile Include="..\MewUI\Shared\Rendering\TextCacheKey.cs" LinkBase="Rendering" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextBitmap.cs" LinkBase="Rendering\Common" />
+    <Compile Include="..\MewUI\Shared\Rendering\Common\TextCacheKey.cs" LinkBase="Rendering\Common" />
 
     <!-- Shared MewVG files -->
     <Compile Include="..\MewUI\Shared\Rendering\MewVG\MewVGGraphicsContext.Common.cs" LinkBase="Rendering\MewVG" />
