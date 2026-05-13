@@ -1250,6 +1250,11 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             IsHitTestVisible = true;
         }
 
+        // OnRender reads IsMouseOver directly (no style trigger), so the framework's
+        // visual-state path doesn't invalidate for us. Schedule a render explicitly.
+        protected override void OnMouseEnter() => InvalidateVisual();
+        protected override void OnMouseLeave() => InvalidateVisual();
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);

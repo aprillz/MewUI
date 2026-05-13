@@ -12,6 +12,7 @@ public abstract partial class UIElement : Element
     private bool _suggestedIsEnabled = true;
     private bool _suggestedIsEnabledInitialized;
     private bool _visualStateDirty;
+    private bool _resolvingVisualState;
 
     /// <summary>
     /// Controls visibility. When false, the element is not rendered and does not participate in layout.
@@ -368,7 +369,7 @@ public abstract partial class UIElement : Element
         }
 
         if (!SkipViewportCull && this is not Window &&
-		    (FindVisualRoot() is not Window root || !new Rect(root.ClientSize).IntersectsWith(Bounds)))
+            (FindVisualRoot() is not Window root || !new Rect(root.ClientSize).IntersectsWith(Bounds)))
         {
             return;
         }
@@ -376,6 +377,7 @@ public abstract partial class UIElement : Element
         using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this))
         {
             ResolveVisualState(snap: false);
+            ClearVisualStateDirty();
             OnRender(context);
             RenderSubtree(context);
         }
@@ -398,19 +400,24 @@ public abstract partial class UIElement : Element
     /// </summary>
     public void InvalidateVisualState()
     {
-        if (_visualStateDirty)
+        // Reentrance: ApplyStyleValues may set properties that fire AffectsVisualState,
+        // which would re-enter this method. Skip — the in-progress resolve picks up the
+        // new state when it reads ComputeVisualState's inputs.
+        if (_resolvingVisualState)
         {
             return;
         }
 
-        _visualStateDirty = true;
-
-        if (FindVisualRoot() is Window window)
+        _resolvingVisualState = true;
+        try
         {
-            window.RegisterVisualStateDirty(this);
+            ResolveVisualState(snap: false);
+            ClearVisualStateDirty();
         }
-
-        InvalidateVisual();
+        finally
+        {
+            _resolvingVisualState = false;
+        }
     }
 
     internal bool IsVisualStateDirty => _visualStateDirty;

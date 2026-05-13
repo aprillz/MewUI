@@ -22,5 +22,5 @@
   <!-- Split platform hosts and rendering backends into separate assemblies -->
   <ItemGroup>
     <Compile Remove="Shared\**" />
-  </ItemGroup>  
+  </ItemGroup>
 </Project>
