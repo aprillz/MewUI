@@ -140,6 +140,9 @@ internal static partial class OpenGL32
     [LibraryImport(LibraryName)]
     public static partial void glGetIntegerv(uint pname, out int data);
 
+    [LibraryImport(LibraryName, EntryPoint = "glGetIntegerv")]
+    public static unsafe partial void glGetIntegerv(uint pname, int* data);
+
     [LibraryImport(LibraryName)]
     public static partial uint glGetError();
 

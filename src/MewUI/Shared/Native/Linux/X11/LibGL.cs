@@ -93,6 +93,9 @@ internal static partial class LibGL
     public static partial void glClear(uint mask);
 
     [LibraryImport(LibraryName)]
+    public static partial void glFlush();
+
+    [LibraryImport(LibraryName)]
     public static partial void glFinish();
 
     [LibraryImport(LibraryName)]
@@ -139,6 +142,9 @@ internal static partial class LibGL
 
     [LibraryImport(LibraryName)]
     public static partial void glGetIntegerv(uint pname, out int data);
+
+    [LibraryImport(LibraryName, EntryPoint = "glGetIntegerv")]
+    public static unsafe partial void glGetIntegerv(uint pname, int* data);
 
     [LibraryImport(LibraryName)]
     public static partial uint glGetError();

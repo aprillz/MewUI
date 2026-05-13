@@ -89,6 +89,7 @@ internal static class GL
     public static void Hint(uint target, uint mode) => GLNative.Hint(target, mode);
     public static void ClearColor(float red, float green, float blue, float alpha) => GLNative.ClearColor(red, green, blue, alpha);
     public static void Clear(uint mask) => GLNative.Clear(mask);
+    public static void Flush() => GLNative.Flush();
     public static void Finish() => GLNative.Finish();
     public static void LineWidth(float width) => GLNative.LineWidth(width);
     public static void Begin(uint mode) => GLNative.Begin(mode);
@@ -111,6 +112,15 @@ internal static class GL
     {
         GLNative.GetIntegerv(pname, out int value);
         return value;
+    }
+
+    public static unsafe void GetIntegers(uint pname, Span<int> values)
+    {
+        if (values.IsEmpty) return;
+        fixed (int* p = values)
+        {
+            GLNative.GetIntegerv(pname, p);
+        }
     }
 
     public static string? GetVersionString()

@@ -40,6 +40,8 @@ internal static class GLNative
 
     public static void Clear(uint mask) => LibGL.glClear(mask);
 
+    public static void Flush() => LibGL.glFlush();
+
     public static void Finish() => LibGL.glFinish();
 
     public static void LineWidth(float width) => LibGL.glLineWidth(width);
@@ -69,6 +71,8 @@ internal static class GLNative
     public static nint GetString(uint name) => LibGL.glGetString(name);
 
     public static void GetIntegerv(uint pname, out int data) => LibGL.glGetIntegerv(pname, out data);
+
+    public static unsafe void GetIntegerv(uint pname, int* data) => LibGL.glGetIntegerv(pname, data);
 
     public static uint GetError() => LibGL.glGetError();
 }

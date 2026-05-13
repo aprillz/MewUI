@@ -67,6 +67,8 @@ internal static class GLNative
 
     public static void Clear(uint mask) => OpenGL32.glClear(mask);
 
+    public static void Flush() => OpenGL32.glFlush();
+
     public static void Finish() => OpenGL32.glFinish();
 
     public static void LineWidth(float width) => OpenGL32.glLineWidth(width);
@@ -96,6 +98,8 @@ internal static class GLNative
     public static nint GetString(uint name) => OpenGL32.glGetString(name);
 
     public static void GetIntegerv(uint pname, out int data) => OpenGL32.glGetIntegerv(pname, out data);
+
+    public static unsafe void GetIntegerv(uint pname, int* data) => OpenGL32.glGetIntegerv(pname, data);
 
     public static uint GetError() => OpenGL32.glGetError();
 }

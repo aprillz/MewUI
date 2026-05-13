@@ -24,7 +24,6 @@ internal static unsafe class WglDxInterop
 {
     /// <summary>WGL_ACCESS_READ_ONLY_NV — the GL side only samples, never writes.</summary>
     public const uint WGL_ACCESS_READ_ONLY_NV = 0x00000000;
-
     public const uint WGL_ACCESS_READ_WRITE_NV = 0x00000001;
     public const uint WGL_ACCESS_WRITE_DISCARD_NV = 0x00000002;
 
