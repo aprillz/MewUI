@@ -12,12 +12,16 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 public sealed partial class MewVGWin32GraphicsFactory
 {
+    public const string BackendIdentifier = "MewVG.Win32";
+
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
-        new MewVGGlOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext, "MewVG Win32");
+        new MewVGGlOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
 
 #pragma warning disable CS0649
-    [ThreadStatic] private static nint _pixelSurfacePresentHwnd;
-    [ThreadStatic] private static nint _pixelSurfacePresentHdc;
+    [ThreadStatic]
+    private static nint _pixelSurfacePresentHwnd;
+    [ThreadStatic]
+    private static nint _pixelSurfacePresentHdc;
     /// <summary>
     /// The specific pixel surface that the layered-window present is rendering
     /// INTO. Set by <see cref="MewVGWin32LayeredPresenter.Present"/>. Distinguishes
@@ -28,7 +32,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// </summary>
     [ThreadStatic] private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
 #pragma warning restore CS0649
-    public string Backend => "MewVG.Win32";
+    public string Identifier => BackendIdentifier;
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
     private MewVGWin32LayeredPresenter? _layeredPresenterField;

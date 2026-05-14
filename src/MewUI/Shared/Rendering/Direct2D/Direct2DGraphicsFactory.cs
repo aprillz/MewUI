@@ -11,9 +11,10 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 
 public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IWin32TransparencyCapabilities, IDisposable
 {
+    public const string BackendIdentifier = "Direct2D";
     public static Direct2DGraphicsFactory Instance => field ??= new Direct2DGraphicsFactory();
 
-    public string Backend => "Direct2D";
+    public string Identifier => BackendIdentifier;
 
     /// <summary>
     /// D2D presents transparent windows via a DXGI swap-chain (premultiplied alpha) attached

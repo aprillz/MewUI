@@ -6,11 +6,12 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 public sealed partial class MewVGMacOSGraphicsFactory
 {
+    public const string BackendIdentifier = "MewVG.MacOS";
+
     private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider = new();
     private nint _cachedMetalDevice;
 
-    public string Backend => "MewVG.MacOS";
-
+    public string Identifier => BackendIdentifier;
     /// <summary>
     /// Native <c>id&lt;MTLDevice&gt;</c> this factory's window resources draw with.
     /// Cross-API integrators (Skia GR Metal, video samplers, custom effects) read this and

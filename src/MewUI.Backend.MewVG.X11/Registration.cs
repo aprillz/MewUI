@@ -7,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class MewVGX11Backend
 {
-    public const string BackendId = "mewvg-x11-gl";
+    public static string BackendIdentifier => MewVGX11GraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendId, static () => MewVGGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => MewVGX11GraphicsFactory.Instance);
 
     public static ApplicationBuilder UseMewVGX11(this ApplicationBuilder builder)
     {

@@ -6,9 +6,13 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 internal interface IMewVGOffscreenSurfaceProvider : IDisposable
 {
     MewVGGlOffscreenSurface AcquireSurface();
+
     void ReturnSurface(MewVGGlOffscreenSurface surface);
+
     void QueueTargetDisposal(OpenGLPixelRenderSurface target);
+
     void ReleasePendingTargetsUnderCurrentContext();
+
     void QueueImageDisposal(MewVGImage image);
 
     /// <summary>
@@ -30,6 +34,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     /// layers) may have wrapped scratch FBO textures via CreateImageFromHandle into the
     /// outer NVG's deferred draw queue — those textures must outlive the outer flush.</summary>
     void EnterSession();
+
     /// <summary>Returns true if this was the outermost session (caller should drain).</summary>
     bool ExitSession();
 }
@@ -44,22 +49,25 @@ internal sealed class MewVGGlOffscreenSurface
     }
 
     internal nint NativeContext { get; }
+
     internal NanoVGGL Vg { get; }
+
     internal MewVGTextCache TextCache { get; }
 }
 
 internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfaceProvider
 {
     private readonly Func<nint> _getCurrentContext;
-    private readonly string _backendName;
     private readonly object _lock = new();
     private readonly Dictionary<nint, SurfacePool> _poolsByContext = new();
+
     // List, not Queue, because the drain filters by each target's CreationContext —
     // a target queued by the worker thread (FBO created on the worker HGLRC) must
     // not be dequeued and released by the UI thread (running under the window
     // HGLRC), since FBOs aren't shared. Walking the list lets us pick out only the
     // entries whose owning context matches the current one.
     private readonly List<OpenGLPixelRenderSurface> _pendingTargetDisposal = new();
+
     // Per-NVG queue: each NVG drains only its own bucket from its EndFrame on the thread
     // that owns it. NanoVG instance state (image table, draw queue, transform stack) is not
     // thread-safe — calling vg.DeleteImage on a NVG that's mid-frame on another thread
@@ -67,6 +75,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
     // The previous flat queue let UI's EndFrame drain images whose NVG was the worker's,
     // racing the worker mid-frame.
     private readonly Dictionary<NanoVG, Queue<(MewVGImage Image, NVGimageFlags Flags)>> _pendingImageDisposal = new();
+
     private int _sessionDepth;
     private bool _disposed;
 
@@ -90,10 +99,9 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    public MewVGGlOffscreenSurfaceProvider(Func<nint> getCurrentContext, string backendName)
+    public MewVGGlOffscreenSurfaceProvider(Func<nint> getCurrentContext)
     {
         _getCurrentContext = getCurrentContext ?? throw new ArgumentNullException(nameof(getCurrentContext));
-        _backendName = backendName;
     }
 
     private sealed class SurfacePool
@@ -109,7 +117,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         if (nativeContext == 0)
         {
             throw new InvalidOperationException(
-                $"{_backendName} offscreen rendering requires a current OpenGL context on the calling thread.");
+                $"Offscreen rendering requires a current OpenGL context on the calling thread.");
         }
 
         lock (_lock)

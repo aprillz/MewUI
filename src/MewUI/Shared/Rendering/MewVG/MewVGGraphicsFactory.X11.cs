@@ -11,8 +11,10 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 public sealed partial class MewVGX11GraphicsFactory
 {
+    public const string BackendIdentifier = "MewVG.X11";
+
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
-        new MewVGGlOffscreenSurfaceProvider(LibGL.glXGetCurrentContext, "MewVG X11");
+        new MewVGGlOffscreenSurfaceProvider(LibGL.glXGetCurrentContext);
 
     // -------------------------------------------------------------------------
     // Shared worker GLX context (background offscreen render support).
@@ -140,7 +142,7 @@ public sealed partial class MewVGX11GraphicsFactory
 
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
 
-    public string Backend => "MewVG.X11";
+    public string Identifier => BackendIdentifier;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {

@@ -7,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class MewVGMacOSBackend
 {
-    public const string BackendId = "mewvg-metal";
+        public static string BackendIdentifier => MewVGMacOSGraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendId, static () => MewVGGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => MewVGMacOSGraphicsFactory.Instance);
 
     public static ApplicationBuilder UseMewVGMetal(this ApplicationBuilder builder)
     {

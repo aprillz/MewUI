@@ -7,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class Direct2DBackend
 {
-    public const string BackendId = "direct2d";
+    public static string BackendIdentifier => Direct2DGraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendId, static () => Direct2DGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => Direct2DGraphicsFactory.Instance);
 
     public static ApplicationBuilder UseDirect2D(this ApplicationBuilder builder)
     {

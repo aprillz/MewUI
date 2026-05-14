@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Rendering.MewVG;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -5,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class MewVGWin32Backend
 {
-    public const string BackendId = "mewvg-win32-gl";
+    public static string BackendIdentifier => MewVGWin32GraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendId, static () => Rendering.MewVG.MewVGGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => MewVGWin32GraphicsFactory.Instance);
 
     public static ApplicationBuilder UseMewVGWin32(this ApplicationBuilder builder)
     {
@@ -19,7 +21,7 @@ public static class MewVGWin32Backend
         // - No stencil buffer request
         GraphicsRuntimeOptions.PreferredMsaaSamples = 0;
         GraphicsRuntimeOptions.PreferredMewVGStencilBits = 0;
-        Application.SetDefaultGraphicsFactory(BackendId);
+        Application.SetDefaultGraphicsFactory(BackendIdentifier);
         return builder;
     }
 }
