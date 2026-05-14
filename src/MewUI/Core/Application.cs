@@ -162,7 +162,7 @@ public sealed class Application
         {
             try
             {
-                return DefaultGraphicsFactory.Backend;
+                return DefaultGraphicsFactory.Identifier;
             }
             catch
             {
@@ -402,7 +402,7 @@ public sealed class Application
         }
 
         throw new InvalidOperationException(
-            "No graphics backend selected. Register a backend package (e.g. Aprillz.MewUI.Backend.OpenGL / Direct2D / Gdi) " +
+            "No graphics backend selected. Register a backend package (e.g. Aprillz.MewUI.Backend.Direct2D / Gdi / MewVG.*) " +
             "and call Application.SetDefaultGraphicsFactory(...) if multiple backends are referenced.");
     }
 
