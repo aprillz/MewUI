@@ -38,6 +38,13 @@ Heuristics:
 - If the fix addresses one bug category, do NOT expand into
   secondary consequences unless they are independently significant.
 - Prefer a strong subject line over an explanatory body.
+- Mention impact only when it is concrete, direct, and visible from the
+  change itself.
+- Do not add inferred benefits such as reduced binary size, simplified
+  interop, better maintainability, or improved performance unless the
+  change directly measures or demonstrates them.
+- If the change is a cleanup, removal, rename, or refactor, describe the
+  actual change instead of its assumed benefits.
 
 Output:
 - Return ONLY the commit message text.
