@@ -40,24 +40,31 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
     private readonly IMetalFrameSession _frameSession;
     private readonly MewVGMetalTextCache _textCache;
+    private readonly Action<GpuInteropInvalidatedEventArgs>? _gpuInteropInvalidated;
 
     private nint _drawable;
     private nint _commandBuffer;
     private nint _encoder;
+    private nint _currentFrameDevice;
+    private readonly HashSet<GpuDeviceIdentity> _reportedExternalMismatches = new();
     private bool _beganFrame;
     private nint _framePool; // Frame-spanning autorelease pool: created in BeginFrame, drained in EndFrame.
 
-    private MewVGMacOSGraphicsContext(IMetalFrameSession frameSession)
+    private MewVGMacOSGraphicsContext(
+        IMetalFrameSession frameSession,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
     {
         _frameSession = frameSession;
         _vg = frameSession.Vg;
         _textCache = frameSession.TextCache;
+        _gpuInteropInvalidated = gpuInteropInvalidated;
     }
 
     internal static MewVGMacOSGraphicsContext CreateForWindow(
         MewVGMetalWindowResources resources,
-        MewVGMetalOffscreenSurfaceProvider offscreenProvider)
-        => new(new MetalWindowFrameSession(resources, offscreenProvider));
+        MewVGMetalOffscreenSurfaceProvider offscreenProvider,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
+        => new(new MetalWindowFrameSession(resources, offscreenProvider), gpuInteropInvalidated);
 
     /// <summary>
     /// Builds a graphics context that renders into <paramref name="target"/>'s
@@ -70,7 +77,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         MewVGMetalOffscreenSurface offscreen,
         MewVGMetalPixelRenderSurface target,
         MewVGMetalOffscreenSurfaceProvider offscreenProvider)
-        => new(new MetalOffscreenFrameSession(offscreen, target, offscreenProvider));
+        => new(new MetalOffscreenFrameSession(offscreen, target, offscreenProvider), gpuInteropInvalidated: null);
 
     partial void DestroyPlatform()
     {
@@ -91,6 +98,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         _drawable = 0;
         _commandBuffer = 0;
         _encoder = 0;
+        _currentFrameDevice = 0;
         _beganFrame = false;
 
         if (!_frameSession.TryBeginFrame(_viewportWidthPx, _viewportHeightPx, out var frame))
@@ -99,6 +107,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         }
 
         _drawable = frame.Drawable;
+        _currentFrameDevice = frame.Device;
 
         nint cmdBuf = ObjCRuntime.SendMessage(frame.CommandQueue, SelCommandBuffer);
         if (cmdBuf == 0)
@@ -199,6 +208,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
     }
 
     private readonly record struct MetalFrame(
+        nint Device,
         nint ColorTexture,
         nint StencilTexture,
         nint MsaaColorTexture,
@@ -208,11 +218,17 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private interface IMetalFrameSession
     {
         NanoVGMetal Vg { get; }
+
         MewVGMetalTextCache TextCache { get; }
+
         bool IsOffscreen { get; }
+
         bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame);
+
         void AfterCommit(nint commandBuffer, nint drawable);
+
         void ReleasePendingFrameResources();
+
         void DisposeContext(MewVGMacOSGraphicsContext context);
     }
 
@@ -228,7 +244,9 @@ internal sealed partial class MewVGMacOSGraphicsContext
         }
 
         public NanoVGMetal Vg => _resources.Vg;
+
         public MewVGMetalTextCache TextCache => _resources.TextCache;
+
         public bool IsOffscreen => false;
 
         public bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame)
@@ -251,6 +269,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             }
 
             frame = new MetalFrame(
+                _resources.Device,
                 colorTexture,
                 _resources.EnsureStencilTexture(viewportWidthPx, viewportHeightPx),
                 _resources.EnsureMsaaColorTexture(viewportWidthPx, viewportHeightPx),
@@ -294,13 +313,16 @@ internal sealed partial class MewVGMacOSGraphicsContext
         }
 
         public NanoVGMetal Vg => _offscreen.Vg;
+
         public MewVGMetalTextCache TextCache => _offscreen.TextCache;
+
         public bool IsOffscreen => true;
 
         public bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame)
         {
-            _target.EnsureGpuTextures(_offscreen.Device);
+            _target.EnsureGpuTextures(_offscreen.Device, _offscreen.CommandQueue);
             frame = new MetalFrame(
+                _offscreen.Device,
                 _target.ColorTexture,
                 _target.StencilTexture,
                 0,
@@ -832,10 +854,15 @@ internal sealed partial class MewVGMacOSGraphicsContext
 
     protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
     {
-        if (image is MewVGExternalLockedImage extImage)
+        if (image is MewVGExternalRasterImage extImage)
         {
-            EnsureExternalAcquired(extImage.Texture);
-            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
+            int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
             if (extImageId == 0) return;
             DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
                 image.PixelWidth, image.PixelHeight);
@@ -854,6 +881,41 @@ internal sealed partial class MewVGMacOSGraphicsContext
         }
 
         DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: sourceRect, mew.PixelWidth, mew.PixelHeight);
+    }
+
+    private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
+    {
+        // No-opinion bail-outs: nothing to compare against, or lease doesn't expose affinity.
+        // The pointer equality check below is the real signal — cross-API pointer collisions
+        // (a GL share-group handle matching a Metal device pointer) don't happen in practice,
+        // so we no longer need a typed-backend discriminator to gate this check.
+        if (_currentFrameDevice == 0 ||
+            lease is not IGpuResourceAffinityProvider affinityProvider ||
+            affinityProvider.Affinity?.Device is not { } sourceDevice ||
+            sourceDevice.IsEmpty)
+        {
+            return true;
+        }
+
+        // MetalDevice* identifies the Metal device; both IdLow and NativeHandle carry the
+        // pointer value so structural equality holds across copies.
+        var targetDevice = _currentFrameDevice == 0
+            ? default
+            : new GpuDeviceIdentity((ulong)_currentFrameDevice, 0, _currentFrameDevice);
+        if (sourceDevice.IdLow == targetDevice.IdLow && sourceDevice.IdHigh == targetDevice.IdHigh)
+        {
+            return true;
+        }
+
+        if (_reportedExternalMismatches.Add(sourceDevice))
+        {
+            _gpuInteropInvalidated?.Invoke(new GpuInteropInvalidatedEventArgs(
+                GpuInteropInvalidationReason.ExternalResourceMismatch,
+                renderTargetDeviceChanged: true,
+                externalResourceMismatch: true));
+        }
+
+        return false;
     }
 
     #endregion

@@ -9,21 +9,27 @@ internal sealed partial class MewVGWin32GraphicsContext
 {
     private readonly IWin32FrameSession _frameSession;
     private readonly MewVGTextCache _textCache;
+    private readonly Action<GpuInteropInvalidatedEventArgs>? _gpuInteropInvalidated;
+    private readonly HashSet<GpuDeviceIdentity> _reportedExternalMismatches = new();
     private GdiMeasurementContext? _measureContext;
 
-    private MewVGWin32GraphicsContext(IWin32FrameSession frameSession)
+    private MewVGWin32GraphicsContext(
+        IWin32FrameSession frameSession,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
     {
         _frameSession = frameSession;
         _vg = frameSession.Vg;
         _textCache = frameSession.TextCache;
+        _gpuInteropInvalidated = gpuInteropInvalidated;
     }
 
     internal static MewVGWin32GraphicsContext CreateForWindow(
-        MewVGWindowResources resources,
+        MewVGWin32WindowResources resources,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         nint hwnd,
-        nint hdc)
-        => new(new WindowBackbufferFrameSession(resources, offscreenProvider, hwnd, hdc));
+        nint hdc,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
+        => new(new WindowBackbufferFrameSession(resources, offscreenProvider, hwnd, hdc), gpuInteropInvalidated);
 
     /// <summary>
     /// Builds a graphics context that renders into a pixel surface (FBO) while
@@ -38,15 +44,15 @@ internal sealed partial class MewVGWin32GraphicsContext
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         OpenGLPixelRenderSurface pixelSurface,
         nint hdc)
-        => new(new OffscreenPixelSurfaceFrameSession(offscreen, offscreenProvider, pixelSurface, hdc));
+        => new(new OffscreenPixelSurfaceFrameSession(offscreen, offscreenProvider, pixelSurface, hdc), gpuInteropInvalidated: null);
 
     internal static MewVGWin32GraphicsContext CreateForLayeredWindow(
-        MewVGWindowResources resources,
+        MewVGWin32WindowResources resources,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         nint hwnd,
         nint hdc,
         OpenGLPixelRenderSurface pixelSurface)
-        => new(new WindowPixelSurfaceFrameSession(resources, offscreenProvider, hwnd, hdc, pixelSurface));
+        => new(new WindowPixelSurfaceFrameSession(resources, offscreenProvider, hwnd, hdc, pixelSurface), gpuInteropInvalidated: null);
 
     internal void SetWindowTarget(nint hwnd, nint hdc)
         => (_frameSession as WindowBackbufferFrameSession)?.SetTarget(hwnd, hdc);
@@ -382,10 +388,15 @@ internal sealed partial class MewVGWin32GraphicsContext
     {
         ArgumentNullException.ThrowIfNull(image);
 
-        if (image is MewVGExternalLockedImage extImage)
+        if (image is MewVGExternalRasterImage extImage)
         {
-            EnsureExternalAcquired(extImage.Texture);
-            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
+            int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
             if (extImageId == 0) return;
             DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: null,
                 image.PixelWidth, image.PixelHeight);
@@ -410,10 +421,15 @@ internal sealed partial class MewVGWin32GraphicsContext
     {
         ArgumentNullException.ThrowIfNull(image);
 
-        if (image is MewVGExternalLockedImage extImage)
+        if (image is MewVGExternalRasterImage extImage)
         {
-            EnsureExternalAcquired(extImage.Texture);
-            int extImageId = extImage.GetOrCreateImageId(_vg, GetImageFlags());
+            var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
+            int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
             if (extImageId == 0) return;
             DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
                 image.PixelWidth, image.PixelHeight);
@@ -432,6 +448,38 @@ internal sealed partial class MewVGWin32GraphicsContext
         }
 
         DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: sourceRect, vgImage.PixelWidth, vgImage.PixelHeight);
+    }
+
+    private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
+    {
+        // No-opinion bail-outs: nothing to compare against. The share-group equality check below
+        // is the real signal — cross-API pointer collisions (a Metal device pointer matching a
+        // WGL HGLRC) don't happen in practice, so a typed-backend discriminator isn't needed.
+        if (lease is not IGpuResourceAffinityProvider affinityProvider ||
+            affinityProvider.Affinity?.Device is not { } sourceDevice ||
+            sourceDevice.IsEmpty)
+        {
+            return true;
+        }
+
+        nint currentContext = OpenGL32.wglGetCurrentContext();
+        nint targetShareGroup = _frameSession.OpenGLShareGroup;
+        if (currentContext == 0 ||
+            sourceDevice.NativeHandle == currentContext ||
+            (targetShareGroup != 0 && sourceDevice.NativeHandle == targetShareGroup))
+        {
+            return true;
+        }
+
+        if (_reportedExternalMismatches.Add(sourceDevice))
+        {
+            _gpuInteropInvalidated?.Invoke(new GpuInteropInvalidatedEventArgs(
+                GpuInteropInvalidationReason.ExternalResourceMismatch,
+                renderTargetDeviceChanged: true,
+                externalResourceMismatch: true));
+        }
+
+        return false;
     }
 
     #endregion
@@ -470,6 +518,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         NanoVGGL Vg { get; }
         MewVGTextCache TextCache { get; }
         nint Hdc { get; }
+        nint OpenGLShareGroup { get; }
         void BeginFrame();
         void BindFrameTarget();
         void EndFrame();
@@ -479,12 +528,12 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     private sealed class WindowBackbufferFrameSession : IWin32FrameSession
     {
-        private readonly MewVGWindowResources _resources;
+        private readonly MewVGWin32WindowResources _resources;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private nint _hwnd;
         private nint _hdc;
 
-        public WindowBackbufferFrameSession(MewVGWindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc)
+        public WindowBackbufferFrameSession(MewVGWin32WindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc)
         {
             _resources = resources;
             _offscreenProvider = offscreenProvider;
@@ -495,6 +544,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public NanoVGGL Vg => _resources.Vg;
         public MewVGTextCache TextCache => _resources.TextCache;
         public nint Hdc => _hdc;
+        public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
 
         public void SetTarget(nint hwnd, nint hdc)
         {
@@ -519,7 +569,6 @@ internal sealed partial class MewVGWin32GraphicsContext
             TextCache.ReleasePendingDeletes();
             _resources.SetSwapInterval(GetSwapInterval());
             _resources.SwapBuffers(_hdc, _hwnd);
-            _resources.ReleaseCurrent();
         }
 
         public void AbortFrame()
@@ -533,12 +582,12 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     private sealed class WindowPixelSurfaceFrameSession : IWin32FrameSession
     {
-        private readonly MewVGWindowResources _resources;
+        private readonly MewVGWin32WindowResources _resources;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private readonly nint _hdc;
         private readonly OpenGLPixelRenderSurface _pixelSurface;
 
-        public WindowPixelSurfaceFrameSession(MewVGWindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc, OpenGLPixelRenderSurface pixelSurface)
+        public WindowPixelSurfaceFrameSession(MewVGWin32WindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc, OpenGLPixelRenderSurface pixelSurface)
         {
             _resources = resources;
             _offscreenProvider = offscreenProvider;
@@ -549,6 +598,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public NanoVGGL Vg => _resources.Vg;
         public MewVGTextCache TextCache => _resources.TextCache;
         public nint Hdc => _hdc;
+        public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
 
         public void BeginFrame()
         {
@@ -614,6 +664,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public NanoVGGL Vg => _offscreen.Vg;
         public MewVGTextCache TextCache => _offscreen.TextCache;
         public nint Hdc { get; }
+        public nint OpenGLShareGroup => _pixelSurface.CreationContext;
 
         public void BeginFrame()
         {

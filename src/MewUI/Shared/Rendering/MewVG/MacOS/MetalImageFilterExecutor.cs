@@ -1,5 +1,3 @@
-using Debug = System.Diagnostics.Debug;
-using ConditionalAttribute = System.Diagnostics.ConditionalAttribute;
 using System.Runtime.InteropServices;
 
 using Aprillz.MewUI.Rendering.Filters;
@@ -106,7 +104,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
             // Lazy GPU-texture init — pool gives back a fresh RT whose MTLTexture hasn't been
             // created yet (no offscreen frame has run on it). MPS needs the destination
             // texture realised before encoding.
-            metalDest.EnsureGpuTextures(device);
+            metalDest.EnsureGpuTextures(device, queue);
             if (metalDest.ColorTexture == 0) return null;
 
             // Build a one-shot command buffer for this blur pass. MPS encodes both the

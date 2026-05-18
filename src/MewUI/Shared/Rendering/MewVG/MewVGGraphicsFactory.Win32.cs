@@ -18,9 +18,10 @@ public sealed partial class MewVGWin32GraphicsFactory
         new MewVGGLOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
 
 #pragma warning disable CS0649
-    [ThreadStatic] private static nint _pixelSurfacePresentHwnd;
-    [ThreadStatic] private static nint _pixelSurfacePresentHdc;
-
+    [ThreadStatic]
+    private static nint _pixelSurfacePresentHwnd;
+    [ThreadStatic]
+    private static nint _pixelSurfacePresentHdc;
     /// <summary>
     /// The specific pixel surface that the layered-window present is rendering
     /// INTO. Set by <see cref="MewVGWin32LayeredPresenter.Present"/>. Distinguishes
@@ -29,14 +30,13 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
-    [ThreadStatic] private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
-
+    [ThreadStatic]
+    private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
 #pragma warning restore CS0649
-
+    
     public string Backend => BackendIdentifier;
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
-
     private MewVGWin32LayeredPresenter? _layeredPresenterField;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
@@ -85,7 +85,7 @@ public sealed partial class MewVGWin32GraphicsFactory
 
         // Share textures/buffers with the worker context so background offscreen render
         // tasks (Task.Run) can hand off FBO textures to this window for sampling.
-        return MewVGWindowResources.Create(win32.Hwnd, win32.Hdc, SharedWorkerContext);
+        return MewVGWin32WindowResources.Create(win32.Hwnd, win32.Hdc, SharedWorkerContext);
     }
 
     private partial IGraphicsContext CreateContextCore(WindowRenderTarget target, IDisposable resources)
@@ -95,8 +95,8 @@ public sealed partial class MewVGWin32GraphicsFactory
             throw new ArgumentException("MewVG (Win32) requires a Win32 HDC window surface.", nameof(target));
         }
 
-        var res = (MewVGWindowResources)resources;
-        return res.GetOrCreateContext(_offscreenProvider, win32.Hwnd, win32.Hdc);
+        var res = (MewVGWin32WindowResources)resources;
+        return res.GetOrCreateContext(_offscreenProvider, win32.Hwnd, win32.Hdc, RaiseGpuInteropInvalidated);
     }
 
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
@@ -114,6 +114,7 @@ public sealed partial class MewVGWin32GraphicsFactory
             pixelHeight,
             dpiScale,
             _offscreenProvider.QueueTargetDisposal,
+            OpenGL32.wglGetCurrentContext,
             hasAlpha);
         handled = true;
     }
@@ -189,9 +190,8 @@ public sealed partial class MewVGWin32GraphicsFactory
             return;
         }
 
-        if (surface is not IWin32LayeredWindowSurface win32Surface ||
-            win32Surface.Hwnd == 0 ||
-            surface.Kind != WindowSurfaceKind.Layered)
+        if (surface is not IWin32WindowSurface win32Surface ||
+            win32Surface.Hwnd == 0)
         {
             return;
         }
@@ -240,7 +240,6 @@ public sealed partial class MewVGWin32GraphicsFactory
     // -------------------------------------------------------------------------
 
     private readonly object _workerContextLock = new();
-
     // Serializes worker-context activation across threads. wglMakeCurrent on a
     // shared HGLRC from multiple threads is a race: a context can only be current
     // on ONE thread at a time, and a second thread's wglMakeCurrent either fails
@@ -250,7 +249,6 @@ public sealed partial class MewVGWin32GraphicsFactory
     // steals the context mid-render). Held for the lifetime of each
     // <see cref="Win32WorkerContextScope"/>.
     private readonly object _workerActivationLock = new();
-
     private nint _workerHwnd;
     private nint _workerHdc;
     private nint _workerHglrc;
@@ -320,7 +318,7 @@ public sealed partial class MewVGWin32GraphicsFactory
                 // Pixel format must be share-compatible with window contexts. Match the
                 // pfd seed that MewVGWindowResources uses (stencil bits for NanoVG AA/clip;
                 // MSAA off — worker FBOs do their own AA).
-                var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGlDoubleBuffered();
+                var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGLDoubleBuffered();
                 pfd.cStencilBits = (byte)Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
 
                 int pf = Gdi32.ChoosePixelFormat(hdc, ref pfd);
@@ -483,7 +481,7 @@ public sealed partial class MewVGWin32GraphicsFactory
             // PooledPboTexture which returns the uploader to the pool instead of
             // destroying the GL resources.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalLockedImage(new PooledPboTexture(uploader, _pboPool), ownsTexture: true);
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
         }
         catch
         {
@@ -499,7 +497,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
     private readonly object _lock = new();
     private readonly Dictionary<nint, OpenGLPixelRenderSurface> _layeredTargets = new();
     private readonly Dictionary<nint, Win32LayeredBitmap> _layeredStagingTargets = new();
-    private readonly Dictionary<nint, MewVGWindowResources> _layeredWindowResources = new();
+    private readonly Dictionary<nint, MewVGWin32WindowResources> _layeredWindowResources = new();
 
     public MewVGWin32LayeredPresenter(IMewVGOffscreenSurfaceProvider offscreenProvider, Func<nint> getShareContext)
     {
@@ -509,14 +507,14 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
 
     internal readonly record struct LayeredRenderContext(nint Hwnd, nint Hdc, OpenGLPixelRenderSurface RenderTarget);
 
-    internal bool Present(Window window, IWin32LayeredWindowSurface surface, double opacity, Action<LayeredRenderContext> render)
+    internal bool Present(Window window, IWin32WindowSurface surface, double opacity, Action<LayeredRenderContext> render)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(surface);
         ArgumentNullException.ThrowIfNull(render);
 
         var hwnd = surface.Hwnd;
-        if (hwnd == 0 || surface.Kind != WindowSurfaceKind.Layered)
+        if (hwnd == 0)
         {
             return false;
         }
@@ -579,7 +577,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
         }
     }
 
-    internal MewVGWindowResources GetOrCreateWindowResources(nint hwnd, nint hdc)
+    internal MewVGWin32WindowResources GetOrCreateWindowResources(nint hwnd, nint hdc)
     {
         if (hwnd == 0 || hdc == 0)
         {
@@ -593,7 +591,7 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
                 return existing;
             }
 
-            var created = MewVGWindowResources.Create(hwnd, hdc, _getShareContext());
+            var created = MewVGWin32WindowResources.Create(hwnd, hdc, _getShareContext());
             _layeredWindowResources[hwnd] = created;
             return created;
         }
@@ -723,11 +721,8 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
         private bool _disposed;
 
         public int PixelWidth { get; }
-
         public int PixelHeight { get; }
-
         public double DpiScale { get; }
-
         public nint Hdc { get; }
 
         public Win32LayeredBitmap(int pixelWidth, int pixelHeight, double dpiScale)

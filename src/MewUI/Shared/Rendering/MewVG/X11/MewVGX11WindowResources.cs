@@ -16,10 +16,14 @@ internal sealed class MewVGX11WindowResources : IDisposable
 
     public bool SupportsBgra => _gl.SupportsBgra;
 
+    public nint OpenGLShareGroup { get; }
+
     private MewVGX11GraphicsContext? _cachedContext;
 
-    internal MewVGX11GraphicsContext GetOrCreateContext(IMewVGOffscreenSurfaceProvider offscreenProvider)
-        => _cachedContext ??= MewVGX11GraphicsContext.CreateForWindow(this, offscreenProvider);
+    internal MewVGX11GraphicsContext GetOrCreateContext(
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
+        => _cachedContext ??= MewVGX11GraphicsContext.CreateForWindow(this, offscreenProvider, gpuInteropInvalidated);
 
     internal void InvalidateCachedContext(MewVGX11GraphicsContext context)
     {
@@ -29,12 +33,13 @@ internal sealed class MewVGX11WindowResources : IDisposable
         }
     }
 
-    private MewVGX11WindowResources(nint display, GlxOpenGLWindowResources gl, NanoVGGL vg)
+    private MewVGX11WindowResources(nint display, GlxOpenGLWindowResources gl, NanoVGGL vg, nint shareContext)
     {
         _display = display;
         _gl = gl;
         Vg = vg;
         TextCache = new MewVGTextCache(vg);
+        OpenGLShareGroup = shareContext != 0 ? shareContext : gl.GlxContext;
     }
 
     public static MewVGX11WindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo, nint shareContext = 0)
@@ -50,7 +55,7 @@ internal sealed class MewVGX11WindowResources : IDisposable
         {
             MewVGGLBootstrapX11.EnsureInitialized();
             var vg = new NanoVGGL();
-            return new MewVGX11WindowResources(display, gl, vg);
+            return new MewVGX11WindowResources(display, gl, vg, shareContext);
         }
         finally
         {

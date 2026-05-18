@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;

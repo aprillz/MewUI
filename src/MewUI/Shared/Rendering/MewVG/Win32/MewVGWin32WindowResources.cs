@@ -4,7 +4,7 @@ using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed class MewVGWindowResources : IDisposable
+internal sealed class MewVGWin32WindowResources : IDisposable
 {
     /// <summary>
     /// MSAA sample count. 1 = no MSAA, 4 or 8 for hardware multisampling.
@@ -21,11 +21,17 @@ internal sealed class MewVGWindowResources : IDisposable
 
     public bool SupportsBgra => _gl.SupportsBgra;
 
+    public nint OpenGLShareGroup { get; }
+
     private MewVGWin32GraphicsContext? _cachedContext;
 
-    internal MewVGWin32GraphicsContext GetOrCreateContext(IMewVGOffscreenSurfaceProvider offscreenProvider, nint hwnd, nint hdc)
+    internal MewVGWin32GraphicsContext GetOrCreateContext(
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        nint hwnd,
+        nint hdc,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
     {
-        var context = _cachedContext ??= MewVGWin32GraphicsContext.CreateForWindow(this, offscreenProvider, hwnd, hdc);
+        var context = _cachedContext ??= MewVGWin32GraphicsContext.CreateForWindow(this, offscreenProvider, hwnd, hdc, gpuInteropInvalidated);
         context.SetWindowTarget(hwnd, hdc);
         return context;
     }
@@ -47,15 +53,16 @@ internal sealed class MewVGWindowResources : IDisposable
         }
     }
 
-    private MewVGWindowResources(nint hwnd, WglOpenGLWindowResources gl, NanoVGGL vg)
+    private MewVGWin32WindowResources(nint hwnd, WglOpenGLWindowResources gl, NanoVGGL vg, nint shareContext)
     {
         _hwnd = hwnd;
         _gl = gl;
         Vg = vg;
         TextCache = new MewVGTextCache(vg);
+        OpenGLShareGroup = shareContext != 0 ? shareContext : gl.Hglrc;
     }
 
-    public static MewVGWindowResources Create(nint hwnd, nint hdc, nint shareContext = 0)
+    public static MewVGWin32WindowResources Create(nint hwnd, nint hdc, nint shareContext = 0)
     {
         // NanoVG uses stencil for AA and clipping; request a stencil buffer when selecting pixel format.
         var gl = WglOpenGLWindowResources.Create(hwnd, hdc,
@@ -74,7 +81,7 @@ internal sealed class MewVGWindowResources : IDisposable
                 ? NVGcreateFlags.None
                 : NVGcreateFlags.Antialias;
             var vg = new NanoVGGL(flags);
-            return new MewVGWindowResources(hwnd, gl, vg);
+            return new MewVGWin32WindowResources(hwnd, gl, vg, shareContext);
         }
         finally
         {

@@ -25,9 +25,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     private static readonly nint SelSetTextureType = Metal.Sel.SetTextureType;
     private static readonly nint SelSetSampleCount = Metal.Sel.SetSampleCount;
 
-    // MTLTextureUsageRenderTarget = 1 << 2
     private const ulong MTLTextureUsageRenderTarget = 1ul << 2;
-    // MTLStorageModePrivate = 2
     private const ulong MTLStorageModePrivate = 2;
 
     /// <summary>
@@ -44,16 +42,23 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     private int _msaaColorHeightPx;
 
     public nint Hwnd { get; }
+
     public nint Layer { get; }
+
     public nint Device { get; }
+
     public nint CommandQueue { get; }
+
     public NanoVGMetal Vg { get; }
+
     public MewVGMetalTextCache TextCache { get; }
 
     private MewVGMacOSGraphicsContext? _cachedContext;
 
-    internal MewVGMacOSGraphicsContext GetOrCreateContext(MewVGMetalOffscreenSurfaceProvider offscreenProvider)
-        => _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider);
+    internal MewVGMacOSGraphicsContext GetOrCreateContext(
+        MewVGMetalOffscreenSurfaceProvider offscreenProvider,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
+        => _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider, gpuInteropInvalidated);
 
     /// <summary>
     /// Drops the cached graphics context reference when the context is
@@ -82,20 +87,19 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         TextCache = new MewVGMetalTextCache(vg);
     }
 
-    public static MewVGMetalWindowResources Create(nint hwnd, nint metalLayer)
+    public static MewVGMetalWindowResources Create(nint hwnd, nint metalLayer, nint device)
     {
         if (hwnd == 0 || metalLayer == 0)
         {
             throw new ArgumentException("Invalid window handle or CAMetalLayer pointer.");
         }
 
-        using var pool = new AutoReleasePool();
-
-        nint device = MetalDevice.CreateSystemDefaultDevice();
         if (device == 0)
         {
-            throw new PlatformNotSupportedException("MetalDevice.CreateSystemDefaultDevice() returned null.");
+            throw new ArgumentException("Metal device handle must be non-zero (factory-provided).", nameof(device));
         }
+
+        using var pool = new AutoReleasePool();
 
         // With MSAA enabled, disable geometry-based AA (fringe triangles are not needed).
         var flags = MsaaSampleCount > 1

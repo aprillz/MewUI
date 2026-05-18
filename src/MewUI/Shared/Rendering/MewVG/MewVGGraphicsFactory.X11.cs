@@ -31,19 +31,15 @@ public sealed partial class MewVGX11GraphicsFactory
     private readonly object _workerActivationLock = new();
     private readonly object _workerCtxInitLock = new();
     private nint _workerCtx;
-
     // First-window display + drawable + visual — captured at first window
     // creation and reused for worker context init / activation. Single-display
     // X11 process is the assumed common case; multi-display would need per-
     // display worker contexts (not supported here).
     private nint _workerDisplay;
-
     private nint _workerDrawable;
     private X11GlxVisualInfo _workerVisualInfo;
     private bool _workerHasVisualInfo;
     private bool _workerInitFailed;
-
-    public string Backend => BackendIdentifier;
 
     /// <summary>GLXContext of the shared worker context. 0 if not yet created
     /// or init failed. Window contexts pass this as <c>shareList</c> at
@@ -143,7 +139,10 @@ public sealed partial class MewVGX11GraphicsFactory
         }
     }
 
+
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
+
+    public string Backend => BackendIdentifier;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
@@ -189,7 +188,7 @@ public sealed partial class MewVGX11GraphicsFactory
         }
 
         var res = (MewVGX11WindowResources)resources;
-        var ctx = res.GetOrCreateContext(_offscreenProvider);
+        var ctx = res.GetOrCreateContext(_offscreenProvider, RaiseGpuInteropInvalidated);
         ctx.SetTarget(glx.Display, glx.Window);
         return ctx;
     }
@@ -209,6 +208,7 @@ public sealed partial class MewVGX11GraphicsFactory
             pixelHeight,
             dpiScale,
             _offscreenProvider.QueueTargetDisposal,
+            LibGL.glXGetCurrentContext,
             hasAlpha);
         handled = true;
     }
@@ -326,7 +326,7 @@ public sealed partial class MewVGX11GraphicsFactory
         {
             // See Win32 partial for the pooling rationale — same applies on X11/GLX.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalLockedImage(new PooledPboTexture(uploader, _pboPool), ownsTexture: true);
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
         }
         catch
         {
