@@ -1723,6 +1723,28 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                 return;
             }
 
+            // 1:1 fast path: direct blit from the source DIB, skips _scaled cache's
+            // per-frame box-filter copy (identity scale still walks pixel-by-pixel there).
+            if (destPx.Width == srcW && destPx.Height == srcH)
+            {
+                if (gdiImage.IsOpaque)
+                {
+                    // All pixels alpha == 255 → SRCCOPY (~2-3x faster than AlphaBlend).
+                    Gdi32.BitBlt(
+                        Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
+                        memDc, srcX, srcY, GdiConstants.SRCCOPY);
+                }
+                else
+                {
+                    var blend11 = BLENDFUNCTION.SourceOver(255);
+                    Gdi32.AlphaBlend(
+                        Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
+                        memDc, srcX, srcY, srcW, srcH,
+                        blend11);
+                }
+                return;
+            }
+
             // Linear/HighQuality: try cached scaled bitmap for deterministic, backend-independent resampling.
             // This trades memory for speed when the same image is drawn repeatedly at the same scaled size
             // (common in UI).

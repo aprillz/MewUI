@@ -13,6 +13,10 @@ internal sealed class GdiImage : IImage
     private readonly IPixelBufferSource? _source;
     private nint _bits;
     private bool _disposed;
+    private readonly bool _ownsDib = true;
+
+    /// <summary>Producer hint: all pixels alpha == 255. GDI context picks SRCCOPY over AlphaBlend.</summary>
+    public bool IsOpaque { get; set; }
     private (ScaledKey key, nint handle) _scaled;
     private int _sourceVersion = -1;
     private nint _gpBitmap;
@@ -54,6 +58,29 @@ internal sealed class GdiImage : IImage
         {
             User32.ReleaseDC(0, screenDc);
         }
+    }
+
+    /// <summary>Wraps an externally-owned DIB section. Caller keeps ownership; <see cref="MarkBitsChanged"/> evicts derived caches after writes.</summary>
+    public GdiImage(int width, int height, nint externalDibHandle, nint externalBits)
+    {
+        if (externalDibHandle == 0) throw new ArgumentException("externalDibHandle must be non-zero.", nameof(externalDibHandle));
+        if (externalBits == 0) throw new ArgumentException("externalBits must be non-zero.", nameof(externalBits));
+        PixelWidth = width;
+        PixelHeight = height;
+        Handle = externalDibHandle;
+        _bits = externalBits;
+        _ownsDib = false;
+    }
+
+    /// <summary>Evicts the geometry-keyed _scaled cache and bumps _sourceVersion (gp/tx caches re-derive on next lookup).</summary>
+    public void MarkBitsChanged()
+    {
+        if (_scaled != default)
+        {
+            Gdi32.DeleteObject(_scaled.handle);
+            _scaled = default;
+        }
+        _sourceVersion++;
     }
 
     public GdiImage(IPixelBufferSource source) : this(
@@ -169,7 +196,10 @@ internal sealed class GdiImage : IImage
                 _scaled = default;
             }
 
-            Gdi32.DeleteObject(Handle);
+            if (_ownsDib)
+            {
+                Gdi32.DeleteObject(Handle);
+            }
             Handle = 0;
             _bits = 0;
             _disposed = true;
