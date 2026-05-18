@@ -7,13 +7,14 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// OpenGL pixel render surface using FBO (Framebuffer Object).
 /// Provides offscreen rendering with CPU-side pixel buffer access.
 /// </summary>
-internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IGLTextureSource, IExternalWritableGpuSurface
+internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IGLTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
 {
     // Lazily allocated — only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
     // actually requests pixel bytes. The pure GPU-only path (MewVGImage zero-copy via
     // CreateImageFromHandle) never touches this. At 100 source layers × ~5 MB each per
     // frame, eager allocation here was ~500 MB of GC churn for memory that nothing read.
     private byte[]? _pixels;
+
     private readonly object _gate = new();
     private readonly Action<OpenGLPixelRenderSurface>? _glDisposeRequested;
     private readonly Func<nint>? _currentContextProvider;
@@ -27,6 +28,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     private uint _stencilRenderbuffer;
     private bool _fboInitialized;
     private bool _hasStencil;
+
     // HGLRC / GLXContext that created the FBO + texture + RB. Required by the
     // background-rebuild path because FBOs and renderbuffers are NOT shared across
     // contexts via wglShareLists / glXCreateContext (only textures, buffers, shaders
@@ -36,6 +38,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     // glDelete* call a silent no-op, leaking the FBO. The provider's drain filters
     // by this field.
     private nint _creationContext;
+
     // Set by GPU writers (blur shader, NVG render) to signal that the FBO contents are
     // newer than the CPU-side _pixels mirror. Cleared by the next readback. Used to defer
     // glReadPixels until something actually requests the CPU bytes — folding 100 sync
@@ -45,12 +48,14 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     private byte[]? _lockBuffer;
     private byte[]? _uploadBuffer;
     private Action? _releaseAction;
+
     // External retain count for the FBO color texture, used by zero-copy scratch-surface paths
     // (via IGpuTextureSource.RetainGpuHandle). MewVGImage takes a retain when it wraps our
     // texture zero-copy with NVG's NoDelete flag, so the texture stays alive through the
     // consumer's NVG flush even if Dispose runs first. ReleaseGpuHandle decrements; when it
     // reaches 0 and Dispose was already called, the GL resource release fires.
     private int _externalRetainCount;
+
     private bool _disposeDeferredForRetain;
 
     public OpenGLPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale,
@@ -117,6 +122,10 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     /// <see cref="InitializeFbo"/> succeeds.</summary>
     internal void RecordCreationContext(nint context) => _creationContext = context;
 
+    public GpuResourceAffinity? Affinity => _creationContext == 0
+        ? null
+        : new GpuResourceAffinity(Display: null, new GpuDeviceIdentity((ulong)_creationContext, 0, _creationContext));
+
     /// <summary>NanoVG renders with SRC_ALPHA / ONE_MINUS_SRC_ALPHA blending into
     /// the FBO color attachment, producing premultiplied output.</summary>
     public bool IsPremultiplied => true;
@@ -161,7 +170,9 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     // IGLTextureSource — exposes the FBO color texture for zero-copy NoDelete wrapping.
     uint IGLTextureSource.TextureId => _disposed || !_fboInitialized ? 0u : _texture;
+
     nint IGLTextureSource.ShareGroup => _creationContext;
+
     void IGLTextureSource.ConfigureWrap(bool repeatX, bool repeatY)
         => ConfigureGpuTextureWrap((nint)_texture, repeatX, repeatY);
 
@@ -256,7 +267,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     private const uint GL_REPEAT = 0x2901;
 
-    private sealed class ExternalWriteScope : IGlExternalGpuWriteScope
+    private sealed class ExternalWriteScope : IExternalGpuWriteScope, IGpuResourceAffinityProvider
     {
         private readonly OpenGLPixelRenderSurface _surface;
         private readonly int _previousFramebuffer;
@@ -273,10 +284,18 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         }
 
         public int PixelWidth => _surface.PixelWidth;
+
         public int PixelHeight => _surface.PixelHeight;
+
         public bool YFlipped => true;
-        public uint FramebufferId => _surface._fbo;
-        public uint TextureId => _surface._texture;
+
+        public nint NativeHandle => (nint)_surface._texture;
+
+        public nint NativeAlternateHandle => (nint)_surface._fbo;
+
+        public nint NativeDeviceHandle => 0;
+
+        public GpuResourceAffinity? Affinity => _surface.Affinity;
 
         public void Flush() => GL.Flush();
 
@@ -690,3 +709,4 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         }
     }
 }
+

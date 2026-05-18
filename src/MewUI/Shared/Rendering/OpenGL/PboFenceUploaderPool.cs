@@ -146,6 +146,8 @@ internal sealed class PooledPboTexture : IExternalRasterSource
         public int PixelWidth => 0;
         public int PixelHeight => 0;
         public bool YFlipped => false;
+        public nint NativeHandle => 0;
+        public nint NativeAlternateHandle => 0;
         public void Dispose() { }
     }
 }

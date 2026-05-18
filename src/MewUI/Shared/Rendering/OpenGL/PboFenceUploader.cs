@@ -154,7 +154,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
     public IExternalRasterLease Acquire()
     {
         AcquireTexture();
-        return new GlLease(this);
+        return new GLLease(this);
     }
 
     private void AcquireTexture()
@@ -243,16 +243,17 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         // until Dispose. Acquire's fence wait already handled sync.
     }
 
-    private sealed class GlLease : IGlTextureLease
+    private sealed class GLLease : IExternalRasterLease
     {
         private PboFenceUploader? _owner;
 
-        public GlLease(PboFenceUploader owner)
+        public GLLease(PboFenceUploader owner)
         {
             _owner = owner;
         }
 
-        public uint TextureId => _owner?._textureId ?? 0;
+        public nint NativeHandle => (nint)(_owner?._textureId ?? 0);
+        public nint NativeAlternateHandle => 0;
         public int PixelWidth => _owner?._pixelWidth ?? 0;
         public int PixelHeight => _owner?._pixelHeight ?? 0;
         public bool YFlipped => _owner?.YFlipped ?? false;

@@ -18,7 +18,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 ///   <item>Construction: <c>wglDXOpenDeviceNV</c> on D3D11 device, allocate GL
 ///         texture name, <c>wglDXRegisterObjectNV</c> binds the D3D11 texture to it.</item>
 ///   <item>Per frame: backend calls <see cref="Acquire"/> and receives an
-///         <see cref="IGlTextureLease"/> whose texture id NVG reads.</item>
+///         <see cref="IExternalRasterLease"/> whose <c>NativeHandle</c> is the GL texture id NVG reads.</item>
 ///   <item>Per frame end: backend disposes the lease, which calls
 ///         <c>wglDXUnlockObjectsNV</c>; D3D11 may modify the texture again.</item>
 ///   <item>Disposal: unlock if needed, <c>wglDXUnregisterObjectNV</c>,
@@ -35,6 +35,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// </remarks>
 public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
 {
+    private static readonly Guid IID_IDXGIDevice = new("54EC77FA-1377-44E6-8C32-88FD5F44C84C");
     private static readonly object _sharedDeviceGate = new();
     private static readonly Dictionary<nint, SharedDeviceHandle> s_sharedDevices = [];
 
@@ -42,6 +43,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
     private nint _wglDevice;       // shared wglDXOpenDeviceNV result per D3D11 device
     private nint _wglObject;       // wglDXRegisterObjectNV result
     private uint _glTextureId;
+    private readonly GpuResourceAffinity? _affinity;
     private bool _locked;
     private bool _disposed;
 
@@ -58,6 +60,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
     /// MewVGExternalRasterImage adds <c>NVG_IMAGE_FLIPY</c> when this is
     /// <see langword="true"/>; for D3D11 sources we report <see langword="false"/>.</summary>
     public bool YFlipped => false;
+    public GpuResourceAffinity? Affinity => _affinity;
     public SurfaceCapabilities Capabilities =>
         SurfaceCapabilities.ExternalHandle |
         SurfaceCapabilities.ExternallySynchronized |
@@ -105,6 +108,12 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
         }
 
         _d3d11Device = d3d11Device;
+        nint currentContext = OpenGL32.wglGetCurrentContext();
+        _affinity = currentContext != 0
+            ? new GpuResourceAffinity(Display: null, new GpuDeviceIdentity((ulong)currentContext, 0, currentContext))
+            : TryGetD3D11AdapterLuid(d3d11Device, out var lowPart, out var highPart)
+                ? new GpuResourceAffinity(Display: null, new GpuDeviceIdentity(lowPart, highPart, 0))
+                : null;
 
         // Allocate an empty GL texture object — wglDXRegisterObjectNV binds the D3D11
         // texture to this name. After registration, GL_TEXTURE_2D operations on the
@@ -130,7 +139,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
     public IExternalRasterLease Acquire()
     {
         Lock();
-        return new GlLease(this);
+        return new GLLease(this);
     }
 
     private void Lock()
@@ -147,19 +156,21 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
         _locked = false;
     }
 
-    private sealed class GlLease : IGlTextureLease
+    private sealed class GLLease : IExternalRasterLease, IGpuResourceAffinityProvider
     {
         private WglDxInteropTexture? _owner;
 
-        public GlLease(WglDxInteropTexture owner)
+        public GLLease(WglDxInteropTexture owner)
         {
             _owner = owner;
         }
 
-        public uint TextureId => _owner?._glTextureId ?? 0;
+        public nint NativeHandle => (nint)(_owner?._glTextureId ?? 0);
+        public nint NativeAlternateHandle => 0;
         public int PixelWidth => _owner?.PixelWidth ?? 0;
         public int PixelHeight => _owner?.PixelHeight ?? 0;
         public bool YFlipped => _owner?.YFlipped ?? false;
+        public GpuResourceAffinity? Affinity => _owner?.Affinity;
 
         public void Dispose()
         {
@@ -218,6 +229,74 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
             s_sharedDevices.Add(d3d11Device, new SharedDeviceHandle(wglDevice));
             return wglDevice;
         }
+    }
+
+    private static bool TryGetD3D11AdapterLuid(nint d3d11Device, out ulong lowPart, out long highPart)
+    {
+        lowPart = 0;
+        highPart = 0;
+
+        nint dxgiDevice = 0;
+        nint adapter = 0;
+        try
+        {
+            if (Marshal.QueryInterface(d3d11Device, in IID_IDXGIDevice, out dxgiDevice) < 0 || dxgiDevice == 0)
+            {
+                return false;
+            }
+
+            var dxgiDeviceVtable = *(nint**)dxgiDevice;
+            var getAdapter = (delegate* unmanaged[Stdcall]<nint, nint*, int>)dxgiDeviceVtable[7];
+            if (getAdapter(dxgiDevice, &adapter) < 0 || adapter == 0)
+            {
+                return false;
+            }
+
+            var adapterVtable = *(nint**)adapter;
+            var getDesc = (delegate* unmanaged[Stdcall]<nint, DXGI_ADAPTER_DESC*, int>)adapterVtable[8];
+            DXGI_ADAPTER_DESC desc;
+            if (getDesc(adapter, &desc) < 0)
+            {
+                return false;
+            }
+
+            lowPart = desc.AdapterLuid.LowPart;
+            highPart = desc.AdapterLuid.HighPart;
+            return true;
+        }
+        finally
+        {
+            if (adapter != 0)
+            {
+                Marshal.Release(adapter);
+            }
+
+            if (dxgiDevice != 0)
+            {
+                Marshal.Release(dxgiDevice);
+            }
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DXGI_ADAPTER_DESC
+    {
+        public unsafe fixed char Description[128];
+        public uint VendorId;
+        public uint DeviceId;
+        public uint SubSysId;
+        public uint Revision;
+        public nuint DedicatedVideoMemory;
+        public nuint DedicatedSystemMemory;
+        public nuint SharedSystemMemory;
+        public LUID AdapterLuid;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct LUID
+    {
+        public readonly uint LowPart;
+        public readonly int HighPart;
     }
 
     private void ReleaseSharedDeviceHandle()
