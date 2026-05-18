@@ -46,7 +46,7 @@ internal sealed class MewVGExternalRasterImage : IImage
     {
         if (_disposed) return 0;
 
-        nint handle = GetNativeHandle(lease);
+        nint handle = lease.NativeHandle;
         if (handle == 0) return 0;
 
         if (_source.AlphaMode == BitmapAlphaMode.Premultiplied)
@@ -77,15 +77,6 @@ internal sealed class MewVGExternalRasterImage : IImage
         }
         return id;
     }
-
-    private static nint GetNativeHandle(IExternalRasterLease lease)
-        => lease switch
-        {
-            IGlTextureLease gl => (nint)gl.TextureId,
-            IMetalTextureLease metal => metal.Texture,
-            ID3D11TextureLease d3d => d3d.Texture2D != 0 ? d3d.Texture2D : d3d.DxgiSurface,
-            _ => 0
-        };
 
     public void Dispose()
     {

@@ -5,9 +5,9 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 internal interface IMewVGOffscreenSurfaceProvider : IDisposable
 {
-    MewVGGlOffscreenSurface AcquireSurface();
+    MewVGGLOffscreenSurface AcquireSurface();
 
-    void ReturnSurface(MewVGGlOffscreenSurface surface);
+    void ReturnSurface(MewVGGLOffscreenSurface surface);
 
     void QueueTargetDisposal(OpenGLPixelRenderSurface target);
 
@@ -39,9 +39,9 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     bool ExitSession();
 }
 
-internal sealed class MewVGGlOffscreenSurface
+internal sealed class MewVGGLOffscreenSurface
 {
-    internal MewVGGlOffscreenSurface(nint nativeContext, NanoVGGL vg, MewVGTextCache textCache)
+    internal MewVGGLOffscreenSurface(nint nativeContext, NanoVGGL vg, MewVGTextCache textCache)
     {
         NativeContext = nativeContext;
         Vg = vg;
@@ -55,7 +55,7 @@ internal sealed class MewVGGlOffscreenSurface
     internal MewVGTextCache TextCache { get; }
 }
 
-internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfaceProvider
+internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfaceProvider
 {
     private readonly Func<nint> _getCurrentContext;
     private readonly object _lock = new();
@@ -99,17 +99,17 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    public MewVGGlOffscreenSurfaceProvider(Func<nint> getCurrentContext)
+    public MewVGGLOffscreenSurfaceProvider(Func<nint> getCurrentContext)
     {
         _getCurrentContext = getCurrentContext ?? throw new ArgumentNullException(nameof(getCurrentContext));
     }
 
     private sealed class SurfacePool
     {
-        public readonly Stack<MewVGGlOffscreenSurface> Available = new();
+        public readonly Stack<MewVGGLOffscreenSurface> Available = new();
     }
 
-    public MewVGGlOffscreenSurface AcquireSurface()
+    public MewVGGLOffscreenSurface AcquireSurface()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -136,10 +136,10 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
         var vg = new NanoVGGL(NVGcreateFlags.Antialias);
         var textCache = new MewVGTextCache(vg);
-        return new MewVGGlOffscreenSurface(nativeContext, vg, textCache);
+        return new MewVGGLOffscreenSurface(nativeContext, vg, textCache);
     }
 
-    public void ReturnSurface(MewVGGlOffscreenSurface surface)
+    public void ReturnSurface(MewVGGLOffscreenSurface surface)
     {
         if (_disposed)
         {
@@ -315,7 +315,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
     public void Dispose()
     {
-        List<MewVGGlOffscreenSurface> surfaces = new();
+        List<MewVGGLOffscreenSurface> surfaces = new();
         List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> imageEntries = new();
         List<OpenGLPixelRenderSurface> targets = new();
 
@@ -381,7 +381,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    private static void DisposeSurface(MewVGGlOffscreenSurface surface)
+    private static void DisposeSurface(MewVGGLOffscreenSurface surface)
     {
         surface.TextCache.Dispose();
         if (surface.Vg is IDisposable disposable)

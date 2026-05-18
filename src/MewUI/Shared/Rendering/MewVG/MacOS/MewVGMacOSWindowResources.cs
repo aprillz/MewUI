@@ -55,8 +55,10 @@ internal sealed class MewVGMetalWindowResources : IDisposable
 
     private MewVGMacOSGraphicsContext? _cachedContext;
 
-    internal MewVGMacOSGraphicsContext GetOrCreateContext(MewVGMetalOffscreenSurfaceProvider offscreenProvider)
-        => _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider);
+    internal MewVGMacOSGraphicsContext GetOrCreateContext(
+        MewVGMetalOffscreenSurfaceProvider offscreenProvider,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
+        => _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider, gpuInteropInvalidated);
 
     /// <summary>
     /// Drops the cached graphics context reference when the context is

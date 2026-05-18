@@ -9,24 +9,30 @@ internal sealed partial class MewVGX11GraphicsContext
 {
     private readonly IX11FrameSession _frameSession;
     private readonly MewVGTextCache _textCache;
+    private readonly Action<GpuInteropInvalidatedEventArgs>? _gpuInteropInvalidated;
+    private readonly HashSet<GpuDeviceIdentity> _reportedExternalMismatches = new();
 
-    private MewVGX11GraphicsContext(IX11FrameSession frameSession)
+    private MewVGX11GraphicsContext(
+        IX11FrameSession frameSession,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
     {
         _frameSession = frameSession;
         _vg = frameSession.Vg;
         _textCache = frameSession.TextCache;
+        _gpuInteropInvalidated = gpuInteropInvalidated;
     }
 
     internal static MewVGX11GraphicsContext CreateForWindow(
         MewVGX11WindowResources resources,
-        IMewVGOffscreenSurfaceProvider offscreenProvider)
-        => new(new X11WindowFrameSession(resources, offscreenProvider));
+        IMewVGOffscreenSurfaceProvider offscreenProvider,
+        Action<GpuInteropInvalidatedEventArgs>? gpuInteropInvalidated)
+        => new(new X11WindowFrameSession(resources, offscreenProvider), gpuInteropInvalidated);
 
     internal static MewVGX11GraphicsContext CreateForOffscreen(
-        MewVGGlOffscreenSurface offscreen,
+        MewVGGLOffscreenSurface offscreen,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         OpenGLPixelRenderSurface pixelSurface)
-        => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, pixelSurface));
+        => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, pixelSurface), gpuInteropInvalidated: null);
 
     internal void SetTarget(nint display, nint window)
     {
@@ -369,6 +375,11 @@ internal sealed partial class MewVGX11GraphicsContext
         if (image is MewVGExternalRasterImage extImage)
         {
             var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
             int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
             if (extImageId == 0) return;
             DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: null,
@@ -397,6 +408,11 @@ internal sealed partial class MewVGX11GraphicsContext
         if (image is MewVGExternalRasterImage extImage)
         {
             var lease = EnsureExternalAcquired(extImage.Source);
+            if (!IsExternalRasterLeaseCompatible(lease))
+            {
+                return;
+            }
+
             int extImageId = extImage.GetOrCreateImageId(_vg, lease, GetImageFlags());
             if (extImageId == 0) return;
             DrawImagePattern(extImageId, destRect, alpha: 1f, sourceRect: sourceRect,
@@ -416,6 +432,38 @@ internal sealed partial class MewVGX11GraphicsContext
         }
 
         DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: sourceRect, vgImage.PixelWidth, vgImage.PixelHeight);
+    }
+
+    private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
+    {
+        // No-opinion bail-outs: nothing to compare against. The share-group equality check below
+        // is the real signal — cross-API pointer collisions don't happen in practice, so a
+        // typed-backend discriminator isn't needed.
+        if (lease is not IGpuResourceAffinityProvider affinityProvider ||
+            affinityProvider.Affinity?.Device is not { } sourceDevice ||
+            sourceDevice.IsEmpty)
+        {
+            return true;
+        }
+
+        nint currentContext = LibGL.glXGetCurrentContext();
+        nint targetShareGroup = _frameSession.OpenGLShareGroup;
+        if (currentContext == 0 ||
+            sourceDevice.NativeHandle == currentContext ||
+            (targetShareGroup != 0 && sourceDevice.NativeHandle == targetShareGroup))
+        {
+            return true;
+        }
+
+        if (_reportedExternalMismatches.Add(sourceDevice))
+        {
+            _gpuInteropInvalidated?.Invoke(new GpuInteropInvalidatedEventArgs(
+                GpuInteropInvalidationReason.ExternalResourceMismatch,
+                renderTargetDeviceChanged: true,
+                externalResourceMismatch: true));
+        }
+
+        return false;
     }
 
     #endregion
@@ -453,6 +501,7 @@ internal sealed partial class MewVGX11GraphicsContext
     {
         NanoVGGL Vg { get; }
         MewVGTextCache TextCache { get; }
+        nint OpenGLShareGroup { get; }
         void BeginFrame();
         void BindFrameTarget();
         void EndFrame();
@@ -476,6 +525,8 @@ internal sealed partial class MewVGX11GraphicsContext
         public NanoVGGL Vg => _resources.Vg;
 
         public MewVGTextCache TextCache => _resources.TextCache;
+
+        public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
 
         public void SetTarget(nint display, nint window)
         {
@@ -520,12 +571,12 @@ internal sealed partial class MewVGX11GraphicsContext
 
     private sealed class X11OffscreenFrameSession : IX11FrameSession
     {
-        private readonly MewVGGlOffscreenSurface _offscreen;
+        private readonly MewVGGLOffscreenSurface _offscreen;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private readonly OpenGLPixelRenderSurface _pixelSurface;
 
         public X11OffscreenFrameSession(
-            MewVGGlOffscreenSurface offscreen,
+            MewVGGLOffscreenSurface offscreen,
             IMewVGOffscreenSurfaceProvider offscreenProvider,
             OpenGLPixelRenderSurface pixelSurface)
         {
@@ -537,6 +588,8 @@ internal sealed partial class MewVGX11GraphicsContext
         public NanoVGGL Vg => _offscreen.Vg;
 
         public MewVGTextCache TextCache => _offscreen.TextCache;
+
+        public nint OpenGLShareGroup => _pixelSurface.CreationContext;
 
         public void BeginFrame()
         {

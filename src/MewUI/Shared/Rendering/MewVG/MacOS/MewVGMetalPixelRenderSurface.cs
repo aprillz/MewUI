@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// CPU-readable pixel surface (used by filter /
 /// pattern uploads, WriteableBitmap-backed controls, etc.).
 /// </summary>
-internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IMetalTextureSource, IExternalWritableGpuSurface
+internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IMetalTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
 {
     // -[MTLTexture getBytes:bytesPerRow:fromRegion:mipmapLevel:]
     // MTLRegion is 48 bytes (3 NSInteger origin + 3 NSInteger size). On both
@@ -27,6 +27,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         void* bytes, nuint bytesPerRow,
         void* regionPtr,
         nuint mipmapLevel);
+
 
     // MTLTextureUsage: ShaderRead = 1<<0, ShaderWrite = 1<<1, RenderTarget = 1<<2.
     // ShaderWrite is required so MPS / compute kernels (e.g. MPSImageGaussianBlur in
@@ -205,9 +206,14 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     internal void EnsureGpuTextures(nint device, nint commandQueue = 0)
     {
         if (_disposed || device == 0) return;
-        if (ColorTexture != 0 && StencilTexture != 0) return;
 
         _device = device;
+        if (commandQueue != 0)
+        {
+            _commandQueue = commandQueue;
+        }
+
+        if (ColorTexture != 0 && StencilTexture != 0) return;
 
         if (ColorTexture == 0)
         {
@@ -223,6 +229,10 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     nint IMetalTextureSource.MtlTexture => _disposed ? 0 : ColorTexture;
 
     nint IMetalTextureSource.MtlDevice => _disposed ? 0 : _device;
+
+    public GpuResourceAffinity? Affinity => _device == 0
+        ? null
+        : new GpuResourceAffinity(Display: null, new GpuDeviceIdentity((ulong)_device, 0, _device));
 
     private nint CreateTexture(nint device, MTLPixelFormat format, ulong storageMode)
     {
@@ -402,7 +412,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         IncrementVersion();
     }
 
-    private sealed class ExternalWriteScope : IMetalExternalGpuWriteScope
+    private sealed class ExternalWriteScope : IExternalGpuWriteScope, IGpuResourceAffinityProvider
     {
         private readonly MewVGMetalPixelRenderSurface _surface;
 
@@ -417,11 +427,13 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
         public bool YFlipped => false;
 
-        public nint Texture => _surface.ColorTexture;
+        public nint NativeHandle => _surface.ColorTexture;
 
-        public nint Device => _surface._device;
+        public nint NativeAlternateHandle => _surface._commandQueue;
 
-        public nint CommandQueue => _surface._commandQueue;
+        public nint NativeDeviceHandle => _surface._device;
+
+        public GpuResourceAffinity? Affinity => _surface.Affinity;
 
         public void Flush()
         { }
@@ -447,3 +459,4 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         if (StencilTexture != 0) { ObjCRuntime.SendMessageNoReturn(StencilTexture, SelRelease); StencilTexture = 0; }
     }
 }
+

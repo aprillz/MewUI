@@ -15,7 +15,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     public const string BackendIdentifier = "MewVG.Win32";
 
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
-        new MewVGGlOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
+        new MewVGGLOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
 
 #pragma warning disable CS0649
     [ThreadStatic]
@@ -30,9 +30,11 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
-    [ThreadStatic] private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
+    [ThreadStatic]
+    private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
 #pragma warning restore CS0649
-    public string Identifier => BackendIdentifier;
+    
+    public string Backend => BackendIdentifier;
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
     private MewVGWin32LayeredPresenter? _layeredPresenterField;
@@ -94,7 +96,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         }
 
         var res = (MewVGWin32WindowResources)resources;
-        return res.GetOrCreateContext(_offscreenProvider, win32.Hwnd, win32.Hdc);
+        return res.GetOrCreateContext(_offscreenProvider, win32.Hwnd, win32.Hdc, RaiseGpuInteropInvalidated);
     }
 
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
@@ -188,9 +190,8 @@ public sealed partial class MewVGWin32GraphicsFactory
             return;
         }
 
-        if (surface is not IWin32LayeredWindowSurface win32Surface ||
-            win32Surface.Hwnd == 0 ||
-            surface.Kind != WindowSurfaceKind.Layered)
+        if (surface is not IWin32WindowSurface win32Surface ||
+            win32Surface.Hwnd == 0)
         {
             return;
         }
@@ -317,7 +318,7 @@ public sealed partial class MewVGWin32GraphicsFactory
                 // Pixel format must be share-compatible with window contexts. Match the
                 // pfd seed that MewVGWindowResources uses (stencil bits for NanoVG AA/clip;
                 // MSAA off — worker FBOs do their own AA).
-                var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGlDoubleBuffered();
+                var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGLDoubleBuffered();
                 pfd.cStencilBits = (byte)Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
 
                 int pf = Gdi32.ChoosePixelFormat(hdc, ref pfd);
@@ -506,14 +507,14 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
 
     internal readonly record struct LayeredRenderContext(nint Hwnd, nint Hdc, OpenGLPixelRenderSurface RenderTarget);
 
-    internal bool Present(Window window, IWin32LayeredWindowSurface surface, double opacity, Action<LayeredRenderContext> render)
+    internal bool Present(Window window, IWin32WindowSurface surface, double opacity, Action<LayeredRenderContext> render)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(surface);
         ArgumentNullException.ThrowIfNull(render);
 
         var hwnd = surface.Hwnd;
-        if (hwnd == 0 || surface.Kind != WindowSurfaceKind.Layered)
+        if (hwnd == 0)
         {
             return false;
         }

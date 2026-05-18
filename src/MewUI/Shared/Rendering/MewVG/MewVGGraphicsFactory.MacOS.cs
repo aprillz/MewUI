@@ -11,7 +11,7 @@ public sealed partial class MewVGMacOSGraphicsFactory
     private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider = new();
     private nint _cachedMetalDevice;
 
-    public string Identifier => BackendIdentifier;
+    public string Backend => BackendIdentifier;
     /// <summary>
     /// Native <c>id&lt;MTLDevice&gt;</c> this factory's window resources draw with.
     /// Cross-API integrators (Skia GR Metal, video samplers, custom effects) read this and
@@ -82,23 +82,12 @@ public sealed partial class MewVGMacOSGraphicsFactory
         }
 
         var res = (MewVGMetalWindowResources)resources;
-        var ctx = res.GetOrCreateContext(_offscreenProvider);
+        var ctx = res.GetOrCreateContext(_offscreenProvider, RaiseGpuInteropInvalidated);
         return ctx;
     }
 
     private partial IGraphicsContext CreateMeasurementContextCore(uint dpi)
         => new MewVGMetalMeasurementContext(dpi);
-
-    partial void TryGetPreferredSurfaceKind(ref bool handled, ref WindowSurfaceKind kind)
-    {
-        if (handled)
-        {
-            return;
-        }
-
-        kind = WindowSurfaceKind.Metal;
-        handled = true;
-    }
 
     partial void TryCreatePixelSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IRenderSurface? renderTarget)
     {
