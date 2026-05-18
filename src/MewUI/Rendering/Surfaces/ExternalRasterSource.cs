@@ -25,6 +25,11 @@ public interface IExternalRasterSource : IRasterSource, IDisposable
     IExternalRasterLease Acquire();
 }
 
+/// <summary>
+/// A lease over an externally-managed GPU/CPU raster resource. Native handle semantics
+/// are defined by the producer/consumer pairing — typically a GPU texture handle for the
+/// active rendering backend (GL texture id, MTLTexture*, ID3D11Texture2D*).
+/// </summary>
 public interface IExternalRasterLease : IDisposable
 {
     int PixelWidth { get; }
@@ -32,21 +37,17 @@ public interface IExternalRasterLease : IDisposable
     int PixelHeight { get; }
 
     bool YFlipped { get; }
-}
 
-public interface IGlTextureLease : IExternalRasterLease
-{
-    uint TextureId { get; }
-}
+    /// <summary>
+    /// Primary native handle for the leased resource. Concrete meaning is API-paired
+    /// with the consuming backend; <c>0</c> indicates the handle is unavailable.
+    /// </summary>
+    nint NativeHandle { get; }
 
-public interface IMetalTextureLease : IExternalRasterLease
-{
-    nint Texture { get; }
-}
-
-public interface ID3D11TextureLease : IExternalRasterLease
-{
-    nint Texture2D { get; }
-
-    nint DxgiSurface { get; }
+    /// <summary>
+    /// Optional secondary native handle. For D3D11 this is an <c>IDXGISurface*</c> aliasing
+    /// the same resource as <see cref="NativeHandle"/>; producers without a cached alternate
+    /// return <c>0</c> and the consumer falls back to deriving it from <see cref="NativeHandle"/>.
+    /// </summary>
+    nint NativeAlternateHandle { get; }
 }
