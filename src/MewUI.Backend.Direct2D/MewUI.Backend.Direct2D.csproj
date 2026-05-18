@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +25,8 @@
     <Compile Include="..\MewUI\Shared\Native\Win32\Direct2D\**\*.cs" LinkBase="Native\Direct2D"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\DirectWrite\**\*.cs" LinkBase="Native\DirectWrite"/>
     <Compile Include="..\MewUI\Shared\Native\Win32\Structs\*.cs" LinkBase="Native\Structs" />
+    <!-- Public types (Char32/Byte32) come from Platform.Win32 via ProjectReference; avoid duplicate compilation. -->
+    <Compile Remove="..\MewUI\Shared\Native\Win32\Structs\InlineArrays.cs" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Constants\*.cs" LinkBase="Native\Constants" />
     <Compile Include="..\MewUI\Shared\Native\Common\Structs\*.cs" LinkBase="Native\Structs" />
     <Compile Include="..\MewUI\Shared\Platform\Win32\Resources\IWin32HdcSource.cs" LinkBase="Resources" />
