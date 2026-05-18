@@ -55,25 +55,6 @@ var root = new Window()
             // populated only after Body() runs, which happens after StatusBar() in arg order.
             drawTimeLabel.Bind(Label.TextProperty, vectorPreview, SvgView.LastDrawTimeProperty,
                 ts => ts == TimeSpan.Zero ? string.Empty : $"Draw: {ts.GetText()}");
-
-            if (svgFiles.Length > 0)
-            {
-                int initialIndex = 0;
-                for (int i = 0; i < svgFiles.Length; i++)
-                {
-                    if (string.Equals(Path.GetFileName(svgFiles[i]), "__issue-134-01.svg", StringComparison.OrdinalIgnoreCase))
-                    {
-                        initialIndex = i;
-                        break;
-                    }
-                }
-                fileList.SelectedIndex = initialIndex;
-                LoadFile(svgFiles[initialIndex]);
-            }
-            else
-            {
-                statusLabel.Text = "No SVG files found in sample svg folder";
-            }
         })
         .OnClosed(ReleaseCurrentPreview)
     );
