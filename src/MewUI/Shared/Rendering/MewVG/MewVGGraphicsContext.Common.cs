@@ -7,7 +7,7 @@ using Aprillz.MewVG.Tess;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 #if MEWUI_MEWVG_MACOS
-internal sealed partial class MewVGMetalGraphicsContext : GraphicsContextBase
+internal sealed partial class MewVGMacOSGraphicsContext : GraphicsContextBase
 #elif MEWUI_MEWVG_X11
 internal sealed partial class MewVGX11GraphicsContext : GraphicsContextBase
 #else

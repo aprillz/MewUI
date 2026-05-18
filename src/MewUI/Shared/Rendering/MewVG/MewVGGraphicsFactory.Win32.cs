@@ -10,14 +10,17 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGGraphicsFactory
+public sealed partial class MewVGWin32GraphicsFactory
 {
+    public const string BackendIdentifier = "MewVG.Win32";
+
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
-        new MewVGGlOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext, "MewVG Win32");
+        new MewVGGLOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
 
 #pragma warning disable CS0649
     [ThreadStatic] private static nint _pixelSurfacePresentHwnd;
     [ThreadStatic] private static nint _pixelSurfacePresentHdc;
+
     /// <summary>
     /// The specific pixel surface that the layered-window present is rendering
     /// INTO. Set by <see cref="MewVGWin32LayeredPresenter.Present"/>. Distinguishes
@@ -27,10 +30,13 @@ public sealed partial class MewVGGraphicsFactory
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
     [ThreadStatic] private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
+
 #pragma warning restore CS0649
-    public string Backend => "MewVG.Win32";
+
+    public string Backend => BackendIdentifier;
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
+
     private MewVGWin32LayeredPresenter? _layeredPresenterField;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
@@ -234,6 +240,7 @@ public sealed partial class MewVGGraphicsFactory
     // -------------------------------------------------------------------------
 
     private readonly object _workerContextLock = new();
+
     // Serializes worker-context activation across threads. wglMakeCurrent on a
     // shared HGLRC from multiple threads is a race: a context can only be current
     // on ONE thread at a time, and a second thread's wglMakeCurrent either fails
@@ -243,6 +250,7 @@ public sealed partial class MewVGGraphicsFactory
     // steals the context mid-render). Held for the lifetime of each
     // <see cref="Win32WorkerContextScope"/>.
     private readonly object _workerActivationLock = new();
+
     private nint _workerHwnd;
     private nint _workerHdc;
     private nint _workerHglrc;
@@ -715,8 +723,11 @@ internal sealed class MewVGWin32LayeredPresenter : IDisposable
         private bool _disposed;
 
         public int PixelWidth { get; }
+
         public int PixelHeight { get; }
+
         public double DpiScale { get; }
+
         public nint Hdc { get; }
 
         public Win32LayeredBitmap(int pixelWidth, int pixelHeight, double dpiScale)

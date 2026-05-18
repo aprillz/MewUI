@@ -23,7 +23,7 @@ internal sealed partial class MewVGX11GraphicsContext
         => new(new X11WindowFrameSession(resources, offscreenProvider));
 
     internal static MewVGX11GraphicsContext CreateForOffscreen(
-        MewVGGlOffscreenSurface offscreen,
+        MewVGGLOffscreenSurface offscreen,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         OpenGLPixelRenderSurface pixelSurface)
         => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, pixelSurface));
@@ -519,12 +519,12 @@ internal sealed partial class MewVGX11GraphicsContext
 
     private sealed class X11OffscreenFrameSession : IX11FrameSession
     {
-        private readonly MewVGGlOffscreenSurface _offscreen;
+        private readonly MewVGGLOffscreenSurface _offscreen;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private readonly OpenGLPixelRenderSurface _pixelSurface;
 
         public X11OffscreenFrameSession(
-            MewVGGlOffscreenSurface offscreen,
+            MewVGGLOffscreenSurface offscreen,
             IMewVGOffscreenSurfaceProvider offscreenProvider,
             OpenGLPixelRenderSurface pixelSurface)
         {

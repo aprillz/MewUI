@@ -50,10 +50,10 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     public NanoVGMetal Vg { get; }
     public MewVGMetalTextCache TextCache { get; }
 
-    private MewVGMetalGraphicsContext? _cachedContext;
+    private MewVGMacOSGraphicsContext? _cachedContext;
 
-    internal MewVGMetalGraphicsContext GetOrCreateContext(MewVGMetalOffscreenSurfaceProvider offscreenProvider)
-        => _cachedContext ??= MewVGMetalGraphicsContext.CreateForWindow(this, offscreenProvider);
+    internal MewVGMacOSGraphicsContext GetOrCreateContext(MewVGMetalOffscreenSurfaceProvider offscreenProvider)
+        => _cachedContext ??= MewVGMacOSGraphicsContext.CreateForWindow(this, offscreenProvider);
 
     /// <summary>
     /// Drops the cached graphics context reference when the context is
@@ -64,7 +64,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     /// Stack between two contexts and they corrupt each other's state.
     /// (Same root cause as the Win32 fix in <c>MewVGWindowResources</c>.)
     /// </summary>
-    internal void InvalidateCachedContext(MewVGMetalGraphicsContext ctx)
+    internal void InvalidateCachedContext(MewVGMacOSGraphicsContext ctx)
     {
         if (ReferenceEquals(_cachedContext, ctx))
         {

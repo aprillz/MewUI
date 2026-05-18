@@ -3,11 +3,13 @@ using Aprillz.MewUI.Rendering.CoreText;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGGraphicsFactory
+public sealed partial class MewVGMacOSGraphicsFactory
 {
+    public const string BackendIdentifier = "MewVG.MacOS";
+
     private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider = new();
 
-    public string Backend => "MewVG.MacOS";
+    public string Backend => BackendIdentifier;
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {
@@ -107,7 +109,7 @@ public sealed partial class MewVGGraphicsFactory
         // own MTLTexture back into its CPU pixel buffer at EndFrame
         // so filter / pattern uploads see the rendered output.
         var offscreenResources = _offscreenProvider.AcquireSurface();
-        context = MewVGMetalGraphicsContext.CreateForOffscreen(offscreenResources, pixelSurface, _offscreenProvider);
+        context = MewVGMacOSGraphicsContext.CreateForOffscreen(offscreenResources, pixelSurface, _offscreenProvider);
         handled = true;
     }
 

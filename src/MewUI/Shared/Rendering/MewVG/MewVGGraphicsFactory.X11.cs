@@ -9,10 +9,12 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGGraphicsFactory
+public sealed partial class MewVGX11GraphicsFactory
 {
+    public const string BackendIdentifier = "MewVG.X11";
+
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
-        new MewVGGlOffscreenSurfaceProvider(LibGL.glXGetCurrentContext, "MewVG X11");
+        new MewVGGLOffscreenSurfaceProvider(LibGL.glXGetCurrentContext);
 
     // -------------------------------------------------------------------------
     // Shared worker GLX context (background offscreen render support).
@@ -29,15 +31,19 @@ public sealed partial class MewVGGraphicsFactory
     private readonly object _workerActivationLock = new();
     private readonly object _workerCtxInitLock = new();
     private nint _workerCtx;
+
     // First-window display + drawable + visual — captured at first window
     // creation and reused for worker context init / activation. Single-display
     // X11 process is the assumed common case; multi-display would need per-
     // display worker contexts (not supported here).
     private nint _workerDisplay;
+
     private nint _workerDrawable;
     private X11GlxVisualInfo _workerVisualInfo;
     private bool _workerHasVisualInfo;
     private bool _workerInitFailed;
+
+    public string Backend => BackendIdentifier;
 
     /// <summary>GLXContext of the shared worker context. 0 if not yet created
     /// or init failed. Window contexts pass this as <c>shareList</c> at
@@ -137,10 +143,7 @@ public sealed partial class MewVGGraphicsFactory
         }
     }
 
-
     public IDisposable AcquireConcurrentRenderUnit() => MewVGNoOpRenderScope.Instance;
-
-    public string Backend => "MewVG.X11";
 
     private partial IFont CreateFontCore(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough)
     {

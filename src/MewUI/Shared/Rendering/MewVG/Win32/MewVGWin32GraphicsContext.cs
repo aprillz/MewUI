@@ -34,7 +34,7 @@ internal sealed partial class MewVGWin32GraphicsContext
     /// context takes ownership and returns it to the provider on Dispose.
     /// </summary>
     internal static MewVGWin32GraphicsContext CreateForOffscreen(
-        MewVGGlOffscreenSurface offscreen,
+        MewVGGLOffscreenSurface offscreen,
         IMewVGOffscreenSurfaceProvider offscreenProvider,
         OpenGLPixelRenderSurface pixelSurface,
         nint hdc)
@@ -595,12 +595,12 @@ internal sealed partial class MewVGWin32GraphicsContext
 
     private sealed class OffscreenPixelSurfaceFrameSession : IWin32FrameSession
     {
-        private readonly MewVGGlOffscreenSurface _offscreen;
+        private readonly MewVGGLOffscreenSurface _offscreen;
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private readonly OpenGLPixelRenderSurface _pixelSurface;
 
         public OffscreenPixelSurfaceFrameSession(
-            MewVGGlOffscreenSurface offscreen,
+            MewVGGLOffscreenSurface offscreen,
             IMewVGOffscreenSurfaceProvider offscreenProvider,
             OpenGLPixelRenderSurface pixelSurface,
             nint hdc)

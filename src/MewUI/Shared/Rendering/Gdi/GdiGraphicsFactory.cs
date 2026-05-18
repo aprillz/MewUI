@@ -14,7 +14,9 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// </summary>
 public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
 {
-    public string Backend => "Gdi";
+    public const string BackendIdentifier = "Gdi";
+
+    public string Backend => BackendIdentifier;
 
     /// <summary>
     /// Gets the singleton instance of the GDI graphics factory.
@@ -147,7 +149,6 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         => IsDoubleBuffered
         ? GdiPlusGraphicsContext.CreateDoubleBuffered(hwnd, hdc, dpiScale, ImageScaleQuality, transparentComposition)
         : new GdiPlusGraphicsContext(hwnd, hdc, dpiScale, ImageScaleQuality);
-
 
     public IGraphicsContext CreateMeasurementContext(uint dpi)
     {
@@ -411,8 +412,11 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         private bool _disposed;
 
         public int PixelWidth { get; }
+
         public int PixelHeight { get; }
+
         public double DpiScale { get; }
+
         public nint Hdc { get; }
 
         public Win32LayeredBitmap(int pixelWidth, int pixelHeight, double dpiScale)

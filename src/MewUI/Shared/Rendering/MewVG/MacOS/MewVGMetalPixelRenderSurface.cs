@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
 /// GPU-backed pixel render surface for the Metal backend. Holds a
-/// shared-storage MTLTexture so an offscreen <see cref="MewVGMetalGraphicsContext"/>
+/// shared-storage MTLTexture so an offscreen <see cref="MewVGMacOSGraphicsContext"/>
 /// can render into it directly, then exposes the rendered pixels through the
 /// CPU-readable pixel surface (used by filter /
 /// pattern uploads, WriteableBitmap-backed controls, etc.).

@@ -6,7 +6,7 @@ using Aprillz.MewVG.Interop;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed partial class MewVGMetalGraphicsContext
+internal sealed partial class MewVGMacOSGraphicsContext
 {
     private static readonly nint ClsMTLRenderPassDescriptor = ObjCRuntime.GetClass("MTLRenderPassDescriptor");
 
@@ -47,14 +47,14 @@ internal sealed partial class MewVGMetalGraphicsContext
     private bool _beganFrame;
     private nint _framePool; // Frame-spanning autorelease pool: created in BeginFrame, drained in EndFrame.
 
-    private MewVGMetalGraphicsContext(IMetalFrameSession frameSession)
+    private MewVGMacOSGraphicsContext(IMetalFrameSession frameSession)
     {
         _frameSession = frameSession;
         _vg = frameSession.Vg;
         _textCache = frameSession.TextCache;
     }
 
-    internal static MewVGMetalGraphicsContext CreateForWindow(
+    internal static MewVGMacOSGraphicsContext CreateForWindow(
         MewVGMetalWindowResources resources,
         MewVGMetalOffscreenSurfaceProvider offscreenProvider)
         => new(new MetalWindowFrameSession(resources, offscreenProvider));
@@ -66,7 +66,7 @@ internal sealed partial class MewVGMetalGraphicsContext
     /// via <see cref="MewVGMetalOffscreenSurfaceProvider.AcquireSurface"/>; the
     /// context takes ownership and returns it to the pool on Dispose.
     /// </summary>
-    internal static MewVGMetalGraphicsContext CreateForOffscreen(
+    internal static MewVGMacOSGraphicsContext CreateForOffscreen(
         MewVGMetalOffscreenSurface offscreen,
         MewVGMetalPixelRenderSurface target,
         MewVGMetalOffscreenSurfaceProvider offscreenProvider)
@@ -213,7 +213,7 @@ internal sealed partial class MewVGMetalGraphicsContext
         bool TryBeginFrame(int viewportWidthPx, int viewportHeightPx, out MetalFrame frame);
         void AfterCommit(nint commandBuffer, nint drawable);
         void ReleasePendingFrameResources();
-        void DisposeContext(MewVGMetalGraphicsContext context);
+        void DisposeContext(MewVGMacOSGraphicsContext context);
     }
 
     private sealed class MetalWindowFrameSession : IMetalFrameSession
@@ -273,7 +273,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             TextCache.ReleasePendingDeletes();
         }
 
-        public void DisposeContext(MewVGMetalGraphicsContext context)
+        public void DisposeContext(MewVGMacOSGraphicsContext context)
             => _resources.InvalidateCachedContext(context);
     }
 
@@ -332,7 +332,7 @@ internal sealed partial class MewVGMetalGraphicsContext
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
         }
 
-        public void DisposeContext(MewVGMetalGraphicsContext context)
+        public void DisposeContext(MewVGMacOSGraphicsContext context)
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 

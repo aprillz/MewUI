@@ -11,9 +11,11 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 
 public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IWin32TransparencyCapabilities, IDisposable
 {
+    public const string BackendIdentifier = "Direct2D";
+
     public static Direct2DGraphicsFactory Instance => field ??= new Direct2DGraphicsFactory();
 
-    public string Backend => "Direct2D";
+    public string Backend => BackendIdentifier;
 
     /// <summary>
     /// D2D presents transparent windows via a DXGI swap-chain (premultiplied alpha) attached
@@ -1036,11 +1038,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         public nint RenderTarget;
         public nint SwapChain;
         public nint TargetBitmap;
+
         // DirectComposition handles for transparent (NOREDIRECTIONBITMAP) windows. The swap-chain
         // attaches to a visual which is the root of a target bound to the HWND; DWM then
         // composes the swap-chain output with per-pixel alpha. All three handles are 0 when
         // the cache entry is for an opaque (CreateSwapChainForHwnd) target.
         public nint DcompDevice;
+
         public nint DcompTarget;
         public nint DcompVisual;
         public uint Width;

@@ -7,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class GdiBackend
 {
-    public const string BackendId = "gdi";
+    public static string BackendIdentifier => GdiGraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendId, static () => GdiGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => GdiGraphicsFactory.Instance);
 
     public static ApplicationBuilder UseGdi(this ApplicationBuilder builder)
     {

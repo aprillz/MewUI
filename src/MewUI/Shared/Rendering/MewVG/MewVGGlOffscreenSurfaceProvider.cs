@@ -5,8 +5,8 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 internal interface IMewVGOffscreenSurfaceProvider : IDisposable
 {
-    MewVGGlOffscreenSurface AcquireSurface();
-    void ReturnSurface(MewVGGlOffscreenSurface surface);
+    MewVGGLOffscreenSurface AcquireSurface();
+    void ReturnSurface(MewVGGLOffscreenSurface surface);
     void QueueTargetDisposal(OpenGLPixelRenderSurface target);
     void ReleasePendingTargetsUnderCurrentContext();
     void QueueImageDisposal(MewVGImage image);
@@ -34,9 +34,9 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     bool ExitSession();
 }
 
-internal sealed class MewVGGlOffscreenSurface
+internal sealed class MewVGGLOffscreenSurface
 {
-    internal MewVGGlOffscreenSurface(nint nativeContext, NanoVGGL vg, MewVGTextCache textCache)
+    internal MewVGGLOffscreenSurface(nint nativeContext, NanoVGGL vg, MewVGTextCache textCache)
     {
         NativeContext = nativeContext;
         Vg = vg;
@@ -48,10 +48,9 @@ internal sealed class MewVGGlOffscreenSurface
     internal MewVGTextCache TextCache { get; }
 }
 
-internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfaceProvider
+internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfaceProvider
 {
     private readonly Func<nint> _getCurrentContext;
-    private readonly string _backendName;
     private readonly object _lock = new();
     private readonly Dictionary<nint, SurfacePool> _poolsByContext = new();
     // List, not Queue, because the drain filters by each target's CreationContext —
@@ -90,18 +89,17 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    public MewVGGlOffscreenSurfaceProvider(Func<nint> getCurrentContext, string backendName)
+    public MewVGGLOffscreenSurfaceProvider(Func<nint> getCurrentContext)
     {
         _getCurrentContext = getCurrentContext ?? throw new ArgumentNullException(nameof(getCurrentContext));
-        _backendName = backendName;
     }
 
     private sealed class SurfacePool
     {
-        public readonly Stack<MewVGGlOffscreenSurface> Available = new();
+        public readonly Stack<MewVGGLOffscreenSurface> Available = new();
     }
 
-    public MewVGGlOffscreenSurface AcquireSurface()
+    public MewVGGLOffscreenSurface AcquireSurface()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -109,7 +107,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         if (nativeContext == 0)
         {
             throw new InvalidOperationException(
-                $"{_backendName} offscreen rendering requires a current OpenGL context on the calling thread.");
+                "Offscreen rendering requires a current OpenGL context on the calling thread.");
         }
 
         lock (_lock)
@@ -128,10 +126,10 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
         var vg = new NanoVGGL(NVGcreateFlags.Antialias);
         var textCache = new MewVGTextCache(vg);
-        return new MewVGGlOffscreenSurface(nativeContext, vg, textCache);
+        return new MewVGGLOffscreenSurface(nativeContext, vg, textCache);
     }
 
-    public void ReturnSurface(MewVGGlOffscreenSurface surface)
+    public void ReturnSurface(MewVGGLOffscreenSurface surface)
     {
         if (_disposed)
         {
@@ -307,7 +305,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
     public void Dispose()
     {
-        List<MewVGGlOffscreenSurface> surfaces = new();
+        List<MewVGGLOffscreenSurface> surfaces = new();
         List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> imageEntries = new();
         List<OpenGLPixelRenderSurface> targets = new();
 
@@ -373,7 +371,7 @@ internal sealed class MewVGGlOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         }
     }
 
-    private static void DisposeSurface(MewVGGlOffscreenSurface surface)
+    private static void DisposeSurface(MewVGGLOffscreenSurface surface)
     {
         surface.TextCache.Dispose();
         if (surface.Vg is IDisposable disposable)

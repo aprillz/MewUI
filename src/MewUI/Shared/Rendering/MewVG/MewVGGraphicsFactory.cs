@@ -6,14 +6,33 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-public sealed partial class MewVGGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
+#if MEWUI_MEWVG_MACOS
+public sealed partial class MewVGMacOSGraphicsFactory
+
+#elif MEWUI_MEWVG_X11
+public sealed partial class MewVGX11GraphicsFactory 
+
+#else
+public sealed partial class MewVGWin32GraphicsFactory 
+#endif
+    : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
 {
-    public static MewVGGraphicsFactory Instance => field ??= new MewVGGraphicsFactory();
+
+
+#if MEWUI_MEWVG_MACOS
+    public static MewVGMacOSGraphicsFactory Instance => field ??= new();
+    private MewVGMacOSGraphicsFactory() { }
+#elif MEWUI_MEWVG_X11
+    public static MewVGX11GraphicsFactory Instance => field ??= new ();
+    private MewVGX11GraphicsFactory() { }
+#else
+        public static MewVGWin32GraphicsFactory Instance => field ??= new ();
+    private MewVGWin32GraphicsFactory() { }
+#endif
 
     private readonly ConcurrentDictionary<nint, IDisposable> _windows = new();
     private readonly RenderResourceCache _renderResourceCache = new();
 
-    private MewVGGraphicsFactory() { }
 
     /// <summary>
     /// When <see langword="true"/>, CPU pixel sources (<see cref="IPixelBufferSource"/>) are
