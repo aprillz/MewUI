@@ -111,6 +111,19 @@ public sealed class ScrollViewer : ContentControl
     /// <param name="verticalOffset">The vertical offset.</param>
     public void SetScrollOffsets(double horizontalOffset, double verticalOffset)
     {
+        // Sync extent metrics before applying the offset; ScrollController.SetOffsetDip
+        // clamps against (extent - viewport), and stale extent (e.g. when content's INCC
+        // grows the extent and immediately requests an offset correction before the next
+        // arrange) would clamp the requested offset to the OLD maxima. Pulling the latest
+        // extent from the content lets the clamp see the new bounds.
+        if (Content is IScrollContent scrollContent)
+        {
+            _scroll.DpiScale = DpiScale;
+            var contentExtent = scrollContent.Extent;
+            _scroll.SetMetricsDip(0, contentExtent.Width, _viewport.Width);
+            _scroll.SetMetricsDip(1, contentExtent.Height, _viewport.Height);
+        }
+
         HorizontalOffset = horizontalOffset;
         VerticalOffset = verticalOffset;
         SyncBars();
