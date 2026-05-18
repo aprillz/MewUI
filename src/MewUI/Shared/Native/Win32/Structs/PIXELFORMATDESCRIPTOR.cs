@@ -34,7 +34,7 @@ internal struct PIXELFORMATDESCRIPTOR
     public uint dwVisibleMask;
     public uint dwDamageMask;
 
-    public static PIXELFORMATDESCRIPTOR CreateOpenGlDoubleBuffered()
+    public static PIXELFORMATDESCRIPTOR CreateOpenGLDoubleBuffered()
     {
         var pfd = new PIXELFORMATDESCRIPTOR
         {

@@ -62,4 +62,3 @@ internal static partial class Dwmapi
     [LibraryImport(LibraryName)]
     internal static partial int DwmIsCompositionEnabled(out int pfEnabled);
 }
-

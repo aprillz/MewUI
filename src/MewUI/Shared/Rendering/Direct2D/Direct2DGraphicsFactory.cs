@@ -9,13 +9,14 @@ using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IWin32TransparencyCapabilities, IDisposable
+public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IDisposable
 {
     public const string BackendIdentifier = "Direct2D";
-
     public static Direct2DGraphicsFactory Instance => field ??= new Direct2DGraphicsFactory();
 
     public string Backend => BackendIdentifier;
+
+    public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 
     /// <summary>
     /// D2D presents transparent windows via a DXGI swap-chain (premultiplied alpha) attached
@@ -39,9 +40,21 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     private readonly object _rtLock = new();
     private readonly Dictionary<nint, CachedWindowTarget> _windowTargets = new();
-    private readonly Dictionary<nint, Direct2DPixelRenderSurface> _layeredTargets = new();
+    private readonly HashSet<nint> _externalDxgiDeviceContextWindowTargets = [];
+    private readonly Dictionary<nint, long> _lastExternalMismatchNotificationTicks = new();
     private readonly Dictionary<StrokeStyle, nint> _strokeStyles = new();
     private readonly RenderResourceCache _renderResourceCache = new();
+    // Opaque windows use ID2D1HwndRenderTarget by default. Windows that render external
+    // DXGI images are promoted to a device-context swap-chain target because those
+    // images need ID2D1DeviceContext bitmap creation and same-device resource binding.
+    private const bool UseSwapChainForOpaqueWindows = false;
+
+    private enum WindowTargetMode
+    {
+        HwndRenderTarget,
+        SwapChainDeviceContext,
+        TransparentComposition,
+    }
 
     private Direct2DGraphicsFactory() { }
 
@@ -57,13 +70,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             }
 
             _windowTargets.Clear();
-
-            foreach (var (_, layered) in _layeredTargets)
-            {
-                layered.Dispose();
-            }
-
-            _layeredTargets.Clear();
         }
 
         lock (_rtLock)
@@ -373,14 +379,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IImage CreateImageFromNativeBitmap(nint nativeBitmap, int pixelWidth, int pixelHeight)
         => new Direct2DNativeBitmapImage(nativeBitmap, pixelWidth, pixelHeight);
 
-    /// <summary>
-    /// Wraps an externally-owned <c>IDXGISurface*</c> as an <see cref="IImage"/>. The
-    /// bitmap is materialized against the consuming render target on demand so each
-    /// target gets a resource in its own Direct2D resource domain.
-    /// </summary>
-    public IImage CreateImageFromDxgiSurface(nint dxgiSurface, int pixelWidth, int pixelHeight, BitmapAlphaMode alphaMode = BitmapAlphaMode.Premultiplied)
-        => new Direct2DDxgiSurfaceImage(dxgiSurface, pixelWidth, pixelHeight, alphaMode);
-
     public IGraphicsContext CreateContext(IRenderTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -392,7 +390,11 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 throw new ArgumentException("Direct2D backend requires a Win32 window surface.", nameof(target));
             }
 
-            return CreateContextCore(win32Surface.Hwnd, windowTarget.DpiScale, win32Surface.TransparentComposition);
+            return CreateContextCore(
+                win32Surface.Hwnd,
+                windowTarget.DpiScale,
+                win32Surface.TransparentComposition,
+                win32Surface.DisplayIdentity);
         }
 
         if (target is Direct2DPixelRenderSurface surfaceTarget)
@@ -416,12 +418,12 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         throw new NotSupportedException($"Unsupported render target type: {target.GetType().Name}");
     }
 
-    private IGraphicsContext CreateContextCore(nint hwnd, double dpiScale, bool transparentComposition = false)
+    private IGraphicsContext CreateContextCore(nint hwnd, double dpiScale, bool transparentComposition = false, PlatformDisplayIdentity displayIdentity = default)
     {
         EnsureInitialized();
 
         // Pre-warm the cached window target so the first BeginFrame doesn't pay the cost.
-        GetOrCreateCachedWindowTarget(hwnd, dpiScale, transparentComposition);
+        GetOrCreateCachedWindowTarget(hwnd, dpiScale, transparentComposition, displayIdentity);
 
         var ctx = new Direct2DGraphicsContext(
             this,
@@ -438,7 +440,10 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 bool transparent = t is WindowRenderTarget wrt
                     && wrt.Surface is Platform.Win32.IWin32WindowSurface ws
                     && ws.TransparentComposition;
-                return GetOrCreateCachedWindowTarget(hwnd, t.DpiScale, transparent);
+                var currentDisplay = t is WindowRenderTarget currentWrt
+                    ? currentWrt.Surface.DisplayIdentity
+                    : displayIdentity;
+                return GetOrCreateCachedWindowTarget(hwnd, t.DpiScale, transparent, currentDisplay);
             });
         ctx.TextTracker = _textTracker;
         return ctx;
@@ -563,9 +568,49 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public IImage CreateImageView(IPixelBufferSource source)
         => new Direct2DImage(source);
 
-    public IImage CreateImageView(IExternalSampleSource source)
-        => throw new NotSupportedException(
-            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
+    public IImage CreateImageView(IExternalRasterSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var lease = source.Acquire();
+        nint cachedDxgiSurface = lease.NativeAlternateHandle;
+        nint dxgiSurface = cachedDxgiSurface;
+        if (dxgiSurface == 0 && lease.NativeHandle != 0)
+        {
+            _ = ComHelpers.QueryInterface(lease.NativeHandle, D2D1.IID_IDXGISurface, out dxgiSurface);
+        }
+
+        if (dxgiSurface == 0)
+        {
+            lease.Dispose();
+            throw new NotSupportedException(
+                $"{GetType().Name} could not acquire an IDXGISurface from {source.GetType().Name}.");
+        }
+
+        try
+        {
+            var affinity = lease is IGpuResourceAffinityProvider affinityProvider
+                ? affinityProvider.Affinity
+                : null;
+            return new Direct2DDxgiSurfaceImage(
+                dxgiSurface,
+                lease.PixelWidth,
+                lease.PixelHeight,
+                source.AlphaMode,
+                affinity,
+                lease: null,
+                preferDeviceContextBitmap: false);
+        }
+        finally
+        {
+            if (dxgiSurface != cachedDxgiSurface)
+            {
+                ComHelpers.Release(dxgiSurface);
+            }
+
+            lease.Dispose();
+        }
+    }
 
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
@@ -578,93 +623,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public Filters.IImageFilterExecutor CreateImageFilterExecutor()
         => new Direct2DImageFilterExecutor(this);
 
-    public bool Present(Window window, IWindowSurface surface, double opacity)
-    {
-        if (surface is not IWin32LayeredWindowSurface win32Surface ||
-            surface.Kind != WindowSurfaceKind.Layered ||
-            win32Surface.Hwnd == 0)
-        {
-            return false;
-        }
-
-        ArgumentNullException.ThrowIfNull(window);
-
-        var hwnd = win32Surface.Hwnd;
-        int w = Math.Max(1, win32Surface.PixelWidth);
-        int h = Math.Max(1, win32Surface.PixelHeight);
-        double dpiScale = win32Surface.DpiScale <= 0 ? 1.0 : win32Surface.DpiScale;
-
-        var target = GetOrCreateLayeredTarget(hwnd, w, h, dpiScale);
-        window.RenderFrameToSurface(target);
-
-        // NOTE: UpdateLayeredWindow interprets pptDst as the WINDOW top-left in screen coordinates.
-        // Passing ClientToScreen(0,0) will move the window every time we present (drift), because
-        // client-origin != window-origin for any style with a non-client border.
-        //
-        // For per-pixel transparency we enforce a borderless popup window style on Win32 so
-        // client-size == window-size and input/render stay aligned.
-        if (!User32.GetWindowRect(hwnd, out var windowRect))
-        {
-            return true; // Best-effort: rendered but couldn't present.
-        }
-        var dst = new POINT(windowRect.left, windowRect.top);
-        var size = new SIZE(w, h);
-        var src = new POINT(0, 0);
-        byte alpha = (byte)Math.Round(Math.Clamp(opacity, 0.0, 1.0) * 255.0);
-        var blend = BLENDFUNCTION.SourceOver(alpha);
-
-        const uint ULW_ALPHA = 0x00000002;
-        _ = User32.UpdateLayeredWindow(
-            hwnd: hwnd,
-            hdcDst: 0,
-            pptDst: ref dst,
-            psize: ref size,
-            hdcSrc: target.Hdc,
-            pptSrc: ref src,
-            crKey: 0,
-            pblend: ref blend,
-            dwFlags: ULW_ALPHA);
-
-        return true;
-    }
-
-    private Direct2DPixelRenderSurface GetOrCreateLayeredTarget(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
-    {
-        lock (_rtLock)
-        {
-            if (_layeredTargets.TryGetValue(hwnd, out var existing) &&
-                existing.PixelWidth == pixelWidth &&
-                existing.PixelHeight == pixelHeight &&
-                Math.Abs(existing.DpiScale - dpiScale) < 0.001)
-            {
-                return existing;
-            }
-
-            if (_layeredTargets.Remove(hwnd, out var old))
-            {
-                old.Dispose();
-            }
-
-            var created = new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale);
-            _layeredTargets[hwnd] = created;
-            return created;
-        }
-    }
-
     public void ReleaseWindowResources(nint hwnd)
     {
         lock (_rtLock)
         {
             // The context is owned by the Window and disposed there. Here we only
-            // release factory-owned native handles (COM render targets, layered bitmaps).
+            // release factory-owned native handles (COM render targets).
+            _externalDxgiDeviceContextWindowTargets.Remove(hwnd);
             InvalidateCachedWindowTargetLocked(hwnd);
-
-            if (_layeredTargets.Remove(hwnd, out var layered))
-            {
-                // The pixel surface owns its own DC render target now (RAII), so disposing
-                // the surface releases the DC render target in lockstep.
-                layered.Dispose();
-            }
         }
     }
 
@@ -678,14 +644,29 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             }
 
             _windowTargets.Clear();
-
-            foreach (var (_, layered) in _layeredTargets)
-            {
-                layered.Dispose();
-            }
-
-            _layeredTargets.Clear();
         }
+
+        OnGpuInteropInvalidated(new GpuInteropInvalidatedEventArgs(
+            GpuInteropInvalidationReason.DeviceLost,
+            renderTargetDeviceChanged: true,
+            externalResourceMismatch: true));
+    }
+
+    private void OnGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
+        => GpuInteropInvalidated?.Invoke(this, e);
+
+    private void QueueGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
+    {
+        if (GpuInteropInvalidated is null)
+        {
+            return;
+        }
+
+        System.Threading.ThreadPool.QueueUserWorkItem(static state =>
+        {
+            var (factory, args) = ((Direct2DGraphicsFactory, GpuInteropInvalidatedEventArgs))state!;
+            factory.OnGpuInteropInvalidated(args);
+        }, (this, e));
     }
 
     private void InvalidateCachedWindowTarget(nint hwnd)
@@ -706,26 +687,25 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         }
     }
 
-    private (nint renderTarget, int generation) GetOrCreateCachedWindowTarget(nint hwnd, double dpiScale, bool transparentComposition = false)
+    private (nint renderTarget, int generation) GetOrCreateCachedWindowTarget(nint hwnd, double dpiScale, bool transparentComposition = false, PlatformDisplayIdentity displayIdentity = default)
     {
         var rc = D2D1VTable.GetClientRect(hwnd);
         uint w = (uint)Math.Max(1, rc.Width);
         uint h = (uint)Math.Max(1, rc.Height);
         float dpi = (float)(96.0 * dpiScale);
         var presentOptions = GetPresentOptions();
+        nint monitor = GetMonitor(hwnd, displayIdentity);
 
         lock (_rtLock)
         {
             int generation = 0;
-            if (SharedFilterDeviceContext != 0 && _d2dDevice != 0 && _d3dDevice != 0)
+            var mode = GetWindowTargetMode(hwnd, transparentComposition);
+            if (mode != WindowTargetMode.HwndRenderTarget
+                && SharedFilterDeviceContext != 0
+                && _d2dDevice != 0
+                && _d3dDevice != 0)
             {
-                // Both opaque and transparent windows now go through the swap-chain path.
-                // Transparent windows must be created with WS_EX_NOREDIRECTIONBITMAP (the Win32
-                // platform sets this when the backend reports Win32TransparencyMode.Surface);
-                // the swap-chain is created with PREMULTIPLIED alpha and DWM composes it
-                // directly without a redirection bitmap, eliminating the per-frame readback
-                // that the legacy ID2D1HwndRenderTarget / ID2D1DCRenderTarget paths incur.
-                if (TryGetOrCreateCachedSwapChainTargetLocked(hwnd, w, h, dpi, presentOptions, transparentComposition, out var swapChainTarget))
+                if (TryGetOrCreateCachedSwapChainTargetLocked(hwnd, w, h, dpi, presentOptions, mode, monitor, out var swapChainTarget))
                 {
                     return swapChainTarget;
                 }
@@ -739,7 +719,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             if (_windowTargets.TryGetValue(hwnd, out var entry) && entry.RenderTarget != 0)
             {
                 if (entry.Width == w && entry.Height == h && entry.DpiX == dpi
-                    && entry.PresentOptions == presentOptions && entry.AlphaMode == requiredAlpha && !entry.UsesSwapChain)
+                    && entry.PresentOptions == presentOptions && entry.AlphaMode == requiredAlpha && entry.Mode == WindowTargetMode.HwndRenderTarget)
                 {
                     return (entry.RenderTarget, entry.Generation);
                 }
@@ -764,12 +744,56 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             }
 
             D2D1VTable.SetDpi((ID2D1RenderTarget*)renderTarget, dpi, dpi);
-            _windowTargets[hwnd] = new CachedWindowTarget(renderTarget, w, h, dpi, presentOptions, alphaMode, generation, usesSwapChain: false, swapChain: 0, targetBitmap: 0);
+            var created = new CachedWindowTarget(renderTarget, w, h, dpi, presentOptions, alphaMode, generation, WindowTargetMode.HwndRenderTarget, swapChain: 0, targetBitmap: 0)
+            {
+                Monitor = monitor,
+                DeviceIdentity = GetFactoryDeviceIdentity(),
+            };
+            _windowTargets[hwnd] = created;
             return (renderTarget, generation);
         }
     }
 
-    private bool TryGetOrCreateCachedSwapChainTargetLocked(nint hwnd, uint width, uint height, float dpi, D2D1_PRESENT_OPTIONS presentOptions, bool transparentComposition, out (nint renderTarget, int generation) target)
+    private WindowTargetMode GetWindowTargetMode(nint hwnd, bool transparentComposition)
+    {
+        if (transparentComposition)
+        {
+            return WindowTargetMode.TransparentComposition;
+        }
+
+        if (UseSwapChainForOpaqueWindows || _externalDxgiDeviceContextWindowTargets.Contains(hwnd))
+        {
+            return WindowTargetMode.SwapChainDeviceContext;
+        }
+
+        return WindowTargetMode.HwndRenderTarget;
+    }
+
+    internal bool RequireDeviceContextTargetForExternalDxgiContent(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return false;
+        }
+
+        lock (_rtLock)
+        {
+            if (!_externalDxgiDeviceContextWindowTargets.Add(hwnd))
+            {
+                return false;
+            }
+
+            if (_windowTargets.TryGetValue(hwnd, out var entry) && entry.Mode == WindowTargetMode.HwndRenderTarget)
+            {
+                entry.DisposeNativeHandles();
+                _windowTargets.Remove(hwnd);
+            }
+
+            return true;
+        }
+    }
+
+    private bool TryGetOrCreateCachedSwapChainTargetLocked(nint hwnd, uint width, uint height, float dpi, D2D1_PRESENT_OPTIONS presentOptions, WindowTargetMode mode, nint monitor, out (nint renderTarget, int generation) target)
     {
         target = default;
 
@@ -777,12 +801,17 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         // requires a new swap-chain (different DXGI_ALPHA_MODE) and a fresh window (the
         // WS_EX_NOREDIRECTIONBITMAP bit is fixed at CreateWindow time anyway, but if the
         // window survives a recreate we still need the cached target reissued).
+        bool transparentComposition = mode == WindowTargetMode.TransparentComposition;
         var requiredAlpha = transparentComposition ? D2D1_ALPHA_MODE.PREMULTIPLIED : D2D1_ALPHA_MODE.IGNORE;
-
         int generation = 0;
         if (_windowTargets.TryGetValue(hwnd, out var existing) && existing.RenderTarget != 0)
         {
-            if (existing.UsesSwapChain
+            if (existing.Mode == WindowTargetMode.HwndRenderTarget)
+            {
+                return false;
+            }
+
+            if (existing.Mode == mode
                 && existing.Width == width
                 && existing.Height == height
                 && existing.DpiX == dpi
@@ -798,7 +827,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             _windowTargets.Remove(hwnd);
         }
 
-        if (!TryCreateSwapChainWindowTarget(hwnd, width, height, dpi, presentOptions, generation, transparentComposition, out var created))
+        if (!TryCreateSwapChainWindowTarget(hwnd, width, height, dpi, presentOptions, generation, mode, monitor, out var created))
         {
             return false;
         }
@@ -808,7 +837,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return true;
     }
 
-    private bool TryCreateSwapChainWindowTarget(nint hwnd, uint width, uint height, float dpi, D2D1_PRESENT_OPTIONS presentOptions, int generation, bool transparentComposition, out CachedWindowTarget target)
+    private bool TryCreateSwapChainWindowTarget(nint hwnd, uint width, uint height, float dpi, D2D1_PRESENT_OPTIONS presentOptions, int generation, WindowTargetMode mode, nint monitor, out CachedWindowTarget target)
     {
         target = null!;
 
@@ -820,6 +849,9 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         nint dcompDevice = 0;
         nint dcompTarget = 0;
         nint dcompVisual = 0;
+        nint windowD3DDevice = _d3dDevice;
+        nint windowD2DDevice = _d2dDevice;
+        bool transparentComposition = mode == WindowTargetMode.TransparentComposition;
 
         // Transparent surfaces must use PREMULTIPLIED alpha end-to-end so DWM (via the
         // DirectComposition visual that wraps the swap-chain) blends against the desktop.
@@ -855,7 +887,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
             if (transparentComposition)
             {
-                hr = Dxgi.CreateSwapChainForComposition(dxgiFactory, _d3dDevice, swapChainDesc, out swapChain);
+                hr = Dxgi.CreateSwapChainForComposition(dxgiFactory, windowD3DDevice, swapChainDesc, out swapChain);
                 if (hr < 0 || swapChain == 0)
                 {
                     return false;
@@ -863,7 +895,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
                 // Need an IDXGIDevice for DCompositionCreateDevice — the D3D11 device
                 // implements it.
-                if (ComHelpers.QueryInterface(_d3dDevice, Dcomp.IID_IDXGIDevice, out var dxgiDevice) < 0 || dxgiDevice == 0)
+                if (ComHelpers.QueryInterface(windowD3DDevice, Dcomp.IID_IDXGIDevice, out var dxgiDevice) < 0 || dxgiDevice == 0)
                 {
                     return false;
                 }
@@ -914,7 +946,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             }
             else
             {
-                hr = Dxgi.CreateSwapChainForHwnd(dxgiFactory, _d3dDevice, hwnd, swapChainDesc, out swapChain);
+                hr = Dxgi.CreateSwapChainForHwnd(dxgiFactory, windowD3DDevice, hwnd, swapChainDesc, out swapChain);
                 if (hr < 0 || swapChain == 0)
                 {
                     return false;
@@ -929,7 +961,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 return false;
             }
 
-            hr = D2D1VTable.CreateDeviceContext(_d2dDevice, options: 0, out deviceContext);
+            hr = D2D1VTable.CreateDeviceContext(windowD2DDevice, options: 0, out deviceContext);
             if (hr < 0 || deviceContext == 0)
             {
                 return false;
@@ -951,11 +983,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             D2D1VTable.SetTarget((ID2D1DeviceContext*)deviceContext, targetBitmap);
             D2D1VTable.SetDpi((ID2D1RenderTarget*)deviceContext, dpi, dpi);
 
-            target = new CachedWindowTarget(deviceContext, width, height, dpi, presentOptions, d2dAlphaMode, generation, usesSwapChain: true, swapChain, targetBitmap)
+            target = new CachedWindowTarget(deviceContext, width, height, dpi, presentOptions, d2dAlphaMode, generation, mode, swapChain, targetBitmap)
             {
                 DcompDevice = dcompDevice,
                 DcompTarget = dcompTarget,
                 DcompVisual = dcompVisual,
+                Monitor = monitor,
+                DeviceIdentity = GetD3D11DeviceIdentity(windowD3DDevice),
             };
             deviceContext = 0;
             swapChain = 0;
@@ -1013,15 +1047,75 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     {
         lock (_rtLock)
         {
-            if (!_windowTargets.TryGetValue(hwnd, out var entry) || !entry.UsesSwapChain || entry.SwapChain == 0)
+            if (!_windowTargets.TryGetValue(hwnd, out var entry) || !entry.IsSwapChainBacked || entry.SwapChain == 0)
             {
                 return 0;
             }
 
             uint syncInterval = Application.IsRunning && !Application.Current.RenderLoopSettings.VSyncEnabled ? 0u : 1u;
-            return Dxgi.Present(entry.SwapChain, syncInterval, flags: 0);
+            int hr = Dxgi.Present(entry.SwapChain, syncInterval, flags: 0);
+            return hr;
         }
     }
+
+    internal bool IsExternalDxgiImageCompatible(nint hwnd, int renderTargetGeneration, Direct2DDxgiSurfaceImage image)
+    {
+        if (hwnd == 0 || image.Affinity?.Device is not { } sourceDevice || sourceDevice.IsEmpty)
+        {
+            return true;
+        }
+
+        GpuDeviceIdentity? targetDevice = null;
+        lock (_rtLock)
+        {
+            if (_windowTargets.TryGetValue(hwnd, out var entry) && entry.Generation == renderTargetGeneration)
+            {
+                targetDevice = entry.DeviceIdentity;
+            }
+        }
+
+        if (targetDevice is not { } target || target.IsEmpty || AreSameDevice(sourceDevice, target))
+        {
+            return true;
+        }
+
+        if (image.MarkMismatchNotified())
+        {
+            bool shouldNotify = false;
+            lock (_rtLock)
+            {
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (!_lastExternalMismatchNotificationTicks.TryGetValue(hwnd, out long last)
+                    || now - last >= System.Diagnostics.Stopwatch.Frequency)
+                {
+                    _lastExternalMismatchNotificationTicks[hwnd] = now;
+                    shouldNotify = true;
+                }
+            }
+
+            if (shouldNotify)
+            {
+                QueueGpuInteropInvalidated(new GpuInteropInvalidatedEventArgs(
+                    GpuInteropInvalidationReason.ExternalResourceMismatch,
+                    renderTargetDeviceChanged: true,
+                    externalResourceMismatch: true,
+                    renderTargetHandle: hwnd));
+            }
+        }
+
+        return false;
+    }
+
+    private GpuDeviceIdentity? GetFactoryDeviceIdentity()
+        => GetD3D11DeviceIdentity(_d3dDevice);
+
+    private static GpuDeviceIdentity? GetD3D11DeviceIdentity(nint d3d11Device)
+        => d3d11Device == 0 ? null : new GpuDeviceIdentity((ulong)d3d11Device, 0, d3d11Device);
+
+    // Record-struct equality already compares all fields structurally; the helper is kept for
+    // readability at the call site.
+    private static bool AreSameDevice(GpuDeviceIdentity left, GpuDeviceIdentity right)
+        => left == right;
 
     private static D2D1_PRESENT_OPTIONS GetPresentOptions()
     {
@@ -1033,29 +1127,44 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         return D2D1_PRESENT_OPTIONS.NONE;
     }
 
+    private static nint GetMonitor(nint hwnd, PlatformDisplayIdentity displayIdentity)
+    {
+        // Win32 places HMONITOR in NativeHandle; any non-zero value from the platform side
+        // is preferred over a fresh MonitorFromWindow lookup. (Win32 is the only platform
+        // hitting this factory, so a typed-discriminator check isn't needed.)
+        if (displayIdentity.NativeHandle != 0)
+        {
+            return displayIdentity.NativeHandle;
+        }
+
+        return hwnd == 0 ? 0 : User32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    }
+
     private sealed class CachedWindowTarget
     {
         public nint RenderTarget;
         public nint SwapChain;
         public nint TargetBitmap;
-
         // DirectComposition handles for transparent (NOREDIRECTIONBITMAP) windows. The swap-chain
         // attaches to a visual which is the root of a target bound to the HWND; DWM then
         // composes the swap-chain output with per-pixel alpha. All three handles are 0 when
         // the cache entry is for an opaque (CreateSwapChainForHwnd) target.
         public nint DcompDevice;
-
         public nint DcompTarget;
         public nint DcompVisual;
+        public nint Monitor;
+        public GpuDeviceIdentity? DeviceIdentity;
         public uint Width;
         public uint Height;
         public float DpiX;
         public D2D1_PRESENT_OPTIONS PresentOptions;
         public D2D1_ALPHA_MODE AlphaMode;
         public int Generation;
-        public bool UsesSwapChain;
+        public WindowTargetMode Mode;
 
-        public CachedWindowTarget(nint renderTarget, uint width, uint height, float dpiX, D2D1_PRESENT_OPTIONS presentOptions, D2D1_ALPHA_MODE alphaMode, int generation, bool usesSwapChain, nint swapChain, nint targetBitmap)
+        public bool IsSwapChainBacked => Mode != WindowTargetMode.HwndRenderTarget;
+
+        public CachedWindowTarget(nint renderTarget, uint width, uint height, float dpiX, D2D1_PRESENT_OPTIONS presentOptions, D2D1_ALPHA_MODE alphaMode, int generation, WindowTargetMode mode, nint swapChain, nint targetBitmap)
         {
             RenderTarget = renderTarget;
             SwapChain = swapChain;
@@ -1066,12 +1175,12 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             PresentOptions = presentOptions;
             AlphaMode = alphaMode;
             Generation = generation;
-            UsesSwapChain = usesSwapChain;
+            Mode = mode;
         }
 
         public void DisposeNativeHandles()
         {
-            if (UsesSwapChain && RenderTarget != 0)
+            if (IsSwapChainBacked && RenderTarget != 0)
             {
                 D2D1VTable.SetTarget((ID2D1DeviceContext*)RenderTarget, 0);
             }
@@ -1114,4 +1223,5 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             }
         }
     }
+
 }

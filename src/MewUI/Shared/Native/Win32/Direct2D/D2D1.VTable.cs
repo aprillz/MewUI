@@ -745,6 +745,19 @@ internal static unsafe class D2D1VTable
         }
     }
 
+    /// <summary>ID2D1Bitmap1::GetSurface (vtbl 13). Returns an AddRef'ed
+    /// <c>IDXGISurface*</c> for GPU-backed bitmaps.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetBitmapSurface(nint bitmap, out nint dxgiSurface)
+    {
+        nint localSurface = 0;
+        var vtbl = *(void***)bitmap;
+        var fn = (delegate* unmanaged[Stdcall]<nint, nint*, int>)(vtbl[13]);
+        int hr = fn(bitmap, &localSurface);
+        dxgiSurface = localSurface;
+        return hr;
+    }
+
     /// <summary>ID2D1Bitmap1::Map (vtbl 14). Bitmap must have been created with
     /// <see cref="D2D1_BITMAP_OPTIONS.CPU_READ"/>. <paramref name="mapped"/> receives a
     /// pointer into staging memory plus row pitch.</summary>

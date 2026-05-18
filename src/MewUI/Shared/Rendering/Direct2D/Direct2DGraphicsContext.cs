@@ -1431,7 +1431,6 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         DiagLog.Write(msg);
     }
 
-
     private static D2D1_MATRIX_3X2_F ToMatrix3x2F(Matrix3x2 m)
         => new(m.M11, m.M12, m.M21, m.M22, m.M31, m.M32);
 
@@ -1678,7 +1677,20 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         => DrawImageBitmapCore(image.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration), destRect, sourceRect);
 
     private void DrawImageCore(Direct2DDxgiSurfaceImage image, Rect destRect, Rect sourceRect)
-        => DrawImageBitmapCore(image.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration), destRect, sourceRect);
+    {
+        if (_hwnd != 0 && _ownerFactory.RequireDeviceContextTargetForExternalDxgiContent(_hwnd))
+        {
+            _onRecreateTarget?.Invoke();
+            return;
+        }
+
+        if (!_ownerFactory.IsExternalDxgiImageCompatible(_hwnd, _renderTargetGeneration, image))
+        {
+            return;
+        }
+
+        DrawImageBitmapCore(image.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration, _deviceContext), destRect, sourceRect);
+    }
 
     private void DrawImageBitmapCore(nint bmp, Rect destRect, Rect sourceRect)
     {
@@ -1834,7 +1846,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         {
             Direct2DImage d2dImage => d2dImage.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration),
             Direct2DNativeBitmapImage nativeBitmapImage => nativeBitmapImage.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration),
-            Direct2DDxgiSurfaceImage dxgiSurfaceImage => dxgiSurfaceImage.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration),
+            Direct2DDxgiSurfaceImage dxgiSurfaceImage => dxgiSurfaceImage.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration, _deviceContext),
             _ => 0,
         };
 

@@ -21,12 +21,16 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// is undefined in D2D, so all filter operations on this target must go through the same
 /// shared DC.
 /// </remarks>
-internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, ID2DTextureSource
-    , IReusableScratchSurface
+internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, ID2DTextureSource, IExternalRasterSource
+    , IReusableScratchSurface, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
 {
+    private static readonly Guid IID_ID3D11Texture2D = new("6f15aaf2-d208-4e89-9ab4-489535d34f9c");
+
     private readonly Direct2DGraphicsFactory _factory;
     private readonly object _gate = new();
     private nint _bitmap;
+    private nint _dxgiSurface;
+    private nint _texture2D;
     private nint _readbackBitmap;       // CANNOT_DRAW | CPU_READ staging copy, lazy
     private byte[]? _readbackBuffer;    // cached managed buffer for Lock()
     private int _readbackVersion = -1;
@@ -84,6 +88,17 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
     public int StrideBytes => PixelWidth * 4;
     public int Version => Volatile.Read(ref _version);
+    public RenderPixelFormat Format => RenderPixelFormat.Bgra8888Premultiplied;
+    public BitmapAlphaMode AlphaMode => HasAlpha ? BitmapAlphaMode.Premultiplied : BitmapAlphaMode.Ignore;
+    public bool YFlipped => false;
+    public SurfaceCapabilities Capabilities =>
+        SurfaceCapabilities.ExternalHandle |
+        SurfaceCapabilities.ExternallySynchronized |
+        SurfaceCapabilities.GpuSampleable;
+    public IReadOnlyList<ExternalRasterPlane> Planes =>
+    [
+        new ExternalRasterPlane(0, _texture2D, PixelWidth, PixelHeight, 0, Format)
+    ];
 
     /// <summary>D2D effects expect premultiplied alpha; the bitmap is created PREMULTIPLIED.</summary>
     public bool IsPremultiplied => true;
@@ -107,11 +122,16 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
         RenderSurfaceDefaults.GetPixelSurfaceCapabilities(
             IsPremultiplied,
             LockMode == LockMode.Readback,
-            this is IGpuTextureSource);
+            this is IGpuTextureSource) | SurfaceCapabilities.ExternalGpuWritable;
 
     ulong IRenderSurface.Version => (ulong)Math.Max(0, Version);
 
     bool IRenderSurface.IsDisposed => _disposed;
+
+    public GpuResourceAffinity? Affinity =>
+        new(null, _factory.NativeD3D11Device == 0
+            ? null
+            : new GpuDeviceIdentity((ulong)_factory.NativeD3D11Device, 0, _factory.NativeD3D11Device));
 
     ReadOnlySpan<byte> ICpuPixelSurface.GetReadOnlyPixelSpan() => GetPixelSpan();
 
@@ -296,6 +316,161 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
         IncrementVersion();
     }
 
+    public IExternalGpuWriteScope BeginExternalWrite()
+    {
+        Monitor.Enter(_gate);
+        try
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(Direct2DGpuPixelRenderSurface));
+            }
+
+            ThrowIfStaleDevice();
+            EnsureExternalD3D11HandlesUnderLock();
+
+            var dc = _factory.SharedFilterDeviceContext;
+            if (dc != 0)
+            {
+                D2D1VTable.Flush((ID2D1RenderTarget*)dc);
+            }
+
+            return new ExternalWriteScope(this);
+        }
+        catch
+        {
+            Monitor.Exit(_gate);
+            throw;
+        }
+    }
+
+    public void MarkExternalContentChanged()
+    {
+        lock (_gate)
+        {
+            _readbackVersion = -1;
+            Interlocked.Increment(ref _version);
+        }
+    }
+
+    public IExternalRasterLease Acquire()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(Direct2DGpuPixelRenderSurface));
+            }
+
+            ThrowIfStaleDevice();
+            EnsureExternalD3D11HandlesUnderLock();
+            ComHelpers.AddRef(_texture2D);
+            ComHelpers.AddRef(_dxgiSurface);
+            return new RasterLease(this, _texture2D, _dxgiSurface);
+        }
+    }
+
+    private void EnsureExternalD3D11HandlesUnderLock()
+    {
+        if (_texture2D != 0 && _dxgiSurface != 0)
+        {
+            return;
+        }
+
+        if (_dxgiSurface == 0)
+        {
+            int surfaceHr = D2D1VTable.GetBitmapSurface(_bitmap, out _dxgiSurface);
+            if (surfaceHr < 0 || _dxgiSurface == 0)
+            {
+                throw new InvalidOperationException($"ID2D1Bitmap1::GetSurface failed: 0x{surfaceHr:X8}");
+            }
+        }
+
+        if (_texture2D == 0)
+        {
+            int textureHr = ComHelpers.QueryInterface(_dxgiSurface, IID_ID3D11Texture2D, out _texture2D);
+            if (textureHr < 0 || _texture2D == 0)
+            {
+                throw new InvalidOperationException($"IDXGISurface::QueryInterface(ID3D11Texture2D) failed: 0x{textureHr:X8}");
+            }
+        }
+    }
+
+    private sealed class ExternalWriteScope : IExternalGpuWriteScope, IGpuResourceAffinityProvider
+    {
+        private readonly Direct2DGpuPixelRenderSurface _surface;
+        private bool _disposed;
+
+        public ExternalWriteScope(Direct2DGpuPixelRenderSurface surface)
+        {
+            _surface = surface;
+        }
+
+        public int PixelWidth => _surface.PixelWidth;
+        public int PixelHeight => _surface.PixelHeight;
+        public bool YFlipped => false;
+        public nint NativeHandle => _surface._texture2D;
+        public nint NativeAlternateHandle => _surface._dxgiSurface;
+        public nint NativeDeviceHandle => _surface._factory.NativeD3D11Device;
+        public GpuResourceAffinity? Affinity => _surface.Affinity;
+
+        public void Flush()
+        {
+            var dc = _surface._factory.SharedFilterDeviceContext;
+            if (dc != 0)
+            {
+                D2D1VTable.Flush((ID2D1RenderTarget*)dc);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            Monitor.Exit(_surface._gate);
+        }
+    }
+
+    private sealed class RasterLease : IExternalRasterLease, IGpuResourceAffinityProvider
+    {
+        private readonly Direct2DGpuPixelRenderSurface _surface;
+        private nint _texture2D;
+        private nint _dxgiSurface;
+
+        public RasterLease(Direct2DGpuPixelRenderSurface surface, nint texture2D, nint dxgiSurface)
+        {
+            _surface = surface;
+            _texture2D = texture2D;
+            _dxgiSurface = dxgiSurface;
+        }
+
+        public int PixelWidth => _surface.PixelWidth;
+        public int PixelHeight => _surface.PixelHeight;
+        public bool YFlipped => false;
+        public nint NativeHandle => _texture2D;
+        public nint NativeAlternateHandle => _dxgiSurface;
+        public GpuResourceAffinity? Affinity => _surface.Affinity;
+
+        public void Dispose()
+        {
+            if (_texture2D != 0)
+            {
+                ComHelpers.Release(_texture2D);
+                _texture2D = 0;
+            }
+
+            if (_dxgiSurface != 0)
+            {
+                ComHelpers.Release(_dxgiSurface);
+                _dxgiSurface = 0;
+            }
+        }
+    }
+
     private void ThrowIfStaleDevice()
     {
         if (!IsDeviceCurrent)
@@ -314,6 +489,16 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
                 ComHelpers.Release(_readbackBitmap);
                 _readbackBitmap = 0;
             }
+            if (_texture2D != 0)
+            {
+                ComHelpers.Release(_texture2D);
+                _texture2D = 0;
+            }
+            if (_dxgiSurface != 0)
+            {
+                ComHelpers.Release(_dxgiSurface);
+                _dxgiSurface = 0;
+            }
             _readbackBuffer = null;
             _readbackVersion = -1;
         }
@@ -328,6 +513,16 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
             ComHelpers.Release(_bitmap);
             _bitmap = 0;
         }
+        if (_texture2D != 0)
+        {
+            ComHelpers.Release(_texture2D);
+            _texture2D = 0;
+        }
+        if (_dxgiSurface != 0)
+        {
+            ComHelpers.Release(_dxgiSurface);
+            _dxgiSurface = 0;
+        }
         if (_readbackBitmap != 0)
         {
             ComHelpers.Release(_readbackBitmap);
@@ -336,3 +531,4 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
         _readbackBuffer = null;
     }
 }
+

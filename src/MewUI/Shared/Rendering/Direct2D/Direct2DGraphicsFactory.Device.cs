@@ -4,13 +4,14 @@ using Aprillz.MewUI.Native.Direct2D;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-public sealed unsafe partial class Direct2DGraphicsFactory
+public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetDeviceProvider
 {
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
     private const int DXGI_ERROR_DEVICE_REMOVED = unchecked((int)0x887A0005);
     private const int DXGI_ERROR_DEVICE_HUNG = unchecked((int)0x887A0006);
     private const int DXGI_ERROR_DEVICE_RESET = unchecked((int)0x887A0007);
+    private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
     // Controls whether the factory creates its default internal D3D11 -> DXGI -> D2D
     // device chain when GPU rendering is first needed.
@@ -69,6 +70,29 @@ public sealed unsafe partial class Direct2DGraphicsFactory
             EnsureFilterDeviceContext();
             return _d3dDevice;
         }
+    }
+
+    /// <summary>
+    /// Returns an AddRef'ed <c>ID3D11Device*</c> compatible with the current cached target
+    /// for <paramref name="renderTargetHandle"/>. The caller must release the returned
+    /// pointer. If the target has not been created yet, this falls back to the factory device.
+    /// </summary>
+    public nint RetainD3D11DeviceForRenderTarget(nint renderTargetHandle)
+    {
+        EnsureFilterDeviceContext();
+
+        nint device = 0;
+        lock (_rtLock)
+        {
+            device = _d3dDevice;
+
+            if (device != 0)
+            {
+                ComHelpers.AddRef(device);
+            }
+        }
+
+        return device;
     }
 
     /// <summary>
@@ -209,28 +233,45 @@ public sealed unsafe partial class Direct2DGraphicsFactory
 
     private bool TryCreateD2DDeviceChainFromD3D11Device(nint d3d11Device)
     {
+        if (TryCreateD2DDeviceChainFromD3D11Device(d3d11Device, out var dxgiDevice, out var d2dDevice))
+        {
+            _dxgiDevice = dxgiDevice;
+            _d2dDevice = d2dDevice;
+            int hr = D2D1VTable.CreateDeviceContext(_d2dDevice, options: 0, out _filterDeviceContext);
+            if (hr >= 0 && _filterDeviceContext != 0)
+            {
+                return true;
+            }
+
+            if (_filterDeviceContext != 0)
+            {
+                ComHelpers.Release(_filterDeviceContext);
+                _filterDeviceContext = 0;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryCreateD2DDeviceChainFromD3D11Device(nint d3d11Device, out nint dxgiDevice, out nint d2dDevice)
+    {
+        dxgiDevice = 0;
+        d2dDevice = 0;
         if (d3d11Device == 0)
         {
             return false;
         }
 
-        int hr;
-
-        if (ComHelpers.QueryInterface(d3d11Device, D2D1.IID_IDXGIDevice, out _dxgiDevice) < 0 || _dxgiDevice == 0)
+        if (ComHelpers.QueryInterface(d3d11Device, D2D1.IID_IDXGIDevice, out dxgiDevice) < 0 || dxgiDevice == 0)
         {
             return false;
         }
 
-        hr = D2D1VTable.CreateDevice((ID2D1Factory*)_d2dFactory, _dxgiDevice, out _d2dDevice);
-        if (hr < 0 || _d2dDevice == 0)
+        int hr = D2D1VTable.CreateDevice((ID2D1Factory*)_d2dFactory, dxgiDevice, out d2dDevice);
+        if (hr < 0 || d2dDevice == 0)
         {
-            return false;
-        }
-
-        hr = D2D1VTable.CreateDeviceContext(_d2dDevice, options: 0, out _filterDeviceContext);
-        if (hr < 0 || _filterDeviceContext == 0)
-        {
-            _filterDeviceContext = 0;
+            ComHelpers.Release(dxgiDevice);
+            dxgiDevice = 0;
             return false;
         }
 
