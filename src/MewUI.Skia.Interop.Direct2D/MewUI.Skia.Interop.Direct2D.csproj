@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Skia.Interop.Direct2D</AssemblyName>
+    <PackageId>$(MewUITitle).Skia.Interop.Direct2D</PackageId>
+    <Description>Zero-copy GPU bridge between $(MewUITitle).Skia and the Direct2D backend. Activate at startup with SkiaDirect2DInterop.Use().</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI.Skia\Shared\Rendering\SkiaGLInterop.cs" LinkBase="Rendering" />
+    <Compile Include="..\MewUI.Skia\Shared\Rendering\SkiaGLSurfaceHost.cs" LinkBase="Rendering" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Skia.Interop.MewVG.Win32</AssemblyName>
+    <PackageId>$(MewUITitle).Skia.Interop.MewVG.Win32</PackageId>
+    <Description>Zero-copy GPU bridge between $(MewUITitle).Skia and the MewVG.Win32 backend. Activate at startup with SkiaMewVGWin32Interop.Use().</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI.Skia\Shared\Rendering\SkiaGLInterop.cs" LinkBase="Rendering" />
+    <Compile Include="..\MewUI.Skia\Shared\Rendering\SkiaGLSurfaceHost.cs" LinkBase="Rendering" />
+  </ItemGroup>
+
+</Project>

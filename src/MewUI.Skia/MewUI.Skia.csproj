@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Skia</AssemblyName>
+    <PackageId>$(MewUITitle).Skia</PackageId>
+    <Description>Skia rendering integration for $(MewUITitle). Provides SkiaCanvasView and the ISkiaInteropProvider registry; ships a CPU upload fallback for any backend. Install a matching Aprillz.MewUI.Skia.Interop.* package for zero-copy GPU paths.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="3.119.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.119.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <!-- Shared GL hosting source is compiled into each consuming Interop assembly. -->
+  <ItemGroup>
+    <Compile Remove="Shared\**" />
+  </ItemGroup>
+
+</Project>

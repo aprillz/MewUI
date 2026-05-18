@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Skia.Interop.Gdi</AssemblyName>
+    <PackageId>$(MewUITitle).Skia.Interop.Gdi</PackageId>
+    <Description>Zero-copy bridge between $(MewUITitle).Skia and the GDI backend. Skia paints directly into a shared DIB section so GDI BitBlt consumes the bits without a per-frame copy. Activate at startup with SkiaGdiInterop.Register().</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+  </ItemGroup>
+
+  <!-- Shared GL FBO helpers (Compile-linked into this assembly so the WGL/GL types are internal). -->
+  <ItemGroup>
+    <Compile Include="..\MewUI.Skia\Shared\Rendering\SkiaGLInterop.cs" LinkBase="Rendering" />
+  </ItemGroup>
+
+</Project>

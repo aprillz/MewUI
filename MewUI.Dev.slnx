@@ -13,14 +13,13 @@
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
     <Project Path="samples/MewUI.ImeTest/MewUI.ImeTest.csproj" />
     <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
+    <Project Path="samples/MewUI.Skia.Sample/MewUI.Skia.Sample.csproj" />
     <Project Path="samples/MewUI.Svg.Sample/MewUI.Svg.Sample.csproj" />
     <Project Path="samples/MewUI.Video.Sample/MewUI.Video.Sample.csproj" />
     <Project Path="samples/MewUI.Win32.WebView2.Sample/MewUI.Win32.WebView2.Sample.csproj" />
     <Project Path="samples/MewUI.WriteableBitmapSample/MewUI.WriteableBitmapSample.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <File Path="build/MewUI.Common.props" />
-    <File Path="build/MewUI.Local.props" />
     <Project Path="src/MewUI.Backend.Direct2D/MewUI.Backend.Direct2D.csproj" />
     <Project Path="src/MewUI.Backend.Gdi/MewUI.Backend.Gdi.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
@@ -29,6 +28,12 @@
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
+    <Project Path="src/MewUI.Skia/MewUI.Skia.csproj" />
+    <Project Path="src/MewUI.Skia.Interop.Direct2D/MewUI.Skia.Interop.Direct2D.csproj" />
+    <Project Path="src/MewUI.Skia.Interop.Gdi/MewUI.Skia.Interop.Gdi.csproj" />
+    <Project Path="src/MewUI.Skia.Interop.MewVG.MacOS/MewUI.Skia.Interop.MewVG.MacOS.csproj" />
+    <Project Path="src/MewUI.Skia.Interop.MewVG.Win32/MewUI.Skia.Interop.MewVG.Win32.csproj" />
+    <Project Path="src/MewUI.Skia.Interop.MewVG.X11/MewUI.Skia.Interop.MewVG.X11.csproj" />
     <Project Path="src/MewUI.Svg/MewUI.Svg.csproj" />
     <Project Path="src/MewUI.Win32.WebView2/MewUI.Win32.WebView2.csproj" />
     <Project Path="src/MewUI/MewUI.csproj" />
@@ -46,8 +51,8 @@
     <Project Path="meta/MewUI.Windows/MewUI.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
+    <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
     <Project Path="tests/MewUI.TextBoxPerformance/MewUI.TextBoxPerformance.csproj" />
   </Folder>
 </Solution>

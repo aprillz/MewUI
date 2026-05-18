@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Skia.Interop.MewVG.MacOS</AssemblyName>
+    <PackageId>$(MewUITitle).Skia.Interop.MewVG.MacOS</PackageId>
+    <Description>Zero-copy GPU bridge between $(MewUITitle).Skia and the MewVG.MacOS backend. Activate at startup with SkiaMewVGMacOSInterop.Use().</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+</Project>
