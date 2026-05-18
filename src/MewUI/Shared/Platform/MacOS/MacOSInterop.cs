@@ -1431,14 +1431,3 @@ internal static unsafe partial class ObjC
         }
     }
 }
-
-internal static partial class CGL
-{
-    // CGLLockContext / CGLUnlockContext are used to serialize access to a CGLContextObj.
-    // This is important for correctness when the drawable is being resized while rendering.
-    [LibraryImport("/System/Library/Frameworks/OpenGL.framework/OpenGL", EntryPoint = "CGLLockContext")]
-    public static partial void LockContext(nint cglContext);
-
-    [LibraryImport("/System/Library/Frameworks/OpenGL.framework/OpenGL", EntryPoint = "CGLUnlockContext")]
-    public static partial void UnlockContext(nint cglContext);
-}
