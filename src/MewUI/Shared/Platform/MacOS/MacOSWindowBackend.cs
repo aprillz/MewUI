@@ -27,7 +27,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private readonly Window _window;
     private nint _nsWindow;
     private nint _nsView;
-    private nint _nsContext;
     private nint _metalLayer;
     private bool _shown;
     private int _needsRender;
@@ -616,10 +615,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetWindowTransparency(_nsWindow, _nsView, _allowsTransparency);
             MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _allowsTransparency ? MacOSWindowInterop.TransparentStyleMask : _defaultStyleMask);
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
-            if (_nsContext != 0)
-            {
-                MacOSWindowInterop.SetOpenGLSurfaceOpacity(_nsContext, !_allowsTransparency);
-            }
             if (_metalLayer != 0)
             {
                 MacOSWindowInterop.SetLayerOpaque(_metalLayer, !_allowsTransparency);
@@ -726,7 +721,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         {
             _host.UnregisterWindow(_nsWindow);
             MacOSWindowInterop.UnregisterWindowCloseTarget(_nsWindow);
-            MacOSWindowInterop.UnregisterReshapeTarget(_nsView);
             MacOSWindowInterop.UnregisterTextInputTarget(_nsView);
             if (_metalLayer != 0)
             {
@@ -735,7 +729,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.ReleaseWindow(_nsWindow);
             _nsWindow = 0;
             _nsView = 0;
-            _nsContext = 0;
             _metalLayer = 0;
         }
     }
@@ -826,10 +819,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         if (_nsWindow != 0)
         {
-            // Prefer CAMetalLayer path when the active graphics factory requests it.
-            // This avoids AppKit's "stretch last frame" behavior during live-resize by rendering from the layer draw cycle.
-            if (_window.GraphicsFactory is IWindowSurfaceSelector { PreferredSurfaceKind: WindowSurfaceKind.Metal })
-            {
+            // CAMetalLayer is the only supported surface — render from the layer's draw cycle to
+            // avoid AppKit's "stretch last frame" behavior during live-resize. (The NSOpenGLView
+            // legacy fallback was removed once the macOS backend stabilized on Metal.)
                 var (view, layer) = MacOSWindowInterop.AttachMetalLayerView(_nsWindow, _window.Width, _window.Height);
                 if (view != 0 && (Math.Abs(initialClientSize.Width - _window.Width) > 0.01 || Math.Abs(initialClientSize.Height - _window.Height) > 0.01))
                 {
@@ -837,7 +829,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 }
                 _nsView = view;
                 _metalLayer = layer;
-                _nsContext = 0;
                 MacOSWindowInterop.RegisterTextInputTarget(_nsView, this);
                 MacOSWindowInterop.RegisterForDragDrop(_nsView);
                 MacOSWindowInterop.RegisterMetalLayerTarget(_metalLayer, this);
@@ -847,22 +838,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                     MacOSWindowInterop.SetLayerOpaque(_metalLayer, !_allowsTransparency);
                 }
                 UpdateMetalLayerDisplaySyncIfNeeded();
-            }
-            else
-            {
-                var (view, ctx) = MacOSWindowInterop.AttachLegacyOpenGLView(_nsWindow, _window.Width, _window.Height);
-                if (view != 0 && (Math.Abs(initialClientSize.Width - _window.Width) > 0.01 || Math.Abs(initialClientSize.Height - _window.Height) > 0.01))
-                {
-                    MacOSWindowInterop.SetViewFrame(view, initialClientSize.Width, initialClientSize.Height);
-                }
-                _nsView = view;
-                _nsContext = ctx;
-                _metalLayer = 0;
-                MacOSWindowInterop.RegisterTextInputTarget(_nsView, this);
-                MacOSWindowInterop.RegisterForDragDrop(_nsView);
-                MacOSWindowInterop.RegisterReshapeTarget(_nsView, this);
-                MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
-            }
 
             // Establish initial DPI once we have a view/screen.
             UpdateDpiIfNeeded(force: true);
@@ -876,10 +851,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetWindowTransparency(_nsWindow, _nsView, _allowsTransparency);
             MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _allowsTransparency ? MacOSWindowInterop.TransparentStyleMask : _defaultStyleMask);
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
-            if (_nsContext != 0)
-            {
-                MacOSWindowInterop.SetOpenGLSurfaceOpacity(_nsContext, !_allowsTransparency);
-            }
             MacOSWindowInterop.RegisterWindowCloseTarget(_nsWindow, this);
 
             // Apply extended client area if set before window creation.
@@ -1036,21 +1007,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if (_metalLayer != 0)
         {
             MacOSWindowInterop.UpdateMetalLayerDrawableSize(_metalLayer, widthDip, heightDip, _lastDpiScale);
-        }
-        else if (_nsContext != 0)
-        {
-            // Ensure the OpenGL drawable is updated to the new view size. Without this, AppKit may stretch
-            // the last rendered frame during live resize (content looks like a scaled bitmap until mouse-up).
-            // Keep update() serialized with rendering/swap (avoid racing with the render thread).
-            MacOSWindowInterop.LockOpenGLContext(_nsContext);
-            try
-            {
-                MacOSWindowInterop.UpdateOpenGLContext(_nsContext);
-            }
-            finally
-            {
-                MacOSWindowInterop.UnlockOpenGLContext(_nsContext);
-            }
         }
 
         _window.SetClientSizeDip(widthDip, heightDip);
@@ -1888,34 +1844,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 // invoke the CAMetalLayer delegate.
                 MacOSWindowInterop.DisplayLayerIfNeeded(_metalLayer);
             }
-            return;
         }
-
-        if (_nsContext == 0)
-        {
-            return;
         }
-
-        MacOSWindowInterop.LockOpenGLContext(_nsContext);
-        try
-        {
-            // Keep the drawable in sync with the view size during live-resize.
-            MacOSWindowInterop.UpdateOpenGLContext(_nsContext);
-            _window.RenderFrame(CreateOpenGLSurface());
-        }
-        finally
-        {
-            MacOSWindowInterop.UnlockOpenGLContext(_nsContext);
-        }
-    }
-
-    private MacOSOpenGLSurface CreateOpenGLSurface()
-    {
-        var clientSize = _window.ClientSize;
-        int pixelWidth = (int)Math.Max(1, Math.Ceiling(clientSize.Width * _window.DpiScale));
-        int pixelHeight = (int)Math.Max(1, Math.Ceiling(clientSize.Height * _window.DpiScale));
-        return new MacOSOpenGLSurface(_nsView, _nsContext, pixelWidth, pixelHeight, _window.DpiScale);
-    }
 
     private MacOSMetalSurface CreateMetalSurface()
     {
@@ -1990,38 +1920,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
-    // Live resize is handled by the native -[NSOpenGLView reshape] callback (see MacOSWindowInterop).
-
-    private sealed class MacOSOpenGLSurface : IMacOSOpenGLWindowSurface
-    {
-        public WindowSurfaceKind Kind => WindowSurfaceKind.OpenGL;
-
-        public nint Handle => View;
-
-        public int PixelWidth { get; }
-
-        public int PixelHeight { get; }
-
-        public double DpiScale { get; }
-
-        public nint View { get; }
-
-        public nint OpenGLContext { get; }
-
-        public MacOSOpenGLSurface(nint view, nint context, int pixelWidth, int pixelHeight, double dpiScale)
-        {
-            View = view;
-            OpenGLContext = context;
-            PixelWidth = pixelWidth;
-            PixelHeight = pixelHeight;
-            DpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
-        }
-    }
-
     private sealed class MacOSMetalSurface : IMacOSMetalWindowSurface
     {
-        public WindowSurfaceKind Kind => WindowSurfaceKind.Metal;
-
         public nint Handle => MetalLayer;
 
         public int PixelWidth { get; }

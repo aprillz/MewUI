@@ -21,16 +21,12 @@ internal static unsafe class MacOSWindowInterop
     private const ulong NSViewWidthSizable = 2;
     private const ulong NSViewHeightSizable = 16;
     private static readonly Dictionary<nint, WeakReference<MacOSWindowBackend>> _windowCloseTargets = new();
-    private static readonly Dictionary<nint, WeakReference<MacOSWindowBackend>> _reshapeTargets = new();
     private static readonly Dictionary<nint, WeakReference<MacOSWindowBackend>> _textInputTargets = new();
     private static readonly Dictionary<nint, WeakReference<MacOSWindowBackend>> _metalLayerTargets = new();
     private static bool _initialized;
 
     private static nint ClsNSWindow;
     private static nint ClsNSString;
-    private static nint ClsNSOpenGLView;
-    private static nint ClsMewUIOpenGLView;
-    private static nint ClsNSOpenGLPixelFormat;
     private static nint ClsNSAppearance;
     private static nint ClsNSColor;
     private static nint ClsNSArray;
@@ -87,18 +83,9 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelInterpretKeyEvents;
     private static nint SelArrayWithObject;
 
-    private static nint SelInitWithAttributes;
-    private static nint SelInitWithFramePixelFormat;
-    private static nint SelOpenGLContext;
-    private static nint SelSetWantsBestResolution;
     private static nint SelSetAutoresizingMask;
     private static nint SelSetOpaque;
     private static nint SelInLiveResize;
-    private static nint SelUpdateOpenGLContext;
-    private static nint SelReshape;
-    private static nint SelDrawRect;
-    private static nint SelSetValuesForParameter;
-    private static nint SelCGLContextObj;
     private static nint SelSetNeedsDisplay;
     private static nint SelSetNeedsDisplayNoArgs;
     private static nint SelDisplayIfNeeded;
@@ -489,32 +476,6 @@ internal static unsafe class MacOSWindowInterop
         ObjC.MsgSend_void_nint_nint(window, SelMakeFirstResponder, responder);
     }
 
-    public static void RegisterReshapeTarget(nint view, MacOSWindowBackend backend)
-    {
-        if (view == 0)
-        {
-            return;
-        }
-
-        lock (_reshapeTargets)
-        {
-            _reshapeTargets[view] = new WeakReference<MacOSWindowBackend>(backend);
-        }
-    }
-
-    public static void UnregisterReshapeTarget(nint view)
-    {
-        if (view == 0)
-        {
-            return;
-        }
-
-        lock (_reshapeTargets)
-        {
-            _reshapeTargets.Remove(view);
-        }
-    }
-
     public static void RegisterTextInputTarget(nint view, MacOSWindowBackend backend)
     {
         if (view == 0)
@@ -566,7 +527,6 @@ internal static unsafe class MacOSWindowInterop
     {
         EnsureInitialized();
         EnsureTextInputViewSubclass();
-        EnsureOpenGLViewSubclass();
 
         if (view == 0 || ev == 0 || ClsNSArray == 0 || SelArrayWithObject == 0 || SelInterpretKeyEvents == 0)
         {
@@ -768,75 +728,6 @@ internal static unsafe class MacOSWindowInterop
         return view != 0 && ObjC.MsgSend_bool(view, SelInLiveResize);
     }
 
-    public static void UpdateOpenGLContext(nint nsOpenGLContext)
-    {
-        EnsureInitialized();
-        if (nsOpenGLContext == 0)
-        {
-            return;
-        }
-
-        ObjC.MsgSend_void(nsOpenGLContext, SelUpdateOpenGLContext);
-    }
-
-    public static void SetSwapInterval(nint nsOpenGLContext, int interval)
-    {
-        EnsureInitialized();
-        if (nsOpenGLContext == 0 || SelSetValuesForParameter == 0)
-        {
-            return;
-        }
-
-        // NSOpenGLContextParameterSwapInterval = 222
-        const int NSOpenGLContextParameterSwapInterval = 222;
-        int value = Math.Clamp(interval, 0, 1);
-        ObjC.MsgSend_void_intPtr_int(nsOpenGLContext, SelSetValuesForParameter, &value, NSOpenGLContextParameterSwapInterval);
-    }
-
-    public static void SetOpenGLSurfaceOpacity(nint nsOpenGLContext, bool opaque)
-    {
-        EnsureInitialized();
-        if (nsOpenGLContext == 0 || SelSetValuesForParameter == 0)
-        {
-            return;
-        }
-
-        // NSOpenGLCPSurfaceOpacity = 236
-        const int NSOpenGLCPSurfaceOpacity = 236;
-        int value = opaque ? 1 : 0;
-        ObjC.MsgSend_void_intPtr_int(nsOpenGLContext, SelSetValuesForParameter, &value, NSOpenGLCPSurfaceOpacity);
-    }
-
-    public static void LockOpenGLContext(nint nsOpenGLContext)
-    {
-        EnsureInitialized();
-        if (nsOpenGLContext == 0 || SelCGLContextObj == 0)
-        {
-            return;
-        }
-
-        var cgl = ObjC.MsgSend_nint(nsOpenGLContext, SelCGLContextObj);
-        if (cgl != 0)
-        {
-            CGL.LockContext(cgl);
-        }
-    }
-
-    public static void UnlockOpenGLContext(nint nsOpenGLContext)
-    {
-        EnsureInitialized();
-        if (nsOpenGLContext == 0 || SelCGLContextObj == 0)
-        {
-            return;
-        }
-
-        var cgl = ObjC.MsgSend_nint(nsOpenGLContext, SelCGLContextObj);
-        if (cgl != 0)
-        {
-            CGL.UnlockContext(cgl);
-        }
-    }
-
     public static void DisplayIfNeeded(nint nsView)
     {
         EnsureInitialized();
@@ -911,118 +802,6 @@ internal static unsafe class MacOSWindowInterop
         }
 
         ObjC.MsgSend_void(layer, SelSetNeedsDisplayNoArgs);
-    }
-
-    public static (nint View, nint Context) AttachLegacyOpenGLView(nint window, double widthDip, double heightDip)
-    {
-        EnsureInitialized();
-        // Must create the view as our subclass so it can:
-        // - forward reshape/draw callbacks
-        // - participate in NSTextInputClient (insertText/setMarkedText/...) for IME and plain text input
-        //
-        // If we create a plain NSOpenGLView first and only later register the subclass, existing instances
-        // won't gain the required Objective-C methods, and text input will silently stop working.
-        EnsureOpenGLViewSubclass();
-        // Minimal legacy pixel format (OpenGL 2.1 on macOS when using legacy profile).
-        // https://developer.apple.com/library/archive/documentation/GraphicsImaging/Conceptual/OpenGL-MacProgGuide/opengl_chap3/opengl_chap3.html
-        const int NSOpenGLPFAOpenGLProfile = 99;
-        const int NSOpenGLProfileVersionLegacy = 0x1000;
-        const int NSOpenGLPFAColorSize = 8;
-        const int NSOpenGLPFAAlphaSize = 11;
-        const int NSOpenGLPFADepthSize = 12;
-        const int NSOpenGLPFAStencilSize = 13;
-        const int NSOpenGLPFADoubleBuffer = 5;
-        const int NSOpenGLPFAMultisample = 59;
-        const int NSOpenGLPFASampleBuffers = 55;
-        const int NSOpenGLPFASamples = 56;
-        int stencilBits = Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
-
-        int* msaaAttrs = stackalloc int[]
-        {
-            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersionLegacy,
-            NSOpenGLPFAColorSize, 24,
-            NSOpenGLPFAAlphaSize, 8,
-            NSOpenGLPFADepthSize, 24,
-            NSOpenGLPFAStencilSize, stencilBits,
-            NSOpenGLPFADoubleBuffer,
-            // Prefer MSAA to reduce jaggies on filled primitives (Ellipse/RoundRect/etc).
-            NSOpenGLPFAMultisample,
-            NSOpenGLPFASampleBuffers, 1,
-            NSOpenGLPFASamples, 4,
-            0
-        };
-
-        int* fallbackAttrs = stackalloc int[]
-        {
-            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersionLegacy,
-            NSOpenGLPFAColorSize, 24,
-            NSOpenGLPFAAlphaSize, 8,
-            NSOpenGLPFADepthSize, 24,
-            NSOpenGLPFAStencilSize, stencilBits,
-            NSOpenGLPFADoubleBuffer,
-            0
-        };
-
-        nint pf = ObjC.MsgSend_nint(ClsNSOpenGLPixelFormat, SelAlloc);
-        pf = ObjC.MsgSend_nint_intPtr(pf, SelInitWithAttributes, msaaAttrs);
-        if (pf == 0)
-        {
-            // Some systems/drivers may not support the requested sample count/profile combo.
-            // Fall back to a non-MSAA pixel format.
-            pf = ObjC.MsgSend_nint(ClsNSOpenGLPixelFormat, SelAlloc);
-            pf = ObjC.MsgSend_nint_intPtr(pf, SelInitWithAttributes, fallbackAttrs);
-        }
-        if (pf == 0)
-        {
-            return (0, 0);
-        }
-
-        var viewClass = ClsMewUIOpenGLView != 0 ? ClsMewUIOpenGLView : ClsNSOpenGLView;
-        var view = ObjC.MsgSend_nint(viewClass, SelAlloc);
-        var rect = new NSRect(0, 0, widthDip, heightDip);
-        view = ObjC.MsgSend_nint_rect_nint(view, SelInitWithFramePixelFormat, rect, pf);
-        if (view == 0)
-        {
-            return (0, 0);
-        }
-
-        // Prefer retina backing if available.
-        ObjC.MsgSend_void_nint_bool(view, SelSetWantsBestResolution, true);
-        ObjC.MsgSend_void_nint_bool(view, SelSetOpaque, true);
-
-        // Force redraw during live resize to avoid AppKit scaling the last rendered frame (the "stretched bitmap" effect).
-        // This is the OpenGL analogue of the CAMetalLayer-based recipe: keep the view's layer-backed redraw policy
-        // in sync with bounds changes and request draws during resize.
-        if (SelSetWantsLayer != 0)
-        {
-            ObjC.MsgSend_void_nint_bool(view, SelSetWantsLayer, true);
-        }
-
-        // NSViewLayerContentsRedrawPolicy.DuringViewResize = 2
-        const int NSViewLayerContentsRedrawDuringViewResize = 2;
-        if (SelSetLayerContentsRedrawPolicy != 0)
-        {
-            ObjC.MsgSend_void_nint_int(view, SelSetLayerContentsRedrawPolicy, NSViewLayerContentsRedrawDuringViewResize);
-        }
-
-        if (SelLayer != 0 && SelSetNeedsDisplayOnBoundsChange != 0)
-        {
-            var layer = ObjC.MsgSend_nint(view, SelLayer);
-            if (layer != 0)
-            {
-                ObjC.MsgSend_void_nint_bool(layer, SelSetNeedsDisplayOnBoundsChange, true);
-            }
-        }
-
-        // Note: AppKit's live-resize content preservation flag is on NSWindow
-        // (setPreservesContentDuringLiveResize:), not NSView.
-        ObjC.MsgSend_void_nint_ulong(view, SelSetAutoresizingMask, NSViewWidthSizable | NSViewHeightSizable);
-
-        ObjC.MsgSend_void_nint_nint(window, SelSetContentView, view);
-
-        // Extract the context.
-        var ctx = ObjC.MsgSend_nint(view, SelOpenGLContext);
-        return (view, ctx);
     }
 
     // Structs used in objc_msgSend signatures must be blittable and have the exact native layout.
@@ -1183,8 +962,6 @@ internal static unsafe class MacOSWindowInterop
         ClsNSWindow = ObjC.GetClass("NSWindow");
         ClsNSString = ObjC.GetClass("NSString");
         ClsNSArray = ObjC.GetClass("NSArray");
-        ClsNSOpenGLView = ObjC.GetClass("NSOpenGLView");
-        ClsNSOpenGLPixelFormat = ObjC.GetClass("NSOpenGLPixelFormat");
         ClsNSAppearance = ObjC.GetClass("NSAppearance");
         ClsNSColor = ObjC.GetClass("NSColor");
 
@@ -1239,18 +1016,9 @@ internal static unsafe class MacOSWindowInterop
         SelInterpretKeyEvents = ObjC.Sel("interpretKeyEvents:");
         SelArrayWithObject = ObjC.Sel("arrayWithObject:");
 
-        SelInitWithAttributes = ObjC.Sel("initWithAttributes:");
-        SelInitWithFramePixelFormat = ObjC.Sel("initWithFrame:pixelFormat:");
-        SelOpenGLContext = ObjC.Sel("openGLContext");
-        SelSetWantsBestResolution = ObjC.Sel("setWantsBestResolutionOpenGLSurface:");
         SelSetAutoresizingMask = ObjC.Sel("setAutoresizingMask:");
         SelSetOpaque = ObjC.Sel("setOpaque:");
         SelInLiveResize = ObjC.Sel("inLiveResize");
-        SelUpdateOpenGLContext = ObjC.Sel("update");
-        SelReshape = ObjC.Sel("reshape");
-        SelDrawRect = ObjC.Sel("drawRect:");
-        SelSetValuesForParameter = ObjC.Sel("setValues:forParameter:");
-        SelCGLContextObj = ObjC.Sel("CGLContextObj");
         SelSetNeedsDisplay = ObjC.Sel("setNeedsDisplay:");
         SelSetNeedsDisplayNoArgs = ObjC.Sel("setNeedsDisplay");
         SelDisplayIfNeeded = ObjC.Sel("displayIfNeeded");
@@ -1267,7 +1035,6 @@ internal static unsafe class MacOSWindowInterop
         SelCount = ObjC.Sel("count");
         SelObjectAtIndex = ObjC.Sel("objectAtIndex:");
         SelUTF8String = ObjC.Sel("UTF8String");
-        EnsureOpenGLViewSubclass();
 
         SelAppearanceNamed = ObjC.Sel("appearanceNamed:");
         _appearanceNameAqua = ObjC.CreateNSString("NSAppearanceNameAqua");
@@ -1307,27 +1074,6 @@ internal static unsafe class MacOSWindowInterop
                 }
 
                 _textInputTargets.Remove(view);
-            }
-        }
-
-        backend = null!;
-        return false;
-    }
-
-    private static bool TryGetReshapeTarget(nint view, out MacOSWindowBackend backend)
-    {
-        lock (_reshapeTargets)
-        {
-            if (_reshapeTargets.TryGetValue(view, out var wr))
-            {
-                if (wr.TryGetTarget(out var target) && target != null)
-                {
-                    backend = target;
-                    return true;
-                }
-
-                // Backend collected without unregistration; remove stale mapping.
-                _reshapeTargets.Remove(view);
             }
         }
 
@@ -1867,81 +1613,6 @@ internal static unsafe class MacOSWindowInterop
         }
 
         _ = ObjC.AddProtocol(cls, "NSDraggingDestination");
-    }
-
-    [UnmanagedCallersOnly]
-    private static void MewUIOpenGLView_reshape(nint self, nint _cmd)
-    {
-        try
-        {
-            // Call super -[NSOpenGLView reshape]
-            var super = new ObjC.objc_super(self, ClsNSOpenGLView);
-            ObjC.MsgSendSuper_void(ref super, _cmd);
-
-            if (TryGetReshapeTarget(self, out var backend))
-            {
-                backend.OnNativeViewReshape();
-            }
-        }
-        catch
-        {
-            // Never let an exception cross the unmanaged boundary.
-        }
-    }
-
-    [UnmanagedCallersOnly]
-    private static void MewUIOpenGLView_drawRect(nint self, nint _cmd, NSRect dirtyRect)
-    {
-        try
-        {
-            if (TryGetReshapeTarget(self, out var backend))
-            {
-                backend.RenderNow();
-            }
-        }
-        catch
-        {
-            // Never let an exception cross the unmanaged boundary.
-        }
-    }
-
-    private static void EnsureOpenGLViewSubclass()
-    {
-        if (ClsMewUIOpenGLView != 0 || ClsNSOpenGLView == 0 || SelReshape == 0 || SelDrawRect == 0)
-        {
-            return;
-        }
-
-        const string className = "MewUIOpenGLView";
-        var cls = ObjC.GetClass(className);
-        bool needsRegister = false;
-        if (cls == 0)
-        {
-            cls = ObjC.AllocateClassPair(ClsNSOpenGLView, className);
-            needsRegister = cls != 0;
-        }
-
-        if (cls != 0)
-        {
-            var imp = (nint)(delegate* unmanaged<nint, nint, void>)&MewUIOpenGLView_reshape;
-            _ = ObjC.AddMethod(cls, SelReshape, imp, "v@:");
-
-            var impDraw = (nint)(delegate* unmanaged<nint, nint, NSRect, void>)&MewUIOpenGLView_drawRect;
-            // drawRect: takes an NSRect (CGRect) by value.
-            _ = ObjC.AddMethod(cls, SelDrawRect, impDraw, "v@:{CGRect={CGPoint=dd}{CGSize=dd}}");
-
-            // NSTextInputClient / text services
-            AddTextInputClientMethods(cls);
-            _ = ObjC.AddProtocol(cls, "NSTextInputClient");
-            AddDragDestinationMethods(cls);
-
-            if (needsRegister)
-            {
-                ObjC.RegisterClassPair(cls);
-            }
-        }
-
-        ClsMewUIOpenGLView = cls;
     }
 
     [UnmanagedCallersOnly]
