@@ -113,3 +113,5 @@ __MACOSX/
 # Tooling
 .vscode/
 *.code-workspace
+/agent
+/.claude
