@@ -37,6 +37,11 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     private double[]? _prefix; // length = count+1
     private bool _prefixValid;
 
+    // Running statistics over measured heights — used to estimate unmeasured items.
+    // Replaces the fixed EstimatedItemHeight default for items that haven't been arranged yet.
+    private double _measuredHeightSum;
+    private int _measuredHeightCount;
+
     private bool _isRequestingOffsetCorrection;
     private bool _stickToBottom;
     private int _pendingScrollIntoViewIndex = -1;
@@ -370,7 +375,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
             if (!HeightsEqual(_heights[i], alignedH))
             {
+                RemoveMeasuredHeight(_heights[i]);
                 _heights[i] = alignedH;
+                AddMeasuredHeight(alignedH);
                 anyHeightChanged = true;
             }
 
@@ -647,7 +654,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
                 if (!HeightsEqual(_heights[index], alignedH))
                 {
+                    RemoveMeasuredHeight(_heights[index]);
                     _heights[index] = alignedH;
+                    AddMeasuredHeight(alignedH);
                     InvalidatePrefix();
                     RecomputeExtent();
                 }
@@ -685,7 +694,44 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
             return h;
         }
 
-        return Math.Max(1, EstimatedItemHeight);
+        // Pixel-align the estimate so the prefix sum advances in the same whole-pixel
+        // increments that anchor correction applies to the offset. Measured heights are
+        // already pixel-rounded at measurement; matching the estimate keeps the prefix
+        // grid consistent for both measured and unmeasured items, eliminating sub-pixel
+        // drift across rapid INCC bursts where many unmeasured items are inserted.
+        return Math.Max(1, GetRunningEstimateOrDefault());
+    }
+
+    private double GetRunningEstimateOrDefault()
+    {
+        double raw = _measuredHeightCount > 0
+            ? _measuredHeightSum / _measuredHeightCount
+            : EstimatedItemHeight;
+        double dpiScale = GetDpi() / 96.0;
+        if (dpiScale <= 0) dpiScale = 1.0;
+        return LayoutRounding.RoundToPixel(raw, dpiScale);
+    }
+
+    private void AddMeasuredHeight(double height)
+    {
+        if (height > 0)
+        {
+            _measuredHeightSum += height;
+            _measuredHeightCount++;
+        }
+    }
+
+    private void RemoveMeasuredHeight(double height)
+    {
+        if (height > 0 && _measuredHeightCount > 0)
+        {
+            _measuredHeightSum = Math.Max(0, _measuredHeightSum - height);
+            _measuredHeightCount--;
+            if (_measuredHeightCount == 0)
+            {
+                _measuredHeightSum = 0;
+            }
+        }
     }
 
     private int FindIndexByY(double yContent)
@@ -736,6 +782,10 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         }
         else
         {
+            for (int i = count; i < _heights.Count; i++)
+            {
+                RemoveMeasuredHeight(_heights[i]);
+            }
             _heights.RemoveRange(count, _heights.Count - count);
         }
 
@@ -774,6 +824,8 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     private void ResetHeights()
     {
         _heights.Clear();
+        _measuredHeightSum = 0;
+        _measuredHeightCount = 0;
         _prefix = null;
         _prefixValid = false;
         RecomputeExtent();
@@ -1154,6 +1206,16 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         try
         {
             OffsetCorrectionRequested?.Invoke(correctedOffset);
+
+            // Keep the presenter's local offset in sync with the value we just pushed
+            // to the host. Subsequent operations within the same synchronous dispatch
+            // (e.g. a burst of INCC events from collection mutation) compute anchors
+            // against this offset; without this update they all see the pre-correction
+            // value and produce the same correction delta every iteration, so 20 inserts
+            // collapse to a single 70px shift instead of accumulating 20 × 70px.
+            // The next external SetOffset (driven by ScrollViewer arrange) will reconcile
+            // any host-side clamping.
+            _offset = correctedOffset;
         }
         finally
         {
@@ -1223,8 +1285,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
                     if (insertIndex <= anchorIndex)
                     {
                         requestAnchorCorrection = true;
-                        // Best-effort using estimates (new items are unknown).
-                        correctionDelta = change.Count * Math.Max(1, EstimatedItemHeight);
+                        // New items haven't been measured; use the running mean over already-measured
+                        // items rather than a fixed default. Refined later by measurement-based anchor correction.
+                        correctionDelta = change.Count * Math.Max(1, GetRunningEstimateOrDefault());
                     }
                 }
                 break;
@@ -1250,6 +1313,12 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
                             correctionDelta = -removed;
                         }
 
+                        // Drop measured-height stats for all removed items (independent of anchor position).
+                        for (int i = 0; i < removeCount; i++)
+                        {
+                            RemoveMeasuredHeight(_heights[removeIndex + i]);
+                        }
+
                         _heights.RemoveRange(removeIndex, removeCount);
                         RemapRealizedIndicesAfterRemove(removeIndex, removeCount);
                     }
@@ -1263,6 +1332,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
                     int c = Math.Min(change.Count, _heights.Count - start);
                     for (int i = 0; i < c; i++)
                     {
+                        RemoveMeasuredHeight(_heights[start + i]);
                         _heights[start + i] = -1;
                     }
 
@@ -1306,9 +1376,14 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         if (requestAnchorCorrection && !_isRequestingOffsetCorrection)
         {
             // Best-effort correction using estimates; refined later by measurement-based anchor correction.
-            double desiredOffsetY = alignedOffsetY + correctionDelta;
+            // Quantize the delta to a whole-pixel multiple so each INCC iteration produces an
+            // identical visual shift. Combined with prefix estimates also being pixel-aligned
+            // (see GetEstimatedHeightDip), the rendered offset and prefix advance in lockstep
+            // and anchor position stays stable across a rapid prepend burst.
+            double quantizedDelta = LayoutRounding.RoundToPixel(correctionDelta, dpiScale);
+            double desiredOffsetY = _offset.Y + quantizedDelta;
             desiredOffsetY = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - _viewport.Height));
-            if (Math.Abs(desiredOffsetY - alignedOffsetY) > (1.0 / dpiScale) * 0.5)
+            if (Math.Abs(desiredOffsetY - _offset.Y) > (1.0 / dpiScale) * 0.5)
             {
                 RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
             }
