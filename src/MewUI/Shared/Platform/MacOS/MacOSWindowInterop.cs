@@ -331,6 +331,17 @@ internal static unsafe class MacOSWindowInterop
         return ObjC.MsgSend_rect(screen, SelFrame);
     }
 
+    public static nint GetWindowScreen(nint window)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelScreen == 0)
+        {
+            return 0;
+        }
+
+        return ObjC.MsgSend_nint(window, SelScreen);
+    }
+
     public static void SetWindowPosition(nint window, double leftDip, double topDip)
     {
         EnsureInitialized();
