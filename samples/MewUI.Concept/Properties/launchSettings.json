@@ -6,7 +6,7 @@
       }
 
     },
-    "NanoVG": {
+    "MewVG": {
       "commandName": "Project",
       "commandLineArgs": "--vg"
     },

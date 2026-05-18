@@ -3,7 +3,7 @@
     "Direct2D": {
       "commandName": "Project"
     },
-    "NanoVG": {
+    "MewVG": {
       "commandName": "Project",
       "commandLineArgs": "--vg"
     },
