@@ -162,7 +162,7 @@ public sealed class Application
         {
             try
             {
-                return DefaultGraphicsFactory.Identifier;
+                return DefaultGraphicsFactory.Backend;
             }
             catch
             {
