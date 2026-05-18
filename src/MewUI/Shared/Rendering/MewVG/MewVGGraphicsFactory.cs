@@ -15,8 +15,12 @@ public sealed partial class MewVGX11GraphicsFactory
 #else
 public sealed partial class MewVGWin32GraphicsFactory 
 #endif
-    : IGraphicsFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfaceSelector, IWindowSurfacePresenter
+    : IGraphicsFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWindowSurfacePresenter
 {
+    public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
+
+    internal void RaiseGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
+        => GpuInteropInvalidated?.Invoke(this, e);
 
 
 #if MEWUI_MEWVG_MACOS
@@ -56,17 +60,6 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// will go through <c>IGraphicsFactory</c> as a versioned option.
     /// </remarks>
     internal bool UseAsyncPboUpload { get; set; } = true;
-
-    public WindowSurfaceKind PreferredSurfaceKind
-    {
-        get
-        {
-            var kind = WindowSurfaceKind.Default;
-            bool handled = false;
-            TryGetPreferredSurfaceKind(ref handled, ref kind);
-            return handled ? kind : WindowSurfaceKind.Default;
-        }
-    }
 
     public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,
         bool italic = false, bool underline = false, bool strikethrough = false)
@@ -131,8 +124,8 @@ public sealed partial class MewVGWin32GraphicsFactory
         return true;
     }
 
-    private IImage CreateExternalLockedTextureImage(IExternalLockedTexture texture)
-        => new MewVGExternalLockedImage(texture);
+    private IImage CreateExternalRasterImage(IExternalRasterSource source)
+        => new MewVGExternalRasterImage(source);
 
     public IImageFilterExecutor CreateImageFilterExecutor()
     {
@@ -234,16 +227,8 @@ public sealed partial class MewVGWin32GraphicsFactory
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create image views for pixel-backed surfaces.");
 
-    public IImage CreateImageView(IExternalSampleSource source)
-    {
-        if (source is ExternalLockedTextureSampleSource locked)
-        {
-            return CreateExternalLockedTextureImage(locked.Texture);
-        }
-
-        throw new NotSupportedException(
-            $"{GetType().Name} does not support external sample sources of type {source.GetType().Name}.");
-    }
+    public IImage CreateImageView(IExternalRasterSource source)
+        => CreateExternalRasterImage(source);
 
     public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
         => RenderDeviceFactoryHelpers.TryReadPixels(source, destination, destinationStrideBytes);
@@ -289,8 +274,6 @@ public sealed partial class MewVGWin32GraphicsFactory
     partial void TryCreatePixelSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha, ref bool handled, ref IRenderSurface? renderTarget);
 
     partial void TryGetImageDisposeHandler(ref Action<MewVGImage>? handler);
-
-    partial void TryGetPreferredSurfaceKind(ref bool handled, ref WindowSurfaceKind kind);
 
     partial void DisposePlatformResources();
 

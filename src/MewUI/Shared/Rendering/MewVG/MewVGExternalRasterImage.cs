@@ -4,17 +4,16 @@ using Aprillz.MewVG;
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
-/// IImage implementation that wraps an externally-managed GPU texture (provided via
-/// <see cref="IExternalLockedTexture"/>). The texture's
-/// <see cref="IExternalLockedTexture.Acquire"/> / <see cref="IExternalLockedTexture.Release"/>
-/// brackets are driven by <c>MewVGGraphicsContext</c> per frame; this class only handles
-/// the NVG NoDelete-style wrapping of the native handle.
+/// IImage implementation that wraps an externally-managed raster source. The source's
+/// <see cref="IExternalRasterSource.Acquire"/> lease is driven by
+/// <c>MewVGGraphicsContext</c> per frame; this class only handles the NVG
+/// NoDelete-style wrapping of the native handle exposed by the lease.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Created from an external sample source. The wrapping caller (sample, library) owns the lifetime of the underlying
-/// <see cref="IExternalLockedTexture"/> — disposing this image releases the NVG
-/// bookkeeping but does NOT dispose the external texture.
+/// Created from an external raster source. The wrapping caller owns the lifetime of the
+/// underlying <see cref="IExternalRasterSource"/> — disposing this image releases the
+/// NVG bookkeeping but does NOT dispose the external resource.
 /// </para>
 /// <para>
 /// Thread safety: NVG image-id table per backend instance. <see cref="GetOrCreateImageId"/>
@@ -22,76 +21,59 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// access from multiple GL contexts uses the per-NVG dictionary.
 /// </para>
 /// </remarks>
-internal sealed class MewVGExternalLockedImage : IImage
+internal sealed class MewVGExternalRasterImage : IImage
 {
-    private readonly IExternalLockedTexture _texture;
-    private readonly bool _ownsTexture;
-    private readonly Dictionary<NanoVG, int> _images = new();
+    private readonly IExternalRasterSource _source;
+    private readonly Dictionary<(NanoVG vg, nint handle), int> _images = new();
     private bool _disposed;
 
-    public IExternalLockedTexture Texture => _texture;
+    public IExternalRasterSource Source => _source;
 
-    public int PixelWidth => _texture.PixelWidth;
-    public int PixelHeight => _texture.PixelHeight;
+    public int PixelWidth => _source.PixelWidth;
+    public int PixelHeight => _source.PixelHeight;
 
-    /// <param name="texture">The external GPU texture to wrap.</param>
-    /// <param name="ownsTexture">
-    /// When <see langword="true"/>, this image's <see cref="Dispose"/> also disposes
-    /// the underlying <paramref name="texture"/>. Set by factory paths that construct
-    /// the texture internally (e.g. PBO+fence uploader for streaming CPU sources) so
-    /// the consumer doesn't need to track it separately. Default <see langword="false"/>
-    /// preserves the original semantics — caller-owned external textures (D3D11 video
-    /// frame, IOSurface) survive image disposal.
-    /// </param>
-    public MewVGExternalLockedImage(IExternalLockedTexture texture, bool ownsTexture = false)
+    public MewVGExternalRasterImage(IExternalRasterSource source)
     {
-        ArgumentNullException.ThrowIfNull(texture);
-        _texture = texture;
-        _ownsTexture = ownsTexture;
+        ArgumentNullException.ThrowIfNull(source);
+        _source = source;
     }
 
     /// <summary>
-    /// Returns an NVG image id for this texture on the given <paramref name="vg"/>. The
-    /// caller MUST have invoked <c>_texture.Acquire()</c> for the current frame before
-    /// calling this — the returned NVG id references the native handle directly via
-    /// NoDelete, so it's only valid until the frame's matching <c>Release</c>.
+    /// Returns an NVG image id for this texture lease on the given <paramref name="vg"/>.
+    /// The caller owns the lease lifetime for the current frame.
     /// </summary>
-    public int GetOrCreateImageId(NanoVG vg, NVGimageFlags flags)
+    public int GetOrCreateImageId(NanoVG vg, IExternalRasterLease lease, NVGimageFlags flags)
     {
         if (_disposed) return 0;
 
-        nint handle = _texture.NativeHandle;
+        nint handle = lease.NativeHandle;
         if (handle == 0) return 0;
 
-        if (_texture.AlphaMode == BitmapAlphaMode.Premultiplied)
+        if (_source.AlphaMode == BitmapAlphaMode.Premultiplied)
         {
             flags |= NVGimageFlags.Premultiplied;
         }
-        if (_texture.YFlipped)
+        if (lease.YFlipped)
         {
             flags |= NVGimageFlags.FlipY;
         }
         flags |= NVGimageFlags.NoDelete;
 
-        if (_images.TryGetValue(vg, out var cached) && cached != 0)
+        var key = (vg, handle);
+        if (_images.TryGetValue(key, out var cached) && cached != 0)
         {
             return cached;
         }
 
-        // Try the backend-agnostic native-handle wrap first (Metal and any backend that
-        // implements CreateImageFromNativeHandle). If unsupported (default returns 0), fall
-        // back to the GL int-handle wrap. The texture's NativeHandle interpretation depends
-        // on which backend produced the IImage — GL backends store a uint texture id in the
-        // low 32 bits; Metal backends store an MTLTexture pointer.
-        int id = vg.CreateImageFromNativeHandle(handle, _texture.PixelWidth, _texture.PixelHeight, flags);
+        int id = vg.CreateImageFromNativeHandle(handle, lease.PixelWidth, lease.PixelHeight, flags);
         if (id == 0)
         {
-            id = vg.CreateImageFromHandle((int)handle, _texture.PixelWidth, _texture.PixelHeight, flags);
+            id = vg.CreateImageFromHandle((int)handle, lease.PixelWidth, lease.PixelHeight, flags);
         }
 
         if (id != 0)
         {
-            _images[vg] = id;
+            _images[key] = id;
         }
         return id;
     }
@@ -101,8 +83,8 @@ internal sealed class MewVGExternalLockedImage : IImage
         if (_disposed) return;
         _disposed = true;
         // Release NVG bookkeeping. NoDelete means the underlying texture is owned by the
-        // IExternalLockedTexture — we must NOT call glDeleteTextures on it ourselves.
-        foreach (var (vg, imageId) in _images)
+        // external raster source — we must NOT call glDeleteTextures on it ourselves.
+        foreach (var ((vg, _), imageId) in _images)
         {
             if (imageId != 0)
             {
@@ -110,10 +92,5 @@ internal sealed class MewVGExternalLockedImage : IImage
             }
         }
         _images.Clear();
-
-        if (_ownsTexture)
-        {
-            _texture.Dispose();
-        }
     }
 }
