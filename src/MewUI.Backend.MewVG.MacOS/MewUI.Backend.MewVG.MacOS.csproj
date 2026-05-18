@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
   </ItemGroup>
 
   <ItemGroup>
