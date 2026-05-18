@@ -26,7 +26,7 @@ internal static partial class Win32DpiApiResolver
 
     static Win32DpiApiResolver()
     {
-        nint user32 = NativeLibrary.Load("user32.dll");
+        nint user32 = NativeLibrary.Load("user32.dll", typeof(Win32DpiApiResolver).Assembly, DllImportSearchPath.System32);
         _hasSetProcessDpiAwarenessContext = NativeLibrary.TryGetExport(user32, "SetProcessDpiAwarenessContext", out _);
         _hasGetDpiForWindow = NativeLibrary.TryGetExport(user32, "GetDpiForWindow", out _);
         _hasGetDpiForSystem = NativeLibrary.TryGetExport(user32, "GetDpiForSystem", out _);
@@ -34,7 +34,7 @@ internal static partial class Win32DpiApiResolver
         _hasAdjustWindowRectExForDpi = NativeLibrary.TryGetExport(user32, "AdjustWindowRectExForDpi", out _);
 
         // Probe shcore.dll for Win8.1 API (may not exist on Win7).
-        if (NativeLibrary.TryLoad("shcore.dll", out _shcoreLib) && _shcoreLib != 0)
+        if (NativeLibrary.TryLoad("shcore.dll", typeof(Win32DpiApiResolver).Assembly, DllImportSearchPath.System32, out _shcoreLib) && _shcoreLib != 0)
         {
             NativeLibrary.TryGetExport(_shcoreLib, "GetDpiForMonitor", out _getDpiForMonitorPtr);
             NativeLibrary.TryGetExport(_shcoreLib, "SetProcessDpiAwareness", out _setProcessDpiAwarenessPtr);
