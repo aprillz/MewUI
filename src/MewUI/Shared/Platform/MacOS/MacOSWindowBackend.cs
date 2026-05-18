@@ -1852,7 +1852,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         var clientSize = _window.ClientSize;
         int pixelWidth = (int)Math.Max(1, Math.Ceiling(clientSize.Width * _window.DpiScale));
         int pixelHeight = (int)Math.Max(1, Math.Ceiling(clientSize.Height * _window.DpiScale));
-        return new MacOSMetalSurface(_nsView, _metalLayer, pixelWidth, pixelHeight, _window.DpiScale);
+        var screen = MacOSWindowInterop.GetWindowScreen(_nsWindow);
+        return new MacOSMetalSurface(_nsView, _metalLayer, screen, pixelWidth, pixelHeight, _window.DpiScale);
     }
 
     internal void RenderFromMetalLayerDisplay(nint layer)
@@ -1886,8 +1887,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     private sealed class MacOSMetalSurface : IMacOSMetalWindowSurface
     {
-        public WindowSurfaceKind Kind => WindowSurfaceKind.Metal;
-
         public nint Handle => MetalLayer;
 
         public int PixelWidth { get; }
@@ -1896,14 +1895,23 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         public double DpiScale { get; }
 
+        // NSScreen* identifies the display on macOS. Both NativeHandle and IdLow carry the
+        // pointer value so structural equality holds across copies; Core type stays platform-
+        // neutral and the platform translation lives here.
+        public PlatformDisplayIdentity DisplayIdentity =>
+            Screen == 0 ? default : new PlatformDisplayIdentity((ulong)Screen, 0, Screen);
+
         public nint View { get; }
 
         public nint MetalLayer { get; }
 
-        public MacOSMetalSurface(nint view, nint metalLayer, int pixelWidth, int pixelHeight, double dpiScale)
+        public nint Screen { get; }
+
+        public MacOSMetalSurface(nint view, nint metalLayer, nint screen, int pixelWidth, int pixelHeight, double dpiScale)
         {
             View = view;
             MetalLayer = metalLayer;
+            Screen = screen;
             PixelWidth = pixelWidth;
             PixelHeight = pixelHeight;
             DpiScale = dpiScale <= 0 ? 1.0 : dpiScale;

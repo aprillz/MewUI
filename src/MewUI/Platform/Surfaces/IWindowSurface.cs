@@ -1,23 +1,17 @@
 namespace Aprillz.MewUI.Platform;
 
-public enum WindowSurfaceKind
+/// <summary>
+/// Identifies the platform display/output associated with a window surface as an opaque
+/// (IdLow, IdHigh, NativeHandle) tuple. Equality is structural, so backends only need to
+/// know how to extract their own meaningful field — typically <see cref="NativeHandle"/>
+/// (Win32 HMONITOR, macOS NSScreen*, etc.) plus an optional secondary index
+/// (<see cref="IdHigh"/> carries the X11 screen number).
+/// The Core type is platform-neutral; per-platform construction lives in the corresponding
+/// platform backend.
+/// </summary>
+public readonly record struct PlatformDisplayIdentity(ulong IdLow, long IdHigh, nint NativeHandle)
 {
-    Default = 0,
-
-    /// <summary>
-    /// Prefer an OpenGL-backed native view/surface when available.
-    /// </summary>
-    OpenGL = 1,
-
-    /// <summary>
-    /// Prefer a Metal-backed native layer/surface when available.
-    /// </summary>
-    Metal = 2,
-
-    /// <summary>
-    /// Prefer a layered/composited presentation surface (e.g., Win32 UpdateLayeredWindow).
-    /// </summary>
-    Layered = 3,
+    public bool IsEmpty => IdLow == 0 && IdHigh == 0 && NativeHandle == 0;
 }
 
 /// <summary>
@@ -26,8 +20,6 @@ public enum WindowSurfaceKind
 /// </summary>
 public interface IWindowSurface
 {
-    WindowSurfaceKind Kind { get; }
-
     /// <summary>
     /// Gets the primary native handle of the surface.
     /// For Win32 this is typically an HWND.
@@ -39,6 +31,13 @@ public interface IWindowSurface
     int PixelHeight { get; }
 
     double DpiScale { get; }
+
+    /// <summary>
+    /// Gets the platform display/output identity currently associated with this surface.
+    /// Backends should treat an empty value as "unknown" and fall back to their existing
+    /// platform-specific discovery path.
+    /// </summary>
+    PlatformDisplayIdentity DisplayIdentity => default;
 }
 
 /// <summary>

@@ -2403,8 +2403,6 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private sealed class X11GlxWindowSurface : IX11GlxWindowSurface
     {
-        public WindowSurfaceKind Kind => WindowSurfaceKind.OpenGL;
-
         public nint Handle => Window;
 
         public int PixelWidth { get; }
@@ -2412,6 +2410,13 @@ internal sealed class X11WindowBackend : IWindowBackend
         public int PixelHeight { get; }
 
         public double DpiScale { get; }
+
+        // X11 needs both the Display* and the integer screen number to uniquely identify an
+        // output. Display* goes into NativeHandle (and IdLow for structural equality);
+        // VisualInfo.Screen rides in IdHigh as the secondary index. Core type stays platform-
+        // neutral; the X11-specific packing lives here.
+        public PlatformDisplayIdentity DisplayIdentity =>
+            Display == 0 ? default : new PlatformDisplayIdentity((ulong)Display, VisualInfo.Screen, Display);
 
         public nint Display { get; }
 

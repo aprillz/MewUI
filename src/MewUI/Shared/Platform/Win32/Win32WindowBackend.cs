@@ -1376,7 +1376,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return;
         }
 
-        var surface = new Win32LayeredSurface(Handle, pixelWidth, pixelHeight, Window.DpiScale);
+        var monitor = User32.MonitorFromWindow(Handle, MonitorDefaultToNearest);
+        var surface = new Win32LayeredPresentSurface(Handle, monitor, pixelWidth, pixelHeight, Window.DpiScale);
         _ = presenter.Present(Window, surface, _opacity);
     }
 
@@ -1393,23 +1394,28 @@ internal sealed class Win32WindowBackend : IWindowBackend
         // here so D2D's CreateContextCore selects the swap-chain transparent target.
         bool transparent = _allowsTransparency
             && ResolveTransparencyMode() == Win32TransparencyMode.Surface;
+        var monitor = User32.MonitorFromWindow(Handle, MonitorDefaultToNearest);
 
-        if (_cachedHdcSurface?.Matches(hdc, pixelWidth, pixelHeight, dpiScale, transparent) != true)
+        if (_cachedHdcSurface?.Matches(hdc, monitor, pixelWidth, pixelHeight, dpiScale, transparent) != true)
         {
-            _cachedHdcSurface = new Win32HdcSurface(Handle, hdc, pixelWidth, pixelHeight, dpiScale, TransparentComposition: transparent);
+            _cachedHdcSurface = new Win32HdcSurface(Handle, hdc, monitor, pixelWidth, pixelHeight, dpiScale, TransparentComposition: transparent);
         }
         return _cachedHdcSurface;
     }
 
-    private sealed record Win32HdcSurface(nint Hwnd, nint Hdc, int PixelWidth, int PixelHeight, double DpiScale, bool TransparentComposition)
+    private sealed record Win32HdcSurface(nint Hwnd, nint Hdc, nint Monitor, int PixelWidth, int PixelHeight, double DpiScale, bool TransparentComposition)
         : IWin32HdcWindowSurface
     {
-        public WindowSurfaceKind Kind => WindowSurfaceKind.Default;
-
         public nint Handle => Hwnd;
 
-        public bool Matches(nint hdc, int pixelWidth, int pixelHeight, double dpiScale, bool transparentComposition) =>
-            Hdc == hdc && PixelWidth == pixelWidth && PixelHeight == pixelHeight && DpiScale == dpiScale
+        // HMONITOR identifies the display; replicate it in NativeHandle for backends that
+        // expect the platform-native pointer there. IdLow mirrors the same value so structural
+        // equality is meaningful even when callers only inspect the numeric id pair.
+        public PlatformDisplayIdentity DisplayIdentity =>
+            Monitor == 0 ? default : new PlatformDisplayIdentity((ulong)Monitor, 0, Monitor);
+
+        public bool Matches(nint hdc, nint monitor, int pixelWidth, int pixelHeight, double dpiScale, bool transparentComposition) =>
+            Hdc == hdc && Monitor == monitor && PixelWidth == pixelWidth && PixelHeight == pixelHeight && DpiScale == dpiScale
             && TransparentComposition == transparentComposition;
     }
 
@@ -1489,13 +1495,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
     }
 
-    private sealed class Win32LayeredSurface : IWin32LayeredWindowSurface
+    // Lightweight HWND-only surface used to drive the IWindowSurfacePresenter (Bitmap-mode
+    // UpdateLayeredWindow) path. Distinct from Win32HdcSurface because the present path
+    // creates its own offscreen DC; no HDC is supplied at this layer.
+    private sealed class Win32LayeredPresentSurface : IWin32WindowSurface
     {
-        public WindowSurfaceKind Kind => WindowSurfaceKind.Layered;
-
         public nint Handle => Hwnd;
 
         public nint Hwnd { get; }
+
+        public nint Monitor { get; }
 
         public int PixelWidth { get; }
 
@@ -1503,9 +1512,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         public double DpiScale { get; }
 
-        public Win32LayeredSurface(nint hwnd, int pixelWidth, int pixelHeight, double dpiScale)
+        public PlatformDisplayIdentity DisplayIdentity =>
+            Monitor == 0 ? default : new PlatformDisplayIdentity((ulong)Monitor, 0, Monitor);
+
+        public Win32LayeredPresentSurface(nint hwnd, nint monitor, int pixelWidth, int pixelHeight, double dpiScale)
         {
             Hwnd = hwnd;
+            Monitor = monitor;
             PixelWidth = pixelWidth;
             PixelHeight = pixelHeight;
             DpiScale = dpiScale;
