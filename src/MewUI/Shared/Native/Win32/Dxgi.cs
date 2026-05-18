@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Native.Structs;
+
 namespace Aprillz.MewUI.Native;
 
 internal static unsafe partial class Dxgi
@@ -15,6 +17,63 @@ internal static unsafe partial class Dxgi
         uint flags,
         in Guid riid,
         out nint ppFactory);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int EnumAdapters(nint factory, uint adapterIndex, out nint adapter)
+    {
+        nint localAdapter = 0;
+        var vtbl = *(nint**)factory;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)vtbl[7];
+        int hr = fn(factory, adapterIndex, &localAdapter);
+        adapter = localAdapter;
+        return hr;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int EnumOutputs(nint adapter, uint outputIndex, out nint output)
+    {
+        nint localOutput = 0;
+        var vtbl = *(nint**)adapter;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)vtbl[7];
+        int hr = fn(adapter, outputIndex, &localOutput);
+        output = localOutput;
+        return hr;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetAdapterDesc(nint adapter, out DXGI_ADAPTER_DESC desc)
+    {
+        desc = default;
+        fixed (DXGI_ADAPTER_DESC* pDesc = &desc)
+        {
+            var vtbl = *(nint**)adapter;
+            var fn = (delegate* unmanaged[Stdcall]<nint, DXGI_ADAPTER_DESC*, int>)vtbl[8];
+            return fn(adapter, pDesc);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetAdapterFromDevice(nint dxgiDevice, out nint adapter)
+    {
+        nint localAdapter = 0;
+        var vtbl = *(nint**)dxgiDevice;
+        var fn = (delegate* unmanaged[Stdcall]<nint, nint*, int>)vtbl[7];
+        int hr = fn(dxgiDevice, &localAdapter);
+        adapter = localAdapter;
+        return hr;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetOutputDesc(nint output, out DXGI_OUTPUT_DESC desc)
+    {
+        desc = default;
+        fixed (DXGI_OUTPUT_DESC* pDesc = &desc)
+        {
+            var vtbl = *(nint**)output;
+            var fn = (delegate* unmanaged[Stdcall]<nint, DXGI_OUTPUT_DESC*, int>)vtbl[7];
+            return fn(output, pDesc);
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int MakeWindowAssociation(nint factory, nint hwnd, uint flags)
@@ -90,6 +149,43 @@ internal static unsafe partial class Dxgi
     }
 }
 
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal unsafe struct DXGI_OUTPUT_DESC
+{
+    public fixed char DeviceName[32];
+    public RECT DesktopCoordinates;
+    public int AttachedToDesktop;
+    public DXGI_MODE_ROTATION Rotation;
+    public nint Monitor;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal unsafe struct DXGI_ADAPTER_DESC
+{
+    public fixed char Description[128];
+    public uint VendorId;
+    public uint DeviceId;
+    public uint SubSysId;
+    public uint Revision;
+    public nuint DedicatedVideoMemory;
+    public nuint DedicatedSystemMemory;
+    public nuint SharedSystemMemory;
+    public LUID AdapterLuid;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct LUID(uint lowPart, int highPart) : IEquatable<LUID>
+{
+    public readonly uint LowPart = lowPart;
+    public readonly int HighPart = highPart;
+
+    public bool Equals(LUID other) => LowPart == other.LowPart && HighPart == other.HighPart;
+
+    public override bool Equals(object? obj) => obj is LUID other && Equals(other);
+
+    public override int GetHashCode() => HashCode.Combine(LowPart, HighPart);
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct DXGI_SAMPLE_DESC(uint count, uint quality)
 {
@@ -127,6 +223,15 @@ internal readonly struct DXGI_SWAP_CHAIN_DESC1(
 internal enum DXGI_SCALING : uint
 {
     STRETCH = 0,
+}
+
+internal enum DXGI_MODE_ROTATION : uint
+{
+    UNSPECIFIED = 0,
+    IDENTITY = 1,
+    ROTATE90 = 2,
+    ROTATE180 = 3,
+    ROTATE270 = 4,
 }
 
 internal enum DXGI_SWAP_EFFECT : uint
