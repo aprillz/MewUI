@@ -8,7 +8,31 @@ internal static class ItemsViewportMath
         double viewportHeight,
         double currentOffset)
     {
-        if (index < 0 || itemHeight <= 0 || viewportHeight <= 0 ||
+        if (index < 0 || itemHeight <= 0)
+        {
+            return currentOffset;
+        }
+
+        return ComputeScrollOffsetToBringItemRangeIntoView(
+            itemTop: index * itemHeight,
+            itemHeight: itemHeight,
+            viewportHeight: viewportHeight,
+            currentOffset: currentOffset);
+    }
+
+    /// <summary>
+    /// Computes the scroll offset that brings an item with the given top/height into view.
+    /// Used by variable-height hosts that know the item's real Y range (e.g. via the
+    /// presenter's prefix sum) rather than assuming a uniform item height.
+    /// </summary>
+    public static double ComputeScrollOffsetToBringItemRangeIntoView(
+        double itemTop,
+        double itemHeight,
+        double viewportHeight,
+        double currentOffset)
+    {
+        if (itemHeight <= 0 || viewportHeight <= 0 ||
+            double.IsNaN(itemTop) || double.IsInfinity(itemTop) ||
             double.IsNaN(itemHeight) || double.IsInfinity(itemHeight) ||
             double.IsNaN(viewportHeight) || double.IsInfinity(viewportHeight) ||
             double.IsNaN(currentOffset) || double.IsInfinity(currentOffset))
@@ -16,7 +40,6 @@ internal static class ItemsViewportMath
             return currentOffset;
         }
 
-        double itemTop = index * itemHeight;
         double itemBottom = itemTop + itemHeight;
 
         double newOffset = currentOffset;

@@ -1910,6 +1910,43 @@ public static class ControlExtensions
 
     #endregion
 
+    #region GridView presenters
+
+    /// <summary>
+    /// Uses fixed-height row virtualization (default). Rows assume <see cref="GridView.RowHeight"/>
+    /// or the theme default; cell content taller than that clips.
+    /// </summary>
+    public static GridView FixedHeightPresenter(this GridView grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        grid.SetPresenter(new FixedHeightItemsPresenter
+        {
+            BorderThickness = 0,
+            Padding = new Thickness(0),
+            UseHorizontalExtentForLayout = true,
+        });
+        return grid;
+    }
+
+    /// <summary>
+    /// Uses variable-height row virtualization. Each row's height is the maximum measured
+    /// cell height plus <see cref="GridView.CellPadding"/> vertical thickness — suitable for
+    /// rows with wrapping text or differently sized cell content.
+    /// </summary>
+    public static GridView VariableHeightPresenter(this GridView grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        grid.SetPresenter(new VariableHeightItemsPresenter
+        {
+            BorderThickness = 0,
+            Padding = new Thickness(0),
+            UseHorizontalExtentForLayout = true,
+        });
+        return grid;
+    }
+
+    #endregion
+
     #region TreeView
 
     /// <summary>

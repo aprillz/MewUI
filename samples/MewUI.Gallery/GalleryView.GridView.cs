@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Gallery;
@@ -10,7 +12,9 @@ partial class GalleryView
 
             ComplexGridViewBindingCard(),
 
-            TemplateGridViewCard());
+            TemplateGridViewCard(),
+
+            VariableHeightGridViewCard());
 
     private FrameworkElement SimpleGridViewCard()
     {
@@ -345,7 +349,6 @@ partial class GalleryView
                     .Bind(
                         build: _ => new ComboBox()
                             .Items(["User", "Admin", "Guest"])
-                            .Padding(6, 0)
                             .CenterVertical(),
                         bind: (view, item) => ((ComboBox)view).BindSelectedIndex(item.RoleIndex)),
 
@@ -369,6 +372,109 @@ partial class GalleryView
                         bind: (view, item) => ((ToggleSwitch)view).BindIsChecked(item.IsOnline))
             );
     }
+
+    private FrameworkElement VariableHeightGridViewCard()
+    {
+        var notes = new ObservableCollection<VariableHeightGridRow>(
+            Enumerable.Range(1, 200).Select(i => new VariableHeightGridRow(
+                id: i,
+                author: $"User {i:000}",
+                note: SampleNoteText(i))));
+
+        long nextId = notes.Count + 1;
+
+        void Prepend(int count)
+        {
+            // Insert in reverse so the final order keeps the prepended block contiguous.
+            for (int i = count - 1; i >= 0; i--)
+            {
+                var id = (int)(nextId + i);
+                notes.Insert(0, new VariableHeightGridRow(id, $"Bot {id}", SampleNoteText(id * 3)));
+            }
+            nextId += count;
+        }
+
+        return Card(
+            "GridView (variable row height + scroll anchor)",
+            new DockPanel()
+                .Width(640)
+                .Height(320)
+                .Spacing(6)
+                .Children(
+                    new TextBlock()
+                        .DockTop()
+                        .Text("Each row sizes to the tallest cell. Scroll into the list, then 'Prepend 20' to verify the viewport stays anchored on the same content.")
+                        .TextWrapping(TextWrapping.Wrap)
+                        .FontSize(11),
+
+                    new StackPanel()
+                        .DockTop()
+                        .Horizontal()
+                        .Spacing(8)
+                        .Children(
+                            new Button()
+                                .Content("Prepend 20")
+                                .OnClick(() => Prepend(20)),
+
+                            new Button()
+                                .Content("Add to end")
+                                .OnClick(() =>
+                                {
+                                    var id = (int)nextId++;
+                                    notes.Add(new VariableHeightGridRow(id, $"User {id}", SampleNoteText(id)));
+                                })
+                        ),
+
+                    new GridView()
+                        .VariableHeightPresenter()
+                        .ItemsSource(notes)
+                        .ZebraStriping()
+                        .Columns(
+                            new GridViewColumn<VariableHeightGridRow>()
+                                .Header("#")
+                                .Width(50)
+                                .Text(r => r.Id.ToString()),
+
+                            new GridViewColumn<VariableHeightGridRow>()
+                                .Header("Author")
+                                .Width(110)
+                                .Text(r => r.Author),
+
+                            new GridViewColumn<VariableHeightGridRow>()
+                                .Header("Note")
+                                .Width(440)
+                                .Bind(
+                                    build: _ => new TextBlock()
+                                        .TextWrapping(TextWrapping.Wrap),
+                                    bind: (view, row) => ((TextBlock)view).Text(row.Note)
+                                )
+                        )
+                ));
+
+        static string SampleNoteText(int seed)
+        {
+            // Deterministic varied lengths so different rows produce different heights.
+            int len = 30 + (seed * 37) % 240;
+            const string lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+                                  "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. " +
+                                  "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi.";
+            return $"#{seed}: " + lorem.Substring(0, Math.Min(len, lorem.Length));
+        }
+    }
+}
+
+sealed class VariableHeightGridRow
+{
+    public VariableHeightGridRow(int id, string author, string note)
+    {
+        Id = id;
+        Author = author ?? string.Empty;
+        Note = note ?? string.Empty;
+    }
+
+    public int Id { get; }
+    public string Author { get; }
+    public string Note { get; }
 }
 
 sealed class ComplexGridRow

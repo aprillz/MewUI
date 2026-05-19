@@ -407,7 +407,7 @@ partial class GalleryView
 
             messages.Add(new ChatMessage(nextId++, "You", text, Mine: true, DateTimeOffset.Now));
             input.Value = string.Empty;
-            Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render, () => ScrollToBottom());
+            ScrollToBottom();
         }
 
         var status = new ObservableValue<string>(string.Empty);
