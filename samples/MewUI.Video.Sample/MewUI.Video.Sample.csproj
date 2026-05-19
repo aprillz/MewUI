@@ -42,5 +42,4 @@
     <None Include="README.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <Import Project="..\..\build\Aprillz.MewUI.targets" />
 </Project>
