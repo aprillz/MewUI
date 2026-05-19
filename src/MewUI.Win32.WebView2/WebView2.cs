@@ -44,9 +44,9 @@ public sealed partial class WebView2 : FrameworkElement
     private Rendering.IFont? _font;
     private WebViewEnvironmentOptions? _options;
 
-    private static readonly ConcurrentDictionary<nint, WebView2> s_hostMap = new();
-    private static readonly WndProcDelegate s_hostWndProc = HostWndProc;
-    private static readonly nint s_hostWndProcPtr = Marshal.GetFunctionPointerForDelegate(s_hostWndProc);
+    private static readonly ConcurrentDictionary<nint, WebView2> _hostMap = new();
+    private static readonly WndProcDelegate _hostWndProc = HostWndProc;
+    private static readonly nint _hostWndProcPtr = Marshal.GetFunctionPointerForDelegate(_hostWndProc);
 
     private delegate nint WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
 
@@ -552,7 +552,7 @@ public sealed partial class WebView2 : FrameworkElement
 
         if (_hostHandle != 0)
         {
-            s_hostMap.TryRemove(_hostHandle, out _);
+            _hostMap.TryRemove(_hostHandle, out _);
             if (_hostWndProcPrev != 0)
             {
                 Interop.SetWindowLongPtr(_hostHandle, GWLP_WNDPROC, _hostWndProcPrev);
@@ -894,8 +894,8 @@ public sealed partial class WebView2 : FrameworkElement
 
         if (_hostHandle != 0)
         {
-            s_hostMap[_hostHandle] = this;
-            _hostWndProcPrev = Interop.SetWindowLongPtr(_hostHandle, GWLP_WNDPROC, s_hostWndProcPtr);
+            _hostMap[_hostHandle] = this;
+            _hostWndProcPrev = Interop.SetWindowLongPtr(_hostHandle, GWLP_WNDPROC, _hostWndProcPtr);
         }
 
         // Do not show here; visibility is controlled by UpdateWebViewVisibility after bounds are set.
@@ -903,7 +903,7 @@ public sealed partial class WebView2 : FrameworkElement
 
     private static nint HostWndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
-        if (msg == WM_PARENTNOTIFY && s_hostMap.TryGetValue(hWnd, out var webViewFromNotify))
+        if (msg == WM_PARENTNOTIFY && _hostMap.TryGetValue(hWnd, out var webViewFromNotify))
         {
             uint childMsg = (uint)wParam & 0xFFFF;
             if (childMsg == WM_MOUSEMOVE)
@@ -925,7 +925,7 @@ public sealed partial class WebView2 : FrameworkElement
             }
         }
 
-        if (s_hostMap.TryGetValue(hWnd, out var target) && target._hostWndProcPrev != 0)
+        if (_hostMap.TryGetValue(hWnd, out var target) && target._hostWndProcPrev != 0)
         {
             return Interop.CallWindowProc(target._hostWndProcPrev, hWnd, msg, wParam, lParam);
         }
