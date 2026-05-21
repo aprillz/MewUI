@@ -104,23 +104,16 @@ public sealed partial class MewVGWin32GraphicsFactory
     partial void TryCreateAsyncUploadImage(IPixelBufferSource source, ref IImage? image);
 
     /// <summary>
-    /// Heuristic for whether async PBO upload is worth the per-image overhead
-    /// (1 GL texture + 2 PBOs allocated, fence per upload). Tiny static images
-    /// see no benefit; large or streaming sources do.
+    /// Routes to async PBO upload only when the producer explicitly flags itself as
+    /// streaming. Static sources (file-decoded PNG, opaque <c>WriteableBitmap</c> drawn
+    /// once) stay on the sync path so <see cref="ImageScaleQuality.HighQuality"/> can
+    /// emit mipmaps. Readback sources skip PBO because the lock-time sync barrier
+    /// already dominates.
     /// </summary>
     private static bool QualifiesForPboUpload(IPixelBufferSource source)
     {
-        // Below ~1 MB the per-frame sync upload cost (~30μs at PCIe 4.0) is dwarfed
-        // by the PBO/fence overhead. Threshold tuned conservatively — profile with
-        // representative streaming workloads to revise.
-        const long MinByteSize = 1L * 1024 * 1024;
-        long byteSize = (long)source.PixelWidth * source.PixelHeight * 4;
-        if (byteSize < MinByteSize) return false;
-
-        // GPU-resident sources already pay a sync barrier on Lock (LockMode.Readback)
-        // — staging that through PBO doesn't help because the readback dominates.
+        if (!source.IsStreaming) return false;
         if (source.LockMode == LockMode.Readback) return false;
-
         return true;
     }
 

@@ -52,6 +52,15 @@ public interface IPixelBufferSource : IRasterSource
     LockMode LockMode => LockMode.Direct;
 
     /// <summary>
+    /// Producer hint: the buffer is updated frequently (e.g. each frame of a video,
+    /// animated CPU canvas). Backends may route through async upload paths (PBO+fence on
+    /// GL) instead of a blocking <c>glTexSubImage2D</c>. Static sources (file-decoded
+    /// PNG, opaque WriteableBitmap drawn once) leave this <see langword="false"/> so the
+    /// sync upload path keeps mipmap generation and other quality settings.
+    /// </summary>
+    bool IsStreaming => false;
+
+    /// <summary>
     /// Locks and returns the current pixel buffer snapshot.
     /// </summary>
     /// <remarks>
