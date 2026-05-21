@@ -135,7 +135,7 @@ public sealed class Image : FrameworkElement
         // Do not decode in this method. Decoding happens when the source is first used for rendering
         // (ImageSource.CreateImage caches the decoded pixel buffer). If the source hasn't been used
         // yet, simply return false.
-        if (!imageSource.TryGetDecodedBitmap(out var decoded))
+        if (!imageSource.TryGetBgra32PixelBuffer(out var decoded))
         {
             return false;
         }

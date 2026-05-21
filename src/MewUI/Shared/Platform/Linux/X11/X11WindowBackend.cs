@@ -990,7 +990,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        if (!ImageDecoders.TryDecode(src.Data, out var bmp))
+        if (!ImageDecoders.TryDecode(src.EncodedBytes.Span, out var bmp))
         {
             return;
         }

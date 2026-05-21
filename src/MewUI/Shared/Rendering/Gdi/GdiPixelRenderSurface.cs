@@ -61,8 +61,6 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
 
     public double DpiScale { get; }
 
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
-
     public int StrideBytes => PixelWidth * 4;
 
     public int Version => Volatile.Read(ref _version);
@@ -208,7 +206,6 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
             PixelWidth,
             PixelHeight,
             StrideBytes,
-            PixelFormat,
             _version,
             dirtyRegion: null,
             release: _releaseAction);

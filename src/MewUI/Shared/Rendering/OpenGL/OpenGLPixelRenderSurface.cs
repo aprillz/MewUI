@@ -87,8 +87,6 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     public double DpiScale { get; }
 
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
-
     public int StrideBytes => PixelWidth * 4;
 
     public int Version => Volatile.Read(ref _version);
@@ -371,7 +369,6 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
             PixelWidth,
             PixelHeight,
             StrideBytes,
-            PixelFormat,
             _version,
             dirtyRegion: null,
             release: _releaseAction);

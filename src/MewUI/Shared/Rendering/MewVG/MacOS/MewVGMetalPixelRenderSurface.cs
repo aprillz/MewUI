@@ -148,8 +148,6 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     public double DpiScale { get; }
 
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
-
     public int StrideBytes => PixelWidth * 4;
 
     public int Version => Volatile.Read(ref _version);
@@ -379,7 +377,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         Buffer.BlockCopy(pixels, 0, _lockBuffer, 0, size);
         _releaseAction ??= () => Monitor.Exit(_gate);
         return new PixelBufferLock(
-            _lockBuffer, PixelWidth, PixelHeight, StrideBytes, PixelFormat,
+            _lockBuffer, PixelWidth, PixelHeight, StrideBytes,
             _version, dirtyRegion: null, release: _releaseAction);
     }
 

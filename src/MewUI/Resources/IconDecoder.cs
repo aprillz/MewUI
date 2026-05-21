@@ -19,7 +19,7 @@ internal sealed class IconDecoder : IImageDecoder
             && BinaryPrimitives.ReadUInt16LittleEndian(encoded.Slice(4)) > 0;
     }
 
-    public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    public bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
         bitmap = default;
 
@@ -47,6 +47,6 @@ internal sealed class IconDecoder : IImageDecoder
             return false;
         }
 
-        return ImageDecoders.TryDecode(source.Data, out bitmap);
+        return ImageDecoders.TryDecode(source.EncodedBytes.Span, out bitmap);
     }
 }

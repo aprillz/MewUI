@@ -52,14 +52,13 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
     int IRasterSource.PixelWidth => _cpuPixelWidth;
     int IRasterSource.PixelHeight => _cpuPixelHeight;
     int IPixelBufferSource.StrideBytes => _cpuPixelWidth * 4;
-    BitmapPixelFormat IPixelBufferSource.PixelFormat => BitmapPixelFormat.Bgra32;
     bool IPixelBufferSource.IsPremultiplied => true;
     bool IPixelBufferSource.HasAlpha => true;
     int IRasterSource.Version => _cpuVersion;
 
     PixelBufferLock IPixelBufferSource.Lock() => new(
         _cpuBuffer, _cpuPixelWidth, _cpuPixelHeight, _cpuPixelWidth * 4,
-        BitmapPixelFormat.Bgra32, _cpuVersion, dirtyRegion: null, release: null);
+        _cpuVersion, dirtyRegion: null, release: null);
 
     protected override Size MeasureContent(Size availableSize) => Size.Empty;
 

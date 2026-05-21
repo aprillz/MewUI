@@ -68,12 +68,12 @@ public static class ImageDecoders
     }
 
     /// <summary>
-    /// Attempts to decode an encoded image span into a <see cref="DecodedBitmap"/>.
+    /// Attempts to decode an encoded image span into a <see cref="Bgra32PixelBuffer"/>.
     /// </summary>
     /// <param name="encoded">Encoded image bytes.</param>
     /// <param name="bitmap">Decoded bitmap on success.</param>
     /// <returns><see langword="true"/> if a decoder matched and decoding succeeded; otherwise, <see langword="false"/>.</returns>
-    public static bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    public static bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
         IImageDecoder? decoder = null;
         lock (_lock)
@@ -106,12 +106,12 @@ public static class ImageDecoders
     }
 
     /// <summary>
-    /// Attempts to decode an encoded image byte array into a <see cref="DecodedBitmap"/>.
+    /// Attempts to decode an encoded image byte array into a <see cref="Bgra32PixelBuffer"/>.
     /// </summary>
     /// <param name="encoded">Encoded image bytes.</param>
     /// <param name="bitmap">Decoded bitmap on success.</param>
     /// <returns><see langword="true"/> if a decoder matched and decoding succeeded; otherwise, <see langword="false"/>.</returns>
-    public static bool TryDecode(byte[] encoded, out DecodedBitmap bitmap)
+    public static bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap)
     {
         ArgumentNullException.ThrowIfNull(encoded);
 

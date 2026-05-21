@@ -69,7 +69,6 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
     public int PixelWidth { get; }
     public int PixelHeight { get; }
     public double DpiScale { get; }
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
     public int StrideBytes => PixelWidth * 4;
     public int Version => Volatile.Read(ref _version);
 
@@ -213,7 +212,6 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
             PixelWidth,
             PixelHeight,
             StrideBytes,
-            PixelFormat,
             _version,
             dirtyRegion: null,
             release: _releaseAction);

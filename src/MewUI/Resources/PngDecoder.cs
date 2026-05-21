@@ -19,7 +19,7 @@ internal sealed class PngDecoder : IImageDecoder
         return encoded.Slice(0, 8).SequenceEqual(sig);
     }
 
-    public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    public bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
         bitmap = default;
 
@@ -196,7 +196,7 @@ internal sealed class PngDecoder : IImageDecoder
         bool hasAlpha = colorType == 4 || colorType == 6
                         || (colorType == 3 && paletteAlpha != null);
 
-        bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst, hasAlpha);
+        bitmap = new Bgra32PixelBuffer(width, height, dst, hasAlpha);
         return true;
     }
 

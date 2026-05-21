@@ -6,37 +6,80 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Backend-agnostic encoded image source (PNG/JPG/BMP).
+/// Backend-agnostic image source. Accepts either encoded image bytes (PNG/JPG/BMP) or
+/// pre-decoded BGRA pixel buffers.
 ///
-/// For built-in backends, decoding is shared and cached so that:
-/// - rendering can create backend images from a single decoded pixel buffer, and
-/// - controls can sample pixels (e.g. <c>Image.TryPeekColor</c>) without re-decoding.
+/// For built-in backends, decoded pixels are shared and cached so rendering and pixel
+/// sampling (e.g. <c>Image.TryPeekColor</c>) reuse a single buffer. After a successful
+/// decode the encoded bytes are released — see <see cref="EncodedBytes"/>.
 ///
-/// If the built-in decoder cannot decode the payload, creation falls back to
-/// <see cref="IGraphicsFactory.CreateImageFromBytes(byte[])"/> so custom factories can handle additional formats.
+/// If the built-in decoders cannot decode the payload, creation falls back to
+/// <see cref="IGraphicsFactory.CreateImageFromBytes(byte[])"/> so custom factories can
+/// handle additional formats. Sources created from raw pixels skip the decoder path entirely.
 /// </summary>
 public sealed class ImageSource : IImageSource
 {
-    /// <summary>
-    /// Gets the encoded image payload (e.g. PNG/JPEG/BMP).
-    /// </summary>
-    public byte[] Data { get; }
-
-    /// <summary>
-    /// Best-effort detected format id from registered decoders (diagnostics only).
-    /// </summary>
-    public string? FormatId => ImageDecoders.DetectFormatId(Data);
-
     private readonly object _decodeLock = new();
-    private DecodedBitmap _decodedBitmap;
+    private byte[]? _encoded;
+    private string? _cachedFormatId;
+    private bool _formatIdComputed;
+    private Bgra32PixelBuffer _decodedBitmap;
     private bool _decodedValid;
     private StaticPixelBufferSource? _decodedPixelSource;
 
-    private ImageSource(byte[] data)
+    private ImageSource(byte[] encoded)
     {
-        ArgumentNullException.ThrowIfNull(data);
-        Data = data;
+        ArgumentNullException.ThrowIfNull(encoded);
+        _encoded = encoded;
     }
+
+    private ImageSource(Bgra32PixelBuffer pixels)
+    {
+        if (pixels.WidthPx <= 0 || pixels.HeightPx <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pixels), "Buffer dimensions must be positive.");
+        }
+        if (pixels.Data is null || pixels.Data.Length != pixels.WidthPx * pixels.HeightPx * 4)
+        {
+            throw new ArgumentException("Invalid BGRA buffer length.", nameof(pixels));
+        }
+
+        _decodedBitmap = pixels;
+        _decodedValid = true;
+    }
+
+    /// <summary>
+    /// Gets the encoded image payload. Empty once the source has been successfully
+    /// decoded — the encoded buffer is released to reclaim memory. Raw-pixel sources
+    /// never carry encoded data.
+    /// </summary>
+    internal ReadOnlyMemory<byte> EncodedBytes => _encoded ?? ReadOnlyMemory<byte>.Empty;
+
+    /// <summary>
+    /// Best-effort detected format id from registered decoders (diagnostics only).
+    /// Cached after first access — survives encoded-bytes release.
+    /// </summary>
+    public string? FormatId
+    {
+        get
+        {
+            if (!_formatIdComputed)
+            {
+                _cachedFormatId = _encoded is null ? null : ImageDecoders.DetectFormatId(_encoded);
+                _formatIdComputed = true;
+            }
+            return _cachedFormatId;
+        }
+    }
+
+    /// <summary>Pixel width. Returns 0 when neither decoded pixels nor encoded bytes are available.</summary>
+    public int PixelWidth => _decodedValid ? _decodedBitmap.WidthPx : 0;
+
+    /// <summary>Pixel height. Returns 0 when neither decoded pixels nor encoded bytes are available.</summary>
+    public int PixelHeight => _decodedValid ? _decodedBitmap.HeightPx : 0;
+
+    /// <summary>Whether the source carries a meaningful alpha channel.</summary>
+    public bool HasAlpha => !_decodedValid || _decodedBitmap.HasAlpha;
 
     /// <summary>
     /// Creates an <see cref="ImageSource"/> from encoded image bytes.
@@ -112,6 +155,81 @@ public sealed class ImageSource : IImageSource
     public static bool TryFromResource<TAnchor>(string resourceName, out ImageSource? source) =>
         TryFromResource(typeof(TAnchor).Assembly, resourceName, out source);
 
+    /// <summary>
+    /// Wraps a pre-decoded BGRA32 buffer. The array is referenced (not copied) — caller must
+    /// not mutate after handing it over.
+    /// </summary>
+    public static ImageSource FromBgraPixels(int width, int height, byte[] bgra, bool hasAlpha = true)
+    {
+        ArgumentNullException.ThrowIfNull(bgra);
+        return new(new Bgra32PixelBuffer(width, height, bgra, hasAlpha));
+    }
+
+    /// <summary>
+    /// Copies BGRA32 pixels into a new buffer.
+    /// </summary>
+    public static ImageSource FromBgraPixels(int width, int height, ReadOnlySpan<byte> bgra, bool hasAlpha = true)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(width), "Dimensions must be positive.");
+        }
+        int expected = checked(width * height * 4);
+        if (bgra.Length != expected)
+        {
+            throw new ArgumentException($"Expected {expected} bytes (tight-packed BGRA32), got {bgra.Length}.", nameof(bgra));
+        }
+        var copy = GC.AllocateUninitializedArray<byte>(expected);
+        bgra.CopyTo(copy);
+        return new(new Bgra32PixelBuffer(width, height, copy, hasAlpha));
+    }
+
+    /// <summary>
+    /// Wraps an existing <see cref="Bgra32PixelBuffer"/>. The buffer's array is referenced (not copied).
+    /// </summary>
+    public static ImageSource FromBgraPixels(Bgra32PixelBuffer buffer) => new(buffer);
+
+    /// <summary>
+    /// Copies the decoded pixels into the caller-provided destination buffer in tight-packed BGRA32 order.
+    /// Triggers decode on first access if needed.
+    /// </summary>
+    /// <param name="destination">Destination buffer to receive the pixels.</param>
+    /// <param name="strideBytes">Destination stride in bytes per row. Must be at least <c>PixelWidth*4</c>.</param>
+    public void CopyPixels(Span<byte> destination, int strideBytes)
+    {
+        if (!_decodedValid)
+        {
+            TryEnsureDecoded(out _);
+        }
+        if (!_decodedValid)
+        {
+            throw new InvalidOperationException("No decoded pixel data available.");
+        }
+
+        int width = _decodedBitmap.WidthPx;
+        int height = _decodedBitmap.HeightPx;
+        int rowBytes = width * 4;
+        if (strideBytes < rowBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(strideBytes));
+        }
+        int needed = checked((height - 1) * strideBytes + rowBytes);
+        if (destination.Length < needed)
+        {
+            throw new ArgumentException("Destination buffer is too small for the specified stride.", nameof(destination));
+        }
+
+        var src = _decodedBitmap.Data.AsSpan();
+        int srcOffset = 0;
+        int dstOffset = 0;
+        for (int y = 0; y < height; y++)
+        {
+            src.Slice(srcOffset, rowBytes).CopyTo(destination.Slice(dstOffset, rowBytes));
+            srcOffset += rowBytes;
+            dstOffset += strideBytes;
+        }
+    }
+
     private static ImageSource FromStream(Stream stream)
     {
         if (stream.CanSeek)
@@ -134,7 +252,7 @@ public sealed class ImageSource : IImageSource
         return new ImageSource(ms.ToArray());
     }
 
-    internal bool TryGetDecodedBitmap(out DecodedBitmap bitmap)
+    internal bool TryGetBgra32PixelBuffer(out Bgra32PixelBuffer bitmap)
     {
         if (_decodedValid)
         {
@@ -161,7 +279,16 @@ public sealed class ImageSource : IImageSource
                 return true;
             }
 
-            if (!ImageDecoders.TryDecode(Data, out var decoded))
+            if (_decodedValid)
+            {
+                // Raw-pixel source — wrap the existing buffer without invoking the decoder.
+                _decodedPixelSource = new StaticPixelBufferSource(
+                    _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
+                pixelSource = _decodedPixelSource;
+                return true;
+            }
+
+            if (_encoded is null || !ImageDecoders.TryDecode(_encoded, out var decoded))
             {
                 pixelSource = null!;
                 return false;
@@ -171,6 +298,13 @@ public sealed class ImageSource : IImageSource
             _decodedValid = true;
             _decodedPixelSource = new StaticPixelBufferSource(decoded.WidthPx, decoded.HeightPx, decoded.Data, decoded.HasAlpha);
             pixelSource = _decodedPixelSource;
+            // Cache FormatId before releasing encoded bytes so it remains available.
+            if (!_formatIdComputed)
+            {
+                _cachedFormatId = ImageDecoders.DetectFormatId(_encoded);
+                _formatIdComputed = true;
+            }
+            _encoded = null;
             return true;
         }
     }
@@ -198,6 +332,10 @@ public sealed class ImageSource : IImageSource
             }
         }
 
-        return factory.CreateImageFromBytes(Data);
+        if (_encoded is null)
+        {
+            throw new InvalidOperationException("Cannot create image: decode failed and no encoded bytes available.");
+        }
+        return factory.CreateImageFromBytes(_encoded);
     }
 }

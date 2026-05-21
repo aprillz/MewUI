@@ -9,7 +9,7 @@ internal sealed class BmpDecoder : IImageDecoder
     public bool CanDecode(ReadOnlySpan<byte> encoded) =>
         encoded.Length >= 2 && encoded[0] == (byte)'B' && encoded[1] == (byte)'M';
 
-    public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    public bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
         // BMP loader:
         // - BITMAPFILEHEADER + BITMAPINFOHEADER (size >= 40)
@@ -168,7 +168,7 @@ internal sealed class BmpDecoder : IImageDecoder
         // alpha, so callers may have placed real values there. Treat 32-bit as alpha-bearing
         // to be safe; the rest can take the opaque fast path.
         bool hasAlpha = bpp == 32;
-        bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst, hasAlpha);
+        bitmap = new Bgra32PixelBuffer(width, height, dst, hasAlpha);
         return true;
     }
 

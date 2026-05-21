@@ -87,10 +87,6 @@ internal sealed class GdiImage : IImage
         source?.PixelWidth ?? throw new ArgumentNullException(nameof(source)),
         source.PixelHeight)
     {
-        if (source.PixelFormat != BitmapPixelFormat.Bgra32)
-        {
-            throw new NotSupportedException($"Unsupported pixel format: {source.PixelFormat}");
-        }
 
         _source = source;
         _sourceVersion = -1;

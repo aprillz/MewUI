@@ -85,7 +85,6 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     public int PixelWidth { get; }
     public int PixelHeight { get; }
     public double DpiScale { get; }
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
     public int StrideBytes => PixelWidth * 4;
     public int Version => Volatile.Read(ref _version);
     public RenderPixelFormat Format => RenderPixelFormat.Bgra8888Premultiplied;
@@ -195,7 +194,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
             Action release = () => Monitor.Exit(_gate);
             return new PixelBufferLock(
                 bytes, PixelWidth, PixelHeight, StrideBytes,
-                PixelFormat, _version, dirtyRegion: null, release);
+                _version, dirtyRegion: null, release);
         }
         catch
         {

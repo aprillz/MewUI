@@ -61,11 +61,6 @@ internal sealed class MewVGImage : IImage
     public MewVGImage(IPixelBufferSource source, Action<MewVGImage>? disposeRequested = null)
     {
         ArgumentNullException.ThrowIfNull(source);
-        if (source.PixelFormat != BitmapPixelFormat.Bgra32)
-        {
-            throw new NotSupportedException($"Unsupported pixel format: {source.PixelFormat}");
-        }
-
         PixelWidth = source.PixelWidth;
         PixelHeight = source.PixelHeight;
         _disposeRequested = disposeRequested;

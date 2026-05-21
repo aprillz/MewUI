@@ -23,7 +23,6 @@ public sealed class VideoFrame : IPixelBufferSource
     public int PixelWidth => Width;
     public int PixelHeight => Height;
     public int StrideBytes => Width * 4;
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
     public bool IsPremultiplied => false;
     public bool HasAlpha => false;
     public int Version => 0;
@@ -51,7 +50,6 @@ public sealed class VideoFrame : IPixelBufferSource
         Width,
         Height,
         StrideBytes,
-        PixelFormat,
         Version,
         dirtyRegion: null,
         release: null);

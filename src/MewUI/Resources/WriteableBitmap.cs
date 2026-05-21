@@ -34,11 +34,6 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     public int StrideBytes => PixelWidth * 4;
 
     /// <summary>
-    /// Gets the pixel format (always BGRA32).
-    /// </summary>
-    public BitmapPixelFormat PixelFormat => BitmapPixelFormat.Bgra32;
-
-    /// <summary>
     /// Whether this bitmap is expected to carry alpha. Set at construction time —
     /// callers that know their content is opaque (video frames, photo decoders, etc.)
     /// can pass <c>false</c> so backends pick <c>ALPHA_MODE.IGNORE</c> on the GPU side
@@ -97,13 +92,8 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// The pixel buffer is taken as-is (BGRA32, straight alpha).
     /// </summary>
     /// <param name="bitmap">The decoded bitmap.</param>
-    public WriteableBitmap(DecodedBitmap bitmap)
+    public WriteableBitmap(Bgra32PixelBuffer bitmap)
     {
-        if (bitmap.PixelFormat != BitmapPixelFormat.Bgra32)
-        {
-            throw new NotSupportedException($"Unsupported pixel format: {bitmap.PixelFormat}");
-        }
-
         if (bitmap.WidthPx <= 0 || bitmap.HeightPx <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(bitmap), "Bitmap dimensions must be positive.");
@@ -265,7 +255,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelRegion? dirtyRegion = _dirtyRegion;
         _dirtyRegion = null;
 
-        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, PixelFormat, v, dirtyRegion, () => Monitor.Exit(_lock));
+        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, v, dirtyRegion, () => Monitor.Exit(_lock));
     }
 
     internal Span<byte> GetPixelsMutableNoLock() => _bgra;

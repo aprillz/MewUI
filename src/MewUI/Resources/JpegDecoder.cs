@@ -12,7 +12,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
     public bool CanDecode(ReadOnlySpan<byte> encoded) =>
         encoded.Length >= 3 && encoded[0] == 0xFF && encoded[1] == 0xD8 && encoded[2] == 0xFF;
 
-    public bool TryDecode(ReadOnlySpan<byte> encoded, out DecodedBitmap bitmap)
+    public bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
         bitmap = default;
 
@@ -25,7 +25,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
         return TryDecode(encoded.ToArray(), out bitmap);
     }
 
-    public bool TryDecode(byte[] encoded, out DecodedBitmap bitmap)
+    public bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap)
     {
         bitmap = default;
 
@@ -104,7 +104,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
 
             cinfo.jpeg_finish_decompress();
             // JPEG has no alpha channel — output is opaque by construction.
-            bitmap = new DecodedBitmap(width, height, BitmapPixelFormat.Bgra32, dst, HasAlpha: false);
+            bitmap = new Bgra32PixelBuffer(width, height, dst, HasAlpha: false);
             return true;
         }
         catch (Exception ex)

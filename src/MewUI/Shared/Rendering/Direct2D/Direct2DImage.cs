@@ -21,13 +21,8 @@ internal sealed class Direct2DImage : IImage
     public int PixelWidth { get; }
     public int PixelHeight { get; }
 
-    public Direct2DImage(DecodedBitmap bmp)
+    public Direct2DImage(Bgra32PixelBuffer bmp)
     {
-        if (bmp.PixelFormat != BitmapPixelFormat.Bgra32)
-        {
-            throw new NotSupportedException($"Unsupported pixel format: {bmp.PixelFormat}");
-        }
-
         PixelWidth = bmp.WidthPx;
         PixelHeight = bmp.HeightPx;
         _pixels = new StaticPixelBufferSource(bmp.WidthPx, bmp.HeightPx, bmp.Data, bmp.HasAlpha);
@@ -38,11 +33,6 @@ internal sealed class Direct2DImage : IImage
     public Direct2DImage(IPixelBufferSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        if (source.PixelFormat != BitmapPixelFormat.Bgra32)
-        {
-            throw new NotSupportedException($"Unsupported pixel format: {source.PixelFormat}");
-        }
-
         PixelWidth = source.PixelWidth;
         PixelHeight = source.PixelHeight;
         _pixels = source;

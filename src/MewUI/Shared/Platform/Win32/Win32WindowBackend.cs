@@ -1108,15 +1108,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return 0;
         }
 
-        if (!ImageDecoders.TryDecode(src.Data, out var bmp))
+        if (!ImageDecoders.TryDecode(src.EncodedBytes.Span, out var bmp))
         {
             return 0;
         }
 
-        return CreateHIconFromDecodedBitmap(bmp);
+        return CreateHIconFromPixelBuffer(bmp);
     }
 
-    private static nint CreateHIconFromDecodedBitmap(DecodedBitmap bmp)
+    private static nint CreateHIconFromPixelBuffer(Bgra32PixelBuffer bmp)
     {
         int w = Math.Max(1, bmp.WidthPx);
         int h = Math.Max(1, bmp.HeightPx);
