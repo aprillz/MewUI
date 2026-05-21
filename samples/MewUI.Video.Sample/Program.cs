@@ -23,46 +23,13 @@ VideoPlayerWindow playerWindow = null!;
 Window? logWindow = null;
 MultiLineTextBox? logTextBox = null;
 
-Process currentProcess = Process.GetCurrentProcess();
-TimeSpan lastCpuTime = currentProcess.TotalProcessorTime;
-long lastCpuSampleTicks = Stopwatch.GetTimestamp();
-double lastCpuPercent = 0;
-double lastCpuAveragePercent = 0;
-double lastCpuMinPercent = 0;
-double lastCpuMaxPercent = 0;
-double intervalCpuSeconds = 0;
-double intervalElapsedSeconds = 0;
-double intervalCpuMinPercent = double.PositiveInfinity;
-double intervalCpuMaxPercent = 0;
-GpuLoadSampler? gpuSampler = null;
-double lastGpuPercent = 0;
-CancellationTokenSource? counterAggregationCts = null;
-Task? counterAggregationTask = null;
-bool counterResetRequested = false;
-HashSet<string> loggedCounterErrors = new();
-
-// Snapshot mutated by the counter aggregation loop and pushed into the player window
-// after each tick. Reads on the UI thread go through VideoPlayerWindow.Stats (atomic
-// reference assignment) so we never need to lock on the publish path.
-HostStats latestStats = HostStats.Empty;
-object counterSnapshotGate = new();
+ProcessStatistics processStats = new();
 
 SampleLog.LineAppended += AppendLogLine;
 
 string? startupPath = Environment.GetCommandLineArgs()
     .Skip(1)
     .FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
-
-if (Debugger.IsAttached && string.IsNullOrWhiteSpace(startupPath))
-{
-    string[] debugCandidates = OperatingSystem.IsMacOS()
-        ? ["/Users/al6uiz/Downloads/hevc_4k60P_main_dji_mavic3.mov"]
-        : OperatingSystem.IsLinux()
-        ? ["/mnt/e/Downloads/hevc_4k60P_main_dji_mavic3.mov"]
-        : [@"E:\Downloads\hevc_4k60P_main_dji_mavic3.mov"];
-
-    startupPath = debugCandidates.FirstOrDefault(File.Exists);
-}
 
 Application.DispatcherUnhandledException += e =>
 {
@@ -72,229 +39,21 @@ Application.DispatcherUnhandledException += e =>
 };
 
 playerWindow = new VideoPlayerWindow(startupPath);
+processStats.GetMetalDevice = () => playerWindow.Player?.Playback?.MetalDevice ?? 0;
+processStats.StatsUpdated += snapshot => playerWindow.Stats = snapshot;
 playerWindow.Loaded += () =>
 {
     EnsureLogWindow();
-    StartCounterAggregation();
+    processStats.Start();
 };
 playerWindow.Closed += () =>
 {
-    StopCounterAggregation();
+    processStats.Stop();
+    processStats.Dispose();
     logWindow?.Close();
 };
 
 Application.Run(playerWindow);
-
-void StartCounterAggregation()
-{
-    if (counterAggregationCts is not null)
-    {
-        return;
-    }
-
-    ResetCounterSamplingState();
-    counterAggregationCts = new CancellationTokenSource();
-    counterAggregationTask = Task.Run(() => RunCounterAggregationLoopAsync(counterAggregationCts.Token));
-}
-
-void StopCounterAggregation()
-{
-    var cts = counterAggregationCts;
-    counterAggregationCts = null;
-
-    if (cts is null)
-    {
-        return;
-    }
-
-    cts.Cancel();
-    cts.Dispose();
-}
-
-async Task RunCounterAggregationLoopAsync(CancellationToken cancellationToken)
-{
-    try
-    {
-        ResetCounterSamplingState();
-        if (OperatingSystem.IsWindows())
-        {
-            gpuSampler ??= new GpuLoadSampler();
-        }
-
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
-        long nextCpuPublishTicks = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
-
-        while (await timer.WaitForNextTickAsync(cancellationToken))
-        {
-            try
-            {
-                if (TryConsumeCounterResetRequest())
-                {
-                    ResetCounterSamplingState();
-                    if (OperatingSystem.IsWindows())
-                    {
-                        // LibreHardwareMonitor's Computer auto-rediscovers adapters on the
-                        // next Sample() — no explicit teardown / rebuild needed like the old
-                        // PerformanceCounter path required.
-                    }
-                }
-
-                currentProcess.Refresh();
-                SampleCpuUsage();
-
-                string gpuUsageText = SampleGpuUsageText();
-                long nowTicks = Stopwatch.GetTimestamp();
-                string cpuUsageText = nowTicks >= nextCpuPublishTicks
-                    ? FormatCpuUsageSample()
-                    : latestStats.CpuUsageText;
-
-                if (nowTicks >= nextCpuPublishTicks)
-                {
-                    nextCpuPublishTicks = nowTicks + Stopwatch.Frequency;
-                }
-
-                long privateBytes;
-                if (OperatingSystem.IsMacOS() && MacOsNative.TryGetPhysFootprint(out ulong physFootprint))
-                {
-                    privateBytes = (long)physFootprint;
-                }
-                else
-                {
-                    privateBytes = currentProcess.PrivateMemorySize64;
-                }
-
-                ulong metalGpuBytes = 0;
-                if (OperatingSystem.IsMacOS())
-                {
-                    // Reference reads are atomic; safe cross-thread access.
-                    nint metalDevice = playerWindow?.Player?.Playback?.MetalDevice ?? 0;
-                    metalGpuBytes = MacOsNative.GetMetalAllocatedSize(metalDevice);
-                }
-
-                var snapshot = new HostStats(
-                    CpuUsageText: cpuUsageText,
-                    GpuUsageText: gpuUsageText,
-                    WorkingSetBytes: currentProcess.WorkingSet64,
-                    PrivateBytes: privateBytes,
-                    ManagedHeapBytes: GC.GetTotalMemory(forceFullCollection: false),
-                    MetalGpuBytes: metalGpuBytes);
-
-                latestStats = snapshot;
-                if (playerWindow is not null)
-                {
-                    playerWindow.Stats = snapshot;
-                }
-            }
-            catch (Exception perTickEx)
-            {
-                // A single bad sample shouldn't kill the whole loop. Log once per unique
-                // message so a recurring failure doesn't spam the log.
-                string key = $"{perTickEx.GetType().Name}: {perTickEx.Message}";
-                if (loggedCounterErrors.Add(key))
-                {
-                    SampleLog.Write($"Counter aggregation tick failed (will retry): {key}\n{perTickEx.StackTrace}");
-                }
-            }
-        }
-    }
-    catch (OperationCanceledException)
-    {
-    }
-    catch (Exception ex)
-    {
-        SampleLog.Write($"Counter aggregation loop terminated by exception: {ex}");
-    }
-    finally
-    {
-        gpuSampler?.Dispose();
-        gpuSampler = null;
-    }
-}
-
-bool TryConsumeCounterResetRequest()
-{
-    lock (counterSnapshotGate)
-    {
-        bool requested = counterResetRequested;
-        counterResetRequested = false;
-        return requested;
-    }
-}
-
-void ResetCounterSamplingState()
-{
-    currentProcess.Refresh();
-    lastCpuTime = currentProcess.TotalProcessorTime;
-    lastCpuSampleTicks = Stopwatch.GetTimestamp();
-    lastCpuPercent = 0;
-    lastCpuAveragePercent = 0;
-    lastCpuMinPercent = 0;
-    lastCpuMaxPercent = 0;
-    intervalCpuSeconds = 0;
-    intervalElapsedSeconds = 0;
-    intervalCpuMinPercent = double.PositiveInfinity;
-    intervalCpuMaxPercent = 0;
-    lastGpuPercent = 0;
-}
-
-void SampleCpuUsage()
-{
-    currentProcess.Refresh();
-    TimeSpan cpuTime = currentProcess.TotalProcessorTime;
-    long nowTicks = Stopwatch.GetTimestamp();
-    double elapsedSeconds = (nowTicks - lastCpuSampleTicks) / (double)Stopwatch.Frequency;
-    if (elapsedSeconds <= 0)
-    {
-        return;
-    }
-
-    double cpuSeconds = (cpuTime - lastCpuTime).TotalSeconds;
-    lastCpuPercent = cpuSeconds / (elapsedSeconds * Environment.ProcessorCount) * 100.0;
-    lastCpuPercent = Math.Clamp(lastCpuPercent, 0, 999);
-    intervalCpuSeconds += Math.Max(0, cpuSeconds);
-    intervalElapsedSeconds += elapsedSeconds;
-    intervalCpuMinPercent = Math.Min(intervalCpuMinPercent, lastCpuPercent);
-    intervalCpuMaxPercent = Math.Max(intervalCpuMaxPercent, lastCpuPercent);
-
-    lastCpuTime = cpuTime;
-    lastCpuSampleTicks = nowTicks;
-}
-
-string FormatCpuUsageSample()
-{
-    if (intervalElapsedSeconds > 0)
-    {
-        double intervalPercent = intervalCpuSeconds / (intervalElapsedSeconds * Environment.ProcessorCount) * 100.0;
-        lastCpuAveragePercent = Math.Clamp(intervalPercent, 0, 999);
-        lastCpuMinPercent = double.IsPositiveInfinity(intervalCpuMinPercent) ? lastCpuAveragePercent : intervalCpuMinPercent;
-        lastCpuMaxPercent = intervalCpuMaxPercent;
-    }
-
-    intervalCpuSeconds = 0;
-    intervalElapsedSeconds = 0;
-    intervalCpuMinPercent = double.PositiveInfinity;
-    intervalCpuMaxPercent = 0;
-    return $"{lastCpuAveragePercent:0.0}% (1s avg, min {lastCpuMinPercent:0.0}, max {lastCpuMaxPercent:0.0})";
-}
-
-string SampleGpuUsageText()
-{
-    if (!OperatingSystem.IsWindows())
-    {
-        return "n/a";
-    }
-
-    gpuSampler ??= new GpuLoadSampler();
-    if (!gpuSampler.IsAvailable)
-    {
-        return "unavailable";
-    }
-
-    var v = gpuSampler.Sample();
-    if (!v.HasValue) return "n/a";
-    lastGpuPercent = v.Value;
-    return gpuSampler.IsPrimed ? $"{lastGpuPercent:0.0}%" : "warming";
-}
 
 static void Startup()
 {

@@ -27,6 +27,7 @@ public sealed class VideoFrame : IPixelBufferSource
     public bool IsPremultiplied => false;
     public bool HasAlpha => false;
     public int Version => 0;
+    public bool IsStreaming => true;
 
     public nint GetTextureHandle() => (GpuResource as D3D11GpuResource)?.TextureHandle ?? 0;
 

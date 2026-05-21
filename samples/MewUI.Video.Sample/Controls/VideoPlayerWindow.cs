@@ -513,11 +513,11 @@ public sealed class VideoPlayerWindow : Window
         builder.Append("\npresent: ").Append(playback.PresentationTimingStatsText);
         builder.Append("\npresent path test: ").Append(_videoView.PresentationPathText);
         builder.Append("\nprocess");
-        builder.Append("\ncpu: ").Append(stats.CpuUsageText);
+        builder.Append("\ncpu: ").Append($"{stats.CpuAveragePercent:0.0}% (1s avg, min {stats.CpuMinPercent:0.0}, max {stats.CpuMaxPercent:0.0})");
         builder.Append("\nworking set: ").Append(FormatBytes(stats.WorkingSetBytes));
         builder.Append("\nprivate bytes: ").Append(FormatBytes(stats.PrivateBytes));
         builder.Append("\nmanaged heap: ").Append(FormatBytes(stats.ManagedHeapBytes));
-        builder.Append("\ngpu: ").Append(stats.GpuUsageText);
+        builder.Append("\ngpu: ").Append(stats.GpuPercent is { } gpu ? $"{gpu:0.0}%" : "n/a");
 
         if (OperatingSystem.IsMacOS())
         {
@@ -606,18 +606,14 @@ public sealed class VideoPlayerWindow : Window
 /// as an immutable record so cross-thread assignment is safe (reference write is atomic).
 /// </summary>
 public readonly record struct HostStats(
-    string CpuUsageText,
-    string GpuUsageText,
+    double CpuAveragePercent,
+    double CpuMinPercent,
+    double CpuMaxPercent,
+    double? GpuPercent,
     long WorkingSetBytes,
     long PrivateBytes,
     long ManagedHeapBytes,
     ulong MetalGpuBytes)
 {
-    public static HostStats Empty { get; } = new(
-        CpuUsageText: "warming",
-        GpuUsageText: OperatingSystem.IsWindows() ? "warming" : "n/a",
-        WorkingSetBytes: 0,
-        PrivateBytes: 0,
-        ManagedHeapBytes: 0,
-        MetalGpuBytes: 0);
+    public static HostStats Empty { get; } = default;
 }
