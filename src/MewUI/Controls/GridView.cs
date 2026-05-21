@@ -30,7 +30,8 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
     private readonly GridViewCore _core = new();
 
     private readonly HeaderRow _header;
-    private readonly FixedHeightItemsPresenter _presenter;
+    private IItemsPresenter _presenter;
+    private readonly IDataTemplate _rowTemplate;
 
     private double _rowsExtentHeight;
     private double _columnsExtentWidth;
@@ -45,22 +46,15 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         _scrollViewer.CornerRadius = 0;
 
         _header = new HeaderRow(this) { Parent = this };
-        _presenter = new FixedHeightItemsPresenter
-        {
-            BorderThickness = 0,
-            Padding = new Thickness(0),
-            UseHorizontalExtentForLayout = true,
-        };
 
-        var rowTemplate = new DelegateTemplate<object?>(
+        _rowTemplate = new DelegateTemplate<object?>(
             build: _ => new Row(this),
             bind: BindRowTemplate);
 
-        _presenter.ItemTemplate = rowTemplate;
-        _presenter.ItemsSource = _core.ItemsSource;
-        _presenter.BeforeItemRender = BeforeRowRender;
+        _presenter = CreateDefaultPresenter();
+        InitializePresenter(_presenter);
 
-        _scrollViewer.Content = _presenter;
+        _scrollViewer.Content = (UIElement)_presenter;
         _scrollViewer.ScrollChanged += () =>
         {
             _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
@@ -735,7 +729,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             desiredRowsHeight = Math.Max(0, availableSize.Height - headerH - Padding.VerticalThickness - borderInset * 2);
         }
 
-        _presenter.ItemHeight = rowH;
+        _presenter.ItemHeightHint = rowH;
         _presenter.ExtentWidth = _columnsExtentWidth;
 
         _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
@@ -773,6 +767,15 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             contentBounds.Y + headerH,
             Math.Max(0, contentBounds.Width),
             Math.Max(0, contentBounds.Height - headerH));
+
+        // Apply the rebind hint BEFORE the scroll viewer arranges the presenter so this
+        // frame's arrange picks it up. Setting it after _scrollViewer.Arrange would defer
+        // the rebind to the next frame, producing a one-frame flicker where the row's
+        // stale _rowIndex disagrees with the just-shifted SelectedIndex (visible as the
+        // selection appearing to release then reattach right after a prepend/remove).
+        _presenter.RebindExisting = _rebindVisibleOnNextRender;
+        _rebindVisibleOnNextRender = false;
+
         _scrollViewer.Arrange(rowsViewport);
 
         if (TryConsumeScrollIntoViewRequest(out var request))
@@ -786,10 +789,6 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
                 ScrollIntoView(request.Index);
             }
         }
-
-        // Ensure newly realized items bind against the latest state.
-        _presenter.RebindExisting = _rebindVisibleOnNextRender;
-        _rebindVisibleOnNextRender = false;
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -898,10 +897,87 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         row.Bind(item, index);
     }
 
-    private void OnItemsChanged(ItemsChange _)
+    private void OnItemsChanged(ItemsChange change)
     {
         _presenter.ItemsSource = _core.ItemsSource;
-        _presenter.RecycleAll();
+        // Presenters handle Add/Remove/Replace internally (remapping realized indices,
+        // updating height caches and offsets). Force a full recycle only for Reset, which
+        // signals a wholesale collection change.
+        if (change.Kind == ItemsChangeKind.Reset)
+        {
+            _presenter.RecycleAll();
+        }
+
+        // Force rebind of visible rows only when the change can shift their indices or
+        // their backing data. Pure append-at-end (Insert with Index == previous count)
+        // doesn't affect any existing realized row, so triggering a rebind there causes
+        // unnecessary cell-context resets — visually that flashes selection/hover off+on
+        // for every appended item.
+        int newCount = _core.ItemsSource.Count;
+        int oldCount = newCount - (change.Kind == ItemsChangeKind.Add ? change.Count
+                                  : change.Kind == ItemsChangeKind.Remove ? -change.Count
+                                  : 0);
+        bool needsRebind = change.Kind switch
+        {
+            ItemsChangeKind.Reset => true,
+            ItemsChangeKind.Move => true,
+            ItemsChangeKind.Replace => true,
+            ItemsChangeKind.Remove => true,
+            ItemsChangeKind.Add => change.Index < oldCount,  // false when appending at end
+            _ => true
+        };
+        if (needsRebind)
+        {
+            _rebindVisibleOnNextRender = true;
+        }
+        InvalidateMeasure();
+        InvalidateArrange();
+        InvalidateVisual();
+    }
+
+    private IItemsPresenter CreateDefaultPresenter()
+        => new FixedHeightItemsPresenter
+        {
+            BorderThickness = 0,
+            Padding = new Thickness(0),
+            UseHorizontalExtentForLayout = true,
+        };
+
+    private void InitializePresenter(IItemsPresenter presenter)
+    {
+        presenter.ItemTemplate = _rowTemplate;
+        presenter.ItemsSource = _core.ItemsSource;
+        presenter.BeforeItemRender = BeforeRowRender;
+        presenter.UseHorizontalExtentForLayout = true;
+        // Variable-height virtualization requests scroll offset corrections during INCC bursts
+        // (insert/remove above the anchor) and after re-measurement refines heights. Without
+        // this subscription the events are dropped and the ScrollViewer's stale offset gets
+        // pushed back into the presenter on the next arrange, causing visible jumps.
+        presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
+    }
+
+    private void OnPresenterOffsetCorrectionRequested(Point offset)
+        => _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, offset.Y);
+
+    /// <summary>
+    /// Replaces the row presenter (e.g. swap fixed-height virtualization for variable-height).
+    /// Default is <see cref="FixedHeightItemsPresenter"/>; use
+    /// <c>VariableHeightPresenter()</c> extension for per-row measured heights.
+    /// </summary>
+    internal void SetPresenter(IItemsPresenter presenter)
+    {
+        if (presenter == null) throw new ArgumentNullException(nameof(presenter));
+        if (ReferenceEquals(presenter, _presenter)) return;
+
+        _presenter.OffsetCorrectionRequested -= OnPresenterOffsetCorrectionRequested;
+        if (_presenter is IDisposable d)
+        {
+            d.Dispose();
+        }
+
+        InitializePresenter(presenter);
+        _presenter = presenter;
+        _scrollViewer.Content = (UIElement)_presenter;
         _rebindVisibleOnNextRender = true;
         InvalidateMeasure();
         InvalidateArrange();
@@ -917,36 +993,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
     }
 
     private void ScrollSelectedIntoView()
-    {
-        int index = SelectedIndex;
-        int count = _core.ItemsSource.Count;
-        if (index < 0 || index >= count)
-        {
-            return;
-        }
-
-        double viewport = _rowsViewportHeight;
-        if (viewport <= 0 || double.IsNaN(viewport) || double.IsInfinity(viewport))
-        {
-            RequestScrollIntoView(ScrollIntoViewRequest.Selected());
-            return;
-        }
-
-        double rowH = ResolveRowHeight();
-        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
-        {
-            return;
-        }
-
-        _rowsExtentHeight = count * rowH;
-
-        double oldOffset = _scrollViewer.VerticalOffset;
-        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, rowH, viewport, oldOffset);
-        if (!newOffset.Equals(oldOffset))
-        {
-            _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
-        }
-    }
+        => ScrollIntoView(SelectedIndex);
 
     public void ScrollIntoView(int index)
     {
@@ -963,20 +1010,25 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             return;
         }
 
-        double rowH = ResolveRowHeight();
-        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        // Prefer the presenter's own y-range when it knows real (measured) item bounds —
+        // e.g. VariableHeightItemsPresenter's prefix sum. Falls back to fixed-height math
+        // only when the presenter can't supply a range (e.g. unmeasured items in variable
+        // mode that the presenter hasn't realized yet).
+        double oldOffset = _scrollViewer.VerticalOffset;
+        if (_presenter.TryGetItemYRange(index, out double itemTop, out double itemBottom))
         {
+            double itemH = Math.Max(1, itemBottom - itemTop);
+            double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemRangeIntoView(itemTop, itemH, viewport, oldOffset);
+            if (!newOffset.Equals(oldOffset))
+            {
+                _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
+            }
             return;
         }
 
-        _rowsExtentHeight = count * rowH;
-
-        double oldOffset = _scrollViewer.VerticalOffset;
-        double newOffset = ItemsViewportMath.ComputeScrollOffsetToBringItemIntoView(index, rowH, viewport, oldOffset);
-        if (!newOffset.Equals(oldOffset))
-        {
-            _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
-        }
+        // Unmeasured item — defer to the presenter so it can estimate, scroll, then refine
+        // after the item realizes. (Same path used when viewport isn't laid out yet.)
+        _presenter.RequestScrollIntoView(index);
     }
 
     private static UIElement? FindNextFocusableInContainer(FrameworkElement container, UIElement current, bool forward)
@@ -1205,6 +1257,13 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
                 _owner._core.SetColumnWidth(_resizeColumnIndex, newWidth);
                 _owner._rebindVisibleOnNextRender = true;
+                // Variable-height rows recompute height from cell content; column-width
+                // changes can change wrap break points → row height changes. Tell the
+                // presenter to drop its cached heights so prefix sums re-measure.
+                if (_owner._presenter is VariableHeightItemsPresenter variableHeightPresenter)
+                {
+                    variableHeightPresenter.InvalidateHeights();
+                }
                 _owner.InvalidateMeasure();
                 _owner.InvalidateVisual();
                 InvalidateArrange();
@@ -1373,14 +1432,27 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             var pad = _owner.CellPadding;
             double padH = pad.HorizontalThickness;
             double padV = pad.VerticalThickness;
+            double maxCellH = 0;
             for (int i = 0; i < _cells.Count; i++)
             {
                 double w = Math.Max(0, _owner._core.Columns[i].Width - padH);
-                double h = Math.Max(0, availableSize.Height - padV);
+                double h = double.IsPositiveInfinity(availableSize.Height)
+                    ? double.PositiveInfinity
+                    : Math.Max(0, availableSize.Height - padV);
                 _cells[i].View.Measure(new Size(w, h));
+                if (_cells[i].View.DesiredSize.Height > maxCellH)
+                {
+                    maxCellH = _cells[i].View.DesiredSize.Height;
+                }
             }
 
-            return new Size(availableSize.Width, availableSize.Height);
+            // Report measured max cell height + padding. FixedHeightItemsPresenter ignores
+            // this and uses its own ItemHeight; VariableHeightItemsPresenter uses it as the
+            // actual row height for prefix-sum bookkeeping and viewport layout.
+            double rowH = double.IsPositiveInfinity(availableSize.Height)
+                ? maxCellH + padV
+                : availableSize.Height;
+            return new Size(availableSize.Width, rowH);
         }
 
         protected override void ArrangeContent(Rect bounds)

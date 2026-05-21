@@ -43,7 +43,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     private int _measuredHeightCount;
 
     private bool _isRequestingOffsetCorrection;
-    private bool _stickToBottom;
     private int _pendingScrollIntoViewIndex = -1;
 
     // Tracks the DPI scale from the last layout pass so we can detect DPI changes
@@ -196,11 +195,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
     public void SetOffset(Point offset)
     {
-        var dpiScale = GetDpi() / 96.0;
-        var onePx = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
         double maxY = Math.Max(0, Extent.Height - _viewport.Height);
-        _stickToBottom = offset.Y >= maxY - onePx * 1.5;
-
         var clamped = new Point(
             Math.Clamp(offset.X, 0, Math.Max(0, Extent.Width - _viewport.Width)),
             Math.Clamp(offset.Y, 0, maxY));
@@ -401,18 +396,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         {
             InvalidatePrefix();
             RecomputeExtent();
-
-            // If the user is pinned to bottom (e.g. chat), always keep the viewport at the end.
-            if (_stickToBottom)
-            {
-                double desiredOffsetY = Math.Max(0, Extent.Height - _viewport.Height);
-                if (!_isRequestingOffsetCorrection && Math.Abs(desiredOffsetY - alignedOffsetY) >= onePx * 0.99)
-                {
-                    RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
-                    InvalidateMeasure();
-                }
-                return;
-            }
 
             // After refining heights, re-run ScrollIntoView correction for the pending target
             // using the now-accurate prefix/height data.
@@ -820,6 +803,29 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
     }
 
     private void InvalidatePrefix() => _prefixValid = false;
+
+    /// <summary>
+    /// Discards all cached item heights without recycling the realized containers. Call when
+    /// an external factor (e.g. column-width change in a tabular host) invalidates previously
+    /// measured row heights but the item set and templates are unchanged. The next arrange
+    /// re-measures visible items; off-screen items refresh on demand when scrolled in.
+    /// </summary>
+    public void InvalidateHeights()
+    {
+        int count = _heights.Count;
+        if (count == 0) return;
+
+        for (int i = 0; i < count; i++)
+        {
+            _heights[i] = -1;
+        }
+        _measuredHeightSum = 0;
+        _measuredHeightCount = 0;
+        InvalidatePrefix();
+        RecomputeExtent();
+        InvalidateMeasure();
+        InvalidateArrange();
+    }
 
     private void ResetHeights()
     {
@@ -1360,32 +1366,15 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         InvalidatePrefix();
         RecomputeExtent();
 
-        if (_stickToBottom && !_isRequestingOffsetCorrection)
-        {
-            double desiredOffsetY = Math.Max(0, Extent.Height - _viewport.Height);
-            if (Math.Abs(desiredOffsetY - alignedOffsetY) > (1.0 / dpiScale) * 0.5)
-            {
-                RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
-            }
-
-            InvalidateMeasure();
-            InvalidateVisual();
-            return;
-        }
-
         if (requestAnchorCorrection && !_isRequestingOffsetCorrection)
         {
             // Best-effort correction using estimates; refined later by measurement-based anchor correction.
-            // Quantize the delta to a whole-pixel multiple so each INCC iteration produces an
-            // identical visual shift. Combined with prefix estimates also being pixel-aligned
-            // (see GetEstimatedHeightDip), the rendered offset and prefix advance in lockstep
-            // and anchor position stays stable across a rapid prepend burst.
             double quantizedDelta = LayoutRounding.RoundToPixel(correctionDelta, dpiScale);
             double desiredOffsetY = _offset.Y + quantizedDelta;
-            desiredOffsetY = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - _viewport.Height));
-            if (Math.Abs(desiredOffsetY - _offset.Y) > (1.0 / dpiScale) * 0.5)
+            double clamped = Math.Clamp(desiredOffsetY, 0, Math.Max(0, Extent.Height - _viewport.Height));
+            if (Math.Abs(clamped - _offset.Y) > (1.0 / dpiScale) * 0.5)
             {
-                RequestOffsetCorrection(new Point(_offset.X, desiredOffsetY));
+                RequestOffsetCorrection(new Point(_offset.X, clamped));
             }
         }
 
