@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Skia;
 using Aprillz.MewUI.Skia.Controls;
 using Aprillz.MewUI.Skia.Interop;
 using Aprillz.MewUI.Skia.Sample.Diagnostics;
@@ -14,14 +13,6 @@ using SkiaSharp;
 #endif
 
 Startup();
-
-// Enable MewUI/MewVG backend diagnostic logging. Backends gate verbose output (e.g.
-// WGL context creation + GL vendor/renderer/version) behind this flag — flipping it on
-// here makes those lines show up in Debug.WriteLine so we can correlate the backend GL
-// context identity with our own SkiaGLSurfaceHost identity (they may differ on Optimus).
-DiagLog.Enabled =
-    string.Equals(Environment.GetEnvironmentVariable("MEWUI_SKIA_DIAG"), "1", StringComparison.OrdinalIgnoreCase)
-    || string.Equals(Environment.GetEnvironmentVariable("MEWUI_SKIA_DIAG"), "true", StringComparison.OrdinalIgnoreCase);
 
 Window window = null!;
 SkiaCanvasView canvas = null!;
@@ -154,16 +145,16 @@ void ApplyStats(StatsSnapshot snapshot)
 
 void PublishOverlay()
 {
+    string gpuText = _latestStats.GpuPercent is { } gpu ? $"{gpu:0.0}%" : "n/a";
     var text =
         $"FPS: {_latestFpsText} / " +
-        $"CPU: {_latestStats.CpuUsageText} / " +
-        $"GPU: {_latestStats.GpuUsageText}\n" +
+        $"CPU: {_latestStats.CpuPercent:0.0}% / " +
+        $"GPU: {gpuText}\n" +
         $"WS:  {FormatBytes(_latestStats.WorkingSetBytes)} / " +
         $"PB:  {FormatBytes(_latestStats.PrivateBytes)} / " +
         $"MH:  {FormatBytes(_latestStats.ManagedHeapBytes)}";
 
     overlayText.Value = text;
-    //Debug.WriteLine(text);
 }
 
 static string FormatBytes(long bytes)

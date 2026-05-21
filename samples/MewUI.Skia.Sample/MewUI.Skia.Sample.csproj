@@ -31,7 +31,8 @@
     <ProjectReference Include="..\..\src\MewUI.Skia.Interop.MewVG.X11\MewUI.Skia.Interop.MewVG.X11.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!-- Debug-only: PerformanceCounter package has trim / NativeAOT compatibility issues. -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.0" />
   </ItemGroup>
 
