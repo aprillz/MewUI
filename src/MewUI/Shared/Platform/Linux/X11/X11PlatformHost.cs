@@ -289,6 +289,21 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public void Quit(Application app) => _running = false;
 
+    public Point GetCursorScreenPosition()
+    {
+        if (Display == 0) return default;
+        var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
+        if (root == 0) return default;
+        if (NativeX11.XQueryPointer(Display, root,
+            out _, out _,
+            out int rootX, out int rootY,
+            out _, out _, out _))
+        {
+            return new Point(rootX, rootY);
+        }
+        return default;
+    }
+
     public void DoEvents()
     {
         if (Display == 0)

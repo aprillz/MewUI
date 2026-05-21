@@ -23,6 +23,7 @@
     <Compile Include="..\MewUI\Shared\Native\Win32\DwmApi.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Kernel32.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Win32\Imm32.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Win32\Ole32.cs" LinkBase="Native" />
   </ItemGroup>
 
 </Project>

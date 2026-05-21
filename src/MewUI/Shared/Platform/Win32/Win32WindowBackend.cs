@@ -26,6 +26,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private bool _initialEraseDone;
     private double _opacity = 1.0;
     private bool _allowsTransparency;
+    private nint _dropTargetCom;
 
     private readonly TextInputSuppression _textInputSuppression = new();
     private nint _savedImeContext;
@@ -743,6 +744,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case WindowMessages.WM_DROPFILES:
+                // Legacy file-drop path — used as a fallback on MTA threads where IDropTarget cannot be
+                // registered. STA threads use IDropTarget instead (Shell32.DragAcceptFiles is not called).
                 return HandleDropFiles(wParam);
 
             default:
@@ -789,7 +792,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         _titleBarThemeSync.Initialize(Handle);
         _host.RegisterWindow(Handle, this);
         Window.AttachBackend(this);
-        Shell32.DragAcceptFiles(Handle, true);
+        // AttachBackend calls SetAllowDrop(true) automatically if Window.AllowDrop was already set,
+        // so we don't need to register the drop target here.
 
         ApplyResizeMode();
         EnsureLayeredStyleIfNeeded();
@@ -840,19 +844,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
             unsafe
             {
                 uint count = Shell32.DragQueryFile(hDrop, 0xFFFFFFFF, null, 0);
-                if (count == 0)
-                {
-                    return 0;
-                }
+                if (count == 0) return 0;
 
                 var paths = new List<string>((int)count);
                 for (uint i = 0; i < count; i++)
                 {
                     uint length = Shell32.DragQueryFile(hDrop, i, null, 0);
-                    if (length == 0)
-                    {
-                        continue;
-                    }
+                    if (length == 0) continue;
 
                     char[] rented = ArrayPool<char>.Shared.Rent((int)length + 1);
                     try
@@ -872,16 +870,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
                     }
                 }
 
-                if (paths.Count == 0)
-                {
-                    return 0;
-                }
+                if (paths.Count == 0) return 0;
 
-                POINT clientPointPx = default;
-                _ = Shell32.DragQueryPoint(hDrop, &clientPointPx);
-                var screenPointPx = clientPointPx;
-                User32.ClientToScreen(Handle, ref screenPointPx);
+                POINT clientPx = default;
+                _ = Shell32.DragQueryPoint(hDrop, &clientPx);
+                var screenPx = clientPx;
+                User32.ClientToScreen(Handle, ref screenPx);
 
+                double dpi = Window.DpiScale;
                 var data = new DataObject(new Dictionary<string, object>
                 {
                     [StandardDataFormats.StorageItems] = paths,
@@ -889,10 +885,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
                 var args = new DragEventArgs(
                     data,
-                    new Point(clientPointPx.x / Window.DpiScale, clientPointPx.y / Window.DpiScale),
-                    new Point(screenPointPx.x, screenPointPx.y));
+                    new Point(clientPx.x / dpi, clientPx.y / dpi),
+                    new Point(screenPx.x, screenPx.y),
+                    DragDropEffects.Copy);
 
-                Window.RaiseDrop(args);
+                // Route through the framework so element-level Drop handlers fire (and window-level fallback).
+                // No DragEnter/Over/Leave with WM_DROPFILES — only the final Drop is delivered.
+                WindowDragDropRouter.OnExternalDrop(Window, args);
                 return 0;
             }
         }
@@ -1265,6 +1264,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         // so the _lifetimeState guard inside RaiseClosed() prevents double invocation.
         Window.RaiseClosed();
 
+        RevokeDropTarget();
         _titleBarThemeSync.Dispose();
         DestroyIcons();
         User32.ReleaseCapture();
@@ -1275,6 +1275,60 @@ internal sealed class Win32WindowBackend : IWindowBackend
         _host.UnregisterWindow(Handle);
         Window.DisposeVisualTree();
         Handle = 0;
+    }
+
+    private Win32DropTargetAdapter? _dropTargetAdapter;
+    private bool _legacyDropFilesRegistered;
+
+    // STA → IDropTarget + IDropTargetHelper.   MTA → WM_DROPFILES fallback.
+    // Apartment requirements and effect negotiation details: see remarks on UIElement.AllowDropProperty.
+    /// <inheritdoc/>
+    public void SetAllowDrop(bool allow)
+    {
+        if (allow) RegisterDropTarget();
+        else RevokeDropTarget();
+    }
+
+    private void RegisterDropTarget()
+    {
+        if (Handle == 0 || _dropTargetCom != 0 || _legacyDropFilesRegistered) return;
+
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA &&
+            Ole32.OleInitialize(0) >= 0)
+        {
+            _dropTargetAdapter = new Win32DropTargetAdapter(this);
+            var pTarget = Win32DropTarget.Create(_dropTargetAdapter);
+            int hr = Ole32.RegisterDragDrop(Handle, pTarget);
+            if (hr >= 0)
+            {
+                _dropTargetCom = pTarget;
+                return;
+            }
+            Win32DropTarget.Release(pTarget);
+            _dropTargetAdapter = null;
+        }
+
+        // Fallback: WM_DROPFILES will be delivered to WndProc; HandleDropFiles routes through the router.
+        Shell32.DragAcceptFiles(Handle, true);
+        _legacyDropFilesRegistered = true;
+    }
+
+    private void RevokeDropTarget()
+    {
+        if (Handle == 0) return;
+        if (_dropTargetCom != 0)
+        {
+            _ = Ole32.RevokeDragDrop(Handle);
+            _dropTargetAdapter?.ReleaseHelper();
+            _dropTargetAdapter = null;
+            Win32DropTarget.Release(_dropTargetCom);
+            _dropTargetCom = 0;
+        }
+        if (_legacyDropFilesRegistered)
+        {
+            Shell32.DragAcceptFiles(Handle, false);
+            _legacyDropFilesRegistered = false;
+        }
     }
 
     private nint HandlePaint()

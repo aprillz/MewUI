@@ -29,8 +29,11 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _xdndEnterAtom;
     private nint _xdndPositionAtom;
     private nint _xdndStatusAtom;
+    private nint _xdndLeaveAtom;
     private nint _xdndTypeListAtom;
     private nint _xdndActionCopyAtom;
+    private nint _xdndActionMoveAtom;
+    private nint _xdndActionLinkAtom;
     private nint _xdndDropAtom;
     private nint _xdndFinishedAtom;
     private nint _xdndSelectionAtom;
@@ -42,6 +45,9 @@ internal sealed class X11WindowBackend : IWindowBackend
     private int _xdndLastRootX;
     private int _xdndLastRootY;
     private nint _xdndLastDropTime;
+    private bool _xdndEnterDispatched;
+    private DragDropEffects _xdndLastEffect;
+    private bool _allowDrop;
     private long _lastRenderTick;
     private X11GlxVisualInfo? _glxVisualInfo;
 
@@ -765,8 +771,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndEnterAtom = NativeX11.XInternAtom(Display, "XdndEnter", false);
         _xdndPositionAtom = NativeX11.XInternAtom(Display, "XdndPosition", false);
         _xdndStatusAtom = NativeX11.XInternAtom(Display, "XdndStatus", false);
+        _xdndLeaveAtom = NativeX11.XInternAtom(Display, "XdndLeave", false);
         _xdndTypeListAtom = NativeX11.XInternAtom(Display, "XdndTypeList", false);
         _xdndActionCopyAtom = NativeX11.XInternAtom(Display, "XdndActionCopy", false);
+        _xdndActionMoveAtom = NativeX11.XInternAtom(Display, "XdndActionMove", false);
+        _xdndActionLinkAtom = NativeX11.XInternAtom(Display, "XdndActionLink", false);
         _xdndDropAtom = NativeX11.XInternAtom(Display, "XdndDrop", false);
         _xdndFinishedAtom = NativeX11.XInternAtom(Display, "XdndFinished", false);
         _xdndSelectionAtom = NativeX11.XInternAtom(Display, "XdndSelection", false);
@@ -777,14 +786,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             NativeX11.XSetWMProtocols(Display, Handle, ref _wmDeleteWindowAtom, 1);
         }
 
-        if (_xdndAwareAtom != 0 && _atomAtom != 0)
-        {
-            unsafe
-            {
-                nint xdndVersion = (nint)5;
-                NativeX11.XChangeProperty(Display, Handle, _xdndAwareAtom, _atomAtom, 32, 0, (nint)(&xdndVersion), 1);
-            }
-        }
+        ApplyXdndAware();
 
         // Apply transparency-related window hints after atoms are initialized.
         if (_allowsTransparency)
@@ -1173,6 +1175,12 @@ internal sealed class X11WindowBackend : IWindowBackend
                     if (_xdndDropAtom != 0 && client.message_type == _xdndDropAtom)
                     {
                         HandleXdndDrop(client);
+                        break;
+                    }
+
+                    if (_xdndLeaveAtom != 0 && client.message_type == _xdndLeaveAtom)
+                    {
+                        HandleXdndLeave();
                         break;
                     }
 
@@ -1665,6 +1673,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndSourceWindow = (nint)client.data[0];
         _xdndVersion = ((ulong)client.data[1] >> 24) & 0xFF;
         _xdndOfferedTypes.Clear();
+        _xdndEnterDispatched = false;
+        _xdndLastEffect = DragDropEffects.None;
 
         bool usesTypeList = (client.data[1] & 1) != 0;
         if (usesTypeList)
@@ -1693,7 +1703,32 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndLastRootX = (short)((packed >> 16) & 0xFFFF);
         _xdndLastRootY = (short)(packed & 0xFFFF);
         _xdndLastDropTime = (nint)client.data[3];
-        SendXdndStatus(AcceptsXdndDrop());
+
+        // Build a lightweight (format-keys-only) IDataObject so element-level routing can decide accept
+        // based on the offered types. The real payload becomes available only after XdndDrop + selection conversion.
+        var args = BuildXdndPositionArgs();
+        if (_xdndEnterDispatched)
+        {
+            WindowDragDropRouter.OnExternalDragOver(Window, args);
+        }
+        else
+        {
+            WindowDragDropRouter.OnExternalDragEnter(Window, args);
+            _xdndEnterDispatched = true;
+        }
+
+        _xdndLastEffect = args.Accepted ? args.Effect : DragDropEffects.None;
+        SendXdndStatus(_xdndLastEffect);
+    }
+
+    private void HandleXdndLeave()
+    {
+        if (_xdndEnterDispatched)
+        {
+            var args = BuildXdndPositionArgs();
+            WindowDragDropRouter.OnExternalDragLeave(Window, args);
+        }
+        ResetXdndState();
     }
 
     private unsafe void HandleXdndDrop(XClientMessageEvent client)
@@ -1719,6 +1754,24 @@ internal sealed class X11WindowBackend : IWindowBackend
             Handle,
             _xdndLastDropTime);
         NativeX11.XFlush(Display);
+    }
+
+    // Lightweight args for enter/over time: format keys present, no payload (X11 selection-conversion model).
+    private DragEventArgs BuildXdndPositionArgs()
+    {
+        var emptyFormats = new Dictionary<string, object>(capacity: 1);
+        if (_textUriListAtom != 0 && _xdndOfferedTypes.Contains(_textUriListAtom))
+        {
+            emptyFormats[StandardDataFormats.StorageItems] = Array.Empty<string>();
+        }
+
+        var data = new DataObject(emptyFormats);
+        var position = TranslateRootToClient(_xdndLastRootX, _xdndLastRootY);
+        return new DragEventArgs(
+            data,
+            new Point(position.x / Window.DpiScale, position.y / Window.DpiScale),
+            new Point(_xdndLastRootX, _xdndLastRootY),
+            DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
     }
 
     private void HandleXdndSelection(XSelectionEvent selection)
@@ -1751,10 +1804,12 @@ internal sealed class X11WindowBackend : IWindowBackend
             var args = new DragEventArgs(
                 data,
                 new Point(position.x / Window.DpiScale, position.y / Window.DpiScale),
-                new Point(_xdndLastRootX, _xdndLastRootY));
+                new Point(_xdndLastRootX, _xdndLastRootY),
+                DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
 
-            Window.RaiseDrop(args);
-            success = true;
+            var effect = WindowDragDropRouter.OnExternalDrop(Window, args);
+            success = effect != DragDropEffects.None || args.Handled;
+            _xdndLastEffect = effect;
         }
         finally
         {
@@ -1771,12 +1826,20 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool AcceptsXdndDrop()
         => _textUriListAtom != 0 && _xdndOfferedTypes.Contains(_textUriListAtom);
 
-    private unsafe void SendXdndStatus(bool accept)
+    private unsafe void SendXdndStatus(DragDropEffects effect)
     {
         if (_xdndSourceWindow == 0 || _xdndStatusAtom == 0)
         {
             return;
         }
+
+        // Pick a single action atom — Xdnd carries one action at a time.
+        nint actionAtom = 0;
+        if ((effect & DragDropEffects.Move) != 0) actionAtom = _xdndActionMoveAtom;
+        else if ((effect & DragDropEffects.Copy) != 0) actionAtom = _xdndActionCopyAtom;
+        else if ((effect & DragDropEffects.Link) != 0) actionAtom = _xdndActionLinkAtom;
+
+        bool accept = actionAtom != 0;
 
         XEvent ev = default;
         ev.xclient.type = 33;
@@ -1788,7 +1851,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         ev.xclient.data[1] = accept ? 1 : 0;
         ev.xclient.data[2] = 0;
         ev.xclient.data[3] = 0;
-        ev.xclient.data[4] = accept ? _xdndActionCopyAtom : 0;
+        ev.xclient.data[4] = actionAtom;
         _ = NativeX11.XSendEvent(Display, _xdndSourceWindow, false, 0, ref ev);
         NativeX11.XFlush(Display);
     }
@@ -1821,6 +1884,37 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndLastRootX = 0;
         _xdndLastRootY = 0;
         _xdndLastDropTime = 0;
+        _xdndEnterDispatched = false;
+        _xdndLastEffect = DragDropEffects.None;
+    }
+
+    /// <inheritdoc/>
+    public void SetAllowDrop(bool allow)
+    {
+        if (_allowDrop == allow) return;
+        _allowDrop = allow;
+        if (Handle != 0)
+        {
+            ApplyXdndAware();
+        }
+    }
+
+    private void ApplyXdndAware()
+    {
+        if (Handle == 0 || _xdndAwareAtom == 0) return;
+        if (_allowDrop)
+        {
+            if (_atomAtom == 0) return;
+            unsafe
+            {
+                nint xdndVersion = (nint)5;
+                NativeX11.XChangeProperty(Display, Handle, _xdndAwareAtom, _atomAtom, 32, 0, (nint)(&xdndVersion), 1);
+            }
+        }
+        else
+        {
+            NativeX11.XDeleteProperty(Display, Handle, _xdndAwareAtom);
+        }
     }
 
     private List<string> ReadXdndPaths(nint property)

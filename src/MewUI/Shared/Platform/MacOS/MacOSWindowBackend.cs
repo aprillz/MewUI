@@ -33,6 +33,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private double _lastDpiScale = 1.0;
     private double _opacity = 1.0;
     private bool _allowsTransparency;
+    private bool _allowDrop;
     private bool _leftDown;
     private bool _rightDown;
     private bool _middleDown;
@@ -622,6 +623,19 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
+    /// <inheritdoc/>
+    public void SetAllowDrop(bool allow)
+    {
+        if (_allowDrop == allow) return;
+        _allowDrop = allow;
+        // If the NSView has been created, apply the change immediately; otherwise EnsureCreated picks it up.
+        if (_nsView != 0)
+        {
+            if (allow) MacOSWindowInterop.RegisterForDragDrop(_nsView);
+            else MacOSWindowInterop.UnregisterFromDragDrop(_nsView);
+        }
+    }
+
     internal double _extendTitleBarHeight;
 
     public void SetExtendClientAreaToTitleBar(double titleBarHeight)
@@ -760,8 +774,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         var args = CreateDragEventArgs(paths, windowPoint);
         _lastDragEventArgs = args;
-        _window.RaiseDragEnter(args);
-        return 1;
+        WindowDragDropRouter.OnExternalDragEnter(_window, args);
+        return args.Accepted ? (ulong)args.Effect : 0;
     }
 
     internal ulong HandleNativeDragOver(IReadOnlyList<string> paths, NSPoint windowPoint)
@@ -773,15 +787,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         var args = CreateDragEventArgs(paths, windowPoint);
         _lastDragEventArgs = args;
-        _window.RaiseDragOver(args);
-        return 1;
+        WindowDragDropRouter.OnExternalDragOver(_window, args);
+        return args.Accepted ? (ulong)args.Effect : 0;
     }
 
     internal void HandleNativeDragLeave()
     {
         if (_lastDragEventArgs is { } args)
         {
-            _window.RaiseDragLeave(args);
+            WindowDragDropRouter.OnExternalDragLeave(_window, args);
         }
 
         _lastDragEventArgs = null;
@@ -796,8 +810,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         var args = CreateDragEventArgs(paths, windowPoint);
         _lastDragEventArgs = args;
-        _window.RaiseDrop(args);
-        return true;
+        var effect = WindowDragDropRouter.OnExternalDrop(_window, args);
+        return effect != DragDropEffects.None || args.Handled;
     }
 
     private void EnsureCreated()
@@ -830,7 +844,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             _nsView = view;
             _metalLayer = layer;
             MacOSWindowInterop.RegisterTextInputTarget(_nsView, this);
-            MacOSWindowInterop.RegisterForDragDrop(_nsView);
+            if (_allowDrop) MacOSWindowInterop.RegisterForDragDrop(_nsView);
             MacOSWindowInterop.RegisterMetalLayerTarget(_metalLayer, this);
             MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
             if (_metalLayer != 0)

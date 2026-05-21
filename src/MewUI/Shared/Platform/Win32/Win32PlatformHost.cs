@@ -268,6 +268,11 @@ public sealed class Win32PlatformHost : IPlatformHost
         User32.PostQuitMessage(0);
     }
 
+    public Point GetCursorScreenPosition()
+    {
+        return User32.GetCursorPos(out var pt) ? new Point(pt.x, pt.y) : default;
+    }
+
     public void DoEvents()
     {
         MSG msg;

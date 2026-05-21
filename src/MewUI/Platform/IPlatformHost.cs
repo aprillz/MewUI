@@ -89,4 +89,10 @@ public interface IPlatformHost : IDisposable
     /// Processes pending messages without entering a full message loop (best effort).
     /// </summary>
     void DoEvents();
+
+    /// <summary>
+    /// Gets the current cursor position in screen-pixel coordinates (Y-down).
+    /// Used by framework drag-and-drop to resolve which window the cursor is over during a session.
+    /// </summary>
+    Point GetCursorScreenPosition() => default;
 }

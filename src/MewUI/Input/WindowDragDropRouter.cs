@@ -1,0 +1,643 @@
+using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Platform;
+
+namespace Aprillz.MewUI.Input;
+
+/// <summary>
+/// Coordinates framework-internal drag-and-drop routing.
+/// Routes element-level <see cref="UIElement.DragEnter"/>/<c>Over</c>/<c>Leave</c>/<c>Drop</c>
+/// using the same popup-aware bubble parent rules as mouse input.
+/// </summary>
+/// <remarks>
+/// Phase 1 scope: framework-only drag-and-drop. Mouse events flow through this router
+/// when a drag session is active; the OS DnD APIs (Win32 <c>IDropTarget</c>,
+/// macOS <c>NSDraggingSource</c>, X11 Xdnd send) are intentionally not used here.
+/// Cross-window routing (Phase 4) reuses the same hit-test/event-dispatch code by
+/// resolving the target window from a global cursor probe.
+/// </remarks>
+internal static class WindowDragDropRouter
+{
+    // 4 DIPs matches typical platform defaults (Win32 SM_CXDRAG, GtkSettings).
+    private const double DragGestureThresholdDip = 4.0;
+
+    private static DragCandidate? _candidate;
+    private static DragSession? _activeSession;
+    private static ExternalDragSession? _externalSession;
+
+    internal static bool IsActive => _activeSession != null;
+
+    internal static DragSession? ActiveSession => _activeSession;
+
+    /// <summary>Records a drag candidate when a mouse-down lands on a <see cref="UIElement.CanDrag"/> element (or its ancestor).</summary>
+    public static void OnMouseDown(Window window, Point positionInWindow, Point screenPosition, UIElement? leaf)
+    {
+        // An active drag in progress consumes new presses (shouldn't normally happen — capture diverts them).
+        if (_activeSession != null) return;
+
+        _candidate = null;
+        if (leaf == null) return;
+
+        // Walk the bubble chain for the nearest CanDrag element.
+        for (var current = leaf; current != null; current = WindowInputRouter.GetInputBubbleParent(window, current))
+        {
+            if (current.CanDrag)
+            {
+                _candidate = new DragCandidate(window, current, positionInWindow, screenPosition);
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Routes a mouse-move during a potential or active drag session.
+    /// Returns <see langword="true"/> if the move was consumed (drag promoted to active, or active session updated).
+    /// </summary>
+    public static bool OnMouseMove(Window window, Point positionInWindow, Point screenPosition)
+    {
+        if (_activeSession != null)
+        {
+            UpdateActiveDrag(window, positionInWindow, screenPosition);
+            return true;
+        }
+
+        if (_candidate == null) return false;
+
+        var dx = positionInWindow.X - _candidate.StartPositionInWindow.X;
+        var dy = positionInWindow.Y - _candidate.StartPositionInWindow.Y;
+        if (dx * dx + dy * dy < DragGestureThresholdDip * DragGestureThresholdDip)
+        {
+            return false;
+        }
+
+        // Threshold exceeded — try to promote to an active session.
+        return TryPromoteCandidate();
+    }
+
+    /// <summary>
+    /// Routes a mouse-up during a potential or active drag session.
+    /// Returns <see langword="true"/> if the up was consumed (drop performed or candidate cleared).
+    /// </summary>
+    public static bool OnMouseUp(Window window, Point positionInWindow, Point screenPosition)
+    {
+        if (_activeSession != null)
+        {
+            PerformDropAndEnd(window, positionInWindow, screenPosition);
+            return true;
+        }
+
+        if (_candidate != null)
+        {
+            _candidate = null;
+            return false; // candidate was a click, not a drag — let normal MouseUp routing run
+        }
+
+        return false;
+    }
+
+    /// <summary>Cancels any active drag session (Esc, source window closing, etc.).</summary>
+    public static void CancelActive()
+    {
+        if (_activeSession == null) return;
+        EndSession(canceled: true);
+    }
+
+    /// <summary>Starts a drag session by explicit API call (bypasses gesture detection).</summary>
+    public static void BeginExplicitDrag(Window window, UIElement source, IDataObject data, DragDropEffects effects, DragPreviewContent? preview)
+    {
+        if (_activeSession != null) return;
+
+        var startInWindow = source.TranslatePoint(default, window);
+        var startInElement = default(Point);
+        var screenPosition = window.LastMouseScreenPositionPx;
+
+        var args = new DragStartingEventArgs(startInElement, startInWindow)
+        {
+            Data = data,
+            AllowedEffects = effects,
+            Preview = preview,
+        };
+        StartSession(window, source, args);
+    }
+
+    private static bool TryPromoteCandidate()
+    {
+        var candidate = _candidate!;
+        _candidate = null;
+
+        var sourceWindow = candidate.SourceWindow;
+        var source = candidate.Source;
+
+        var startInElement = sourceWindow.TranslatePoint(candidate.StartPositionInWindow, source);
+        var args = new DragStartingEventArgs(startInElement, candidate.StartPositionInWindow);
+
+        // Bubble DragStarting up the chain until handled or canceled.
+        for (var current = (UIElement?)source; current != null; current = WindowInputRouter.GetInputBubbleParent(sourceWindow, current))
+        {
+            current.RaiseDragStarting(args);
+            if (args.Cancel || args.Data != null) break;
+        }
+
+        if (args.Cancel || args.Data == null) return false;
+
+        return StartSession(sourceWindow, source, args);
+    }
+
+    private static bool StartSession(Window sourceWindow, UIElement source, DragStartingEventArgs args)
+    {
+        if (args.Data == null) return false;
+
+        // When the caller did not specify a hotspot, anchor the preview where the user grabbed the source —
+        // this keeps the preview visually aligned with the original at drag-start.
+        var hotspot = args.Preview?.Hotspot ?? args.StartPositionInElement;
+
+        var session = new DragSession(
+            sourceWindow,
+            source,
+            args.Data,
+            args.AllowedEffects,
+            args.Preview,
+            hotspot);
+
+        // Any element-level capture (e.g. a Button's OnMouseDown) is replaced by the drag session.
+        // Without this the normal hit-test would keep short-circuiting to the captured element after the drop.
+        sourceWindow.ClearMouseCaptureState();
+
+        // Backend-level capture so mouse-up arrives at the source window even when the cursor leaves.
+        sourceWindow.CaptureMouseForDrag();
+        _activeSession = session;
+
+        AttachPreview(sourceWindow, session);
+        UpdateActiveDrag(sourceWindow, sourceWindow.LastMousePositionDip, sourceWindow.LastMouseScreenPositionPx);
+        return true;
+    }
+
+    private static void UpdateActiveDrag(Window eventWindow, Point positionInWindow, Point screenPosition)
+    {
+        var session = _activeSession!;
+
+        var targetWindow = ResolveTargetWindow(eventWindow, ref positionInWindow, ref screenPosition);
+        var leaf = targetWindow?.HitTest(positionInWindow);
+
+        BuildChain(targetWindow, leaf, _scratchNewChain);
+
+        var args = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects)
+        {
+            Effect = DragDropEffects.None,
+        };
+
+        // Diff old chain vs new chain.
+        var oldChain = session.CurrentChain;
+        var oldWindow = session.CurrentTargetWindow;
+
+        // DragLeave on entries removed (those in oldChain not in newChain, or when window changed).
+        if (!ReferenceEquals(oldWindow, targetWindow))
+        {
+            // Different window — leave everything in old chain.
+            for (int i = 0; i < oldChain.Count; i++)
+            {
+                oldChain[i].RaiseDragLeave(args);
+            }
+            oldChain.Clear();
+        }
+        else
+        {
+            // Same window — leave entries no longer present.
+            for (int i = 0; i < oldChain.Count; i++)
+            {
+                if (!_scratchNewChain.Contains(oldChain[i]))
+                {
+                    oldChain[i].RaiseDragLeave(args);
+                }
+            }
+        }
+
+        // DragEnter on entries newly added.
+        for (int i = _scratchNewChain.Count - 1; i >= 0; i--)
+        {
+            if (!oldChain.Contains(_scratchNewChain[i]))
+            {
+                _scratchNewChain[i].RaiseDragEnter(args);
+            }
+        }
+
+        // Save new chain.
+        oldChain.Clear();
+        oldChain.AddRange(_scratchNewChain);
+        session.CurrentTargetWindow = targetWindow;
+
+        // DragOver on the current chain (leaf to root).
+        var overArgs = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects)
+        {
+            Effect = args.Effect,
+            Accepted = args.Accepted,
+        };
+        for (int i = 0; i < oldChain.Count; i++)
+        {
+            oldChain[i].RaiseDragOver(overArgs);
+            if (overArgs.Accepted) overArgs.Handled = true;
+            if (overArgs.Handled) break;
+        }
+
+        // Normalize the effect: must be within AllowedEffects, and accepted-implies-non-None.
+        var effect = overArgs.Effect & session.AllowedEffects;
+        if (!overArgs.Accepted) effect = DragDropEffects.None;
+        if (overArgs.Accepted && effect == DragDropEffects.None)
+        {
+            // Default fallback when target says "accepted" but did not pick a specific effect.
+            effect = (session.AllowedEffects & DragDropEffects.Copy) != 0
+                ? DragDropEffects.Copy
+                : session.AllowedEffects;
+        }
+        session.LastEffect = effect;
+
+        UpdatePreviewPosition(targetWindow, session, positionInWindow);
+    }
+
+    private static void PerformDropAndEnd(Window eventWindow, Point positionInWindow, Point screenPosition)
+    {
+        var session = _activeSession!;
+        var targetWindow = ResolveTargetWindow(eventWindow, ref positionInWindow, ref screenPosition);
+        var leaf = targetWindow?.HitTest(positionInWindow);
+
+        BuildChain(targetWindow, leaf, _scratchNewChain);
+
+        var args = new DragEventArgs(session.Data, positionInWindow, screenPosition, session.AllowedEffects)
+        {
+            Effect = session.LastEffect,
+            Accepted = session.LastEffect != DragDropEffects.None,
+        };
+
+        if (targetWindow != null && _scratchNewChain.Count > 0 && args.Accepted)
+        {
+            for (int i = 0; i < _scratchNewChain.Count; i++)
+            {
+                _scratchNewChain[i].RaiseDrop(args);
+                if (args.Accepted) args.Handled = true;
+                if (args.Handled) break;
+            }
+        }
+
+        var finalEffect = args.Accepted ? (args.Effect & session.AllowedEffects) : DragDropEffects.None;
+        if (args.Accepted && finalEffect == DragDropEffects.None)
+        {
+            finalEffect = (session.AllowedEffects & DragDropEffects.Copy) != 0
+                ? DragDropEffects.Copy
+                : session.AllowedEffects;
+        }
+        session.LastEffect = finalEffect;
+
+        EndSession(canceled: !args.Accepted);
+    }
+
+    private static void EndSession(bool canceled)
+    {
+        var session = _activeSession;
+        if (session == null) return;
+        _activeSession = null;
+
+        // Leave any current target chain.
+        var leaveArgs = new DragEventArgs(session.Data, default, default, session.AllowedEffects);
+        for (int i = 0; i < session.CurrentChain.Count; i++)
+        {
+            session.CurrentChain[i].RaiseDragLeave(leaveArgs);
+        }
+        session.CurrentChain.Clear();
+
+        DetachPreview(session);
+        session.SourceWindow.ReleaseMouseAfterDrag();
+
+        var completed = new DragCompletedEventArgs(canceled ? DragDropEffects.None : session.LastEffect, canceled);
+        session.Source.RaiseDragCompleted(completed);
+    }
+
+    private static Window? ResolveTargetWindow(Window eventWindow, ref Point positionInWindow, ref Point screenPosition)
+    {
+        // Probe the global cursor and try to find a same-app MewUI window under it.
+        // Falls back to the event window (single-window behavior) when the probe is unavailable or finds no match.
+        if (!Application.IsRunning) return eventWindow;
+        var app = Application.Current;
+        var cursorScreen = app.PlatformHost.GetCursorScreenPosition();
+        if (cursorScreen == default) return eventWindow;
+
+        screenPosition = cursorScreen;
+
+        var windows = app.AllWindows;
+        // Iterate in reverse — later-registered windows are heuristically more likely to be on top.
+        for (int i = windows.Count - 1; i >= 0; i--)
+        {
+            var candidate = windows[i];
+            if (candidate.Handle == 0) continue;
+
+            Point clientDip;
+            try
+            {
+                clientDip = candidate.ScreenToClient(cursorScreen);
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            var size = candidate.ClientSize;
+            if (clientDip.X < 0 || clientDip.Y < 0 ||
+                clientDip.X > size.Width || clientDip.Y > size.Height)
+            {
+                continue;
+            }
+
+            positionInWindow = clientDip;
+            return candidate;
+        }
+
+        // Cursor not over any MewUI window — return null so the chain leaves and the preview shows a rejected state.
+        return null;
+    }
+
+    private static readonly List<UIElement> _scratchNewChain = new();
+
+    private static void BuildChain(Window? window, UIElement? leaf, List<UIElement> chain)
+    {
+        chain.Clear();
+        if (window == null || leaf == null) return;
+        for (var current = leaf; current != null; current = WindowInputRouter.GetInputBubbleParent(window, current))
+        {
+            if (current.AllowDrop)
+            {
+                chain.Add(current);
+            }
+        }
+    }
+
+    private static void AttachPreview(Window window, DragSession session)
+    {
+        if (session.Preview == null) return;
+        var overlay = new DragPreviewOverlay(session.Preview, session.PreviewHotspot);
+        session.PreviewOverlay = overlay;
+        window.OverlayLayer.Add(overlay);
+    }
+
+    private static void DetachPreview(DragSession session)
+    {
+        var overlay = session.PreviewOverlay;
+        if (overlay == null) return;
+        if (overlay.Parent is Window owner)
+        {
+            owner.OverlayLayer.Remove(overlay);
+        }
+        session.PreviewOverlay = null;
+    }
+
+    private static void UpdatePreviewPosition(Window? targetWindow, DragSession session, Point cursorInWindow)
+    {
+        var overlay = session.PreviewOverlay;
+        if (overlay == null) return;
+
+        // Move overlay to the target window when the cursor crosses windows.
+        if (targetWindow != null && !ReferenceEquals(overlay.Parent, targetWindow))
+        {
+            if (overlay.Parent is Window oldOwner)
+            {
+                oldOwner.OverlayLayer.Remove(overlay);
+            }
+            targetWindow.OverlayLayer.Add(overlay);
+        }
+        overlay.UpdateCursorPosition(cursorInWindow);
+    }
+
+    // ============================================================================================
+    // External drag-in (OS DnD → MewUI elements). Driven by per-platform backend adapters:
+    //   Win32  : IDropTarget COM impl
+    //   macOS  : NSDraggingDestination protocol callbacks
+    //   X11    : XdndEnter / XdndPosition / XdndLeave / XdndDrop client messages
+    // The router is responsible only for element-chain routing + window-level fallback.
+    // ============================================================================================
+
+    /// <summary>External drag entered the window. Computes the target chain and raises element-level DragEnter.</summary>
+    public static void OnExternalDragEnter(Window window, DragEventArgs args)
+    {
+        if (_activeSession != null) return; // ignore while an internal session owns the cursor
+
+        // Clear any stale chain from a prior session that didn't get a clean Leave.
+        if (_externalSession != null)
+        {
+            LeaveExternalChain(args);
+        }
+
+        _externalSession = new ExternalDragSession(window);
+        DispatchExternalEnterOver(window, args, raiseEnter: true);
+    }
+
+    /// <summary>External drag moved over the window. Diffs the chain and raises Leave/Enter/Over.</summary>
+    public static void OnExternalDragOver(Window window, DragEventArgs args)
+    {
+        if (_activeSession != null) return;
+
+        if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window))
+        {
+            // Treat a stray Over as Enter so backends that drop the Enter message don't desync the chain.
+            OnExternalDragEnter(window, args);
+            return;
+        }
+
+        DispatchExternalEnterOver(window, args, raiseEnter: false);
+    }
+
+    /// <summary>External drag left the window. Leaves the current chain and clears state.</summary>
+    public static void OnExternalDragLeave(Window window, DragEventArgs args)
+    {
+        if (_activeSession != null) return;
+        if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window)) return;
+
+        LeaveExternalChain(args);
+        window.RaiseDragLeave(args);
+    }
+
+    /// <summary>External drag dropped on the window. Routes the drop through the element chain, then falls back to window-level.</summary>
+    /// <returns>The final negotiated effect (None when nothing accepted).</returns>
+    public static DragDropEffects OnExternalDrop(Window window, DragEventArgs args)
+    {
+        if (_activeSession != null) return DragDropEffects.None;
+
+        try
+        {
+            var leaf = window.HitTest(args.Position);
+            BuildChain(window, leaf, _scratchNewChain);
+
+            for (int i = 0; i < _scratchNewChain.Count; i++)
+            {
+                _scratchNewChain[i].RaiseDrop(args);
+                if (args.Accepted) args.Handled = true;
+                if (args.Handled) break;
+            }
+
+            if (!args.Handled)
+            {
+                // Same default-accept policy as DragEnter/Over so an unaware window-level Drop handler
+                // still produces a valid effect for the OS to confirm the operation.
+                if (HasStandardFormat(args.Data))
+                {
+                    args.Accepted = true;
+                    if (args.Effect == DragDropEffects.None)
+                    {
+                        args.Effect = (args.AllowedEffects & DragDropEffects.Copy) != 0
+                            ? DragDropEffects.Copy
+                            : args.AllowedEffects;
+                    }
+                }
+                window.RaiseDrop(args);
+            }
+
+            return NormalizeEffect(args);
+        }
+        finally
+        {
+            _externalSession = null;
+            _scratchNewChain.Clear();
+        }
+    }
+
+    private static void DispatchExternalEnterOver(Window window, DragEventArgs args, bool raiseEnter)
+    {
+        var session = _externalSession!;
+        var leaf = window.HitTest(args.Position);
+        BuildChain(window, leaf, _scratchNewChain);
+
+        var oldChain = session.CurrentChain;
+
+        // DragLeave on entries removed.
+        for (int i = 0; i < oldChain.Count; i++)
+        {
+            if (!_scratchNewChain.Contains(oldChain[i]))
+            {
+                oldChain[i].RaiseDragLeave(args);
+            }
+        }
+
+        // DragEnter on entries newly added (leaf to root order to mirror mouse-enter semantics).
+        for (int i = _scratchNewChain.Count - 1; i >= 0; i--)
+        {
+            if (!oldChain.Contains(_scratchNewChain[i]))
+            {
+                _scratchNewChain[i].RaiseDragEnter(args);
+            }
+        }
+
+        // DragOver bubbling, leaf to root.
+        for (int i = 0; i < _scratchNewChain.Count; i++)
+        {
+            _scratchNewChain[i].RaiseDragOver(args);
+            if (args.Accepted) args.Handled = true;
+            if (args.Handled) break;
+        }
+
+        // Window-level fallback for unhandled events.
+        // The framework default at window scope is "accept if any standard format is present" so the OS
+        // shows a "drop allowed" cursor without every consumer wiring up a DragOver handler purely for
+        // visual feedback. Handlers can still explicitly opt out (set Accepted=false / Effect=None).
+        if (!args.Handled)
+        {
+            if (HasStandardFormat(args.Data))
+            {
+                args.Accepted = true;
+                if (args.Effect == DragDropEffects.None)
+                {
+                    args.Effect = (args.AllowedEffects & DragDropEffects.Copy) != 0
+                        ? DragDropEffects.Copy
+                        : args.AllowedEffects;
+                }
+            }
+            if (raiseEnter) window.RaiseDragEnter(args);
+            else window.RaiseDragOver(args);
+        }
+
+        oldChain.Clear();
+        oldChain.AddRange(_scratchNewChain);
+    }
+
+    private static bool HasStandardFormat(IDataObject data)
+        => data.Contains(StandardDataFormats.StorageItems) || data.Contains(StandardDataFormats.Text);
+
+    private static void LeaveExternalChain(DragEventArgs args)
+    {
+        var session = _externalSession!;
+        for (int i = 0; i < session.CurrentChain.Count; i++)
+        {
+            session.CurrentChain[i].RaiseDragLeave(args);
+        }
+        session.CurrentChain.Clear();
+        _externalSession = null;
+    }
+
+    private static DragDropEffects NormalizeEffect(DragEventArgs args)
+    {
+        if (!args.Accepted) return DragDropEffects.None;
+        var effect = args.Effect & args.AllowedEffects;
+        if (effect != DragDropEffects.None) return effect;
+        // Target said accepted without picking a specific effect — pick the first allowed one.
+        if ((args.AllowedEffects & DragDropEffects.Copy) != 0) return DragDropEffects.Copy;
+        if ((args.AllowedEffects & DragDropEffects.Move) != 0) return DragDropEffects.Move;
+        if ((args.AllowedEffects & DragDropEffects.Link) != 0) return DragDropEffects.Link;
+        return DragDropEffects.None;
+    }
+}
+
+internal sealed class ExternalDragSession
+{
+    public Window Window { get; }
+
+    public List<UIElement> CurrentChain { get; } = new();
+
+    public ExternalDragSession(Window window) => Window = window;
+}
+
+internal sealed class DragCandidate
+{
+    public Window SourceWindow { get; }
+
+    public UIElement Source { get; }
+
+    public Point StartPositionInWindow { get; }
+
+    public Point StartScreenPosition { get; }
+
+    public DragCandidate(Window sourceWindow, UIElement source, Point startInWindow, Point startScreen)
+    {
+        SourceWindow = sourceWindow;
+        Source = source;
+        StartPositionInWindow = startInWindow;
+        StartScreenPosition = startScreen;
+    }
+}
+
+internal sealed class DragSession
+{
+    public Window SourceWindow { get; }
+
+    public UIElement Source { get; }
+
+    public IDataObject Data { get; }
+
+    public DragDropEffects AllowedEffects { get; }
+
+    public DragPreviewContent? Preview { get; }
+
+    public Point PreviewHotspot { get; }
+
+    public Window? CurrentTargetWindow { get; set; }
+
+    public List<UIElement> CurrentChain { get; } = new();
+
+    public DragDropEffects LastEffect { get; set; }
+
+    public DragPreviewOverlay? PreviewOverlay { get; set; }
+
+    public DragSession(Window sourceWindow, UIElement source, IDataObject data, DragDropEffects allowedEffects, DragPreviewContent? preview, Point previewHotspot)
+    {
+        SourceWindow = sourceWindow;
+        Source = source;
+        Data = data;
+        AllowedEffects = allowedEffects;
+        Preview = preview;
+        PreviewHotspot = previewHotspot;
+    }
+}

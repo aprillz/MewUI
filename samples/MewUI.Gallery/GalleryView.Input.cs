@@ -153,6 +153,8 @@ partial class GalleryView
                          )
                  ),
 
-                DragDropCard()
+                WindowDragDropCard(),
+
+                ElementDragDropCard()
              );
 }

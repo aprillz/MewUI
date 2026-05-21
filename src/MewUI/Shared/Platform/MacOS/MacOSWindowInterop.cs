@@ -521,6 +521,19 @@ internal static unsafe class MacOSWindowInterop
         }
     }
 
+    public static void UnregisterFromDragDrop(nint view)
+    {
+        EnsureInitialized();
+        if (view == 0 || ClsNSArray == 0 || SelRegisterForDraggedTypes == 0) return;
+
+        // Re-registering with an empty types array effectively clears the dragged types on the NSView.
+        var emptyArray = ObjC.MsgSend_nint(ClsNSArray, ObjC.Sel("array"));
+        if (emptyArray != 0)
+        {
+            ObjC.MsgSend_void_nint_nint(view, SelRegisterForDraggedTypes, emptyArray);
+        }
+    }
+
     public static void UnregisterTextInputTarget(nint view)
     {
         if (view == 0)

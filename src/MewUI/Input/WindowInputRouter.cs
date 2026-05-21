@@ -50,6 +50,12 @@ internal static class WindowInputRouter
     {
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
+        // A drag in progress (or a gesture about to be promoted) consumes the move; skip normal routing.
+        if (WindowDragDropRouter.OnMouseMove(window, positionInWindow, screenPosition))
+        {
+            return;
+        }
+
         var element = HitTest(window, positionInWindow);
         UpdateMouseOver(window, element);
 
@@ -81,6 +87,20 @@ internal static class WindowInputRouter
         {
             window.AccessKeyManager.OnPointerDown();
             window.OnAfterMouseDownHitTest(positionInWindow, button, element);
+
+            // Record a drag candidate before routing — gesture promotion happens on later MouseMove.
+            if (button == MewUI.MouseButton.Left)
+            {
+                WindowDragDropRouter.OnMouseDown(window, positionInWindow, screenPosition, element);
+            }
+        }
+        else if (button == MewUI.MouseButton.Left)
+        {
+            // Mouse-up on left button completes any active drag session; if so, skip normal routing.
+            if (WindowDragDropRouter.OnMouseUp(window, positionInWindow, screenPosition))
+            {
+                return;
+            }
         }
 
         UpdateMouseOver(window, element);
@@ -188,6 +208,14 @@ internal static class WindowInputRouter
     /// </summary>
     public static void KeyDown(Window window, KeyEventArgs args)
     {
+        // Esc cancels an active drag before any normal key routing.
+        if (WindowDragDropRouter.IsActive && args.Key == Key.Escape)
+        {
+            WindowDragDropRouter.CancelActive();
+            args.Handled = true;
+            return;
+        }
+
         for (var current = window.FocusManager.FocusedElement; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseKeyDown(args);

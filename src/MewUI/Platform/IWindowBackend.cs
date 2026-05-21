@@ -212,4 +212,11 @@ public interface IWindowBackend : IDisposable
     /// Returns <see cref="Thickness.Zero"/> if not applicable.
     /// </summary>
     Thickness NativeChromeButtonInset => default;
+
+    /// <summary>
+    /// Enables or disables the platform drag-and-drop drop-target registration for this window.
+    /// Mirrors <see cref="Controls.UIElement.AllowDrop"/> semantics of WinForms/WPF: a window only acts
+    /// as a drop target when <paramref name="allow"/> is <see langword="true"/>.
+    /// </summary>
+    void SetAllowDrop(bool allow) { }
 }
