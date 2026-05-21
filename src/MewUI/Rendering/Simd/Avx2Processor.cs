@@ -387,4 +387,31 @@ internal static class Avx2Processor
             dst[i] = 0;
         }
     }
+
+    /// <summary>
+    /// Swaps the R and B channels of a 32-bit-per-pixel buffer (RGBA↔BGRA) using AVX2
+    /// per-lane PSHUFB. Processes 8 pixels (32 bytes) per iteration; remainder must be
+    /// finished by the caller.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe int SwapRedBlue32(byte* src, byte* dst, int byteCount)
+    {
+        if (src == null || dst == null || byteCount < 32)
+        {
+            return 0;
+        }
+
+        var mask = Vector256.Create(
+            (byte)2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15,
+            (byte)2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
+
+        int offset = 0;
+        while (offset + 32 <= byteCount)
+        {
+            var v = Avx.LoadVector256(src + offset);
+            Avx.Store(dst + offset, Avx2.Shuffle(v, mask));
+            offset += 32;
+        }
+        return offset;
+    }
 }

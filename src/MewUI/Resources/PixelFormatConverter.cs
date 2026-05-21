@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Rendering.Simd;
+
 namespace Aprillz.MewUI.Resources;
 
 /// <summary>
@@ -27,20 +29,7 @@ public static class PixelFormatConverter
         }
 
         var bgra = GC.AllocateUninitializedArray<byte>(expected);
-        SwizzleRgbaToBgra(rgba, bgra);
+        SimdDispatcher.SwapRedBlue32(rgba, bgra);
         return new Bgra32PixelBuffer(width, height, bgra, hasAlpha);
-    }
-
-    private static void SwizzleRgbaToBgra(ReadOnlySpan<byte> src, Span<byte> dst)
-    {
-        int pixelCount = src.Length / 4;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            int o = i * 4;
-            dst[o + 0] = src[o + 2]; // B <- R
-            dst[o + 1] = src[o + 1]; // G
-            dst[o + 2] = src[o + 0]; // R <- B
-            dst[o + 3] = src[o + 3]; // A
-        }
     }
 }

@@ -277,6 +277,56 @@ internal static class SimdDispatcher
     }
 
     /// <summary>
+    /// Swaps the R and B channels of a 32-bit-per-pixel buffer (RGBA↔BGRA). Operates in
+    /// place when <paramref name="src"/> and <paramref name="dst"/> overlap. Length must
+    /// be a multiple of 4.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe void SwapRedBlue32(ReadOnlySpan<byte> src, Span<byte> dst)
+    {
+        if (src.Length == 0)
+        {
+            return;
+        }
+
+        if (src.Length != dst.Length)
+        {
+            throw new ArgumentException("Source and destination buffers must have the same length.");
+        }
+
+        if ((src.Length & 3) != 0)
+        {
+            throw new ArgumentException("Buffer length must be a multiple of 4.");
+        }
+
+        fixed (byte* srcPtr = src)
+        fixed (byte* dstPtr = dst)
+        {
+            int byteCount = src.Length;
+            int offset = 0;
+
+            if (SimdCapabilities.HasAvx2)
+            {
+                offset = Avx2Processor.SwapRedBlue32(srcPtr, dstPtr, byteCount);
+            }
+
+            offset += Sse2Processor.SwapRedBlue32(srcPtr + offset, dstPtr + offset, byteCount - offset);
+
+            for (int o = offset; o < byteCount; o += 4)
+            {
+                byte b0 = srcPtr[o + 0];
+                byte b1 = srcPtr[o + 1];
+                byte b2 = srcPtr[o + 2];
+                byte b3 = srcPtr[o + 3];
+                dstPtr[o + 0] = b2;
+                dstPtr[o + 1] = b1;
+                dstPtr[o + 2] = b0;
+                dstPtr[o + 3] = b3;
+            }
+        }
+    }
+
+    /// <summary>
     /// Downsamples a premultiplied BGRA image by 2x using a 2x2 box filter.
     /// Supports odd sizes by duplicating the last row/column.
     /// </summary>

@@ -413,4 +413,30 @@ internal static class Sse2Processor
         var sum = Sse2.Add(twoPixelsBytesAsU16, shifted);
         return Sse2.And(sum, keepFirst4);
     }
+
+    /// <summary>
+    /// Swaps the R and B channels of a 32-bit-per-pixel buffer (RGBA↔BGRA) using SSSE3
+    /// PSHUFB. Processes 4 pixels (16 bytes) per iteration; remainder must be finished by
+    /// the caller. Returns 0 if SSSE3 isn't available.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe int SwapRedBlue32(byte* src, byte* dst, int byteCount)
+    {
+        if (!Ssse3.IsSupported || src == null || dst == null || byteCount < 16)
+        {
+            return 0;
+        }
+
+        var mask = Vector128.Create(
+            (byte)2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
+
+        int offset = 0;
+        while (offset + 16 <= byteCount)
+        {
+            var v = Sse2.LoadVector128(src + offset);
+            Sse2.Store(dst + offset, Ssse3.Shuffle(v, mask));
+            offset += 16;
+        }
+        return offset;
+    }
 }
