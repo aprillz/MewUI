@@ -105,8 +105,8 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             // Downsample to 100% logical size before blur. We DON'T upsample back — the
             // scratch is emitted at the downsampled dimensions and the final DrawImage at
             // the caller stretches it to the filter region using the backend's hardware
-            // bilinear path (D2D/GDI/MewVG), which is essentially free vs a CPU upsample
-            // pass. NOTE: this means the result has fewer pixels than the source layer.
+            // bilinear path, which is essentially free vs a CPU upsample pass.
+            // NOTE: this means the result has fewer pixels than the source layer.
             // Downstream filter nodes that align by raw pixel index (Composite/Merge's
             // MaterializeAt) would mis-align here — fine for plain feGaussianBlur but a
             // future fix when complex filter chains land for the CPU executor.
@@ -129,7 +129,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             }
 
             var output = ctx.AcquireScratch(blurW, blurH, inputResult.Bounds);
-            // Match the scratch surface's pixel contract — backends like the D2D DIB report
+            // Match the scratch surface's pixel contract — some scratch backings report
             // IsPremultiplied=false, meaning their pixel buffer must contain straight-alpha
             // bytes. We blurred in premultiplied space for correctness, so unpremultiply
             // back before writing if the scratch expects straight. Otherwise the next

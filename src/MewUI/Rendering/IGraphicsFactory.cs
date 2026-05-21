@@ -167,21 +167,18 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     IImageFilterExecutor CreateImageFilterExecutor() => new CpuImageFilterExecutor();
 
     /// <summary>
-    /// Serializes worker-thread offline render units against UI
-    /// window frames. The MewVG OpenGL backend overrides this to acquire the same
-    /// mutex its UI window <c>BeginFrame</c> / <c>EndFrame</c> path holds, so the
-    /// filter offline render and UI render don't overlap on share-listed GL
-    /// contexts (which races on Intel iGPU producing intermittent black filter
-    /// regions). Backends with thread-free APIs (D2D MULTI_THREADED, Metal, GDI)
-    /// return a no-op disposable.
+    /// Serializes worker-thread offline render units against UI window frames. Backends
+    /// with share-listed GPU contexts override this to acquire the same mutex their UI
+    /// <c>BeginFrame</c> / <c>EndFrame</c> path holds, so filter offline renders and UI
+    /// renders don't overlap (overlap races on some drivers produce intermittent black
+    /// filter regions). Backends with thread-safe APIs return a no-op disposable.
     /// </summary>
     IDisposable AcquireConcurrentRenderUnit() => NoOpScope.Instance;
 
     /// <summary>
     /// Reserves any per-thread state needed to perform rendering on the calling thread.
-    /// Required for backends with thread-affine state (OpenGL contexts must be made
-    /// current per thread). Backends with thread-free APIs (D2D MULTI_THREADED, Metal,
-    /// GDI memory DCs) return a no-op disposable.
+    /// Required for backends with thread-affine state (context-current style APIs).
+    /// Backends with thread-safe APIs return a no-op disposable.
     /// <para/>
     /// Use this from worker threads that call <see cref="IRenderDevice.CreateSurface"/> /
     /// <see cref="IRenderDevice.CreateContext(IRenderSurface)"/>:

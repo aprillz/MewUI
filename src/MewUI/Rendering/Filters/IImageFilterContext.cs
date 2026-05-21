@@ -63,10 +63,10 @@ public interface IImageFilterContext
 }
 
 /// <summary>
-/// Backend-agnostic graph evaluator. Each backend (MewVG GL, D2D, CPU) implements its own
-/// concrete executor that handles the node types it can render natively. Unsupported nodes
-/// delegate to a fallback executor (typically the CPU one) — see plan.md for the
-/// chain-of-responsibility model.
+/// Backend-agnostic graph evaluator. Each backend implements its own concrete executor
+/// that handles the node types it can render natively. Unsupported nodes delegate to a
+/// fallback executor (typically the CPU one) — see plan.md for the chain-of-responsibility
+/// model.
 /// </summary>
 public interface IImageFilterExecutor
 {

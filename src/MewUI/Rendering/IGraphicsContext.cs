@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Rendering
 {
     /// <summary>
     /// Abstract interface for graphics rendering operations.
-    /// Allows swapping the underlying graphics library (GDI, Direct2D, Skia, etc.)
+    /// Allows swapping the underlying graphics library via pluggable backends.
     /// </summary>
     public interface IGraphicsContext : IDisposable
     {
@@ -27,7 +27,7 @@ namespace Aprillz.MewUI.Rendering
 
         /// <summary>
         /// Hints the context that text rendering should produce correct alpha channel values.
-        /// Backends that always produce correct alpha (e.g. Direct2D) may ignore this hint.
+        /// Backends that always produce correct alpha may ignore this hint.
         /// </summary>
         bool EnableAlphaTextHint { get; set; }
 
@@ -269,9 +269,9 @@ namespace Aprillz.MewUI.Rendering
         /// rasterization buffer and GPU texture across renders even when the text content
         /// mutates. The default implementation discards <paramref name="owner"/> and forwards
         /// to <see cref="DrawTextLayout(ReadOnlySpan{char}, TextFormat, TextLayout, Color)"/>;
-        /// backends that don't benefit from the optimization (Direct2D, GDI) simply inherit
-        /// the default. A <see langword="null"/> owner is equivalent to the default — falls back
-        /// to content-keyed caching.
+        /// backends that don't benefit from the optimization simply inherit the default.
+        /// A <see langword="null"/> owner is equivalent to the default — falls back to
+        /// content-keyed caching.
         /// </summary>
         void DrawTextLayout(ReadOnlySpan<char> text, TextFormat format, TextLayout layout, Color color, object? owner)
             => DrawTextLayout(text, format, layout, color);

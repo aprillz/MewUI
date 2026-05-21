@@ -55,14 +55,14 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
         return new ScratchFilterResult(lease, image, bounds, l =>
         {
             // Defer the pool return until the image's backend-side GPU/NVG handles are
-            // actually released. Backends that wrap a scratch surface zero-copy with NVG (MewVG
-            // Metal / GL) have an in-flight draw queue that must flush before the RT can be
-            // recycled — otherwise the next AcquireScratch in the same eval hands back the
-            // same RT and the next filter node's GPU write overwrites the texture while a
-            // queued draw still references it (cross-filter content bleed when UI invalidate
-            // races a render). When the backend accepts the deferred callback, image.Dispose
-            // queues for the post-flush drain that fires it; otherwise (CPU bitmap, D2D copy)
-            // we fall back to the original immediate-return path.
+            // actually released. Backends that wrap a scratch surface zero-copy have an
+            // in-flight draw queue that must flush before the RT can be recycled —
+            // otherwise the next AcquireScratch in the same eval hands back the same RT
+            // and the next filter node's GPU write overwrites the texture while a queued
+            // draw still references it (cross-filter content bleed when UI invalidate
+            // races a render). When the backend accepts the deferred callback,
+            // image.Dispose queues for the post-flush drain that fires it; otherwise (CPU
+            // bitmap, eager-copy paths) we fall back to the original immediate-return path.
             if (image.TrySetPostReleaseCallback(() => _pool.Return(l)))
             {
                 image.Dispose();

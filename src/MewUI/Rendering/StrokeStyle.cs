@@ -48,7 +48,7 @@ public readonly struct StrokeStyle : IEquatable<StrokeStyle>
     /// Gets the miter limit.  When the miter join angle is very sharp the miter can extend far;
     /// if the ratio of miter length to stroke width exceeds this value the join is clipped to a bevel.
     /// Meaningful only when <see cref="LineJoin"/> is <see cref="StrokeLineJoin.Miter"/>.
-    /// Defaults to <c>10.0</c>, matching SVG and Direct2D defaults.
+    /// Defaults to <c>10.0</c>, matching the SVG default.
     /// </summary>
     public double MiterLimit { get; init; }
 

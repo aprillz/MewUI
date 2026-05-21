@@ -349,8 +349,8 @@ public abstract class GraphicsContextBase : IGraphicsContext
     /// calling control instance, or a per-region marker for multi-region controls) used by
     /// backends with owner-keyed text caches to reuse the same rasterization buffer and GPU
     /// texture across renders even when the text content mutates. Backends that don't
-    /// benefit from owner-keying (Direct2D, GDI) inherit this default which discards
-    /// <paramref name="owner"/> and forwards to the parameterless overload.
+    /// benefit from owner-keying inherit this default which discards <paramref name="owner"/>
+    /// and forwards to the parameterless overload.
     /// </summary>
     public virtual void DrawTextLayout(ReadOnlySpan<char> text,
         TextFormat format, TextLayout layout, Color color, object? owner)

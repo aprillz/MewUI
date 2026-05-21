@@ -11,8 +11,8 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// <item><see cref="BorrowedFilterResult"/> — points at a layer the caller owns. <see cref="Dispose"/> is no-op.</item>
 /// <item><see cref="ScratchFilterResult"/> — backed by a rented render surface
 /// from the executor's scratch pool; <see cref="Dispose"/> returns it.</item>
-/// <item>Backend-specific subclasses — wrap native handles (<c>ID2D1Bitmap</c>, NVG image id),
-/// optionally with lazy CPU readback for cross-backend chain-of-responsibility fallback.</item>
+/// <item>Backend-specific subclasses — wrap native handles, optionally with lazy CPU
+/// readback for cross-backend chain-of-responsibility fallback.</item>
 /// </list>
 /// All subclasses must support both <see cref="AsImage"/> (for backend-native draw operations)
 /// and <see cref="ReadPixels"/> (for CPU executor handoff). The latter may trigger a GPU→CPU

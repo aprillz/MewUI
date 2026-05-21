@@ -78,8 +78,8 @@ public sealed class ScratchSurfacePool : IDisposable
         }
 
         // Filter scratch buffers benefit from the GPU pipeline when the backend supports
-        // it (Direct2D's shared device, MewVG's FBO). The compatibility device routes to
-        // the existing factory methods today, while keeping allocation policy centralized.
+        // it. The compatibility device routes to the existing factory methods today,
+        // while keeping allocation policy centralized.
         var surface = _device.CreateSurface(RenderSurfaceDescriptor.FilterIntermediate(
             w,
             h,

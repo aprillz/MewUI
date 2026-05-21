@@ -2,24 +2,21 @@ namespace Aprillz.MewUI.Resources;
 
 /// <summary>
 /// Marker interface for raster sources whose pixels live primarily on the GPU. Sits one
-/// tier above <see cref="IRasterSource"/> and below the per-backend marker
-/// interfaces (<c>ID2DTextureSource</c>, <c>IGLTextureSource</c>, <c>IMetalTextureSource</c>)
-/// defined in their respective backend assemblies.
+/// tier above <see cref="IRasterSource"/> and below per-backend marker interfaces defined
+/// in their respective backend assemblies.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Carries only backend-agnostic metadata. Backend identity and the typed native handles
-/// (e.g. <c>uint TextureId</c> for GL, <c>nint MtlTexture</c> for Metal) are exposed by
-/// the per-backend marker interfaces in their own assemblies, so:
+/// Carries only backend-agnostic metadata. Backend identity and typed native handles are
+/// exposed by per-backend marker interfaces in their own assemblies, so:
 /// </para>
 /// <list type="bullet">
 ///   <item>Core has zero knowledge of any specific GPU backend.</item>
 ///   <item>A consumer that wants zero-copy interop with a particular backend casts to
-///         that backend's marker (<c>source is IGLTextureSource gl</c>); cross-backend
-///         sources can choose a CPU readback path separately when they also implement
-///         <see cref="IPixelBufferSource"/>.</item>
-///   <item>Adding a new backend (Vulkan, WebGPU) defines its own marker in its own
-///         assembly without modifying core.</item>
+///         that backend's marker; cross-backend sources can choose a CPU readback path
+///         separately when they also implement <see cref="IPixelBufferSource"/>.</item>
+///   <item>Adding a new backend defines its own marker in its own assembly without
+///         modifying core.</item>
 /// </list>
 /// <para>
 /// CPU-side readback is intentionally not part of this contract. Implement
@@ -39,25 +36,22 @@ public interface IGpuTextureSource : IRasterSource
     int GpuPixelHeight => PixelHeight;
 
     /// <summary>
-    /// True when texel row 0 corresponds to the bottom of the image (GL FBO convention).
-    /// False for top-down storage (D3D / Metal). Consumers that mix sources from different
-    /// backends use this to flip the V coordinate at sample time when needed.
+    /// True when texel row 0 corresponds to the bottom of the image (bottom-up storage).
+    /// False for top-down storage. Consumers that mix sources from different backends use
+    /// this to flip the V coordinate at sample time when needed.
     /// </summary>
     bool YFlipped => false;
 
     /// <summary>
     /// Returns the native GPU texture handle this source owns, or <c>0</c> when the
     /// resource hasn't been allocated yet (e.g. CPU-only consumer never triggered GPU
-    /// init). Interpretation depends on the consuming backend: GL texture id for
-    /// <see cref="System.IntPtr"/> from a GL source, <c>MTLTexture*</c> from a Metal
-    /// source. Backend-typed handles are exposed by per-backend marker interfaces
-    /// (<c>IGLTextureSource.TextureId</c>, <c>IMetalTextureSource.MtlTexture</c>); this
-    /// method is the backend-agnostic accessor used when the consumer doesn't need to
-    /// disambiguate.
+    /// init). Interpretation depends on the consuming backend; backend-typed handles are
+    /// exposed by per-backend marker interfaces. This method is the backend-agnostic
+    /// accessor used when the consumer doesn't need to disambiguate.
     /// </summary>
     /// <remarks>
-    /// The handle remains owned by the source — wrapping consumers must use
-    /// NoDelete-style flags (e.g. <c>NVGimageFlags.NoDelete</c>) to avoid double-free.
+    /// The handle remains owned by the source — wrapping consumers must use no-delete-style
+    /// flags to avoid double-free.
     /// </remarks>
     nint GetTextureHandle() => 0;
 
@@ -80,17 +74,14 @@ public interface IGpuTextureSource : IRasterSource
 
     /// <summary>
     /// Configures the underlying GPU texture's wrap mode for tiled / clamped sampling.
-    /// Called by zero-copy image consumers (e.g. MewVG image-brush wrapping an FBO color
-    /// attachment) before binding the texture for drawing — without this, tile-mode brush
-    /// requests silently clamp because the source originally created the texture with
-    /// <c>GL_CLAMP_TO_EDGE</c> (right for filter sampling, wrong for tiled fills) and
-    /// NVG's <c>NoDelete</c> wrapping doesn't touch external texture state.
+    /// Called by zero-copy image consumers before binding the texture for drawing — without
+    /// this, tile-mode brush requests silently clamp because the source originally created
+    /// the texture with edge-clamp (right for filter sampling, wrong for tiled fills) and
+    /// no-delete-style wrapping doesn't touch external texture state.
     /// </summary>
     /// <remarks>
     /// Default no-op — only sources whose backing GPU texture's wrap mode actually matters
-    /// (currently <c>OpenGLPixelRenderSurface</c>) override. Future cleanup may move this
-    /// to <c>IGLTextureSource.ConfigureWrap</c> since wrap mode is GL-specific; kept here
-    /// for now so backend-agnostic consumers (MewVGImage) can call without GL marker cast.
+    /// at the consumer's tile-mode draw site override.
     /// </remarks>
     void ConfigureGpuTextureWrap(nint handle, bool repeatX, bool repeatY) { }
 }
