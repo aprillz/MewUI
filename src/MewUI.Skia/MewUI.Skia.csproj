@@ -8,10 +8,14 @@
     <Description>Skia rendering integration for $(MewUITitle). Provides SkiaCanvasView and the ISkiaInteropProvider registry; ships a CPU upload fallback for any backend. Install a matching Aprillz.MewUI.Skia.Interop.* package for zero-copy GPU paths.</Description>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <SkiaSharpVersion>3.119.2</SkiaSharpVersion>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="3.119.2" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.2" />
-    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.119.2" />
+    <PackageReference Include="SkiaSharp" Version="$(SkiaSharpVersion)" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="$(SkiaSharpVersion)" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="$(SkiaSharpVersion)" />
   </ItemGroup>
 
   <ItemGroup>
