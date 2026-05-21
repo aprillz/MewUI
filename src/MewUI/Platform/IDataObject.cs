@@ -20,7 +20,7 @@ public interface IDataObject
     /// <summary>
     /// Attempts to retrieve strongly typed data for the specified format.
     /// </summary>
-    bool TryGetData<T>(string format, [NotNullWhen(true)]out T? value);
+    bool TryGetData<T>(string format, [NotNullWhen(true)] out T? value);
 
     /// <summary>
     /// Returns the raw data for the specified format, or null when not present.
@@ -70,7 +70,7 @@ public sealed class DataObject : IDataObject
     public bool Contains(string format)
         => !string.IsNullOrWhiteSpace(format) && _data.ContainsKey(format);
 
-    public bool TryGetData<T>(string format, [NotNullWhen(true)]out T? value)
+    public bool TryGetData<T>(string format, [NotNullWhen(true)] out T? value)
     {
         if (!string.IsNullOrWhiteSpace(format) &&
             _data.TryGetValue(format, out var raw) &&
@@ -114,7 +114,9 @@ public sealed class DataObject : IDataObject
     private sealed class FormatsView : IReadOnlyList<string>
     {
         private readonly Dictionary<string, object> _data;
+
         public FormatsView(Dictionary<string, object> data) => _data = data;
+
         public string this[int index]
         {
             get
@@ -128,8 +130,11 @@ public sealed class DataObject : IDataObject
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
         }
+
         public int Count => _data.Count;
+
         public IEnumerator<string> GetEnumerator() => _data.Keys.GetEnumerator();
+
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

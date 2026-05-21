@@ -584,6 +584,7 @@ internal static class WindowDragDropRouter
 internal sealed class ExternalDragSession
 {
     public Window Window { get; }
+
     public List<UIElement> CurrentChain { get; } = new();
 
     public ExternalDragSession(Window window) => Window = window;
@@ -592,8 +593,11 @@ internal sealed class ExternalDragSession
 internal sealed class DragCandidate
 {
     public Window SourceWindow { get; }
+
     public UIElement Source { get; }
+
     public Point StartPositionInWindow { get; }
+
     public Point StartScreenPosition { get; }
 
     public DragCandidate(Window sourceWindow, UIElement source, Point startInWindow, Point startScreen)
@@ -608,15 +612,23 @@ internal sealed class DragCandidate
 internal sealed class DragSession
 {
     public Window SourceWindow { get; }
+
     public UIElement Source { get; }
+
     public IDataObject Data { get; }
+
     public DragDropEffects AllowedEffects { get; }
+
     public DragPreviewContent? Preview { get; }
+
     public Point PreviewHotspot { get; }
 
     public Window? CurrentTargetWindow { get; set; }
+
     public List<UIElement> CurrentChain { get; } = new();
+
     public DragDropEffects LastEffect { get; set; }
+
     public DragPreviewOverlay? PreviewOverlay { get; set; }
 
     public DragSession(Window sourceWindow, UIElement source, IDataObject data, DragDropEffects allowedEffects, DragPreviewContent? preview, Point previewHotspot)

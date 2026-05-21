@@ -47,10 +47,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Action? _cachedLayoutAndRender;
     private LayoutPerformanceStats _lastLayoutPerformanceStats;
 
-    /// <summary>
-    /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
-    /// </summary>
-    internal IWindowBackend? Backend => _backend;
     private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
@@ -74,6 +70,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private WindowLifetimeState _lifetimeState;
     private int _modalDisableCount;
     private bool _isDialogWindow;
+
+    /// <summary>
+    /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
+    /// </summary>
+    internal IWindowBackend? Backend => _backend;
+
     internal Action<Window>? BuildCallback { get; private set; }
 
     internal Point LastMousePositionDip => _lastMousePositionDip;
@@ -223,6 +225,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private sealed class AdornerEntry
     {
         public required UIElement Adorned { get; init; }
+
         public required UIElement Element { get; init; }
     }
 
@@ -553,9 +556,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public void SetWindowBorderColor(Color? color) => _backend?.SetWindowBorderColor(color);
 
     private void OnTitleChanged() => _backend?.SetTitle(Title);
+
     private void OnIconChanged() => _backend?.SetIcon(Icon);
+
     private void OnOpacityChanged() => _backend?.SetOpacity(Opacity);
+
     private void OnAllowsTransparencyChanged() => _backend?.SetAllowsTransparency(AllowsTransparency);
+
     private void OnExtendClientAreaChanged() => _backend?.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
 
     /// <summary>
@@ -1782,7 +1789,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _backend.SetAllowDrop(true);
     }
 
-
     internal void ReleaseWindowGraphicsResources(nint windowHandle)
     {
         if (windowHandle == 0)
@@ -1897,7 +1903,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         RenderFrameCore(target, clientSize);
-
     }
 
     internal void RenderFrameToSurface(IRenderSurface surface)

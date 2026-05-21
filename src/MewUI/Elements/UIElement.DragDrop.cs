@@ -79,10 +79,15 @@ public abstract partial class UIElement
     public event Action<DragCompletedEventArgs>? DragCompleted;
 
     internal void RaiseDragEnter(DragEventArgs e) => OnDragEnter(e);
+
     internal void RaiseDragOver(DragEventArgs e) => OnDragOver(e);
+
     internal void RaiseDragLeave(DragEventArgs e) => OnDragLeave(e);
+
     internal void RaiseDrop(DragEventArgs e) => OnDrop(e);
+
     internal void RaiseDragStarting(DragStartingEventArgs e) => OnDragStarting(e);
+
     internal void RaiseDragCompleted(DragCompletedEventArgs e) => OnDragCompleted(e);
 
     /// <summary>Override to receive drag-enter events before the public <see cref="DragEnter"/> handler.</summary>

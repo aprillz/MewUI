@@ -2,12 +2,9 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
-using Aprillz.MewUI.Native.Constants;
 using Aprillz.MewUI.Native.Structs;
-using Aprillz.MewUI.Platform;
 
 namespace Aprillz.MewUI.Platform.Win32;
 
@@ -37,6 +34,7 @@ internal static unsafe class Win32DropTarget
 
     // IID_IDropTarget (00000122-0000-0000-C000-000000000046)
     private static readonly Guid IID_IDropTarget = new(0x00000122, 0x0000, 0x0000, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46);
+
     private static readonly Guid IID_IUnknown = new(0x00000000, 0x0000, 0x0000, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46);
 
     /// <summary>
@@ -349,6 +347,7 @@ internal static unsafe class Win32DataObjectAdapter
     // Vtable indices for IDataObject:
     //   3 = GetData, 4 = GetDataHere, 5 = QueryGetData, 6 = GetCanonicalFormatEtc, 7 = SetData, 8 = EnumFormatEtc
     private const int GetDataIndex = 3;
+
     private const int QueryGetDataIndex = 5;
 
     public static IDataObject From(nint pDataObj, bool materialize)

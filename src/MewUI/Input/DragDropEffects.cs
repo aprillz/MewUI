@@ -9,10 +9,13 @@ public enum DragDropEffects
 {
     /// <summary>No effect; target rejects the drop or source cancels.</summary>
     None = 0,
+
     /// <summary>The data is copied to the target.</summary>
     Copy = 1,
+
     /// <summary>The data is moved from the source to the target.</summary>
     Move = 2,
+
     /// <summary>A link to the data is established at the target.</summary>
     Link = 4,
 }
