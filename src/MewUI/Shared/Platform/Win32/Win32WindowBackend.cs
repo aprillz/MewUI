@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
@@ -624,14 +625,21 @@ internal sealed class Win32WindowBackend : IWindowBackend
             case WindowMessages.WM_PAINT:
                 return HandlePaint();
 
+            // OS modal loops (DefWindowProc-driven resize/move and menu loops) suspend
+            // our main loop's Render pass. Drive a ~60fps WM_TIMER so animations and
+            // any pending invalidations keep rendering until the modal loop exits.
+            // Also force one immediate render so the first frame after entering the
+            // modal loop doesn't wait up to 16ms for the first WM_TIMER tick.
             case WindowMessages.WM_ENTERSIZEMOVE:
-                if (_allowsTransparency)
-                    User32.SetTimer(Handle, 1, 16, 0); // ~60fps render during drag/resize
+            case WindowMessages.WM_ENTERMENULOOP:
+                User32.SetTimer(Handle, 1, 8, 0);
+                Window.Invalidate();
+                RenderIfNeeded();
                 return 0;
 
             case WindowMessages.WM_EXITSIZEMOVE:
-                if (_allowsTransparency)
-                    User32.KillTimer(Handle, 1);
+            case WindowMessages.WM_EXITMENULOOP:
+                User32.KillTimer(Handle, 1);
                 return 0;
 
             case WindowMessages.WM_ERASEBKGND:
@@ -729,10 +737,20 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case WindowMessages.WM_TIMER:
-                if (wParam == 1 && _allowsTransparency)
+                if (wParam == 1)
                 {
-                    Window.Invalidate();
-                    RenderIfNeeded();
+                    // AnimationManager.Update runs inside RenderFrameCore, so we must force a
+                    // render every tick while animations are active to advance their clocks.
+                    // Otherwise honor the standard NeedsRender flag — the dispatcher will dispatch
+                    // its own WM_INVOKE inside the modal pump and flip the flag at its own pace.
+                    if (AnimationManager.Instance.ActiveCount > 0)
+                    {
+                        RenderNow();
+                    }
+                    else
+                    {
+                        RenderIfNeeded();
+                    }
                     return 0;
                 }
 
@@ -1720,6 +1738,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private nint HandleMouseMove(nint lParam)
     {
+        EnsureMouseLeaveTracking();
+
         var pos = GetMousePosition(lParam);
         var screenPos = ClientToScreen(pos);
 
