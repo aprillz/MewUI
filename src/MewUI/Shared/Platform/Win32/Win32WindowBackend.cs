@@ -1827,6 +1827,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         int delta = (short)((wParam.ToInt64() >> 16) & 0xFFFF);
 
+        // MouseWheelEventArgs.Delta convention is "positive = toward earlier content"
+        // (vertical: up, horizontal: left). Win32 vertical (WM_MOUSEWHEEL) already matches
+        // — positive = wheel forward = scroll up. But Win32 horizontal (WM_MOUSEHWHEEL)
+        // is the opposite — positive = tilt right = scroll right — so negate it here.
+        if (isHorizontal)
+        {
+            delta = -delta;
+        }
+
         var screenX = (short)(lParam.ToInt64() & 0xFFFF);
         var screenY = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
         var pt = new POINT(screenX, screenY);
