@@ -51,6 +51,30 @@ int fpsFrames = 0;
 // interned string literals — reference comparison is enough.
 string _lastPathDesc = "";
 
+// SK object cache reused by PaintScene. Native-handle wrappers cost P/Invoke + native
+// ref counting per allocation; recreate only when construction inputs (gradient extent,
+// font size) actually change. Mutable Color / StrokeWidth / Size live on the instance.
+SKPaint sBackgroundPaint = new() { IsAntialias = true };
+SKPaint sCardStrokePaint = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, Color = new SKColor(113, 145, 230, 90) };
+SKPaint sWavePaint = new()
+{
+    IsAntialias = true,
+    Style = SKPaintStyle.Stroke,
+    StrokeCap = SKStrokeCap.Round,
+    StrokeJoin = SKStrokeJoin.Round,
+    Color = new SKColor(39, 92, 210, 220)
+};
+SKPaint sGlowPaint = new() { IsAntialias = true, Style = SKPaintStyle.Fill, Color = new SKColor(88, 133, 255, 70) };
+SKPaint sDotPaint = new() { IsAntialias = true, Style = SKPaintStyle.Fill, Color = new SKColor(28, 73, 194, 255) };
+SKPaint sAccentPaint = new() { IsAntialias = true, Style = SKPaintStyle.Fill, Color = new SKColor(248, 118, 74, 235) };
+SKPaint sAccentTextPaint = new() { IsAntialias = true, Color = new SKColor(40, 56, 104, 240) };
+SKPath sWavePath = new();
+SKTypeface? sAccentTypeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold);
+SKFont sAccentFont = new(sAccentTypeface, 20f);
+SKShader? sBackgroundShader = null;
+float sBackgroundShaderWidth = -1f;
+float sBackgroundShaderHeight = -1f;
+
 var root = new Window()
     .Resizable(1080, 760)
     .StartCenterScreen()
@@ -97,6 +121,21 @@ var root = new Window()
             processStats.StatsUpdated -= OnStatsUpdated;
             processStats.Stop();
             processStats.Dispose();
+
+            // Tear down cached SK native handles. Finalizers would eventually catch them,
+            // but explicit Dispose avoids the cost of the queue scan at process exit and
+            // surfaces use-after-free bugs immediately if anything still references them.
+            sBackgroundPaint.Dispose();
+            sCardStrokePaint.Dispose();
+            sWavePaint.Dispose();
+            sGlowPaint.Dispose();
+            sDotPaint.Dispose();
+            sAccentPaint.Dispose();
+            sAccentTextPaint.Dispose();
+            sWavePath.Dispose();
+            sAccentFont.Dispose();
+            sAccentTypeface?.Dispose();
+            sBackgroundShader?.Dispose();
         })
         .OnFrameRendered(() =>
         {
@@ -281,51 +320,39 @@ FrameworkElement TopBar() => new Border()
     );
 
 void PaintScene(SKCanvas canvas, SKImageInfo info)
-{ 
+{
     float width = info.Width;
     float height = info.Height;
     float minSide = MathF.Min(width, height);
     // Phase comes from wall-clock elapsed seconds × speed — frame-rate-independent.
     float t = (float)(animationClock.Elapsed.TotalSeconds * 2.1);
 
-    // Card background
-    using var background = new SKPaint
+    // Card background — gradient shader depends on (width, height), so rebuild only on resize.
+    if (sBackgroundShader is null || sBackgroundShaderWidth != width || sBackgroundShaderHeight != height)
     {
-        IsAntialias = true,
-        Shader = SKShader.CreateLinearGradient(
+        sBackgroundShader?.Dispose();
+        sBackgroundShader = SKShader.CreateLinearGradient(
             new SKPoint(0, 0),
             new SKPoint(width, height),
             [new SKColor(246, 249, 255), new SKColor(228, 237, 255)],
             null,
-            SKShaderTileMode.Clamp)
-    };
-    using var cardStroke = new SKPaint
-    {
-        IsAntialias = true,
-        Style = SKPaintStyle.Stroke,
-        StrokeWidth = MathF.Max(1.5f, minSide * 0.012f),
-        Color = new SKColor(113, 145, 230, 90)
-    };
+            SKShaderTileMode.Clamp);
+        sBackgroundPaint.Shader = sBackgroundShader;
+        sBackgroundShaderWidth = width;
+        sBackgroundShaderHeight = height;
+    }
+    sCardStrokePaint.StrokeWidth = MathF.Max(1.5f, minSide * 0.012f);
     var panelRect = new SKRect(0, 0, width, height);
     var innerRect = panelRect;
     innerRect.Inflate(-1.5f, -1.5f);
-    canvas.DrawRoundRect(panelRect, 28, 28, background);
-    canvas.DrawRoundRect(innerRect, 26, 26, cardStroke);
+    canvas.DrawRoundRect(panelRect, 28, 28, sBackgroundPaint);
+    canvas.DrawRoundRect(innerRect, 26, 26, sCardStrokePaint);
 
-    // Animated wave
-    using var wavePaint = new SKPaint
-    {
-        IsAntialias = true,
-        Style = SKPaintStyle.Stroke,
-        StrokeWidth = MathF.Max(2f, minSide * 0.018f),
-        StrokeCap = SKStrokeCap.Round,
-        StrokeJoin = SKStrokeJoin.Round,
-        Color = new SKColor(39, 92, 210, 220)
-    };
-    using var wave = new SKPath();
+    // Animated wave — reset the shared path and refill points each frame.
+    sWavePaint.StrokeWidth = MathF.Max(2f, minSide * 0.018f);
+    sWavePath.Reset();
 
     float baseline = height * 0.70f;
-
 
     var multiply = 2.0f;
     var div = 56 * multiply;
@@ -338,28 +365,16 @@ void PaintScene(SKCanvas canvas, SKImageInfo info)
 
         if (i == 0)
         {
-            wave.MoveTo(x, y);
+            sWavePath.MoveTo(x, y);
         }
         else
         {
-            wave.LineTo(x, y);
+            sWavePath.LineTo(x, y);
         }
     }
-    canvas.DrawPath(wave, wavePaint);
+    canvas.DrawPath(sWavePath, sWavePaint);
 
     // Three orbiting dots
-    using var glowPaint = new SKPaint
-    {
-        IsAntialias = true,
-        Style = SKPaintStyle.Fill,
-        Color = new SKColor(88, 133, 255, 70)
-    };
-    using var dotPaint = new SKPaint
-    {
-        IsAntialias = true,
-        Style = SKPaintStyle.Fill,
-        Color = new SKColor(28, 73, 194, 255)
-    };
     var center = new SKPoint(width * 0.5f, height * 0.42f);
     float orbit = minSide * 0.19f;
     float radius = minSide * 0.09f;
@@ -368,30 +383,23 @@ void PaintScene(SKCanvas canvas, SKImageInfo info)
         float angle = t + i * 2.0943952f;
         float x = center.X + MathF.Cos(angle) * orbit;
         float y = center.Y + MathF.Sin(angle * 1.17f) * orbit * 0.6f;
-        canvas.DrawCircle(x, y, radius * 1.35f, glowPaint);
-        canvas.DrawCircle(x, y, radius, dotPaint);
+        canvas.DrawCircle(x, y, radius * 1.35f, sGlowPaint);
+        canvas.DrawCircle(x, y, radius, sDotPaint);
     }
 
-    // Accent pill + label
-    using var accentPaint = new SKPaint
+    // Accent pill + label — font size depends on minSide, only update on change.
+    float accentFontSize = MathF.Max(20f, minSide * 0.11f);
+    if (sAccentFont.Size != accentFontSize)
     {
-        IsAntialias = true,
-        Style = SKPaintStyle.Fill,
-        Color = new SKColor(248, 118, 74, 235)
-    };
-    using var accentText = new SKPaint
-    {
-        IsAntialias = true,
-        Color = new SKColor(40, 56, 104, 240)
-    };
-    using var accentFont = new SKFont(SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold), MathF.Max(20f, minSide * 0.11f));
+        sAccentFont.Size = accentFontSize;
+    }
 
     float accentWidth = width * 0.18f;
     float accentHeight = minSide * 0.07f;
     float accentX = width * 0.11f + (MathF.Sin(t * 1.4f) * width * 0.05f);
     float accentY = height * 0.18f;
-    canvas.DrawRoundRect(new SKRect(accentX, accentY, accentX + accentWidth, accentY + accentHeight), 14, 14, accentPaint);
-    canvas.DrawText("SKSurface", width * 0.10f, height * 0.24f, SKTextAlign.Left, accentFont, accentText);
+    canvas.DrawRoundRect(new SKRect(accentX, accentY, accentX + accentWidth, accentY + accentHeight), 14, 14, sAccentPaint);
+    canvas.DrawText("SKSurface", width * 0.10f, height * 0.24f, SKTextAlign.Left, sAccentFont, sAccentTextPaint);
 }
 
 static void Startup()
