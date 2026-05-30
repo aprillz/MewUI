@@ -639,7 +639,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             case WindowMessages.WM_EXITSIZEMOVE:
             case WindowMessages.WM_EXITMENULOOP:
-                    User32.KillTimer(Handle, 1);
+                User32.KillTimer(Handle, 1);
                 return 0;
 
             case WindowMessages.WM_ERASEBKGND:
@@ -748,9 +748,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
                         RenderNow();
                     }
                     else
-                {
-                    Window.Invalidate();
-                    RenderIfNeeded();
+                    {
+                        RenderIfNeeded();
                     }
                     return 0;
                 }
@@ -1827,6 +1826,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private nint HandleMouseWheel(nint wParam, nint lParam, bool isHorizontal)
     {
         int delta = (short)((wParam.ToInt64() >> 16) & 0xFFFF);
+
+        // MouseWheelEventArgs.Delta convention is "positive = toward earlier content"
+        // (vertical: up, horizontal: left). Win32 vertical (WM_MOUSEWHEEL) already matches
+        // — positive = wheel forward = scroll up. But Win32 horizontal (WM_MOUSEHWHEEL)
+        // is the opposite — positive = tilt right = scroll right — so negate it here.
+        if (isHorizontal)
+        {
+            delta = -delta;
+        }
 
         var screenX = (short)(lParam.ToInt64() & 0xFFFF);
         var screenY = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
