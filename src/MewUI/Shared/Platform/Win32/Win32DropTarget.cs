@@ -185,7 +185,6 @@ internal sealed unsafe class Win32DropTargetAdapter
     //   6 = Drop(IDataObject*, POINT*, DWORD)
     //   7 = Show(BOOL)
     private const int HelperDragEnterIndex = 3;
-
     private const int HelperDragLeaveIndex = 4;
     private const int HelperDragOverIndex = 5;
     private const int HelperDropIndex = 6;

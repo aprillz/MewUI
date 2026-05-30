@@ -136,7 +136,8 @@ public class MouseWheelEventArgs : MouseEventArgs
     /// </summary>
     /// <param name="position">Mouse position relative to the element (DIPs).</param>
     /// <param name="screenPosition">Mouse position in screen coordinates in device pixels.</param>
-    /// <param name="delta">Wheel delta (positive = up, negative = down).</param>
+    /// <param name="delta">Wheel delta. Positive means scrolling toward earlier content
+    /// (vertical: up, horizontal: left); negative means the opposite direction.</param>
     /// <param name="isHorizontal"><see langword="true"/> for horizontal scroll; otherwise, <see langword="false"/>.</param>
     /// <param name="leftButton">Whether the left button is pressed.</param>
     /// <param name="rightButton">Whether the right button is pressed.</param>
