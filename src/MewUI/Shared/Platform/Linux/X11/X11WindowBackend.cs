@@ -1574,8 +1574,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         int yPx = e.y;
         var pos = new Point(xPx / Window.DpiScale, yPx / Window.DpiScale);
 
-        // X11 button: 1 left, 2 middle, 3 right, 4/5 wheel.
-        if (e.button == 4 || e.button == 5)
+        // X11 button: 1 left, 2 middle, 3 right, 4/5 v-wheel, 6/7 h-wheel.
+        if (e.button is 4 or 5 or 6 or 7)
         {
             if (!isDown)
             {
@@ -1585,11 +1585,14 @@ internal sealed class X11WindowBackend : IWindowBackend
             var wheelElement = WindowInputRouter.HitTest(Window, pos);
             WindowInputRouter.UpdateMouseOver(Window, wheelElement);
 
-            int delta = e.button == 4 ? 120 : -120;
+            int delta = e.button is 4 or 6 ? 120 : -120;
+            
             bool leftDown = (e.state & (1u << 8)) != 0;
             bool middleDown = (e.state & (1u << 9)) != 0;
             bool rightDown = (e.state & (1u << 10)) != 0;
-            WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal: false, leftDown, rightDown, middleDown);
+            bool isHorizontal = e.button is 6 or 7;
+
+            WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal, leftDown, rightDown, middleDown); WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal, leftDown, rightDown, middleDown); WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal, leftDown, rightDown, middleDown); WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal, leftDown, rightDown, middleDown); WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, isHorizontal, leftDown, rightDown, middleDown);
 
             return;
         }
