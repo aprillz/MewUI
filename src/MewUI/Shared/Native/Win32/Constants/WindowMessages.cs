@@ -108,6 +108,7 @@ internal static class WindowMessages
     public const uint WM_IME_STARTCOMPOSITION = 0x010D;
     public const uint WM_IME_ENDCOMPOSITION = 0x010E;
     public const uint WM_IME_COMPOSITION = 0x010F;
+    public const uint WM_IME_NOTIFY = 0x0282;
 
     public const uint WM_INITDIALOG = 0x0110;
     public const uint WM_COMMAND = 0x0111;
