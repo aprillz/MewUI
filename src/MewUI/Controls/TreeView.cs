@@ -348,8 +348,8 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             return;
         }
 
-        double itemHeight = ResolveItemHeight();
-        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        double itemHeight = GetPixelAlignedItemHeight();
+        if (itemHeight <= 0)
         {
             return;
         }
@@ -548,7 +548,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         }
 
         double itemHeight = ResolveItemHeight();
-        double height = _itemsSource.Count * itemHeight;
+        double height = _itemsSource.Count * GetPixelAlignedItemHeight();
 
         _presenter.ItemHeight = itemHeight;
         _presenter.ExtentWidth = extentWidth;
@@ -1049,7 +1049,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         var innerBounds = bounds.Deflate(new Thickness(GetBorderVisualInset()));
         var contentBounds = LayoutRounding.SnapViewportRectToPixels(innerBounds.Deflate(Padding), dpiScale);
 
-        double itemHeight = ResolveItemHeight();
+        double itemHeight = GetPixelAlignedItemHeight();
         if (itemHeight <= 0)
         {
             return false;
@@ -1096,6 +1096,20 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         }
 
         return Math.Max(Theme.Metrics.BaseControlHeight, 24);
+    }
+
+    // Pixel-aligned item height matching the FixedHeightItemsPresenter's visual layout.
+    // Needed so hit-test, extent, and ScrollIntoView agree with the rendered rows
+    // (esp. at 125% DPI where a 24 DIP row rounds to 24.8 DIP per row).
+    private double GetPixelAlignedItemHeight()
+    {
+        double h = ResolveItemHeight();
+        if (h <= 0 || double.IsNaN(h) || double.IsInfinity(h))
+        {
+            return 0;
+        }
+
+        return LayoutRounding.RoundToPixel(h, GetDpi() / 96.0);
     }
 
     private void SetSelectedNodeCore(TreeViewNode? node)

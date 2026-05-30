@@ -79,7 +79,8 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
             if (count == 0 || ItemHeight <= 0 || ItemWidth <= 0) return 0;
             int cols = ComputeColumns(_viewport.Width);
             int rows = (count + cols - 1) / cols;
-            return Math.Min(rows * ItemHeight, ItemHeight * 12);
+            double alignedH = GetPixelAlignedItemHeight();
+            return Math.Min(rows * alignedH, alignedH * 12);
         }
     }
 
@@ -257,10 +258,11 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
     {
         index = -1;
         int count = ItemsSource.Count;
-        if (count <= 0 || ItemHeight <= 0 || ItemWidth <= 0) return false;
+        double alignedH = GetPixelAlignedItemHeight();
+        if (count <= 0 || alignedH <= 0 || ItemWidth <= 0) return false;
 
         int cols = ComputeColumns(_viewport.Width);
-        int row = (int)Math.Floor(yContent / ItemHeight);
+        int row = (int)Math.Floor(yContent / alignedH);
         if (row < 0) return false;
 
         int i = row * cols;
@@ -274,11 +276,13 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
     {
         index = -1;
         int count = ItemsSource.Count;
-        if (count <= 0 || ItemHeight <= 0 || ItemWidth <= 0) return false;
+        double alignedH = GetPixelAlignedItemHeight();
+        double alignedW = GetPixelAlignedItemWidth();
+        if (count <= 0 || alignedH <= 0 || alignedW <= 0) return false;
 
         int cols = ComputeColumns(_viewport.Width);
-        int row = (int)Math.Floor(yContent / ItemHeight);
-        int col = (int)Math.Floor(xContent / ItemWidth);
+        int row = (int)Math.Floor(yContent / alignedH);
+        int col = (int)Math.Floor(xContent / alignedW);
 
         if (row < 0 || col < 0 || col >= cols) return false;
 
@@ -293,13 +297,30 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
     {
         top = 0; bottom = 0;
         int count = ItemsSource.Count;
-        if (count <= 0 || index < 0 || index >= count || ItemHeight <= 0 || ItemWidth <= 0) return false;
+        double alignedH = GetPixelAlignedItemHeight();
+        if (count <= 0 || index < 0 || index >= count || alignedH <= 0 || ItemWidth <= 0) return false;
 
         int cols = ComputeColumns(_viewport.Width);
         int row = index / cols;
-        top = row * ItemHeight;
-        bottom = top + ItemHeight;
+        top = row * alignedH;
+        bottom = top + alignedH;
         return true;
+    }
+
+    // Must match the pixel-aligned height/width used in OnRender so hit-test, extent,
+    // and ScrollIntoView stay consistent with the visual layout (esp. at 125% DPI).
+    private double GetPixelAlignedItemHeight()
+    {
+        double h = Math.Max(0, ItemHeight);
+        if (h <= 0 || double.IsNaN(h) || double.IsInfinity(h)) return 0;
+        return LayoutRounding.RoundToPixel(h, GetDpi() / 96.0);
+    }
+
+    private double GetPixelAlignedItemWidth()
+    {
+        double w = Math.Max(0, ItemWidth);
+        if (w <= 0 || double.IsNaN(w) || double.IsInfinity(w)) return 0;
+        return LayoutRounding.RoundToPixel(w, GetDpi() / 96.0);
     }
 
     public void RequestScrollIntoView(int index)
@@ -330,7 +351,8 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
     private void RecomputeExtent()
     {
         int count = ItemsSource.Count;
-        if (count == 0 || ItemHeight <= 0 || ItemWidth <= 0)
+        double alignedH = GetPixelAlignedItemHeight();
+        if (count == 0 || alignedH <= 0 || ItemWidth <= 0)
         {
             _extent = new Size(_viewport.Width, 0);
             return;
@@ -338,7 +360,7 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
 
         int cols = ComputeColumns(_viewport.Width);
         int rows = (count + cols - 1) / cols;
-        _extent = new Size(_viewport.Width, rows * ItemHeight);
+        _extent = new Size(_viewport.Width, rows * alignedH);
     }
 
     private void OnItemsChanged(ItemsChange _)

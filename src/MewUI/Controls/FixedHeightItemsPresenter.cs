@@ -116,7 +116,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
         get
         {
             int count = ItemsSource.Count;
-            double h = ItemHeight;
+            double h = GetPixelAlignedItemHeight();
             return count == 0 || h <= 0 ? 0 : Math.Min(count * h, h * 12);
         }
     }
@@ -338,7 +338,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
     private void RecomputeExtent()
     {
-        double itemHeight = Math.Max(0, ItemHeight);
+        double itemHeight = GetPixelAlignedItemHeight();
         double height = ItemsSource.Count == 0 || itemHeight <= 0 ? 0 : ItemsSource.Count * itemHeight;
 
         double width = double.IsNaN(_extentWidth) ? _viewport.Width : _extentWidth;
@@ -362,8 +362,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
             return false;
         }
 
-        double itemHeight = Math.Max(0, ItemHeight);
-        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        double itemHeight = GetPixelAlignedItemHeight();
+        if (itemHeight <= 0)
         {
             return false;
         }
@@ -389,8 +389,8 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
             return false;
         }
 
-        double itemHeight = Math.Max(0, ItemHeight);
-        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        double itemHeight = GetPixelAlignedItemHeight();
+        if (itemHeight <= 0)
         {
             return false;
         }
@@ -398,6 +398,21 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
         top = index * itemHeight;
         bottom = top + itemHeight;
         return true;
+    }
+
+    // Must match the pixel-aligned height used in ArrangeContent so hit-test
+    // and ScrollIntoView stay consistent with the visual layout (esp. at 125% DPI,
+    // where 26 DIP rounds to 26.4 DIP per item).
+    private double GetPixelAlignedItemHeight()
+    {
+        double itemHeight = Math.Max(0, ItemHeight);
+        if (itemHeight <= 0 || double.IsNaN(itemHeight) || double.IsInfinity(itemHeight))
+        {
+            return 0;
+        }
+
+        var dpiScale = GetDpi() / 96.0;
+        return LayoutRounding.RoundToPixel(itemHeight, dpiScale);
     }
 
     public void RequestScrollIntoView(int index)

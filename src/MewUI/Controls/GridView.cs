@@ -194,8 +194,8 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
     private int ResolvePageStep(int count)
     {
-        double rowH = ResolveRowHeight();
-        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        double rowH = GetPixelAlignedRowHeight();
+        if (rowH <= 0)
         {
             return 1;
         }
@@ -481,8 +481,8 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             return false;
         }
 
-        double rowH = ResolveRowHeight();
-        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        double rowH = GetPixelAlignedRowHeight();
+        if (rowH <= 0)
         {
             return false;
         }
@@ -715,9 +715,10 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         double headerH = ResolveHeaderHeight();
         double rowH = ResolveRowHeight();
+        double alignedRowH = GetPixelAlignedRowHeight();
 
         int count = _core.ItemsSource.Count;
-        _rowsExtentHeight = count > 0 && rowH > 0 ? count * rowH : 0;
+        _rowsExtentHeight = count > 0 && alignedRowH > 0 ? count * alignedRowH : 0;
 
         double desiredRowsHeight;
         if (double.IsPositiveInfinity(availableSize.Height))
@@ -1064,7 +1065,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
     private bool IsItemInViewport(int index)
     {
-        double rowH = ResolveRowHeight();
+        double rowH = GetPixelAlignedRowHeight();
         if (rowH <= 0 || _rowsViewportHeight <= 0)
         {
             return false;
@@ -1084,6 +1085,20 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         }
 
         return Math.Max(Theme.Metrics.BaseControlHeight, 24);
+    }
+
+    // Pixel-aligned row height matching the FixedHeightItemsPresenter's visual layout.
+    // Needed so hit-test, extent, and viewport queries agree with the rendered rows
+    // (esp. at 125% DPI where a 24 DIP row rounds to 24.8 DIP per row).
+    private double GetPixelAlignedRowHeight()
+    {
+        double rowH = ResolveRowHeight();
+        if (rowH <= 0 || double.IsNaN(rowH) || double.IsInfinity(rowH))
+        {
+            return 0;
+        }
+
+        return LayoutRounding.RoundToPixel(rowH, GetDpi() / 96.0);
     }
 
     private double ResolveHeaderHeight()
