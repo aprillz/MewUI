@@ -95,6 +95,25 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static partial int XSelectInput(nint display, nint window, nint eventMask);
 
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool XQueryExtension(
+        nint display,
+        string name,
+        out int majorOpcodeReturn,
+        out int firstEventReturn,
+        out int firstErrorReturn);
+
+    // GenericEvent (XEvent.type == 35) cookies — used by XInput2 and other modern extensions.
+    // These belong to core libX11; the extension-specific payload referenced through
+    // XGenericEventCookie.data is interpreted by the receiving extension.
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool XGetEventData(nint display, ref XGenericEventCookie cookie);
+
+    [LibraryImport(LibraryName)]
+    public static partial void XFreeEventData(nint display, ref XGenericEventCookie cookie);
+
     [LibraryImport(LibraryName)]
     public static partial void XFlush(nint display);
 
@@ -396,6 +415,33 @@ internal struct XEvent
 
     [FieldOffset(0)]
     public XSelectionEvent xselection;
+
+    [FieldOffset(0)]
+    public XGenericEventCookie xcookie;
+}
+
+internal static class X11EventType
+{
+    public const int GenericEvent = 35;
+}
+
+/// <summary>
+/// Generic event cookie variant of <see cref="XEvent"/>. When <see cref="XEvent.type"/>
+/// equals <see cref="X11EventType.GenericEvent"/> (35), the union member is this cookie
+/// referencing extension-specific payload at <see cref="data"/>.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct XGenericEventCookie
+{
+    public int type;
+    public nuint serial;
+    [MarshalAs(UnmanagedType.Bool)]
+    public bool send_event;
+    public nint display;
+    public int extension;
+    public int evtype;
+    public uint cookie;
+    public nint data;       // pointer to extension event payload (e.g. XIDeviceEvent*)
 }
 
 [StructLayout(LayoutKind.Sequential)]
