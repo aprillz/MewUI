@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Controls;
+namespace Aprillz.MewUI;
 
 /// <summary>
 /// Flags indicating which native window chrome features the platform supports.

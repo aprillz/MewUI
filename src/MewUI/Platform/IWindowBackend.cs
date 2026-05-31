@@ -203,11 +203,11 @@ public interface IWindowBackend : IDisposable
     /// <summary>
     /// Gets the native window chrome capabilities supported by this platform.
     /// </summary>
-    Controls.WindowChromeCapabilities ChromeCapabilities => Controls.WindowChromeCapabilities.None;
+    WindowChromeCapabilities ChromeCapabilities => WindowChromeCapabilities.None;
 
     /// <summary>
     /// Gets the reserved area (in DIPs) for native chrome buttons when
-    /// <see cref="Controls.WindowChromeCapabilities.NativeChromeButtons"/> is supported.
+    /// <see cref="WindowChromeCapabilities.NativeChromeButtons"/> is supported.
     /// Content should avoid overlapping this area.
     /// Returns <see cref="Thickness.Zero"/> if not applicable.
     /// </summary>
