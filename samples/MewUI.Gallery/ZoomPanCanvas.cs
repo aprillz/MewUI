@@ -240,7 +240,7 @@ public class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (e.Handled || e.IsHorizontal)
+        if (e.Handled || e.Delta.Y == 0 || Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y))
         {
             return;
         }
@@ -252,7 +252,8 @@ public class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
         }
 
         double oldZoom = Zoom;
-        double factor = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
+        // Continuous zoom: full notch = 1.15×, sub-notch (trackpad) scales smoothly via the exponent.
+        double factor = Math.Pow(1.15, e.Delta.Y);
         double newZoom = Math.Clamp(oldZoom * factor, MinZoom, MaxZoom);
 
         if (Math.Abs(newZoom - oldZoom) < 1e-9)
