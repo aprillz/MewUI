@@ -1,4 +1,3 @@
-using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
@@ -9,16 +8,12 @@ namespace Aprillz.MewUI.Controls;
 public sealed class Slider : RangeBase
 {
     private bool _isDragging;
-    private WheelNotchAccumulator _wheelAccumulator;
 
     public static readonly MewProperty<Color> ThumbBrushProperty =
         MewProperty<Color>.Register<Slider>(nameof(ThumbBrush), default, MewPropertyOptions.AffectsRender);
 
     public static readonly MewProperty<Color> ThumbBorderBrushProperty =
         MewProperty<Color>.Register<Slider>(nameof(ThumbBorderBrush), default, MewPropertyOptions.AffectsRender);
-
-    public static readonly MewProperty<double> SmallChangeProperty =
-        MewProperty<double>.Register<Slider>(nameof(SmallChange), 1.0, MewPropertyOptions.None);
 
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
         MewProperty<bool>.Register<Slider>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
@@ -27,15 +22,8 @@ public sealed class Slider : RangeBase
     {
         MaximumProperty.OverrideDefaultValue<Slider>(100.0);
         HeightProperty.OverrideDefaultValue<Slider>(24.0);
-    }
-
-    /// <summary>
-    /// Gets or sets the increment for small changes.
-    /// </summary>
-    public double SmallChange
-    {
-        get => GetValue(SmallChangeProperty);
-        set => SetValue(SmallChangeProperty, value);
+        SmallChangeProperty.OverrideDefaultValue<Slider>(1.0);
+        LargeChangeProperty.OverrideDefaultValue<Slider>(10.0);
     }
 
     public bool ChangeOnWheel
@@ -173,19 +161,15 @@ public sealed class Slider : RangeBase
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!IsEffectivelyEnabled || !ChangeOnWheel)
+        if (!IsEffectivelyEnabled || !ChangeOnWheel || e.Delta.Y == 0)
         {
             return;
         }
 
-        int notches = _wheelAccumulator.TakeY(e.Delta.Y);
-        if (notches == 0)
-        {
-            e.Handled = true;
-            return;
-        }
-
-        SetValueInternal(Value + notches * GetKeyboardSmallStep(), true);
+        // Wheel uses LargeChange (page-style) so a single notch moves a noticeable amount.
+        // Keyboard arrows continue to use SmallChange for fine control.
+        // Trackpad sub-notch input scales proportionally via Delta.Y.
+        SetValueInternal(Value + e.Delta.Y * LargeChange, true);
         e.Handled = true;
     }
 

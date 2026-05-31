@@ -24,6 +24,19 @@ public abstract class RangeBase : Control
             static (_, value) => Sanitize(value));
 
     /// <summary>
+    /// Increment for small changes (e.g. keyboard arrow keys). Derived types override
+    /// the default value to suit their range (Slider: 1, ScrollBar: 24 DIPs).
+    /// </summary>
+    public static readonly MewProperty<double> SmallChangeProperty =
+        MewProperty<double>.Register<RangeBase>(nameof(SmallChange), 0.1, MewPropertyOptions.None);
+
+    /// <summary>
+    /// Increment for large changes (e.g. PageUp / PageDown, mouse wheel, track click).
+    /// </summary>
+    public static readonly MewProperty<double> LargeChangeProperty =
+        MewProperty<double>.Register<RangeBase>(nameof(LargeChange), 1.0, MewPropertyOptions.None);
+
+    /// <summary>
     /// Gets or sets the minimum value.
     /// </summary>
     public double Minimum
@@ -48,6 +61,24 @@ public abstract class RangeBase : Control
     {
         get => GetValue(ValueProperty);
         set => SetValue(ValueProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the increment for small changes.
+    /// </summary>
+    public double SmallChange
+    {
+        get => GetValue(SmallChangeProperty);
+        set => SetValue(SmallChangeProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the increment for large changes.
+    /// </summary>
+    public double LargeChange
+    {
+        get => GetValue(LargeChangeProperty);
+        set => SetValue(LargeChangeProperty, value);
     }
 
     /// <summary>
