@@ -47,11 +47,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Action? _cachedLayoutAndRender;
     private LayoutPerformanceStats _lastLayoutPerformanceStats;
 
-    /// <summary>
-    /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
-    /// </summary>
-    internal IWindowBackend? Backend => _backend;
-
     private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
@@ -75,6 +70,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private WindowLifetimeState _lifetimeState;
     private int _modalDisableCount;
     private bool _isDialogWindow;
+
+    /// <summary>
+    /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
+    /// </summary>
+    internal IWindowBackend? Backend => _backend;
 
     internal Action<Window>? BuildCallback { get; private set; }
 
@@ -137,6 +137,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     {
         _lastMousePositionDip = positionDip;
         _lastMouseScreenPositionPx = screenPositionPx;
+#if DEBUG
+        InvalidateInspectorOverlayIfHoverChanged();
+#endif
     }
 
     internal void ReevaluateMouseOver()

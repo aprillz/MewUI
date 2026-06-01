@@ -10,6 +10,35 @@ public partial class Window
     private Adorner? _debugInspectorAdorner;
     private DebugInspectorOverlay? _debugInspectorOverlay;
     private DebugVisualTreeWindow? _debugVisualTreeWindow;
+    private UIElement? _lastInspectorHover;
+
+    /// <summary>
+    /// Called from <see cref="UpdateLastMousePosition"/>. Triggers an overlay redraw only
+    /// when the element under the cursor actually changes, so cursor moves inside a single
+    /// element no longer churn the inspector at every input tick.
+    /// </summary>
+    private void InvalidateInspectorOverlayIfHoverChanged()
+    {
+        if (_debugInspectorOverlay == null)
+        {
+            _lastInspectorHover = null;
+            return;
+        }
+
+        var hovered = HitTest(_lastMousePositionDip);
+        if (hovered is Adorner)
+        {
+            hovered = null;
+        }
+
+        if (ReferenceEquals(hovered, _lastInspectorHover))
+        {
+            return;
+        }
+
+        _lastInspectorHover = hovered;
+        _debugInspectorOverlay.InvalidateVisual();
+    }
 
 #if DEBUG
     public void DevToolsToggleInspector() => ToggleDebugInspector();
