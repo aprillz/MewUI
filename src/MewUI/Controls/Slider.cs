@@ -166,10 +166,7 @@ public sealed class Slider : RangeBase
             return;
         }
 
-        // Wheel uses LargeChange (page-style) so a single notch moves a noticeable amount.
-        // Keyboard arrows continue to use SmallChange for fine control.
-        // Trackpad sub-notch input scales proportionally via Delta.Y.
-        SetValueInternal(Value + e.Delta.Y * LargeChange, true);
+        SetValueInternal(Value + e.Delta.Y, true);
         e.Handled = true;
     }
 

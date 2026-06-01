@@ -10,6 +10,7 @@ internal sealed class ScrollController
 {
     private readonly int[] _extentPx = new int[2];
     private readonly int[] _viewportPx = new int[2];
+
     // Canonical offsets are stored in DIPs so DPI changes preserve the logical scroll position.
     // We still compute pixel offsets on-demand for stable rounding when interacting with bars.
     private readonly double[] _offsetDip = new double[2];
@@ -155,22 +156,6 @@ internal sealed class ScrollController
         }
 
         return SetOffsetDip(axis, GetOffsetDip(axis) + deltaDip);
-    }
-
-    /// <summary>
-    /// Scrolls by a number of mouse-wheel notches (clamped).
-    /// </summary>
-    [Obsolete("Use ScrollByDip(axis, notches * stepDip) — wheel input is normalized to fractional notches at the input boundary.")]
-    public bool ScrollByNotches(int axis, int notches, double stepDip)
-    {
-        if (notches == 0)
-        {
-            return false;
-        }
-
-        int stepPx = Math.Max(1, DipToPx(stepDip));
-        int deltaPx = checked(notches * stepPx);
-        return SetOffsetPx(axis, checked(GetOffsetPx(axis) + deltaPx));
     }
 
     private int DipToPx(double dip) => LayoutRounding.RoundToPixelInt(dip, DpiScale);
