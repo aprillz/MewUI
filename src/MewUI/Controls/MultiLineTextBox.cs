@@ -452,25 +452,45 @@ public sealed class MultiLineTextBox : TextBase
     {
         base.OnMouseWheel(e);
 
-        if (e.Handled || !_vBar.IsVisible)
-        {
-            return;
-        }
-
-        double scrollDip = e.Delta.Y * Theme.Metrics.ScrollWheelStep;
-        if (Math.Abs(scrollDip) < 0.5)
+        if (e.Handled)
         {
             return;
         }
 
         var viewportBounds = GetViewportContentBounds();
-        double viewportH = viewportBounds.Height;
-        double viewportW = viewportBounds.Width;
         var dpiScale = GetDpi() / 96.0;
-        SetVerticalOffset(ClampOffset(VerticalOffset - scrollDip, GetExtentHeight(viewportW), viewportH, dpiScale), false);
-        _vBar.Value = VerticalOffset;
-        InvalidateVisual();
-        e.Handled = true;
+        bool handled = false;
+
+        if (_vBar.IsVisible && e.Delta.Y != 0)
+        {
+            double scrollDip = e.Delta.Y * Theme.Metrics.ScrollWheelStep;
+            if (Math.Abs(scrollDip) >= 0.5)
+            {
+                SetVerticalOffset(ClampOffset(VerticalOffset - scrollDip, GetExtentHeight(viewportBounds.Width), viewportBounds.Height, dpiScale), false);
+                _vBar.Value = VerticalOffset;
+                handled = true;
+            }
+        }
+
+        if (_hBar.IsVisible && e.Delta.X != 0)
+        {
+            double scrollDip = e.Delta.X * Theme.Metrics.ScrollWheelStep;
+            if (Math.Abs(scrollDip) >= 0.5)
+            {
+                // _hBar.Maximum is set in ArrangeContent to (extentW - viewportW), so it already
+                // encodes the legal horizontal range without re-running the wrap-aware extent math.
+                double newOffset = Math.Clamp(HorizontalOffset - scrollDip, 0, _hBar.Maximum);
+                SetHorizontalOffset(newOffset, false);
+                _hBar.Value = HorizontalOffset;
+                handled = true;
+            }
+        }
+
+        if (handled)
+        {
+            InvalidateVisual();
+            e.Handled = true;
+        }
     }
 
     protected override void MoveCaretToLineEdge(bool start, bool extendSelection)

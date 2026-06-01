@@ -480,24 +480,19 @@ public sealed class ScrollViewer : ContentControl
             return;
         }
 
-        if (!_vBar.IsVisible && !_hBar.IsVisible)
-        {
-            return;
-        }
-
-        // Pick the dominant axis from a 2D delta (trackpads can produce both axes simultaneously).
-        bool isVerticalIntent = Math.Abs(e.Delta.Y) >= Math.Abs(e.Delta.X);
-
-        if (isVerticalIntent && _vBar.IsVisible)
+        bool handled = false;
+        if (_vBar.IsVisible && e.Delta.Y != 0)
         {
             ScrollBy(-e.Delta.Y);
-            e.Handled = true;
-            return;
+            handled = true;
         }
-
-        if (!isVerticalIntent && _hBar.IsVisible)
+        if (_hBar.IsVisible && e.Delta.X != 0)
         {
             ScrollByHorizontal(-e.Delta.X);
+            handled = true;
+        }
+        if (handled)
+        {
             e.Handled = true;
         }
     }
