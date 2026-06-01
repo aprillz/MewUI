@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 
@@ -18,14 +19,15 @@ public sealed class ScrollBar : RangeBase
     public static readonly MewProperty<double> ViewportSizeProperty =
         MewProperty<double>.Register<ScrollBar>(nameof(ViewportSize), 0.0, MewPropertyOptions.AffectsRender);
 
-    public static readonly MewProperty<double> SmallChangeProperty =
-        MewProperty<double>.Register<ScrollBar>(nameof(SmallChange), 24.0, MewPropertyOptions.None);
-
-    public static readonly MewProperty<double> LargeChangeProperty =
-        MewProperty<double>.Register<ScrollBar>(nameof(LargeChange), 120.0, MewPropertyOptions.None);
+    static ScrollBar()
+    {
+        SmallChangeProperty.OverrideDefaultValue<ScrollBar>(24.0);
+        LargeChangeProperty.OverrideDefaultValue<ScrollBar>(120.0);
+    }
 
     private double _dragStartPos;
     private double _dragStartValue;
+    private WheelNotchAccumulator _wheelAccumulator;
 
     private bool IsDragging
     {
@@ -50,24 +52,6 @@ public sealed class ScrollBar : RangeBase
     {
         get => GetValue(ViewportSizeProperty);
         set => SetValue(ViewportSizeProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the amount to scroll for small changes (e.g. mouse wheel).
-    /// </summary>
-    public double SmallChange
-    {
-        get => GetValue(SmallChangeProperty);
-        set => SetValue(SmallChangeProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the amount to scroll for large changes (e.g. track click).
-    /// </summary>
-    public double LargeChange
-    {
-        get => GetValue(LargeChangeProperty);
-        set => SetValue(LargeChangeProperty, value);
     }
 
     /// <summary>

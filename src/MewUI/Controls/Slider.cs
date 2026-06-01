@@ -15,9 +15,6 @@ public sealed class Slider : RangeBase
     public static readonly MewProperty<Color> ThumbBorderBrushProperty =
         MewProperty<Color>.Register<Slider>(nameof(ThumbBorderBrush), default, MewPropertyOptions.AffectsRender);
 
-    public static readonly MewProperty<double> SmallChangeProperty =
-        MewProperty<double>.Register<Slider>(nameof(SmallChange), 1.0, MewPropertyOptions.None);
-
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
         MewProperty<bool>.Register<Slider>(nameof(ChangeOnWheel), true, MewPropertyOptions.None);
 
@@ -25,15 +22,8 @@ public sealed class Slider : RangeBase
     {
         MaximumProperty.OverrideDefaultValue<Slider>(100.0);
         HeightProperty.OverrideDefaultValue<Slider>(24.0);
-    }
-
-    /// <summary>
-    /// Gets or sets the increment for small changes.
-    /// </summary>
-    public double SmallChange
-    {
-        get => GetValue(SmallChangeProperty);
-        set => SetValue(SmallChangeProperty, value);
+        SmallChangeProperty.OverrideDefaultValue<Slider>(1.0);
+        LargeChangeProperty.OverrideDefaultValue<Slider>(10.0);
     }
 
     public bool ChangeOnWheel
