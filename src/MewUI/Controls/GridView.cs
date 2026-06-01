@@ -401,19 +401,20 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         bool canVScroll = _rowsExtentHeight > _rowsViewportHeight + 0.5;
         bool canHScroll = _columnsExtentWidth > _rowsViewportWidth + 0.5;
+        bool handled = false;
 
-        bool isVerticalIntent = Math.Abs(e.Delta.Y) >= Math.Abs(e.Delta.X);
-
-        if (isVerticalIntent && canVScroll)
+        if (canVScroll && e.Delta.Y != 0)
         {
             _scrollViewer.ScrollBy(-e.Delta.Y);
-            e.Handled = true;
-            return;
+            handled = true;
         }
-
-        if (!isVerticalIntent && canHScroll)
+        if (canHScroll && e.Delta.X != 0)
         {
             _scrollViewer.ScrollByHorizontal(-e.Delta.X);
+            handled = true;
+        }
+        if (handled)
+        {
             e.Handled = true;
         }
     }
