@@ -247,6 +247,29 @@ public sealed class X11PlatformHost : IPlatformHost
         };
     }
 
+    // GenericEvent (XInput2 etc.) carries its target window inside the cookie payload, not
+    // in any XEvent union field. Fetch once, read XIDeviceEvent.event, deliver to that one
+    // backend, then free — backend sees an already-fetched cookie and must NOT re-fetch/free.
+    private void DispatchGenericEvent(ref XEvent ev)
+    {
+        if (!NativeX11.XGetEventData(Display, ref ev.xcookie))
+            return;
+
+        try
+        {
+            if (ev.xcookie.data == 0) return;
+            var xiHeader = Marshal.PtrToStructure<XIDeviceEvent>(ev.xcookie.data);
+            if (xiHeader.@event != 0 && _windows.TryGetValue(xiHeader.@event, out var backend))
+            {
+                backend.ProcessEvent(ref ev);
+            }
+        }
+        finally
+        {
+            NativeX11.XFreeEventData(Display, ref ev.xcookie);
+        }
+    }
+
     private void DrainAndProcessEvents()
     {
         while (_running && NativeX11.XPending(Display) != 0)
@@ -254,6 +277,12 @@ public sealed class X11PlatformHost : IPlatformHost
             NativeX11.XNextEvent(Display, out var ev);
             if (ev.type == 28) // PropertyNotify
                 HandlePropertyNotify(ev.xproperty);
+
+            if (ev.type == X11EventType.GenericEvent)
+            {
+                DispatchGenericEvent(ref ev);
+                continue;
+            }
 
             var window = GetEventWindow(ev);
             if (window != 0 && _windows.TryGetValue(window, out var backend))
@@ -321,6 +350,11 @@ public sealed class X11PlatformHost : IPlatformHost
                     HandlePropertyNotify(ev.xproperty);
                     // Fall through to also deliver PropertyNotify to the window backend
                     // so it can track _NET_WM_STATE changes for WindowState sync.
+                }
+                if (ev.type == X11EventType.GenericEvent)
+                {
+                    DispatchGenericEvent(ref ev);
+                    continue;
                 }
                 var window = GetEventWindow(ev);
                 if (window != 0 && _windows.TryGetValue(window, out var backend))

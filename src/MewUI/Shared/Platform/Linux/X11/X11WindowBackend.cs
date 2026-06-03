@@ -12,6 +12,7 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 internal sealed class X11WindowBackend : IWindowBackend
 {
     private static readonly EnvDebugLogger ImeLogger = new("MEWUI_IME_DEBUG", "[X11][IME]");
+    private static readonly EnvDebugLogger XI2Logger = new("MEWUI_XI2_DEBUG", "[X11][XI2]");
 
     private readonly X11PlatformHost _host;
 
@@ -67,6 +68,9 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _xi2Enabled;
     private int _xi2Opcode;
     private readonly Dictionary<(int deviceId, int valuator), XI2ScrollAxis> _scrollAxes = new();
+    // True when at least one master pointer has a scroll axis cached — only then is XI_Motion
+    // guaranteed to deliver high-res scroll, so only then should legacy core wheel be suppressed.
+    private bool _xi2MasterHasScrollAxis;
 
     private sealed class XI2ScrollAxis
     {
@@ -840,55 +844,45 @@ internal sealed class X11WindowBackend : IWindowBackend
         try
         {
             if (!NativeX11.XQueryExtension(Display, "XInputExtension", out int opcode, out _, out _))
-            {
                 return;
-            }
 
             int major = 2, minor = 1;
             if (XI2.XIQueryVersion(Display, ref major, ref minor) != 0)
-            {
-                // Non-Success return ⇒ XI2.1 not available.
                 return;
-            }
 
-            // Subscribe to XI_Motion on master devices so we receive valuator-encoded scroll.
-            // Legacy ButtonPress/Release on buttons 1/2/3 (and 4–7 fallback) keep flowing
-            // through core events, so we do not request XI_Button* here.
+            // Subscribe to XI_Motion only. Including XI_ButtonPress in the mask causes some
+            // X servers to stop delivering core button events without reliably delivering XI
+            // button events — we lose both. Core buttons 4-7 stay on the legacy path and are
+            // suppressed in HandleButton when XI2 scroll axes are active to avoid doubling.
             const int evtypeBits = 8;
             int maskBytes = (XI2.XI_Motion / evtypeBits) + 1;
-            var maskBuffer = new byte[maskBytes];
-            maskBuffer[XI2.XI_Motion / evtypeBits] |= (byte)(1 << (XI2.XI_Motion % evtypeBits));
 
             unsafe
             {
+                Span<byte> maskBuffer = stackalloc byte[maskBytes];
+                maskBuffer.Clear();
+                maskBuffer[XI2.XI_Motion / evtypeBits] |= 1 << (XI2.XI_Motion % evtypeBits);
+
                 fixed (byte* maskPtr = maskBuffer)
                 {
                     var maskInfo = new XIEventMask
                     {
-                        deviceid = XI2.XIAllMasterDevices,
+                        deviceid = XI2.XIAllDevices,
                         mask_len = maskBytes,
                         mask = (nint)maskPtr,
                     };
-                    if (XI2.XISelectEvents(Display, Handle, new[] { maskInfo }, 1) != 0)
-                    {
+                    if (XI2.XISelectEvents(Display, Handle, [maskInfo], 1) != 0)
                         return;
-                    }
                 }
             }
 
             CacheXI2ScrollAxes();
             _xi2Opcode = opcode;
             _xi2Enabled = true;
-            DiagLog.Write($"X11 XInput2 enabled: opcode={opcode} scrollAxes={_scrollAxes.Count}");
+            XI2Logger.Write($"XInput2 enabled: opcode={opcode} scrollAxes={_scrollAxes.Count}");
         }
-        catch (DllNotFoundException)
-        {
-            // libXi missing — fall back to legacy button-based wheel.
-        }
-        catch (EntryPointNotFoundException)
-        {
-            // Older libXi without XI2 entry points.
-        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
     }
 
     /// <summary>
@@ -899,12 +893,11 @@ internal sealed class X11WindowBackend : IWindowBackend
     private void CacheXI2ScrollAxes()
     {
         _scrollAxes.Clear();
+        _xi2MasterHasScrollAxis = false;
 
         nint devicesPtr = XI2.XIQueryDevice(Display, XI2.XIAllDevices, out int deviceCount);
         if (devicesPtr == 0 || deviceCount <= 0)
-        {
             return;
-        }
 
         try
         {
@@ -915,9 +908,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                 {
                     var device = Marshal.PtrToStructure<XIDeviceInfo>(devicesPtr + i * deviceInfoSize);
                     if (device.num_classes <= 0 || device.classes == 0)
-                    {
                         continue;
-                    }
 
                     // classes is XIAnyClassInfo** — an array of pointers to per-class headers.
                     nint* classPtrs = (nint*)device.classes;
@@ -925,19 +916,18 @@ internal sealed class X11WindowBackend : IWindowBackend
                     {
                         nint classPtr = classPtrs[c];
                         if (classPtr == 0) continue;
-
-                        int classType = Marshal.ReadInt32(classPtr);
-                        if (classType != XI2.XIScrollClass) continue;
+                        if (Marshal.ReadInt32(classPtr) != XI2.XIScrollClass) continue;
 
                         var scrollInfo = Marshal.PtrToStructure<XIScrollClassInfo>(classPtr);
-                        if (scrollInfo.increment == 0) continue;   // avoid div-by-zero
+                        if (scrollInfo.increment == 0) continue;
 
-                        var axis = new XI2ScrollAxis
+                        _scrollAxes[(device.deviceid, scrollInfo.number)] = new XI2ScrollAxis
                         {
                             ScrollType = scrollInfo.scroll_type,
                             Increment = scrollInfo.increment,
                         };
-                        _scrollAxes[(device.deviceid, scrollInfo.number)] = axis;
+                        if (device.use == XI2.XIMasterPointer)
+                            _xi2MasterHasScrollAxis = true;
                     }
                 }
             }
@@ -948,43 +938,37 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
     }
 
-    /// <summary>
-    /// Dispatches an XInput2 GenericEvent. Only <c>XI_Motion</c> is currently consumed;
-    /// other XI events fall through to the legacy core-event path.
-    /// </summary>
+    // Caller (PlatformHost) has already fetched the cookie via XGetEventData and owns the
+    // matching XFreeEventData — do not re-fetch or free here.
     private void HandleXI2GenericEvent(ref XEvent ev)
     {
-        if (!NativeX11.XGetEventData(Display, ref ev.xcookie))
-        {
-            return;
-        }
-
-        try
-        {
-            if (ev.xcookie.evtype == XI2.XI_Motion)
-            {
-                HandleXI2Motion(ev.xcookie.data);
-            }
-        }
-        finally
-        {
-            NativeX11.XFreeEventData(Display, ref ev.xcookie);
-        }
+        if (ev.xcookie.data == 0) return;
+        if (ev.xcookie.evtype == XI2.XI_Motion)
+            HandleXI2Motion(ev.xcookie.data);
     }
 
-    /// <summary>
-    /// Reads scroll valuator deltas from an XInput2 motion event and routes them as
-    /// a single 2D <see cref="MouseWheelEventArgs.Delta"/> notch vector.
-    /// </summary>
+    // XISelectEvents(XI_Motion) suppresses core MotionNotify on this window, so this handler
+    // must drive mouse-over/move in addition to extracting scroll valuator deltas.
     private unsafe void HandleXI2Motion(nint dataPtr)
     {
         if (dataPtr == 0) return;
 
         var dev = Marshal.PtrToStructure<XIDeviceEvent>(dataPtr);
-        if (dev.valuators.mask_len <= 0 || dev.valuators.mask == 0 || dev.valuators.values == 0)
-        {
+
+        // XIAllDevices delivers each physical motion twice — once via the slave
+        // (deviceid==sourceid) and once via the master mirror. Skip slaves.
+        if (dev.deviceid == dev.sourceid)
             return;
-        }
+
+        var pos = new Point(dev.event_x / Window.DpiScale, dev.event_y / Window.DpiScale);
+        bool leftDown = (dev.mods.effective & (int)X11ModifierMask.Button1) != 0;
+        bool middleDown = (dev.mods.effective & (int)X11ModifierMask.Button2) != 0;
+        bool rightDown = (dev.mods.effective & (int)X11ModifierMask.Button3) != 0;
+
+        WindowInputRouter.MouseMove(Window, pos, ClientToScreen(pos), leftDown: leftDown, rightDown: rightDown, middleDown: middleDown);
+
+        if (dev.valuators.mask_len <= 0 || dev.valuators.mask == 0 || dev.valuators.values == 0)
+            return;
 
         double notchesY = 0;
         double notchesX = 0;
@@ -992,8 +976,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         double* valuesPtr = (double*)dev.valuators.values;
         int valueIndex = 0;
 
-        // The valuator mask uses one bit per valuator number; iterate every set bit and
-        // consult our scroll axis cache. valuesPtr advances only when a bit is actually set.
         int totalBits = dev.valuators.mask_len * 8;
         for (int v = 0; v < totalBits; v++)
         {
@@ -1014,34 +996,17 @@ internal sealed class X11WindowBackend : IWindowBackend
                 double deltaUnits = newValue - axis.LastValue;
                 axis.LastValue = newValue;
 
-                // XInput2 reports positive deltas in the "down/right" direction (X11 convention),
-                // which is opposite of MouseWheelEventArgs.Delta (+Y = up, +X = left).
                 double notches = -deltaUnits / axis.Increment;
 
                 if (axis.ScrollType == XI2.XIScrollTypeVertical)
-                {
                     notchesY += notches;
-                }
                 else if (axis.ScrollType == XI2.XIScrollTypeHorizontal)
-                {
                     notchesX += notches;
-                }
             }
         }
 
         if (notchesY == 0 && notchesX == 0)
-        {
             return;
-        }
-
-        var pos = new Point(dev.event_x / Window.DpiScale, dev.event_y / Window.DpiScale);
-        var wheelElement = WindowInputRouter.HitTest(Window, pos);
-        WindowInputRouter.UpdateMouseOver(Window, wheelElement);
-
-        // Modifier extraction matches the core-event path so consumers see consistent button state.
-        bool leftDown = (dev.mods.effective & (int)X11ModifierMask.Button1) != 0;
-        bool middleDown = (dev.mods.effective & (int)X11ModifierMask.Button2) != 0;
-        bool rightDown = (dev.mods.effective & (int)X11ModifierMask.Button3) != 0;
 
         WindowInputRouter.MouseWheel(
             Window, pos, ClientToScreen(pos),
@@ -1820,6 +1785,15 @@ internal sealed class X11WindowBackend : IWindowBackend
                      or X11MouseButton.WheelLeft or X11MouseButton.WheelRight)
         {
             if (!isDown)
+            {
+                return;
+            }
+
+            // When XI_Motion is delivering high-res scroll for a master pointer with scroll
+            // axes, the X server still emits emulated core button 4-7 alongside it. Drop the
+            // legacy path to avoid doubled wheel deltas. Gated on master (not any device) so
+            // setups where only slaves expose scroll classes still get wheel via legacy.
+            if (_xi2Enabled && _xi2MasterHasScrollAxis)
             {
                 return;
             }

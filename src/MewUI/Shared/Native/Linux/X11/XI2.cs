@@ -20,6 +20,13 @@ internal static partial class XI2
     public const int XIAllDevices = 0;
     public const int XIAllMasterDevices = 1;
 
+    // XIDeviceInfo.use values — distinguishes master/slave pointer/keyboard devices.
+    public const int XIMasterPointer = 1;
+    public const int XIMasterKeyboard = 2;
+    public const int XISlavePointer = 3;
+    public const int XISlaveKeyboard = 4;
+    public const int XIFloatingSlave = 5;
+
     // XIAnyClassInfo.type discriminator values.
     public const int XIKeyClass = 0;
     public const int XIButtonClass = 1;
