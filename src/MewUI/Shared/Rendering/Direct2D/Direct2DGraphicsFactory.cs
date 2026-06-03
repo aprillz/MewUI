@@ -453,8 +453,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     {
         EnsureInitialized();
 
-        // The DC render target lifetime tracks the pixel surface itself (RAII). The context
-        // calls back into the surface for the HDC-bound DC render target handle each frame.
         var d2dFactory = _d2dFactory;
         var ctx = new Direct2DGraphicsContext(
             this,
@@ -463,7 +461,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             dwriteFactory: _dwriteFactory,
             defaultStrokeStyle: _defaultFixedStrokeStyle,
             onRecreateTarget: null,
-            onPresentTarget: null,
+            onPresentTarget: () => { target.IncrementVersion(); return 0; },
             ownsRenderTarget: false,
             resolveRenderTarget: t => ((Direct2DPixelRenderSurface)t).GetOrCreateDcRenderTarget(d2dFactory));
         return ctx;
@@ -487,7 +485,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             dwriteFactory: _dwriteFactory,
             defaultStrokeStyle: _defaultFixedStrokeStyle,
             onRecreateTarget: null,
-            onPresentTarget: null,
+            onPresentTarget: () => { target.IncrementVersion(); return 0; },
             ownsRenderTarget: false,
             resolveRenderTarget: null);
         return ctx;
@@ -560,15 +558,30 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 $"{GetType().Name} can only create contexts for renderable surfaces.");
 
     public IImage CreateImageView(IRenderSurface surface)
-        => surface is IPixelBufferSource pixelSource
-            ? CreateImageView(pixelSource)
-            : throw new NotSupportedException(
-                $"{GetType().Name} can only create image views for pixel-backed surfaces.");
+    {
+        // GPU-resident surfaces that also implement IExternalRasterSource go through the
+        // DXGI bridge so any D2D DC can sample them zero-copy. Prefer this path over the
+        // IPixelBufferSource fallback — otherwise Direct2DGpuPixelRenderSurface (created
+        // on the SharedFilterDC) shows stale cached pixels when drawn from a window DC.
+        // surface.DpiScale is forwarded so the bridge bitmap reports the correct logical
+        // size when sampled from an RT with a different dpi.
+        if (surface is IExternalRasterSource externalSource)
+            return CreateImageView(externalSource, surface.DpiScale);
+
+        if (surface is IPixelBufferSource pixelSource)
+            return CreateImageView(pixelSource);
+
+        throw new NotSupportedException(
+            $"{GetType().Name} can only create image views for pixel-backed or externally-rastered surfaces.");
+    }
 
     public IImage CreateImageView(IPixelBufferSource source)
         => new Direct2DImage(source);
 
     public IImage CreateImageView(IExternalRasterSource source)
+        => CreateImageView(source, dpiScale: 1.0);
+
+    internal IImage CreateImageView(IExternalRasterSource source, double dpiScale)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -599,7 +612,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 source.AlphaMode,
                 affinity,
                 lease: null,
-                preferDeviceContextBitmap: false);
+                preferDeviceContextBitmap: false,
+                dpiScale: dpiScale);
         }
         finally
         {
