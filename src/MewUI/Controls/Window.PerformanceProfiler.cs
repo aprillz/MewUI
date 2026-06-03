@@ -164,67 +164,90 @@ partial class Window
 
             Span<char> textBuffer = stackalloc char[768];
             var text = new StackTextFormatter(textBuffer);
-            text.Append("FPS ");
+            text.Append(MewUIStrings.ProfilerFpsLabel.Value);
             text.Append(rolling.Fps, "0.0");
-            text.Append("  Frame ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerFrameLabel.Value);
             text.Append(latest.FrameMs, "0.00");
-            text.Append(" ms\nAvg ");
+            text.Append(" ms\n");
+            text.Append(MewUIStrings.ProfilerAverageLabel.Value);
             text.Append(rolling.AverageFrameMs, "0.00");
-            text.Append("  Min ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerMinLabel.Value);
             text.Append(rolling.MinFrameMs, "0.00");
-            text.Append("  Max ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerMaxLabel.Value);
             text.Append(rolling.MaxFrameMs, "0.00");
-            text.Append("\nLayout ");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerLayoutLabel.Value);
             text.Append(latest.LayoutMs, "0.00");
-            text.Append("  Measure ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerMeasureLabel.Value);
             text.Append(latest.MeasureMs, "0.00");
-            text.Append("  Arrange ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerArrangeLabel.Value);
             text.Append(latest.ArrangeMs, "0.00");
-            text.Append("\nAnim ");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerAnimationShortLabel.Value);
             text.Append(latest.AnimationMs, "0.00");
-            text.Append("  Render ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerRenderLabel.Value);
             text.Append(latest.RenderBodyMs, "0.00");
-            text.Append("  Dev ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerDevToolsShortLabel.Value);
             text.Append(latest.DevToolsMs, "0.00");
-            text.Append("  End ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerEndFrameShortLabel.Value);
             text.Append(latest.EndFrameMs, "0.00");
-            text.Append("  Present ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerPresentLabel.Value);
             text.Append(latest.PresentMs, "0.00");
-            text.Append("\nDraw ");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerDrawLabel.Value);
             text.Append(latest.DrawCalls);
-            text.Append("  Cull ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerCullLabel.Value);
             text.Append(latest.CullCount);
-            text.Append("  Alloc ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerAllocatedLabel.Value);
             text.AppendBytes(latest.AllocatedBytes);
-            text.Append("  GC ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerGcLabel.Value);
             text.Append(latest.Gen0Collections);
             text.Append('/');
             text.Append(latest.Gen1Collections);
             text.Append('/');
             text.Append(latest.Gen2Collections);
-            text.Append("\nPrim Shape ");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerPrimitiveShapeLabel.Value);
             text.Append(latest.PrimitiveStats.ShapeCount);
-            text.Append("  Text ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerTextPrimitiveLabel.Value);
             text.Append(latest.PrimitiveStats.DrawTextCount);
-            text.Append("  Img ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerImagePrimitiveLabel.Value);
             text.Append(latest.PrimitiveStats.DrawImageCount);
-            text.Append("  Clip ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerClipLabel.Value);
             text.Append(latest.PrimitiveStats.ClipCount);
             text.Append('\n');
             if (loop != null)
             {
-                text.Append("Loop ");
+                text.Append(MewUIStrings.ProfilerLoopLabel.Value);
                 AppendRenderLoopMode(ref text, loop.Mode);
-                text.Append("  VSync ");
-                text.Append(loop.VSyncEnabled);
-                text.Append("  Target ");
+                text.Append("  ");
+                text.Append(MewUIStrings.ProfilerVSyncLabel.Value);
+                text.Append(loop.VSyncEnabled ? MewUIStrings.ProfilerOn.Value : MewUIStrings.ProfilerOff.Value);
+                text.Append("  ");
+                text.Append(MewUIStrings.ProfilerTargetLabel.Value);
                 text.Append(loop.TargetFps);
             }
             else
             {
-                text.Append("Loop (not running)");
+                text.Append(MewUIStrings.ProfilerLoopNotRunning.Value);
             }
-            text.Append("\nCtrl+Shift+Alt+P: Profiler");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerShortcutHint.Value);
 
             var font = GetFont();
             const double maxWidth = 380;
@@ -249,14 +272,14 @@ partial class Window
         {
             ExcludeFromProfiler = true;
             _target = target;
-            Title = "MewUI Profiler";
+            Title = MewUIStrings.ProfilerTitle.Value;
             WindowSize = WindowSize.Resizable(980, 680);
 
             _surface = new ProfilerSurface(_target);
 
             var liveHint = new TextBlock
             {
-                Text = "Space: Live/Pause",
+                Text = MewUIStrings.ProfilerLivePauseHint.Value,
                 VerticalTextAlignment = TextAlignment.Center,
             };
 
@@ -349,12 +372,17 @@ partial class Window
             var stats = PerformanceProfiler.Instance.GetLatestFrame(_sourceId);
             Span<char> buffer = stackalloc char[128];
             var text = new StackTextFormatter(buffer);
-            text.Append(IsLive ? "Live" : "Paused");
-            text.Append("   CPU ");
+            text.Append(IsLive ? MewUIStrings.ProfilerLive.Value : MewUIStrings.ProfilerPaused.Value);
+            text.Append("   ");
+            text.Append(MewUIStrings.ProfilerCpuLabel.Value);
             text.Append(stats.FrameMs, "0.00");
-            text.Append("ms   GPU --ms   Frame ");
+            text.Append("ms   ");
+            text.Append(MewUIStrings.ProfilerGpuLabel.Value);
+            text.Append("--ms   ");
+            text.Append(MewUIStrings.ProfilerFrameLabel.Value);
             text.Append(stats.FrameIndex);
-            text.Append("   Space: pause/live");
+            text.Append("   ");
+            text.Append(MewUIStrings.ProfilerSpacePauseLive.Value);
             context.DrawText(text.WrittenSpan, rect.Deflate(new Thickness(8, 0)), GetFont(), Color.White, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
         }
 
@@ -365,7 +393,7 @@ partial class Window
             int count = PerformanceProfiler.Instance.CopyFrames(_frames, _sourceId);
             if (count == 0)
             {
-                DrawEmpty(context, rect, "No profiler frames yet");
+                DrawEmpty(context, rect, MewUIStrings.ProfilerNoFrames.Value);
                 return;
             }
 
@@ -553,14 +581,14 @@ partial class Window
 
             if (frame == null || frame.SampleCount == 0)
             {
-                DrawEmpty(context, rect, "No selected frame samples");
+                DrawEmpty(context, rect, MewUIStrings.ProfilerNoSelectedFrameSamples.Value);
                 return;
             }
 
             var font = GetFont();
             var labelRect = new Rect(rect.X, rect.Y, 140, rect.Height);
             context.FillRectangle(labelRect, Color.FromArgb(255, 50, 50, 50));
-            context.DrawText("Main Thread", new Rect(labelRect.X + 8, labelRect.Y, labelRect.Width - 16, 28), font, Color.White, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+            context.DrawText(MewUIStrings.ProfilerMainThread.Value, new Rect(labelRect.X + 8, labelRect.Y, labelRect.Width - 16, 28), font, Color.White, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
 
             var lane = new Rect(labelRect.Right, rect.Y, Math.Max(0, rect.Width - labelRect.Width), rect.Height);
             double frameMs = Math.Max(1, frame.Stats.FrameMs);
@@ -644,28 +672,39 @@ partial class Window
             Span<char> buffer = stackalloc char[384];
             var text = new StackTextFormatter(buffer);
             text.Append(info.Name);
-            text.Append("\nTotal ");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerTotalHeader.Value);
+            text.Append(' ');
             text.Append(totalMs, "0.000");
-            text.Append("ms  Self ");
+            text.Append("ms  ");
+            text.Append(MewUIStrings.ProfilerSelfHeader.Value);
+            text.Append(' ');
             text.Append(selfMs, "0.000");
-            text.Append("ms\nStart ");
+            text.Append("ms\n");
+            text.Append(MewUIStrings.ProfilerStartLabel.Value);
             text.Append(startMs, "0.000");
-            text.Append("ms  Category ");
+            text.Append("ms  ");
+            text.Append(MewUIStrings.ProfilerCategoryLabel.Value);
             AppendSampleCategory(ref text, sample.Category);
-            text.Append("\nDepth ");
+            text.Append('\n');
+            text.Append(MewUIStrings.ProfilerDepthLabel.Value);
             text.Append(sample.Depth);
-            text.Append("  Calls 1");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerCallsHeader.Value);
+            text.Append(" 1");
 
             if (sample.Target is { } element)
             {
-                text.Append("\nElement ");
+                text.Append('\n');
+                text.Append(MewUIStrings.ProfilerElementLabel.Value);
                 text.Append(element.GetType().Name);
                 text.Append("  ");
                 AppendRect(ref text, element.Bounds);
             }
             else
             {
-                text.Append("\nElement (none)");
+                text.Append('\n');
+                text.Append(MewUIStrings.ProfilerElementNone.Value);
             }
 
             var font = GetFont();
@@ -838,31 +877,43 @@ partial class Window
             var prim = frame.Stats.PrimitiveStats;
             Span<char> buffer = stackalloc char[512];
             var text = new StackTextFormatter(buffer);
-            text.Append("Frame ");
+            text.Append(MewUIStrings.ProfilerFrameLabel.Value);
             text.Append(frame.Stats.FrameIndex);
-            text.Append("  Samples ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerSamplesLabel.Value);
             text.Append(frame.SampleCount);
-            text.Append("  Overflow ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerOverflowLabel.Value);
             text.Append(frame.SampleOverflowCount);
-            text.Append("  Dev ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerDevToolsShortLabel.Value);
             text.Append(frame.Stats.DevToolsMs, "0.00");
-            text.Append("ms  Present ");
+            text.Append("ms  ");
+            text.Append(MewUIStrings.ProfilerPresentLabel.Value);
             text.Append(frame.Stats.PresentMs, "0.00");
-            text.Append("ms  Draw ");
+            text.Append("ms  ");
+            text.Append(MewUIStrings.ProfilerDrawLabel.Value);
             text.Append(frame.Stats.DrawCalls);
-            text.Append("  Cull ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerCullLabel.Value);
             text.Append(frame.Stats.CullCount);
-            text.Append("  Shape ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerShapeLabel.Value);
             text.Append(prim.ShapeCount);
-            text.Append("  Text ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerTextPrimitiveLabel.Value);
             text.Append(prim.DrawTextCount);
-            text.Append("  Img ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerImagePrimitiveLabel.Value);
             text.Append(prim.DrawImageCount);
-            text.Append("  Clip ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerClipLabel.Value);
             text.Append(prim.ClipCount);
-            text.Append("  Alloc ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerAllocatedLabel.Value);
             text.AppendBytes(frame.Stats.AllocatedBytes);
-            text.Append("  GC ");
+            text.Append("  ");
+            text.Append(MewUIStrings.ProfilerGcLabel.Value);
             text.Append(frame.Stats.Gen0Collections);
             text.Append('/');
             text.Append(frame.Stats.Gen1Collections);
@@ -871,10 +922,10 @@ partial class Window
             context.DrawText(text.WrittenSpan, new Rect(rect.X + 8, rect.Y + 4, rect.Width - 16, 20), font, Color.White, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
 
             var header = new Rect(rect.X + 8, rect.Y + 28, rect.Width - 16, 18);
-            context.DrawText("Name", new Rect(header.X, header.Y, Math.Max(0, header.Width - 220), header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
-            context.DrawText("Total", new Rect(header.Right - 210, header.Y, 70, header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
-            context.DrawText("Self", new Rect(header.Right - 135, header.Y, 70, header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
-            context.DrawText("Calls", new Rect(header.Right - 58, header.Y, 58, header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
+            context.DrawText(MewUIStrings.ProfilerNameHeader.Value, new Rect(header.X, header.Y, Math.Max(0, header.Width - 220), header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
+            context.DrawText(MewUIStrings.ProfilerTotalHeader.Value, new Rect(header.Right - 210, header.Y, 70, header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
+            context.DrawText(MewUIStrings.ProfilerSelfHeader.Value, new Rect(header.Right - 135, header.Y, 70, header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
+            context.DrawText(MewUIStrings.ProfilerCallsHeader.Value, new Rect(header.Right - 58, header.Y, 58, header.Height), font, Color.FromArgb(255, 210, 210, 210), TextAlignment.Right, TextAlignment.Center, TextWrapping.NoWrap);
 
             DrawAggregateRows(context, rect, frame, font);
         }
@@ -1004,10 +1055,10 @@ partial class Window
         switch (mode)
         {
             case RenderLoopMode.OnRequest:
-                formatter.Append("OnRequest");
+                formatter.Append(MewUIStrings.ProfilerRenderLoopOnRequest.Value);
                 break;
             case RenderLoopMode.Continuous:
-                formatter.Append("Continuous");
+                formatter.Append(MewUIStrings.ProfilerRenderLoopContinuous.Value);
                 break;
             default:
                 formatter.Append((int)mode);
@@ -1033,37 +1084,37 @@ partial class Window
         switch (category)
         {
             case ProfilerSampleCategory.Frame:
-                formatter.Append("Frame");
+                formatter.Append(MewUIStrings.ProfilerCategoryFrame.Value);
                 break;
             case ProfilerSampleCategory.Layout:
-                formatter.Append("Layout");
+                formatter.Append(MewUIStrings.ProfilerCategoryLayout.Value);
                 break;
             case ProfilerSampleCategory.Measure:
-                formatter.Append("Measure");
+                formatter.Append(MewUIStrings.ProfilerCategoryMeasure.Value);
                 break;
             case ProfilerSampleCategory.Arrange:
-                formatter.Append("Arrange");
+                formatter.Append(MewUIStrings.ProfilerCategoryArrange.Value);
                 break;
             case ProfilerSampleCategory.Render:
-                formatter.Append("Render");
+                formatter.Append(MewUIStrings.ProfilerCategoryRender.Value);
                 break;
             case ProfilerSampleCategory.Animation:
-                formatter.Append("Animation");
+                formatter.Append(MewUIStrings.ProfilerCategoryAnimation.Value);
                 break;
             case ProfilerSampleCategory.Backend:
-                formatter.Append("Backend");
+                formatter.Append(MewUIStrings.ProfilerCategoryBackend.Value);
                 break;
             case ProfilerSampleCategory.VSyncWait:
-                formatter.Append("VSyncWait");
+                formatter.Append(MewUIStrings.ProfilerCategoryVSyncWait.Value);
                 break;
             case ProfilerSampleCategory.DevTools:
-                formatter.Append("DevTools");
+                formatter.Append(MewUIStrings.ProfilerCategoryDevTools.Value);
                 break;
             case ProfilerSampleCategory.GC:
-                formatter.Append("GC");
+                formatter.Append(MewUIStrings.ProfilerCategoryGc.Value);
                 break;
             default:
-                formatter.Append("Other");
+                formatter.Append(MewUIStrings.ProfilerCategoryOther.Value);
                 break;
         }
     }

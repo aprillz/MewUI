@@ -924,7 +924,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             _state = state;
             _showAlpha = showAlpha;
 
-            _hexLabel = MakeLabel("Hex");
+            _hexLabel = MakeLabel(MewUIStrings.ColorPickerHexLabel.Value);
             _hexBox = new TextBox
             {
                 ImeMode = ImeMode.Disabled,

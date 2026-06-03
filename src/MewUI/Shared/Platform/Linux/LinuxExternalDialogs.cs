@@ -244,7 +244,7 @@ internal static class LinuxExternalDialogs
         {
             "--file-selection",
             "--title",
-            options.Title ?? "Open"
+            options.Title ?? MewUIStrings.OpenFileDialogTitle.Value
         };
 
         if (!string.IsNullOrWhiteSpace(options.InitialDirectory))
@@ -289,7 +289,7 @@ internal static class LinuxExternalDialogs
             "--file-selection",
             "--save",
             "--title",
-            options.Title ?? "Save"
+            options.Title ?? MewUIStrings.SaveFileDialogTitle.Value
         };
 
         if (options.OverwritePrompt)
@@ -339,7 +339,7 @@ internal static class LinuxExternalDialogs
             "--file-selection",
             "--directory",
             "--title",
-            options.Title ?? "Select folder"
+            options.Title ?? MewUIStrings.SelectFolderDialogTitle.Value
         };
 
         if (!string.IsNullOrWhiteSpace(options.InitialDirectory))
@@ -370,7 +370,7 @@ internal static class LinuxExternalDialogs
         var args = new List<string>();
 
         args.Add("--title");
-        args.Add(options.Title ?? "Open");
+        args.Add(options.Title ?? MewUIStrings.OpenFileDialogTitle.Value);
 
         if (options.Multiselect)
         {
@@ -415,7 +415,7 @@ internal static class LinuxExternalDialogs
     {
         var args = new List<string>();
         args.Add("--title");
-        args.Add(options.Title ?? "Save");
+        args.Add(options.Title ?? MewUIStrings.SaveFileDialogTitle.Value);
         args.Add("--getsavefilename");
 
         var start = GetSuggestedPath(options.InitialDirectory, options.FileName) ?? options.InitialDirectory;
@@ -451,7 +451,7 @@ internal static class LinuxExternalDialogs
     {
         var args = new List<string>();
         args.Add("--title");
-        args.Add(options.Title ?? "Select folder");
+        args.Add(options.Title ?? MewUIStrings.SelectFolderDialogTitle.Value);
         args.Add("--getexistingdirectory");
 
         if (!string.IsNullOrWhiteSpace(options.InitialDirectory))

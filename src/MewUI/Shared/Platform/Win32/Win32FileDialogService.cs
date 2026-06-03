@@ -68,7 +68,7 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
 
     private static unsafe string? SelectFolderCore(FolderDialogOptions options)
     {
-        string title = options.Title ?? "Select folder";
+        string title = options.Title ?? MewUIStrings.SelectFolderDialogTitle.Value;
         string? initialDirectory = options.InitialDirectory;
 
         int hr = Ole32.CoInitializeEx(0, Ole32.COINIT_APARTMENTTHREADED);

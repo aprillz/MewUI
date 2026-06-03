@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Reflection;
+using System.Resources;
 using Aprillz.MewUI;
 
 namespace MewUI.Test.Core;
@@ -21,6 +23,11 @@ public sealed class MewUIStringsTests
         Assert.AreEqual("Copy", MewUIStrings.Copy.Value);
         Assert.AreEqual("Select All", MewUIStrings.SelectAll.Value);
         Assert.AreEqual("_OK", MewUIStrings.OK.Value);
+        Assert.AreEqual("Open", MewUIStrings.OpenFileDialogTitle.Value);
+        Assert.AreEqual("Window", MewUIStrings.WindowTitle.Value);
+        Assert.AreEqual("Hex", MewUIStrings.ColorPickerHexLabel.Value);
+        Assert.AreEqual("Refresh", GetStringValue("DevToolsRefresh"));
+        Assert.AreEqual("MewUI Profiler", GetStringValue("ProfilerTitle"));
     }
 
     [TestMethod]
@@ -31,6 +38,11 @@ public sealed class MewUIStringsTests
         Assert.AreEqual("复制", MewUIStrings.Copy.Value);
         Assert.AreEqual("全选", MewUIStrings.SelectAll.Value);
         Assert.AreEqual("确定", MewUIStrings.OK.Value);
+        Assert.AreEqual("打开", MewUIStrings.OpenFileDialogTitle.Value);
+        Assert.AreEqual("窗口", MewUIStrings.WindowTitle.Value);
+        Assert.AreEqual("十六进制", MewUIStrings.ColorPickerHexLabel.Value);
+        Assert.AreEqual("刷新", GetStringValue("DevToolsRefresh"));
+        Assert.AreEqual("MewUI 分析器", GetStringValue("ProfilerTitle"));
     }
 
     [TestMethod]
@@ -52,22 +64,51 @@ public sealed class MewUIStringsTests
     }
 
     [TestMethod]
-    public void SetCulture_RaisesChangedForUpdatedValues()
+    public void SetCulture_UpdatesLoadedValues()
     {
         MewUIStrings.SetCulture(CultureInfo.InvariantCulture);
-        int changedCount = 0;
-        void OnChanged() => changedCount++;
 
-        MewUIStrings.Cut.Changed += OnChanged;
-        try
-        {
-            MewUIStrings.SetCulture(CultureInfo.GetCultureInfo("zh-Hans"));
-        }
-        finally
-        {
-            MewUIStrings.Cut.Changed -= OnChanged;
-        }
+        Assert.AreEqual("Cut", MewUIStrings.Cut.Value);
 
-        Assert.AreEqual(1, changedCount);
+        MewUIStrings.SetCulture(CultureInfo.GetCultureInfo("zh-Hans"));
+
+        Assert.AreEqual("剪切", MewUIStrings.Cut.Value);
     }
+
+    [TestMethod]
+    public void Resources_ContainEveryRegisteredString()
+    {
+        var resourceManager = new ResourceManager(
+            "Aprillz.MewUI.Resources.MewUIStrings",
+            typeof(MewUIStrings).Assembly);
+        var neutralCulture = CultureInfo.InvariantCulture;
+        var chineseCulture = CultureInfo.GetCultureInfo("zh-Hans");
+
+        var properties = GetRegisteredStringProperties();
+
+        foreach (var property in properties)
+        {
+            Assert.IsNotNull(resourceManager.GetString(property.Name, neutralCulture), property.Name);
+            Assert.IsNotNull(resourceManager.GetString(property.Name, chineseCulture), property.Name);
+        }
+    }
+
+    private static string GetStringValue(string propertyName)
+    {
+        var property = typeof(MewUIStrings).GetProperty(
+            propertyName,
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.IsNotNull(property, propertyName);
+        Assert.AreEqual(typeof(ObservableValue<string>), property.PropertyType, propertyName);
+
+        var value = (ObservableValue<string>?)property.GetValue(null);
+        Assert.IsNotNull(value, propertyName);
+        return value.Value;
+    }
+
+    private static IEnumerable<PropertyInfo> GetRegisteredStringProperties()
+        => typeof(MewUIStrings)
+            .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(p => p.PropertyType == typeof(ObservableValue<string>));
 }

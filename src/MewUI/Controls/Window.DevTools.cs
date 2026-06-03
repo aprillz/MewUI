@@ -253,16 +253,17 @@ public partial class Window
             _cachedFocused = focused;
             _cachedPinned = pinned;
 
-            string hoverText = hovered != null ? $"{hovered.GetType().Name} {FormatRect(GetElementRectInWindow(hovered))}" : "(none)";
-            string focusText = focused != null ? $"{focused.GetType().Name} {FormatRect(GetElementRectInWindow(focused))}" : "(none)";
-            string pinText = pinned != null ? $"{pinned.GetType().Name} {FormatRect(GetElementRectInWindow(pinned))}" : "(none)";
+            string none = MewUIStrings.DevToolsNonePlaceholder.Value;
+            string hoverText = hovered != null ? $"{hovered.GetType().Name} {FormatRect(GetElementRectInWindow(hovered))}" : none;
+            string focusText = focused != null ? $"{focused.GetType().Name} {FormatRect(GetElementRectInWindow(focused))}" : none;
+            string pinText = pinned != null ? $"{pinned.GetType().Name} {FormatRect(GetElementRectInWindow(pinned))}" : none;
 
             var sb = new System.Text.StringBuilder(512);
-            sb.Append("Inspector: Ctrl/Cmd+Shift+I\n");
-            sb.Append("VisualTree: Ctrl/Cmd+Shift+T\n");
-            sb.Append("Hover: ").Append(hoverText).Append('\n');
-            sb.Append("Focus: ").Append(focusText).Append('\n');
-            sb.Append("Selected: ").Append(pinText);
+            sb.Append(MewUIStrings.DevToolsInspectorLine.Value).Append('\n');
+            sb.Append(MewUIStrings.DevToolsVisualTreeLine.Value).Append('\n');
+            sb.Append(MewUIStrings.DevToolsHoverPrefix.Value).Append(hoverText).Append('\n');
+            sb.Append(MewUIStrings.DevToolsFocusPrefix.Value).Append(focusText).Append('\n');
+            sb.Append(MewUIStrings.DevToolsSelectedPrefix.Value).Append(pinText);
 
             _cachedText = sb.ToString();
             return _cachedText;
@@ -312,14 +313,14 @@ public partial class Window
             ExcludeFromProfiler = true;
             _target = target;
 
-            Title = "Live Visual Tree";
+            Title = MewUIStrings.DevToolsLiveVisualTreeTitle.Value;
             WindowSize = WindowSize.Resizable(520, 720);
 
-            _selectedLabel = new TextBlock { Text = "Selected: (none)" };
-            _modeLabel = new TextBlock { Text = "Mode: Follow/Peek" };
+            _selectedLabel = new TextBlock { Text = MewUIStrings.DevToolsSelectedNone.Value };
+            _modeLabel = new TextBlock { Text = MewUIStrings.DevToolsModeFollowPeek.Value };
 
-            _followFocus = new CheckBox { Content = new TextBlock { Text = "Follow Focus", VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
-            _autoExpandFocus = new CheckBox { Content = new TextBlock { Text = "Auto Expand Focus", VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
+            _followFocus = new CheckBox { Content = new TextBlock { Text = MewUIStrings.DevToolsFollowFocus.Value, VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
+            _autoExpandFocus = new CheckBox { Content = new TextBlock { Text = MewUIStrings.DevToolsAutoExpandFocus.Value, VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
             _followFocus.CheckedChanged += _ => UpdateFollowUi();
 
             _tree = new TreeView()
@@ -333,17 +334,17 @@ public partial class Window
                     ((TextBlock)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold : FontWeight.Normal));
                 });
 
-            var refreshBtn = new Button().Content("Refresh");
+            var refreshBtn = new Button().Content(MewUIStrings.DevToolsRefresh.Value);
             refreshBtn.Click += Refresh;
 
-            _goFocusButton = new Button().Content("Go Focus");
+            _goFocusButton = new Button().Content(MewUIStrings.DevToolsGoFocus.Value);
             _goFocusButton.Click += () => PeekElement(_lastNonNullFocused ?? _target.FocusManager.FocusedElement);
 
-            var pickBtn = new Button().Content("Pick (Click)");
+            var pickBtn = new Button().Content(MewUIStrings.DevToolsPickClick.Value);
             _pickButton = pickBtn;
             pickBtn.Click += TogglePick;
 
-            var clearBtn = new Button().Content("Clear Selection");
+            var clearBtn = new Button().Content(MewUIStrings.DevToolsClearSelection.Value);
             clearBtn.Click += () =>
             {
                 if (_target._debugInspectorOverlay != null)
@@ -356,7 +357,7 @@ public partial class Window
                 {
                     _items.SelectedIndex = -1;
                 }
-                _selectedLabel.Text = "Selected: (none)";
+                _selectedLabel.Text = MewUIStrings.DevToolsSelectedNone.Value;
             };
 
 
@@ -418,10 +419,10 @@ public partial class Window
         {
             if (_pickButton != null)
             {
-                _pickButton.Content(_pickArmed ? "Pick: ARMED (click target)" : "Pick (Click)");
+                _pickButton.Content(_pickArmed ? MewUIStrings.DevToolsPickArmed.Value : MewUIStrings.DevToolsPickClick.Value);
             }
 
-            _modeLabel.Text = _pickArmed ? "Mode: Pick (click in target window to select)" : "Mode: Follow/Peek";
+            _modeLabel.Text = _pickArmed ? MewUIStrings.DevToolsModePick.Value : MewUIStrings.DevToolsModeFollowPeek.Value;
         }
 
         public void OnTargetMouseDown(Point positionInWindow, MouseButton button, UIElement? element)
@@ -445,7 +446,7 @@ public partial class Window
                 {
                     _items.SelectedIndex = -1;
                 }
-                _selectedLabel.Text = "Selected: (none)";
+                _selectedLabel.Text = MewUIStrings.DevToolsSelectedNone.Value;
                 return;
             }
 
@@ -541,12 +542,12 @@ public partial class Window
 
             if (_target.Content is Element content)
             {
-                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: [BuildModel(content, parentKey: "root:content")]);
+                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: MewUIStrings.DevToolsContentRoot.Value, element: content, children: [BuildModel(content, parentKey: "root:content")]);
                 roots.Add(contentRoot);
             }
             else
             {
-                roots.Add(new VisualTreeNodeModel(key: "root:content", text: "Content (null)", element: null, children: Array.Empty<VisualTreeNodeModel>()));
+                roots.Add(new VisualTreeNodeModel(key: "root:content", text: MewUIStrings.DevToolsContentNullRoot.Value, element: null, children: Array.Empty<VisualTreeNodeModel>()));
             }
 
             if (_target._popupManager.Count > 0)
@@ -557,7 +558,7 @@ public partial class Window
                     popupModels.Add(BuildModel(_target._popupManager.ElementAt(i), parentKey: "root:popups"));
                 }
 
-                roots.Add(new VisualTreeNodeModel(key: "root:popups", text: "Popups", element: null, children: popupModels));
+                roots.Add(new VisualTreeNodeModel(key: "root:popups", text: MewUIStrings.DevToolsPopupsRoot.Value, element: null, children: popupModels));
             }
 
             if (_target._adorners.Count > 0)
@@ -568,7 +569,7 @@ public partial class Window
                     adornerModels.Add(BuildModel(_target._adorners[i].Element, parentKey: "root:adorners"));
                 }
 
-                roots.Add(new VisualTreeNodeModel(key: "root:adorners", text: "Adorners", element: null, children: adornerModels));
+                roots.Add(new VisualTreeNodeModel(key: "root:adorners", text: MewUIStrings.DevToolsAdornersRoot.Value, element: null, children: adornerModels));
             }
 
             return roots;
@@ -684,8 +685,8 @@ public partial class Window
             }
 
             _selectedLabel.Text = element == null
-                ? "Selected: (none)"
-                : $"Selected: {element.GetType().Name} {FormatRect(GetElementRectInWindow(element))}";
+                ? MewUIStrings.DevToolsSelectedNone.Value
+                : $"{MewUIStrings.DevToolsSelectedPrefix.Value}{element.GetType().Name} {FormatRect(GetElementRectInWindow(element))}";
 
             _tree.ScrollIntoView(index);
             _tree.InvalidateVisual();

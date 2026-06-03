@@ -203,6 +203,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public Window()
     {
+        Title = MewUIStrings.WindowTitle.Value;
         AdornerLayer = new AdornerLayer(this);
         OverlayLayer = new OverlayLayer(this);
         _popupManager = new PopupManager(this);

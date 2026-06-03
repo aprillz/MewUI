@@ -8,7 +8,7 @@ public sealed class OpenFileDialogOptions
     /// <summary>Native owner handle (platform-specific).</summary>
     public nint Owner { get; set; }
     /// <summary>Dialog title.</summary>
-    public string Title { get; set; } = "Open";
+    public string Title { get; set; } = MewUIStrings.OpenFileDialogTitle.Value;
     /// <summary>Initial directory (optional).</summary>
     public string? InitialDirectory { get; set; }
     /// <summary>File filter string (platform-specific).</summary>
@@ -25,7 +25,7 @@ public sealed class SaveFileDialogOptions
     /// <summary>Native owner handle (platform-specific).</summary>
     public nint Owner { get; set; }
     /// <summary>Dialog title.</summary>
-    public string Title { get; set; } = "Save";
+    public string Title { get; set; } = MewUIStrings.SaveFileDialogTitle.Value;
     /// <summary>Initial directory (optional).</summary>
     public string? InitialDirectory { get; set; }
     /// <summary>File filter string (platform-specific).</summary>
@@ -46,7 +46,7 @@ public sealed class FolderDialogOptions
     /// <summary>Native owner handle (platform-specific).</summary>
     public nint Owner { get; set; }
     /// <summary>Dialog title.</summary>
-    public string Title { get; set; } = "Select folder";
+    public string Title { get; set; } = MewUIStrings.SelectFolderDialogTitle.Value;
     /// <summary>Initial directory (optional).</summary>
     public string? InitialDirectory { get; set; }
 }
