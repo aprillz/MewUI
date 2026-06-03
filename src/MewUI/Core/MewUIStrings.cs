@@ -1,19 +1,15 @@
 using System.Globalization;
-using System.Resources;
 
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Centralized UI strings backed by embedded resources.
-/// Call <see cref="SetCulture(CultureInfo?)"/> before building or refreshing UI to use another culture.
+/// Centralized UI strings that can be resolved by a host-provided localizer.
 /// </summary>
 public static class MewUIStrings
 {
-    private static readonly ResourceManager ResourceManager =
-        new("Aprillz.MewUI.Resources.MewUIStrings", typeof(MewUIStrings).Assembly);
-
     private static readonly object SyncRoot = new();
     private static readonly List<LocalizedStringEntry> Entries = [];
+    private static Func<string, string, CultureInfo, string?>? _localizer;
     private static CultureInfo? _culture;
 
     // MessageBox
@@ -246,11 +242,6 @@ public static class MewUIStrings
 
     internal static ObservableValue<string> ProfilerCategoryOther { get; } = Register(nameof(ProfilerCategoryOther), "Other");
 
-    static MewUIStrings()
-    {
-        SetCulture();
-    }
-
     /// <summary>
     /// Gets the explicitly applied culture. A null value means the last <see cref="SetCulture(CultureInfo?)"/>
     /// call used <see cref="CultureInfo.CurrentUICulture"/>.
@@ -267,25 +258,49 @@ public static class MewUIStrings
     }
 
     /// <summary>
-    /// Applies localized values from embedded resources to the centralized string store.
+    /// Configures the host-provided string resolver used by <see cref="SetCulture(CultureInfo?)"/>.
+    /// Pass <c>null</c> to reset all entries to their default values.
+    /// </summary>
+    /// <param name="localizer">
+    /// A resolver that receives the string key, default value, and resolved culture. Returning <c>null</c>
+    /// uses the default value. The host owns any culture fallback and resource loading behavior.
+    /// </param>
+    /// <param name="culture">Culture to apply immediately, or null for the current UI culture.</param>
+    public static void SetLocalizer(Func<string, string, CultureInfo, string?>? localizer, CultureInfo? culture = null)
+    {
+        lock (SyncRoot)
+        {
+            _localizer = localizer;
+        }
+
+        SetCulture(culture);
+    }
+
+    /// <summary>
+    /// Applies values from the current host-provided localizer to the centralized string store.
     /// Pass <c>null</c> to use <see cref="CultureInfo.CurrentUICulture"/>.
-    /// Controls that read these values after this call, or bind to these
-    /// <see cref="ObservableValue{T}"/> entries, will observe the updated values.
-    /// Controls that already copied a string value are not refreshed automatically.
+    /// Controls that read these values after this call, or bind to these <see cref="ObservableValue{T}"/>
+    /// entries, will observe the updated values. Controls that already copied a string value are not
+    /// refreshed automatically.
     /// </summary>
     /// <param name="culture">Culture to apply, or null for the current UI culture.</param>
     public static void SetCulture(CultureInfo? culture = null)
     {
         CultureInfo resolvedCulture = culture ?? CultureInfo.CurrentUICulture;
+        Func<string, string, CultureInfo, string?>? localizer;
+        LocalizedStringEntry[] entries;
 
         lock (SyncRoot)
         {
             _culture = culture;
-            for (int i = 0; i < Entries.Count; i++)
-            {
-                LocalizedStringEntry entry = Entries[i];
-                entry.Value.Value = ResourceManager.GetString(entry.Name, resolvedCulture) ?? entry.DefaultValue;
-            }
+            localizer = _localizer;
+            entries = [.. Entries];
+        }
+
+        for (int i = 0; i < entries.Length; i++)
+        {
+            LocalizedStringEntry entry = entries[i];
+            entry.Value.Value = localizer?.Invoke(entry.Name, entry.DefaultValue, resolvedCulture) ?? entry.DefaultValue;
         }
     }
 
