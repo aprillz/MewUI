@@ -1,6 +1,8 @@
+using System.Resources;
 using System.Runtime.CompilerServices;
 
 [assembly: DisableRuntimeMarshalling]
+[assembly: NeutralResourcesLanguage("en")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.Direct2D")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.Gdi")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.MewVG.Win32")]
