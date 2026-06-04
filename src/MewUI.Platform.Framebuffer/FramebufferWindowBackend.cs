@@ -343,11 +343,6 @@ internal sealed class FramebufferWindowBackend : IWindowBackend
             return;
         }
 
-        if (_factory.Options.UseTslibTouchInput)
-        {
-            Console.WriteLine("[MewUI.Framebuffer] UI-thread touch polling uses evdev; tslib is only supported by the threaded input pump.");
-        }
-
         _polledTouchDevice = EvdevTouchDevice.TryOpen(_factory.Options);
         if (_polledTouchDevice is null)
         {

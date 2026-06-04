@@ -9,7 +9,6 @@ internal sealed class FramebufferInputPump : IDisposable
     private readonly FramebufferOptions _options;
     private readonly Thread _thread;
     private readonly CancellationTokenSource _cts = new();
-    private TslibTouchDevice? _tslibDevice;
     private EvdevTouchDevice? _device;
     private TouchState _state;
     private readonly object _touchDispatchGate = new();
@@ -42,8 +41,6 @@ internal sealed class FramebufferInputPump : IDisposable
         _cts.Cancel();
         _thread.Join(TimeSpan.FromSeconds(1));
         _cts.Dispose();
-        _tslibDevice?.Dispose();
-        _tslibDevice = null;
         _device?.Dispose();
         _device = null;
     }
@@ -52,11 +49,6 @@ internal sealed class FramebufferInputPump : IDisposable
     {
         try
         {
-            if (TryRunTslibLoop())
-            {
-                return;
-            }
-
             _device = EvdevTouchDevice.TryOpen(_options);
             if (_device is null)
             {
@@ -95,62 +87,6 @@ internal sealed class FramebufferInputPump : IDisposable
         {
             Console.WriteLine($"[MewUI.Framebuffer] Touch input stopped: {ex.Message}");
         }
-    }
-
-    private bool TryRunTslibLoop()
-    {
-        if (!_options.UseTslibTouchInput)
-        {
-            if (_options.LogTouchInput)
-            {
-                Console.WriteLine("[MewUI.Framebuffer] tslib disabled; using evdev.");
-            }
-
-            return false;
-        }
-
-        _tslibDevice = TslibTouchDevice.TryOpen(_options);
-        if (_tslibDevice is null)
-        {
-            if (_options.LogTouchInput)
-            {
-                Console.WriteLine("[MewUI.Framebuffer] tslib unavailable; falling back to evdev.");
-            }
-
-            return false;
-        }
-
-        Console.WriteLine($"[MewUI.Framebuffer] Touch input: tslib {_tslibDevice.Path}");
-
-        Span<TslibTouchDevice.TouchSample> samples = stackalloc TslibTouchDevice.TouchSample[16];
-        while (!_cts.IsCancellationRequested)
-        {
-            if (_tslibDevice.Poll(100) <= 0)
-            {
-                continue;
-            }
-
-            int count = _tslibDevice.Read(samples);
-            for (int i = 0; i < count; i++)
-            {
-                ProcessTslibSample(samples[i]);
-            }
-        }
-
-        return true;
-    }
-
-    private void ProcessTslibSample(TslibTouchDevice.TouchSample sample)
-    {
-        var point = MapTslibToWindow(sample.x, sample.y);
-        bool touching = sample.pressure > 0;
-
-        if (_options.LogTouchInput)
-        {
-            Console.WriteLine($"[MewUI.Framebuffer] tslib sample raw=({sample.x},{sample.y}) p={sample.pressure} mapped=({point.X:0.0},{point.Y:0.0}) down={touching}");
-        }
-
-        DispatchTouch(point, touching);
     }
 
     private void ProcessEvent(EvdevTouchDevice.InputEvent ev)
@@ -239,32 +175,6 @@ internal sealed class FramebufferInputPump : IDisposable
         return new Point(
             Math.Clamp(x, 0.0, 1.0) * Math.Max(1, size.Width),
             Math.Clamp(y, 0.0, 1.0) * Math.Max(1, size.Height));
-    }
-
-    private Point MapTslibToWindow(int rawX, int rawY)
-    {
-        double x = rawX;
-        double y = rawY;
-
-        if (_options.SwapTouchAxes)
-        {
-            (x, y) = (y, x);
-        }
-
-        var size = _window.ClientSizeDip;
-        if (_options.InvertTouchX)
-        {
-            x = size.Width - x;
-        }
-
-        if (_options.InvertTouchY)
-        {
-            y = size.Height - y;
-        }
-
-        return new Point(
-            Math.Clamp(x, 0, Math.Max(1, size.Width)),
-            Math.Clamp(y, 0, Math.Max(1, size.Height)));
     }
 
     private void DispatchTouch(Point point, bool touching)

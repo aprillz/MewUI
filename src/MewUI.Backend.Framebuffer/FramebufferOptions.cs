@@ -14,8 +14,6 @@ public sealed record FramebufferOptions
 
     public string? TouchDevicePath { get; init; }
 
-    public bool UseTslibTouchInput { get; init; } = true;
-
     public bool SwapTouchAxes { get; init; }
 
     public bool InvertTouchX { get; init; }
