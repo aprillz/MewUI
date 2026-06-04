@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Platform.Framebuffer</AssemblyName>
+    <PackageId>$(MewUITitle).Platform.Framebuffer</PackageId>
+    <Description>Single-screen Linux framebuffer platform host for $(MewUITitle)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\MewUI.Backend.Framebuffer\MewUI.Backend.Framebuffer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxDispatcher.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxExternalDialogs.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxThemeDetector.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Platform\Linux\LinuxGSettingsMonitor.cs" LinkBase="Platform\Linux" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
+  </ItemGroup>
+
+</Project>
