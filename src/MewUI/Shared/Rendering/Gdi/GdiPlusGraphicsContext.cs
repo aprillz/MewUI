@@ -27,6 +27,8 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     private readonly AaSurfacePool _surfacePool = new();
 
     private nint _graphics;
+    private nint _gpBitmap;
+    private bool _pixelSurfaceDirtied;
     private readonly Stack<GraphicsStateSnapshot> _states = CollectionPool<Stack<GraphicsStateSnapshot>>.Rent();
     private readonly double _dpiScale;
 
@@ -107,6 +109,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         GdiPlusInterop.EnsureInitialized();
     }
 
+    protected override void OnBeginFrame(IRenderTarget target)
+    {
+        if (_pixelSurface != null && _pixelSurface.DibBits != 0)
+        {
+            _pixelSurface.GetPixelSpan().Clear();
+            _pixelSurfaceDirtied = true;
+        }
+    }
+
     protected override void OnEndFrame()
     {
         _surfacePool.Dispose();
@@ -115,6 +126,19 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         {
             GdiPlusInterop.GdipDeleteGraphics(_graphics);
             _graphics = 0;
+        }
+
+        // GpBitmap is the backing image of _graphics - must release after.
+        if (_gpBitmap != 0)
+        {
+            GdiPlusInterop.GdipDisposeImage(_gpBitmap);
+            _gpBitmap = 0;
+        }
+
+        if (_pixelSurfaceDirtied && _pixelSurface != null)
+        {
+            _pixelSurface.IncrementVersion();
+            _pixelSurfaceDirtied = false;
         }
 
         // Double-buffered: blit back buffer to screen
@@ -1924,9 +1948,36 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return true;
         }
 
-        if (GdiPlusInterop.GdipCreateFromHDC(Hdc, out _graphics) != 0 || _graphics == 0)
+        if (_pixelSurface != null && _pixelSurface.DibBits != 0)
         {
-            return false;
+            const int PixelFormat32bppPArgb = 0x000E200B;
+            int strideBytes = _pixelSurface.PixelWidth * 4;
+            if (GdiPlusInterop.GdipCreateBitmapFromScan0(
+                    _pixelSurface.PixelWidth,
+                    _pixelSurface.PixelHeight,
+                    strideBytes,
+                    PixelFormat32bppPArgb,
+                    _pixelSurface.DibBits,
+                    out _gpBitmap) != 0 || _gpBitmap == 0)
+            {
+                return false;
+            }
+
+            if (GdiPlusInterop.GdipGetImageGraphicsContext(_gpBitmap, out _graphics) != 0 || _graphics == 0)
+            {
+                GdiPlusInterop.GdipDisposeImage(_gpBitmap);
+                _gpBitmap = 0;
+                return false;
+            }
+
+            _pixelSurfaceDirtied = true;
+        }
+        else
+        {
+            if (GdiPlusInterop.GdipCreateFromHDC(Hdc, out _graphics) != 0 || _graphics == 0)
+            {
+                return false;
+            }
         }
 
         GdiPlusInterop.GdipSetSmoothingMode(_graphics, GdiPlusInterop.SmoothingMode.AntiAlias);

@@ -21,6 +21,7 @@ internal sealed unsafe class Direct2DDxgiSurfaceImage : IImage, IGpuResourceAffi
     private readonly BitmapAlphaMode _alphaMode;
     private readonly IDisposable? _lease;
     private readonly bool _preferDeviceContextBitmap;
+    private readonly float _bitmapDpi;
     private bool _mismatchNotified;
 
     public int PixelWidth { get; }
@@ -34,11 +35,13 @@ internal sealed unsafe class Direct2DDxgiSurfaceImage : IImage, IGpuResourceAffi
         BitmapAlphaMode alphaMode,
         GpuResourceAffinity? affinity = null,
         IDisposable? lease = null,
-        bool preferDeviceContextBitmap = true)
+        bool preferDeviceContextBitmap = true,
+        double dpiScale = 1.0)
     {
         if (dxgiSurface == 0) throw new ArgumentException("DXGI surface pointer is 0.", nameof(dxgiSurface));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelHeight, 0);
+        if (!(dpiScale > 0)) dpiScale = 1.0;
 
         ComHelpers.AddRef(dxgiSurface);
         _dxgiSurface = dxgiSurface;
@@ -48,6 +51,7 @@ internal sealed unsafe class Direct2DDxgiSurfaceImage : IImage, IGpuResourceAffi
         Affinity = affinity;
         _lease = lease;
         _preferDeviceContextBitmap = preferDeviceContextBitmap;
+        _bitmapDpi = (float)(96.0 * dpiScale);
     }
 
     public bool MarkMismatchNotified()
@@ -79,8 +83,8 @@ internal sealed unsafe class Direct2DDxgiSurfaceImage : IImage, IGpuResourceAffi
         {
             var props = new D2D1_BITMAP_PROPERTIES1(
                 new D2D1_PIXEL_FORMAT(D2D1.DXGI_FORMAT_B8G8R8A8_UNORM, ToD2DAlphaMode(_alphaMode)),
-                dpiX: 96,
-                dpiY: 96,
+                dpiX: _bitmapDpi,
+                dpiY: _bitmapDpi,
                 D2D1_BITMAP_OPTIONS.NONE,
                 colorContext: 0);
 
@@ -94,8 +98,8 @@ internal sealed unsafe class Direct2DDxgiSurfaceImage : IImage, IGpuResourceAffi
         {
             var props = new D2D1_BITMAP_PROPERTIES(
                 new D2D1_PIXEL_FORMAT(D2D1.DXGI_FORMAT_B8G8R8A8_UNORM, ToD2DAlphaMode(_alphaMode)),
-                dpiX: 96,
-                dpiY: 96);
+                dpiX: _bitmapDpi,
+                dpiY: _bitmapDpi);
 
             hr = D2D1VTable.CreateSharedBitmap(
                 (ID2D1RenderTarget*)renderTarget,

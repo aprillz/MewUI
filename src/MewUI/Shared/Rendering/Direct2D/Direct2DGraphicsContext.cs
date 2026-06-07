@@ -128,6 +128,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         {
             D2D1VTable.BeginDraw((ID2D1RenderTarget*)_renderTarget);
             ConfigureRenderTargetForFrame();
+
+            if (target is Direct2DPixelRenderSurface)
+            {
+                D2D1VTable.Clear((ID2D1RenderTarget*)_renderTarget, new D2D1_COLOR_F(0, 0, 0, 0));
+            }
         }
     }
 

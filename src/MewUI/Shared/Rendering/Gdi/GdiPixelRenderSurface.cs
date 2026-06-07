@@ -65,19 +65,8 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
 
     public int Version => Volatile.Read(ref _version);
 
-    /// <summary>
-    /// GDI+ alpha blending (the modern <c>GdiPlusGraphicsContext</c> path) writes
-    /// premultiplied RGBA into the DIB. The legacy GDI ROP-based blitters that
-    /// this target also fronts produce undefined alpha; consumers that care
-    /// about alpha read this back as premultiplied.
-    /// </summary>
     public bool IsPremultiplied => true;
 
-    /// <summary>
-    /// Mirrors the alpha-channel hint from construction. Consumers reading these pixels via
-    /// <see cref="IPixelBufferSource"/> use this to skip alpha scans for opaque RTs (e.g.
-    /// a video frame target).
-    /// </summary>
     public bool HasAlpha { get; }
 
     RenderPixelFormat IRenderSurface.Format => RenderSurfaceDefaults.GetBgraFormat(IsPremultiplied);
@@ -110,10 +99,10 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
             ((IPixelBufferSource)this).LockMode == LockMode.Readback,
             CopyPixels);
 
-    /// <summary>
-    /// Gets the memory device context for rendering.
-    /// </summary>
     internal nint Hdc { get; }
+
+    // GDI+ writes alpha when Graphics is built from GpBitmap-on-Scan0; CreateFromHDC ignores alpha.
+    internal nint DibBits => _dibBits;
 
     internal GdiPresentationMode PresentationMode { get; }
 

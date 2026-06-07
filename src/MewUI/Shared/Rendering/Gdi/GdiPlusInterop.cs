@@ -249,6 +249,9 @@ internal static partial class GdiPlusInterop
         int width, int height, int stride, int format, nint scan0, out nint bitmap);
 
     [LibraryImport("gdiplus.dll")]
+    public static partial int GdipGetImageGraphicsContext(nint image, out nint graphics);
+
+    [LibraryImport("gdiplus.dll")]
     public static partial int GdipDisposeImage(nint image);
 
     [LibraryImport("gdiplus.dll")]
