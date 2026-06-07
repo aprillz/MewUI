@@ -1,4 +1,4 @@
-﻿namespace BitMiracle.LibJpeg.Classic.Internal;
+namespace BitMiracle.LibJpeg.Classic.Internal;
 
 /// <summary>
 /// Bitreading state saved across MCUs
