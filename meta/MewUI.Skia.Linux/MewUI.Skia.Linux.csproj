@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle).Skia.Linux</PackageId>
+    <Description>MewUI Skia metapackage for Linux - includes Skia CPU fallback plus MewVG X11 interop.</Description>
+    <PackageTags>mewui;skia;linux;x11;mewvg;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.MewVG.X11\MewUI.Skia.Interop.MewVG.X11.csproj" />
+  </ItemGroup>
+
+</Project>
