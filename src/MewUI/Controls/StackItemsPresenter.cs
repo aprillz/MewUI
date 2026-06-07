@@ -12,6 +12,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
     private readonly List<FrameworkElement> _containers = new();
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly ConditionalWeakTable<FrameworkElement, TemplateContext> _contexts = new();
+    private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly List<double> _measuredHeights = new();
     private readonly List<(int Index, Rect ItemRect)> _arrangedItems = new();
 
@@ -100,7 +101,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     public Thickness ItemPadding { get; set; }
 
-    public bool RebindExisting { get; set; } = true;
+    public uint ItemBindingGeneration { get; set; }
 
     public double ItemHeightHint { get; set; } = 28;
 
@@ -161,6 +162,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         foreach (var container in _containers)
         {
             container.Parent = null;
+            _itemBindingGenerations.Remove(container);
             _pool.Push(container);
         }
 
@@ -442,6 +444,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
             int last = _containers.Count - 1;
             var container = _containers[last];
             container.Parent = null;
+            _itemBindingGenerations.Remove(container);
             _pool.Push(container);
             _containers.RemoveAt(last);
         }
@@ -458,7 +461,13 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         // Bind all
         for (int i = 0; i < count; i++)
         {
-            BindContainer(_containers[i], i);
+            var container = _containers[i];
+            if (!_itemBindingGenerations.TryGetValue(container, out var boundGeneration) ||
+                boundGeneration != ItemBindingGeneration)
+            {
+                BindContainer(container, i);
+                _itemBindingGenerations[container] = ItemBindingGeneration;
+            }
         }
     }
 

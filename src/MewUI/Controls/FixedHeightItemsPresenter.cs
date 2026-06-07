@@ -6,8 +6,7 @@ using Aprillz.MewUI.Rendering;
 /// Fixed-height virtualizing items presenter intended to be hosted by a scroll owner
 /// (e.g. <see cref="ScrollViewer"/>) via <see cref="IScrollContent"/>.
 /// </summary>
-internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScrollContent
-    , IItemsPresenter
+internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
 {
     private readonly TemplatedItemsHost _itemsHost;
 
@@ -101,7 +100,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
 
     public Thickness ItemPadding { get; set; }
 
-    public bool RebindExisting { get; set; } = true;
+    public uint ItemBindingGeneration { get; set; }
 
     public double ItemHeightHint
     {
@@ -272,7 +271,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IVisualTreeHost, IScr
             ItemHeight = alignedItemHeight,
             YStart = LayoutRounding.RoundToPixel(yStart, dpiScale),
             ItemRadius = ItemRadius,
-            RebindExisting = RebindExisting,
+            ItemBindingGeneration = ItemBindingGeneration,
         };
 
         var userGetContainerRect = GetContainerRect;

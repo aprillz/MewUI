@@ -11,12 +11,12 @@ namespace Aprillz.MewUI.Controls;
 /// items that haven't been measured yet. When measurements refine cached heights, it requests
 /// scroll offset corrections so the current viewport anchor remains stable (prevents jump).
 /// </remarks>
-internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, IScrollContent
-    , IItemsPresenter
+internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 {
     private readonly Dictionary<FrameworkElement, TemplateContext> _contexts = new();
 
     private readonly Dictionary<int, FrameworkElement> _realized = new();
+    private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
     private readonly List<int> _recycleScratch = new();
@@ -141,7 +141,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
     public Thickness ItemPadding { get; set; }
 
-    public bool RebindExisting { get; set; } = false;
+    public uint ItemBindingGeneration { get; set; }
 
     public double ItemRadius
     {
@@ -349,7 +349,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
 
         for (int i = first; i < lastExclusive; i++)
         {
-            var element = GetOrCreate(i, RebindExisting);
+            var element = GetOrCreate(i, ItemBindingGeneration);
 
             // Measure with ItemPadding-deflated width so the child measures within
             // the actual space it will receive after Arrange Deflate.
@@ -904,15 +904,18 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         }
     }
 
-    private FrameworkElement GetOrCreate(int index, bool rebindExisting)
+    private FrameworkElement GetOrCreate(int index, uint itemBindingGeneration)
     {
         if (_realized.TryGetValue(index, out var existing))
         {
             // Also rebind if the item was focus-pinned and missed a prior rebind pass.
             bool pending = _pendingRebind != null && _pendingRebind.Remove(index);
-            if (rebindExisting || pending)
+            bool generationMismatch = !_itemBindingGenerations.TryGetValue(existing, out var boundGeneration)
+                || boundGeneration != itemBindingGeneration;
+            if (generationMismatch || pending)
             {
                 BindItemContainer(existing, index);
+                _itemBindingGenerations[existing] = itemBindingGeneration;
             }
 
             // When a focus-pinned item re-enters the visible range after being off-screen,
@@ -939,6 +942,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         element.Parent = this;
         element.IsVisible = true;
         BindItemContainer(element, index);
+        _itemBindingGenerations[element] = itemBindingGeneration;
         _realized[index] = element;
         TryRestoreDeferredFocus(element, index);
         return element;
@@ -1000,6 +1004,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
         }
 
         UnbindItemContainer(element);
+        _itemBindingGenerations.Remove(element);
         element.Parent = null;
 
         if (!_recycledByIndex.TryAdd(index, element))
@@ -1349,6 +1354,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IVisualTreeHost, I
                         if (_realized.TryGetValue(index, out var element))
                         {
                             BindItemContainer(element, index);
+                            _itemBindingGenerations[element] = ItemBindingGeneration;
                         }
                     }
                 }

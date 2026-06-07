@@ -18,7 +18,7 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
 
     Thickness ItemPadding { get; set; }
 
-    bool RebindExisting { get; set; }
+    uint ItemBindingGeneration { get; set; }
 
     /// <summary>
     /// In fixed mode this is the actual item height; in variable mode this is an estimated height hint.
