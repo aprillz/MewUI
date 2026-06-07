@@ -316,10 +316,9 @@ public sealed partial class MewVGWin32GraphicsFactory
                 }
 
                 // Pixel format must be share-compatible with window contexts. Match the
-                // pfd seed that MewVGWindowResources uses (stencil bits for NanoVG AA/clip;
-                // MSAA off — worker FBOs do their own AA).
+                // pfd seed that MewVGWindowResources uses (stencil bits for NanoVG AA/clip).
                 var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGLDoubleBuffered();
-                pfd.cStencilBits = (byte)Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
+                pfd.cStencilBits = 8;
 
                 int pf = Gdi32.ChoosePixelFormat(hdc, ref pfd);
                 if (pf == 0)

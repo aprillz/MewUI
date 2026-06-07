@@ -534,20 +534,16 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         OpenGLExt.FramebufferTexture2D(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_COLOR_ATTACHMENT0,
             GL.GL_TEXTURE_2D, _texture, 0);
 
-        int stencilBits = Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
-        if (stencilBits > 0)
+        uint renderbuffer = 0;
+        OpenGLExt.GenRenderbuffers(1, &renderbuffer);
+        if (renderbuffer != 0)
         {
-            uint renderbuffer = 0;
-            OpenGLExt.GenRenderbuffers(1, &renderbuffer);
-            if (renderbuffer != 0)
-            {
-                _stencilRenderbuffer = renderbuffer;
-                OpenGLExt.BindRenderbuffer(OpenGLExt.GL_RENDERBUFFER, _stencilRenderbuffer);
-                OpenGLExt.RenderbufferStorage(OpenGLExt.GL_RENDERBUFFER, OpenGLExt.GL_DEPTH24_STENCIL8, PixelWidth, PixelHeight);
-                OpenGLExt.FramebufferRenderbuffer(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_DEPTH_STENCIL_ATTACHMENT,
-                    OpenGLExt.GL_RENDERBUFFER, _stencilRenderbuffer);
-                OpenGLExt.BindRenderbuffer(OpenGLExt.GL_RENDERBUFFER, 0);
-            }
+            _stencilRenderbuffer = renderbuffer;
+            OpenGLExt.BindRenderbuffer(OpenGLExt.GL_RENDERBUFFER, _stencilRenderbuffer);
+            OpenGLExt.RenderbufferStorage(OpenGLExt.GL_RENDERBUFFER, OpenGLExt.GL_DEPTH24_STENCIL8, PixelWidth, PixelHeight);
+            OpenGLExt.FramebufferRenderbuffer(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_DEPTH_STENCIL_ATTACHMENT,
+                OpenGLExt.GL_RENDERBUFFER, _stencilRenderbuffer);
+            OpenGLExt.BindRenderbuffer(OpenGLExt.GL_RENDERBUFFER, 0);
         }
 
         // Check completeness
@@ -706,4 +702,3 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         }
     }
 }
-

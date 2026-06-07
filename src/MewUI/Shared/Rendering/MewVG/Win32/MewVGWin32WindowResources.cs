@@ -6,11 +6,6 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 
 internal sealed class MewVGWin32WindowResources : IDisposable
 {
-    /// <summary>
-    /// MSAA sample count. 1 = no MSAA, 4 or 8 for hardware multisampling.
-    /// </summary>
-    internal const int MsaaSampleCount = 0;
-
     private readonly nint _hwnd;
     private readonly WglOpenGLWindowResources _gl;
     private bool _disposed;
@@ -67,20 +62,15 @@ internal sealed class MewVGWin32WindowResources : IDisposable
         // NanoVG uses stencil for AA and clipping; request a stencil buffer when selecting pixel format.
         var gl = WglOpenGLWindowResources.Create(hwnd, hdc,
             new WglOpenGLWindowResources.WglPixelFormatOptions(
-                PreferredMsaaSamples: MsaaSampleCount,
                 DepthBits: 0,
-                StencilBits: Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits)),
+                StencilBits: 8),
             shareContext);
         gl.MakeCurrent(hdc);
         try
         {
             MewVGGLBootstrap.EnsureInitialized();
 
-            // With MSAA enabled, disable geometry-based AA (fringe triangles are not needed).
-            var flags = MsaaSampleCount > 1
-                ? NVGcreateFlags.None
-                : NVGcreateFlags.Antialias;
-            var vg = new NanoVGGL(flags);
+            var vg = new NanoVGGL(NVGcreateFlags.Antialias);
             return new MewVGWin32WindowResources(hwnd, gl, vg, shareContext);
         }
         finally

@@ -10,7 +10,7 @@ using NativeX11 = Aprillz.MewUI.Native.X11;
 namespace Aprillz.MewUI.Platform.Linux.X11;
 
 /// <summary>
-/// Experimental Linux (X11) platform host.
+/// Linux (X11) platform host.
 /// </summary>
 public sealed class X11PlatformHost : IPlatformHost
 {

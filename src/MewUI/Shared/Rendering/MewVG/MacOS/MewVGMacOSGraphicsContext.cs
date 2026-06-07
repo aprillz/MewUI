@@ -34,7 +34,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private static readonly nint SelSetClearStencil = ObjCRuntime.RegisterSelector("setClearStencil:");
     private static readonly nint SelDepthAttachment = ObjCRuntime.RegisterSelector("depthAttachment");
     private static readonly nint SelSetClearDepth = ObjCRuntime.RegisterSelector("setClearDepth:");
-    private static readonly nint SelSetResolveTexture = Metal.Sel.SetResolveTexture;
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
     private static readonly nint SelWaitUntilCompleted = ObjCRuntime.RegisterSelector("waitUntilCompleted");
 
@@ -124,7 +123,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         // strokes/fills can write coverage and composite within one encoder.
         nint coverageTexture = _vg.EnsureCoverageTexture(_viewportWidthPx, _viewportHeightPx);
 
-        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, frame.MsaaColorTexture, coverageTexture);
+        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, coverageTexture);
         if (passDesc == 0)
         {
             return;
@@ -139,11 +138,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         RetainIfNotNull(encoder);
         _encoder = encoder;
 
-        // Pass the render-pass attachment textures so the Metal renderer can rebuild
-        // an equivalent encoder after a coverage-AA detour (transparent stroke/fill
-        // composite needs to switch to a coverage texture and back).
-        _vg.SetRenderEncoder(_encoder, _commandBuffer,
-            frame.ColorTexture, frame.StencilTexture, frame.MsaaColorTexture);
+        _vg.SetRenderEncoder(_encoder, _commandBuffer);
         _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
         _vg.ResetTransform();
         _vg.ResetScissor();
@@ -211,7 +206,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
         nint Device,
         nint ColorTexture,
         nint StencilTexture,
-        nint MsaaColorTexture,
         nint CommandQueue,
         nint Drawable);
 
@@ -272,7 +266,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 _resources.Device,
                 colorTexture,
                 _resources.EnsureStencilTexture(viewportWidthPx, viewportHeightPx),
-                _resources.EnsureMsaaColorTexture(viewportWidthPx, viewportHeightPx),
                 _resources.CommandQueue,
                 drawable);
             return true;
@@ -325,7 +318,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 _offscreen.Device,
                 _target.ColorTexture,
                 _target.StencilTexture,
-                0,
                 _offscreen.CommandQueue,
                 0);
             return frame.ColorTexture != 0;
@@ -358,7 +350,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint msaaColorTexture, nint coverageTexture)
+    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint coverageTexture)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -371,30 +363,14 @@ internal sealed partial class MewVGMacOSGraphicsContext
             return 0;
         }
 
-        bool msaa = msaaColorTexture != 0;
-
         // colorAttachments[0]
         nint colorAttachments = ObjCRuntime.SendMessage(passDesc, SelColorAttachments);
         nint color0 = colorAttachments != 0 ? ObjCRuntime.SendMessage(colorAttachments, SelObjectAtIndexedSubscript, (UInt64)0) : 0;
         if (color0 != 0)
         {
-            if (msaa)
-            {
-                // Render into the MSAA texture, resolve to the drawable.
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, msaaColorTexture);
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.MultisampleResolve);
-                if (SelSetResolveTexture != 0)
-                {
-                    ObjCRuntime.SendMessageNoReturn(color0, SelSetResolveTexture, drawableTexture);
-                }
-            }
-            else
-            {
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, drawableTexture);
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
-                ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.Store);
-            }
+            ObjCRuntime.SendMessageNoReturn(color0, SelSetTexture, drawableTexture);
+            ObjCRuntime.SendMessageNoReturn(color0, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+            ObjCRuntime.SendMessageNoReturn(color0, SelSetStoreAction, (UInt64)MTLStoreAction.Store);
 
             ObjCRuntime.SendMessageNoReturn(color0, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));
         }

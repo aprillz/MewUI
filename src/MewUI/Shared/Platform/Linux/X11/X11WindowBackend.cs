@@ -492,10 +492,6 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         // Choose a GLX visual for OpenGL rendering and create the window with that visual.
         // When transparency is requested, prefer a 32-bit ARGB visual via FBConfig.
-        // Try MSAA first to reduce jaggies on filled primitives (RoundRect, Ellipse, etc).
-        // GLX_SAMPLE_BUFFERS / GLX_SAMPLES are from GLX_ARB_multisample.
-        const int GLX_SAMPLE_BUFFERS = 100000;
-        const int GLX_SAMPLES = 100001;
         const int GLX_X_RENDERABLE = 0x8012;
         const int GLX_DRAWABLE_TYPE = 0x8010;
         const int GLX_RENDER_TYPE = 0x8011;
@@ -530,8 +526,6 @@ internal sealed class X11WindowBackend : IWindowBackend
                 24,
                 GLX_STENCIL_SIZE,
                 8,
-                GLX_SAMPLE_BUFFERS, 1,
-                GLX_SAMPLES, 4,
                 0
             };
 
@@ -539,7 +533,6 @@ internal sealed class X11WindowBackend : IWindowBackend
             if (fbConfigs != 0 && fbCount > 0)
             {
                 XVisualInfo? best = null;
-                int bestSamples = -1;
                 int bestStencil = -1;
 
                 for (int i = 0; i < fbCount; i++)
@@ -581,20 +574,10 @@ internal sealed class X11WindowBackend : IWindowBackend
                         continue;
                     }
 
-                    int sampleBuffers = 0;
-                    int samples = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_SAMPLE_BUFFERS, out sampleBuffers);
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_SAMPLES, out samples);
-                    int score = sampleBuffers > 0 ? samples : 0;
-
-                    // Prefer configs with a stencil buffer (required for rounded clip via stencil),
-                    // then prefer higher MSAA.
-                    if (best == null ||
-                        stencilSize > bestStencil ||
-                        (stencilSize == bestStencil && score > bestSamples))
+                    // Prefer configs with a stencil buffer for rounded clip and path fills.
+                    if (best == null || stencilSize > bestStencil)
                     {
                         best = vi;
-                        bestSamples = score;
                         bestStencil = stencilSize;
                     }
                 }
@@ -612,7 +595,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         if (!usedFbConfig)
         {
-            int[] attribsMsaa =
+            int[] attribs =
             {
                 4,  // GLX_RGBA
                 5,  // GLX_DOUBLEBUFFER
@@ -628,15 +611,13 @@ internal sealed class X11WindowBackend : IWindowBackend
                 24,
                 GLX_STENCIL_SIZE,
                 8,
-                GLX_SAMPLE_BUFFERS, 1,
-                GLX_SAMPLES, 4,
                 0
             };
 
             nint visualInfoPtr;
             unsafe
             {
-                fixed (int* p = attribsMsaa)
+                fixed (int* p = attribs)
                 {
                     visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
                 }
@@ -644,7 +625,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             if (visualInfoPtr == 0)
             {
-                int[] attribs =
+                // Last resort: allow a visual without stencil (rounded clip may not work).
+                int[] attribsNoStencil =
                 {
                     4,  // GLX_RGBA
                     5,  // GLX_DOUBLEBUFFER
@@ -658,14 +640,12 @@ internal sealed class X11WindowBackend : IWindowBackend
                     8,
                     GLX_DEPTH_SIZE,
                     24,
-                    GLX_STENCIL_SIZE,
-                    8,
                     0
                 };
 
                 unsafe
                 {
-                    fixed (int* p = attribs)
+                    fixed (int* p = attribsNoStencil)
                     {
                         visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
                     }
@@ -673,36 +653,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
                 if (visualInfoPtr == 0)
                 {
-                    // Last resort: allow a visual without stencil (rounded clip may not work).
-                    int[] attribsNoStencil =
-                    {
-                        4,  // GLX_RGBA
-                        5,  // GLX_DOUBLEBUFFER
-                        8,  // GLX_RED_SIZE
-                        8,
-                        9,  // GLX_GREEN_SIZE
-                        8,
-                        10, // GLX_BLUE_SIZE
-                        8,
-                        GLX_ALPHA_SIZE,
-                        8,
-                        GLX_DEPTH_SIZE,
-                        24,
-                        0
-                    };
-
-                    unsafe
-                    {
-                        fixed (int* p = attribsNoStencil)
-                        {
-                            visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
-                        }
-                    }
-
-                    if (visualInfoPtr == 0)
-                    {
-                        throw new InvalidOperationException("glXChooseVisual failed.");
-                    }
+                    throw new InvalidOperationException("glXChooseVisual failed.");
                 }
             }
 

@@ -48,15 +48,10 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
 
         int screen = X11.XDefaultScreen(display);
 
-        // Try MSAA first (matches X11WindowBackend behavior), then fall back to a minimal RGBA + double-buffer visual.
-        // GLX_SAMPLE_BUFFERS / GLX_SAMPLES are from GLX_ARB_multisample.
-        const int GLX_SAMPLE_BUFFERS = 100000;
-        const int GLX_SAMPLES = 100001;
         const int GLX_DEPTH_SIZE = 12;
         const int GLX_STENCIL_SIZE = 13;
-        int stencilBits = Math.Max(0, GraphicsRuntimeOptions.PreferredMewVGStencilBits);
 
-        int[] attribsMsaa =
+        int[] attribs =
         {
             4,  // GLX_RGBA
             5,  // GLX_DOUBLEBUFFER
@@ -69,16 +64,14 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
             11, // GLX_ALPHA_SIZE
             8,
             GLX_DEPTH_SIZE, 24,
-            GLX_STENCIL_SIZE, stencilBits,
-            GLX_SAMPLE_BUFFERS, 1,
-            GLX_SAMPLES, 4,
+            GLX_STENCIL_SIZE, 8,
             0   // None
         };
 
         nint visualInfoPtr;
         unsafe
         {
-            fixed (int* p = attribsMsaa)
+            fixed (int* p = attribs)
             {
                 visualInfoPtr = LibGL.glXChooseVisual(display, screen, (nint)p);
             }
@@ -86,35 +79,7 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
 
         if (visualInfoPtr == 0)
         {
-            int[] attribs =
-            {
-                4,  // GLX_RGBA
-                5,  // GLX_DOUBLEBUFFER
-                8,  // GLX_RED_SIZE
-                8,
-                9,  // GLX_GREEN_SIZE
-                8,
-                10, // GLX_BLUE_SIZE
-                8,
-                11, // GLX_ALPHA_SIZE
-                8,
-                GLX_DEPTH_SIZE, 24,
-                GLX_STENCIL_SIZE, stencilBits,
-                0   // None
-            };
-
-            unsafe
-            {
-                fixed (int* p = attribs)
-                {
-                    visualInfoPtr = LibGL.glXChooseVisual(display, screen, (nint)p);
-                }
-            }
-
-            if (visualInfoPtr == 0)
-            {
-                throw new InvalidOperationException("glXChooseVisual failed.");
-            }
+            throw new InvalidOperationException("glXChooseVisual failed.");
         }
 
         var visualInfo = Marshal.PtrToStructure<XVisualInfo>(visualInfoPtr);
