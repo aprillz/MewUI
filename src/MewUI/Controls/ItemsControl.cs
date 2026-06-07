@@ -52,8 +52,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
             _presenter.ItemsSource = _itemsSource;
 
             _hoverIndex = -1;
-            InvalidateMeasure();
-            InvalidateVisual();
+            InvalidateItemBindings();
         }
     }
 
@@ -92,8 +91,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
             ArgumentNullException.ThrowIfNull(value);
             _itemTemplate = value;
             _presenter.ItemTemplate = value;
-            InvalidateMeasure();
-            InvalidateVisual();
+            InvalidateItemBindings();
         }
     }
 
@@ -118,6 +116,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
         if (ItemPadding == oldTheme.Metrics.ItemPadding)
         {
             ItemPadding = newTheme.Metrics.ItemPadding;
+            InvalidateItemBindings();
         }
     }
 
@@ -235,6 +234,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
+        _presenter.ItemBindingGeneration = ItemBindingGeneration;
         _scrollViewer.Arrange(innerBounds);
 
         if (TryConsumeScrollIntoViewRequest(out var request) &&
@@ -334,8 +334,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
 
     private void OnItemsChanged(ItemsChange _)
     {
-        InvalidateMeasure();
-        InvalidateVisual();
+        InvalidateItemBindings();
     }
 
     private void OnScrollViewerChanged()
@@ -468,6 +467,7 @@ public sealed class ItemsControl : VirtualizedItemsBase
         presenter.ItemTemplate = _itemTemplate;
         presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
+        presenter.ItemBindingGeneration = ItemBindingGeneration;
         presenter.ItemHeightHint = ResolveItemHeight();
         presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
     }

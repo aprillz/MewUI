@@ -13,7 +13,7 @@ internal sealed class TemplatedItemsHost
         public double ItemHeight;
         public double YStart;
         public double ItemRadius;
-        public bool RebindExisting;
+        internal uint ItemBindingGeneration;
     }
 
     internal struct ItemsRangeOptions
@@ -94,7 +94,7 @@ internal sealed class TemplatedItemsHost
             Layout.YStart,
             Options.BeforeItemRender,
             Options.GetContainerRect,
-            Layout.RebindExisting);
+            Layout.ItemBindingGeneration);
     }
 
     public void RenderArranged(IGraphicsContext context)
@@ -118,7 +118,7 @@ internal sealed class TemplatedItemsHost
             Layout.ItemHeight,
             Layout.YStart,
             Options.GetContainerRect,
-            Layout.RebindExisting);
+            Layout.ItemBindingGeneration);
     }
 
     private FrameworkElement CreateItemContainer()

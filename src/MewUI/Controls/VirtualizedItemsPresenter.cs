@@ -16,6 +16,7 @@ internal sealed class VirtualizedItemsPresenter
     private Action<FrameworkElement>? _unbind;
 
     private readonly Dictionary<int, FrameworkElement> _realized = new();
+    private readonly Dictionary<FrameworkElement, uint> _itemBindingGenerations = new();
     private readonly Stack<FrameworkElement> _pool = new();
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
     private HashSet<int>? _pendingRebind;
@@ -160,7 +161,7 @@ internal sealed class VirtualizedItemsPresenter
         double yStart,
         Action<IGraphicsContext, int, Rect>? beforeItemRender = null,
         Func<int, Rect, Rect>? getContainerRect = null,
-        bool rebindExisting = true)
+        uint itemBindingGeneration = 0)
     {
         if (lastExclusive <= first)
         {
@@ -175,7 +176,7 @@ internal sealed class VirtualizedItemsPresenter
             itemHeight,
             yStart,
             getContainerRect,
-            rebindExisting);
+            itemBindingGeneration);
 
         double dpiScale = _owner.GetDpiScaleCached();
         int baseYPx = LayoutRounding.RoundToPixelInt(yStart, dpiScale);
@@ -242,7 +243,7 @@ internal sealed class VirtualizedItemsPresenter
         double itemHeight,
         double yStart,
         Func<int, Rect, Rect>? getContainerRect = null,
-        bool rebindExisting = true)
+        uint itemBindingGeneration = 0)
     {
         if (lastExclusive <= first)
         {
@@ -282,7 +283,7 @@ internal sealed class VirtualizedItemsPresenter
             var containerRect = getContainerRect != null ? getContainerRect(i, itemRect) : itemRect;
             // Keep container geometry stable at fractional DPI (e.g. 150%) and avoid edge-based +1px drift.
             containerRect = LayoutRounding.RoundRectToPixels(containerRect, dpiScale);
-            var element = GetOrCreate(i, rebindExisting);
+            var element = GetOrCreate(i, itemBindingGeneration);
             element.Measure(new Size(Math.Max(0, containerRect.Width), Math.Max(0, containerRect.Height)));
             element.Arrange(containerRect);
         }
@@ -290,15 +291,18 @@ internal sealed class VirtualizedItemsPresenter
         FlushRecycledByIndexToPool();
     }
 
-    internal FrameworkElement GetOrCreate(int index, bool rebindExisting)
+    internal FrameworkElement GetOrCreate(int index, uint itemBindingGeneration)
     {
         if (_realized.TryGetValue(index, out var existing))
         {
             // Also rebind if the item was focus-pinned and missed a prior rebind pass.
             bool pending = _pendingRebind != null && _pendingRebind.Remove(index);
-            if (rebindExisting || pending)
+            bool generationMismatch = !_itemBindingGenerations.TryGetValue(existing, out var boundGeneration)
+                || boundGeneration != itemBindingGeneration;
+            if (generationMismatch || pending)
             {
                 _bind(existing, index);
+                _itemBindingGenerations[existing] = itemBindingGeneration;
             }
 
             // When a focus-pinned item re-enters the visible range after being off-screen,
@@ -326,6 +330,7 @@ internal sealed class VirtualizedItemsPresenter
         element.IsVisible = true;
 
         _bind(element, index);
+        _itemBindingGenerations[element] = itemBindingGeneration;
         _realized[index] = element;
 
         TryRestoreDeferredFocus(element, index);
@@ -364,6 +369,7 @@ internal sealed class VirtualizedItemsPresenter
         }
 
         _unbind?.Invoke(element);
+        _itemBindingGenerations.Remove(element);
         element.Parent = null;
         if (!_recycledByIndex.TryAdd(index, element))
         {

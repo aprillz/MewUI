@@ -33,7 +33,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly FixedHeightItemsPresenter _presenter;
     private readonly ScrollViewer _scrollViewer;
-    private bool _rebindVisibleOnNextRender = true;
+    private uint _itemBindingGeneration;
     private ITreeItemsView _itemsSource = TreeItemsView.Empty;
     private TreeViewNode? _selectedNode;
     private object? _selectedItem;
@@ -67,10 +67,8 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
 
             _presenter.ItemsSource = _itemsSource;
             _presenter.RecycleAll();
-            _rebindVisibleOnNextRender = true;
+            InvalidateItemBindings();
 
-            InvalidateMeasure();
-            InvalidateVisual();
         }
     }
 
@@ -151,7 +149,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     {
         if (_presenter != null)
             _presenter.ItemPadding = ItemPadding;
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
     }
 
     /// <summary>
@@ -164,9 +162,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         {
             ArgumentNullException.ThrowIfNull(value);
             _presenter.ItemTemplate = value;
-            _rebindVisibleOnNextRender = true;
-            InvalidateMeasure();
-            InvalidateVisual();
+            InvalidateItemBindings();
         }
     }
 
@@ -214,7 +210,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             GetContainerRect = OnGetContainerRect,
             ItemPadding = ItemPadding,
             ItemHeight = ResolveItemHeight(),
-            RebindExisting = true,
+            ItemBindingGeneration = _itemBindingGeneration,
             UseHorizontalExtentForLayout = true,
         };
 
@@ -299,10 +295,8 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     {
         _observedExtentWidth = 0;
         _presenter.RecycleAll();
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         _hoverVisibleIndex = -1;
-        InvalidateMeasure();
-        InvalidateVisual();
         ReevaluateMouseOverAfterScroll();
     }
 
@@ -317,11 +311,17 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
 
         _selectedNode = node;
         _selectedItem = item;
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
 
         SelectedNodeChanged?.Invoke(node);
         SelectionChanged?.Invoke(item);
         ScrollIntoView(index);
+    }
+
+    private void InvalidateItemBindings()
+    {
+        unchecked { _itemBindingGeneration++; }
+        InvalidateMeasure();
         InvalidateVisual();
     }
 
@@ -394,7 +394,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     protected override void OnEnabledChanged()
     {
         base.OnEnabledChanged();
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         InvalidateVisual();
     }
 
@@ -407,7 +407,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             ItemPadding = newTheme.Metrics.ItemPadding;
         }
 
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
@@ -571,8 +571,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     {
         base.ArrangeContent(bounds);
 
-        _presenter.RebindExisting = _rebindVisibleOnNextRender;
-        _rebindVisibleOnNextRender = false;
+        _presenter.ItemBindingGeneration = _itemBindingGeneration;
 
         var snapped = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
@@ -637,7 +636,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             }
 
             // Use the element's already-measured DesiredSize and Bounds.
-            // No re-measurement — the item was measured during the prior layout pass.
+            // No re-measurement - the item was measured during the prior layout pass.
             double w = Math.Max(0, element.DesiredSize.Width);
             if (w <= 0 && element.Bounds.IsEmpty)
             {
