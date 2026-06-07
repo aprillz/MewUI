@@ -73,6 +73,7 @@ partial class GalleryView : UserControl
                 Section("Layout", LayoutPage()),
                 Section("Typography", TypographyPage()),
                 Section("Media", MediaPage()),
+                Section("Custom Rendering", CustomRenderingPage()),
                 Section("Transform", TransformPage()),
                 Section("Shapes", ShapesPage()),
                 Section("Icons", IconsPage()),
