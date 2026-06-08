@@ -45,19 +45,6 @@ Application.DispatcherUnhandledException += e =>
 
 Application
     .Create()
-    //.UseMetrics(ThemeMetrics.Default with
-    //{
-    //ControlCornerRadius = 0,
-    //ControlBorderThickness = 2,
-    //ControlBorderThickness = 0.5
-    //})
-    //.UseSeed(ThemeSeed.DefaultLight with
-    //{
-    //    WindowBackground = ThemeSeed.DefaultLight.WindowBackground.Lerp(ThemeSeed.DefaultLight.WindowText, 0.015)
-    //}, ThemeSeed.DefaultDark with
-    //{
-    //    WindowBackground = ThemeSeed.DefaultDark.WindowBackground.Lerp(ThemeSeed.DefaultDark.WindowText, 0.01)
-    //})
     .UseAccent(Accent.Purple)
     .BuildMainWindow(() =>
     new Window()
@@ -166,8 +153,8 @@ FrameworkElement TopBar() => new Border()
 #endif
                                     .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
                                     .FontSize(18)
-                                    .SemiBold(),
-
+                                    .SemiBold(), 
+                                
                                 new TextBlock()
                                     .Ref(out backendText)
                             )
@@ -200,6 +187,12 @@ FrameworkElement TopBar() => new Border()
                             .Horizontal()
                             .Spacing(8)
                             .Children(
+                                new CheckBox()
+                                    .Content("Cached")
+                                    .IsChecked(true)
+                                    .OnCheckedChanged(v => gallery.SetCardsCached(v == true))
+                                    .CenterVertical(),
+
                                 new CheckBox()
                                     .Content("Max FPS")
                                     .BindIsChecked(maxFpsEnabled)
