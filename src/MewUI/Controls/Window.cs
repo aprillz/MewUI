@@ -1044,6 +1044,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _backend!.EnsureTheme(Theme.IsDark);
         _lifetimeState = WindowLifetimeState.Shown;
 
+        // Establish the OS-level owner relationship so the window stays above its owner in z-order and shares
+        // its lifetime (it was previously set only at the framework level, used for positioning, which left the
+        // native window independent and able to fall behind its owner). Modal ShowDialog does this separately.
+        if (owner != null && Handle != 0)
+        {
+            _backend!.SetOwner(owner.Handle);
+        }
+
         // Raise Loaded once, and only after the application's dispatcher is ready.
         // Do not rely on PlatformHost.Run ordering: a first render can happen during Show on some platforms.
         if (!_loadedRaised && Application.IsRunning)
