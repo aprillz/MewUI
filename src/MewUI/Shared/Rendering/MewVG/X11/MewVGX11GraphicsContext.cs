@@ -482,7 +482,15 @@ internal sealed partial class MewVGX11GraphicsContext
             return extentPx;
         }
 
-        int remaining = axis == 0 ? Math.Max(1, viewport - boundsPx.Left) : Math.Max(1, viewport - boundsPx.Top);
+        // boundsPx.Left/Top is in this context's LOCAL space; viewport is in world (FBO) space.
+        // When rendering into an offscreen cache the context is translated by -elementOrigin, so the
+        // local position must be shifted by the transform to find the true start within the viewport.
+        // Without this, an element at a non-zero layout X clamps the raster extent as if the text
+        // started that far into a viewport that is only element-sized → text truncated (only works at
+        // X=0 where translate==local). The window path has an identity transform, so it is unchanged.
+        int translatePx = RenderingUtil.RoundToPixelInt(axis == 0 ? _transform.M31 : _transform.M32, DpiScale);
+        int worldStart = (axis == 0 ? boundsPx.Left : boundsPx.Top) + translatePx;
+        int remaining = Math.Max(1, viewport - worldStart);
         return Math.Clamp(remaining, 1, hardMax);
     }
 
