@@ -835,6 +835,17 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 return true;
             }
 
+            if (existing.Mode == mode
+                && existing.AlphaMode == requiredAlpha
+                && existing.PresentOptions == presentOptions
+                && existing.SwapChain != 0
+                && existing.RenderTarget != 0
+                && TryResizeSwapChainWindowTarget(existing, width, height, dpi, monitor))
+            {
+                target = (existing.RenderTarget, existing.Generation);
+                return true;
+            }
+
             existing.DisposeNativeHandles();
             existing.Generation++;
             generation = existing.Generation;
@@ -1053,6 +1064,85 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             if (dxgiFactory != 0)
             {
                 ComHelpers.Release(dxgiFactory);
+            }
+        }
+    }
+
+    private bool TryResizeSwapChainWindowTarget(CachedWindowTarget entry, uint width, uint height, float dpi, nint monitor)
+    {
+        if (!entry.IsSwapChainBacked || entry.SwapChain == 0 || entry.RenderTarget == 0)
+        {
+            return false;
+        }
+
+        nint dxgiSurface = 0;
+        nint targetBitmap = 0;
+        try
+        {
+            D2D1VTable.SetTarget((ID2D1DeviceContext*)entry.RenderTarget, 0);
+
+            if (entry.TargetBitmap != 0)
+            {
+                ComHelpers.Release(entry.TargetBitmap);
+                entry.TargetBitmap = 0;
+            }
+
+            // Keep the DirectComposition target/visual/content graph intact; only swap-chain
+            // buffers and the D2D target bitmap change. Replacing the visual during live
+            // resize can expose a blank transparent frame before the first present.
+            int hr = Dxgi.ResizeBuffers(
+                entry.SwapChain,
+                bufferCount: 2,
+                width,
+                height,
+                D2D1.DXGI_FORMAT_B8G8R8A8_UNORM,
+                flags: 0);
+            if (hr < 0)
+            {
+                return false;
+            }
+
+            hr = Dxgi.GetBuffer(entry.SwapChain, 0, D2D1.IID_IDXGISurface, out dxgiSurface);
+            if (hr < 0 || dxgiSurface == 0)
+            {
+                return false;
+            }
+
+            var bitmapProps = new D2D1_BITMAP_PROPERTIES1(
+                new D2D1_PIXEL_FORMAT(D2D1.DXGI_FORMAT_B8G8R8A8_UNORM, entry.AlphaMode),
+                dpi,
+                dpi,
+                D2D1_BITMAP_OPTIONS.TARGET | D2D1_BITMAP_OPTIONS.CANNOT_DRAW,
+                colorContext: 0);
+
+            hr = D2D1VTable.CreateBitmapFromDxgiSurface((ID2D1DeviceContext*)entry.RenderTarget, dxgiSurface, bitmapProps, out targetBitmap);
+            if (hr < 0 || targetBitmap == 0)
+            {
+                return false;
+            }
+
+            D2D1VTable.SetTarget((ID2D1DeviceContext*)entry.RenderTarget, targetBitmap);
+            D2D1VTable.SetDpi((ID2D1RenderTarget*)entry.RenderTarget, dpi, dpi);
+
+            entry.TargetBitmap = targetBitmap;
+            targetBitmap = 0;
+            entry.Width = width;
+            entry.Height = height;
+            entry.DpiX = dpi;
+            entry.Monitor = monitor;
+            entry.Generation++;
+            return true;
+        }
+        finally
+        {
+            if (targetBitmap != 0)
+            {
+                ComHelpers.Release(targetBitmap);
+            }
+
+            if (dxgiSurface != 0)
+            {
+                ComHelpers.Release(dxgiSurface);
             }
         }
     }
