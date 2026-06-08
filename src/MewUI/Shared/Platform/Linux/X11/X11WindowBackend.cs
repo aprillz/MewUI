@@ -130,6 +130,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         // Some IM modules don't start preedit until the IC is focused.
         // Relying solely on FocusIn can miss cases where focus is already on the window when mapped.
+        SetWindowActive(true);
         _inputMethod?.OnFocusIn();
     }
 
@@ -1404,15 +1405,13 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case FocusIn:
-                Window.SetIsActive(true);
-                Window.RaiseActivated();
+                SetWindowActive(true);
                 _inputMethod?.OnFocusIn();
                 UpdateImeCursorRect();
                 break;
 
             case FocusOut:
-                Window.SetIsActive(false);
-                Window.RaiseDeactivated();
+                SetWindowActive(false);
                 _inputMethod?.OnFocusOut();
                 break;
 
@@ -1822,6 +1821,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         var screenPos = ClientToScreen(pos);
+        if (isDown && !Window.IsActive)
+        {
+            SetWindowActive(true);
+        }
+
         WindowInputRouter.MouseButton(
             Window,
             pos,
@@ -2453,6 +2457,24 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void EnsureTheme(bool isDark)
     {
+    }
+
+    private void SetWindowActive(bool active)
+    {
+        if (Window.IsActive == active)
+        {
+            return;
+        }
+
+        Window.SetIsActive(active);
+        if (active)
+        {
+            Window.RaiseActivated();
+        }
+        else
+        {
+            Window.RaiseDeactivated();
+        }
     }
 
     public void Activate()
