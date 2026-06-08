@@ -135,6 +135,14 @@ internal static unsafe partial class Dxgi
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int ResizeBuffers(nint swapChain, uint bufferCount, uint width, uint height, uint newFormat, uint flags)
+    {
+        var vtbl = *(nint**)swapChain;
+        var fn = (delegate* unmanaged[Stdcall]<nint, uint, uint, uint, uint, uint, int>)vtbl[13];
+        return fn(swapChain, bufferCount, width, height, newFormat, flags);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetBuffer(nint swapChain, uint index, in Guid riid, out nint surface)
     {
         nint localSurface = 0;
