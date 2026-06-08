@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\build\$(MewUITitle).Windows.targets" Pack="true" PackagePath="buildTransitive\" LinkBase="buildTransitive"/>
+    <None Include="buildTransitive\$(MewUITitle).Windows.targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
 
 </Project>

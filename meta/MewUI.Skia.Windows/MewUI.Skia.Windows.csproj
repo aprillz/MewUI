@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle).Skia.Windows</PackageId>
+    <Description>MewUI Skia metapackage for Windows - includes Skia CPU fallback plus Direct2D, GDI, and MewVG Win32 interop packages.</Description>
+    <PackageTags>mewui;skia;windows;win32;direct2d;gdi;mewvg;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.Direct2D\MewUI.Skia.Interop.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.Gdi\MewUI.Skia.Interop.Gdi.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.MewVG.Win32\MewUI.Skia.Interop.MewVG.Win32.csproj" />
+  </ItemGroup>
+
+</Project>
