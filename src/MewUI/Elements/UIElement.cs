@@ -368,7 +368,7 @@ public abstract partial class UIElement : Element
             return;
         }
 
-        if (!SkipViewportCull && this is not Window &&
+        if (!SkipViewportCull && _cacheSnapshotDepth == 0 && this is not Window &&
             (FindVisualRoot() is not Window root || !new Rect(root.ClientSize).IntersectsWith(Bounds)))
         {
             return;
@@ -378,8 +378,16 @@ public abstract partial class UIElement : Element
         {
             ResolveVisualState(snap: false);
             ClearVisualStateDirty();
-            OnRender(context);
-            RenderSubtree(context);
+
+            if (_hasBitmapCache)
+            {
+                RenderCached(context);
+            }
+            else
+            {
+                OnRender(context);
+                RenderSubtree(context);
+            }
         }
     }
 
@@ -729,6 +737,9 @@ public abstract partial class UIElement : Element
         {
             // Stop property animations when detached from the visual tree.
             StopAllPropertyAnimations();
+
+            // Release any cached GPU surface/image; re-attaching rebuilds it on next render.
+            DisposeCacheEntry();
         }
     }
 

@@ -753,6 +753,35 @@ public static class ElementExtensions
         return element;
     }
 
+    /// <summary>
+    /// Sets the render-cache policy. Pass a <see cref="BitmapCache"/> to cache the element's
+    /// rendered output to an offscreen bitmap; pass <see langword="null"/> to render live.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="cacheMode">The cache policy, or null for live rendering.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T CacheMode<T>(this T element, CacheMode? cacheMode) where T : UIElement
+    {
+        element.CacheMode = cacheMode;
+        return element;
+    }
+
+    /// <summary>
+    /// Enables (or disables) bitmap caching of the element's rendered output. The cached bitmap is
+    /// blitted each frame until the element's content, size, or DPI changes; the visual tree stays
+    /// live. Equivalent to assigning a <see cref="BitmapCache"/> to <see cref="UIElement.CacheMode"/>.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="cached">Whether to enable bitmap caching.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T Cached<T>(this T element, bool cached = true) where T : UIElement
+    {
+        element.CacheMode = cached ? new BitmapCache() : null;
+        return element;
+    }
+
     #endregion
 
     #region Canvas Attached Properties
