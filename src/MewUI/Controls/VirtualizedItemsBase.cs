@@ -2,7 +2,7 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Base class for virtualized, scrollable items controls.
-/// Provides shared infrastructure: ScrollViewer hosting, rebind flag, deferred scroll-into-view request,
+/// Provides shared infrastructure: ScrollViewer hosting, item binding generation, deferred scroll-into-view request,
 /// pending tab-focus helper, and default visual properties common to ListBox, GridView, and TreeView.
 /// </summary>
 public abstract class VirtualizedItemsBase : Control, ISubtreeInvalidationHost
@@ -14,7 +14,7 @@ public abstract class VirtualizedItemsBase : Control, ISubtreeInvalidationHost
     /// </summary>
     private protected PendingTabFocusHelper _tabFocusHelper = null!;
 
-    private protected bool _rebindVisibleOnNextRender = true;
+    private protected uint _itemBindingGeneration;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
 
     protected VirtualizedItemsBase()
@@ -34,7 +34,19 @@ public abstract class VirtualizedItemsBase : Control, ISubtreeInvalidationHost
     protected override void OnEnabledChanged()
     {
         base.OnEnabledChanged();
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings(invalidateMeasure: false);
+        InvalidateVisual();
+    }
+
+    private protected uint ItemBindingGeneration => _itemBindingGeneration;
+
+    private protected void InvalidateItemBindings(bool invalidateMeasure = true)
+    {
+        unchecked { _itemBindingGeneration++; }
+        if (invalidateMeasure)
+        {
+            InvalidateMeasure();
+        }
         InvalidateVisual();
     }
 

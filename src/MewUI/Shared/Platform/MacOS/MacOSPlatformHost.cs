@@ -148,6 +148,19 @@ public sealed class MacOSPlatformHost : IPlatformHost
         }
     }
 
+    // Global cursor position in the screen-px convention shared with ClientToScreen/ScreenToClient (Cocoa
+    // points × backing scale, bottom-left origin). Enables cross-window drag routing (WindowDragDropRouter).
+    public Point GetCursorScreenPosition()
+    {
+        var location = MacOSInterop.GetMouseScreenLocation();
+        double scale = MacOSInterop.GetMainScreenScaleFactor();
+        if (scale <= 0)
+        {
+            scale = 1.0;
+        }
+        return new Point(location.x * scale, location.y * scale);
+    }
+
     private void RenderAllWindows()
     {
         if (_windows.Count == 0)

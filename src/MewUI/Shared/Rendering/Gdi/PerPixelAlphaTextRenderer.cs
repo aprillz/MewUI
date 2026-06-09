@@ -7,8 +7,6 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 
 internal static class PerPixelAlphaTextRenderer
 {
-    private const byte OpaqueAlphaThreshold = 250;
-
     public static unsafe void DrawText(
         nint hdc,
         GdiPixelRenderSurface? pixelSurface,
@@ -25,14 +23,29 @@ internal static class PerPixelAlphaTextRenderer
         TextAlignment hAlign = TextAlignment.Left,
         TextAlignment vAlign = TextAlignment.Top)
     {
-        int width = targetRect.Width;
-        int height = targetRect.Height;
+        var surfaceRect = targetRect;
+        if (pixelSurface != null)
+        {
+            surfaceRect.left = Math.Clamp(surfaceRect.left, 0, pixelSurface.PixelWidth);
+            surfaceRect.top = Math.Clamp(surfaceRect.top, 0, pixelSurface.PixelHeight);
+            surfaceRect.right = Math.Clamp(surfaceRect.right, 0, pixelSurface.PixelWidth);
+            surfaceRect.bottom = Math.Clamp(surfaceRect.bottom, 0, pixelSurface.PixelHeight);
+        }
+
+        int width = surfaceRect.Width;
+        int height = surfaceRect.Height;
         if (width <= 0 || height <= 0)
         {
             return;
         }
 
-        var drawRect = targetRect;
+        var drawRect = pixelSurface != null
+            ? RECT.FromLTRB(
+                targetRect.left - surfaceRect.left,
+                targetRect.top - surfaceRect.top,
+                targetRect.right - surfaceRect.left,
+                targetRect.bottom - surfaceRect.top)
+            : targetRect;
         if (yOffsetPx != 0)
         {
             drawRect.top += yOffsetPx;
@@ -41,12 +54,6 @@ internal static class PerPixelAlphaTextRenderer
         if (textHeightPx > 0)
         {
             drawRect.bottom = drawRect.top + textHeightPx;
-        }
-
-        if (pixelSurface != null && IsOpaqueUnderText(pixelSurface, drawRect))
-        {
-            DrawTextDirect(hdc, text, drawRect, font.GetHandle(GdiFontRenderMode.Coverage), color, format, wrapping, trimming, hAlign, vAlign);
-            return;
         }
 
         if (width > GdiRenderingConstants.MaxAaSurfaceSize || height > GdiRenderingConstants.MaxAaSurfaceSize)
@@ -72,7 +79,13 @@ internal static class PerPixelAlphaTextRenderer
 
             try
             {
-                var localRect = RECT.FromLTRB(0, 0, width, height);
+                var localRect = pixelSurface != null
+                    ? RECT.FromLTRB(
+                        targetRect.left - surfaceRect.left,
+                        targetRect.top - surfaceRect.top,
+                        targetRect.right - surfaceRect.left,
+                        targetRect.bottom - surfaceRect.top)
+                    : RECT.FromLTRB(0, 0, width, height);
                 if (yOffsetPx != 0)
                 {
                     localRect.top += yOffsetPx;
@@ -143,7 +156,14 @@ internal static class PerPixelAlphaTextRenderer
                 }
             }
 
-            surface.AlphaBlendTo(hdc, targetRect.left, targetRect.top, width, height, 0, 0);
+            if (pixelSurface != null)
+            {
+                CompositeToPixelSurface(surface, pixelSurface, surfaceRect.left, surfaceRect.top, width, height);
+            }
+            else
+            {
+                surface.AlphaBlendTo(hdc, surfaceRect.left, surfaceRect.top, width, height, 0, 0);
+            }
         }
         finally
         {
@@ -151,50 +171,60 @@ internal static class PerPixelAlphaTextRenderer
         }
     }
 
-    private static bool IsOpaqueUnderText(GdiPixelRenderSurface pixelSurface, RECT r)
+    private static unsafe void CompositeToPixelSurface(AaSurface source, GdiPixelRenderSurface target, int destX, int destY, int width, int height)
     {
-        var span = pixelSurface.GetPixelSpan();
-        int pw = pixelSurface.PixelWidth;
-        int ph = pixelSurface.PixelHeight;
-        if (pw <= 0 || ph <= 0 || span.Length < pw * ph * 4)
+        var targetSpan = target.GetPixelSpan();
+        if (targetSpan.IsEmpty)
         {
-            return false;
+            return;
         }
 
-        int left = Math.Clamp(r.left, 0, pw - 1);
-        int right = Math.Clamp(r.right - 1, 0, pw - 1);
-        int top = Math.Clamp(r.top, 0, ph - 1);
-        int bottom = Math.Clamp(r.bottom - 1, 0, ph - 1);
-        if (right < left || bottom < top)
+        int srcX = 0;
+        int srcY = 0;
+        if (destX < 0)
         {
-            return false;
+            srcX = -destX;
+            width += destX;
+            destX = 0;
+        }
+        if (destY < 0)
+        {
+            srcY = -destY;
+            height += destY;
+            destY = 0;
         }
 
-        int midX = left + (right - left) / 2;
-        int midY = top + (bottom - top) / 2;
-        Span<int> xs = stackalloc int[] { left, midX, right };
-        Span<int> ys = stackalloc int[] { top, midY, bottom };
-
-        foreach (int y in ys)
+        width = Math.Min(width, Math.Min(source.Width - srcX, target.PixelWidth - destX));
+        height = Math.Min(height, Math.Min(source.Height - srcY, target.PixelHeight - destY));
+        if (width <= 0 || height <= 0)
         {
-            int row = y * pw * 4;
-            foreach (int x in xs)
+            return;
+        }
+
+        fixed (byte* targetBase = targetSpan)
+        {
+            int targetStride = target.PixelWidth * 4;
+            for (int y = 0; y < height; y++)
             {
-                int idx = row + x * 4;
-                byte b = span[idx + 0];
-                byte g = span[idx + 1];
-                byte red = span[idx + 2];
-                byte a = span[idx + 3];
+                byte* src = source.GetRowPointer(srcY + y) + srcX * 4;
+                byte* dst = targetBase + (destY + y) * targetStride + destX * 4;
 
-                bool opaque = a >= OpaqueAlphaThreshold || (a == 0 && (red | g | b) != 0);
-                if (!opaque)
+                for (int x = 0; x < width; x++, src += 4, dst += 4)
                 {
-                    return false;
+                    int sa = src[3];
+                    if (sa == 0)
+                    {
+                        continue;
+                    }
+
+                    int invA = 255 - sa;
+                    dst[0] = (byte)Math.Min(255, src[0] + (dst[0] * invA + 127) / 255);
+                    dst[1] = (byte)Math.Min(255, src[1] + (dst[1] * invA + 127) / 255);
+                    dst[2] = (byte)Math.Min(255, src[2] + (dst[2] * invA + 127) / 255);
+                    dst[3] = (byte)Math.Min(255, sa + (dst[3] * invA + 127) / 255);
                 }
             }
         }
-
-        return true;
     }
 
     private static unsafe void DrawTextDirect(

@@ -1,12 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <IsPackable>true</IsPackable>
-    <AssemblyName>Aprillz.MewUI.Platform.MacOS</AssemblyName>
-    <RootNamespace>Aprillz.MewUI</RootNamespace>
+    <AssemblyName>$(MewUITitle).Platform.MacOS</AssemblyName>
+    <PackageId>$(MewUITitle).Platform.MacOS</PackageId>
+    <Description>macOS platform host for $(MewUITitle)</Description>
   </PropertyGroup>
 
   <ItemGroup>

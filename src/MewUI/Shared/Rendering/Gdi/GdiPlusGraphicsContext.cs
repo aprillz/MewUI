@@ -128,7 +128,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             _graphics = 0;
         }
 
-        // GpBitmap is the backing image of _graphics — must release after.
+        // GpBitmap is the backing image of _graphics - must release after.
         if (_gpBitmap != 0)
         {
             GdiPlusInterop.GdipDisposeImage(_gpBitmap);
@@ -1428,7 +1428,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     private bool TryGetTextWorldTransform(out XFORM xform)
     {
         var m = _stateManager.Transform;
-        if (m == Matrix3x2.Identity)
+        if (m.M11 == 1f && m.M12 == 0f && m.M21 == 0f && m.M22 == 1f)
         {
             xform = default;
             return false;

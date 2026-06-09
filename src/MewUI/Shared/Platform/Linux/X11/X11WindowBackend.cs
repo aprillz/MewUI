@@ -130,6 +130,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         // Some IM modules don't start preedit until the IC is focused.
         // Relying solely on FocusIn can miss cases where focus is already on the window when mapped.
+        SetWindowActive(true);
         _inputMethod?.OnFocusIn();
     }
 
@@ -492,10 +493,6 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         // Choose a GLX visual for OpenGL rendering and create the window with that visual.
         // When transparency is requested, prefer a 32-bit ARGB visual via FBConfig.
-        // Try MSAA first to reduce jaggies on filled primitives (RoundRect, Ellipse, etc).
-        // GLX_SAMPLE_BUFFERS / GLX_SAMPLES are from GLX_ARB_multisample.
-        const int GLX_SAMPLE_BUFFERS = 100000;
-        const int GLX_SAMPLES = 100001;
         const int GLX_X_RENDERABLE = 0x8012;
         const int GLX_DRAWABLE_TYPE = 0x8010;
         const int GLX_RENDER_TYPE = 0x8011;
@@ -530,8 +527,6 @@ internal sealed class X11WindowBackend : IWindowBackend
                 24,
                 GLX_STENCIL_SIZE,
                 8,
-                GLX_SAMPLE_BUFFERS, 1,
-                GLX_SAMPLES, 4,
                 0
             };
 
@@ -539,7 +534,6 @@ internal sealed class X11WindowBackend : IWindowBackend
             if (fbConfigs != 0 && fbCount > 0)
             {
                 XVisualInfo? best = null;
-                int bestSamples = -1;
                 int bestStencil = -1;
 
                 for (int i = 0; i < fbCount; i++)
@@ -581,20 +575,10 @@ internal sealed class X11WindowBackend : IWindowBackend
                         continue;
                     }
 
-                    int sampleBuffers = 0;
-                    int samples = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_SAMPLE_BUFFERS, out sampleBuffers);
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_SAMPLES, out samples);
-                    int score = sampleBuffers > 0 ? samples : 0;
-
-                    // Prefer configs with a stencil buffer (required for rounded clip via stencil),
-                    // then prefer higher MSAA.
-                    if (best == null ||
-                        stencilSize > bestStencil ||
-                        (stencilSize == bestStencil && score > bestSamples))
+                    // Prefer configs with a stencil buffer for rounded clip and path fills.
+                    if (best == null || stencilSize > bestStencil)
                     {
                         best = vi;
-                        bestSamples = score;
                         bestStencil = stencilSize;
                     }
                 }
@@ -612,7 +596,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         if (!usedFbConfig)
         {
-            int[] attribsMsaa =
+            int[] attribs =
             {
                 4,  // GLX_RGBA
                 5,  // GLX_DOUBLEBUFFER
@@ -628,15 +612,13 @@ internal sealed class X11WindowBackend : IWindowBackend
                 24,
                 GLX_STENCIL_SIZE,
                 8,
-                GLX_SAMPLE_BUFFERS, 1,
-                GLX_SAMPLES, 4,
                 0
             };
 
             nint visualInfoPtr;
             unsafe
             {
-                fixed (int* p = attribsMsaa)
+                fixed (int* p = attribs)
                 {
                     visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
                 }
@@ -644,7 +626,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             if (visualInfoPtr == 0)
             {
-                int[] attribs =
+                // Last resort: allow a visual without stencil (rounded clip may not work).
+                int[] attribsNoStencil =
                 {
                     4,  // GLX_RGBA
                     5,  // GLX_DOUBLEBUFFER
@@ -658,14 +641,12 @@ internal sealed class X11WindowBackend : IWindowBackend
                     8,
                     GLX_DEPTH_SIZE,
                     24,
-                    GLX_STENCIL_SIZE,
-                    8,
                     0
                 };
 
                 unsafe
                 {
-                    fixed (int* p = attribs)
+                    fixed (int* p = attribsNoStencil)
                     {
                         visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
                     }
@@ -673,36 +654,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
                 if (visualInfoPtr == 0)
                 {
-                    // Last resort: allow a visual without stencil (rounded clip may not work).
-                    int[] attribsNoStencil =
-                    {
-                        4,  // GLX_RGBA
-                        5,  // GLX_DOUBLEBUFFER
-                        8,  // GLX_RED_SIZE
-                        8,
-                        9,  // GLX_GREEN_SIZE
-                        8,
-                        10, // GLX_BLUE_SIZE
-                        8,
-                        GLX_ALPHA_SIZE,
-                        8,
-                        GLX_DEPTH_SIZE,
-                        24,
-                        0
-                    };
-
-                    unsafe
-                    {
-                        fixed (int* p = attribsNoStencil)
-                        {
-                            visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
-                        }
-                    }
-
-                    if (visualInfoPtr == 0)
-                    {
-                        throw new InvalidOperationException("glXChooseVisual failed.");
-                    }
+                    throw new InvalidOperationException("glXChooseVisual failed.");
                 }
             }
 
@@ -816,6 +768,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         ApplyOpacity();
         ApplyResizeMode();
+        ApplyToolWindowHints();
 
         _inputMethod = X11InputMethodFactory.Create(Display, Handle);
         if (_inputMethod is XimInputMethod xim && xim.TryGetFilterEvents(out var imeFilterEvents))
@@ -1453,15 +1406,13 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case FocusIn:
-                Window.SetIsActive(true);
-                Window.RaiseActivated();
+                SetWindowActive(true);
                 _inputMethod?.OnFocusIn();
                 UpdateImeCursorRect();
                 break;
 
             case FocusOut:
-                Window.SetIsActive(false);
-                Window.RaiseDeactivated();
+                SetWindowActive(false);
                 _inputMethod?.OnFocusOut();
                 break;
 
@@ -1871,6 +1822,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         var screenPos = ClientToScreen(pos);
+        if (isDown && !Window.IsActive)
+        {
+            SetWindowActive(true);
+        }
+
         WindowInputRouter.MouseButton(
             Window,
             pos,
@@ -2504,6 +2460,24 @@ internal sealed class X11WindowBackend : IWindowBackend
     {
     }
 
+    private void SetWindowActive(bool active)
+    {
+        if (Window.IsActive == active)
+        {
+            return;
+        }
+
+        Window.SetIsActive(active);
+        if (active)
+        {
+            Window.RaiseActivated();
+        }
+        else
+        {
+            Window.RaiseDeactivated();
+        }
+    }
+
     public void Activate()
     {
         if (Display == 0 || Handle == 0)
@@ -2542,21 +2516,67 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             NativeX11.XSetTransientForHint(Display, Handle, ownerHandle);
 
-            // Best-effort EWMH modal hint.
-            var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
-            var netWmStateModal = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MODAL", false);
-            if (netWmState != 0 && netWmStateModal != 0)
+            // EWMH modal hint — ONLY for true modal dialogs (ShowDialog). A plain owned window (Show(owner))
+            // must not be modal, otherwise the WM/compositor (e.g. XWayland) dims the owner and treats it as a
+            // dialog. Setting transient-for alone is enough to keep an owned window above its owner. Best-effort.
+            if (Window.IsDialogWindow)
             {
-                unsafe
+                var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
+                var netWmStateModal = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MODAL", false);
+                if (netWmState != 0 && netWmStateModal != 0)
                 {
-                    nint data = netWmStateModal;
-                    NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                    unsafe
+                    {
+                        nint data = netWmStateModal;
+                        NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                    }
                 }
             }
         }
         catch
         {
             // Best-effort.
+        }
+    }
+
+    // Marks the window as a floating tool/utility window: _NET_WM_WINDOW_TYPE_UTILITY (thin WM decoration) +
+    // skip-taskbar. Set as properties before the window is mapped (a _NET_WM_STATE ClientMessage only applies
+    // once the WM manages the window). Owner/transient is set separately via SetOwner. Best-effort — WMs vary
+    // in utility-type support, degrading to a normal (skip-taskbar) window. Mutually exclusive with transparency.
+    private void ApplyToolWindowHints()
+    {
+        if (Display == 0 || Handle == 0 || !Window.IsToolWindow || _allowsTransparency)
+        {
+            return;
+        }
+
+        try
+        {
+            var windowType = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE", false);
+            var windowTypeUtility = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_UTILITY", false);
+            if (windowType != 0 && windowTypeUtility != 0)
+            {
+                unsafe
+                {
+                    nint data = windowTypeUtility;
+                    NativeX11.XChangeProperty(Display, Handle, windowType, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                }
+            }
+
+            var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
+            var skipTaskbar = NativeX11.XInternAtom(Display, "_NET_WM_STATE_SKIP_TASKBAR", false);
+            if (netWmState != 0 && skipTaskbar != 0)
+            {
+                unsafe
+                {
+                    nint data = skipTaskbar;
+                    NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort — WMs vary in utility-type support.
         }
     }
 

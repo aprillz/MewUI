@@ -8,6 +8,13 @@ using Aprillz.MewUI.Gallery;
 [assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
 #endif
 
+
+if (OperatingSystem.IsWindows())
+{
+    Thread.CurrentThread.SetApartmentState(ApartmentState.Unknown);
+    Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
+}
+
 var stopwatch = Stopwatch.StartNew();
 Startup();
 IconSource icon;
@@ -19,6 +26,8 @@ using (var rs = typeof(Program).Assembly.GetManifestResourceStream("Aprillz.MewU
 Window window = null!;
 TextBlock backendText = null!;
 TextBlock themeText = null!;
+GalleryView gallery = null!;
+
 ObservableValue<ThemeVariant> themeMode = new(ThemeVariant.System);
 
 var fpsText = new ObservableValue<string>("FPS: -");
@@ -49,9 +58,10 @@ Application
                     .Margin(8)
                     .Children(
                         TopBar()
-                        .DockTop(),
+                            .DockTop(),
 
-                    new GalleryView(window)
+                        new GalleryView(window)
+                            .Ref(out gallery)
                 )
         )
             .OnLoaded(() =>
@@ -149,6 +159,12 @@ FrameworkElement TopBar() => new Border()
                             .Horizontal()
                             .Spacing(8)
                             .Children(
+                                new CheckBox()
+                                    .Content("Cached")
+                                    .IsChecked(true)
+                                    .OnCheckedChanged(v => gallery.SetCardsCached(v == true))
+                                    .CenterVertical(),
+
                                 new CheckBox()
                                     .Content("Max FPS")
                                     .BindIsChecked(maxFpsEnabled)

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\MewUI.Meta.props" />
+
+  <PropertyGroup>
+    <PackageId>$(MewUITitle).Skia.MacOS</PackageId>
+    <Description>MewUI Skia metapackage for macOS - includes Skia CPU fallback plus MewVG Metal interop.</Description>
+    <PackageTags>mewui;skia;macos;metal;mewvg;gui;nativeaot;metapackage</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.MewVG.MacOS\MewUI.Skia.Interop.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -827,7 +827,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             widthDip: initialClientSize.Width,
             heightDip: initialClientSize.Height,
             allowsTransparency: _allowsTransparency,
-            isDialog: _window.IsDialogWindow);
+            isDialog: _window.IsDialogWindow,
+            isToolWindow: _window.IsToolWindow);
 
         if (_nsWindow != 0)
         {

@@ -6,6 +6,9 @@ partial class GalleryView : UserControl
 {
     private Window window;
 
+    // All card borders, so the global "Cached" toggle can flip BitmapCache on every card at once.
+    private readonly List<Border> _cardBorders = new();
+
     protected override Element? OnBuild() =>
         new ScrollViewer()
             .VerticalScroll(ScrollMode.Auto)
@@ -16,17 +19,19 @@ partial class GalleryView : UserControl
     {
         this.window = window;
         InitializeDragDropSample();
-
         Build();
     }
 
     public static string CombineBaseDirectory(params string[] path)
         => Path.Combine([AppContext.BaseDirectory, .. path]);
 
-    private FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320) => new Border()
+    private FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320)
+    {
+        var border = new Border()
             .MinWidth(minWidth)
             .Padding(14)
             .CornerRadius(10)
+            .Cached()
             .Child(
                 new StackPanel()
                     .Vertical()
@@ -38,6 +43,18 @@ partial class GalleryView : UserControl
                             .Bold(),
                         content
                     ));
+        _cardBorders.Add(border);
+        return border;
+    }
+
+    /// <summary>Globally turns BitmapCache on/off for every card (debug toggle).</summary>
+    public void SetCardsCached(bool cached)
+    {
+        foreach (var border in _cardBorders)
+        {
+            border.CacheMode = cached ? new BitmapCache() : null;
+        }
+    }
 
     private FrameworkElement CardGrid(params FrameworkElement[] cards) => new WrapPanel()
         .Orientation(Orientation.Horizontal)

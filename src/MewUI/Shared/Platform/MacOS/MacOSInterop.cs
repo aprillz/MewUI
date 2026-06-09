@@ -657,6 +657,14 @@ internal static unsafe class MacOSInterop
         return scale <= 0 ? 1.0 : scale;
     }
 
+    // The cursor's current screen location in Cocoa points (bottom-left origin), via +[NSEvent mouseLocation].
+    // Callers scale by the backing factor to reach the px convention used by ClientToScreen/ScreenToClient.
+    public static NSPoint GetMouseScreenLocation()
+    {
+        EnsureApplicationInitialized();
+        return ObjC.MsgSend_point(ClsNSEvent, ObjC.Sel("mouseLocation"));
+    }
+
     public static NSRect GetMainScreenFrame()
     {
         EnsureApplicationInitialized();

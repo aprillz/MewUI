@@ -8,6 +8,32 @@ partial class GalleryView
     private ObservableValue<int> intBinding = new ObservableValue<int>(1);
     private ObservableValue<double> doubleBinding = new ObservableValue<double>(42.5);
 
+    // Multi-line text box demo that shows the live selection (start / length) bound to the read-only
+    // SelectionStart/SelectionLength MewProperties — used to inspect selection geometry.
+    private FrameworkElement MultiLineTextBoxDemo()
+    {
+        var box = new MultiLineTextBox()
+            .Height(120)
+            .Width(290)
+            .Wrap(false)
+            .Text("The quick brown fox jumps over the lazy dog.\n\n- Wrap supported\n- Selection supported\n- Scroll supported");
+
+        return new StackPanel()
+            .Vertical()
+            .Spacing(6)
+            .Children(
+                box,
+                new TextBlock()
+                    .FontSize(11)
+                    .Bind(TextBlock.TextProperty, box, TextBase.SelectionStartProperty,
+                        (int start) => $"selection start: {start}"),
+                new TextBlock()
+                    .FontSize(11)
+                    .Bind(TextBlock.TextProperty, box, TextBase.SelectionLengthProperty,
+                        (int length) => $"selection length: {length}")
+            );
+    }
+
     private FrameworkElement InputsPage() =>
             CardGrid(
                 Card(
@@ -108,11 +134,7 @@ partial class GalleryView
 
                 Card(
                     "MultiLineTextBox",
-                    new MultiLineTextBox()
-                        .Height(120)
-                        .Width(290)
-                        .Wrap(false)
-                        .Text("The quick brown fox jumps over the lazy dog.\n\n- Wrap supported\n- Selection supported\n- Scroll supported")
+                    MultiLineTextBoxDemo()
                 ),
 
                 Card(
@@ -157,6 +179,8 @@ partial class GalleryView
 
                 WindowDragDropCard(),
 
-                ElementDragDropCard()
+                ElementDragDropCard(),
+
+                CrossWindowDragDropCard()
              );
 }

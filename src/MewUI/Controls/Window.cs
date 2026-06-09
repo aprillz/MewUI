@@ -70,6 +70,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private WindowLifetimeState _lifetimeState;
     private int _modalDisableCount;
     private bool _isDialogWindow;
+    private IGpuInteropInvalidationSource? _gpuInvalidationSource;
 
     /// <summary>
     /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
@@ -465,6 +466,26 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Hint for platform backends to use alert-panel animation (e.g. macOS bounce).
     /// </summary>
     internal bool IsAlertWindow { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether this is a floating tool/utility window: a thin native title bar with move and
+    /// close only (no minimize/maximize), excluded from the taskbar, floating above its <see cref="Owner"/>.
+    /// Must be set BEFORE <see cref="Show(Window?)"/> (the native window is built from it); setting it
+    /// after the window is shown throws. Ignored when <see cref="AllowsTransparency"/> is true (which removes
+    /// the chrome entirely).
+    /// </summary>
+    public bool IsToolWindow
+    {
+        get;
+        set
+        {
+            if (_backend is not null)
+            {
+                throw new InvalidOperationException("IsToolWindow must be set before the window is shown.");
+            }
+            field = value;
+        }
+    }
 
     /// <summary>
     /// Gets or sets the initial window placement behavior.
@@ -1024,6 +1045,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // may reset when the window is first ordered on screen.
         _backend!.EnsureTheme(Theme.IsDark);
         _lifetimeState = WindowLifetimeState.Shown;
+
+        // Establish the OS-level owner relationship so the window stays above its owner in z-order and shares
+        // its lifetime (it was previously set only at the framework level, used for positioning, which left the
+        // native window independent and able to fall behind its owner). Modal ShowDialog does this separately.
+        if (owner != null && Handle != 0)
+        {
+            _backend!.SetOwner(owner.Handle);
+        }
 
         // Raise Loaded once, and only after the application's dispatcher is ready.
         // Do not rely on PlatformHost.Run ordering: a first render can happen during Show on some platforms.
@@ -1827,6 +1856,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _loadedRaised = true;
 
+        SubscribeGpuInteropInvalidation();
+
         PerformLayout();
         Loaded?.Invoke();
 
@@ -1874,6 +1905,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _lifetimeState = WindowLifetimeState.Closed;
         UnsubscribeFromDispatcherChanged();
+        UnsubscribeGpuInteropInvalidation();
 
         if (Application.IsRunning)
         {
@@ -1881,6 +1913,44 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         Closed?.Invoke();
+    }
+
+
+    /// <summary>
+    /// Monotonic counter bumped whenever the backend reports GPU device/target invalidation
+    /// (device lost, render-target device change, display change). Render caches compare against
+    /// this to discard offscreen surfaces built on a now-invalid device and rebuild them.
+    /// </summary>
+    internal int DeviceGeneration { get; private set; }
+
+    private void SubscribeGpuInteropInvalidation()
+    {
+        if (_gpuInvalidationSource != null)
+        {
+            return;
+        }
+
+        if (GraphicsFactory is IGpuInteropInvalidationSource source)
+        {
+            _gpuInvalidationSource = source;
+            source.GpuInteropInvalidated += OnGpuInteropInvalidated;
+        }
+    }
+
+    private void UnsubscribeGpuInteropInvalidation()
+    {
+        if (_gpuInvalidationSource != null)
+        {
+            _gpuInvalidationSource.GpuInteropInvalidated -= OnGpuInteropInvalidated;
+            _gpuInvalidationSource = null;
+        }
+    }
+
+    private void OnGpuInteropInvalidated(object? sender, GpuInteropInvalidatedEventArgs e)
+    {
+        // A new device generation invalidates every render cache built on the old device.
+        DeviceGeneration++;
+        InvalidateVisual();
     }
 
     internal void RaiseClientSizeChanged(double widthDip, double heightDip) => ClientSizeChanged?.Invoke(new Size(widthDip, heightDip));

@@ -1216,6 +1216,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
             {
                 style &= ~WindowStyles.WS_SYSMENU;
             }
+            if (Window.IsToolWindow)
+            {
+                // Tool windows expose only a close button (no minimize/maximize), matching the utility-window
+                // contract on the other platforms.
+                style &= ~(WindowStyles.WS_MINIMIZEBOX | WindowStyles.WS_MAXIMIZEBOX);
+            }
             if (!Window.WindowSize.IsResizable)
             {
                 style &= ~(WindowStyles.WS_THICKFRAME | WindowStyles.WS_MAXIMIZEBOX);
@@ -1248,6 +1254,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
             // Window-wide opacity (no per-pixel alpha) uses the classic WS_EX_LAYERED +
             // SetLayeredWindowAttributes(LWA_ALPHA) path regardless of backend.
             exStyle |= WindowStylesEx.WS_EX_LAYERED;
+        }
+
+        // Tool/utility window: thin caption + excluded from the taskbar (it floats above its owner). Distinct
+        // from AllowsTransparency (frameless); the two are mutually exclusive so guard on the else path above.
+        if (Window.IsToolWindow && !Window.AllowsTransparency)
+        {
+            exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW;
         }
 
         return exStyle;

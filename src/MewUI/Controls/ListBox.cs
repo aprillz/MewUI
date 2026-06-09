@@ -66,7 +66,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         _presenter.ItemsSource = _itemsSource;
 
         _hoverIndex = -1;
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
 
         if (preserveListBoxSelection)
         {
@@ -150,7 +150,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
     {
         if (_presenter != null)
             _presenter.ItemPadding = ItemPadding;
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
     }
 
     /// <summary>
@@ -164,7 +164,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             ArgumentNullException.ThrowIfNull(value);
             _itemTemplate = value;
             _presenter.ItemTemplate = value;
-            _rebindVisibleOnNextRender = true;
+            InvalidateItemBindings();
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -244,7 +244,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             : ScrollMode.Auto;
         _scrollViewer.SetScrollOffsets(oldX, oldY);
 
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         _hoverIndex = -1;
         InvalidateMeasure();
         InvalidateVisual();
@@ -281,7 +281,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             ItemPadding = newTheme.Metrics.ItemPadding;
         }
 
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
     }
 
     protected override Size MeasureContent(Size availableSize)
@@ -392,8 +392,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
         var borderInset = GetBorderVisualInset();
         var innerBounds = snapped.Deflate(new Thickness(borderInset));
 
-        _presenter.RebindExisting = _rebindVisibleOnNextRender;
-        _rebindVisibleOnNextRender = false;
+        _presenter.ItemBindingGeneration = ItemBindingGeneration;
 
         _scrollViewer.Arrange(innerBounds);
 
@@ -683,7 +682,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             _presenter.RecycleAll();
         }
         _hoverIndex = -1;
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -711,7 +710,7 @@ public partial class ListBox : VirtualizedItemsBase, IVirtualizedTabNavigationHo
             return;
         }
 
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
 
         if (!_syncingSelectedIndex)
         {

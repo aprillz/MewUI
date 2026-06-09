@@ -247,6 +247,65 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
     }
 
+    private static readonly MewPropertyKey<int> SelectionStartPropertyKey =
+        MewProperty<int>.RegisterReadOnly<TextBase>(nameof(SelectionStart), 0);
+
+    /// <summary>Start index of the current selection (caret index when nothing is selected). Read-only.</summary>
+    public static readonly MewProperty<int> SelectionStartProperty = SelectionStartPropertyKey.Property;
+
+    public int SelectionStart => GetValue(SelectionStartProperty);
+
+    private static readonly MewPropertyKey<int> SelectionLengthPropertyKey =
+        MewProperty<int>.RegisterReadOnly<TextBase>(nameof(SelectionLength), 0);
+
+    /// <summary>Length of the current selection (0 when nothing is selected). Read-only.</summary>
+    public static readonly MewProperty<int> SelectionLengthProperty = SelectionLengthPropertyKey.Property;
+
+    public int SelectionLength => GetValue(SelectionLengthProperty);
+
+    /// <summary>The currently selected text (empty when nothing is selected).</summary>
+    public string SelectedText
+    {
+        get
+        {
+            var (start, end) = _editor.GetSelectionRange();
+            return end > start ? GetTextSubstringCore(start, end - start) : string.Empty;
+        }
+    }
+
+    private bool _syncingSelection;
+
+    // Selection/caret state lives in the editor; mirror it onto the read-only MewProperties so it is
+    // bindable/observable. Every selection or caret change funnels through InvalidateVisual (to repaint
+    // the caret/highlight) and the editor is always mutated before that call, so this is the single
+    // point where the mirror is guaranteed current. SetValue is a no-op when unchanged, so the repeated
+    // calls from caret-blink invalidations cost nothing. The guard avoids re-entry if a property change
+    // were ever to invalidate again.
+    private void SyncSelectionProperties()
+    {
+        var (start, end) = _editor.GetSelectionRange();
+        SetValue(SelectionStartPropertyKey, start);
+        SetValue(SelectionLengthPropertyKey, end - start);
+    }
+
+    public override void InvalidateVisual()
+    {
+        if (_editor is not null && !_syncingSelection)
+        {
+            _syncingSelection = true;
+            try
+            {
+                SyncSelectionProperties();
+            }
+            finally
+            {
+                _syncingSelection = false;
+            }
+        }
+
+        base.InvalidateVisual();
+    }
+
     // Platform text services (IME) sometimes report a replacement range (e.g. AppKit insertText/setMarkedText).
     // We need a controlled way for backends to align our caret/selection with that range *before* starting
     // a composition, so the composition replaces the correct characters.

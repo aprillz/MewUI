@@ -24,8 +24,6 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
     public static readonly MewProperty<double> MaxAutoViewportHeightProperty =
         MewProperty<double>.Register<GridView>(nameof(MaxAutoViewportHeight), 320.0, MewPropertyOptions.AffectsLayout);
 
-    private void OnCellPaddingChanged() => _rebindVisibleOnNextRender = true;
-
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
 
@@ -66,7 +64,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             _header.SetColumns(_core.Columns);
             _presenter.RecycleAll();
-            _rebindVisibleOnNextRender = true;
+            InvalidateItemBindings();
             InvalidateMeasure();
             InvalidateArrange();
             InvalidateVisual();
@@ -131,7 +129,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         InvalidateVisual();
     }
 
@@ -191,6 +189,10 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             InvalidateVisual();
         }
     }
+
+    private void OnCellPaddingChanged() => InvalidateItemBindings();
+
+    private void InvalidateGridItemBindings() => InvalidateItemBindings();
 
     private int ResolvePageStep(int count)
     {
@@ -358,14 +360,14 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             if (IsItemInViewport(found))
             {
-                // Item is on-screen — let normal Tab navigation handle intra-item movement.
+                // Item is on-screen - let normal Tab navigation handle intra-item movement.
                 return false;
             }
 
             // Item is off-screen (focus-pinned). We can't return false here because
             // FocusManager's flat-list Tab would move focus within the same container,
             // then ScrollViewer.OnDescendantFocused fires first (before GridView) and
-            // uses the element's stale Bounds — resulting in no vertical scroll.
+            // uses the element's stale Bounds - resulting in no vertical scroll.
             // Instead, scroll this item into view and move focus ourselves.
             ScrollIntoView(found);
             var next = FindNextFocusableInContainer(foundContainer, focusedElement, moveForward);
@@ -776,8 +778,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         // the rebind to the next frame, producing a one-frame flicker where the row's
         // stale _rowIndex disagrees with the just-shifted SelectedIndex (visible as the
         // selection appearing to release then reattach right after a prepend/remove).
-        _presenter.RebindExisting = _rebindVisibleOnNextRender;
-        _rebindVisibleOnNextRender = false;
+        _presenter.ItemBindingGeneration = ItemBindingGeneration;
 
         _scrollViewer.Arrange(rowsViewport);
 
@@ -914,7 +915,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         // Force rebind of visible rows only when the change can shift their indices or
         // their backing data. Pure append-at-end (Insert with Index == previous count)
         // doesn't affect any existing realized row, so triggering a rebind there causes
-        // unnecessary cell-context resets — visually that flashes selection/hover off+on
+        // unnecessary cell-context resets - visually that flashes selection/hover off+on
         // for every appended item.
         int newCount = _core.ItemsSource.Count;
         int oldCount = newCount - (change.Kind == ItemsChangeKind.Add ? change.Count
@@ -931,7 +932,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         };
         if (needsRebind)
         {
-            _rebindVisibleOnNextRender = true;
+            InvalidateItemBindings();
         }
         InvalidateMeasure();
         InvalidateArrange();
@@ -981,7 +982,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         InitializePresenter(presenter);
         _presenter = presenter;
         _scrollViewer.Content = (UIElement)_presenter;
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         InvalidateMeasure();
         InvalidateArrange();
         InvalidateVisual();
@@ -990,7 +991,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
     private void OnItemsSelectionChanged()
     {
         SelectionChanged?.Invoke(SelectedItem);
-        _rebindVisibleOnNextRender = true;
+        InvalidateItemBindings();
         ScrollSelectedIntoView();
         InvalidateVisual();
     }
@@ -1013,8 +1014,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             return;
         }
 
-        // Prefer the presenter's own y-range when it knows real (measured) item bounds —
-        // e.g. VariableHeightItemsPresenter's prefix sum. Falls back to fixed-height math
+        // Prefer the presenter's own y-range when it knows real (measured) item bounds ??        // e.g. VariableHeightItemsPresenter's prefix sum. Falls back to fixed-height math
         // only when the presenter can't supply a range (e.g. unmeasured items in variable
         // mode that the presenter hasn't realized yet).
         double oldOffset = _scrollViewer.VerticalOffset;
@@ -1029,7 +1029,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             return;
         }
 
-        // Unmeasured item — defer to the presenter so it can estimate, scroll, then refine
+        // Unmeasured item - defer to the presenter so it can estimate, scroll, then refine
         // after the item realizes. (Same path used when viewport isn't laid out yet.)
         _presenter.RequestScrollIntoView(index);
     }
@@ -1123,6 +1123,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         // Column resize drag state
         private int _resizeColumnIndex = -1;
+
         private double _resizeDragStartX;
         private double _resizeDragStartWidth;
 
@@ -1273,9 +1274,9 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
                 double newWidth = _resizeDragStartWidth + delta;
 
                 _owner._core.SetColumnWidth(_resizeColumnIndex, newWidth);
-                _owner._rebindVisibleOnNextRender = true;
+                _owner.InvalidateGridItemBindings();
                 // Variable-height rows recompute height from cell content; column-width
-                // changes can change wrap break points → row height changes. Tell the
+                // changes can change wrap break points - row height changes. Tell the
                 // presenter to drop its cached heights so prefix sums re-measure.
                 if (_owner._presenter is VariableHeightItemsPresenter variableHeightPresenter)
                 {
@@ -1329,6 +1330,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         // OnRender reads IsMouseOver directly (no style trigger), so the framework's
         // visual-state path doesn't invalidate for us. Schedule a render explicitly.
         protected override void OnMouseEnter() => InvalidateVisual();
+
         protected override void OnMouseLeave() => InvalidateVisual();
 
         protected override void OnMouseDown(MouseEventArgs e)

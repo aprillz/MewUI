@@ -4,9 +4,9 @@ using Aprillz.MewUI.Rendering;
 
 /// <summary>
 /// Virtualizing wrap-grid items presenter with fixed item width and height.
-/// Virtualizes by row — only visible rows are realized.
+/// Virtualizes by row - only visible rows are realized.
 /// </summary>
-internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollContent, IItemsPresenter
+internal sealed class WrapItemsPresenter : Control, IItemsPresenter
 {
     private readonly TemplatedItemsHost _itemsHost;
 
@@ -65,7 +65,7 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
     public Action<IGraphicsContext, int, Rect>? BeforeItemRender { get; set; }
     public Func<int, Rect, Rect>? GetContainerRect { get; set; }
     public Thickness ItemPadding { get; set; }
-    public bool RebindExisting { get; set; } = true;
+    public uint ItemBindingGeneration { get; set; }
     public double ItemHeightHint { get => ItemHeight; set { /* Wrap uses its own ItemHeight; ignore hint */ } }
     public bool UseHorizontalExtentForLayout { get; set; }
     public bool FillsAvailableWidth => true;
@@ -209,9 +209,9 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
             First = firstIndex,
             LastExclusive = lastIndexExcl,
             ItemHeight = alignedItemH,
-            YStart = 0, // not used — GetContainerRect provides absolute coords
+            YStart = 0, // not used - GetContainerRect provides absolute coords
             ItemRadius = ItemRadius,
-            RebindExisting = RebindExisting,
+            ItemBindingGeneration = ItemBindingGeneration,
         };
 
         var userBeforeItemRender = BeforeItemRender;
@@ -341,7 +341,7 @@ internal sealed class WrapItemsPresenter : Control, IVisualTreeHost, IScrollCont
         if (ItemWidth <= 0 || viewportWidth <= 0) return 1;
         // Use rounding tolerance to avoid DPI-dependent column count differences.
         // E.g. 400 DIP / 80 = 5.0 exactly, but pixel-snapped borders may reduce
-        // viewportWidth to 399.33, yielding 4.99 — which should still be 5 columns.
+        // viewportWidth to 399.33, yielding 4.99 - which should still be 5 columns.
         double raw = viewportWidth / ItemWidth;
         int cols = (int)Math.Floor(raw);
         if (raw - cols > 0.95) cols++;

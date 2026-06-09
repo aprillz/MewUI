@@ -113,6 +113,8 @@ internal static unsafe class MacOSWindowInterop
     private static nint _sharedMetalLayerDelegate;
     private static nint ClsMewUIWindow;
     private static nint ClsMewUIWindowDelegate;
+    private static nint ClsNSPanel;
+    private static nint ClsMewUIPanel;
     private static nint _sharedWindowDelegate;
 
     // NSCursor
@@ -590,20 +592,33 @@ internal static unsafe class MacOSWindowInterop
         }
     }
 
-    public static nint CreateWindow(string title, double widthDip, double heightDip, bool allowsTransparency, bool isDialog)
+    public static nint CreateWindow(string title, double widthDip, double heightDip, bool allowsTransparency, bool isDialog, bool isToolWindow)
     {
         EnsureInitialized();
 
-        // Borderless windows (AllowsTransparency) need MewUIWindow subclass for canBecomeKeyWindow
         nint windowClass;
+        ulong styleMask;
         if (allowsTransparency)
         {
+            // Borderless windows (AllowsTransparency) need MewUIWindow subclass for canBecomeKeyWindow.
             EnsureMewUIWindowClass();
             windowClass = ClsMewUIWindow != 0 ? ClsMewUIWindow : ClsNSWindow;
+            styleMask = TransparentStyleMask;
+        }
+        else if (isToolWindow)
+        {
+            // Floating tool/utility window: an NSPanel with the utility-window mask (thin title bar, floats
+            // above the app). Close button only — no miniaturizable. MewUIPanel subclass so the panel can
+            // become key for text input. (UtilityWindow=1<<4 only takes effect on NSPanel, not NSWindow.)
+            EnsureMewUIPanelClass();
+            windowClass = ClsMewUIPanel != 0 ? ClsMewUIPanel : (ClsNSPanel != 0 ? ClsNSPanel : ClsNSWindow);
+            const ulong NSWindowStyleMaskUtilityWindow = 1ul << 4;
+            styleMask = NSWindowStyleMaskUtilityWindow | 1ul /*Titled*/ | 2ul /*Closable*/ | 8ul /*Resizable*/;
         }
         else
         {
             windowClass = ClsNSWindow;
+            styleMask = isDialog ? DialogStyleMask : DefaultStyleMask;
         }
 
         var win = ObjC.MsgSend_nint(windowClass, SelAlloc);
@@ -613,7 +628,6 @@ internal static unsafe class MacOSWindowInterop
         }
 
         var rect = new NSRect(0, 0, widthDip, heightDip);
-        ulong styleMask = allowsTransparency ? TransparentStyleMask : (isDialog ? DialogStyleMask : DefaultStyleMask);
         win = ObjC.MsgSend_nint_rect_ulong_int_bool(win, SelInitWithContentRect, rect, styleMask, NSBackingStoreBuffered, false);
         if (win == 0)
         {
@@ -621,12 +635,18 @@ internal static unsafe class MacOSWindowInterop
         }
 
         SetTitle(win, title);
-        if (isDialog)
+        if (isDialog || isToolWindow)
         {
+            // Close-only chrome (hide miniaturize/zoom buttons).
             HideDialogChromeButtons(win);
         }
         // MouseMoved events are not delivered unless this is enabled.
         ObjC.MsgSend_void_nint_bool(win, SelSetAcceptsMouseMovedEvents, true);
+        if (isToolWindow)
+        {
+            // A utility panel only becomes key "if needed" by default; force it so text fields receive input.
+            ObjC.MsgSend_void_nint_bool(win, ObjC.Sel("setBecomesKeyOnlyIfNeeded:"), false);
+        }
         return win;
     }
 
@@ -2095,6 +2115,45 @@ internal static unsafe class MacOSWindowInterop
         }
 
         ClsMewUIWindow = cls;
+    }
+
+    // NSPanel subclass for tool/utility windows, mirroring MewUIWindow's key/main overrides so a utility
+    // panel can become the key window and receive text input.
+    private static unsafe void EnsureMewUIPanelClass()
+    {
+        if (ClsMewUIPanel != 0)
+        {
+            return;
+        }
+
+        if (ClsNSPanel == 0)
+        {
+            ClsNSPanel = ObjC.GetClass("NSPanel");
+        }
+
+        if (ClsNSPanel == 0)
+        {
+            return;
+        }
+
+        const string className = "MewUIPanel";
+        var cls = ObjC.GetClass(className);
+        if (cls == 0)
+        {
+            cls = ObjC.AllocateClassPair(ClsNSPanel, className);
+            if (cls != 0)
+            {
+                var imp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUIWindow_canBecomeKeyWindow;
+                _ = ObjC.AddMethod(cls, ObjC.Sel("canBecomeKeyWindow"), imp, "c@:");
+
+                var mainImp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUIWindow_canBecomeMainWindow;
+                _ = ObjC.AddMethod(cls, ObjC.Sel("canBecomeMainWindow"), mainImp, "c@:");
+
+                ObjC.RegisterClassPair(cls);
+            }
+        }
+
+        ClsMewUIPanel = cls;
     }
 
     private static void EnsureWindowDelegate()
