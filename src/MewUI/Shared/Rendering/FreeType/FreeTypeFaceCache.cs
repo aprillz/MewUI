@@ -36,6 +36,39 @@ internal sealed unsafe class FreeTypeFaceCache
         return entry;
     }
 
+    public void Trim(int maxEntries)
+    {
+        if (maxEntries < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxEntries));
+        }
+
+        var removeCount = _faces.Count - maxEntries;
+        if (removeCount <= 0)
+        {
+            return;
+        }
+
+        foreach (var pair in _faces.OrderBy(static pair => pair.Value.LastUsedTicks).Take(removeCount))
+        {
+            if (_faces.TryRemove(pair.Key, out var entry))
+            {
+                entry.Dispose();
+            }
+        }
+    }
+
+    public void Clear()
+    {
+        foreach (var pair in _faces)
+        {
+            if (_faces.TryRemove(pair.Key, out var entry))
+            {
+                entry.Dispose();
+            }
+        }
+    }
+
     internal readonly record struct FaceKey(string FontPath, int PixelHeight, FontWeight Weight, bool Italic);
 
     internal sealed class FaceEntry : IDisposable
