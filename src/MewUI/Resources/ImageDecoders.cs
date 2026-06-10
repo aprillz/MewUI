@@ -155,6 +155,62 @@ public static class ImageDecoders
     }
 
     /// <summary>
+    /// Attempts to read decoded image dimensions without materializing the pixel buffer.
+    /// </summary>
+    public static bool TryReadInfo(byte[] encoded, out int width, out int height, out bool hasAlpha)
+    {
+        ArgumentNullException.ThrowIfNull(encoded);
+
+        var decoder = FindDecoder(encoded);
+        if (decoder is not IByteArrayImageDecoder fast)
+        {
+            DiagLog.Write(decoder is null
+                ? "ImageDecoders: No decoder matched input."
+                : $"ImageDecoders: Decoder '{decoder.Id}' does not support fast info reads.");
+            width = 0;
+            height = 0;
+            hasAlpha = false;
+            return false;
+        }
+
+        bool ok = fast.TryReadInfo(encoded, out width, out height, out hasAlpha);
+        if (!ok)
+        {
+            DiagLog.Write($"ImageDecoders: Read info failed for '{decoder.Id}' (length={encoded.Length}).");
+        }
+
+        return ok;
+    }
+
+    /// <summary>
+    /// Attempts to decode an image directly into an existing BGRA32 destination buffer.
+    /// </summary>
+    public static bool TryDecodeInto(byte[] encoded, Span<byte> destination, out int width, out int height, out bool hasAlpha)
+    {
+        ArgumentNullException.ThrowIfNull(encoded);
+
+        var decoder = FindDecoder(encoded);
+        if (decoder is not IByteArrayImageDecoder fast)
+        {
+            DiagLog.Write(decoder is null
+                ? "ImageDecoders: No decoder matched input."
+                : $"ImageDecoders: Decoder '{decoder.Id}' does not support direct decode.");
+            width = 0;
+            height = 0;
+            hasAlpha = false;
+            return false;
+        }
+
+        bool ok = fast.TryDecodeInto(encoded, destination, out width, out height, out hasAlpha);
+        if (!ok)
+        {
+            DiagLog.Write($"ImageDecoders: Direct decode failed for '{decoder.Id}' (length={encoded.Length}).");
+        }
+
+        return ok;
+    }
+
+    /// <summary>
     /// Attempts to identify the input format by probing registered decoders.
     /// This is intended for diagnostics only.
     /// </summary>
@@ -168,6 +224,23 @@ public static class ImageDecoders
                 if (d.CanDecode(encoded))
                 {
                     return d.Id;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static IImageDecoder? FindDecoder(ReadOnlySpan<byte> encoded)
+    {
+        lock (_lock)
+        {
+            for (int i = 0; i < _decoders.Count; i++)
+            {
+                var d = _decoders[i].Decoder;
+                if (d.CanDecode(encoded))
+                {
+                    return d;
                 }
             }
         }

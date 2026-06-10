@@ -29,6 +29,67 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
     {
         bitmap = default;
 
+        if (!TryReadInfo(encoded, out int width, out int height, out _))
+        {
+            return false;
+        }
+
+        byte[] dst = GC.AllocateUninitializedArray<byte>(checked(width * height * 4));
+        if (!TryDecodeInto(encoded, dst, out int decodedWidth, out int decodedHeight, out bool hasAlpha)
+            || decodedWidth != width
+            || decodedHeight != height)
+        {
+            return false;
+        }
+
+        bitmap = new Bgra32PixelBuffer(width, height, dst, hasAlpha);
+        return true;
+    }
+
+    public bool TryReadInfo(byte[] encoded, out int width, out int height, out bool hasAlpha)
+    {
+        width = 0;
+        height = 0;
+        hasAlpha = false;
+
+        if (!CanDecode(encoded))
+        {
+            return false;
+        }
+
+        var cinfo = new jpeg_decompress_struct(new jpeg_error_mgr());
+        try
+        {
+            using var ms = new MemoryStream(encoded, 0, encoded.Length, writable: false, publiclyVisible: true);
+            cinfo.jpeg_stdio_src(ms);
+            cinfo.jpeg_read_header(true);
+            cinfo.Out_color_space = J_COLOR_SPACE.JCS_RGB;
+            cinfo.jpeg_calc_output_dimensions();
+
+            width = cinfo.Output_width;
+            height = cinfo.Output_height;
+            return width > 0 && height > 0;
+        }
+        catch (Exception ex)
+        {
+            DiagLog.Write($"JpegDecoder: read info failed: {ex.GetType().Name}: {ex.Message}");
+            width = 0;
+            height = 0;
+            hasAlpha = false;
+            return false;
+        }
+        finally
+        {
+            try { cinfo.jpeg_destroy(); } catch { }
+        }
+    }
+
+    public bool TryDecodeInto(byte[] encoded, Span<byte> destination, out int width, out int height, out bool hasAlpha)
+    {
+        width = 0;
+        height = 0;
+        hasAlpha = false;
+
         if (!CanDecode(encoded))
         {
             return false;
@@ -48,8 +109,8 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
             cinfo.jpeg_start_decompress();
             started = true;
 
-            int width = cinfo.Output_width;
-            int height = cinfo.Output_height;
+            width = cinfo.Output_width;
+            height = cinfo.Output_height;
             int components = cinfo.Output_components;
 
             if (width <= 0 || height <= 0)
@@ -64,7 +125,13 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
                 return false;
             }
 
-            byte[] dst = GC.AllocateUninitializedArray<byte>(checked(width * height * 4));
+            int requiredBytes = checked(width * height * 4);
+            if (destination.Length < requiredBytes)
+            {
+                DiagLog.Write($"JpegDecoder: Destination too small. Required={requiredBytes}, actual={destination.Length}.");
+                return false;
+            }
+
             int dstStride = width * 4;
 
             int srcStride = width * components;
@@ -88,14 +155,14 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
                 {
                     for (int r = 0; r < read; r++)
                     {
-                        ConvertRgbRowToBgra(srcBuffer.GetRow(r), dst, y + r, width, dstStride);
+                        ConvertRgbRowToBgra(srcBuffer.GetRow(r), destination.Slice((y + r) * dstStride, dstStride), width);
                     }
                 }
                 else
                 {
                     for (int r = 0; r < read; r++)
                     {
-                        ConvertGrayRowToBgra(srcBuffer.GetRow(r), dst, y + r, width, dstStride);
+                        ConvertGrayRowToBgra(srcBuffer.GetRow(r), destination.Slice((y + r) * dstStride, dstStride), width);
                     }
                 }
 
@@ -103,8 +170,6 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
             }
 
             cinfo.jpeg_finish_decompress();
-            // JPEG has no alpha channel — output is opaque by construction.
-            bitmap = new Bgra32PixelBuffer(width, height, dst, HasAlpha: false);
             return true;
         }
         catch (Exception ex)
@@ -124,12 +189,12 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static unsafe void ConvertRgbRowToBgra(ReadOnlySpan<byte> src, byte[] dst, int y, int width, int dstStride)
+    private static unsafe void ConvertRgbRowToBgra(ReadOnlySpan<byte> src, Span<byte> dst, int width)
     {
         fixed (byte* pSrc = src)
         fixed (byte* pDst0 = dst)
         {
-            byte* pDst = pDst0 + (nint)(y * dstStride);
+            byte* pDst = pDst0;
             byte* s = pSrc;
             int x = 0;
 
@@ -148,8 +213,8 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
                 var alphaMask = Vector128.Create(0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF,
                                                   0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF).AsByte();
 
-                int simdWidth = width - 3; // Leave room for last partial iteration
-                while (x < simdWidth)
+                // The overlapping second load reads 28 bytes for each 8-pixel group.
+                while (x <= width - 10)
                 {
                     // Load 16 bytes (covers 5+ pixels worth of RGB data)
                     var rgb0 = Sse2.LoadVector128(s);        // bytes 0-15
@@ -187,12 +252,12 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static unsafe void ConvertGrayRowToBgra(ReadOnlySpan<byte> src, byte[] dst, int y, int width, int dstStride)
+    private static unsafe void ConvertGrayRowToBgra(ReadOnlySpan<byte> src, Span<byte> dst, int width)
     {
         fixed (byte* pSrc = src)
         fixed (byte* pDst0 = dst)
         {
-            byte* pDst = pDst0 + (nint)(y * dstStride);
+            byte* pDst = pDst0;
             byte* s = pSrc;
             int x = 0;
 
