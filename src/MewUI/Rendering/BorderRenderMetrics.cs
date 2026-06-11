@@ -38,27 +38,42 @@ public ref struct BorderRenderMetrics
     }
 
     public Rect Bounds { get; }
+
     public double DpiScale { get; }
+
     public Thickness BorderThickness { get; }
+
     public CornerRadius CornerRadius { get; }
 
     public Rect InnerBounds { get; }
+
     public double InnerTopLeftX { get; }
+
     public double InnerTopLeftY { get; }
+
     public double InnerTopRightX { get; }
+
     public double InnerTopRightY { get; }
+
     public double InnerBottomRightX { get; }
+
     public double InnerBottomRightY { get; }
+
     public double InnerBottomLeftX { get; }
+
     public double InnerBottomLeftY { get; }
 
     public bool IsUniformThickness { get; }
+
     public bool IsUniformRadius { get; }
+
     public bool IsSimple => IsUniformThickness && IsUniformRadius;
 
     // Uniform accessors (meaningful only when IsSimple is true)
     public double UniformThickness => BorderThickness.Left;
+
     public double UniformRadius => CornerRadius.TopLeft;
+
     public double UniformInnerRadius => InnerTopLeftX;
 
     /// <summary>True when any side has a positive thickness. Use this (not <see cref="UniformThickness"/>, which is

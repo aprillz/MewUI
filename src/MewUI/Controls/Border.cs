@@ -52,8 +52,15 @@ public sealed class Border : Control, IVisualTreeHost
 
     private void OnChildChanged(UIElement? oldValue, UIElement? newValue)
     {
-        if (oldValue != null) oldValue.Parent = null;
-        if (newValue != null) newValue.Parent = this;
+        if (oldValue != null)
+        {
+            oldValue.Parent = null;
+        }
+
+        if (newValue != null)
+        {
+            newValue.Parent = this;
+        }
     }
 
     /// <summary>
@@ -134,14 +141,22 @@ public sealed class Border : Control, IVisualTreeHost
         if (metrics.IsSimple)
         {
             // Background only — border is drawn after subtree in RenderSubtree.
-            if (bg.A == 0) return;
+            if (bg.A == 0)
+            {
+                return;
+            }
+
             var bounds = metrics.Bounds;
             var radius = metrics.UniformRadius;
 
             if (radius > 0)
+            {
                 context.FillRoundedRectangle(bounds, radius, radius, bg);
+            }
             else
+            {
                 context.FillRectangle(bounds, bg);
+            }
         }
         else
         {
@@ -152,7 +167,9 @@ public sealed class Border : Control, IVisualTreeHost
                 _cachedOuterPath ??= new PathGeometry();
                 BorderGeometry.GenerateOuterContour(_cachedOuterPath, in metrics);
                 if (!_cachedOuterPath.IsEmpty)
+                {
                     context.FillPath(_cachedOuterPath, borderBrush);
+                }
             }
 
             if (bg.A > 0)
@@ -160,7 +177,9 @@ public sealed class Border : Control, IVisualTreeHost
                 _cachedBgPath ??= new PathGeometry();
                 BorderGeometry.GenerateBackgroundRegion(_cachedBgPath, in metrics);
                 if (!_cachedBgPath.IsEmpty)
+                {
                     context.FillPath(_cachedBgPath, bg);
+                }
             }
         }
     }
@@ -206,9 +225,13 @@ public sealed class Border : Control, IVisualTreeHost
                         Math.Min(metrics.InnerBottomRightY, metrics.InnerBottomLeftY));
 
                     if (minRX > 0 || minRY > 0)
+                    {
                         context.SetClipRoundedRect(clipRect, minRX, minRY);
+                    }
                     else
+                    {
                         context.SetClip(clipRect);
+                    }
                 }
 
                 Child.Render(context);
@@ -229,12 +252,16 @@ public sealed class Border : Control, IVisualTreeHost
             {
                 var bounds = metrics.Bounds;
                 var radius = metrics.UniformRadius;
-                var bt = metrics.UniformThickness;
+                var thickness = metrics.UniformThickness;
 
                 if (radius > 0)
-                    context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, bt, strokeInset: true);
+                {
+                    context.DrawRoundedRectangle(bounds, radius, radius, borderBrush, thickness, strokeInset: true);
+                }
                 else
-                    context.DrawRectangle(bounds, borderBrush, bt, strokeInset: true);
+                {
+                    context.DrawRectangle(bounds, borderBrush, thickness, strokeInset: true);
+                }
             }
         }
     }
