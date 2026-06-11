@@ -163,7 +163,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         }
     }
 
-    internal void ShowAt(UIElement owner, Point positionInWindow, double? anchorTopY = null)
+    public void ShowAt(UIElement owner, Point positionInWindow, double? anchorTopY = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
 
