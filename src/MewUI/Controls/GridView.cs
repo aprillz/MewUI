@@ -24,9 +24,6 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
     public static readonly MewProperty<double> MaxAutoViewportHeightProperty =
         MewProperty<double>.Register<GridView>(nameof(MaxAutoViewportHeight), 320.0, MewPropertyOptions.AffectsLayout);
 
-    private void OnCellPaddingChanged() => InvalidateItemBindings();
-    private void InvalidateGridItemBindings() => InvalidateItemBindings();
-
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
 
@@ -192,6 +189,10 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             InvalidateVisual();
         }
     }
+
+    private void OnCellPaddingChanged() => InvalidateItemBindings();
+
+    private void InvalidateGridItemBindings() => InvalidateItemBindings();
 
     private int ResolvePageStep(int count)
     {
@@ -1122,6 +1123,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
 
         // Column resize drag state
         private int _resizeColumnIndex = -1;
+
         private double _resizeDragStartX;
         private double _resizeDragStartWidth;
 
@@ -1328,6 +1330,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         // OnRender reads IsMouseOver directly (no style trigger), so the framework's
         // visual-state path doesn't invalidate for us. Schedule a render explicitly.
         protected override void OnMouseEnter() => InvalidateVisual();
+
         protected override void OnMouseLeave() => InvalidateVisual();
 
         protected override void OnMouseDown(MouseEventArgs e)
