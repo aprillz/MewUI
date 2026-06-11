@@ -40,9 +40,17 @@ public sealed class DragStartingEventArgs
     /// </summary>
     public bool Cancel { get; set; }
 
+    /// <summary>
+    /// Whether this platform can host a transparent top-level overlay for a <see cref="DragPreviewScope.CrossWindow"/>
+    /// preview. Optional hint: the framework already degrades to an opaque overlay when this is <see langword="false"/>,
+    /// so handlers only need to read this if they want to author a different visual for the opaque case.
+    /// </summary>
+    public bool SupportsTransparentOverlay { get; }
+
     public DragStartingEventArgs(Point startPositionInElement, Point startPositionInWindow)
     {
         StartPositionInElement = startPositionInElement;
         StartPositionInWindow = startPositionInWindow;
+        SupportsTransparentOverlay = Application.IsRunning && Application.Current.PlatformHost.SupportsTransparentOverlay;
     }
 }
