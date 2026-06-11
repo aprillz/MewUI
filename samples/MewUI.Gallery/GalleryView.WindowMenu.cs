@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
@@ -167,16 +165,16 @@ partial class GalleryView
                     )
                 );
 
-        try
-        {
-            manual.Show();
-            manualPositionStatus.Value = $"Manual: shown at requested ({left}, {top})";
+            try
+            {
+                manual.Show();
+                manualPositionStatus.Value = $"Manual: shown at requested ({left}, {top})";
+            }
+            catch (Exception ex)
+            {
+                manualPositionStatus.Value = $"Manual: error ({ex.GetType().Name})";
+            }
         }
-        catch (Exception ex)
-        {
-            manualPositionStatus.Value = $"Manual: error ({ex.GetType().Name})";
-        }
-    }
 
         return CardGrid(
             MenusCard(),
@@ -288,47 +286,47 @@ partial class GalleryView
                                     .Content("Open Files...")
                                     .OnClick(() =>
                                     {
-        var files = FileDialog.OpenFiles(new OpenFileDialogOptions
-        {
-            Owner = window.Handle,
-            Filter = "All Files (*.*)|*.*"
-        });
+                                        var files = FileDialog.OpenFiles(new OpenFileDialogOptions
+                                        {
+                                            Owner = window.Handle,
+                                            Filter = "All Files (*.*)|*.*"
+                                        });
 
-        if (files is null || files.Length == 0)
-        {
-            openFilesStatus.Value = "Open Files: canceled";
-        }
-        else if (files.Length == 1)
-        {
-            openFilesStatus.Value = $"Open Files: {files[0]}";
-        }
-        else
-        {
-            openFilesStatus.Value = $"Open Files: {files.Length} files";
-        }
-    }),
+                                        if (files is null || files.Length == 0)
+                                        {
+                                            openFilesStatus.Value = "Open Files: canceled";
+                                        }
+                                        else if (files.Length == 1)
+                                        {
+                                            openFilesStatus.Value = $"Open Files: {files[0]}";
+                                        }
+                                        else
+                                        {
+                                            openFilesStatus.Value = $"Open Files: {files.Length} files";
+                                        }
+                                    }),
                                 new Button()
                                     .Content("Save File...")
                                     .OnClick(() =>
                                     {
-        var file = FileDialog.SaveFile(new SaveFileDialogOptions
-        {
-            Owner = window.Handle,
-            Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
-            FileName = "demo.txt"
-        });
-        saveFileStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
-    }),
+                                        var file = FileDialog.SaveFile(new SaveFileDialogOptions
+                                        {
+                                            Owner = window.Handle,
+                                            Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                                            FileName = "demo.txt"
+                                        });
+                                        saveFileStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
+                                    }),
                                 new Button()
                                     .Content("Select Folder...")
                                     .OnClick(() =>
                                     {
-        var folder = FileDialog.SelectFolder(new FolderDialogOptions
-        {
-            Owner = window.Handle
-        });
-        folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
-    })
+                                        var folder = FileDialog.SelectFolder(new FolderDialogOptions
+                                        {
+                                            Owner = window.Handle
+                                        });
+                                        folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
+                                    })
                             ),
 
                         new TextBlock()
@@ -777,11 +775,9 @@ partial class GalleryView
 
         static Point GetScreenDip(Window window, MouseEventArgs e)
         {
+            // ClientToScreen now returns top-left, Y-down pixels on every platform.
             var screen = window.ClientToScreen(e.GetPosition(window));
             var scale = Math.Max(1.0, window.DpiScale);
-            if (OperatingSystem.IsMacOS())
-                return new Point(screen.X / scale, -screen.Y / scale); // Cocoa Y (bottom-up) -> top-down
-
             return new Point(screen.X / scale, screen.Y / scale);
         }
     }
