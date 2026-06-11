@@ -47,6 +47,24 @@ public abstract partial class UIElement
 
     internal static bool IsRenderingToCache => _cacheSnapshotDepth > 0;
 
+    /// <summary>
+    /// Renders this element (and its subtree) when it is not part of any window's visual tree, e.g. a
+    /// detached drag-preview element drawn into another surface. Bypasses the viewport cull, which would
+    /// otherwise drop the whole subtree because it has no Window root.
+    /// </summary>
+    internal void RenderDetached(IGraphicsContext context)
+    {
+        _cacheSnapshotDepth++;
+        try
+        {
+            Render(context);
+        }
+        finally
+        {
+            _cacheSnapshotDepth--;
+        }
+    }
+
     public override void InvalidateVisual()
     {
         if (_hasBitmapCache)

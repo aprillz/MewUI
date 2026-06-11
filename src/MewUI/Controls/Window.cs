@@ -70,6 +70,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private WindowLifetimeState _lifetimeState;
     private int _modalDisableCount;
     private bool _isDialogWindow;
+    private IGpuInteropInvalidationSource? _gpuInvalidationSource;
 
     /// <summary>
     /// Gets the window backend (internal use only, e.g. for IME mode switching from controls).
@@ -1826,6 +1827,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _loadedRaised = true;
 
+        SubscribeGpuInteropInvalidation();
+
         PerformLayout();
         Loaded?.Invoke();
 
@@ -1873,6 +1876,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _lifetimeState = WindowLifetimeState.Closed;
         UnsubscribeFromDispatcherChanged();
+        UnsubscribeGpuInteropInvalidation();
 
         if (Application.IsRunning)
         {
@@ -1880,6 +1884,44 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         Closed?.Invoke();
+    }
+
+
+    /// <summary>
+    /// Monotonic counter bumped whenever the backend reports GPU device/target invalidation
+    /// (device lost, render-target device change, display change). Render caches compare against
+    /// this to discard offscreen surfaces built on a now-invalid device and rebuild them.
+    /// </summary>
+    internal int DeviceGeneration { get; private set; }
+
+    private void SubscribeGpuInteropInvalidation()
+    {
+        if (_gpuInvalidationSource != null)
+        {
+            return;
+        }
+
+        if (GraphicsFactory is IGpuInteropInvalidationSource source)
+        {
+            _gpuInvalidationSource = source;
+            source.GpuInteropInvalidated += OnGpuInteropInvalidated;
+        }
+    }
+
+    private void UnsubscribeGpuInteropInvalidation()
+    {
+        if (_gpuInvalidationSource != null)
+        {
+            _gpuInvalidationSource.GpuInteropInvalidated -= OnGpuInteropInvalidated;
+            _gpuInvalidationSource = null;
+        }
+    }
+
+    private void OnGpuInteropInvalidated(object? sender, GpuInteropInvalidatedEventArgs e)
+    {
+        // A new device generation invalidates every render cache built on the old device.
+        DeviceGeneration++;
+        InvalidateVisual();
     }
 
     internal void RaiseClientSizeChanged(double widthDip, double heightDip) => ClientSizeChanged?.Invoke(new Size(widthDip, heightDip));
