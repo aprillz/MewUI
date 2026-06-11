@@ -265,8 +265,12 @@ public class CustomWindow : Window
 
     private void UpdateChromeButtonVisibility()
     {
-        bool hasExtend = ChromeCapabilities.HasFlag(WindowChromeCapabilities.ExtendClientArea);
-        _titleBar.IsVisible = hasExtend;
+        // CustomWindow is fully borderless and always draws its own title bar, so it must stay visible. The
+        // ExtendClientArea check belongs to NativeCustomWindow (which hides the custom bar in favour of the
+        // native title bar); using it here wrongly hid the title bar on platforms reporting
+        // ChromeCapabilities.None (e.g. X11) the first time WindowState changed (maximize), and it never came
+        // back on restore.
+        _titleBar.IsVisible = true;
         _controlButtons.IsVisible = !HasNativeChromeButtons;
         _titleBar.Padding = NativeChromeButtonInset;
     }
