@@ -2618,6 +2618,19 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the tab header placement.
+    /// </summary>
+    /// <param name="tabControl">Target tab control.</param>
+    /// <param name="placement">Header placement.</param>
+    /// <returns>The tab control for chaining.</returns>
+    public static TabControl TabPlacement(this TabControl tabControl, TabPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(tabControl);
+        tabControl.TabPlacement = placement;
+        return tabControl;
+    }
+
+    /// <summary>
     /// Adds a selection changed event handler.
     /// </summary>
     /// <param name="tabControl">Target tab control.</param>

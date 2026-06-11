@@ -25,6 +25,11 @@ public sealed class TabControl : Control
     /// </summary>
     public IReadOnlyList<TabItem> Tabs => _tabs;
 
+    public static readonly MewProperty<TabPlacement> TabPlacementProperty =
+        MewProperty<TabPlacement>.Register<TabControl>(nameof(TabPlacement), TabPlacement.Top,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.OnTabPlacementChanged());
+
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<TabControl>(nameof(SelectedIndex), -1,
             MewPropertyOptions.AffectsLayout,
@@ -38,6 +43,15 @@ public sealed class TabControl : Control
     {
         get => GetValue(SelectedIndexProperty);
         set => SetValue(SelectedIndexProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets where the tab headers are placed.
+    /// </summary>
+    public TabPlacement TabPlacement
+    {
+        get => GetValue(TabPlacementProperty);
+        set => SetValue(TabPlacementProperty, value);
     }
 
     private void OnSelectedIndexChanged()
@@ -71,6 +85,24 @@ public sealed class TabControl : Control
             Spacing = 2,
         };
         _headerStrip.Parent = this;
+    }
+
+    private bool IsHorizontalPlacement =>
+        TabPlacement is TabPlacement.Top or TabPlacement.Bottom;
+
+    private void OnTabPlacementChanged()
+    {
+        _headerStrip.Orientation = IsHorizontalPlacement
+            ? Orientation.Horizontal
+            : Orientation.Vertical;
+
+        for (int i = 0; i < _headerStrip.Count; i++)
+        {
+            if (_headerStrip[i] is TabHeaderButton button)
+            {
+                button.Placement = TabPlacement;
+            }
+        }
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -157,14 +189,16 @@ public sealed class TabControl : Control
             }
         }
 
-        if (e.Key == Key.Left)
+        if ((IsHorizontalPlacement && e.Key == Key.Left) ||
+            (!IsHorizontalPlacement && e.Key == Key.Up))
         {
             SelectPreviousTab();
             e.Handled = true;
             return;
         }
 
-        if (e.Key == Key.Right)
+        if ((IsHorizontalPlacement && e.Key == Key.Right) ||
+            (!IsHorizontalPlacement && e.Key == Key.Down))
         {
             SelectNextTab();
             e.Handled = true;
@@ -267,11 +301,20 @@ public sealed class TabControl : Control
 
         var inner = availableSize.Deflate(border);
 
-        _headerStrip.Measure(new Size(inner.Width, double.PositiveInfinity));
-        double headerH = _headerStrip.DesiredSize.Height;
+        _headerStrip.Measure(IsHorizontalPlacement
+            ? new Size(inner.Width, double.PositiveInfinity)
+            : new Size(double.PositiveInfinity, inner.Height));
 
-        double contentW = inner.Width;
-        double contentH = double.IsPositiveInfinity(inner.Height) ? double.PositiveInfinity : Math.Max(0, inner.Height - headerH);
+        double headerSize = IsHorizontalPlacement
+            ? _headerStrip.DesiredSize.Height
+            : _headerStrip.DesiredSize.Width;
+
+        double contentW = IsHorizontalPlacement
+            ? inner.Width
+            : SubtractAvailable(inner.Width, headerSize);
+        double contentH = IsHorizontalPlacement
+            ? SubtractAvailable(inner.Height, headerSize)
+            : inner.Height;
 
         var contentDesired = Size.Empty;
         var content = SelectedTab?.Content;
@@ -282,8 +325,12 @@ public sealed class TabControl : Control
             contentDesired = content.DesiredSize.Inflate(Padding);
         }
 
-        double desiredW = Math.Max(_headerStrip.DesiredSize.Width, contentDesired.Width);
-        double desiredH = headerH + contentDesired.Height;
+        double desiredW = IsHorizontalPlacement
+            ? Math.Max(_headerStrip.DesiredSize.Width, contentDesired.Width)
+            : _headerStrip.DesiredSize.Width + contentDesired.Width;
+        double desiredH = IsHorizontalPlacement
+            ? _headerStrip.DesiredSize.Height + contentDesired.Height
+            : Math.Max(_headerStrip.DesiredSize.Height, contentDesired.Height);
 
         return new Size(desiredW, desiredH).Inflate(border);
     }
@@ -295,10 +342,8 @@ public sealed class TabControl : Control
 
         var inner = bounds.Deflate(border);
 
-        double headerH = _headerStrip.DesiredSize.Height;
-        _headerStrip.Arrange(new Rect(inner.X, inner.Y, inner.Width, headerH));
-
-        var contentBounds = new Rect(inner.X, inner.Y + headerH, inner.Width, Math.Max(0, inner.Height - headerH));
+        var (headerBounds, contentBounds) = GetLayoutRects(inner);
+        _headerStrip.Arrange(headerBounds);
         SelectedTab?.Content?.Arrange(contentBounds.Deflate(Padding));
     }
 
@@ -313,30 +358,26 @@ public sealed class TabControl : Control
         var borderInset = GetBorderVisualInset();
         var inner = bounds.Deflate(new Thickness(borderInset));
 
-        double headerH = _headerStrip.Bounds.Height;
-        if (headerH <= 0)
-        {
-            headerH = _headerStrip.DesiredSize.Height;
-        }
-
         var contentBg = GetValue(BackgroundProperty);
-
-        var headerRect = new Rect(inner.X, inner.Y, inner.Width, Math.Max(0, headerH));
-
-        var contentRect = new Rect(
-            inner.X,
-            inner.Y + headerRect.Height,
-            inner.Width,
-            Math.Max(0, inner.Height - headerRect.Height));
+        var (_, contentRect) = GetLayoutRects(inner);
 
         var outline = BorderBrush;
 
-        if (contentRect.Height <= 0)
+        if (contentRect.Width <= 0 || contentRect.Height <= 0)
         {
             return;
         }
 
-        DrawBackgroundAndBorder(context, contentRect, contentBg, outline, new Thickness(BorderThickness), new CornerRadius(0, 0, CornerRadius, CornerRadius));
+        var cornerRadius = TabPlacement switch
+        {
+            TabPlacement.Bottom => new CornerRadius(CornerRadius, CornerRadius, 0, 0),
+            TabPlacement.Left => new CornerRadius(0, CornerRadius, CornerRadius, 0),
+            TabPlacement.Right => new CornerRadius(CornerRadius, 0, 0, CornerRadius),
+            _ => new CornerRadius(0, 0, CornerRadius, CornerRadius),
+        };
+
+        DrawBackgroundAndBorder(context, contentRect, contentBg, outline,
+            new Thickness(BorderThickness), cornerRadius);
         if (borderInset > 0)
         {
             DrawContentOutline(context, contentRect, contentBg, borderInset);
@@ -386,6 +427,7 @@ public sealed class TabControl : Control
                 IsSelected = i == SelectedIndex,
                 IsEnabled = tab.IsEnabled,
                 Content = tab.Header!,
+                Placement = TabPlacement,
             };
             header.ClickedCallback = idx =>
             {
@@ -563,6 +605,31 @@ public sealed class TabControl : Control
         }
     }
 
+    private static double SubtractAvailable(double available, double amount) =>
+        double.IsPositiveInfinity(available) ? double.PositiveInfinity : Math.Max(0, available - amount);
+
+    private (Rect Header, Rect Content) GetLayoutRects(Rect inner)
+    {
+        double headerWidth = Math.Clamp(_headerStrip.DesiredSize.Width, 0, inner.Width);
+        double headerHeight = Math.Clamp(_headerStrip.DesiredSize.Height, 0, inner.Height);
+
+        return TabPlacement switch
+        {
+            TabPlacement.Bottom => (
+                new Rect(inner.X, inner.Bottom - headerHeight, inner.Width, headerHeight),
+                new Rect(inner.X, inner.Y, inner.Width, Math.Max(0, inner.Height - headerHeight))),
+            TabPlacement.Left => (
+                new Rect(inner.X, inner.Y, headerWidth, inner.Height),
+                new Rect(inner.X + headerWidth, inner.Y, Math.Max(0, inner.Width - headerWidth), inner.Height)),
+            TabPlacement.Right => (
+                new Rect(inner.Right - headerWidth, inner.Y, headerWidth, inner.Height),
+                new Rect(inner.X, inner.Y, Math.Max(0, inner.Width - headerWidth), inner.Height)),
+            _ => (
+                new Rect(inner.X, inner.Y, inner.Width, headerHeight),
+                new Rect(inner.X, inner.Y + headerHeight, inner.Width, Math.Max(0, inner.Height - headerHeight))),
+        };
+    }
+
     private void DrawContentOutline(IGraphicsContext context, Rect contentRect, Color color, double thickness)
     {
         if (contentRect.Width <= 0 || contentRect.Height <= 0)
@@ -570,23 +637,66 @@ public sealed class TabControl : Control
             return;
         }
 
-        var halfThickness = (thickness / 2);
-
-        var topY = contentRect.Y;
-        var leftX = contentRect.X;
-        var rightX = contentRect.Right;
-
         if (SelectedIndex >= 0 &&
             SelectedIndex < _headerStrip.Count &&
-            _headerStrip[SelectedIndex] is TabHeaderButton btn &&
-            btn.Bounds.Width > 0)
+            _headerStrip[SelectedIndex] is TabHeaderButton btn)
         {
-            double gapL = Math.Clamp(btn.Bounds.Left + thickness, leftX, rightX);
-            double gapR = Math.Clamp(btn.Bounds.Right - thickness, leftX, rightX);
+            Rect rect;
+            if (IsHorizontalPlacement)
+            {
+                if (btn.Bounds.Width <= 0)
+                {
+                    return;
+                }
 
-            var rect = new Rect(gapL, topY - halfThickness, gapR - gapL, thickness * 2);
+                double gapLeft = Math.Clamp(btn.Bounds.Left + thickness, contentRect.Left, contentRect.Right);
+                double gapRight = Math.Clamp(btn.Bounds.Right - thickness, contentRect.Left, contentRect.Right);
+                if (gapRight <= gapLeft)
+                {
+                    return;
+                }
+
+                double edgeY = TabPlacement == TabPlacement.Bottom
+                    ? contentRect.Bottom
+                    : contentRect.Top;
+                // Centre a two-border-thickness seam on the content edge. This fully covers the
+                // outline for both inward-facing Top and outward-facing Bottom placements.
+                rect = new Rect(gapLeft, edgeY - thickness, gapRight - gapLeft, thickness * 2);
+            }
+            else
+            {
+                if (btn.Bounds.Height <= 0)
+                {
+                    return;
+                }
+
+                double gapTop = Math.Clamp(btn.Bounds.Top + thickness, contentRect.Top, contentRect.Bottom);
+                double gapBottom = Math.Clamp(btn.Bounds.Bottom - thickness, contentRect.Top, contentRect.Bottom);
+                if (gapBottom <= gapTop)
+                {
+                    return;
+                }
+
+                double edgeX = TabPlacement == TabPlacement.Right
+                    ? contentRect.Right
+                    : contentRect.Left;
+                // Right places the shared edge at the content's outer bound, so use the same
+                // centred seam as MewDock to avoid leaving a rounded/snapped border sliver.
+                rect = new Rect(edgeX - thickness, gapTop, thickness * 2, gapBottom - gapTop);
+            }
 
             context.FillRectangle(rect, color);
         }
     }
+}
+
+/// <summary>
+/// Specifies where a <see cref="TabControl"/> places its tab headers.
+/// </summary>
+public enum TabPlacement
+{
+    Top,
+    Bottom,
+    Left,
+    Right,
 }

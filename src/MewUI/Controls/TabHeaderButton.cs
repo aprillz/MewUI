@@ -8,6 +8,8 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal sealed class TabHeaderButton : ContentControl
 {
+    private TabPlacement _placement;
+
     public static readonly MewProperty<bool> IsSelectedProperty =
         MewProperty<bool>.Register<TabHeaderButton>(nameof(IsSelected), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState,
@@ -27,6 +29,21 @@ internal sealed class TabHeaderButton : ContentControl
     {
         get => GetValue(IsSelectedProperty);
         set => SetValue(IsSelectedProperty, value);
+    }
+
+    internal TabPlacement Placement
+    {
+        get => _placement;
+        set
+        {
+            if (_placement == value)
+            {
+                return;
+            }
+
+            _placement = value;
+            InvalidateVisual();
+        }
     }
 
     /// <summary>
@@ -116,9 +133,24 @@ internal sealed class TabHeaderButton : ContentControl
         double r = CornerRadius;
         double bt = BorderThickness;
 
-        // Top-only rounding + no bottom border for tab header
+        var (thickness, cornerRadius) = Placement switch
+        {
+            TabPlacement.Bottom => (
+                new Thickness(bt, 0, bt, bt),
+                new CornerRadius(0, 0, r, r)),
+            TabPlacement.Left => (
+                new Thickness(bt, bt, 0, bt),
+                new CornerRadius(r, 0, 0, r)),
+            TabPlacement.Right => (
+                new Thickness(0, bt, bt, bt),
+                new CornerRadius(0, r, r, 0)),
+            _ => (
+                new Thickness(bt, bt, bt, 0),
+                new CornerRadius(r, r, 0, 0)),
+        };
+
         DrawBackgroundAndBorder(context, GetSnappedBorderBounds(Bounds), bg, borderBrush,
-            new Thickness(bt, bt, bt, 0), new CornerRadius(r, r, 0, 0));
+            thickness, cornerRadius);
     }
 
     protected override void ArrangeContent(Rect bounds)
