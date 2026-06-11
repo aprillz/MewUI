@@ -9,6 +9,39 @@ partial class GalleryView
         var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
         Calendar calendar = null!;
 
+        FrameworkElement TabPlacementSample(
+            string title,
+            TabPlacement placement,
+            Rotation? headerRotation = null)
+        {
+            Element Header(string text)
+            {
+                var label = new TextBlock().Text(text);
+                return headerRotation is { } rotation
+                    ? new RotationDecorator()
+                        .Rotation(rotation)
+                        .Child(label)
+                    : label;
+            }
+
+            return new StackPanel()
+                .Vertical()
+                .Spacing(4)
+                .Children(
+                    new TextBlock()
+                        .Text(title)
+                        .FontSize(11),
+                    new TabControl()
+                        .Height(headerRotation is null ? 140 : 180)
+                        .TabPlacement(placement)
+                        .TabItems(
+                            new TabItem().Header(Header("Home")).Content(new TextBlock().Text("Home tab content")),
+                            new TabItem().Header(Header("Settings")).Content(new TextBlock().Text("Settings tab content")),
+                            new TabItem().Header(Header("About")).Content(new TextBlock().Text("About tab content"))
+                        )
+                );
+        }
+
         return CardGrid(
             Card(
                 "CheckBox",
@@ -40,7 +73,7 @@ partial class GalleryView
                     )
             ),
 
-            Card(
+        Card(
                 "ComboBox",
                 new StackPanel()
                     .Vertical()
@@ -117,25 +150,31 @@ partial class GalleryView
                     .Columns(2)
                     .Spacing(8)
                     .Children(
-                        new TabControl()
-                            .Height(120)
-                            .TabItems(
-                                new TabItem().Header("_Home").Content(new TextBlock().Text("Home tab content")),
-                                new TabItem().Header("Se_ttings").Content(new TextBlock().Text("Settings tab content")),
-                                new TabItem().Header("A_bout").Content(new TextBlock().Text("About tab content"))
-                            ),
+                        TabPlacementSample("Top", TabPlacement.Top),
+                        TabPlacementSample("Bottom", TabPlacement.Bottom),
+                        TabPlacementSample("Left", TabPlacement.Left),
+                        TabPlacementSample("Right", TabPlacement.Right)
+                    ),
+                minWidth: 700
+            ),
 
-                        new TabControl()
-                            .Height(120)
-                            .Disable()
-                            .TabItems(
-                                new TabItem().Header("Home").Content(new TextBlock().Text("Home tab content")),
-                                new TabItem().Header("Settings").Content(new TextBlock().Text("Settings tab content")),
-                                new TabItem().Header("About").Content(new TextBlock().Text("About tab content"))
-                            )
-                    )
+            Card(
+                "TabControl + RotationDecorator",
+                new UniformGrid()
+                    .Columns(2)
+                    .Spacing(8)
+                    .Children(
+                        TabPlacementSample(
+                            "Left",
+                            TabPlacement.Left,
+                            Rotation.CounterClockwise90),
+                        TabPlacementSample(
+                            "Right",
+                            TabPlacement.Right,
+                            Rotation.Clockwise90)
+                    ),
+                minWidth: 700
             )
         );
     }
 }
-
