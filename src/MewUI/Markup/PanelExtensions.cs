@@ -462,6 +462,28 @@ public static class PanelExtensions
     }
 
     /// <summary>
+    /// Sets horizontal orientation.
+    /// </summary>
+    /// <param name="panel">Target wrap panel.</param>
+    /// <returns>The wrap panel for chaining.</returns>
+    public static WrapPanel Horizontal(this WrapPanel panel)
+    {
+        panel.Orientation = MewUI.Orientation.Horizontal;
+        return panel;
+    }
+
+    /// <summary>
+    /// Sets vertical orientation.
+    /// </summary>
+    /// <param name="panel">Target wrap panel.</param>
+    /// <returns>The wrap panel for chaining.</returns>
+    public static WrapPanel Vertical(this WrapPanel panel)
+    {
+        panel.Orientation = MewUI.Orientation.Vertical;
+        return panel;
+    }
+
+    /// <summary>
     /// Sets the spacing between items.
     /// </summary>
     /// <param name="panel">Target wrap panel.</param>
