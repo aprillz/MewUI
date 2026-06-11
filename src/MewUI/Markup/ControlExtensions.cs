@@ -504,6 +504,36 @@ public static class ControlExtensions
 
     #endregion
 
+    #region RotationDecorator
+
+    /// <summary>
+    /// Sets the child of a rotation decorator.
+    /// </summary>
+    /// <param name="decorator">Target decorator.</param>
+    /// <param name="child">Child element.</param>
+    /// <returns>The decorator for chaining.</returns>
+    public static RotationDecorator Child(this RotationDecorator decorator, UIElement? child)
+    {
+        ArgumentNullException.ThrowIfNull(decorator);
+        decorator.Child = child;
+        return decorator;
+    }
+
+    /// <summary>
+    /// Sets the direction of a rotation decorator.
+    /// </summary>
+    /// <param name="decorator">Target decorator.</param>
+    /// <param name="rotation">Quarter-turn direction.</param>
+    /// <returns>The decorator for chaining.</returns>
+    public static RotationDecorator Rotation(this RotationDecorator decorator, Rotation rotation)
+    {
+        ArgumentNullException.ThrowIfNull(decorator);
+        decorator.Rotation = rotation;
+        return decorator;
+    }
+
+    #endregion
+
     #region HeaderedContentControl
 
     /// <summary>
