@@ -60,4 +60,9 @@ public ref struct BorderRenderMetrics
     public double UniformThickness => BorderThickness.Left;
     public double UniformRadius => CornerRadius.TopLeft;
     public double UniformInnerRadius => InnerTopLeftX;
+
+    /// <summary>True when any side has a positive thickness. Use this (not <see cref="UniformThickness"/>, which is
+    /// only the Left side) to gate border drawing on the non-uniform path, where Left may be 0 while others are not.</summary>
+    public readonly bool HasAnyBorder =>
+        BorderThickness.Left > 0 || BorderThickness.Top > 0 || BorderThickness.Right > 0 || BorderThickness.Bottom > 0;
 }
