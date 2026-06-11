@@ -2,7 +2,9 @@ using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal readonly record struct MewVGTextCacheKey(TextCacheKey Core);
+// Linear distinguishes rotated draws (which need smooth interpolation) from axis-aligned ones (crisp nearest),
+// so the two cache as separate atlas images.
+internal readonly record struct MewVGTextCacheKey(TextCacheKey Core, bool Linear = false);
 
 internal readonly record struct MewVGTextEntry(
     int ImageId,
@@ -69,7 +71,10 @@ internal sealed class MewVGTextCache : IDisposable
         // Source bitmap is BGRA — feed straight to NVG; GL backend uses GL_BGRA upload, no
         // CPU swap. Backends without native BGRA fall back to a one-time conversion in
         // NanoVG.CreateImageBGRA's default implementation.
-        int imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Nearest, bmp.Data);
+        // Nearest keeps pixel-snapped axis-aligned text crisp; rotated text asks for linear so it interpolates
+        // smoothly instead of breaking up into jaggies.
+        var flags = key.Linear ? NVGimageFlags.None : NVGimageFlags.Nearest;
+        int imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, flags, bmp.Data);
         if (imageId == 0)
         {
             return default;
