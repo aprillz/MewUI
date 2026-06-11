@@ -2,6 +2,7 @@
 
 MewUI의 C# Markup은 XAML 없이 순수 C# 코드로 UI를 선언적으로 구성할 수 있는 Fluent API입니다.
 Native AOT 컴파일과 호환되며, Reflection을 사용하지 않습니다.
+이 가이드의 메서드 시그니처는 `src/MewUI/Markup`의 공개 확장 메서드를 기준으로 합니다.
 
 ## 컨셉
 
@@ -234,7 +235,7 @@ new Window()
 | `Size(width, height)` | 창 크기 |
 | `Resizable(width, height)` | 크기 조절 가능 |
 | `Fixed(width, height)` | 고정 크기 |
-| `FitContentWidth(maxWidth, fixedHeight)` | 콘텐츠에 맞춤 (너비) |
+| `FitContentWidth(fixedHeight, maxWidth)` | 콘텐츠에 맞춤 (너비) |
 | `FitContentHeight(fixedWidth, maxHeight)` | 콘텐츠에 맞춤 (높이) |
 | `FitContentSize(maxWidth, maxHeight)` | 콘텐츠에 맞춤 |
 | `Content(Element)` | 창 내용 |
@@ -325,30 +326,34 @@ new MultiLineTextBox()
 
 ```csharp
 new CheckBox()
-    .Text("Enable feature")
+    .Content("Enable feature")
     .BindIsChecked(vm.IsEnabled)
 ```
 
 | 메서드 | 설명 |
 |--------|------|
-| `Text(string)` | 레이블 텍스트 |
-| `IsChecked(bool)` | 체크 상태 |
+| `Content(string)` | 레이블 텍스트 |
+| `IsChecked(bool?)` | 체크 상태 |
+| `Check()` / `Uncheck()` | 체크/체크 해제 단축 메서드 |
+| `Indeterminate()` | 미결정 상태 설정 |
+| `ThreeState()` | 3상태 모드 활성화 |
 | `OnCheckedChanged(Action<bool>)` | 체크 변경 핸들러 |
 | `BindIsChecked(ObservableValue<bool>)` | 체크 바인딩 |
-| `BindWrap(MultiLineTextBox)` | Wrap 속성 연동 |
+| `BindIsChecked(ObservableValue<bool?>)` | nullable 체크 바인딩 |
+| `OnCheckStateChanged(Action<bool?>)` | 3상태 변경 핸들러 |
 
 ### RadioButton
 
 ```csharp
 new RadioButton()
-    .Text("Option A")
+    .Content("Option A")
     .GroupName("options")
     .IsChecked(true)
 ```
 
 | 메서드 | 설명 |
 |--------|------|
-| `Text(string)` | 레이블 텍스트 |
+| `Content(string)` | 레이블 텍스트 |
 | `GroupName(string?)` | 그룹 이름 (같은 그룹 내 하나만 선택) |
 | `IsChecked(bool)` | 선택 상태 |
 | `OnCheckedChanged(Action<bool>)` | 선택 변경 핸들러 |
@@ -358,13 +363,13 @@ new RadioButton()
 
 ```csharp
 new ToggleSwitch()
-    .Text("Dark Mode")
+    .Content("Dark Mode")
     .BindIsChecked(vm.IsDarkMode)
 ```
 
 | 메서드 | 설명 |
 |--------|------|
-| `Text(string)` | 레이블 텍스트 |
+| `Content(string)` | 레이블 텍스트 |
 | `IsChecked(bool)` | 토글 상태 |
 | `OnCheckedChanged(Action<bool>)` | 토글 변경 핸들러 |
 | `BindIsChecked(ObservableValue<bool>)` | 토글 바인딩 |
@@ -384,7 +389,7 @@ new ListBox()
 | `ItemHeight(double)` | 아이템 높이 |
 | `ItemPadding(Thickness)` | 아이템 패딩 |
 | `SelectedIndex(int)` | 선택 인덱스 |
-| `OnSelectionChanged(Action<int>)` | 선택 변경 핸들러 |
+| `OnSelectionChanged(Action<object?>)` | 선택 변경 핸들러 |
 | `BindSelectedIndex(ObservableValue<int>)` | 선택 바인딩 |
 
 ### ComboBox
@@ -401,8 +406,42 @@ new ComboBox()
 | `Items(params string[])` | 아이템 목록 |
 | `SelectedIndex(int)` | 선택 인덱스 |
 | `Placeholder(string)` | 플레이스홀더 |
-| `OnSelectionChanged(Action<int>)` | 선택 변경 핸들러 |
+| `OnSelectionChanged(Action<object?>)` | 선택 변경 핸들러 |
 | `BindSelectedIndex(ObservableValue<int>)` | 선택 바인딩 |
+
+### GridView
+
+| 메서드 | 설명 |
+|--------|------|
+| `RowHeight(double)` | 행 높이 |
+| `HeaderHeight(double)` | 헤더 높이 |
+| `CellPadding(Thickness)` | 셀 패딩 |
+| `ZebraStriping(bool)` | 교대 행 배경 |
+| `ShowGridLines(bool)` | 그리드 선 표시 |
+| `Columns<TItem>(params GridViewColumn<TItem>[])` | 열 정의 |
+| `ItemsSource<TItem>(IReadOnlyList<TItem>)` | 아이템 소스 |
+| `ItemsSource<TItem>(ItemsView<TItem>)` | ItemsView 소스 |
+| `FixedHeightPresenter()` | 고정 높이 가상화 |
+| `VariableHeightPresenter()` | 가변 높이 가상화 |
+
+GridView 열에는 `Header(string)`, `Width(double)`, `MinWidth(double)`, `Resizable(bool)`을 사용할 수 있습니다.
+
+### TreeView
+
+| 메서드 | 설명 |
+|--------|------|
+| `ItemsSource(IReadOnlyList<TreeViewNode>)` | 루트 노드 |
+| `ItemsSource(ITreeItemsView)` | 트리 아이템 뷰 |
+| `SelectedNode(TreeViewNode?)` | 선택 노드 |
+| `ItemHeight(double)` | 아이템 높이 |
+| `ItemPadding(Thickness)` | 아이템 패딩 |
+| `ItemTemplate(IDataTemplate)` | 아이템 템플릿 |
+| `Indent(double)` | 자식 들여쓰기 |
+| `ExpandTrigger(TreeViewExpandTrigger)` | 확장 트리거 |
+| `Expand(TreeViewNode)` / `Collapse(TreeViewNode)` | 확장 상태 변경 |
+| `Toggle(TreeViewNode)` | 확장 상태 전환 |
+| `OnSelectionChanged(Action<object?>)` | 선택 변경 핸들러 |
+| `OnSelectedNodeChanged(Action<TreeViewNode?>)` | 선택 노드 변경 핸들러 |
 
 ### Slider
 
@@ -438,22 +477,60 @@ new ProgressBar()
 | `Value(double)` | 현재값 |
 | `BindValue(ObservableValue<double>)` | 값 바인딩 |
 
+### Calendar
+
+| 메서드 | 설명 |
+|--------|------|
+| `SelectedDate(DateTime?)` | 선택 날짜 |
+| `DisplayDate(DateTime)` | 표시 날짜 |
+| `DisplayMode(CalendarMode)` | 달력 표시 모드 |
+| `FirstDayOfWeek(DayOfWeek)` | 주의 첫 요일 |
+| `IsTodayHighlighted(bool)` | 오늘 강조 |
+| `OnSelectedDateChanged(Action<DateTime?>)` | 선택 날짜 변경 핸들러 |
+| `BindSelectedDate(ObservableValue<DateTime?>)` | 선택 날짜 바인딩 |
+
+### DatePicker
+
+| 메서드 | 설명 |
+|--------|------|
+| `SelectedDate(DateTime?)` | 선택 날짜 |
+| `Placeholder(string)` | 플레이스홀더 |
+| `DateFormat(string)` | 날짜 형식 |
+| `FirstDayOfWeek(DayOfWeek)` | 주의 첫 요일 |
+| `OnSelectedDateChanged(Action<DateTime?>)` | 선택 날짜 변경 핸들러 |
+| `BindSelectedDate(ObservableValue<DateTime?>)` | 선택 날짜 바인딩 |
+
+### ColorPicker
+
+| 메서드 | 설명 |
+|--------|------|
+| `SelectedColor(Color)` | 선택 색상 |
+| `OnSelectedColorChanged(Action<Color>)` | 선택 색상 변경 핸들러 |
+| `Kind(ColorPickerKind)` | 피커 표시 방식 |
+| `ShowAlpha(bool)` | 알파 컨트롤 표시 |
+
 ### Image
 
 ```csharp
 new Image()
     .SourceFile("logo.png")
     .Size(64, 64)
-    .StretchMode(ImageStretch.Uniform)
+    .StretchMode(Stretch.Uniform)
 ```
 
 | 메서드 | 설명 |
 |--------|------|
-| `Source(ImageSource?)` | 이미지 소스 |
+| `Source(IImageSource?)` | 이미지 소스 |
 | `SourceFile(string path)` | 파일에서 로드 |
 | `SourceResource(Assembly, string)` | 리소스에서 로드 |
 | `SourceResource<TAnchor>(string)` | 리소스에서 로드 (제네릭) |
-| `StretchMode(ImageStretch)` | 늘이기 모드 |
+| `StretchMode(Stretch)` | 늘이기 모드 |
+| `ImageScaleQuality(ImageScaleQuality)` | 스케일링 품질 |
+| `ViewBox(Rect?, ImageViewBoxUnits)` | 소스 뷰박스 |
+| `ViewBoxPixels(Rect?)` | 픽셀 기준 소스 뷰박스 |
+| `ViewBoxRelative(Rect?)` | 상대 좌표 소스 뷰박스 |
+| `AlignmentX(ImageAlignmentX)` | 수평 이미지 정렬 |
+| `AlignmentY(ImageAlignmentY)` | 수직 이미지 정렬 |
 
 ### TabControl
 
@@ -471,11 +548,8 @@ new TabControl()
 | `Tab(header, content)` | 탭 추가 (문자열 헤더) |
 | `Tab(Element header, content)` | 탭 추가 (요소 헤더) |
 | `SelectedIndex(int)` | 선택 탭 인덱스 |
-| `OnSelectionChanged(Action<int>)` | 탭 변경 핸들러 |
-| `VerticalScroll(ScrollMode)` | 수직 스크롤 |
-| `HorizontalScroll(ScrollMode)` | 수평 스크롤 |
-| `AutoVerticalScroll()` | 자동 수직 스크롤 |
-| `AutoHorizontalScroll()` | 자동 수평 스크롤 |
+| `TabPlacement(TabPlacement)` | 탭 헤더 위치 |
+| `OnSelectionChanged(Action<object?>)` | 탭 변경 핸들러 |
 
 ### TabItem
 
@@ -539,6 +613,10 @@ new ScrollViewer()
 | 메서드 | 설명 |
 |--------|------|
 | `Children(params Element[])` | 자식 요소 추가 |
+| `Padding(Thickness)` | 패널 패딩 |
+| `Padding(uniform)` | 균일 패널 패딩 |
+| `Padding(horizontal, vertical)` | 수평/수직 패널 패딩 |
+| `Padding(left, top, right, bottom)` | 개별 패널 패딩 |
 
 ### StackPanel
 
@@ -576,16 +654,44 @@ new Grid()
 | 메서드 | 설명 |
 |--------|------|
 | `Rows(params GridLength[])` | 행 정의 |
+| `Columns(params GridLength[])` | 열 정의 |
 | `Rows(string)` | 행 정의 (문자열: "Auto,*,2*,100") |
 | `Columns(string)` | 열 정의 (문자열) |
 | `Spacing(double)` | 셀 간 간격 |
 | `AutoIndexing(bool)` | 자동 인덱싱 (Row/Column 자동 증가) |
+| `ShowGridLine(bool)` | 레이아웃 그리드 선 표시 |
+| `ShareStarSize(bool)` | 중첩 Grid 간 Star 크기 공유 |
 
 **GridLength 문자열 문법:**
 - `Auto` - 내용에 맞춤
 - `*` - 1 비율
 - `2*` - 2 비율
 - `100` - 100 픽셀
+
+### SplitPanel
+
+```csharp
+new SplitPanel()
+    .Horizontal()
+    .FirstLength(new GridLength(1, GridUnitType.Star))
+    .SecondLength(new GridLength(2, GridUnitType.Star))
+    .SplitterThickness(6)
+    .First(leftPane)
+    .Second(rightPane)
+```
+
+| 메서드 | 설명 |
+|--------|------|
+| `Orientation(Orientation)` | 분할 방향 |
+| `Horizontal()` | 수평 분할 |
+| `Vertical()` | 수직 분할 |
+| `SplitterThickness(double)` | 분할선 두께 |
+| `FirstLength(GridLength)` | 첫 번째 영역 길이 |
+| `SecondLength(GridLength)` | 두 번째 영역 길이 |
+| `MinFirst(double)` / `MaxFirst(double)` | 첫 번째 영역 크기 제한 |
+| `MinSecond(double)` / `MaxSecond(double)` | 두 번째 영역 크기 제한 |
+| `First(UIElement?)` | 첫 번째 영역 콘텐츠 |
+| `Second(UIElement?)` | 두 번째 영역 콘텐츠 |
 
 ### UniformGrid
 
@@ -620,6 +726,8 @@ new WrapPanel()
 | 메서드 | 설명 |
 |--------|------|
 | `Orientation(Orientation)` | 방향 |
+| `Horizontal()` | 가로 방향 |
+| `Vertical()` | 세로 방향 |
 | `Spacing(double)` | 요소 간 간격 |
 | `ItemWidth(double)` | 아이템 너비 |
 | `ItemHeight(double)` | 아이템 높이 |
@@ -641,6 +749,86 @@ new DockPanel()
 |--------|------|
 | `LastChildFill(bool)` | 마지막 자식이 남은 공간 채움 |
 | `Spacing(double)` | 요소 간 간격 |
+
+---
+
+## 추가 확장 API
+
+아래 표는 나머지 공개 Markup 확장 메서드의 색인입니다. 여러 오버로드가 있는 메서드의 전체 매개변수는 IntelliSense 또는 XML API 문서를 참고합니다.
+
+### 공통 Element 및 Control
+
+| 메서드 | 용도 |
+|--------|------|
+| `Apply(...)`, `Register(...)`, `Template(...)` | 사용자 지정 초기화 및 템플릿 |
+| `Bind(...)` | 일반 속성 바인딩 |
+| `IsVisible(...)`, `Enable()`, `Disable()` | 표시 및 활성화 상태 |
+| `ClipToBounds(...)`, `Cursor(...)`, `Opacity(...)`, `Rotation(...)` | 시각 및 입력 속성 |
+| `CacheMode(...)`, `Cached()` | 렌더링 캐시 설정 |
+| `StyleName(...)`, `WithTheme(...)` | 스타일 및 테마 선택 |
+| `ToolTip(...)`, `ContextMenu(...)` | 보조 UI |
+| `Child(...)` | Decorator 자식 콘텐츠 |
+| `AccessKeyTarget(...)` | 액세스 키 대상 |
+| `SemiBold()` | Semibold 글꼴 단축 메서드 |
+| `TextTrimming(...)` | 텍스트 잘라내기 |
+
+### 입력 및 조합 이벤트
+
+| 메서드 | 용도 |
+|--------|------|
+| `OnDoubleClick(...)`, `OnMouseDoubleClick(...)` | 더블 클릭 핸들러 |
+| `OnTextCompositionStart(...)`, `OnTextCompositionUpdate(...)`, `OnTextCompositionEnd(...)` | 텍스트 조합 핸들러 |
+| `OnPreviewTextCompositionStart(...)`, `OnPreviewTextCompositionUpdate(...)`, `OnPreviewTextCompositionEnd(...)` | 미리보기 텍스트 조합 핸들러 |
+
+### Window 및 서비스
+
+| 메서드 | 용도 |
+|--------|------|
+| `Icon(...)`, `OnBuild(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | 창 설정 및 수명 주기 |
+| `OnWindowStateChanged(...)`, `Minimized()`, `Maximized()`, `Topmost(...)` | 창 상태 |
+| `StartCenterScreen()`, `StartCenterOwner()`, `StartManualPosition(...)` | 초기 창 위치 |
+| `ShowToast(...)`, `CreateBusyIndicator(...)` | 창 서비스 |
+
+### 아이템 및 선택
+
+| 메서드 | 용도 |
+|--------|------|
+| `AddColumn(...)` | GridView 열 추가 |
+| `StackPresenter()`, `WrapPresenter(...)` | 아이템 Presenter 선택 |
+| `ChangeOnWheel(...)` | 마우스 휠 값/선택 변경 |
+| `MaxMenuHeight(...)` | ContextMenu 높이 제한 |
+| `IsExpanded(...)`, `BindIsExpanded(...)`, `OnExpandedChanged(...)` | 확장 상태 |
+
+### 입력 컨트롤
+
+| 메서드 | 용도 |
+|--------|------|
+| `Password(...)`, `BindPassword(...)` | PasswordBox 값 및 바인딩 |
+| `Range(...)`, `Step(...)`, `Format(...)`, `IsInteger(...)` | 숫자 입력 설정 |
+| `OnChecked(...)`, `OnUnchecked(...)`, `IsThreeState(...)` | 체크/토글 상태 |
+
+### 메뉴
+
+| 메서드 | 용도 |
+|--------|------|
+| `Add(...)`, `Item(...)`, `SubMenu(...)`, `Separator()` | 메뉴 구성 |
+| `Menu(...)`, `Shortcut(...)` | MenuItem 하위 메뉴 및 단축키 |
+
+### Shape 및 Glyph
+
+| 메서드 | 용도 |
+|--------|------|
+| `Fill(...)`, `Stroke(...)`, `StrokeStyle(...)`, `Stretch(...)` | 도형 모양 |
+| `Data(...)`, `Points(...)`, `CornerRadius(...)` | 도형 지오메트리 |
+| `GlyphSize(...)`, `StrokeThickness(...)` | Glyph 모양 |
+
+### Timer 및 Style
+
+| 메서드 | 용도 |
+|--------|------|
+| `Interval(...)`, `IntervalMs(...)`, `OnTick(...)`, `Start()`, `Stop()` | DispatcherTimer 설정 |
+| `With(...)` | StyleSheet에 스타일 추가 |
+| `HeaderInset(...)` | 헤더 레이아웃 인셋 |
 
 ---
 
