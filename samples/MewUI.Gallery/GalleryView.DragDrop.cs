@@ -9,7 +9,6 @@ partial class GalleryView
 
     private readonly ObservableValue<string> _dropSummary = new(
         "Drop files on this window, or use the element-level drag below.");
-
     private readonly ObservableValue<string> _dragLog = new("(no drag yet)");
     private StackPanel? _slotA;
     private StackPanel? _slotB;
@@ -228,7 +227,8 @@ partial class GalleryView
             e.Data = data;
             e.AllowedEffects = DragDropEffects.Move | DragDropEffects.Copy;
             // Hotspot left null → router uses StartPositionInElement so the preview lines up with the grabbed chip.
-            e.Preview = new DragPreviewContent { Element = chip, Opacity = 0.7 };
+            // CrossWindow: this sample supports dropping the chip on a slot in another window (see DragCompleted).
+            e.Preview = new DragPreviewContent { Scope = DragPreviewScope.CrossWindow, Element = chip, Opacity = 0.7 };
             _dragLog.Value = $"Starting drag for '{label}'";
         };
         chip.DragCompleted += e =>
@@ -236,7 +236,8 @@ partial class GalleryView
             _dragLog.Value = $"Drag of '{label}' completed: {e.FinalEffect}" + (e.WasCanceled ? " (canceled)" : "");
             if (e.FinalEffect == DragDropEffects.Move && !e.WasCanceled)
             {
-                // Remove the chip from its original parent panel.
+                // Remove the chip from its original parent panel. Works across windows too: when the chip is
+                // dropped on a slot in another window, that slot reports Move and the router returns it here.
                 if (chip.Parent is StackPanel parent)
                 {
                     parent.Remove(chip);
@@ -244,5 +245,65 @@ partial class GalleryView
             }
         };
         return chip;
+    }
+
+    // --- Cross-window drag and drop -------------------------------------------------------------------
+    // Demonstrates same-process cross-window routing: open a second window and drag chips between it and the
+    // main window. The router (Application.AllWindows + global cursor) handles the window hand-off; the slots
+    // and chips are the same components used in the single-window sample.
+
+    private FrameworkElement CrossWindowDragDropCard()
+    {
+        var source = new StackPanel().Vertical().Spacing(4);
+        foreach (var label in new[] { "Red", "Green", "Blue" })
+        {
+            source.Add(BuildDragChip(label));
+        }
+
+        return Card(
+            "Cross-Window Drag and Drop",
+            new StackPanel()
+                .Width(320)
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new TextBlock()
+                        .FontSize(11)
+                        .TextWrapping(TextWrapping.Wrap)
+                        .Text("Open a second window, then drag a chip from here into its slot (and back). "
+                            + "Same-process routing — no OS clipboard, the .NET payload is passed by reference."),
+                    new Button()
+                        .Content("Open second window")
+                        .OnClick(OpenCrossWindowTarget),
+                    BuildDragSlot("Drag from here", source)),
+            minWidth: 320);
+    }
+
+    private void OpenCrossWindowTarget()
+    {
+        var target = new StackPanel().Vertical().Spacing(4);
+        target.Add(BuildDragChip("Yellow"));
+
+        Window second = null!;
+        new Window()
+            .Ref(out second)
+            .Resizable(340, 280)
+            .StartCenterOwner()
+            .OnBuild(x =>
+            {
+                x.Title = "Cross-Window D&D";
+                x.Padding = new Thickness(16);
+                x.Content = new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new TextBlock()
+                            .FontSize(11)
+                            .TextWrapping(TextWrapping.Wrap)
+                            .Text("Drag chips here from the main window — or drag 'Yellow' back."),
+                        BuildDragSlot("Drop here", target));
+            });
+
+        second.Show(window);
     }
 }

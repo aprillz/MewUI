@@ -179,6 +179,8 @@ partial class GalleryView
 
                 WindowDragDropCard(),
 
-                ElementDragDropCard()
+                ElementDragDropCard(),
+
+                CrossWindowDragDropCard()
              );
 }
