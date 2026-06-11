@@ -2,6 +2,7 @@
 
 MewUI's C# Markup is a Fluent API that allows you to declaratively build UI with pure C# code without XAML.
 It is compatible with Native AOT compilation and does not use Reflection.
+Method signatures in this guide follow the public extension methods in `src/MewUI/Markup`.
 
 ## Concept
 
@@ -234,7 +235,7 @@ new Window()
 | `Size(width, height)` | Window size |
 | `Resizable(width, height)` | Resizable |
 | `Fixed(width, height)` | Fixed size |
-| `FitContentWidth(maxWidth, fixedHeight)` | Fit content (width) |
+| `FitContentWidth(fixedHeight, maxWidth)` | Fit content (width) |
 | `FitContentHeight(fixedWidth, maxHeight)` | Fit content (height) |
 | `FitContentSize(maxWidth, maxHeight)` | Fit content |
 | `Content(Element)` | Window content |
@@ -325,30 +326,34 @@ new MultiLineTextBox()
 
 ```csharp
 new CheckBox()
-    .Text("Enable feature")
+    .Content("Enable feature")
     .BindIsChecked(vm.IsEnabled)
 ```
 
 | Method | Description |
 |--------|-------------|
-| `Text(string)` | Label text |
-| `IsChecked(bool)` | Checked state |
+| `Content(string)` | Label text |
+| `IsChecked(bool?)` | Checked state |
+| `Check()` / `Uncheck()` | Checked/unchecked shortcut |
+| `Indeterminate()` | Set indeterminate state |
+| `ThreeState()` | Enable three-state mode |
 | `OnCheckedChanged(Action<bool>)` | Checked changed handler |
 | `BindIsChecked(ObservableValue<bool>)` | Checked binding |
-| `BindWrap(MultiLineTextBox)` | Link to Wrap property |
+| `BindIsChecked(ObservableValue<bool?>)` | Nullable checked binding |
+| `OnCheckStateChanged(Action<bool?>)` | Three-state change handler |
 
 ### RadioButton
 
 ```csharp
 new RadioButton()
-    .Text("Option A")
+    .Content("Option A")
     .GroupName("options")
     .IsChecked(true)
 ```
 
 | Method | Description |
 |--------|-------------|
-| `Text(string)` | Label text |
+| `Content(string)` | Label text |
 | `GroupName(string?)` | Group name (only one selected in same group) |
 | `IsChecked(bool)` | Selected state |
 | `OnCheckedChanged(Action<bool>)` | Selection changed handler |
@@ -358,13 +363,13 @@ new RadioButton()
 
 ```csharp
 new ToggleSwitch()
-    .Text("Dark Mode")
+    .Content("Dark Mode")
     .BindIsChecked(vm.IsDarkMode)
 ```
 
 | Method | Description |
 |--------|-------------|
-| `Text(string)` | Label text |
+| `Content(string)` | Label text |
 | `IsChecked(bool)` | Toggle state |
 | `OnCheckedChanged(Action<bool>)` | Toggle changed handler |
 | `BindIsChecked(ObservableValue<bool>)` | Toggle binding |
@@ -384,7 +389,7 @@ new ListBox()
 | `ItemHeight(double)` | Item height |
 | `ItemPadding(Thickness)` | Item padding |
 | `SelectedIndex(int)` | Selected index |
-| `OnSelectionChanged(Action<int>)` | Selection changed handler |
+| `OnSelectionChanged(Action<object?>)` | Selection changed handler |
 | `BindSelectedIndex(ObservableValue<int>)` | Selection binding |
 
 ### ComboBox
@@ -401,8 +406,42 @@ new ComboBox()
 | `Items(params string[])` | Item list |
 | `SelectedIndex(int)` | Selected index |
 | `Placeholder(string)` | Placeholder |
-| `OnSelectionChanged(Action<int>)` | Selection changed handler |
+| `OnSelectionChanged(Action<object?>)` | Selection changed handler |
 | `BindSelectedIndex(ObservableValue<int>)` | Selection binding |
+
+### GridView
+
+| Method | Description |
+|--------|-------------|
+| `RowHeight(double)` | Row height |
+| `HeaderHeight(double)` | Header height |
+| `CellPadding(Thickness)` | Cell padding |
+| `ZebraStriping(bool)` | Alternate row backgrounds |
+| `ShowGridLines(bool)` | Show grid lines |
+| `Columns<TItem>(params GridViewColumn<TItem>[])` | Column definitions |
+| `ItemsSource<TItem>(IReadOnlyList<TItem>)` | Item source |
+| `ItemsSource<TItem>(ItemsView<TItem>)` | Items view source |
+| `FixedHeightPresenter()` | Fixed-height virtualization |
+| `VariableHeightPresenter()` | Variable-height virtualization |
+
+Grid view columns support `Header(string)`, `Width(double)`, `MinWidth(double)`, and `Resizable(bool)`.
+
+### TreeView
+
+| Method | Description |
+|--------|-------------|
+| `ItemsSource(IReadOnlyList<TreeViewNode>)` | Root nodes |
+| `ItemsSource(ITreeItemsView)` | Tree items view |
+| `SelectedNode(TreeViewNode?)` | Selected node |
+| `ItemHeight(double)` | Item height |
+| `ItemPadding(Thickness)` | Item padding |
+| `ItemTemplate(IDataTemplate)` | Item template |
+| `Indent(double)` | Child indentation |
+| `ExpandTrigger(TreeViewExpandTrigger)` | Expansion trigger |
+| `Expand(TreeViewNode)` / `Collapse(TreeViewNode)` | Change expansion state |
+| `Toggle(TreeViewNode)` | Toggle expansion state |
+| `OnSelectionChanged(Action<object?>)` | Selection changed handler |
+| `OnSelectedNodeChanged(Action<TreeViewNode?>)` | Selected node changed handler |
 
 ### Slider
 
@@ -438,22 +477,60 @@ new ProgressBar()
 | `Value(double)` | Current value |
 | `BindValue(ObservableValue<double>)` | Value binding |
 
+### Calendar
+
+| Method | Description |
+|--------|-------------|
+| `SelectedDate(DateTime?)` | Selected date |
+| `DisplayDate(DateTime)` | Displayed date |
+| `DisplayMode(CalendarMode)` | Calendar display mode |
+| `FirstDayOfWeek(DayOfWeek)` | First day of week |
+| `IsTodayHighlighted(bool)` | Highlight today |
+| `OnSelectedDateChanged(Action<DateTime?>)` | Selected date changed handler |
+| `BindSelectedDate(ObservableValue<DateTime?>)` | Selected date binding |
+
+### DatePicker
+
+| Method | Description |
+|--------|-------------|
+| `SelectedDate(DateTime?)` | Selected date |
+| `Placeholder(string)` | Placeholder |
+| `DateFormat(string)` | Date format |
+| `FirstDayOfWeek(DayOfWeek)` | First day of week |
+| `OnSelectedDateChanged(Action<DateTime?>)` | Selected date changed handler |
+| `BindSelectedDate(ObservableValue<DateTime?>)` | Selected date binding |
+
+### ColorPicker
+
+| Method | Description |
+|--------|-------------|
+| `SelectedColor(Color)` | Selected color |
+| `OnSelectedColorChanged(Action<Color>)` | Selected color changed handler |
+| `Kind(ColorPickerKind)` | Picker presentation |
+| `ShowAlpha(bool)` | Show alpha controls |
+
 ### Image
 
 ```csharp
 new Image()
     .SourceFile("logo.png")
     .Size(64, 64)
-    .StretchMode(ImageStretch.Uniform)
+    .StretchMode(Stretch.Uniform)
 ```
 
 | Method | Description |
 |--------|-------------|
-| `Source(ImageSource?)` | Image source |
+| `Source(IImageSource?)` | Image source |
 | `SourceFile(string path)` | Load from file |
 | `SourceResource(Assembly, string)` | Load from resource |
 | `SourceResource<TAnchor>(string)` | Load from resource (generic) |
-| `StretchMode(ImageStretch)` | Stretch mode |
+| `StretchMode(Stretch)` | Stretch mode |
+| `ImageScaleQuality(ImageScaleQuality)` | Scaling quality |
+| `ViewBox(Rect?, ImageViewBoxUnits)` | Source view box |
+| `ViewBoxPixels(Rect?)` | Pixel-based source view box |
+| `ViewBoxRelative(Rect?)` | Relative source view box |
+| `AlignmentX(ImageAlignmentX)` | Horizontal image alignment |
+| `AlignmentY(ImageAlignmentY)` | Vertical image alignment |
 
 ### TabControl
 
@@ -471,11 +548,8 @@ new TabControl()
 | `Tab(header, content)` | Add tab (string header) |
 | `Tab(Element header, content)` | Add tab (element header) |
 | `SelectedIndex(int)` | Selected tab index |
-| `OnSelectionChanged(Action<int>)` | Tab changed handler |
-| `VerticalScroll(ScrollMode)` | Vertical scroll |
-| `HorizontalScroll(ScrollMode)` | Horizontal scroll |
-| `AutoVerticalScroll()` | Auto vertical scroll |
-| `AutoHorizontalScroll()` | Auto horizontal scroll |
+| `TabPlacement(TabPlacement)` | Tab header placement |
+| `OnSelectionChanged(Action<object?>)` | Tab changed handler |
 
 ### TabItem
 
@@ -539,6 +613,10 @@ new ScrollViewer()
 | Method | Description |
 |--------|-------------|
 | `Children(params Element[])` | Add child elements |
+| `Padding(Thickness)` | Panel padding |
+| `Padding(uniform)` | Uniform panel padding |
+| `Padding(horizontal, vertical)` | Horizontal/vertical panel padding |
+| `Padding(left, top, right, bottom)` | Individual panel padding |
 
 ### StackPanel
 
@@ -576,16 +654,44 @@ new Grid()
 | Method | Description |
 |--------|-------------|
 | `Rows(params GridLength[])` | Row definitions |
+| `Columns(params GridLength[])` | Column definitions |
 | `Rows(string)` | Row definitions (string: "Auto,*,2*,100") |
 | `Columns(string)` | Column definitions (string) |
 | `Spacing(double)` | Cell spacing |
 | `AutoIndexing(bool)` | Auto indexing (Row/Column auto-increment) |
+| `ShowGridLine(bool)` | Show layout grid lines |
+| `ShareStarSize(bool)` | Share star sizing across nested grids |
 
 **GridLength String Syntax:**
 - `Auto` - Fit to content
 - `*` - 1 star ratio
 - `2*` - 2 star ratio
 - `100` - 100 pixels
+
+### SplitPanel
+
+```csharp
+new SplitPanel()
+    .Horizontal()
+    .FirstLength(new GridLength(1, GridUnitType.Star))
+    .SecondLength(new GridLength(2, GridUnitType.Star))
+    .SplitterThickness(6)
+    .First(leftPane)
+    .Second(rightPane)
+```
+
+| Method | Description |
+|--------|-------------|
+| `Orientation(Orientation)` | Split direction |
+| `Horizontal()` | Horizontal split |
+| `Vertical()` | Vertical split |
+| `SplitterThickness(double)` | Splitter thickness |
+| `FirstLength(GridLength)` | First pane length |
+| `SecondLength(GridLength)` | Second pane length |
+| `MinFirst(double)` / `MaxFirst(double)` | First pane size limits |
+| `MinSecond(double)` / `MaxSecond(double)` | Second pane size limits |
+| `First(UIElement?)` | First pane content |
+| `Second(UIElement?)` | Second pane content |
 
 ### UniformGrid
 
@@ -620,6 +726,8 @@ new WrapPanel()
 | Method | Description |
 |--------|-------------|
 | `Orientation(Orientation)` | Direction |
+| `Horizontal()` | Horizontal direction |
+| `Vertical()` | Vertical direction |
 | `Spacing(double)` | Spacing between elements |
 | `ItemWidth(double)` | Item width |
 | `ItemHeight(double)` | Item height |
@@ -641,6 +749,86 @@ new DockPanel()
 |--------|-------------|
 | `LastChildFill(bool)` | Last child fills remaining space |
 | `Spacing(double)` | Spacing between elements |
+
+---
+
+## Additional Extension API
+
+The tables below index the remaining public markup extensions. Some methods have multiple overloads; use IntelliSense or the XML API documentation for complete parameter details.
+
+### Common Element and Control
+
+| Methods | Purpose |
+|---------|---------|
+| `Apply(...)`, `Register(...)`, `Template(...)` | Custom initialization and templates |
+| `Bind(...)` | Generic property binding |
+| `IsVisible(...)`, `Enable()`, `Disable()` | Visibility and enabled state |
+| `ClipToBounds(...)`, `Cursor(...)`, `Opacity(...)`, `Rotation(...)` | Visual and input properties |
+| `CacheMode(...)`, `Cached()` | Rendering cache configuration |
+| `StyleName(...)`, `WithTheme(...)` | Style and theme selection |
+| `ToolTip(...)`, `ContextMenu(...)` | Auxiliary UI |
+| `Child(...)` | Decorator child content |
+| `AccessKeyTarget(...)` | Access-key target |
+| `SemiBold()` | Semibold font shortcut |
+| `TextTrimming(...)` | Text trimming |
+
+### Input and Composition Events
+
+| Methods | Purpose |
+|---------|---------|
+| `OnDoubleClick(...)`, `OnMouseDoubleClick(...)` | Double-click handlers |
+| `OnTextCompositionStart(...)`, `OnTextCompositionUpdate(...)`, `OnTextCompositionEnd(...)` | Text composition handlers |
+| `OnPreviewTextCompositionStart(...)`, `OnPreviewTextCompositionUpdate(...)`, `OnPreviewTextCompositionEnd(...)` | Preview text composition handlers |
+
+### Window and Services
+
+| Methods | Purpose |
+|---------|---------|
+| `Icon(...)`, `OnBuild(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | Window configuration and lifecycle |
+| `OnWindowStateChanged(...)`, `Minimized()`, `Maximized()`, `Topmost(...)` | Window state |
+| `StartCenterScreen()`, `StartCenterOwner()`, `StartManualPosition(...)` | Initial window position |
+| `ShowToast(...)`, `CreateBusyIndicator(...)` | Window services |
+
+### Items and Selection
+
+| Methods | Purpose |
+|---------|---------|
+| `AddColumn(...)` | Add a GridView column |
+| `StackPresenter()`, `WrapPresenter(...)` | Items presenter selection |
+| `ChangeOnWheel(...)` | Mouse-wheel value/selection changes |
+| `MaxMenuHeight(...)` | Context menu height limit |
+| `IsExpanded(...)`, `BindIsExpanded(...)`, `OnExpandedChanged(...)` | Expanded state |
+
+### Input Controls
+
+| Methods | Purpose |
+|---------|---------|
+| `Password(...)`, `BindPassword(...)` | PasswordBox value and binding |
+| `Range(...)`, `Step(...)`, `Format(...)`, `IsInteger(...)` | Numeric input configuration |
+| `OnChecked(...)`, `OnUnchecked(...)`, `IsThreeState(...)` | Check/toggle state |
+
+### Menus
+
+| Methods | Purpose |
+|---------|---------|
+| `Add(...)`, `Item(...)`, `SubMenu(...)`, `Separator()` | Build menus |
+| `Menu(...)`, `Shortcut(...)` | Menu item submenu and shortcut |
+
+### Shapes and Glyphs
+
+| Methods | Purpose |
+|---------|---------|
+| `Fill(...)`, `Stroke(...)`, `StrokeStyle(...)`, `Stretch(...)` | Shape appearance |
+| `Data(...)`, `Points(...)`, `CornerRadius(...)` | Shape geometry |
+| `GlyphSize(...)`, `StrokeThickness(...)` | Glyph appearance |
+
+### Timer and Styles
+
+| Methods | Purpose |
+|---------|---------|
+| `Interval(...)`, `IntervalMs(...)`, `OnTick(...)`, `Start()`, `Stop()` | DispatcherTimer configuration |
+| `With(...)` | Add styles to a StyleSheet |
+| `HeaderInset(...)` | Header layout inset |
 
 ---
 
