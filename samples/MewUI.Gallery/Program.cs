@@ -9,6 +9,13 @@ using Aprillz.MewUI.Gallery;
 [assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
 #endif
 
+
+if (OperatingSystem.IsWindows())
+{
+    Thread.CurrentThread.SetApartmentState(ApartmentState.Unknown);
+    Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
+}
+
 var stopwatch = Stopwatch.StartNew();
 Startup();
 IconSource icon;
@@ -235,16 +242,16 @@ FrameworkElement ThemeModePicker() => new StackPanel()
             .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark))
     );
 
-FrameworkElement AccentPicker() => new WrapPanel()
-    .Orientation(Orientation.Horizontal)
+FrameworkElement AccentPicker() => new StackPanel()
+    .Horizontal()
     .Spacing(6)
-    .CenterVertical()
-    .ItemWidth(22)
-    .ItemHeight(22)
     .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray());
 
 Button AccentSwatch(Accent accent) => new Button()
-    .CornerRadius(14)
+    .CornerRadius(11)
+    .CenterVertical()
+    .Width(22)
+    .Height(22)
     .BorderThickness(0)
     .Content(string.Empty)
     .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
