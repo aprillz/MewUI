@@ -467,6 +467,40 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal bool IsAlertWindow { get; set; }
 
     /// <summary>
+    /// Gets or sets whether this is a floating tool/utility window: a thin native title bar with move and
+    /// close only (no minimize/maximize), excluded from the taskbar, floating above its <see cref="Owner"/>.
+    /// Must be set BEFORE <see cref="Show(Window?)"/> (the native window is built from it); setting it
+    /// after the window is shown throws. Ignored when <see cref="AllowsTransparency"/> is true (which removes
+    /// the chrome entirely).
+    /// </summary>
+    public bool IsToolWindow
+    {
+        get;
+        set
+        {
+            if (_backend is not null)
+            {
+                throw new InvalidOperationException("IsToolWindow must be set before the window is shown.");
+            }
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether this is a click-through, non-activating overlay window (set only by <see cref="OverlayWindow"/>):
+    /// mouse events pass through to whatever is behind it and showing it never steals focus. Framework-internal;
+    /// each backend maps it to its native click-through and non-activating window flags.
+    /// </summary>
+    internal bool IsOverlayWindow { get; init; }
+
+    /// <summary>
+    /// The opaque color a non-transparent window clears to: the user-set <see cref="Control.Background"/> when it
+    /// is opaque, otherwise the themed window background. Backends use this to seed the native window background so
+    /// the surface is filled on map instead of showing through until the first paint.
+    /// </summary>
+    internal Color EffectiveOpaqueBackground => Background.A > 0 ? Background : Theme.Palette.WindowBackground;
+
+    /// <summary>
     /// Gets or sets the initial window placement behavior.
     /// Must be set before <see cref="Show"/> is called.
     /// </summary>
@@ -1024,6 +1058,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // may reset when the window is first ordered on screen.
         _backend!.EnsureTheme(Theme.IsDark);
         _lifetimeState = WindowLifetimeState.Shown;
+
+        // Establish the OS-level owner relationship so the window stays above its owner in z-order and shares
+        // its lifetime (it was previously set only at the framework level, used for positioning, which left the
+        // native window independent and able to fall behind its owner). Modal ShowDialog does this separately.
+        if (owner != null && Handle != 0)
+        {
+            _backend!.SetOwner(owner.Handle);
+        }
 
         // Raise Loaded once, and only after the application's dispatcher is ready.
         // Do not rely on PlatformHost.Run ordering: a first render can happen during Show on some platforms.
@@ -2008,7 +2050,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             else
             {
                 // Default to an opaque window background when the user does not specify one.
-                clearColor = Background.A > 0 ? Background : Theme.Palette.WindowBackground;
+                clearColor = EffectiveOpaqueBackground;
             }
 
             phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
