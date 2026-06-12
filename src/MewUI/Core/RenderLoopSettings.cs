@@ -1,11 +1,15 @@
 namespace Aprillz.MewUI;
 
 /// <summary>
-/// Controls the application's render loop scheduling.
+/// Controls the application's render loop scheduling. Continuous rendering has exactly two inputs: the user
+/// <see cref="Continuous"/> flag, and active animations (driven internally by the animation system). The platform
+/// host reads <see cref="IsContinuous"/> - the OR of those (plus VSync-off) - each frame; nothing sets the loop mode
+/// directly.
 /// </summary>
 public sealed class RenderLoopSettings
 {
-    private int _mode;
+    private int _continuous;
+    private int _animationActive;
     private int _targetFps;
     private int _vsyncEnabled = 1;
 
@@ -14,19 +18,13 @@ public sealed class RenderLoopSettings
     }
 
     /// <summary>
-    /// Gets or sets the render loop mode.
+    /// User flag: force the render loop to run continuously. This is the only direct way to request continuous
+    /// rendering; the animation system requests it on its own (see <see cref="IsContinuous"/>) while clocks run.
     /// </summary>
-    public RenderLoopMode Mode
+    public bool Continuous
     {
-        get => (RenderLoopMode)Volatile.Read(ref _mode);
-        set
-        {
-            int next = (int)value;
-            if (Interlocked.Exchange(ref _mode, next) == next)
-            {
-                return;
-            }
-        }
+        get => Volatile.Read(ref _continuous) != 0;
+        set => Interlocked.Exchange(ref _continuous, value ? 1 : 0);
     }
 
     /// <summary>
@@ -35,13 +33,7 @@ public sealed class RenderLoopSettings
     public int TargetFps
     {
         get => Volatile.Read(ref _targetFps);
-        set
-        {
-            if (Interlocked.Exchange(ref _targetFps, value) == value)
-            {
-                return;
-            }
-        }
+        set => Interlocked.Exchange(ref _targetFps, value);
     }
 
     /// <summary>
@@ -50,25 +42,25 @@ public sealed class RenderLoopSettings
     public bool VSyncEnabled
     {
         get => Volatile.Read(ref _vsyncEnabled) != 0;
-        set
-        {
-            int next = value ? 1 : 0;
-            if (Interlocked.Exchange(ref _vsyncEnabled, next) == next)
-            {
-                return;
-            }
-        }
+        set => Interlocked.Exchange(ref _vsyncEnabled, value ? 1 : 0);
     }
 
     /// <summary>
-    /// Returns true when the render loop should run continuously:
-    /// either VSync is disabled or the mode is explicitly set to <see cref="RenderLoopMode.Continuous"/>.
+    /// Driven by the animation system: true while one or more animation clocks are active. Not a user knob - set the
+    /// <see cref="Continuous"/> flag to force continuous rendering yourself.
     /// </summary>
-    public bool IsContinuous => !VSyncEnabled || Mode == RenderLoopMode.Continuous;
+    internal bool AnimationActive
+    {
+        get => Volatile.Read(ref _animationActive) != 0;
+        set => Interlocked.Exchange(ref _animationActive, value ? 1 : 0);
+    }
 
     /// <summary>
-    /// Convenience helper to toggle <see cref="RenderLoopMode.Continuous"/>.
+    /// True when the render loop should run continuously: VSync is off, the user <see cref="Continuous"/> flag is set,
+    /// or animations are active. The single value the platform host reads each frame.
     /// </summary>
-    public void SetContinuous(bool enabled)
-        => Mode = enabled ? RenderLoopMode.Continuous : RenderLoopMode.OnRequest;
+    public bool IsContinuous => !VSyncEnabled || Continuous || AnimationActive;
+
+    /// <summary>Convenience toggle for the user <see cref="Continuous"/> flag.</summary>
+    public void SetContinuous(bool enabled) => Continuous = enabled;
 }

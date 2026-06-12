@@ -214,7 +214,15 @@ partial class Window
             if (loop != null)
             {
                 text.Append("Loop ");
-                AppendRenderLoopMode(ref text, loop.Mode);
+                if (loop.IsContinuous)
+                {
+                    text.Append("Continuous");
+                    text.Append(loop.Continuous ? " user" : loop.AnimationActive ? " anim" : " vsync");
+                }
+                else
+                {
+                    text.Append("OnRequest");
+                }
                 text.Append("  VSync ");
                 text.Append(loop.VSyncEnabled);
                 text.Append("  Target ");
@@ -996,22 +1004,6 @@ partial class Window
         private void DrawEmpty(IGraphicsContext context, Rect rect, string text)
         {
             context.DrawText(text, rect, GetFont(), Color.FromArgb(255, 180, 180, 180), TextAlignment.Center, TextAlignment.Center, TextWrapping.NoWrap);
-        }
-    }
-
-    private static void AppendRenderLoopMode(ref StackTextFormatter formatter, RenderLoopMode mode)
-    {
-        switch (mode)
-        {
-            case RenderLoopMode.OnRequest:
-                formatter.Append("OnRequest");
-                break;
-            case RenderLoopMode.Continuous:
-                formatter.Append("Continuous");
-                break;
-            default:
-                formatter.Append((int)mode);
-                break;
         }
     }
 
