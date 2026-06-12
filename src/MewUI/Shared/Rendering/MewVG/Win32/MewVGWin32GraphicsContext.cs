@@ -157,11 +157,10 @@ internal sealed partial class MewVGWin32GraphicsContext
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
-            double worldLeft = bounds.X + _transform.M31;
-            double worldTop = bounds.Y + _transform.M32;
-            double worldRight = worldLeft + widthPx / DpiScale;
-            double worldBottom = worldTop + heightPx / DpiScale;
-            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+            // Transform the full text rect (rotation/skew aware, not just translation) before the clip test, so
+            // rotated text is not wrongly culled and skipped.
+            var worldText = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            if (worldText.Right <= c.X || worldText.X >= c.Right || worldText.Bottom <= c.Y || worldText.Y >= c.Bottom)
                 return;
         }
 
@@ -295,11 +294,10 @@ internal sealed partial class MewVGWin32GraphicsContext
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
-            double worldLeft = bounds.X + _transform.M31;
-            double worldTop = bounds.Y + _transform.M32;
-            double worldRight = worldLeft + widthPx / DpiScale;
-            double worldBottom = worldTop + heightPx / DpiScale;
-            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+            // Transform the full text rect (rotation/skew aware, not just translation) before the clip test, so
+            // rotated text is not wrongly culled and skipped.
+            var worldText = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            if (worldText.Right <= c.X || worldText.X >= c.Right || worldText.Bottom <= c.Y || worldText.Y >= c.Bottom)
                 return;
         }
 

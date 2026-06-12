@@ -506,15 +506,13 @@ internal sealed partial class MewVGMacOSGraphicsContext
         }
         int heightPx = Math.Max(1, LayoutRounding.CeilToPixelInt(targetHeightDip, DpiScale));
 
-        // Early clip cull: skip text entirely outside the current scissor region.
+        // Early clip cull: skip text entirely outside the current scissor region. Use the FULL transform (4-corner
+        // AABB) so rotated text is not wrongly culled - a translation-only box left rotated text blank.
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
-            double worldLeft = bounds.X + _transform.M31;
-            double worldTop = bounds.Y + _transform.M32;
-            double worldRight = worldLeft + widthPx / DpiScale;
-            double worldBottom = worldTop + heightPx / DpiScale;
-            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+            var textWorld = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            if (textWorld.Right <= c.X || textWorld.X >= c.Right || textWorld.Bottom <= c.Y || textWorld.Y >= c.Bottom)
             {
                 return;
             }
@@ -707,11 +705,8 @@ internal sealed partial class MewVGMacOSGraphicsContext
         if (_clipBoundsWorld.HasValue)
         {
             var c = _clipBoundsWorld.Value;
-            double worldLeft = bounds.X + _transform.M31;
-            double worldTop = bounds.Y + _transform.M32;
-            double worldRight = worldLeft + widthPx / DpiScale;
-            double worldBottom = worldTop + heightPx / DpiScale;
-            if (worldRight <= c.X || worldLeft >= c.Right || worldBottom <= c.Y || worldTop >= c.Bottom)
+            var textWorld = TransformRectToWorldAABB(new Rect(bounds.X, bounds.Y, widthPx / DpiScale, heightPx / DpiScale));
+            if (textWorld.Right <= c.X || textWorld.X >= c.Right || textWorld.Bottom <= c.Y || textWorld.Y >= c.Bottom)
                 return;
         }
 
