@@ -158,7 +158,11 @@ public sealed class MacOSPlatformHost : IPlatformHost
         {
             scale = 1.0;
         }
-        return new Point(location.x * scale, location.y * scale);
+        // mouseLocation is Cocoa (Y-up). Flip to the top-left, Y-down screen-pixel contract (matches
+        // Window.MoveTo and the per-window ClientToScreen/ScreenToClient conversions).
+        var frame = MacOSInterop.GetMainScreenFrame();
+        double topY = (frame.origin.y + frame.size.height) - location.y;
+        return new Point(location.x * scale, topY * scale);
     }
 
     // setIgnoresMouseEvents (click-through) + orderFront-without-makeKey (no-activate) + high window level give

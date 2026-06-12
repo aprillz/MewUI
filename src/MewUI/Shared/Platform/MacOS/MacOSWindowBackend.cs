@@ -494,6 +494,25 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     public void ReleaseMouseCapture()
     { }
 
+    // Cocoa screen coordinates are Y-up (origin at the screen's bottom-left). The framework's screen-pixel
+    // contract is top-left, Y-down (see IPlatformHost.GetCursorScreenPosition), matching Window.MoveTo. These
+    // helpers convert between the two so all macOS screen pixels honor the top-down contract.
+    private Point CocoaScreenPointToTopLeftPx(NSPoint cocoaPoint)
+    {
+        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
+        var screenFrame = GetPositioningScreenFrame();
+        double topY = (screenFrame.origin.y + screenFrame.size.height) - cocoaPoint.y;
+        return new Point(cocoaPoint.x * scale, topY * scale);
+    }
+
+    private NSPoint TopLeftPxToCocoaScreenPoint(Point topLeftPx)
+    {
+        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
+        var screenFrame = GetPositioningScreenFrame();
+        double cocoaY = (screenFrame.origin.y + screenFrame.size.height) - (topLeftPx.Y / scale);
+        return new NSPoint(topLeftPx.X / scale, cocoaY);
+    }
+
     public Point ClientToScreen(Point clientPointDip)
     {
         if (_nsWindow == 0)
@@ -504,8 +523,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         var client = _window.ClientSize;
         var windowPoint = new NSPoint(clientPointDip.X, client.Height - clientPointDip.Y);
         var screenPoint = MacOSWindowInterop.WindowConvertPointToScreen(_nsWindow, windowPoint);
-        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
-        return new Point(screenPoint.x * scale, screenPoint.y * scale);
+        return CocoaScreenPointToTopLeftPx(screenPoint);
     }
 
     public Point ScreenToClient(Point screenPointPx)
@@ -516,10 +534,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         var client = _window.ClientSize;
-        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
         var windowPoint = MacOSWindowInterop.WindowConvertPointFromScreen(
             _nsWindow,
-            new NSPoint(screenPointPx.X / scale, screenPointPx.Y / scale));
+            TopLeftPxToCocoaScreenPoint(screenPointPx));
         return new Point(windowPoint.x, client.Height - windowPoint.y);
     }
 
@@ -777,7 +794,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         var client = _window.ClientSize;
         var localPoint = new Point(windowPoint.x, client.Height - windowPoint.y);
         var screenPoint = MacOSWindowInterop.WindowConvertPointToScreen(_nsWindow, windowPoint);
-        double scale = _lastDpiScale > 0 ? _lastDpiScale : 1.0;
 
         var data = new DataObject(new Dictionary<string, object>
         {
@@ -787,7 +803,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         return new DragEventArgs(
             data,
             localPoint,
-            new Point(screenPoint.x * scale, screenPoint.y * scale));
+            CocoaScreenPointToTopLeftPx(screenPoint));
     }
 
     internal ulong HandleNativeDragEnter(IReadOnlyList<string> paths, NSPoint windowPoint)
