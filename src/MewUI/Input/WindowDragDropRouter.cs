@@ -250,7 +250,7 @@ internal static class WindowDragDropRouter
         }
         session.LastEffect = effect;
 
-        UpdatePreviewPosition(targetWindow, session, positionInWindow);
+        UpdatePreviewPosition(targetWindow, session, positionInWindow, screenPosition);
     }
 
     private static void PerformDropAndEnd(Window eventWindow, Point positionInWindow, Point screenPosition)
@@ -286,10 +286,13 @@ internal static class WindowDragDropRouter
         }
         session.LastEffect = finalEffect;
 
-        EndSession(canceled: !args.Accepted);
+        // A release is NOT a cancel even when no target accepted it: report WasCanceled=false with
+        // FinalEffect=None so a source can tell "released over empty space" (e.g. spawn a window there) apart
+        // from an Esc cancel. The release screen position travels on the completed args.
+        EndSession(canceled: false, screenPosition);
     }
 
-    private static void EndSession(bool canceled)
+    private static void EndSession(bool canceled, Point screenPosition = default)
     {
         var session = _activeSession;
         if (session == null) return;
@@ -306,18 +309,32 @@ internal static class WindowDragDropRouter
         DetachPreview(session);
         session.SourceWindow.ReleaseMouseAfterDrag();
 
-        var completed = new DragCompletedEventArgs(canceled ? DragDropEffects.None : session.LastEffect, canceled);
+        var completed = new DragCompletedEventArgs(
+            canceled ? DragDropEffects.None : session.LastEffect, canceled, screenPosition);
         session.Source.RaiseDragCompleted(completed);
     }
 
     private static Window? ResolveTargetWindow(Window eventWindow, ref Point positionInWindow, ref Point screenPosition)
     {
+        // A within-window drag never targets another window, so skip the cross-window cursor probe entirely.
+        if (_activeSession?.Preview is { Scope: DragPreviewScope.WithinWindow })
+        {
+            return eventWindow;
+        }
+
         // Probe the global cursor and try to find a same-app MewUI window under it.
         // Falls back to the event window (single-window behavior) when the probe is unavailable or finds no match.
-        if (!Application.IsRunning) return eventWindow;
+        if (!Application.IsRunning)
+        {
+            return eventWindow;
+        }
+
         var app = Application.Current;
         var cursorScreen = app.PlatformHost.GetCursorScreenPosition();
-        if (cursorScreen == default) return eventWindow;
+        if (cursorScreen == default)
+        {
+            return eventWindow;
+        }
 
         screenPosition = cursorScreen;
 
@@ -326,7 +343,16 @@ internal static class WindowDragDropRouter
         for (int i = windows.Count - 1; i >= 0; i--)
         {
             var candidate = windows[i];
-            if (candidate.Handle == 0) continue;
+            if (candidate.Handle == 0)
+            {
+                continue;
+            }
+
+            // Skip the preview overlay: it follows the cursor, so drop resolution must see through it.
+            if (candidate.IsOverlayWindow)
+            {
+                continue;
+            }
 
             Point clientDip;
             try
@@ -371,13 +397,57 @@ internal static class WindowDragDropRouter
     private static void AttachPreview(Window window, DragSession session)
     {
         if (session.Preview == null) return;
-        var overlay = new DragPreviewOverlay(session.Preview, session.PreviewHotspot);
-        session.PreviewOverlay = overlay;
-        window.OverlayLayer.Add(overlay);
+
+        if (session.Preview.Scope == DragPreviewScope.CrossWindow)
+        {
+            // A single top-level overlay window that follows the cursor in screen coordinates, so the preview
+            // stays visible across windows and the desktop gap. Transparent when the platform composites it,
+            // otherwise opaque so a cross-window preview stays continuous instead of falling back to per-window.
+            bool transparent = Application.IsRunning && Application.Current.PlatformHost.SupportsTransparentOverlay;
+            var previewWindow = new OverlayWindow(transparent);
+
+            if (session.Preview.Element is { Parent: null } ownedElement)
+            {
+                // Detached element (e.g. a labelled chip): host it as real content, fit to it, cap width.
+                double maxWidth = session.Preview.MaxWidth is { } configured and > 0 ? configured : 256;
+                previewWindow.WindowSize = WindowSize.FitContentSize(maxWidth, 256);
+                previewWindow.Content = ownedElement;
+            }
+            else
+            {
+                // Live element/image: snapshot via DragPreviewOverlay so the source is not re-parented.
+                var surface = new DragPreviewOverlay(session.Preview, session.PreviewHotspot);
+                surface.UpdateCursorPosition(session.PreviewHotspot);
+                var size = surface.PreviewSize;
+                previewWindow.WindowSize = WindowSize.Fixed(Math.Max(1, size.Width), Math.Max(1, size.Height));
+                previewWindow.Content = surface;
+            }
+
+            session.PreviewWindow = previewWindow;
+
+            // Owner = source window; Topmost keeps it above targets; no-activate show keeps source capture/focus.
+            previewWindow.Show(session.SourceWindow);
+            MovePreviewWindow(previewWindow, session, Application.Current.PlatformHost.GetCursorScreenPosition());
+        }
+        else
+        {
+            // WithinWindow: a per-window overlay blends into the window surface (real transparency, no compositor
+            // needed) but is confined to the window it is over.
+            var overlay = new DragPreviewOverlay(session.Preview, session.PreviewHotspot);
+            session.PreviewOverlay = overlay;
+            window.OverlayLayer.Add(overlay);
+        }
     }
 
     private static void DetachPreview(DragSession session)
     {
+        if (session.PreviewWindow is { } previewWindow)
+        {
+            session.PreviewWindow = null;
+            previewWindow.Close();
+            return;
+        }
+
         var overlay = session.PreviewOverlay;
         if (overlay == null) return;
         if (overlay.Parent is Window owner)
@@ -387,13 +457,40 @@ internal static class WindowDragDropRouter
         session.PreviewOverlay = null;
     }
 
-    private static void UpdatePreviewPosition(Window? targetWindow, DragSession session, Point cursorInWindow)
+    private static void MovePreviewWindow(Window previewWindow, DragSession session, Point screenPositionPx)
     {
+        // Top-left = cursor - hotspot. screenPositionPx is top-left Y-down px (matches MoveTo).
+        double scale = previewWindow.DpiScale > 0 ? previewWindow.DpiScale : 1.0;
+        previewWindow.MoveTo(
+            screenPositionPx.X / scale - session.PreviewHotspot.X,
+            screenPositionPx.Y / scale - session.PreviewHotspot.Y);
+    }
+
+    private static void UpdatePreviewPosition(Window? targetWindow, DragSession session, Point cursorInWindow, Point screenPosition)
+    {
+        // Continuous preview: move the top-level overlay window to track the cursor in screen space.
+        if (session.PreviewWindow is { } previewWindow)
+        {
+            MovePreviewWindow(previewWindow, session, screenPosition);
+            return;
+        }
+
         var overlay = session.PreviewOverlay;
         if (overlay == null) return;
 
+        // Cursor is over no MewUI window (e.g. the desktop): detach the preview so it does not linger in the
+        // last window. It re-attaches when the cursor re-enters a window. (Per-window overlay fallback.)
+        if (targetWindow == null)
+        {
+            if (overlay.Parent is Window owner)
+            {
+                owner.OverlayLayer.Remove(overlay);
+            }
+            return;
+        }
+
         // Move overlay to the target window when the cursor crosses windows.
-        if (targetWindow != null && !ReferenceEquals(overlay.Parent, targetWindow))
+        if (!ReferenceEquals(overlay.Parent, targetWindow))
         {
             if (overlay.Parent is Window oldOwner)
             {
@@ -629,7 +726,13 @@ internal sealed class DragSession
 
     public DragDropEffects LastEffect { get; set; }
 
+    // The per-window overlay, confined to the window it is over. Used for a WithinWindow preview; otherwise
+    // PreviewWindow (the cursor-following top-level overlay) is used.
     public DragPreviewOverlay? PreviewOverlay { get; set; }
+
+    // The top-level overlay window that follows the cursor in screen coordinates. Non-null for a CrossWindow
+    // preview (transparent or opaque); otherwise PreviewOverlay is used.
+    public OverlayWindow? PreviewWindow { get; set; }
 
     public DragSession(Window sourceWindow, UIElement source, IDataObject data, DragDropEffects allowedEffects, DragPreviewContent? preview, Point previewHotspot)
     {

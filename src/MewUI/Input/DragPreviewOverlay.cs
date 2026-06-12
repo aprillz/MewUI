@@ -13,12 +13,28 @@ internal sealed class DragPreviewOverlay : UIElement
     private readonly DragPreviewContent _content;
     private readonly Point _hotspot;
     private Point _cursorInWindow;
+    private bool _laidOut;
 
     public DragPreviewOverlay(DragPreviewContent content, Point hotspot)
     {
         _content = content;
         _hotspot = hotspot;
         IsHitTestVisible = false;
+    }
+
+    // A detached preview element (e.g. a labelled chip) is never reached by a window's layout pass, so it has
+    // no Bounds and would fall through to the placeholder. Lay it out once at its content size, capped to MaxWidth.
+    private void EnsureDetachedElementLaidOut()
+    {
+        if (_laidOut) return;
+        _laidOut = true;
+        if (_content.Element is { Parent: null } element)
+        {
+            double maxWidth = _content.MaxWidth is { } configured and > 0 ? configured : double.PositiveInfinity;
+            element.Measure(new Size(maxWidth, double.PositiveInfinity));
+            var desired = element.DesiredSize;
+            element.Arrange(new Rect(0, 0, desired.Width, desired.Height));
+        }
     }
 
     public void UpdateCursorPosition(Point cursorInWindow)
@@ -29,12 +45,16 @@ internal sealed class DragPreviewOverlay : UIElement
         InvalidateVisual();
     }
 
+    /// <summary>The pixel size of the preview content (used to size a host overlay window).</summary>
+    public Size PreviewSize => GetPreviewSize();
+
     private Size GetPreviewSize()
     {
         if (_content.Image is { } image)
         {
             return new Size(image.PixelWidth, image.PixelHeight);
         }
+        EnsureDetachedElementLaidOut();
         if (_content.Element is { } element)
         {
             var bounds = element.Bounds;
@@ -81,7 +101,15 @@ internal sealed class DragPreviewOverlay : UIElement
                 var dx = topLeft.X - element.Bounds.X;
                 var dy = topLeft.Y - element.Bounds.Y;
                 context.Translate(dx, dy);
-                element.Render(context);
+                if (element.Parent == null)
+                {
+                    // Detached preview (e.g. a chip): no Window root, so render past the viewport cull.
+                    element.RenderDetached(context);
+                }
+                else
+                {
+                    element.Render(context);
+                }
                 return;
             }
 

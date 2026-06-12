@@ -41,4 +41,19 @@ public sealed class DragPreviewContent
     /// Drag-time opacity in the range [0..1]. Defaults to 0.75.
     /// </summary>
     public double Opacity { get; init; } = 0.75;
+
+    /// <summary>
+    /// Optional max-width limit (DIPs) for a hosted custom preview. When <see cref="Element"/> is a detached
+    /// element (no parent), the framework hosts and lays it out as the preview, fitting its content and capping
+    /// the width here (the element should trim/wrap its own text). Ignored for snapshot/image previews.
+    /// </summary>
+    public double? MaxWidth { get; init; }
+
+    /// <summary>
+    /// Whether the preview is confined to the source window or follows the cursor across windows.
+    /// Defaults to <see cref="DragPreviewScope.WithinWindow"/>; set <see cref="DragPreviewScope.CrossWindow"/>
+    /// for drags that pop out (e.g. dockable panes). The framework picks the host and, when transparency is
+    /// unavailable, transparently degrades a cross-window preview to an opaque overlay window.
+    /// </summary>
+    public DragPreviewScope Scope { get; init; } = DragPreviewScope.WithinWindow;
 }
