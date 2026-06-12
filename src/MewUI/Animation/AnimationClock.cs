@@ -90,12 +90,19 @@ public sealed class AnimationClock
         _pauseAccumulated = 0;
         _isReversing = false;
         _currentIteration = 0;
+        bool wasRunning = _isRunning;
         _isRunning = true;
         _isPaused = false;
         _rawProgress = 0;
         _progress = 0;
 
-        AnimationManager.Instance.Register(this);
+        // Restarting a still-running clock only resets its timing - re-registering would add a second entry to the
+        // manager's active list (a List, not a set), so a later single Unregister would leave it registered and pin
+        // the render loop in Continuous mode forever.
+        if (!wasRunning)
+        {
+            AnimationManager.Instance.Register(this);
+        }
     }
 
     /// <summary>

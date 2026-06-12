@@ -3,9 +3,9 @@ using System.Diagnostics;
 namespace Aprillz.MewUI.Animation;
 
 /// <summary>
-/// Drives all active <see cref="AnimationClock"/> instances synchronized with the render loop.
-/// When animations are active, switches to <see cref="RenderLoopMode.Continuous"/> so the
-/// platform host renders every frame. Reverts to <see cref="RenderLoopMode.OnRequest"/> when idle.
+/// Drives all active <see cref="AnimationClock"/> instances synchronized with the render loop. While any clock is
+/// active it sets <see cref="RenderLoopSettings.AnimationActive"/> so the platform host renders every frame, and
+/// clears it when idle. It never touches the user's <see cref="RenderLoopSettings.Continuous"/> flag.
 /// </summary>
 public sealed class AnimationManager
 {
@@ -30,6 +30,8 @@ public sealed class AnimationManager
 
     internal void Register(AnimationClock clock)
     {
+        // Only ever called for a not-yet-running clock (AnimationClock.Start guards on its running state), so a clock
+        // appears at most once and a single Unregister fully removes it.
         if (_isUpdating)
         {
             _pendingAdd.Add(clock);
@@ -112,14 +114,7 @@ public sealed class AnimationManager
             return;
         }
 
-        var settings = Application.Current.RenderLoopSettings;
-
-        if (!settings.VSyncEnabled)
-        {
-            return;
-        }
-
-        settings.Mode = RenderLoopMode.Continuous;
+        Application.Current.RenderLoopSettings.AnimationActive = true;
     }
 
     private void DisableContinuousModeIfIdle()
@@ -133,11 +128,8 @@ public sealed class AnimationManager
         {
             return;
         }
-        var settings = Application.Current.RenderLoopSettings;
-        if (settings.VSyncEnabled)
-        {
-            Application.Current.RenderLoopSettings.Mode = RenderLoopMode.OnRequest;
-        }
+
+        Application.Current.RenderLoopSettings.AnimationActive = false;
     }
 
     /// <summary>
