@@ -50,6 +50,16 @@ internal sealed partial class MewVGX11GraphicsContext
 
             GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
 
+            // Clear the window framebuffer for real. The public Clear(Color) is a NanoVG fill, which no-ops when
+            // clearing to a transparent colour (alpha-blend with alpha=0) — so on a transparent window the GLX
+            // back buffer (preserved across swaps on some drivers) accumulates previous frames and the alpha
+            // builds up. glClear zeroes the buffer incl. alpha; ColorMask is forced on first because NanoVG's
+            // stencil-fill pass can leave colormask=(F,F,F,F) (same fix as the offscreen PreparePixelSurface).
+            OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
+            GL.ColorMask(true, true, true, true);
+            GL.ClearColor(0f, 0f, 0f, 0f);
+            GL.Clear(GL.GL_COLOR_BUFFER_BIT);
+
             _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
             _vg.ResetTransform();
             _vg.ResetScissor();
