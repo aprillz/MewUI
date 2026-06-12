@@ -885,44 +885,6 @@ public abstract class Control : FrameworkElement
         var borderThickness = metrics.UniformThickness;
         var radius = metrics.UniformRadius;
 
-#if USE_FILL_STROKE_TRICK
-        bool canUseFillStrokeTrick = borderThickness > 0 &&
-                                  borderBrush.A > 0 &&
-                                  background.A > 0;
-
-        if (canUseFillStrokeTrick || background.A == 255)
-        {
-            if (borderThickness > 0)
-            {
-                if (radius > 0)
-                {
-                    context.FillRoundedRectangle(bounds, radius, radius, borderBrush);
-                }
-                else
-                {
-                    context.FillRectangle(bounds, borderBrush);
-                }
-            }
-
-            var inner = bounds.Deflate(new Thickness(borderThickness));
-            var innerRadius = metrics.UniformInnerRadius;
-
-            if (inner.Width > 0 && inner.Height > 0)
-            {
-                if (innerRadius > 0)
-                {
-                    context.FillRoundedRectangle(inner, innerRadius, innerRadius, background);
-                }
-                else
-                {
-                    context.FillRectangle(inner, background);
-                }
-            }
-
-            return;
-        }
-#endif
-
         if (background.A > 0)
         {
             if (radius > 0)
@@ -956,12 +918,16 @@ public abstract class Control : FrameworkElement
     {
         // Border first: fill entire outer contour with border color.
         // Background then overwrites the inner area — no seam at the boundary.
-        if (borderBrush.A > 0 && metrics.UniformThickness > 0)
+        // Gate on HasAnyBorder, not UniformThickness (= Left only): a non-uniform border may have Left == 0 while
+        // its other sides are non-zero (e.g. a tab/border-tab open on one side), which must still draw a border.
+        if (borderBrush.A > 0 && metrics.HasAnyBorder)
         {
             var outerPath = _sharedOuterPath ??= new PathGeometry();
             BorderGeometry.GenerateOuterContour(outerPath, in metrics);
             if (!outerPath.IsEmpty)
+            {
                 context.FillPath(outerPath, borderBrush);
+            }
         }
 
         if (background.A > 0)
@@ -969,7 +935,9 @@ public abstract class Control : FrameworkElement
             var innerPath = _sharedInnerPath ??= new PathGeometry();
             BorderGeometry.GenerateBackgroundRegion(innerPath, in metrics);
             if (!innerPath.IsEmpty)
+            {
                 context.FillPath(innerPath, background);
+            }
         }
     }
 
