@@ -557,7 +557,7 @@ public sealed class VideoPlayerWindow : Window
 
         var settings = Application.Current.RenderLoopSettings;
         string target = settings.TargetFps > 0 ? settings.TargetFps.ToString() : "uncapped";
-        return $"mode={settings.Mode}, continuous={settings.IsContinuous}, vsync={(settings.VSyncEnabled ? "on" : "off")}, target={target}";
+        return $"mode={(settings.Continuous ? "Continuous" : "On Request")}, vsync={(settings.VSyncEnabled ? "on" : "off")}, target={target}";
     }
 
     private void ResetFpsStats()
