@@ -273,6 +273,21 @@ public sealed class Win32PlatformHost : IPlatformHost
         return User32.GetCursorPos(out var pt) ? new Point(pt.x, pt.y) : default;
     }
 
+    public uint GetDpiForPoint(Point screenPositionPx)
+    {
+        const uint MonitorDefaultToNearest = 2;
+        var point = new POINT((int)Math.Round(screenPositionPx.X), (int)Math.Round(screenPositionPx.Y));
+        var monitor = User32.MonitorFromPoint(point, MonitorDefaultToNearest);
+        if (monitor != 0)
+        {
+            uint dpi = Win32DpiApiResolver.GetDpiForMonitor(monitor);
+            if (dpi > 0)
+            {
+                return dpi;
+            }
+        }
+        return GetSystemDpi();
+    }
 
     // WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE provide a click-through, non-activating overlay.
     public bool SupportsTransparentOverlay => true;
