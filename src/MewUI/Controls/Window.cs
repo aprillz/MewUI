@@ -487,6 +487,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
+    /// Whether this is a click-through, non-activating overlay window (set only by <see cref="OverlayWindow"/>):
+    /// mouse events pass through to whatever is behind it and showing it never steals focus. Framework-internal;
+    /// each backend maps it to its native click-through and non-activating window flags.
+    /// </summary>
+    internal bool IsOverlayWindow { get; init; }
+
+    /// <summary>
     /// Gets or sets the initial window placement behavior.
     /// Must be set before <see cref="Show"/> is called.
     /// </summary>
