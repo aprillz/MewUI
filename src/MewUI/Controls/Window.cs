@@ -494,6 +494,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal bool IsOverlayWindow { get; init; }
 
     /// <summary>
+    /// The opaque color a non-transparent window clears to: the user-set <see cref="Control.Background"/> when it
+    /// is opaque, otherwise the themed window background. Backends use this to seed the native window background so
+    /// the surface is filled on map instead of showing through until the first paint.
+    /// </summary>
+    internal Color EffectiveOpaqueBackground => Background.A > 0 ? Background : Theme.Palette.WindowBackground;
+
+    /// <summary>
     /// Gets or sets the initial window placement behavior.
     /// Must be set before <see cref="Show"/> is called.
     /// </summary>
@@ -2043,7 +2050,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             else
             {
                 // Default to an opaque window background when the user does not specify one.
-                clearColor = Background.A > 0 ? Background : Theme.Palette.WindowBackground;
+                clearColor = EffectiveOpaqueBackground;
             }
 
             phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
