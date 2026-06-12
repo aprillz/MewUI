@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Gallery;
+using Aprillz.MewUI.Rendering;
 
 #if DEBUG
 [assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
@@ -35,6 +36,7 @@ var cullText = new ObservableValue<string>("Cull: -");
 var fpsStopwatch = new Stopwatch();
 var fpsFrames = 0;
 var maxFpsEnabled = new ObservableValue<bool>(false);
+var lastStat = (0,0,0.0);
 
 var currentAccent = ThemeManager.DefaultAccent;
 
@@ -86,7 +88,12 @@ Application
             CheckFPS(ref fpsFrames);
 
                 var stats = window.LastFrameStats;
-                cullText.Value = $"Draw: {stats.DrawCalls} | Cull: {stats.CullCount} ({stats.CullRatio:P0})";
+                var counts = (stats.DrawCalls, stats.CullCount, stats.CullRatio);
+                if (lastStat != counts)
+                {
+                    cullText.Value = $"Draw: {stats.DrawCalls} | Cull: {stats.CullCount} ({stats.CullRatio:P0})";
+                    lastStat = counts;
+                }
             })
         )
     )
@@ -207,16 +214,17 @@ FrameworkElement ThemeModePicker() => new StackPanel()
             .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark))
     );
 
-FrameworkElement AccentPicker() => new WrapPanel()
-    .Orientation(Orientation.Horizontal)
+FrameworkElement AccentPicker() => new StackPanel()
+    .Horizontal()
     .Spacing(6)
-    .CenterVertical()
-    .ItemWidth(22)
-    .ItemHeight(22)
     .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray());
 
 Button AccentSwatch(Accent accent) => new Button()
-    .CornerRadius(14)
+    .CornerRadius(11)
+    .CenterVertical()
+    .MinHeight(22)
+    .Width(22)
+    .Height(22)
     .BorderThickness(0)
     .Content(string.Empty)
     .WithTheme((t, c) => c.Background(accent.GetAccentColor(t.IsDark)))
