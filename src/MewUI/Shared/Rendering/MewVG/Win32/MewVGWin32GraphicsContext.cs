@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Rendering.OpenGL;
@@ -191,16 +193,32 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         if (_textPixelSnap)
         {
-            drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
-            drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+            if (_transform.M12 == 0f && _transform.M21 == 0f)
+            {
+                drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
+                drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+            }
+            else if (Matrix3x2.Invert(_transform, out var inv))
+            {
+                // Rotated: snap the glyph origin on the DEVICE grid (post-transform), then map back to local, so a
+                // quarter turn lands texel-on-pixel regardless of where the rotation centre fell (odd/even parity).
+                var world = Vector2.Transform(new Vector2((float)drawX, (float)drawY), _transform);
+                var snapped = new Vector2(
+                    (float)(RenderingUtil.RoundToPixelInt(world.X, DpiScale) / DpiScale),
+                    (float)(RenderingUtil.RoundToPixelInt(world.Y, DpiScale) / DpiScale));
+                var local = Vector2.Transform(snapped, inv);
+                drawX = local.X;
+                drawY = local.Y;
+            }
         }
 
+        bool needsLinear = NeedsLinearFilter();
         var textHash = string.GetHashCode(text);
         var key = new MewVGTextCacheKey(new TextCacheKey(
             textHash, gdiFont.Handle, string.Empty, 0, color.ToArgb(),
             widthPx, heightPx,
             (int)horizontalAlignment, (int)verticalAlignment,
-            (int)wrapping, (int)trimming));
+            (int)wrapping, (int)trimming), needsLinear);
 
         if (!_textCache.TryGet(key, out var entry))
         {
@@ -215,6 +233,16 @@ internal sealed partial class MewVGWin32GraphicsContext
         var drawRect = new Rect(drawX, drawY, widthDip, heightDip);
         var srcRect = new Rect(entry.X, entry.Y, entry.WidthPx, entry.HeightPx);
         DrawImagePattern(entry.ImageId, drawRect, alpha: 1f, sourceRect: srcRect, entry.AtlasWidthPx, entry.AtlasHeightPx);
+    }
+
+    // Off-axis rotation needs linear filtering for smooth glyph edges; axis-aligned and quarter turns (90/180/270)
+    // map texels to device pixels 1:1, so nearest stays crisp and avoids softening.
+    private bool NeedsLinearFilter()
+    {
+        const float eps = 1e-3f;
+        bool axisAligned = MathF.Abs(_transform.M12) < eps && MathF.Abs(_transform.M21) < eps;
+        bool quarterTurn = MathF.Abs(_transform.M11) < eps && MathF.Abs(_transform.M22) < eps;
+        return !axisAligned && !quarterTurn;
     }
 
     private GdiMeasurementContext EnsureMeasureContext()
@@ -329,10 +357,26 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         if (_textPixelSnap)
         {
-            drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
-            drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+            if (_transform.M12 == 0f && _transform.M21 == 0f)
+            {
+                drawX = RenderingUtil.RoundToPixelInt(drawX, DpiScale) / DpiScale;
+                drawY = RenderingUtil.RoundToPixelInt(drawY, DpiScale) / DpiScale;
+            }
+            else if (Matrix3x2.Invert(_transform, out var inv))
+            {
+                // Rotated: snap the glyph origin on the DEVICE grid (post-transform), then map back to local, so a
+                // quarter turn lands texel-on-pixel regardless of where the rotation centre fell (odd/even parity).
+                var world = Vector2.Transform(new Vector2((float)drawX, (float)drawY), _transform);
+                var snapped = new Vector2(
+                    (float)(RenderingUtil.RoundToPixelInt(world.X, DpiScale) / DpiScale),
+                    (float)(RenderingUtil.RoundToPixelInt(world.Y, DpiScale) / DpiScale));
+                var local = Vector2.Transform(snapped, inv);
+                drawX = local.X;
+                drawY = local.Y;
+            }
         }
 
+        bool needsLinear = NeedsLinearFilter();
         var textHash = string.GetHashCode(text);
         var key = new MewVGTextCacheKey(new TextCacheKey(
             textHash,
@@ -345,7 +389,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)format.HorizontalAlignment,
             (int)format.VerticalAlignment,
             (int)format.Wrapping,
-            (int)format.Trimming));
+            (int)format.Trimming), needsLinear);
 
         if (!_textCache.TryGet(key, out var entry))
         {
