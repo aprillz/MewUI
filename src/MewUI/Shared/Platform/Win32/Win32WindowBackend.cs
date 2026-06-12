@@ -82,12 +82,15 @@ internal sealed class Win32WindowBackend : IWindowBackend
         CreateWindow();
         Window.PerformLayout();
         ApplyResolvedStartupPosition();
-        var showCmd = Window.WindowState switch
-        {
-            Controls.WindowState.Maximized => ShowWindowCommands.SW_SHOWMAXIMIZED,
-            Controls.WindowState.Minimized => ShowWindowCommands.SW_SHOWMINIMIZED,
-            _ => ShowWindowCommands.SW_SHOW,
-        };
+        var showCmd = Window.IsOverlayWindow
+            // Input-transparent overlays must not take activation away from the source window.
+            ? ShowWindowCommands.SW_SHOWNOACTIVATE
+            : Window.WindowState switch
+            {
+                Controls.WindowState.Maximized => ShowWindowCommands.SW_SHOWMAXIMIZED,
+                Controls.WindowState.Minimized => ShowWindowCommands.SW_SHOWMINIMIZED,
+                _ => ShowWindowCommands.SW_SHOW,
+            };
         User32.ShowWindow(Handle, showCmd);
         User32.UpdateWindow(Handle);
     }
@@ -611,8 +614,19 @@ internal sealed class Win32WindowBackend : IWindowBackend
             case WindowMessages.WM_CLOSE:
                 if (Window.RequestClose())
                 {
+                    // Return activation to the owner when an owned window that currently has the foreground is
+                    // destroyed: Win32's default activation can pick the wrong top-level (especially for tool /
+                    // owned windows when several are open), sending focus somewhere unexpected.
+                    var ownerHandle = Window.Owner?.Handle ?? 0;
+                    bool wasForeground = ownerHandle != 0 && User32.GetForegroundWindow() == Handle;
+
                     Window.RaiseClosed();
                     User32.DestroyWindow(Handle);
+
+                    if (wasForeground)
+                    {
+                        _ = User32.SetForegroundWindow(ownerHandle);
+                    }
                 }
                 return 0;
 
@@ -1261,6 +1275,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (Window.IsToolWindow && !Window.AllowsTransparency)
         {
             exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW;
+        }
+
+        // Input-transparent overlay (drag preview): clicks pass through (WS_EX_TRANSPARENT) and the window
+        // never activates (WS_EX_NOACTIVATE), so it cannot steal capture/focus from the source window.
+        // WS_EX_LAYERED is required for the click-through hit-test pass-through to work.
+        if (Window.IsOverlayWindow)
+        {
+            exStyle |= WindowStylesEx.WS_EX_TRANSPARENT | WindowStylesEx.WS_EX_LAYERED | WindowStylesEx.WS_EX_NOACTIVATE;
         }
 
         return exStyle;

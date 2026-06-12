@@ -186,7 +186,18 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetAlertPanelAnimation(_nsWindow);
         }
 
-        MacOSWindowInterop.ShowWindow(_nsWindow);
+        if (_window.IsOverlayWindow)
+        {
+            // Input-transparent overlay (drag preview): click-through (ignoresMouseEvents) + float above all +
+            // order front WITHOUT making it key/main, so it never steals capture/focus from the drag source.
+            MacOSWindowInterop.SetWindowEnabled(_nsWindow, false); // ignoresMouseEvents = true
+            MacOSWindowInterop.SetWindowLevel(_nsWindow, 25);      // NSStatusWindowLevel: above normal/floating
+            MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+        }
+        else
+        {
+            MacOSWindowInterop.ShowWindow(_nsWindow);
+        }
 
         if (_window.IsDialogWindow)
         {
@@ -198,7 +209,13 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.HideCloseButton(_nsWindow);
         }
 
-        if (_allowsTransparency)
+        if (_allowsTransparency && _window.IsOverlayWindow)
+        {
+            // Borderless mask = square corners (titled windows get rounded corners that would clip the overlay's
+            // own content, e.g. a rounded chip). Transparency comes from the non-opaque layer, not the mask.
+            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0); // NSWindowStyleMaskBorderless
+        }
+        else if (_allowsTransparency)
         {
             MacOSWindowInterop.SetWindowStyleMask(_nsWindow, MacOSWindowInterop.TransparentStyleMask);
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, true);
@@ -239,8 +256,18 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     {
         if (_nsWindow != 0)
         {
-            MacOSWindowInterop.CloseWindow(_nsWindow);
-            // windowShouldClose → RequestClose, windowWillClose → RaiseClosedOnce
+            if (_window.IsOverlayWindow)
+            {
+                // The overlay uses a borderless style mask (square corners), which has no
+                // Closable bit, so performClose: would be ignored. Close it directly. windowWillClose still
+                // fires RaiseClosedOnce.
+                MacOSWindowInterop.CloseWindowImmediate(_nsWindow);
+            }
+            else
+            {
+                MacOSWindowInterop.CloseWindow(_nsWindow);
+                // windowShouldClose → RequestClose, windowWillClose → RaiseClosedOnce
+            }
         }
     }
 

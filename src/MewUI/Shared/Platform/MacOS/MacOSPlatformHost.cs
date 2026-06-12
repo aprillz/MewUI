@@ -161,6 +161,10 @@ public sealed class MacOSPlatformHost : IPlatformHost
         return new Point(location.x * scale, location.y * scale);
     }
 
+    // setIgnoresMouseEvents (click-through) + orderFront-without-makeKey (no-activate) + high window level give
+    // a non-activating, click-through, transparent overlay.
+    public bool SupportsTransparentOverlay => true;
+
     private void RenderAllWindows()
     {
         if (_windows.Count == 0)

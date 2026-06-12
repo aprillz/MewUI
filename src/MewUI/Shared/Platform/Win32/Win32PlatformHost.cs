@@ -273,6 +273,10 @@ public sealed class Win32PlatformHost : IPlatformHost
         return User32.GetCursorPos(out var pt) ? new Point(pt.x, pt.y) : default;
     }
 
+
+    // WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE provide a click-through, non-activating overlay.
+    public bool SupportsTransparentOverlay => true;
+
     public void DoEvents()
     {
         MSG msg;

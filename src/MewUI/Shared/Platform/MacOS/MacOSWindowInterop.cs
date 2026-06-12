@@ -35,6 +35,7 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelAlloc;
     private static nint SelInitWithContentRect;
     private static nint SelMakeKeyAndOrderFront;
+    private static nint SelOrderFront;
     private static nint SelClose;
     private static nint SelPerformClose;
     private static nint SelSetTitle;
@@ -701,6 +702,17 @@ internal static unsafe class MacOSWindowInterop
         ObjC.MsgSend_void_nint_nint(window, SelMakeKeyAndOrderFront, 0);
     }
 
+    // Orders the window front WITHOUT making it key/main (no activation). Used for input-transparent overlays.
+    public static void OrderFrontWindow(nint window)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelOrderFront == 0)
+        {
+            return;
+        }
+        ObjC.MsgSend_void_nint_nint(window, SelOrderFront, 0);
+    }
+
     public static void CloseWindow(nint window)
     {
         EnsureInitialized();
@@ -709,6 +721,17 @@ internal static unsafe class MacOSWindowInterop
             ObjC.MsgSend_void_nint_nint(window, SelPerformClose, 0);
         }
         else
+        {
+            ObjC.MsgSend_void(window, SelClose);
+        }
+    }
+
+    // Closes directly via -[NSWindow close], bypassing performClose:. performClose: is a no-op for borderless
+    // windows (they lack NSWindowStyleMaskClosable), so input-transparent overlays must close this way.
+    public static void CloseWindowImmediate(nint window)
+    {
+        EnsureInitialized();
+        if (SelClose != 0)
         {
             ObjC.MsgSend_void(window, SelClose);
         }
@@ -1012,6 +1035,7 @@ internal static unsafe class MacOSWindowInterop
         SelAlloc = ObjC.Sel("alloc");
         SelInitWithContentRect = ObjC.Sel("initWithContentRect:styleMask:backing:defer:");
         SelMakeKeyAndOrderFront = ObjC.Sel("makeKeyAndOrderFront:");
+        SelOrderFront = ObjC.Sel("orderFront:");
         SelClose = ObjC.Sel("close");
         SelPerformClose = ObjC.Sel("performClose:");
         SelSetTitle = ObjC.Sel("setTitle:");
