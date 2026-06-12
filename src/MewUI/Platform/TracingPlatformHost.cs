@@ -33,10 +33,18 @@ internal sealed class TracingPlatformHost : IPlatformHost
     }
 
     public uint GetSystemDpi() => _inner.GetSystemDpi();
+
     public ThemeVariant GetSystemThemeVariant() => _inner.GetSystemThemeVariant();
+
     public uint GetDpiForWindow(nint hwnd) => _inner.GetDpiForWindow(hwnd);
+
     public bool EnablePerMonitorDpiAwareness() => _inner.EnablePerMonitorDpiAwareness();
+
     public int GetSystemMetricsForDpi(int nIndex, uint dpi) => _inner.GetSystemMetricsForDpi(nIndex, dpi);
+
+    public Point GetCursorScreenPosition() => _inner.GetCursorScreenPosition();
+
+    public bool SupportsTransparentOverlay => _inner.SupportsTransparentOverlay;
 
     public void Run(Application app, Window mainWindow)
     {

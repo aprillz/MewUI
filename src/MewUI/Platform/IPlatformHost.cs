@@ -95,4 +95,17 @@ public interface IPlatformHost : IDisposable
     /// Used by framework drag-and-drop to resolve which window the cursor is over during a session.
     /// </summary>
     Point GetCursorScreenPosition() => default;
+
+    /// <summary>
+    /// Gets the DPI of the monitor that contains the given screen-pixel point (Y-down). Lets callers place a
+    /// new window at a screen position with correct per-monitor scaling. Defaults to the system DPI.
+    /// </summary>
+    uint GetDpiForPoint(Point screenPositionPx) => GetSystemDpi();
+
+    /// <summary>
+    /// Whether the platform supports a click-through, non-activating, transparent top-level overlay window.
+    /// When true, drag-and-drop uses a single such window that follows the cursor across windows and the desktop
+    /// (continuous preview); when false it falls back to a per-window overlay (hidden between windows).
+    /// </summary>
+    bool SupportsTransparentOverlay => false;
 }
