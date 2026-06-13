@@ -96,10 +96,11 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 return;
             }
 
-            _itemTemplate = value;
             RecycleAll();
             _pool.Clear();
+            _recycledByIndex.Clear();
             _contexts.Clear();
+            _itemTemplate = value;
             InvalidateMeasure();
             InvalidateVisual();
         }
