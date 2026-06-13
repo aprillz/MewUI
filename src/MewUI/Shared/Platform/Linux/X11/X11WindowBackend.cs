@@ -285,14 +285,11 @@ internal sealed class X11WindowBackend : IWindowBackend
             decorations = 1;
         }
 
-        var hints = new long[] { flags, _motifFunctions, decorations, 0, 0 };
         unsafe
         {
-            fixed (long* p = hints)
-            {
-                NativeX11.XChangeProperty(Display, Handle, atom, atom,
-                    32, 0 /* PropModeReplace */, (nint)p, 5);
-            }
+            long* hints = stackalloc long[5] { flags, _motifFunctions, decorations, 0, 0 };
+            NativeX11.XChangeProperty(Display, Handle, atom, atom,
+                32, 0 /* PropModeReplace */, (nint)hints, 5);
         }
     }
 
@@ -2670,35 +2667,14 @@ internal sealed class X11WindowBackend : IWindowBackend
     public void SetAllowsTransparency(bool allowsTransparency)
     {
         _allowsTransparency = allowsTransparency;
-        if (Display == 0 || Handle == 0 || _motifWmHintsAtom == 0)
+        if (Display == 0 || Handle == 0)
         {
             return;
         }
 
         try
         {
-            var hints = new MotifWmHints
-            {
-                flags = MotifFlags.Decorations,
-                functions = 0,
-                decorations = allowsTransparency ? 0u : 1u,
-                inputMode = 0,
-                status = 0
-            };
-
-            unsafe
-            {
-                NativeX11.XChangeProperty(
-                    Display,
-                    Handle,
-                    _motifWmHintsAtom,
-                    _motifWmHintsAtom,
-                    format: 32,
-                    mode: 0 /*Replace*/,
-                    (nint)(&hints),
-                    nelements: 5);
-            }
-
+            ApplyMotifHints();
             NativeX11.XFlush(Display);
         }
         catch
@@ -2840,19 +2816,4 @@ internal sealed class X11WindowBackend : IWindowBackend
             PixelHeight = pixelHeight;
         }
     }
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct MotifWmHints
-{
-    public uint flags;
-    public uint functions;
-    public uint decorations;
-    public int inputMode;
-    public uint status;
-}
-
-internal static class MotifFlags
-{
-    public const uint Decorations = 1u << 1;
 }

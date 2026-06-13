@@ -17,8 +17,16 @@ internal static class X11InputMethodFactory
 
         // Check environment hints for user intent
         string? gtkIm = null, qtIm = null;
-        try { gtkIm = Environment.GetEnvironmentVariable("GTK_IM_MODULE"); } catch { }
-        try { qtIm = Environment.GetEnvironmentVariable("QT_IM_MODULE"); } catch { }
+        try
+        {
+            gtkIm = Environment.GetEnvironmentVariable("GTK_IM_MODULE");
+        }
+        catch { }
+        try
+        {
+            qtIm = Environment.GetEnvironmentVariable("QT_IM_MODULE");
+        }
+        catch { }
 
         bool hintFcitx = IsHint(gtkIm, "fcitx") || IsHint(qtIm, "fcitx");
 
@@ -61,7 +69,7 @@ internal static class X11InputMethodFactory
 
         ImeLogger.Write("No input method available");
         return null;
-    } 
+    }
 
     private static bool IsHint(string? value, string prefix)
         => value != null && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
