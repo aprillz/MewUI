@@ -38,7 +38,14 @@ public abstract class MewObject : IPropertyOwner
         if (_propertyForwards != null && newValue != null &&
             _propertyForwards.TryGetValue(property.Id, out var fwd))
         {
-            fwd.Target.PropertyStore.SetTarget(fwd.TargetProperty, newValue);
+            if (fwd.TryGetTarget(out var target))
+            {
+                target.PropertyStore.SetTarget(fwd.TargetProperty, newValue);
+            }
+            else
+            {
+                _propertyForwards.Remove(property.Id);
+            }
         }
 
         if (_propertyBindingCallbacks?.TryGetValue(property.Id, out var cb) == true)
@@ -172,6 +179,16 @@ public abstract class MewObject : IPropertyOwner
         var binding = new MewPropertyBinding<TProp, TSource>(
             this, property, source, convert, convertBack, resolvedMode);
         StorePropertyBinding(property.Id, binding);
+    }
+
+    /// <summary>
+    /// Removes the binding currently attached to the specified property.
+    /// The property's current value is preserved.
+    /// </summary>
+    public void ClearBinding<T>(MewProperty<T> property)
+    {
+        ArgumentNullException.ThrowIfNull(property);
+        DisposeExistingBinding(property.Id);
     }
 
     private static void ThrowIfReadOnly(MewProperty property)
@@ -309,4 +326,17 @@ public abstract class MewObject : IPropertyOwner
 /// <summary>
 /// Stores the target of a MewProperty-to-MewProperty binding forward.
 /// </summary>
-internal readonly record struct PropertyForwardEntry(MewObject Target, MewProperty TargetProperty);
+internal sealed class PropertyForwardEntry
+{
+    private readonly WeakReference<MewObject> _target;
+
+    public PropertyForwardEntry(MewObject target, MewProperty targetProperty)
+    {
+        _target = new WeakReference<MewObject>(target);
+        TargetProperty = targetProperty;
+    }
+
+    public MewProperty TargetProperty { get; }
+
+    public bool TryGetTarget(out MewObject target) => _target.TryGetTarget(out target!);
+}
