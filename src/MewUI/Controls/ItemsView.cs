@@ -271,19 +271,13 @@ public sealed class ItemsView<T> : ISelectableItemsView
 
         if (items is INotifyCollectionChanged ncc)
         {
-            NotifyCollectionChangedEventHandler? handler = null;
-            var weak = new WeakReference<ItemsView<T>>(this);
-            handler = (s, e) =>
-            {
-                if (!weak.TryGetTarget(out var self))
-                {
-                    ncc.CollectionChanged -= handler!;
-                    return;
-                }
-
-                self.OnCollectionChanged(e);
-            };
-            ncc.CollectionChanged += handler;
+            WeakEventManager.AddHandler<
+                INotifyCollectionChanged,
+                ItemsView<T>>(
+                CollectionWeakEvents.CollectionChanged,
+                ncc,
+                this,
+                static (view, _, args) => view.OnCollectionChanged(args));
         }
     }
 

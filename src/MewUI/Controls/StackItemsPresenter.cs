@@ -62,8 +62,9 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
                 return;
             }
 
-            _itemTemplate = value;
             RecycleAll();
+            _pool.Clear();
+            _itemTemplate = value;
             SyncContainers();
             InvalidateMeasure();
             InvalidateVisual();
@@ -161,6 +162,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
     {
         foreach (var container in _containers)
         {
+            UnbindContainer(container);
             container.Parent = null;
             _itemBindingGenerations.Remove(container);
             _pool.Push(container);
@@ -443,6 +445,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         {
             int last = _containers.Count - 1;
             var container = _containers[last];
+            UnbindContainer(container);
             container.Parent = null;
             _itemBindingGenerations.Remove(container);
             _pool.Push(container);
@@ -520,8 +523,15 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
             _contexts.Add(element, ctx);
         }
 
-        ctx.Reset();
-        _itemTemplate.Bind(element, item, index, ctx);
+        ctx.BindTemplate(element, _itemTemplate, item, index);
+    }
+
+    private void UnbindContainer(FrameworkElement element)
+    {
+        if (_contexts.TryGetValue(element, out var ctx))
+        {
+            ctx.UnbindTemplate(element);
+        }
     }
 
     private static IDataTemplate CreateDefaultItemTemplate()
