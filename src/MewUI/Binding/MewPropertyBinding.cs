@@ -26,7 +26,11 @@ internal sealed class MewPropertyBinding<T> : IDisposable
         _source = source;
         _mode = mode;
 
-        source.Changed += OnSourceChanged;
+        WeakEventManager.AddHandler(
+            ObservableValueWeakEvents<T>.Changed,
+            source,
+            this,
+            static binding => binding.OnSourceChanged());
 
         if (mode == BindingMode.TwoWay)
         {
@@ -80,7 +84,7 @@ internal sealed class MewPropertyBinding<T> : IDisposable
 
     public void Dispose()
     {
-        _source.Changed -= OnSourceChanged;
+        WeakEventManager.RemoveHandler(ObservableValueWeakEvents<T>.Changed, _source, this);
 
         if (_mode == BindingMode.TwoWay && _onPropertyChanged != null)
         {

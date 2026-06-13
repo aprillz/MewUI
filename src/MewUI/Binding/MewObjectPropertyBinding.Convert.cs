@@ -16,7 +16,7 @@ internal sealed class MewObjectPropertyBinding<TProp, TSource> : IDisposable
     private readonly Func<TSource, TProp> _convert;
     private readonly Func<TProp, TSource>? _convertBack;
     private readonly BindingMode _mode;
-    private readonly Action _onSourceChanged;
+    private readonly WeakEventKey<MewObject, Action> _sourceChangedEvent;
     private readonly Action? _onTargetChanged;
     private bool _updating;
 
@@ -36,10 +36,17 @@ internal sealed class MewObjectPropertyBinding<TProp, TSource> : IDisposable
         _convert = convert;
         _convertBack = convertBack;
         _mode = mode;
-        _onSourceChanged = OnSourceChanged;
-
         // Source → Target
-        source.AddPropertyBindingCallback(sourceProperty.Id, _onSourceChanged);
+        _sourceChangedEvent = new WeakEventKey<MewObject, Action>(
+            (owner, handler) => owner.AddPropertyBindingCallback(sourceProperty.Id, handler),
+            (owner, handler) => owner.RemovePropertyBindingCallback(sourceProperty.Id, handler),
+            requireStaticAccessors: false);
+
+        WeakEventManager.AddHandler(
+            _sourceChangedEvent,
+            source,
+            this,
+            static binding => binding.OnSourceChanged());
 
         // Target → Source (TwoWay)
         if (mode == BindingMode.TwoWay && convertBack != null)
@@ -88,7 +95,7 @@ internal sealed class MewObjectPropertyBinding<TProp, TSource> : IDisposable
 
     public void Dispose()
     {
-        _source.RemovePropertyBindingCallback(_sourceProperty.Id, _onSourceChanged);
+        WeakEventManager.RemoveHandler(_sourceChangedEvent, _source, this);
         if (_mode == BindingMode.TwoWay && _onTargetChanged != null)
         {
             _target.RemovePropertyBindingCallback(_targetProperty.Id, _onTargetChanged);
