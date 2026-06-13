@@ -61,6 +61,7 @@ internal sealed class VirtualizedItemsPresenter
         {
             RecycleAll();
             _pool.Clear();
+            _recycledByIndex.Clear();
         }
 
         _createContainer = createContainer;

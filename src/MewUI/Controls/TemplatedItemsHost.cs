@@ -139,15 +139,14 @@ internal sealed class TemplatedItemsHost
             _contexts.Add(element, ctx);
         }
 
-        ctx.Reset();
-        _itemTemplate.Bind(element, item, index, ctx);
+        ctx.BindTemplate(element, _itemTemplate, item, index);
     }
 
     private void UnbindItemContainer(FrameworkElement element)
     {
         if (_contexts.TryGetValue(element, out var ctx))
         {
-            ctx.Reset();
+            ctx.UnbindTemplate(element);
         }
 
         _recycle?.Invoke(element);

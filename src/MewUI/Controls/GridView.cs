@@ -1391,6 +1391,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             while (_cells.Count > columns.Count)
             {
                 int idx = _cells.Count - 1;
+                _cells[idx].Unbind();
                 _cells[idx].Context.Dispose();
                 RemoveAt(idx);
                 _cells.RemoveAt(idx);
@@ -1429,8 +1430,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             _rowIndex = index;
             for (int i = 0; i < _cells.Count; i++)
             {
-                _cells[i].Context.Reset();
-                _cells[i].Template!.Bind(_cells[i].View, item, index, _cells[i].Context);
+                _cells[i].Bind(item, index);
             }
 
             InvalidateMeasure();
@@ -1440,7 +1440,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
         {
             for (int i = 0; i < _cells.Count; i++)
             {
-                _cells[i].Context.Reset();
+                _cells[i].Unbind();
             }
 
             InvalidateMeasure();
@@ -1559,6 +1559,16 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             public IDataTemplate? Template { get; set; }
 
             public FrameworkElement View { get; private set; }
+
+            public void Bind(object? item, int index)
+            {
+                Context.BindTemplate(View, Template!, item, index);
+            }
+
+            public void Unbind()
+            {
+                Context.UnbindTemplate(View);
+            }
 
             public void EnsureViewBuilt(Row row)
             {

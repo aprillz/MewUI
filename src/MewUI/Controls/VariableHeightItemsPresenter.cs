@@ -96,10 +96,11 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 return;
             }
 
-            _itemTemplate = value;
             RecycleAll();
             _pool.Clear();
+            _recycledByIndex.Clear();
             _contexts.Clear();
+            _itemTemplate = value;
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -892,15 +893,14 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             _contexts.Add(element, ctx);
         }
 
-        ctx.Reset();
-        ItemTemplate.Bind(element, item, index, ctx);
+        ctx.BindTemplate(element, ItemTemplate, item, index);
     }
 
     private void UnbindItemContainer(FrameworkElement element)
     {
         if (_contexts.TryGetValue(element, out var ctx))
         {
-            ctx.Reset();
+            ctx.UnbindTemplate(element);
         }
     }
 

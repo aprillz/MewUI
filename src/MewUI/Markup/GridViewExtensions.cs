@@ -170,6 +170,17 @@ public static class GridViewExtensions
         bool resizable = true)
         => AddColumn(gridView, header, width, new DelegateTemplate<TItem>(build, bind), minWidth, resizable);
 
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        double width,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext> unbind,
+        double minWidth = 0,
+        bool resizable = true)
+        => AddColumn(gridView, header, width, new DelegateTemplate<TItem>(build, bind, unbind), minWidth, resizable);
+
     /// <summary>
     /// Creates a column definition.
     /// </summary>
@@ -191,12 +202,14 @@ public static class GridViewExtensions
     /// <param name="width">Column width in DIPs.</param>
     /// <param name="build">Template build callback.</param>
     /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
     public static GridViewColumn<TItem> Column<TItem>(
         string header,
         double width,
         Func<TemplateContext, FrameworkElement> build,
-        Action<FrameworkElement, TItem, int, TemplateContext> bind)
-        => new GridViewColumn<TItem> { Header = header ?? string.Empty, Width = width, CellTemplate = new DelegateTemplate<TItem>(build, bind) };
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => new GridViewColumn<TItem> { Header = header ?? string.Empty, Width = width, CellTemplate = new DelegateTemplate<TItem>(build, bind, unbind) };
 
     /// <summary>
     /// Sets the column header text.
@@ -292,12 +305,21 @@ public static class GridViewExtensions
     /// <param name="column">Target column.</param>
     /// <param name="build">Template build callback.</param>
     /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
     /// <returns>The column for chaining.</returns>
     public static GridViewColumn<TItem> Bind<TItem, TElement>(
         this GridViewColumn<TItem> column,
         Func<TemplateContext, TElement> build,
-        Action<TElement, TItem, int, TemplateContext> bind) where TElement : FrameworkElement
-        => Bind(column, new DelegateTemplate<TItem>(build, (a, b, c, d) => bind((TElement)a, b, c, d)));
+        Action<TElement, TItem, int, TemplateContext> bind,
+        Action<TElement, TItem, int, TemplateContext>? unbind = null) where TElement : FrameworkElement
+        => Bind(
+            column,
+            new DelegateTemplate<TItem>(
+                build,
+                (view, item, index, context) => bind((TElement)view, item, index, context),
+                unbind == null
+                    ? null
+                    : (view, item, index, context) => unbind((TElement)view, item, index, context)));
 
     /// <summary>
     /// Sets the cell template using delegate-based templating with a simple bind callback.
@@ -315,19 +337,21 @@ public static class GridViewExtensions
         => Bind(column, new DelegateTemplate<TItem>(build, (view, item, index, ctx) => bind((TElement)view, item)));
 
     /// <summary>
-    /// Sets the cell template using delegate-based templating. Alias for <see cref="Bind{TItem, TElement}(GridViewColumn{TItem}, Func{TemplateContext, TElement}, Action{TElement, TItem, int, TemplateContext})"/>.
+    /// Sets the cell template using delegate-based templating.
     /// </summary>
     /// <typeparam name="TItem">Item type.</typeparam>
     /// <typeparam name="TElement">Template root element type.</typeparam>
     /// <param name="column">Target column.</param>
     /// <param name="build">Template build callback.</param>
     /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
     /// <returns>The column for chaining.</returns>
     public static GridViewColumn<TItem> Template<TItem, TElement>(
         this GridViewColumn<TItem> column,
         Func<TemplateContext, TElement> build,
-        Action<TElement, TItem, int, TemplateContext> bind) where TElement : FrameworkElement
-        => Bind(column, build, bind);
+        Action<TElement, TItem, int, TemplateContext> bind,
+        Action<TElement, TItem, int, TemplateContext>? unbind = null) where TElement : FrameworkElement
+        => Bind(column, build, bind, unbind);
 
     /// <summary>
     /// Sets the cell template using delegate-based templating with a simple bind callback. Alias for <see cref="Bind{TItem, TElement}(GridViewColumn{TItem}, Func{TemplateContext, TElement}, Action{TElement, TItem})"/>.
