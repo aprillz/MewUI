@@ -246,6 +246,29 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Binds the visibility state to a converted observable value.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <typeparam name="TSource">Observable value type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Converts the source value to a visibility state.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T BindIsVisible<T, TSource>(
+        this T element,
+        ObservableValue<TSource> source,
+        Func<TSource, bool> convert)
+        where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        element.SetBinding(UIElement.IsVisibleProperty, source, convert);
+        return element;
+    }
+
+    /// <summary>
     /// Binds the enabled state to an observable value.
     /// </summary>
     /// <typeparam name="T">Visual type.</typeparam>
@@ -258,6 +281,29 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         element.SetBinding(UIElement.IsEnabledProperty, source);
+        return element;
+    }
+
+    /// <summary>
+    /// Binds the enabled state to a converted observable value.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <typeparam name="TSource">Observable value type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Converts the source value to an enabled state.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T BindIsEnabled<T, TSource>(
+        this T element,
+        ObservableValue<TSource> source,
+        Func<TSource, bool> convert)
+        where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        element.SetBinding(UIElement.IsEnabledProperty, source, convert);
         return element;
     }
 
