@@ -9,8 +9,14 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class ProgressRing : Control
 {
+    public static readonly MewProperty<bool> IsActiveProperty =
+        MewProperty<bool>.Register<ProgressRing>(
+            nameof(IsActive),
+            false,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, isActive) => self.OnIsActiveChanged(isActive));
+
     private AnimationClock? _clock;
-    private bool _isActive;
 
     private const int DotCount = 6;
     private const double DotRadiusRatio = 0.06; // dot radius relative to ring side length
@@ -45,31 +51,26 @@ public class ProgressRing : Control
     /// </summary>
     public bool IsActive
     {
-        get => _isActive;
-        set
+        get => GetValue(IsActiveProperty);
+        set => SetValue(IsActiveProperty, value);
+    }
+
+    private void OnIsActiveChanged(bool isActive)
+    {
+        if (isActive)
         {
-            if (_isActive == value)
+            _clock = new AnimationClock(TimeSpan.FromMilliseconds(StoryboardDurationMs), Easing.Linear)
             {
-                return;
-            }
-
-            _isActive = value;
-
-            if (value)
-            {
-                _clock = new AnimationClock(TimeSpan.FromMilliseconds(StoryboardDurationMs), Easing.Linear)
-                {
-                    RepeatCount = -1,
-                };
-                _clock.TickCallback = OnAnimationTick;
-                _clock.Start();
-            }
-            else
-            {
-                _clock?.Stop();
-                _clock = null;
-                InvalidateVisual();
-            }
+                RepeatCount = -1,
+            };
+            _clock.TickCallback = OnAnimationTick;
+            _clock.Start();
+        }
+        else
+        {
+            _clock?.Stop();
+            _clock = null;
+            InvalidateVisual();
         }
     }
 
@@ -82,7 +83,7 @@ public class ProgressRing : Control
     {
         base.OnRender(context);
 
-        if (!_isActive || _clock == null)
+        if (!IsActive || _clock == null)
         {
             return;
         }
@@ -158,7 +159,7 @@ public class ProgressRing : Control
             _clock?.Stop();
             _clock = null;
         }
-        else if (_isActive && _clock == null)
+        else if (IsActive && _clock == null)
         {
             // Re-attached while still active — restart.
             _clock = new AnimationClock(TimeSpan.FromMilliseconds(StoryboardDurationMs), Easing.Linear)
