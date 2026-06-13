@@ -1748,12 +1748,14 @@ public static class ControlExtensions
     /// <param name="listBox">Target list box.</param>
     /// <param name="build">Template build callback.</param>
     /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
     /// <returns>The list box for chaining.</returns>
     public static ListBox ItemTemplate<TItem>(
         this ListBox listBox,
         Func<TemplateContext, FrameworkElement> build,
-        Action<FrameworkElement, TItem, int, TemplateContext> bind)
-        => ItemTemplate(listBox, new DelegateTemplate<TItem>(build, bind));
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => ItemTemplate(listBox, new DelegateTemplate<TItem>(build, bind, unbind));
 
     /// <summary>
     /// Uses fixed-height row virtualization with theme default item height.
@@ -2149,12 +2151,14 @@ public static class ControlExtensions
     /// <param name="treeView">Target tree view.</param>
     /// <param name="build">Template build callback.</param>
     /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
     /// <returns>The tree view for chaining.</returns>
     public static TreeView ItemTemplate<TItem>(
         this TreeView treeView,
         Func<TemplateContext, FrameworkElement> build,
-        Action<FrameworkElement, TItem, int, TemplateContext> bind)
-        => ItemTemplate(treeView, new DelegateTemplate<TItem>(build, bind));
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => ItemTemplate(treeView, new DelegateTemplate<TItem>(build, bind, unbind));
 
     /// <summary>
     /// Sets the indent size.
@@ -2522,12 +2526,14 @@ public static class ControlExtensions
     /// <param name="comboBox">Target combo box.</param>
     /// <param name="build">Template build callback.</param>
     /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
     /// <returns>The combo box for chaining.</returns>
     public static ComboBox ItemTemplate<TItem>(
         this ComboBox comboBox,
         Func<TemplateContext, FrameworkElement> build,
-        Action<FrameworkElement, TItem, int, TemplateContext> bind)
-        => ItemTemplate(comboBox, new DelegateTemplate<TItem>(build, bind));
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => ItemTemplate(comboBox, new DelegateTemplate<TItem>(build, bind, unbind));
 
     /// <summary>
     /// Sets the selected index.
@@ -2670,7 +2676,7 @@ public static class ControlExtensions
     #endregion
 
     #region TabControl
-     
+
     /// <summary>
     /// Sets the tab items.
     /// </summary>
