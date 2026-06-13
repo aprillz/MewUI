@@ -207,6 +207,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         AdornerLayer = new AdornerLayer(this);
         OverlayLayer = new OverlayLayer(this);
         _popupManager = new PopupManager(this);
+        InitializeBitmapCacheDiagnostics();
 
 #if DEBUG
         if (this is not DebugVisualTreeWindow)

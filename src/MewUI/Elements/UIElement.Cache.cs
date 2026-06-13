@@ -86,11 +86,20 @@ public abstract partial class UIElement
         int deviceGeneration = window?.DeviceGeneration ?? 0;
         var bitmapCache = (BitmapCache)CacheMode!;
 
-        EnsureCache(factory, context.DpiScale, deviceGeneration, bitmapCache);
+        bool cacheRebuilt = EnsureCache(factory, context.DpiScale, deviceGeneration, bitmapCache);
 
         if (_cache is { } entry)
         {
+            if (cacheRebuilt && window != null)
+            {
+                entry.InvalidationOverlayColor = window.NextBitmapCacheInvalidationOverlayColor();
+            }
             context.DrawImage(entry.Image, Bounds);
+            if (!IsRenderingToCache &&
+                window?.DevToolsBitmapCacheInvalidationOverlayEnabled == true)
+            {
+                context.FillRectangle(Bounds, entry.InvalidationOverlayColor);
+            }
         }
         else
         {
@@ -99,13 +108,13 @@ public abstract partial class UIElement
         }
     }
 
-    private void EnsureCache(IGraphicsFactory factory, double dpiScale, int deviceGeneration, BitmapCache bitmapCache)
+    private bool EnsureCache(IGraphicsFactory factory, double dpiScale, int deviceGeneration, BitmapCache bitmapCache)
     {
         var bounds = Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0)
         {
             DisposeCacheEntry();
-            return;
+            return false;
         }
 
         double effectiveDpiScale = dpiScale * Math.Max(0.01, bitmapCache.RenderAtScale);
@@ -120,7 +129,7 @@ public abstract partial class UIElement
             && current.DeviceGeneration == deviceGeneration
             && current.Version == version)
         {
-            return;
+            return false;
         }
 
         DisposeCacheEntry();
@@ -160,6 +169,8 @@ public abstract partial class UIElement
             DeviceGeneration = deviceGeneration,
             Version = version,
         };
+
+        return true;
     }
 
     private void DisposeCacheEntry()
@@ -177,6 +188,7 @@ public abstract partial class UIElement
         public required double DpiScale { get; init; }
         public required int DeviceGeneration { get; init; }
         public required long Version { get; init; }
+        public Color InvalidationOverlayColor { get; set; }
 
         public void Dispose()
         {
