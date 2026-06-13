@@ -2006,7 +2006,7 @@ public static class ControlExtensions
 
     /// <summary>
     /// Uses variable-height row virtualization. Each row's height is the maximum measured
-    /// cell height plus <see cref="GridView.CellPadding"/> vertical thickness — suitable for
+    /// cell height plus <see cref="GridView.CellPadding"/> vertical thickness - suitable for
     /// rows with wrapping text or differently sized cell content.
     /// </summary>
     public static GridView VariableHeightPresenter(this GridView grid)
@@ -2061,19 +2061,29 @@ public static class ControlExtensions
     /// <param name="childrenSelector">Selector for child collection.</param>
     /// <param name="textSelector">Optional text selector for the default template.</param>
     /// <param name="keySelector">Optional key selector for selection/state stability.</param>
+    /// <param name="isExpandableSelector">
+    /// Optional selector that determines whether an item displays an expand indicator independently
+    /// of its currently loaded child count.
+    /// </param>
     /// <returns>The tree view for chaining.</returns>
     public static TreeView Items<T>(
         this TreeView treeView,
         IReadOnlyList<T> roots,
         Func<T, IReadOnlyList<T>> childrenSelector,
         Func<T, string>? textSelector = null,
-        Func<T, object?>? keySelector = null)
+        Func<T, object?>? keySelector = null,
+        Func<T, bool>? isExpandableSelector = null)
     {
         ArgumentNullException.ThrowIfNull(treeView);
 
         treeView.ItemsSource = roots == null
             ? TreeItemsView.Empty
-            : TreeItemsView.Create(roots, childrenSelector, textSelector, keySelector);
+            : TreeItemsView.Create(
+                roots,
+                childrenSelector,
+                textSelector,
+                keySelector,
+                isExpandableSelector);
 
         return treeView;
     }
@@ -2239,6 +2249,32 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(treeView);
         ArgumentNullException.ThrowIfNull(handler);
         treeView.SelectedNodeChanged += handler;
+        return treeView;
+    }
+
+    /// <summary>
+    /// Adds a handler that runs immediately before a tree item is expanded.
+    /// </summary>
+    public static TreeView OnExpanding(
+        this TreeView treeView,
+        Action<TreeViewExpansionEventArgs> handler)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+        ArgumentNullException.ThrowIfNull(handler);
+        treeView.Expanding += handler;
+        return treeView;
+    }
+
+    /// <summary>
+    /// Adds a handler that runs immediately before a tree item is collapsed.
+    /// </summary>
+    public static TreeView OnCollapsing(
+        this TreeView treeView,
+        Action<TreeViewExpansionEventArgs> handler)
+    {
+        ArgumentNullException.ThrowIfNull(treeView);
+        ArgumentNullException.ThrowIfNull(handler);
+        treeView.Collapsing += handler;
         return treeView;
     }
 
