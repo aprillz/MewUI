@@ -58,6 +58,11 @@ partial class GalleryView
             ),
 
             Card(
+                "TreeView (Async children)",
+                AsyncTreeViewCard()
+            ),
+
+            Card(
                 "ListBox (WrapPresenter)",
                 ListBoxWrapPresenterCard()
             ),
@@ -345,6 +350,135 @@ partial class GalleryView
                             treeView
                         );
         }
+
+        FrameworkElement AsyncTreeViewCard()
+        {
+            LazyTreeNode CreateFolder(string name, int depth) =>
+                new(name, depth, canLoadChildren: true);
+
+            void CancelAndClear(LazyTreeNode node)
+            {
+                foreach (var child in node.Children)
+                {
+                    CancelAndClear(child);
+                }
+
+                node.LoadCancellation?.Cancel();
+                node.IsLoading.Value = false;
+                node.IsLoaded = false;
+                node.Children.Clear();
+            }
+
+            var remoteRoot = CreateFolder("remote", depth: 0);
+            var treeView = new TreeView()
+                .Width(240)
+                .Items(
+                    [remoteRoot],
+                    node => node.Children,
+                    textSelector: node => node.Name,
+                    keySelector: node => node,
+                    isExpandableSelector: node =>
+                        node.Children.Count > 0 || node.CanLoadChildren)
+                .OnExpanding(async e =>
+                {
+                    if (e.Item is not LazyTreeNode node ||
+                        !node.CanLoadChildren ||
+                        node.IsLoaded ||
+                        node.LoadCancellation != null)
+                    {
+                        return;
+                    }
+
+                    var cancellation = new CancellationTokenSource();
+                    node.LoadCancellation = cancellation;
+                    node.IsLoading.Value = true;
+                    try
+                    {
+                        await Task.Delay(1200 + node.Depth * 300, cancellation.Token);
+
+                        if (node.Depth < 3)
+                        {
+                            for (int i = 1; i <= 6; i++)
+                            {
+                                node.Children.Add(CreateFolder(
+                                    $"folder-{node.Depth + 1}-{i:00}",
+                                    node.Depth + 1));
+                            }
+                        }
+
+                        for (int i = 1; i <= 18; i++)
+                        {
+                            node.Children.Add(new LazyTreeNode(
+                                $"file-{node.Depth}-{i:00}.dat",
+                                node.Depth + 1,
+                                canLoadChildren: false));
+                        }
+
+                        node.IsLoaded = true;
+                    }
+                    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                    {
+                    }
+                    finally
+                    {
+                        if (ReferenceEquals(node.LoadCancellation, cancellation))
+                        {
+                            node.LoadCancellation = null;
+                        }
+
+                        node.IsLoading.Value = false;
+                        cancellation.Dispose();
+                    }
+                })
+                .OnCollapsing(e =>
+                {
+                    if (e.Item is LazyTreeNode node)
+                    {
+                        CancelAndClear(node);
+                    }
+                });
+
+            treeView.ItemTemplate<LazyTreeNode>(
+                build: ctx => new StackPanel()
+                    .Horizontal()
+                    .Spacing(6)
+                    .Children(
+                        new Grid()
+                            .Width(16).Height(16)
+                            .CenterVertical()
+                            .Children(
+                                new Image()
+                                    .Register(ctx, "Icon")
+                                    .Size(16, 16)
+                                    .StretchMode(Stretch.None),
+                                new ProgressRing()
+                                    .Register(ctx, "Loading")
+                                    .Size(16, 16)
+                                    .WithTheme((t, c) => c.Foreground(t.Palette.Accent))
+                            ),
+
+                        new TextBlock()
+                            .Register(ctx, "Text")
+                            .CenterVertical()),
+                bind: (view, item, index, ctx) =>
+                {
+                    bool isFolder = item.Children.Count > 0 || item.CanLoadChildren;
+
+                    var icon = ctx.Get<Image>("Icon");
+                    icon.Source(isFolder ? (treeView.ItemsSource.GetIsExpanded(index) ? iconFolderOpen : iconFolderClose) : iconFile);
+
+                    ctx.Get<TextBlock>("Text").Text(item.Name);
+
+                    var loading = ctx.Get<ProgressRing>("Loading");
+                    icon.BindIsVisible(item.IsLoading, isLoading => !isLoading);
+                    loading.Bind(ProgressRing.IsActiveProperty, item.IsLoading);
+                    loading.BindIsVisible(item.IsLoading);
+                });
+
+            return new DockPanel()
+                .Height(240)
+                .Children(treeView);
+        }
     }
 
     private FrameworkElement ChatVariableHeightCard()
@@ -559,3 +693,14 @@ partial class GalleryView
 
 sealed record DemoUser(int Id, string Name, string Role, bool IsOnline);
 sealed record ChatMessage(long Id, string Sender, string Text, bool Mine, DateTimeOffset Time);
+
+sealed class LazyTreeNode(string name, int depth, bool canLoadChildren)
+{
+    public string Name { get; } = name;
+    public int Depth { get; } = depth;
+    public bool CanLoadChildren { get; } = canLoadChildren;
+    public ObservableCollection<LazyTreeNode> Children { get; } = [];
+    public bool IsLoaded { get; set; }
+    public ObservableValue<bool> IsLoading { get; } = new(false);
+    public CancellationTokenSource? LoadCancellation { get; set; }
+}
