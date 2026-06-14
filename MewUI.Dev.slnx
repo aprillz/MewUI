@@ -9,6 +9,7 @@
     <Project Path="src/MewUI.Concept/MewUI.Concept.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/MewDock.Sample/MewDock.Sample.csproj" />
     <Project Path="samples/MewUI.Concept/MewUI.Concept.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
     <Project Path="samples/MewUI.ImeTest/MewUI.ImeTest.csproj" />
@@ -20,6 +21,7 @@
     <Project Path="samples/MewUI.WriteableBitmapSample/MewUI.WriteableBitmapSample.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/MewUI.Analyzers/MewUI.Analyzers.csproj" />
     <Project Path="src/MewUI.Backend.Direct2D/MewUI.Backend.Direct2D.csproj" />
     <Project Path="src/MewUI.Backend.Gdi/MewUI.Backend.Gdi.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
@@ -28,15 +30,18 @@
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
-    <Project Path="src/MewUI.Skia/MewUI.Skia.csproj" />
-    <Project Path="src/MewUI.Skia.Interop.Direct2D/MewUI.Skia.Interop.Direct2D.csproj" />
-    <Project Path="src/MewUI.Skia.Interop.Gdi/MewUI.Skia.Interop.Gdi.csproj" />
-    <Project Path="src/MewUI.Skia.Interop.MewVG.MacOS/MewUI.Skia.Interop.MewVG.MacOS.csproj" />
-    <Project Path="src/MewUI.Skia.Interop.MewVG.Win32/MewUI.Skia.Interop.MewVG.Win32.csproj" />
-    <Project Path="src/MewUI.Skia.Interop.MewVG.X11/MewUI.Skia.Interop.MewVG.X11.csproj" />
     <Project Path="src/MewUI.Svg/MewUI.Svg.csproj" />
     <Project Path="src/MewUI.Win32.WebView2/MewUI.Win32.WebView2.csproj" />
     <Project Path="src/MewUI/MewUI.csproj" />
+  </Folder>
+  <Folder Name="/extensions/">
+    <Project Path="extensions/MewUI.MewDock/MewUI.MewDock.csproj" />
+    <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
+    <Project Path="extensions/MewUI.Skia.Interop.Direct2D/MewUI.Skia.Interop.Direct2D.csproj" />
+    <Project Path="extensions/MewUI.Skia.Interop.Gdi/MewUI.Skia.Interop.Gdi.csproj" />
+    <Project Path="extensions/MewUI.Skia.Interop.MewVG.Win32/MewUI.Skia.Interop.MewVG.Win32.csproj" />
+    <Project Path="extensions/MewUI.Skia.Interop.MewVG.X11/MewUI.Skia.Interop.MewVG.X11.csproj" />
+    <Project Path="extensions/MewUI.Skia.Interop.MewVG.MacOS/MewUI.Skia.Interop.MewVG.MacOS.csproj" />
   </Folder>
   <Folder Name="/external/">
     <Project Path="../MewVG/src/MewVG.Core/MewVG.Core.csproj" />
@@ -51,8 +56,10 @@
     <Project Path="meta/MewUI.Windows/MewUI.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
+    <Project Path="tests/MewUI.Test/MewUI.Test.csproj" />
     <Project Path="tests/MewUI.TextBoxPerformance/MewUI.TextBoxPerformance.csproj" />
   </Folder>
 </Solution>
