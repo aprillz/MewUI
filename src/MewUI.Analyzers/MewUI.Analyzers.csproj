@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Analyzers run inside the compiler/IDE host: netstandard2.0 only, no MewUI.Common.props
+       (which forces net8/net10 + trimming + packaging). Roslyn version is pinned low for
+       broad VS / VS Code (C# Dev Kit) / Rider / CI host compatibility. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Aprillz.MewUI.Analyzers</AssemblyName>
+    <RootNamespace>Aprillz.MewUI.Analyzers</RootNamespace>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- RS1038: this assembly intentionally bundles the code fix (so it references Workspaces).
+         RS2008: analyzer release tracking not warranted yet. -->
+    <NoWarn>$(NoWarn);RS1038;RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pulls in CodeAnalysis.CSharp + Workspaces.Common (needed for the code fix). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

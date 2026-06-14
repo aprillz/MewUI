@@ -1,0 +1,25 @@
+<Project Sdk="MSTest.Sdk/4.0.1">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseVSTest>true</UseVSTest>
+    <!-- MSTEST0001: parallelism preference nag, not relevant to analyzer tests. -->
+    <NoWarn>$(NoWarn);MSTEST0001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pin Roslyn to match the analyzer (4.8); the testing package's floor is otherwise ancient. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.2" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeRefactoring.Testing" Version="1.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the analyzer as a normal library so tests can name its types directly. -->
+    <ProjectReference Include="..\..\src\MewUI.Analyzers\MewUI.Analyzers.csproj" />
+  </ItemGroup>
+
+</Project>
