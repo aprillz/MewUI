@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
-    <ProjectReference Include="..\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
   </ItemGroup>
 
   <!-- Shared GL FBO helpers (Compile-linked into this assembly so the WGL/GL types are internal). -->

@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
-    <ProjectReference Include="..\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
   </ItemGroup>
 
   <ItemGroup>

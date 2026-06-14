@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <RootNamespace>Aprillz.MewUI.MewDock</RootNamespace>
+    <AssemblyName>Aprillz.MewUI.MewDock</AssemblyName>
+    <PackageId>Aprillz.MewUI.MewDock</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+</Project>
