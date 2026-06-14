@@ -4326,34 +4326,6 @@ public static class ControlExtensions
 
     #endregion
 
-    #region ControlTemplate
-
-    /// <summary>
-    /// Sets the template child.
-    /// </summary>
-    /// <param name="template">Target control template.</param>
-    /// <param name="child">Template child.</param>
-    /// <returns>The template for chaining.</returns>
-    public static ControlTemplate Child(this ControlTemplate template, Element? child)
-    {
-        template.Child = child;
-        return template;
-    }
-
-    /// <summary>
-    /// Sets the template content.
-    /// </summary>
-    /// <param name="template">Target control template.</param>
-    /// <param name="content">Template content.</param>
-    /// <returns>The template for chaining.</returns>
-    public static ControlTemplate Content(this ControlTemplate template, Element? content)
-    {
-        template.Content = content;
-        return template;
-    }
-
-    #endregion
-
     #region DropDownBase
 
     /// <summary>
