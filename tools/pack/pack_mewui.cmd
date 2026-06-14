@@ -11,6 +11,14 @@ set FAILED=0
 
 if not exist "%OUT%" mkdir "%OUT%" >nul 2>nul
 
+REM --- Build the analyzer first; it is bundled into Core's analyzers/dotnet/cs ---
+echo Building analyzer ...
+dotnet build "%ROOT%\src\MewUI.Analyzers\MewUI.Analyzers.csproj" -c Release /nr:false
+if errorlevel 1 (
+  echo FAILED: analyzer build
+  exit /b 1
+)
+
 REM --- Individual packages (src) ---
 set PROJECTS=^
   src\MewUI\MewUI.csproj^
@@ -28,14 +36,28 @@ set PROJECTS=%PROJECTS%^
   meta\MewUI.Windows\MewUI.Windows.csproj^
   meta\MewUI.Linux\MewUI.Linux.csproj^
   meta\MewUI.MacOS\MewUI.MacOS.csproj^
-  meta\MewUI.All\MewUI.All.csproj
+  meta\MewUI.All\MewUI.All.csproj^
+  meta\MewUI.Skia.Windows\MewUI.Skia.Windows.csproj^
+  meta\MewUI.Skia.Linux\MewUI.Skia.Linux.csproj^
+  meta\MewUI.Skia.MacOS\MewUI.Skia.MacOS.csproj^
+  meta\MewUI.Skia.All\MewUI.Skia.All.csproj
+
+REM --- Extensions (extensions) ---
+set PROJECTS=%PROJECTS%^
+  extensions\MewUI.MewDock\MewUI.MewDock.csproj^
+  extensions\MewUI.Skia\MewUI.Skia.csproj^
+  extensions\MewUI.Skia.Interop.Direct2D\MewUI.Skia.Interop.Direct2D.csproj^
+  extensions\MewUI.Skia.Interop.Gdi\MewUI.Skia.Interop.Gdi.csproj^
+  extensions\MewUI.Skia.Interop.MewVG.Win32\MewUI.Skia.Interop.MewVG.Win32.csproj^
+  extensions\MewUI.Skia.Interop.MewVG.X11\MewUI.Skia.Interop.MewVG.X11.csproj^
+  extensions\MewUI.Skia.Interop.MewVG.MacOS\MewUI.Skia.Interop.MewVG.MacOS.csproj
 
 for %%P in (%PROJECTS%) do (
   echo Packing %%P ...
   if "%VERSION%"=="" (
-    dotnet pack "%ROOT%\%%P" -c Release -o "%OUT%" /p:ContinuousIntegrationBuild=true
+    dotnet pack "%ROOT%\%%P" -c Release -o "%OUT%" /p:ContinuousIntegrationBuild=true /nr:false
   ) else (
-    dotnet pack "%ROOT%\%%P" -c Release -o "%OUT%" /p:ContinuousIntegrationBuild=true /p:PackageVersion=%VERSION%
+    dotnet pack "%ROOT%\%%P" -c Release -o "%OUT%" /p:ContinuousIntegrationBuild=true /p:PackageVersion=%VERSION% /nr:false
   )
   if errorlevel 1 (
     echo FAILED: %%P
