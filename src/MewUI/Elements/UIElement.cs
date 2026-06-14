@@ -123,6 +123,11 @@ public abstract partial class UIElement : Element
 
         if (property == IsVisibleProperty)
         {
+            if (!IsVisible)
+            {
+                ReleaseBitmapCachesInSubtree();
+            }
+
             OnVisibilityChanged();
         }
         else if (property == IsEnabledProperty)
@@ -371,8 +376,11 @@ public abstract partial class UIElement : Element
         if (!SkipViewportCull && _cacheSnapshotDepth == 0 && this is not Window &&
             (FindVisualRoot() is not Window root || !new Rect(root.ClientSize).IntersectsWith(Bounds)))
         {
+            ReleaseBitmapCachesInSubtree();
             return;
         }
+
+        MarkBitmapCacheVisible();
 
         using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this))
         {

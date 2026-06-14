@@ -12,7 +12,8 @@ public abstract class CacheMode
 /// offscreen bitmap and blits that bitmap each frame until the element's content, size, or DPI
 /// changes. The visual tree is kept intact: layout, hit testing, focus, and state continue to run
 /// on the live element — only painting is served from the cache. Clearing <c>CacheMode</c> resumes
-/// live rendering immediately.
+/// live rendering immediately. Backing bitmaps are released while their subtree is hidden,
+/// outside the window viewport, or detached, and are recreated when rendered again.
 /// <para/>
 /// Settings are immutable. To change them, assign a new <see cref="BitmapCache"/> instance to
 /// <see cref="Controls.UIElement.CacheMode"/> so the property change is observed and the cache is

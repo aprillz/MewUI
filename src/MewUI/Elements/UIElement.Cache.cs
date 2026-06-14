@@ -38,6 +38,7 @@ public abstract partial class UIElement
     private long _contentVersion;
 
     private CacheEntry? _cache;
+    private bool _bitmapCachesReleasedWhileCulled;
 
     // While > 0 on the current thread, the viewport-bounds cull in Render is bypassed: a cache
     // snapshot renders the whole subtree into an offscreen surface, so culling against the window
@@ -46,6 +47,28 @@ public abstract partial class UIElement
     private static int _cacheSnapshotDepth;
 
     internal static bool IsRenderingToCache => _cacheSnapshotDepth > 0;
+
+    private void ReleaseBitmapCachesInSubtree()
+    {
+        if (_bitmapCachesReleasedWhileCulled)
+        {
+            return;
+        }
+
+        VisualTree.Visit(this, static element =>
+        {
+            if (element is UIElement uiElement)
+            {
+                uiElement.DisposeCacheEntry();
+                uiElement._bitmapCachesReleasedWhileCulled = true;
+            }
+        });
+    }
+
+    private void MarkBitmapCacheVisible()
+    {
+        _bitmapCachesReleasedWhileCulled = false;
+    }
 
     /// <summary>
     /// Renders this element (and its subtree) when it is not part of any window's visual tree, e.g. a
