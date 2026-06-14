@@ -1724,18 +1724,6 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Adds a nullable checked state change handler.
-    /// </summary>
-    /// <param name="checkBox">Target check box.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The check box for chaining.</returns>
-    public static CheckBox OnCheckedChanged(this CheckBox checkBox, Action<bool?> handler)
-    {
-        checkBox.CheckedChanged += handler;
-        return checkBox;
-    }
-
-    /// <summary>
     /// Enables three-state mode.
     /// </summary>
     /// <param name="checkBox">Target check box.</param>

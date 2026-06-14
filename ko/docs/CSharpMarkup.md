@@ -38,6 +38,8 @@ new Button()
 | `OnEventName(handler)` | 이벤트 핸들러 등록 | `.OnClick(...)`, `.OnTextChanged(...)` |
 | `OnCanEventName(func)` | 조건부 실행 (Commanding) | `.OnCanClick(() => isValid)` |
 
+같은 `On*` 메서드를 핸들러 delegate의 매개변수 타입만 바꿔 오버로드하지 않습니다. 타입이 명시되지 않은 람다는 두 오버로드에 모두 일치할 수 있으며, 기반 클래스용 확장과 파생 클래스용 확장 사이에서도 같은 문제가 발생합니다. `OnCheckStateChanged`, `OnLayoutSizeChanged`처럼 의미가 구분되는 이름을 사용합니다.
+
 ### 데이터 바인딩
 | 패턴 | 설명 | 예시 |
 |------|------|------|

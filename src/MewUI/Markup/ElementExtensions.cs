@@ -92,7 +92,7 @@ public static class ElementExtensions
     /// <param name="element">Target element.</param>
     /// <param name="handler">Event handler.</param>
     /// <returns>The element for chaining.</returns>
-    public static T OnSizeChanged<T>(this T element, Action<SizeChangedEventArgs> handler)
+    public static T OnLayoutSizeChanged<T>(this T element, Action<SizeChangedEventArgs> handler)
         where T : FrameworkElement
     {
         element.SizeChanged += handler;

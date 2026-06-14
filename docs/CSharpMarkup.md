@@ -38,6 +38,8 @@ All extension methods return `this` to enable method chaining.
 | `OnEventName(handler)` | Register event handler | `.OnClick(...)`, `.OnTextChanged(...)` |
 | `OnCanEventName(func)` | Conditional execution (Commanding) | `.OnCanClick(() => isValid)` |
 
+Do not overload the same `On*` method solely by changing the handler delegate's parameter type. Untyped lambdas can match both overloads, including when one extension targets a base class and another targets a derived class. Use a distinct semantic name instead, such as `OnCheckStateChanged` or `OnLayoutSizeChanged`.
+
 ### Data Binding
 | Pattern | Description | Example |
 |---------|-------------|---------|
