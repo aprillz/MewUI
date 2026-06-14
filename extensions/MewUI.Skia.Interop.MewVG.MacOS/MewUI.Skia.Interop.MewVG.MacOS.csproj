@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
-    <ProjectReference Include="..\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
 
 </Project>

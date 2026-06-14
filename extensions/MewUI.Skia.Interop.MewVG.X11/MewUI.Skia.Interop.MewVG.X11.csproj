@@ -3,14 +3,14 @@
   <Import Project="..\..\build\MewUI.Common.props" />
 
   <PropertyGroup>
-    <AssemblyName>$(MewUITitle).Skia.Interop.Direct2D</AssemblyName>
-    <PackageId>$(MewUITitle).Skia.Interop.Direct2D</PackageId>
-    <Description>Zero-copy GPU bridge between $(MewUITitle).Skia and the Direct2D backend. Activate at startup with SkiaDirect2DInterop.Use().</Description>
+    <AssemblyName>$(MewUITitle).Skia.Interop.MewVG.X11</AssemblyName>
+    <PackageId>$(MewUITitle).Skia.Interop.MewVG.X11</PackageId>
+    <Description>Zero-copy GPU bridge between $(MewUITitle).Skia and the MewVG.X11 backend. Activate at startup with SkiaMewVGX11Interop.Use().</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MewUI.Skia\MewUI.Skia.csproj" />
-    <ProjectReference Include="..\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
   </ItemGroup>
 
   <ItemGroup>
