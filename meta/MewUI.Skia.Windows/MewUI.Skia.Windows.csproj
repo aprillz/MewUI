@@ -9,10 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\MewUI.Skia\MewUI.Skia.csproj" />
-    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.Direct2D\MewUI.Skia.Interop.Direct2D.csproj" />
-    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.Gdi\MewUI.Skia.Interop.Gdi.csproj" />
-    <ProjectReference Include="..\..\src\MewUI.Skia.Interop.MewVG.Win32\MewUI.Skia.Interop.MewVG.Win32.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Skia.Interop.Direct2D\MewUI.Skia.Interop.Direct2D.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Skia.Interop.Gdi\MewUI.Skia.Interop.Gdi.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Skia.Interop.MewVG.Win32\MewUI.Skia.Interop.MewVG.Win32.csproj" />
   </ItemGroup>
 
 </Project>
