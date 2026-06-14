@@ -175,21 +175,27 @@ public sealed class MergeChainStatementsRefactoring : CodeRefactoringProvider
             return document;
         }
 
-        var (_, value) = GetAnchorTarget(anchor, model, cancellationToken);
+        var (target, value) = GetAnchorTarget(anchor, model, cancellationToken);
         if (value is null)
         {
             return document;
         }
 
+        // For a local declaration of a reference type, capture the reference inline with `.Ref(out var x)`
+        // (the MewUI idiom) instead of keeping a `var x = ...;` statement, when a Ref extension exists.
+        var refMethod = TryResolveRefForLocal(anchor, target, model, out var variableName);
+
         ExpressionSyntax accumulator = value.WithoutTrivia();
+        if (refMethod is not null)
+        {
+            accumulator = AppendCall(accumulator, SyntaxFactory.IdentifierName(refMethod), RefArgumentList(variableName!));
+        }
+
         foreach (var (_, calls) in followUps)
         {
             foreach (var (name, arguments) in calls)
             {
-                accumulator = SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression, accumulator, name.WithoutTrivia()),
-                    arguments);
+                accumulator = AppendCall(accumulator, name, arguments);
             }
         }
 
@@ -203,14 +209,72 @@ public sealed class MergeChainStatementsRefactoring : CodeRefactoringProvider
                 merged, baseIndent, FluentChainLayout.ChainLength(merged) >= FluentChainLayout.MinLinks, newline);
         }
 
+        var mergedStatement = refMethod is not null
+            ? SyntaxFactory.ExpressionStatement(accumulator)
+                .WithLeadingTrivia(anchor.GetLeadingTrivia())
+                .WithTrailingTrivia(anchor.GetTrailingTrivia())
+            : BuildMergedStatement(anchor, accumulator);
+
         var editor = await DocumentEditor.CreateAsync(document, cancellationToken).ConfigureAwait(false);
-        editor.ReplaceNode(anchor, BuildMergedStatement(anchor, accumulator));
+        editor.ReplaceNode(anchor, mergedStatement);
         foreach (var (statement, _) in followUps)
         {
             editor.RemoveNode(statement, SyntaxRemoveOptions.KeepNoTrivia);
         }
 
         return editor.GetChangedDocument();
+    }
+
+    private static InvocationExpressionSyntax AppendCall(ExpressionSyntax receiver, SimpleNameSyntax name, ArgumentListSyntax arguments)
+        => SyntaxFactory.InvocationExpression(
+            SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, receiver, name.WithoutTrivia()),
+            arguments);
+
+    // `Ref` extension name to use for a `var x = ...` local of a reference type, or null to keep `var x = ...`.
+    private static string? TryResolveRefForLocal(StatementSyntax anchor, ISymbol? target, SemanticModel model, out string? variableName)
+    {
+        variableName = null;
+        if (anchor is not LocalDeclarationStatementSyntax declaration
+            || declaration.Declaration.Variables.Count != 1
+            || target is null)
+        {
+            return null;
+        }
+
+        var targetType = TargetType(target);
+        if (targetType is null || !targetType.IsReferenceType)
+        {
+            return null;
+        }
+
+        var declarator = declaration.Declaration.Variables[0];
+        foreach (var symbol in model.LookupSymbols(declarator.SpanStart, targetType, "Ref", includeReducedExtensionMethods: true))
+        {
+            if (symbol is IMethodSymbol method
+                && method.ReducedFrom is not null
+                && method.Parameters.Length == 1
+                && method.Parameters[0].RefKind == RefKind.Out)
+            {
+                variableName = declarator.Identifier.Text;
+                return method.Name;
+            }
+        }
+
+        return null;
+    }
+
+    private static ArgumentListSyntax RefArgumentList(string variableName)
+    {
+        var declaration = SyntaxFactory.DeclarationExpression(
+            SyntaxFactory.IdentifierName("var").WithTrailingTrivia(SyntaxFactory.Space),
+            SyntaxFactory.SingleVariableDesignation(SyntaxFactory.Identifier(variableName)));
+
+        var argument = SyntaxFactory.Argument(
+            null,
+            SyntaxFactory.Token(SyntaxKind.OutKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+            declaration);
+
+        return SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(argument));
     }
 
     private static StatementSyntax BuildMergedStatement(StatementSyntax anchor, ExpressionSyntax value)

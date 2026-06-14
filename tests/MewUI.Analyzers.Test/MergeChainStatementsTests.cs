@@ -22,6 +22,7 @@ public sealed class MergeChainStatementsTests
             public static T Text<T>(this T widget, string value) where T : Widget { widget.Text = value; return widget; }
             public static T Width<T>(this T widget, int value) where T : Widget { widget.Width = value; return widget; }
             public static T OnClick<T>(this T widget, System.Action handler) where T : Widget { widget.Click += handler; return widget; }
+            public static T Ref<T>(this T widget, out T field) where T : class { field = widget; return widget; }
         }
         """;
 
@@ -57,8 +58,9 @@ public sealed class MergeChainStatementsTests
     }
 
     [TestMethod]
-    public async Task MergesLocalDeclarationWithMultipleFollowUps()
+    public async Task MergesLocalDeclaration_CapturesWithRefOut()
     {
+        // A `var x = ...` local of a reference type is captured inline with `.Ref(out var x)`.
         var source = """
             class C
             {
@@ -77,7 +79,8 @@ public sealed class MergeChainStatementsTests
             {
                 object M()
                 {
-                    var w = new Widget()
+                    new Widget()
+                        .Ref(out var w)
                         .Text("hi")
                         .Width(5);
                     return w;
