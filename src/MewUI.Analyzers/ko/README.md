@@ -1,5 +1,7 @@
 # Aprillz.MewUI.Analyzers
 
+> **상태 (2026-06-15): 초기 실험적 버전.** 진단 id, 동작, 포맷 출력은 아직 정제 중이며 바뀔 수 있습니다.
+
 MewUI fluent markup용 Roslyn analyzer와 refactoring 모음. NuGet analyzer(`analyzers/dotnet/cs`)로 배포되어
 참조 하나로 Visual Studio, VS Code(C# Dev Kit), Rider, CI에서 동작합니다. 빌드 타임 전용이라
 런타임/NativeAOT 산출물에는 아무것도 들어가지 않습니다.
@@ -105,9 +107,13 @@ new Button()
    new StackPanel()
        .Vertical()
        .Children(
-           new Button().Content("A").Width(80),
+           new Button()
+               .Content("A")
+               .Width(80),
 
-           new Button().Content("B").Width(80)
+           new Button()
+               .Content("B")
+               .Width(80)
        )
    ```
 
@@ -204,5 +210,5 @@ _titleBar.Child(new DockPanel().Children(...));
 dotnet test tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj
 ```
 
-전체 설계는 [agent/fluent-formatter/plan.md](../../agent/fluent-formatter/plan.md), nuget 동봉 방식은
-[agent/fluent-formatter/packaging-plan.md](../../agent/fluent-formatter/packaging-plan.md) 참고.
+전체 설계는 [agent/fluent-formatter/plan.md](../../../agent/fluent-formatter/plan.md), nuget 동봉 방식은
+[agent/fluent-formatter/packaging-plan.md](../../../agent/fluent-formatter/packaging-plan.md) 참고.

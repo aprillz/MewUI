@@ -18,6 +18,7 @@ public sealed class InitializerToFluentTests
             public int Width { get; set; }
             public object Tag { get; set; }
             public System.Action Click { get; set; }
+            public object Content { get; set; }
         }
 
         public static class WidgetExtensions
@@ -25,6 +26,12 @@ public sealed class InitializerToFluentTests
             public static T Text<T>(this T widget, string value) where T : Widget { widget.Text = value; return widget; }
             public static T Width<T>(this T widget, int value) where T : Widget { widget.Width = value; return widget; }
             public static T OnClick<T>(this T widget, System.Action handler) where T : Widget { widget.Click += handler; return widget; }
+            public static T Content<T>(this T widget, object value) where T : Widget { widget.Content = value; return widget; }
+        }
+
+        public static class Factory
+        {
+            public static object Build() => null;
         }
         """;
 
@@ -148,6 +155,38 @@ public sealed class InitializerToFluentTests
                     var w = new Widget()
                         .OnClick(handler)
                         .Width(5);
+                    return w;
+                }
+            }
+            """ + FluentApi;
+
+        await RunAsync(source, fixedSource);
+    }
+
+    [TestMethod]
+    public async Task ConvertsValueThatIsItselfACall_WithoutThrowing()
+    {
+        // Repro: a converted member whose value is a call chain (`Factory.Build()`) must not crash the
+        // fix. `Factory` is a type, so the argument stays inline.
+        var source = """
+            class C
+            {
+                object M()
+                {
+                    var w = new {|MEW1101:Widget|} { Width = 5, Content = Factory.Build() };
+                    return w;
+                }
+            }
+            """ + FluentApi;
+
+        var fixedSource = """
+            class C
+            {
+                object M()
+                {
+                    var w = new Widget()
+                        .Width(5)
+                        .Content(Factory.Build());
                     return w;
                 }
             }

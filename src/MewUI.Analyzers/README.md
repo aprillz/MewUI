@@ -1,5 +1,8 @@
 # Aprillz.MewUI.Analyzers
 
+> **Status (2026-06-15): early experimental version.** Diagnostic ids, behavior, and formatting
+> output are still being refined and may change.
+
 Roslyn analyzers and refactorings for MewUI fluent markup. Ships as a NuGet analyzer
 (`analyzers/dotnet/cs`), so it works in Visual Studio, VS Code (C# Dev Kit), Rider, and CI from one
 reference. Build-time only: nothing ships into the runtime / NativeAOT output.
@@ -110,9 +113,13 @@ new Button()
    new StackPanel()
        .Vertical()
        .Children(
-           new Button().Content("A").Width(80),
+           new Button()
+               .Content("A")
+               .Width(80),
 
-           new Button().Content("B").Width(80)
+           new Button()
+               .Content("B")
+               .Width(80)
        )
    ```
 

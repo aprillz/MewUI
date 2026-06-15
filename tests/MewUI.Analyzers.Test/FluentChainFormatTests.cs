@@ -17,6 +17,7 @@ public sealed class FluentChainFormatTests
             public Node Child(string s) => this;
             public Node Add(params Node[] nodes) => this;
             public Node Color(Paint p) => this;
+            public Node On(System.Action<int> handler) => this;
         }
 
         public class Paint
@@ -43,6 +44,63 @@ public sealed class FluentChainFormatTests
                     .Append("b");
             }
             """;
+
+        await RunAsync(source, fixedSource);
+    }
+
+    [TestMethod]
+    public async Task Expand_OffersOnSingleCallChain()
+    {
+        var source = """
+            class C
+            {
+                object M() => new Node().Ch[||]ild("x");
+            }
+            """ + NodeApi;
+
+        var fixedSource = """
+            class C
+            {
+                object M() => new Node()
+                    .Child("x");
+            }
+            """ + NodeApi;
+
+        await RunAsync(source, fixedSource);
+    }
+
+    [TestMethod]
+    public async Task Expand_RealignsMultiLineLambdaBlock()
+    {
+        var source = """
+            class C
+            {
+                void M(int x)
+                {
+                    new Node().Ch[||]ild("x").On(e =>
+            {
+                Run(e);
+            });
+                }
+                void Run(int e) { }
+            }
+            """ + NodeApi;
+
+        var fixedSource = """
+            class C
+            {
+                void M(int x)
+                {
+                    new Node()
+                        .Child("x")
+                        .On(e =>
+                        {
+                            Run(e);
+                        });
+                }
+                void Run(int e) { }
+            }
+            """ + NodeApi;
 
         await RunAsync(source, fixedSource);
     }
