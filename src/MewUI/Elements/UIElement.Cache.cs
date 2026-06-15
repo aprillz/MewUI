@@ -145,24 +145,47 @@ public abstract partial class UIElement
         int pixelHeight = Math.Max(1, (int)Math.Ceiling(bounds.Height * effectiveDpiScale));
         long version = _contentVersion;
 
-        if (_cache is { } current
-            && current.PixelWidth == pixelWidth
-            && current.PixelHeight == pixelHeight
-            && current.DpiScale == effectiveDpiScale
-            && current.DeviceGeneration == deviceGeneration
-            && current.Version == version)
+        var entry = _cache;
+        bool canReuse = entry != null
+            && entry.PixelWidth == pixelWidth
+            && entry.PixelHeight == pixelHeight
+            && entry.DpiScale == effectiveDpiScale
+            && entry.DeviceGeneration == deviceGeneration;
+
+        if (canReuse && entry!.Version == version)
         {
             return false;
         }
 
-        DisposeCacheEntry();
-
-        IRenderSurface surface = factory.CreateSurface(
-            RenderSurfaceDescriptor.CachedImage(pixelWidth, pixelHeight, effectiveDpiScale));
-
-        using (IGraphicsContext cacheContext = factory.CreateContext(surface))
+        if (!canReuse)
         {
-            cacheContext.BeginFrame(surface);
+            DisposeCacheEntry();
+
+            IRenderSurface surface = factory.CreateSurface(
+                RenderSurfaceDescriptor.CachedImage(pixelWidth, pixelHeight, effectiveDpiScale));
+            try
+            {
+                entry = new CacheEntry
+                {
+                    Surface = surface,
+                    Image = factory.CreateImageView(surface),
+                    PixelWidth = pixelWidth,
+                    PixelHeight = pixelHeight,
+                    DpiScale = effectiveDpiScale,
+                    DeviceGeneration = deviceGeneration,
+                };
+                _cache = entry;
+            }
+            catch
+            {
+                surface.Dispose();
+                throw;
+            }
+        }
+
+        using (IGraphicsContext cacheContext = factory.CreateContext(entry!.Surface))
+        {
+            cacheContext.BeginFrame(entry.Surface);
             cacheContext.Clear(Color.Transparent);
             cacheContext.Translate(-bounds.Left, -bounds.Top);
 
@@ -182,16 +205,7 @@ public abstract partial class UIElement
             cacheContext.EndFrame();
         }
 
-        _cache = new CacheEntry
-        {
-            Surface = surface,
-            Image = factory.CreateImageView(surface),
-            PixelWidth = pixelWidth,
-            PixelHeight = pixelHeight,
-            DpiScale = effectiveDpiScale,
-            DeviceGeneration = deviceGeneration,
-            Version = version,
-        };
+        entry.Version = version;
 
         return true;
     }
@@ -210,7 +224,7 @@ public abstract partial class UIElement
         public required int PixelHeight { get; init; }
         public required double DpiScale { get; init; }
         public required int DeviceGeneration { get; init; }
-        public required long Version { get; init; }
+        public long Version { get; set; }
         public Color InvalidationOverlayColor { get; set; }
 
         public void Dispose()
