@@ -23,8 +23,10 @@ public sealed class FluentChainFormatRefactoring : CodeRefactoringProvider
             return;
         }
 
+        // FindChainTop already guarantees a member-access chain (at least one call), so even a
+        // single-call chain (e.g. `new Border().Padding(...)`) is offered.
         var top = FindChainTop(root.FindNode(context.Span));
-        if (top is null || FluentChainLayout.ChainLength(top) < FluentChainLayout.MinLinks)
+        if (top is null)
         {
             return;
         }

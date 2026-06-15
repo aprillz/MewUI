@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -80,8 +81,17 @@ internal static class FluentChainLayout
             return true;
         }
 
-        var symbol = model.GetSymbolInfo(root).Symbol;
-        return symbol is not null and not ITypeSymbol and not INamespaceSymbol;
+        // Identifier/member root: an element if it is a value, not a type. Use semantics when the node
+        // belongs to the model's tree (MEW1102); for synthesized chains (MEW1101 / MEW1103 build new
+        // nodes) GetSymbolInfo would throw, so fall back to a name heuristic (types are PascalCase).
+        if (root.SyntaxTree == model.SyntaxTree)
+        {
+            var symbol = model.GetSymbolInfo(root).Symbol;
+            return symbol is not null and not ITypeSymbol and not INamespaceSymbol;
+        }
+
+        return root is IdentifierNameSyntax identifier
+            && (identifier.Identifier.ValueText.Length == 0 || !char.IsUpper(identifier.Identifier.ValueText[0]));
     }
 
     // Break the argument list onto its own lines when it has element children, expanding each as a
@@ -94,7 +104,7 @@ internal static class FluentChainLayout
         if (!breakList)
         {
             var inline = list.Select(argument => SyntaxFactory.Argument(
-                argument.NameColon, argument.RefKindKeyword, InlineValue(argument.Expression, newline, model)));
+                argument.NameColon, argument.RefKindKeyword, InlineValue(argument.Expression, callIndent, newline, model)));
             var spacedCommas = Enumerable.Repeat(
                 SyntaxFactory.Token(SyntaxKind.CommaToken).WithTrailingTrivia(SyntaxFactory.Space),
                 System.Math.Max(0, list.Count - 1));
@@ -111,7 +121,7 @@ internal static class FluentChainLayout
         {
             var value = IsElementChain(argument.Expression, model)
                 ? Format((InvocationExpressionSyntax)argument.Expression, argIndent, expand: true, newline, model)
-                : InlineValue(argument.Expression, newline, model);
+                : InlineValue(argument.Expression, argIndent, newline, model);
             return SyntaxFactory.Argument(argument.NameColon, argument.RefKindKeyword, value)
                 .WithLeadingTrivia(index == 0 ? firstLeading : siblingLeading);
         });
@@ -124,10 +134,58 @@ internal static class FluentChainLayout
     }
 
     // An inline argument: collapse a nested chain back to one line, otherwise just strip outer trivia.
-    private static ExpressionSyntax InlineValue(ExpressionSyntax expression, string newline, SemanticModel model)
-        => expression is InvocationExpressionSyntax chain && ChainLength(expression) >= 1
-            ? Format(chain, string.Empty, expand: false, newline, model)
-            : expression.WithoutTrivia();
+    // A multi-line value (e.g. a lambda block) is re-indented so its shallowest line sits at the call's
+    // indent, shifting the whole body to match its new position in the chain.
+    private static ExpressionSyntax InlineValue(ExpressionSyntax expression, string targetIndent, string newline, SemanticModel model)
+    {
+        if (expression is InvocationExpressionSyntax chain && ChainLength(expression) >= 1)
+        {
+            return Format(chain, string.Empty, expand: false, newline, model);
+        }
+
+        return Reindent(expression.WithoutTrivia(), targetIndent, newline);
+    }
+
+    private static ExpressionSyntax Reindent(ExpressionSyntax expression, string targetIndent, string newline)
+    {
+        var lines = expression.ToFullString().Replace("\r\n", "\n").Split('\n');
+        if (lines.Length < 2)
+        {
+            return expression;
+        }
+
+        var minIndent = int.MaxValue;
+        for (var index = 1; index < lines.Length; index++)
+        {
+            if (lines[index].Trim().Length == 0)
+            {
+                continue;
+            }
+
+            minIndent = System.Math.Min(minIndent, lines[index].Length - lines[index].TrimStart().Length);
+        }
+
+        var delta = minIndent == int.MaxValue ? 0 : targetIndent.Length - minIndent;
+        if (delta == 0)
+        {
+            return expression;
+        }
+
+        var rebuilt = new StringBuilder(lines[0]);
+        for (var index = 1; index < lines.Length; index++)
+        {
+            rebuilt.Append(newline);
+            if (lines[index].Trim().Length == 0)
+            {
+                continue;
+            }
+
+            var indent = lines[index].Length - lines[index].TrimStart().Length;
+            rebuilt.Append(' ', System.Math.Max(0, indent + delta)).Append(lines[index].TrimStart());
+        }
+
+        return SyntaxFactory.ParseExpression(rebuilt.ToString());
+    }
 
     private static SyntaxTriviaList Break(string indent, string newline)
         => SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine(newline), SyntaxFactory.Whitespace(indent));
