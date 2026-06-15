@@ -337,6 +337,213 @@ public sealed class OffscreenTextAlphaTests
         }
     }
 
+    [TestMethod]
+    public void Gdi_CacheModeRebuild_SameSize_DoesNotKeepPreviousText()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        GdiGraphicsFactory factory = GdiGraphicsFactory.Instance;
+        Application.DefaultGraphicsFactory = factory;
+
+        const int surfaceWidth = 260;
+        const int surfaceHeight = 60;
+        IRenderSurface windowSurface = factory.CreateSurface(
+            RenderSurfaceDescriptor.Offscreen(surfaceWidth, surfaceHeight, 1.0, hasAlpha: false));
+        try
+        {
+            var label = new Aprillz.MewUI.Controls.Label
+            {
+                Text = "MMMMMMMMMMMM",
+                Foreground = Color.Black,
+                FontSize = 20,
+                SkipViewportCull = true,
+                CacheMode = new BitmapCache(),
+            };
+            label.Measure(new Size(surfaceWidth, surfaceHeight));
+            label.Arrange(new Rect(0, 0, surfaceWidth, surfaceHeight));
+
+            RenderLabel(label, factory, windowSurface, surfaceWidth, surfaceHeight);
+
+            label.Text = "I";
+            RenderLabel(label, factory, windowSurface, surfaceWidth, surfaceHeight);
+
+            var cpu = (ICpuPixelSurface)windowSurface;
+            ReadOnlySpan<byte> pixels = cpu.GetReadOnlyPixelSpan();
+            int darkPixelsPastShortText = 0;
+            for (int y = 0; y < surfaceHeight; y++)
+            {
+                for (int x = 50; x < surfaceWidth; x++)
+                {
+                    int offset = y * cpu.StrideBytes + x * 4;
+                    if (pixels[offset] < 128 || pixels[offset + 1] < 128 || pixels[offset + 2] < 128)
+                    {
+                        darkPixelsPastShortText++;
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, darkPixelsPastShortText);
+        }
+        finally
+        {
+            windowSurface.Dispose();
+        }
+    }
+
+    [TestMethod]
+    public void Gdi_CachedText_RespectsParentClip()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        GdiGraphicsFactory factory = GdiGraphicsFactory.Instance;
+        Application.DefaultGraphicsFactory = factory;
+
+        const int surfaceWidth = 240;
+        const int surfaceHeight = 60;
+        const int clipWidth = 80;
+        IRenderSurface surface = factory.CreateSurface(
+            RenderSurfaceDescriptor.Offscreen(surfaceWidth, surfaceHeight, 1.0, hasAlpha: false));
+        try
+        {
+            var label = new Aprillz.MewUI.Controls.Label
+            {
+                Text = "MMMMMMMMMMMM",
+                Width = 220,
+                Height = surfaceHeight,
+                Foreground = Color.Black,
+                FontSize = 20,
+                SkipViewportCull = true,
+                CacheMode = new BitmapCache(),
+            };
+            var border = new Aprillz.MewUI.Controls.Border
+            {
+                Width = clipWidth,
+                Height = surfaceHeight,
+                ClipToBounds = true,
+                Child = label,
+            };
+            border.Measure(new Size(clipWidth, surfaceHeight));
+            border.Arrange(new Rect(0, 0, clipWidth, surfaceHeight));
+
+            using IGraphicsContext context = factory.CreateContext(surface);
+            context.BeginFrame(surface);
+            context.Clear(Color.White);
+            border.Render(context);
+            context.EndFrame();
+
+            var cpu = (ICpuPixelSurface)surface;
+            ReadOnlySpan<byte> pixels = cpu.GetReadOnlyPixelSpan();
+            int darkPixelsOutsideClip = 0;
+            for (int y = 0; y < surfaceHeight; y++)
+            {
+                for (int x = clipWidth; x < surfaceWidth; x++)
+                {
+                    int offset = y * cpu.StrideBytes + x * 4;
+                    if (pixels[offset] < 128 || pixels[offset + 1] < 128 || pixels[offset + 2] < 128)
+                    {
+                        darkPixelsOutsideClip++;
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, darkPixelsOutsideClip);
+        }
+        finally
+        {
+            surface.Dispose();
+        }
+    }
+
+    [TestMethod]
+    public void Gdi_CachedParent_TextRespectsInternalClip()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        GdiGraphicsFactory factory = GdiGraphicsFactory.Instance;
+        Application.DefaultGraphicsFactory = factory;
+
+        const int surfaceWidth = 240;
+        const int surfaceHeight = 60;
+        const int clipWidth = 80;
+        IRenderSurface surface = factory.CreateSurface(
+            RenderSurfaceDescriptor.Offscreen(surfaceWidth, surfaceHeight, 1.0, hasAlpha: false));
+        try
+        {
+            var label = new Aprillz.MewUI.Controls.Label
+            {
+                Text = "MMMMMMMMMMMM",
+                Width = 220,
+                Height = surfaceHeight,
+                Foreground = Color.Black,
+                FontSize = 20,
+                SkipViewportCull = true,
+            };
+            var border = new Aprillz.MewUI.Controls.Border
+            {
+                Width = clipWidth,
+                Height = surfaceHeight,
+                ClipToBounds = true,
+                CacheMode = new BitmapCache(),
+                Child = label,
+            };
+            border.Measure(new Size(clipWidth, surfaceHeight));
+            border.Arrange(new Rect(0, 0, clipWidth, surfaceHeight));
+
+            using IGraphicsContext context = factory.CreateContext(surface);
+            context.BeginFrame(surface);
+            context.Clear(Color.White);
+            border.Render(context);
+            context.EndFrame();
+
+            var cpu = (ICpuPixelSurface)surface;
+            ReadOnlySpan<byte> pixels = cpu.GetReadOnlyPixelSpan();
+            int darkPixelsOutsideClip = 0;
+            for (int y = 0; y < surfaceHeight; y++)
+            {
+                for (int x = clipWidth; x < surfaceWidth; x++)
+                {
+                    int offset = y * cpu.StrideBytes + x * 4;
+                    if (pixels[offset] < 128 || pixels[offset + 1] < 128 || pixels[offset + 2] < 128)
+                    {
+                        darkPixelsOutsideClip++;
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, darkPixelsOutsideClip);
+        }
+        finally
+        {
+            surface.Dispose();
+        }
+    }
+
+    private static void RenderLabel(
+        Aprillz.MewUI.Controls.Label label,
+        GdiGraphicsFactory factory,
+        IRenderSurface surface,
+        int width,
+        int height)
+    {
+        using IGraphicsContext context = factory.CreateContext(surface);
+        context.BeginFrame(surface);
+        context.Clear(Color.White);
+        label.Render(context);
+        context.EndFrame();
+    }
+
     private static (int maxAlpha, int coveredPixels) RenderTextAndMeasureAlpha(bool fillOpaqueBackground)
     {
         GdiGraphicsFactory factory = GdiGraphicsFactory.Instance;
