@@ -1,4 +1,4 @@
-# Aprillz.MewUI.Win32.WebView2
+# Aprillz.MewUI.WebView2.Win32
 
 Win32 WebView2 control for Aprillz.MewUI framework.
 

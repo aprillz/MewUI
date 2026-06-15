@@ -25,7 +25,7 @@ Aprillz.MewUI                  ← All-in-one metapackage (all platforms + all b
 
 Separately managed packages (not included in metapackages):
 - `Aprillz.MewUI.Svg` — SVG parsing/rendering
-- `Aprillz.MewUI.Win32.WebView2` — WebView2 integration (Windows only)
+- `Aprillz.MewUI.WebView2.Win32` — WebView2 integration (Windows only)
 
 ---
 
@@ -68,7 +68,7 @@ Add SVG or WebView2 support separately.
 
 ```bash
 dotnet add package Aprillz.MewUI.Svg
-dotnet add package Aprillz.MewUI.Win32.WebView2
+dotnet add package Aprillz.MewUI.WebView2.Win32
 ```
 
 ---

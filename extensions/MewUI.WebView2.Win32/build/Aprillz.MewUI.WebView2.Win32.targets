@@ -2,7 +2,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <!--
-    Aprillz.MewUI.Win32.WebView2 MSBuild Targets
+    Aprillz.MewUI.WebView2.Win32 MSBuild Targets
     WebView2Loader.dll은 P/Invoke로 로드되므로 SingleFile 배포 시 별도 파일로 유지
   -->
 

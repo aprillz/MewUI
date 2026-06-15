@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MewUI.Win32.WebView2", "MewUI.Win32.WebView2.csproj", "{07346BC9-AA18-D8F1-B9A3-5ADCC5565290}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MewUI.WebView2.Win32", "MewUI.WebView2.Win32.csproj", "{07346BC9-AA18-D8F1-B9A3-5ADCC5565290}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

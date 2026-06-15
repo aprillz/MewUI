@@ -78,14 +78,14 @@ A "contributor" is any person that distributes its contribution under this licen
 
 ## DirectNAot
 
-`Aprillz.MewUI.Win32.WebView2` is based in part on DirectNAot by Simon Mourier.
+`Aprillz.MewUI.WebView2.Win32` is based in part on DirectNAot by Simon Mourier.
 https://github.com/smourier/DirectNAot
 
 Copyright (c) Simon Mourier. Licensed under the MIT License (full text identical to the FlexLayout MIT License above).
 
 ## WebView2Aot
 
-`Aprillz.MewUI.Win32.WebView2` is based in part on WebView2Aot by Simon Mourier.
+`Aprillz.MewUI.WebView2.Win32` is based in part on WebView2Aot by Simon Mourier.
 https://github.com/smourier/WebView2Aot
 
 Copyright (c) Simon Mourier. Licensed under the MIT License (full text identical to the FlexLayout MIT License above).
