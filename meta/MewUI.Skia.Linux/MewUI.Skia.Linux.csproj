@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\MewUI.Meta.props" />
+  <Import Project="..\..\build\MewUI.Meta.props" />
 
   <PropertyGroup>
     <PackageId>$(MewUITitle).Skia.Linux</PackageId>

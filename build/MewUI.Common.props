@@ -9,6 +9,7 @@
     <MewUIRootNamespace>Aprillz.MewUI</MewUIRootNamespace>
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
+    <MewUIRepositoryUrl>https://github.com/aprillz/MewUI</MewUIRepositoryUrl>
     <MewVGVersion>0.5.3</MewVGVersion>
   </PropertyGroup>
 
@@ -21,6 +22,11 @@
     <Authors>$(MewUIAuthor)</Authors>
     <RootNamespace>$(MewUIRootNamespace)</RootNamespace>
     <PackageLicenseExpression>$(MewUIPackageLicenseExpression)</PackageLicenseExpression>
+    <PackageProjectUrl>$(MewUIRepositoryUrl)</PackageProjectUrl>
+    <RepositoryUrl>$(MewUIRepositoryUrl)</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) $(MewUIAuthor)</Copyright>
+    <PackageIcon>logo_c-256.png</PackageIcon>
 
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -37,5 +43,39 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
+
+  <!-- Shared icon + third-party notices in every package. -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\assets\logo\logo_c-256.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\THIRD_PARTY_NOTICES.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!-- Package README: own NUGET_README.md (nuget-facing, concise), else own README.md, else shared root NUGET_README.md. -->
+  <Choose>
+    <When Condition="Exists('$(MSBuildProjectDirectory)\NUGET_README.md')">
+      <PropertyGroup>
+        <PackageReadmeFile>NUGET_README.md</PackageReadmeFile>
+      </PropertyGroup>
+      <ItemGroup>
+        <None Include="NUGET_README.md" Pack="true" PackagePath="\" />
+      </ItemGroup>
+    </When>
+    <When Condition="Exists('$(MSBuildProjectDirectory)\README.md')">
+      <PropertyGroup>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+      </PropertyGroup>
+      <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\" />
+      </ItemGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <PackageReadmeFile>NUGET_README.md</PackageReadmeFile>
+      </PropertyGroup>
+      <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)..\NUGET_README.md" Pack="true" PackagePath="\" Visible="false" />
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
 
 </Project>

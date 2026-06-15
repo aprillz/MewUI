@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\MewUI.Meta.props" />
+  <Import Project="..\..\build\MewUI.Meta.props" />
 
   <PropertyGroup>
     <PackageId>$(MewUITitle).Windows</PackageId>
@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="buildTransitive\$(MewUITitle).Windows.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="..\..\build\$(MewUITitle).Windows.targets" Link="buildTransitive\$(MewUITitle).Windows.targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
 
 </Project>

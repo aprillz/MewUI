@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\MewUI.Meta.props" />
+  <Import Project="..\..\build\MewUI.Meta.props" />
 
   <PropertyGroup>
     <PackageId>$(MewUITitle)</PackageId>
@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <!-- RID-based publish filtering: exclude non-target-platform assemblies -->
-    <None Include="buildTransitive\$(MewUITitle).targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="..\..\build\$(MewUITitle).targets" Link="buildTransitive\$(MewUITitle).targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
 
 </Project>
