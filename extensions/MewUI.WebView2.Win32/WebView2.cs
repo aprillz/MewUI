@@ -2,6 +2,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
+[SupportedOSPlatform("windows")]
 public sealed partial class WebView2 : FrameworkElement
 {
     private const int WS_CHILD = 0x40000000;

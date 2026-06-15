@@ -4,22 +4,20 @@
 
   <PropertyGroup>
     <TargetFrameworks>net10.0-windows</TargetFrameworks>
-    <AssemblyName>$(MewUITitle).Win32.WebView2</AssemblyName>
-    <PackageId>$(MewUITitle).Win32.WebView2</PackageId>
+    <AssemblyName>$(MewUITitle).WebView2.Win32</AssemblyName>
+    <PackageId>$(MewUITitle).WebView2.Win32</PackageId>
     <Description>Win32 WebView2 control for $(MewUITitle). Requires Microsoft Edge WebView2 Runtime (Evergreen).</Description>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>logo.png</PackageIcon>
     <PackageTags>webview2;win32;native;aot;gui;browser</PackageTags>
   </PropertyGroup>
   
  
   <ItemGroup>
-    <ProjectReference Include="..\MewUI\MewUI.csproj" />
-    <ProjectReference Include="..\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
   </ItemGroup>
  
   <ItemGroup>
@@ -86,7 +84,5 @@
   <ItemGroup>
     <None Include="build\$(PackageId).targets" Pack="true" PackagePath="build\" />
     <None Include="build\$(PackageId).targets" Pack="true" PackagePath="buildTransitive\" />
-    <None Include="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\assets\logo\logo-256.png" Pack="true" PackagePath="logo.png" Visible="false" />
   </ItemGroup>
 </Project>

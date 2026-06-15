@@ -12,7 +12,7 @@
     <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
     <Project Path="samples/MewUI.Skia.Sample/MewUI.Skia.Sample.csproj" />
     <Project Path="samples/MewUI.Video.Sample/MewUI.Video.Sample.csproj" />
-    <Project Path="samples/MewUI.Win32.WebView2.Sample/MewUI.Win32.WebView2.Sample.csproj" />
+    <Project Path="samples/MewUI.WebView2.Win32.Sample/MewUI.WebView2.Win32.Sample.csproj" />
   </Folder>
   <Folder Name="/samples/FBA/">
     <File Path="samples/FBASample/fba_calculator.cs" />
@@ -29,11 +29,11 @@
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
-    <Project Path="src/MewUI.Win32.WebView2/MewUI.Win32.WebView2.csproj" />
     <Project Path="src/MewUI/MewUI.csproj" />
   </Folder>
   <Folder Name="/extensions/">
     <Project Path="extensions/MewUI.MewDock/MewUI.MewDock.csproj" />
+    <Project Path="extensions/MewUI.WebView2.Win32/MewUI.WebView2.Win32.csproj" />
     <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.Direct2D/MewUI.Skia.Interop.Direct2D.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.Gdi/MewUI.Skia.Interop.Gdi.csproj" />

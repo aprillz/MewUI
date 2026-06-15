@@ -23,7 +23,7 @@ try
             .Ref(out window)
             .Resizable(900, 700)
             .Padding(4)
-            .Title("MewUI.Win32.WebView2 Sample")
+            .Title("MewUI.WebView2.Win32 Sample")
             .Content(
                 new DockPanel()
                     .Spacing(4)
