@@ -165,13 +165,14 @@ var label  = new Label()
 ## 🧱 컨트롤 / 패널
 
 컨트롤(구현됨):
-- `Button`
-- `Label`, `Image`
-- `TextBox`, `MultiLineTextBox`
+- `Button`, `ToggleButton`
+- `Label`, `TextBlock`, `Image`
+- `TextBox`, `MultiLineTextBox`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`, `TreeView`, `GridView`
-- `Slider`, `ProgressBar`, `NumericUpDown`
-- `TabControl`, `GroupBox`
+- `Slider`, `ProgressBar`, `ProgressRing`, `NumericUpDown`
+- `TabControl`, `GroupBox`, `Expander`, `Border`
+- `ColorPicker`, `DatePicker`, `Calendar`
 - `MenuBar`, `ContextMenu`, `ToolTip` (창 내 팝업)
 - `ScrollViewer`
 - `Window`, `DispatcherTimer`
@@ -182,9 +183,35 @@ var label  = new Label()
 - `DockPanel` (도킹 + 마지막 채우기)
 - `UniformGrid` (균등 셀)
 - `WrapPanel` (줄바꿈 + Item size)
+- `Canvas` (절대 위치)
 - `SplitPanel` (드래그 분할)
 
-> `SplitPanel`을 제외한 모든 패널은 `Spacing`을 지원합니다.
+> `Canvas`(절대 위치)와 `SplitPanel`을 제외한 모든 패널은 `Spacing`을 지원합니다.
+---
+## 🧩 확장 (Extensions)
+
+코어 위에 선택적으로 얹는 패키지입니다. 필요한 것만 참조하세요.
+
+| 확장 | 설명 | 패키지 |
+|------|------|--------|
+| **MewDock** | Visual Studio 스타일 도킹 - 문서/툴 탭, 드래그 재배치, 분할, 자동 숨김, 최대화, 팝아웃 | `Aprillz.MewUI.MewDock` |
+| **SVG** | 순수 C# SVG 파싱/렌더링 (System.Drawing 비의존, AOT 호환) | `Aprillz.MewUI.Svg` |
+| **Skia** | `SkiaCanvasView` (SkiaSharp로 그리기) + GPU zero-copy 인터롭 | `Aprillz.MewUI.Skia` |
+| **WebView2** | Win32 WebView2 컨트롤 (Microsoft Edge WebView2 런타임 필요, Windows 전용) | `Aprillz.MewUI.WebView2.Win32` |
+
+**Skia 인터롭** - 사용 중인 백엔드에 맞는 zero-copy 브리지를 하나 추가하면 GPU 직행 경로가 켜집니다.
+
+| 백엔드 | 패키지 |
+|--------|--------|
+| Direct2D | `Aprillz.MewUI.Skia.Interop.Direct2D` |
+| GDI | `Aprillz.MewUI.Skia.Interop.Gdi` |
+| MewVG / Win32 | `Aprillz.MewUI.Skia.Interop.MewVG.Win32` |
+| MewVG / X11 | `Aprillz.MewUI.Skia.Interop.MewVG.X11` |
+| MewVG / macOS | `Aprillz.MewUI.Skia.Interop.MewVG.MacOS` |
+
+> 인터롭 없이도 Skia 콘텐츠는 CPU 업로드 폴백으로 렌더링됩니다. Skia는 메타패키지 `Aprillz.MewUI.Skia.Windows` / `.Linux` / `.MacOS` / `.All`로도 묶여 있습니다.
+
+> **MewDock**은 [FlexLayout](https://github.com/caplin/FlexLayout)(MIT)의 C# 포팅입니다. 라이선스 고지는 `THIRD_PARTY_NOTICES.md` 참고.
 ---
 ## 🎨 테마(Theme)
 MewUI는 `Theme` 객체(색상 + 메트릭)와 `ThemeManager`를 사용하여 기본값 설정과 런타임 변경을 제어합니다.

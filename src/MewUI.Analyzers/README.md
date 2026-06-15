@@ -220,7 +220,3 @@ resolution runs without the MewUI build.
 ```
 dotnet test tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj
 ```
-
-See [agent/fluent-formatter/plan.md](../../agent/fluent-formatter/plan.md) for the full design and
-[agent/fluent-formatter/packaging-plan.md](../../agent/fluent-formatter/packaging-plan.md) for how
-the analyzer is bundled into the MewUI NuGet package.
