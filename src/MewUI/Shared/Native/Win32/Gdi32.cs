@@ -333,6 +333,10 @@ internal static partial class Gdi32
     [LibraryImport(LibraryName)]
     public static partial int RectVisible(nint hdc, ref RECT lprc);
 
+    /// <summary>Returns non-zero if the point lies within the current clip region.</summary>
+    [LibraryImport(LibraryName)]
+    public static partial int PtVisible(nint hdc, int x, int y);
+
     #endregion
 
     #region Pixel

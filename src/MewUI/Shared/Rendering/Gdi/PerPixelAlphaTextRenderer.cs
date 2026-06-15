@@ -158,7 +158,7 @@ internal static class PerPixelAlphaTextRenderer
 
             if (pixelSurface != null)
             {
-                CompositeToPixelSurface(surface, pixelSurface, surfaceRect.left, surfaceRect.top, width, height);
+                CompositeToPixelSurface(surface, pixelSurface, hdc, surfaceRect.left, surfaceRect.top, width, height);
             }
             else
             {
@@ -171,7 +171,14 @@ internal static class PerPixelAlphaTextRenderer
         }
     }
 
-    private static unsafe void CompositeToPixelSurface(AaSurface source, GdiPixelRenderSurface target, int destX, int destY, int width, int height)
+    private static unsafe void CompositeToPixelSurface(
+        AaSurface source,
+        GdiPixelRenderSurface target,
+        nint targetDc,
+        int destX,
+        int destY,
+        int width,
+        int height)
     {
         var targetSpan = target.GetPixelSpan();
         if (targetSpan.IsEmpty)
@@ -201,6 +208,31 @@ internal static class PerPixelAlphaTextRenderer
             return;
         }
 
+        // This path writes the DIB pixels directly, bypassing GDI's clipping. Restrict the
+        // destination to the active HDC clip, and retain per-pixel checks for rounded regions.
+        int clipComplexity = Gdi32.GetClipBox(targetDc, out var clip);
+        if (clipComplexity == 0 || clipComplexity == 1)
+        {
+            return;
+        }
+
+        int clippedLeft = Math.Max(destX, clip.left);
+        int clippedTop = Math.Max(destY, clip.top);
+        int clippedRight = Math.Min(destX + width, clip.right);
+        int clippedBottom = Math.Min(destY + height, clip.bottom);
+        if (clippedRight <= clippedLeft || clippedBottom <= clippedTop)
+        {
+            return;
+        }
+
+        srcX += clippedLeft - destX;
+        srcY += clippedTop - destY;
+        destX = clippedLeft;
+        destY = clippedTop;
+        width = clippedRight - clippedLeft;
+        height = clippedBottom - clippedTop;
+        bool hasComplexClip = clipComplexity == 3;
+
         fixed (byte* targetBase = targetSpan)
         {
             int targetStride = target.PixelWidth * 4;
@@ -211,6 +243,11 @@ internal static class PerPixelAlphaTextRenderer
 
                 for (int x = 0; x < width; x++, src += 4, dst += 4)
                 {
+                    if (hasComplexClip && Gdi32.PtVisible(targetDc, destX + x, destY + y) == 0)
+                    {
+                        continue;
+                    }
+
                     int sa = src[3];
                     if (sa == 0)
                     {
