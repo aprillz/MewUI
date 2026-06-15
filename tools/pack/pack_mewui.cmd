@@ -45,6 +45,8 @@ set PROJECTS=%PROJECTS%^
 REM --- Extensions (extensions) ---
 set PROJECTS=%PROJECTS%^
   extensions\MewUI.MewDock\MewUI.MewDock.csproj^
+  extensions\MewUI.Svg\MewUI.Svg.csproj^
+  extensions\MewUI.WebView2.Win32\MewUI.WebView2.Win32.csproj^
   extensions\MewUI.Skia\MewUI.Skia.csproj^
   extensions\MewUI.Skia.Interop.Direct2D\MewUI.Skia.Interop.Direct2D.csproj^
   extensions\MewUI.Skia.Interop.Gdi\MewUI.Skia.Interop.Gdi.csproj^
