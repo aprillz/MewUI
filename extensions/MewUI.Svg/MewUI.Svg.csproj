@@ -32,7 +32,7 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
   </ItemGroup>
 
 </Project>

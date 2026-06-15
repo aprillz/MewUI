@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj"/>
-    <ProjectReference Include="..\..\src\MewUI.Svg\MewUI.Svg.csproj"/>
+    <ProjectReference Include="..\..\extensions\MewUI.Svg\MewUI.Svg.csproj"/>
   </ItemGroup>
 
   <PropertyGroup>
