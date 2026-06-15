@@ -137,7 +137,14 @@ internal static class WindowInputRouter
                     }
                 }
 
-                if (focusTarget != null)
+                if (focusTarget == null)
+                {
+                    if (button is MewUI.MouseButton.Left)
+                    {
+                        window.FocusManager.ClearFocus();
+                    }
+                }
+                else
                 {
                     window.FocusManager.SetFocus(focusTarget, resolveDefault: false);
                 }
