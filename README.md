@@ -293,3 +293,11 @@ If neither is available in `PATH`, MewUI throws:
 **Tooling**
 - [x] Hot Reload (experimental)
 - [ ] Design-time preview
+
+---
+## License
+
+MewUI is licensed under the [MIT License](LICENSE).
+
+Third-party software notices are available in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
