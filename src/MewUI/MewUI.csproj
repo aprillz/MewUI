@@ -9,14 +9,13 @@
 
     <!-- NuGet -->
     <PackageId>$(MewUITitle).Core</PackageId>
-    <PackageReadmeFile>NUGET_README.md</PackageReadmeFile>
-    <PackageIcon>logo_c-256.png</PackageIcon>
   </PropertyGroup>
 
+  <!-- Bundle the analyzer (built first by pack_mewui.cmd) as a build-time asset. Only our DLL goes in;
+       the host provides Roslyn. Added once (analyzers are language-scoped, not per-TFM). -->
   <ItemGroup>
-    <None Include="..\..\NUGET_README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\THIRD_PARTY_NOTICES.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\assets\logo\logo_c-256.png" Pack="true" PackagePath="\" />
+    <None Include="..\MewUI.Analyzers\bin\$(Configuration)\netstandard2.0\Aprillz.MewUI.Analyzers.dll"
+          Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
   <!-- Split platform hosts and rendering backends into separate assemblies -->
