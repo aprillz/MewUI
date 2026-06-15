@@ -227,7 +227,8 @@ partial class GalleryView
             e.Data = data;
             e.AllowedEffects = DragDropEffects.Move | DragDropEffects.Copy;
             // Hotspot left null → router uses StartPositionInElement so the preview lines up with the grabbed chip.
-            e.Preview = new DragPreviewContent { Element = chip, Opacity = 0.7 };
+            // CrossWindow: this sample supports dropping the chip on a slot in another window (see DragCompleted).
+            e.Preview = new DragPreviewContent { Scope = DragPreviewScope.CrossWindow, Element = chip, Opacity = 0.7 };
             _dragLog.Value = $"Starting drag for '{label}'";
         };
         chip.DragCompleted += e =>
