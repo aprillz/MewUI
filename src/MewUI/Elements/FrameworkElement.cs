@@ -382,15 +382,15 @@ public abstract class FrameworkElement : UIElement, IDisposable
         arrangeWidth = Math.Clamp(arrangeWidth, MinWidth, MaxWidth);
         arrangeHeight = Math.Clamp(arrangeHeight, MinHeight, MaxHeight);
 
-        // Stretch fills only when Width is auto (NaN). If Width is explicitly set,
-        // keep that size (clamped) and treat stretch as a left/top alignment within the slot.
+        // Auto-sized elements stretch to fill the slot. Otherwise preserve the explicit or
+        // desired size after min/max constraints, even when it exceeds the available slot.
         double width = (HorizontalAlignment == HorizontalAlignment.Stretch && double.IsNaN(Width))
             ? availableWidth
-            : Math.Min(arrangeWidth, availableWidth);
+            : arrangeWidth;
 
         double height = (VerticalAlignment == VerticalAlignment.Stretch && double.IsNaN(Height))
             ? availableHeight
-            : Math.Min(arrangeHeight, availableHeight);
+            : arrangeHeight;
 
         double x = innerSlot.X;
         if (HorizontalAlignment == HorizontalAlignment.Center)
