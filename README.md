@@ -166,13 +166,14 @@ var label  = new Label()
 ## 🧱 Controls / Panels
 
 Controls (Implemented):
-- `Button`
-- `Label`, `Image`
-- `TextBox`, `MultiLineTextBox`
+- `Button`, `ToggleButton`
+- `Label`, `TextBlock`, `Image`
+- `TextBox`, `MultiLineTextBox`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`, `TreeView`, `GridView`
-- `Slider`, `ProgressBar`, `NumericUpDown`
-- `TabControl`, `GroupBox`
+- `Slider`, `ProgressBar`, `ProgressRing`, `NumericUpDown`
+- `TabControl`, `GroupBox`, `Expander`, `Border`
+- `ColorPicker`, `DatePicker`, `Calendar`
 - `MenuBar`, `ContextMenu`, `ToolTip` (in-window popups)
 - `ScrollViewer`
 - `Window`, `DispatcherTimer`
@@ -183,9 +184,35 @@ Panels:
 - `DockPanel` (dock edges + last-child fill)
 - `UniformGrid` (equal cells)
 - `WrapPanel` (wrap + item size)
+- `Canvas` (absolute positioning)
 - `SplitPanel` (drag splitter)
 
-> All panels except `SplitPanel` support `Spacing`.
+> All panels except `Canvas` (absolute) and `SplitPanel` support `Spacing`.
+---
+## 🧩 Extensions
+
+Optional packages layered on top of the core - reference only what you need.
+
+| Extension | Description | Package |
+|-----------|-------------|---------|
+| **MewDock** | Visual Studio style docking - document/tool tabs, drag rearranging, splits, auto-hide, maximize, popouts | `Aprillz.MewUI.MewDock` |
+| **SVG** | Pure C# SVG parsing/rendering (no System.Drawing, AOT compatible) | `Aprillz.MewUI.Svg` |
+| **Skia** | `SkiaCanvasView` (draw with SkiaSharp) + GPU zero-copy interop | `Aprillz.MewUI.Skia` |
+| **WebView2** | Win32 WebView2 control (requires the Microsoft Edge WebView2 runtime, Windows only) | `Aprillz.MewUI.WebView2.Win32` |
+
+**Skia interop** - add the zero-copy bridge matching your backend to enable the GPU fast path.
+
+| Backend | Package |
+|---------|---------|
+| Direct2D | `Aprillz.MewUI.Skia.Interop.Direct2D` |
+| GDI | `Aprillz.MewUI.Skia.Interop.Gdi` |
+| MewVG / Win32 | `Aprillz.MewUI.Skia.Interop.MewVG.Win32` |
+| MewVG / X11 | `Aprillz.MewUI.Skia.Interop.MewVG.X11` |
+| MewVG / macOS | `Aprillz.MewUI.Skia.Interop.MewVG.MacOS` |
+
+> Without an interop package, Skia content still renders via the CPU upload fallback. Skia is also bundled as metapackages `Aprillz.MewUI.Skia.Windows` / `.Linux` / `.MacOS` / `.All`.
+
+> **MewDock** is a C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT). See `THIRD_PARTY_NOTICES.md` for license notices.
 ---
 ## 🎨 Theme
 

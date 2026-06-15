@@ -209,6 +209,3 @@ _titleBar.Child(new DockPanel().Children(...));
 ```
 dotnet test tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj
 ```
-
-전체 설계는 [agent/fluent-formatter/plan.md](../../../agent/fluent-formatter/plan.md), nuget 동봉 방식은
-[agent/fluent-formatter/packaging-plan.md](../../../agent/fluent-formatter/packaging-plan.md) 참고.
