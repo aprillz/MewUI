@@ -1,0 +1,3 @@
+[submodule "extensions/MewUI.MewCharts/ThirdParty/LiveCharts2"]
+	path = extensions/MewUI.MewCharts/ThirdParty/LiveCharts2
+	url = https://github.com/beto-rodriguez/LiveCharts2
