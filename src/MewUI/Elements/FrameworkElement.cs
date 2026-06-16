@@ -214,7 +214,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         set => SetValue(ThemeProperty, value);
     }
 
-
     public void Dispose()
     {
         if (_disposed)
@@ -367,7 +366,6 @@ public abstract class FrameworkElement : UIElement, IDisposable
         }
     }
 
-
     protected override Rect GetArrangedBounds(Rect finalRect)
     {
         var innerSlot = finalRect.Deflate(Margin);
@@ -417,46 +415,22 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        // Subtract margin from available size
-        var marginWidth = Margin.Left + Margin.Right;
-        var marginHeight = Margin.Top + Margin.Bottom;
+        // Available content space, after margin (used when Width/Height is auto).
+        var availableWidth = Math.Max(0, availableSize.Width - Margin.HorizontalThickness);
+        var availableHeight = Math.Max(0, availableSize.Height - Margin.VerticalThickness);
 
-        var constrainedSize = new Size(
-            Math.Max(0, availableSize.Width - marginWidth),
-            Math.Max(0, availableSize.Height - marginHeight)
-        );
+        // Measure content with explicit Width/Height when set; otherwise use the available
+        // content size. Clamp both cases to [Min, Max] so wrapped content respects MaxWidth.
+        var constrainedWidth = Math.Clamp(double.IsNaN(Width) ? availableWidth : Width, MinWidth, MaxWidth);
+        var constrainedHeight = Math.Clamp(double.IsNaN(Height) ? availableHeight : Height, MinHeight, MaxHeight);
 
-        // Apply explicit size constraints
-        if (!double.IsNaN(Width))
-        {
-            constrainedSize = constrainedSize.WithWidth(Math.Clamp(Width, MinWidth, MaxWidth));
-        }
+        var measured = MeasureContent(new Size(constrainedWidth, constrainedHeight));
 
-        if (!double.IsNaN(Height))
-        {
-            constrainedSize = constrainedSize.WithHeight(Math.Clamp(Height, MinHeight, MaxHeight));
-        }
+        // Desired size honors explicit Width/Height when set (else the measured size), clamped, plus margin.
+        var finalWidth = Math.Clamp(double.IsNaN(Width) ? measured.Width : Width, MinWidth, MaxWidth);
+        var finalHeight = Math.Clamp(double.IsNaN(Height) ? measured.Height : Height, MinHeight, MaxHeight);
 
-        // Measure content
-        var measured = MeasureContent(constrainedSize);
-
-        // Apply min/max constraints
-        var finalWidth = Math.Clamp(measured.Width, MinWidth, MaxWidth);
-        var finalHeight = Math.Clamp(measured.Height, MinHeight, MaxHeight);
-
-        // WPF-style explicit size: DesiredSize must honor Width/Height when specified.
-        if (!double.IsNaN(Width))
-        {
-            finalWidth = Math.Clamp(Width, MinWidth, MaxWidth);
-        }
-
-        if (!double.IsNaN(Height))
-        {
-            finalHeight = Math.Clamp(Height, MinHeight, MaxHeight);
-        }
-
-        // Add margin back to desired size
-        return new Size(finalWidth + marginWidth, finalHeight + marginHeight);
+        return new Size(finalWidth + Margin.HorizontalThickness, finalHeight + Margin.VerticalThickness);
     }
 
     /// <summary>
