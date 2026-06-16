@@ -197,6 +197,7 @@ var label  = new Label()
 | **MewDock** | Visual Studio 스타일 도킹 - 문서/툴 탭, 드래그 재배치, 분할, 자동 숨김, 최대화, 팝아웃 | `Aprillz.MewUI.MewDock` |
 | **SVG** | 순수 C# SVG 파싱/렌더링 (System.Drawing 비의존, AOT 호환) | `Aprillz.MewUI.Svg` |
 | **Skia** | `SkiaCanvasView` (SkiaSharp로 그리기) + GPU zero-copy 인터롭 | `Aprillz.MewUI.Skia` |
+| **MewCharts** | LiveChartsCore 엔진 기반 차트 (Cartesian/Pie/Polar), SkiaSharp 비의존 | `Aprillz.MewUI.MewCharts` |
 | **WebView2** | Win32 WebView2 컨트롤 (Microsoft Edge WebView2 런타임 필요, Windows 전용) | `Aprillz.MewUI.WebView2.Win32` |
 
 **Skia 인터롭** - 사용 중인 백엔드에 맞는 zero-copy 브리지를 하나 추가하면 GPU 직행 경로가 켜집니다.

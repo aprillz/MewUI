@@ -198,6 +198,7 @@ Optional packages layered on top of the core - reference only what you need.
 | **MewDock** | Visual Studio style docking - document/tool tabs, drag rearranging, splits, auto-hide, maximize, popouts | `Aprillz.MewUI.MewDock` |
 | **SVG** | Pure C# SVG parsing/rendering (no System.Drawing, AOT compatible) | `Aprillz.MewUI.Svg` |
 | **Skia** | `SkiaCanvasView` (draw with SkiaSharp) + GPU zero-copy interop | `Aprillz.MewUI.Skia` |
+| **MewCharts** | Charts (Cartesian/Pie/Polar) via the LiveChartsCore engine, no SkiaSharp dependency | `Aprillz.MewUI.MewCharts` |
 | **WebView2** | Win32 WebView2 control (requires the Microsoft Edge WebView2 runtime, Windows only) | `Aprillz.MewUI.WebView2.Win32` |
 
 **Skia interop** - add the zero-copy bridge matching your backend to enable the GPU fast path.
@@ -212,7 +213,7 @@ Optional packages layered on top of the core - reference only what you need.
 
 > Without an interop package, Skia content still renders via the CPU upload fallback. Skia is also bundled as metapackages `Aprillz.MewUI.Skia.Windows` / `.Linux` / `.MacOS` / `.All`.
 
-> **MewDock** is a C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT). See `THIRD_PARTY_NOTICES.md` for license notices.
+> **MewDock** is a C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT). **MewCharts** bundles the [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2) engine (MIT). See `THIRD_PARTY_NOTICES.md` for license notices.
 ---
 ## 🎨 Theme
 
