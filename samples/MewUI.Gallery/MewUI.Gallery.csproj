@@ -18,7 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Analyzers\MewUI.Analyzers.csproj"
-                      OutputItemType="Analyzer"
+                      OutputItemType="Analyzer" Condition="'$(PublishAot)' != 'true'"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
