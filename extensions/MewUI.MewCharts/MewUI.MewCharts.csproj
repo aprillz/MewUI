@@ -1,0 +1,56 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).MewCharts</AssemblyName>
+    <PackageId>$(MewUITitle).MewCharts</PackageId>
+    <Description>Charting for $(MewUITitle), powered by the LiveChartsCore engine compiled into a pure MewUI IGraphicsContext backend (no SkiaSharp dependency). Bundles LiveChartsCore (MIT) from a pinned source submodule.</Description>
+
+    <!-- Single-assembly: LiveChartsCore engine source is compiled directly into this assembly,
+         so our MewDrawingContext/MewPaint can override its internal abstract members without IVT. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
+    <!-- LiveChartsCore 2.0.4 is not fully nullable-annotated; keep it from failing our build. -->
+    <Nullable>annotations</Nullable>
+
+    <!-- Suppress warnings from the vendored LiveChartsCore source compiled into this assembly
+         (the submodule is kept pristine). CS1591 (missing XML docs) is already in NoWarn via
+         MewUI.Common.props; CS0649 = unassigned static fields in CoreMotionCanvas. -->
+    <NoWarn>$(NoWarn);0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Our own MewCharts code. -->
+    <Compile Include="**\*.cs" Exclude="ThirdParty\**\*.cs;obj\**\*.cs;bin\**\*.cs" />
+
+
+    <Compile Remove="ThirdParty\**" />
+    <EmbeddedResource Remove="ThirdParty\**" />
+    <None Remove="ThirdParty\**" />
+
+    <!-- Vendored LiveChartsCore engine (pinned submodule @ 2.0.4), minus assembly-level attrs. -->
+    <Compile Include="ThirdParty\LiveCharts2\src\LiveChartsCore\**\*.cs" Exclude="ThirdParty\LiveCharts2\src\LiveChartsCore\AssemblyInfo.cs;ThirdParty\LiveCharts2\src\LiveChartsCore\obj\**\*.cs;ThirdParty\LiveCharts2\src\LiveChartsCore\bin\**\*.cs" />
+
+
+
+    <!-- Vendored LiveChartsCore engine (pinned submodule @ 2.0.4), minus assembly-level attrs. -->
+
+    <!-- Geo map data, kept under the engine's original manifest name. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- LiveCharts source generator (MotionProperty / UIProperty), pinned in the same submodule.
+         AdditionalProperties silences the vendored generator's XML-doc warnings (CS1591) without
+         editing the submodule (its own root .editorconfig blocks an ancestor editorconfig). -->
+
+    <ProjectReference Include="ThirdParty\LiveCharts2\generators\LiveChartsGenerators\LiveChartsGenerators.csproj"  
+                      Condition="'$(PublishAot)' != 'true'">
+      <OutputItemType>Analyzer</OutputItemType>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+</Project>

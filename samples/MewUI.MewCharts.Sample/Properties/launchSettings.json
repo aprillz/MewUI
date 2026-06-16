@@ -1,0 +1,23 @@
+{
+  "profiles": {
+    "Direct2D": {
+      "commandName": "Project"
+    },
+    "MewVG": {
+      "commandName": "Project",
+      "commandLineArgs": "--vg"
+    },
+    "GDI": {
+      "commandName": "Project",
+      "commandLineArgs": "--gdi"
+    },
+    "WSL": {
+      "commandName": "WSL",
+      "distributionName": "Ubuntu-24.04"
+    },
+    "WSL-rocky": {
+      "commandName": "WSL2",
+      "distributionName": "rocky"
+    }
+  }
+}

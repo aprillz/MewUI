@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Aprillz.MewUI.MewCharts.Sample</RootNamespace>
+    <AssemblyName>Aprillz.MewUI.MewCharts.Sample</AssemblyName>
+    
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
+    <DefineConstants>$(DefineConstants);MEWUI_GALLERY_ALL</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">
+    <DefineConstants>$(DefineConstants);MEWUI_GALLERY_WIN</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
+    <DefineConstants>$(DefineConstants);MEWUI_GALLERY_LINUX</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
+    <DefineConstants>$(DefineConstants);MEWUI_GALLERY_OSX</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
+
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\extensions\MewUI.MewCharts\MewUI.MewCharts.csproj" />
+  </ItemGroup>
+</Project>
