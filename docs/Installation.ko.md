@@ -159,7 +159,7 @@ dotnet publish -r win-x64 -p:MewUIBackend=Direct2D
 | **GDI** | Windows | CPU 기반, 초경량, 최소 의존성 |
 | **MewVG** | Windows, Linux, macOS | NanoVG 기반 Managed 포트. OpenGL(Win32/X11) 또는 Metal(macOS) 사용 |
 
-앱 코드에서의 백엔드 등록은 [Application Lifecycle](ApplicationLifecycle.md)을 참고한다.
+앱 코드에서의 백엔드 등록은 [Application Lifecycle](ApplicationLifecycle.ko.md)을 참고한다.
 
 ---
 

@@ -8,7 +8,7 @@ MewUI fluent markup용 Roslyn analyzer와 refactoring 모음. NuGet analyzer(`an
 
 - 네임스페이스: `Aprillz.MewUI.Analyzers`
 - 타깃: `netstandard2.0`, Roslyn은 호환성을 위해 4.8로 핀 고정.
-- English: [README.md](../README.md)
+- English: [README.md](README.md)
 
 ## 상태
 

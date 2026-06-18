@@ -1,4 +1,4 @@
-[![한국어](https://img.shields.io/badge/README.md-한국어-green.svg)](ko)
+[![한국어](https://img.shields.io/badge/README.md-한국어-green.svg)](README.ko.md)
 
 ![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
 
@@ -195,11 +195,11 @@ Optional packages layered on top of the core - reference only what you need.
 
 | Extension | Description | Package |
 |-----------|-------------|---------|
-| **MewDock** | Visual Studio style docking - document/tool tabs, drag rearranging, splits, auto-hide, maximize, popouts | `Aprillz.MewUI.MewDock` |
-| **SVG** | Pure C# SVG parsing/rendering (no System.Drawing, AOT compatible) | `Aprillz.MewUI.Svg` |
-| **Skia** | `SkiaCanvasView` (draw with SkiaSharp) + GPU zero-copy interop | `Aprillz.MewUI.Skia` |
-| **MewCharts** | Charts (Cartesian/Pie/Polar) via the LiveChartsCore engine, no SkiaSharp dependency | `Aprillz.MewUI.MewCharts` |
-| **WebView2** | Win32 WebView2 control (requires the Microsoft Edge WebView2 runtime, Windows only) | `Aprillz.MewUI.WebView2.Win32` |
+| [**MewDock**](extensions/MewUI.MewDock/README.md) | Visual Studio style docking - document/tool tabs, drag rearranging, splits, auto-hide, maximize, popouts | `Aprillz.MewUI.MewDock` |
+| [**SVG**](extensions/MewUI.Svg/README.md) | Pure C# SVG parsing/rendering (no System.Drawing, AOT compatible) | `Aprillz.MewUI.Svg` |
+| [**Skia**](extensions/MewUI.Skia/README.md) | `SkiaCanvasView` (draw with SkiaSharp) + GPU zero-copy interop | `Aprillz.MewUI.Skia` |
+| [**MewCharts**](extensions/MewUI.MewCharts/README.md) | Charts (Cartesian/Pie/Polar) via the LiveChartsCore engine, no SkiaSharp dependency | `Aprillz.MewUI.MewCharts` |
+| [**WebView2**](extensions/MewUI.WebView2.Win32/README.md) | Win32 WebView2 control (requires the Microsoft Edge WebView2 runtime, Windows only) | `Aprillz.MewUI.WebView2.Win32` |
 
 **Skia interop** - add the zero-copy bridge matching your backend to enable the GPU fast path.
 

@@ -9,7 +9,7 @@ reference. Build-time only: nothing ships into the runtime / NativeAOT output.
 
 - Namespace: `Aprillz.MewUI.Analyzers`
 - Target: `netstandard2.0`, Roslyn pinned to 4.8 for broad host compatibility.
-- Korean version: [한국어](ko/README.md)
+- Korean version: [한국어](README.ko.md)
 
 ## Status
 

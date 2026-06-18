@@ -120,4 +120,4 @@ PR을 열 때는 다음을 지켜 주세요.
 
 ## 행동 기준
 
-이 저장소에 참여하는 모든 사람은 [Code of Conduct](CODE_OF_CONDUCT.md)를 따라야 합니다.
+이 저장소에 참여하는 모든 사람은 [Code of Conduct](CODE_OF_CONDUCT.ko.md)를 따라야 합니다.

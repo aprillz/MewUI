@@ -144,7 +144,7 @@ Application.Run(window);
 ### 2.2 테마 설정 안내
 ThemeVariant/Accent/ThemeSeed/ThemeMetrics 설정은 아래 문서를 참고한다.
 
-- [Theme 문서](Theme.md)
+- [Theme 문서](Theme.ko.md)
 
 ---
 
