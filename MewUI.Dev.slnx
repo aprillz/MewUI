@@ -37,14 +37,18 @@
   <Folder Name="/extensions/">
     <Project Path="extensions/MewUI.MewCharts/MewUI.MewCharts.csproj" />
     <Project Path="extensions/MewUI.MewDock/MewUI.MewDock.csproj" />
-    <Project Path="extensions/MewUI.Svg/MewUI.Svg.csproj" />
-    <Project Path="extensions/MewUI.WebView2.Win32/MewUI.WebView2.Win32.csproj" />
-    <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.Direct2D/MewUI.Skia.Interop.Direct2D.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.Gdi/MewUI.Skia.Interop.Gdi.csproj" />
+    <Project Path="extensions/MewUI.Skia.Interop.MewVG.MacOS/MewUI.Skia.Interop.MewVG.MacOS.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.MewVG.Win32/MewUI.Skia.Interop.MewVG.Win32.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.MewVG.X11/MewUI.Skia.Interop.MewVG.X11.csproj" />
-    <Project Path="extensions/MewUI.Skia.Interop.MewVG.MacOS/MewUI.Skia.Interop.MewVG.MacOS.csproj" />
+    <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
+    <Project Path="extensions/MewUI.Svg/MewUI.Svg.csproj" />
+    <Project Path="extensions/MewUI.WebView2.Win32/MewUI.WebView2.Win32.csproj" />
+  </Folder>
+  <Folder Name="/extensions/tools/">
+    <Project Path="extensions/MewUI.MewCharts/ThirdParty/LiveCharts2/generators/LiveChartsGenerators/LiveChartsGenerators.csproj" />
+    <Project Path="extensions/MewUI.Svg/ThirdParty/SvgNet/Generators/Svg.Generators.csproj" />
   </Folder>
   <Folder Name="/external/">
     <Project Path="../MewVG/src/MewVG.Core/MewVG.Core.csproj" />
