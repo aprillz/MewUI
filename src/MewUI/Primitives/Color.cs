@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Aprillz.MewUI;
 
@@ -85,21 +86,21 @@ public readonly partial struct Color : IEquatable<Color>
     /// Parses a color from a hex string in <c>#RRGGBB</c> or <c>#RRGGBBAA</c> format.
     /// </summary>
     /// <param name="hex">The hex string.</param>
-    public static Color FromHex(string hex)
+    public static Color FromHex(ReadOnlySpan<char> hex)
     {
         hex = hex.TrimStart('#');
 
         return hex.Length switch
         {
             6 => new Color(
-                Convert.ToByte(hex[0..2], 16),
-                Convert.ToByte(hex[2..4], 16),
-                Convert.ToByte(hex[4..6], 16)),
+                byte.Parse(hex[0..2], NumberStyles.HexNumber),
+                byte.Parse(hex[2..4], NumberStyles.HexNumber),
+                byte.Parse(hex[4..6], NumberStyles.HexNumber)),
             8 => new Color(
-                Convert.ToByte(hex[0..2], 16),
-                Convert.ToByte(hex[2..4], 16),
-                Convert.ToByte(hex[4..6], 16),
-                Convert.ToByte(hex[6..8], 16)),
+                byte.Parse(hex[0..2], NumberStyles.HexNumber),
+                byte.Parse(hex[2..4], NumberStyles.HexNumber),
+                byte.Parse(hex[4..6], NumberStyles.HexNumber),
+                byte.Parse(hex[6..8], NumberStyles.HexNumber)),
             _ => throw new ArgumentException("Invalid hex color format", nameof(hex))
         };
     }

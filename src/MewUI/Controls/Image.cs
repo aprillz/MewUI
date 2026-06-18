@@ -189,6 +189,13 @@ public sealed class Image : FrameworkElement
 
     protected override Size MeasureContent(Size availableSize)
     {
+        // Vector sources measure to their intrinsic size; they don't rasterize.
+        if (Source is IVectorImageSource vector)
+        {
+            var intrinsic = vector.IntrinsicSize;
+            return intrinsic.Width > 0 && intrinsic.Height > 0 ? intrinsic : Size.Empty;
+        }
+
         var img = GetImage();
         if (img == null)
         {
@@ -203,6 +210,14 @@ public sealed class Image : FrameworkElement
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // Vector sources render themselves at the laid-out size (crisp at any scale), so a resize
+        // re-renders instead of stretching a fixed raster.
+        if (Source is IVectorImageSource vector)
+        {
+            RenderVector(context, vector);
+            return;
+        }
+
         var img = GetImage();
         if (img == null)
         {
@@ -238,6 +253,69 @@ public sealed class Image : FrameworkElement
             context.Restore();
             context.ImageScaleQuality = prevScaleQuality;
         }
+    }
+
+    private void RenderVector(IGraphicsContext context, IVectorImageSource vector)
+    {
+        var intrinsic = vector.IntrinsicSize;
+        if (intrinsic.Width <= 0 || intrinsic.Height <= 0)
+        {
+            return;
+        }
+
+        context.Save();
+        var dpiScale = GetDpi() / 96.0;
+        context.SetClip(LayoutRounding.SnapViewportRectToPixels(Bounds, dpiScale));
+        try
+        {
+            var dest = ComputeVectorDest(intrinsic, Bounds, StretchMode, AlignmentX, AlignmentY);
+            if (dest.Width > 0 && dest.Height > 0)
+            {
+                vector.Render(context, dest);
+            }
+        }
+        finally
+        {
+            context.Restore();
+        }
+    }
+
+    // Destination rect for a vector source. Unlike the raster path (which crops the source rect for
+    // UniformToFill), vectors are scaled into the returned rect and clipped to Bounds by the caller.
+    private static Rect ComputeVectorDest(Size intrinsic, Rect bounds, Stretch stretch, ImageAlignmentX alignX, ImageAlignmentY alignY)
+    {
+        double iw = Math.Max(0, intrinsic.Width);
+        double ih = Math.Max(0, intrinsic.Height);
+        if (iw <= 0 || ih <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return new Rect(bounds.X, bounds.Y, 0, 0);
+        }
+
+        if (stretch == Stretch.Fill)
+        {
+            return bounds;
+        }
+
+        double dw, dh;
+        if (stretch == Stretch.None)
+        {
+            dw = iw;
+            dh = ih;
+        }
+        else
+        {
+            double scale = stretch == Stretch.UniformToFill
+                ? Math.Max(bounds.Width / iw, bounds.Height / ih)
+                : Math.Min(bounds.Width / iw, bounds.Height / ih);
+            dw = iw * scale;
+            dh = ih * scale;
+        }
+
+        double ax = alignX == ImageAlignmentX.Left ? 0 : alignX == ImageAlignmentX.Right ? 1 : 0.5;
+        double ay = alignY == ImageAlignmentY.Top ? 0 : alignY == ImageAlignmentY.Bottom ? 1 : 0.5;
+        double dx = bounds.X + (bounds.Width - dw) * ax;
+        double dy = bounds.Y + (bounds.Height - dh) * ay;
+        return new Rect(dx, dy, dw, dh);
     }
 
     private Rect GetViewBoxPixels(int pixelWidth, int pixelHeight)
