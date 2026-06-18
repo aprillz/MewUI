@@ -1,7 +1,6 @@
-using System.IO;
 using System.Reflection;
 
-using Aprillz.MewUI;
+using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 
 using Svg;
@@ -14,12 +13,25 @@ namespace Aprillz.MewUI.Svg;
 /// and can be recolored via <see cref="Tint"/> for monochrome icons. <see cref="CreateImage"/> is a
 /// raster fallback for consumers that need pixels.
 /// </summary>
-public sealed class SvgImageSource : IVectorImageSource, INotifyImageChanged, IDisposable
+[System.CLSCompliant(false)] // derives from MewObject (the MewProperty base), which is not CLS-compliant
+public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImageChanged, IDisposable
 {
+    /// <summary>Recolors the SVG fill (monochrome icons). Null keeps the source colors.</summary>
+    public static readonly MewProperty<Color?> TintProperty =
+        MewProperty<Color?>.Register<SvgImageSource>(nameof(Tint), null,
+            changed: (owner, _, _) => owner.OnVisualChanged());
+
+    /// <summary>Pixel width for the <see cref="CreateImage"/> raster fallback (null = intrinsic).</summary>
+    public static readonly MewProperty<int?> RasterWidthProperty =
+        MewProperty<int?>.Register<SvgImageSource>(nameof(RasterWidth), null,
+            changed: (owner, _, _) => owner.OnVisualChanged());
+
+    /// <summary>Pixel height for the <see cref="CreateImage"/> raster fallback (null = intrinsic).</summary>
+    public static readonly MewProperty<int?> RasterHeightProperty =
+        MewProperty<int?>.Register<SvgImageSource>(nameof(RasterHeight), null,
+            changed: (owner, _, _) => owner.OnVisualChanged());
+
     private readonly SvgDocument _document;
-    private Color? _tint;
-    private int? _rasterWidth;
-    private int? _rasterHeight;
 
     // CreateImage raster-fallback cache (the vector Render path does not use these).
     private IRenderSurface? _surface;
@@ -62,31 +74,22 @@ public sealed class SvgImageSource : IVectorImageSource, INotifyImageChanged, ID
     /// </summary>
     public Color? Tint
     {
-        get => _tint;
-        set
-        {
-            if (_tint == value)
-            {
-                return;
-            }
-            _tint = value;
-            InvalidateRaster();
-            Changed?.Invoke();
-        }
+        get => GetValue(TintProperty);
+        set => SetValue(TintProperty, value);
     }
 
     /// <summary>Pixel width for the <see cref="CreateImage"/> raster fallback. Null = intrinsic. Ignored by the vector path.</summary>
     public int? RasterWidth
     {
-        get => _rasterWidth;
-        set { if (_rasterWidth != value) { _rasterWidth = value; InvalidateRaster(); Changed?.Invoke(); } }
+        get => GetValue(RasterWidthProperty);
+        set => SetValue(RasterWidthProperty, value);
     }
 
     /// <summary>Pixel height for the <see cref="CreateImage"/> raster fallback. Null = intrinsic. Ignored by the vector path.</summary>
     public int? RasterHeight
     {
-        get => _rasterHeight;
-        set { if (_rasterHeight != value) { _rasterHeight = value; InvalidateRaster(); Changed?.Invoke(); } }
+        get => GetValue(RasterHeightProperty);
+        set => SetValue(RasterHeightProperty, value);
     }
 
     /// <inheritdoc />
@@ -101,9 +104,9 @@ public sealed class SvgImageSource : IVectorImageSource, INotifyImageChanged, ID
         ArgumentNullException.ThrowIfNull(factory);
 
         var intrinsic = IntrinsicSize;
-        int width = Math.Max(1, _rasterWidth ?? (int)Math.Ceiling(intrinsic.Width));
-        int height = Math.Max(1, _rasterHeight ?? (int)Math.Ceiling(intrinsic.Height));
-        uint tintKey = _tint is Color t ? (uint)((t.A << 24) | (t.R << 16) | (t.G << 8) | t.B) : 0u;
+        int width = Math.Max(1, RasterWidth ?? (int)Math.Ceiling(intrinsic.Width));
+        int height = Math.Max(1, RasterHeight ?? (int)Math.Ceiling(intrinsic.Height));
+        uint tintKey = Tint is Color t ? (uint)((t.A << 24) | (t.R << 16) | (t.G << 8) | t.B) : 0u;
 
         if (_image is not null && _cacheKey == (width, height, tintKey))
         {
@@ -142,7 +145,7 @@ public sealed class SvgImageSource : IVectorImageSource, INotifyImageChanged, ID
             return;
         }
 
-        if (_tint is Color tint)
+        if (Tint is Color tint)
         {
             // Override the root fill so inheriting (monochrome) icon paths pick up the tint, then restore.
             var previous = _document.Fill;
@@ -162,6 +165,13 @@ public sealed class SvgImageSource : IVectorImageSource, INotifyImageChanged, ID
         }
     }
 
+    // A Tint/Raster* property changed: drop the cached raster and notify the host control to repaint.
+    private void OnVisualChanged()
+    {
+        InvalidateRaster();
+        Changed?.Invoke();
+    }
+
     private void InvalidateRaster()
     {
         _image?.Dispose();
@@ -179,6 +189,7 @@ public sealed class SvgImageSource : IVectorImageSource, INotifyImageChanged, ID
             return;
         }
         _disposed = true;
+        DisposePropertyBindings();
         InvalidateRaster();
     }
 }
