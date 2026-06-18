@@ -5,7 +5,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Svg;
 
-public sealed class GdiFontDefn : IFontDefn
+public sealed class MewFontDefn : IFontDefn
 {
     private readonly IFont _font;
     private readonly IGlyphOutlineFont? _outlineFont;
@@ -14,7 +14,7 @@ public sealed class GdiFontDefn : IFontDefn
     public double Size => _font.Size;
     public double SizeInPoints => _font.Size * 72.0 / _ppi;
 
-    public GdiFontDefn(IFont font, double ppi)
+    public MewFontDefn(IFont font, double ppi)
     {
         _font = font;
         _outlineFont = font as IGlyphOutlineFont;

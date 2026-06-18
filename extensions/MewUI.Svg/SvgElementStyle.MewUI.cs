@@ -58,7 +58,7 @@ public partial class SvgElement
             italic: FontStyle is SvgFontStyle.Italic or SvgFontStyle.Oblique,
             underline: TextDecoration.HasFlag(SvgTextDecoration.Underline),
             strikethrough: TextDecoration.HasFlag(SvgTextDecoration.LineThrough));
-        return new GdiFontDefn(font, ppi);
+        return new MewFontDefn(font, ppi);
     }
 
     public static object ValidateFontFamily(string? fontFamilyList, SvgDocument? doc, SvgFontManager fontManager)

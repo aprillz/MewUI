@@ -7,8 +7,9 @@
     <PackageId>$(MewUITitle).Svg</PackageId>
     <DefineConstants>$(DefineConstants);NO_SDC</DefineConstants>
     <Nullable>disable</Nullable>
-    <NoWarn>$(NoWarn);CS8632</NoWarn>
+    <NoWarn>$(NoWarn);CS8632;CS3001;CS3002;CS3003</NoWarn>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <CLSCompliant>false</CLSCompliant>
     <Description>SVG rendering support for $(MewUITitle). Pure managed implementation via System.Xml.Linq — no System.Drawing dependency, NativeAOT compatible.</Description>
   </PropertyGroup>
 
