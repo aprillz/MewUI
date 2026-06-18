@@ -7,7 +7,7 @@
     <PackageId>$(MewUITitle).Svg</PackageId>
     <DefineConstants>$(DefineConstants);NO_SDC</DefineConstants>
     <Nullable>disable</Nullable>
-    <NoWarn>$(NoWarn);CS8632;CS3001;CS3002;CS3003</NoWarn>
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <CLSCompliant>false</CLSCompliant>
     <Description>SVG rendering support for $(MewUITitle). Pure managed implementation via System.Xml.Linq — no System.Drawing dependency, NativeAOT compatible.</Description>
@@ -37,6 +37,7 @@
     <Compile Include="ThirdParty\SvgNet\Source\**\*.cs" Exclude="ThirdParty\SvgNet\Source\**\*.Drawing.cs;ThirdParty\SvgNet\Source\obj\**\*.cs;ThirdParty\SvgNet\Source\bin\**\*.cs" />
     <Compile Remove="ThirdParty\SvgNet\Source\Painting\GenericBoundable.cs" />
     <Compile Remove="ThirdParty\SvgNet\Source\Painting\ISvgBoundable.cs" />
+    <Compile Remove="ThirdParty\SvgNet\Source\Properties\AssemblyInfo.cs" />
     <Compile Remove="ThirdParty\SvgNet\Source\SvgElementIdManager.cs" />
     <Compile Remove="ThirdParty\SvgNet\Source\Transforms\ISvgTransformable.cs" />
     <Compile Remove="ThirdParty\SvgNet\Source\SvgDocument.Win32.cs" />
@@ -55,5 +56,9 @@
   
   <ItemGroup>
     <ProjectReference Include="ThirdParty\SvgNet\Generators\Svg.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Folder Include="ThirdParty\SvgNet\Source\Properties\" />
   </ItemGroup>
 </Project>
