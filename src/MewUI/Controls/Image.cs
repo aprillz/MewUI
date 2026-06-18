@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// An image display control with scaling and alignment options.
 /// </summary>
-public sealed class Image : FrameworkElement
+public sealed partial class Image : FrameworkElement
 {
     public static readonly MewProperty<ImageScaleQuality> ImageScaleQualityProperty =
         MewProperty<ImageScaleQuality>.Register<Image>(nameof(ImageScaleQuality), ImageScaleQuality.Default, MewPropertyOptions.AffectsRender);
@@ -31,8 +31,10 @@ public sealed class Image : FrameworkElement
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
             static (self, oldValue, newValue) => self.OnSourcePropertyChanged(oldValue, newValue));
 
-    private readonly Dictionary<IGraphicsFactory, IImage> _cache =
-        new(ReferenceEqualityComparer<IGraphicsFactory>.Instance);
+    // A control renders through a single graphics factory (registered once at startup), so one cached
+    // backend image suffices. The factory is tracked only to defensively rebuild if it ever changes.
+    private IImage? _cachedImage;
+    private IGraphicsFactory? _cachedFactory;
 
     private INotifyImageChanged? _notifySource;
 
@@ -114,6 +116,16 @@ public sealed class Image : FrameworkElement
         }
 
         ClearCache();
+        // A vector source keeps its surface for reuse (just mark content stale, e.g. a virtualized tile
+        // rebinding); any other (raster/null) source no longer needs the vector surface, so release it.
+        if (newValue is IVectorImageSource)
+        {
+            InvalidateVectorContent();
+        }
+        else
+        {
+            ClearVectorCache();
+        }
     }
 
     /// <summary>
@@ -255,69 +267,6 @@ public sealed class Image : FrameworkElement
         }
     }
 
-    private void RenderVector(IGraphicsContext context, IVectorImageSource vector)
-    {
-        var intrinsic = vector.IntrinsicSize;
-        if (intrinsic.Width <= 0 || intrinsic.Height <= 0)
-        {
-            return;
-        }
-
-        context.Save();
-        var dpiScale = GetDpi() / 96.0;
-        context.SetClip(LayoutRounding.SnapViewportRectToPixels(Bounds, dpiScale));
-        try
-        {
-            var dest = ComputeVectorDest(intrinsic, Bounds, StretchMode, AlignmentX, AlignmentY);
-            if (dest.Width > 0 && dest.Height > 0)
-            {
-                vector.Render(context, dest);
-            }
-        }
-        finally
-        {
-            context.Restore();
-        }
-    }
-
-    // Destination rect for a vector source. Unlike the raster path (which crops the source rect for
-    // UniformToFill), vectors are scaled into the returned rect and clipped to Bounds by the caller.
-    private static Rect ComputeVectorDest(Size intrinsic, Rect bounds, Stretch stretch, ImageAlignmentX alignX, ImageAlignmentY alignY)
-    {
-        double iw = Math.Max(0, intrinsic.Width);
-        double ih = Math.Max(0, intrinsic.Height);
-        if (iw <= 0 || ih <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
-        {
-            return new Rect(bounds.X, bounds.Y, 0, 0);
-        }
-
-        if (stretch == Stretch.Fill)
-        {
-            return bounds;
-        }
-
-        double dw, dh;
-        if (stretch == Stretch.None)
-        {
-            dw = iw;
-            dh = ih;
-        }
-        else
-        {
-            double scale = stretch == Stretch.UniformToFill
-                ? Math.Max(bounds.Width / iw, bounds.Height / ih)
-                : Math.Min(bounds.Width / iw, bounds.Height / ih);
-            dw = iw * scale;
-            dh = ih * scale;
-        }
-
-        double ax = alignX == ImageAlignmentX.Left ? 0 : alignX == ImageAlignmentX.Right ? 1 : 0.5;
-        double ay = alignY == ImageAlignmentY.Top ? 0 : alignY == ImageAlignmentY.Bottom ? 1 : 0.5;
-        double dx = bounds.X + (bounds.Width - dw) * ax;
-        double dy = bounds.Y + (bounds.Height - dh) * ay;
-        return new Rect(dx, dy, dw, dh);
-    }
-
     private Rect GetViewBoxPixels(int pixelWidth, int pixelHeight)
     {
         double iw = Math.Max(0, pixelWidth);
@@ -457,24 +406,23 @@ public sealed class Image : FrameworkElement
         }
 
         var factory = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
-        if (_cache.TryGetValue(factory, out var cached))
+        if (_cachedImage != null && ReferenceEquals(_cachedFactory, factory))
         {
-            return cached;
+            return _cachedImage;
         }
 
-        var created = Source.CreateImage(factory);
-        _cache[factory] = created;
-        return created;
+        // First use, or the graphics factory changed (rare — a runtime backend swap).
+        _cachedImage?.Dispose();
+        _cachedImage = Source.CreateImage(factory);
+        _cachedFactory = factory;
+        return _cachedImage;
     }
 
     private void ClearCache()
     {
-        foreach (var kvp in _cache)
-        {
-            kvp.Value.Dispose();
-        }
-
-        _cache.Clear();
+        _cachedImage?.Dispose();
+        _cachedImage = null;
+        _cachedFactory = null;
     }
 
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
@@ -485,6 +433,7 @@ public sealed class Image : FrameworkElement
         if (newRoot == null)
         {
             ClearCache();
+            ClearVectorCache();
         }
     }
 
@@ -499,11 +448,15 @@ public sealed class Image : FrameworkElement
         }
 
         ClearCache();
+        ClearVectorCache();
     }
 
     private void OnSourceChanged()
     {
-        // Keep cached IImage instances; backend images are expected to refresh from the source (e.g. WriteableBitmap.Version).
+        // Raster IImage instances refresh from the source themselves (e.g. WriteableBitmap.Version); the
+        // rasterized vector bitmap is a snapshot — mark it stale (keep the surface) so a content change
+        // (e.g. tint) re-renders into it.
+        InvalidateVectorContent();
         InvalidateVisual();
     }
 }
