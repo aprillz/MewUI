@@ -55,6 +55,25 @@ var root = new Window()
             // populated only after Body() runs, which happens after StatusBar() in arg order.
             drawTimeLabel.Bind(Label.TextProperty, vectorPreview, SvgView.LastDrawTimeProperty,
                 ts => ts == TimeSpan.Zero ? string.Empty : $"Draw: {ts.GetText()}");
+
+            string? startupFile = null;
+
+            //startupFile = "__issue-127-01.svg";
+
+            if (startupFile is not null && svgFiles.Length > 0)
+            {
+                int initialIndex = 0;
+                for (int i = 0; i < svgFiles.Length; i++)
+                {
+                    if (string.Equals(Path.GetFileName(svgFiles[i]), startupFile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        initialIndex = i;
+                        break;
+                    }
+                }
+                fileList.SelectedIndex = initialIndex;
+                LoadFile(svgFiles[initialIndex]);
+            }
         })
         .OnClosed(ReleaseCurrentPreview)
     );

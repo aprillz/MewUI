@@ -52,6 +52,8 @@
   <Import Project="..\..\build\Aprillz.MewUI.targets" />
 
   <ItemGroup>
-    <None Include="issue\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\extensions\MewUI.Svg\ThirdParty\SvgNet\Tests\Issues\**\*"
+          Link="issue\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
