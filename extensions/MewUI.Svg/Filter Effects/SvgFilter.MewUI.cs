@@ -19,10 +19,6 @@ public partial class SvgFilter
     private const bool CacheEnabled = true;
 
     // Toggle for the [SvgFilter*] / [SvgFilterCache] / [SvgFilterTime] diagnostic spam.
-    // Off by default — flip on when investigating cache hit rates / σ scaling / region
-    // calc per element. The calls remain in source so re-enabling is a one-flag flip.
-    private const bool DebugLogs = false;
-
     private readonly Dictionary<SvgVisualElement, FilterCacheEntry> _resultCache = new();
     // Guards _resultCache and _pendingDisposal — same SvgFilter instance is shared by the
     // SVG document and accessed concurrently from UI and worker render threads (SvgView
@@ -272,9 +268,6 @@ public partial class SvgFilter
             }
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        long tStart = sw.ElapsedTicks;
-
         // Source layer rendering: 1 user unit → effectiveLogicalToPixel pixels. Set the
         // bitmap's reported DpiScale to the same value so internally-DPI-aware rendering
         // (e.g. backend stroke snapping) sees a consistent device-pixel-per-DIP ratio.
@@ -289,7 +282,6 @@ public partial class SvgFilter
             throw new NotSupportedException($"{nameof(SvgFilter)} currently requires CPU-writable filter source layers.");
         }
         sourcePixels.Clear(Aprillz.MewUI.Color.Transparent);
-        long tCreateRT = sw.ElapsedTicks;
 
         // 1. Render the element into the source layer.
         using (var context = offscreenFactory.CreateContext(sourceSurface))
@@ -313,14 +305,12 @@ public partial class SvgFilter
                 context.EndFrame();
             }
         }
-        long tSourceRender = sw.ElapsedTicks;
 
         // 2. Build the filter DAG from this filter element's primitive children, then evaluate.
         // The graph builder honors SVG `in` / `result` chaining (so feMerge, feComposite, etc.
         // produce correct output where the legacy per-primitive ApplyInPlace path could not).
         var primitives = Children.OfType<SvgFilterPrimitive>().ToList();
         ImageFilter? graph = SvgFilterGraphBuilder.Build(primitives, renderer);
-        long tGraphBuild = sw.ElapsedTicks;
 
         IImage outputImage;
         Rect outputSourceRect;
@@ -358,15 +348,12 @@ public partial class SvgFilter
             offscreenFactory,
             logicalToPixelScaleX: effectiveLogicalToPixelX * selfScaleX,
             logicalToPixelScaleY: effectiveLogicalToPixelY * selfScaleY);
-        long tCtxBuild = sw.ElapsedTicks;
 
         using var result = executor.Execute(graph, ctx);
-        long tExec = sw.ElapsedTicks;
 
         DrawFilterResult(renderer, result.AsImage(),
             GetResultDestination(filterRegion, result.Bounds, sourceSurface.PixelWidth, sourceSurface.PixelHeight),
             new Rect(0, 0, result.PixelWidth, result.PixelHeight));
-        long tDraw = sw.ElapsedTicks;
 
         // Snapshot the result into a cache-owned RT so subsequent frames at the same
         // (scale, region) hit the early DrawImage path. The result FilterResult holds a
@@ -380,24 +367,6 @@ public partial class SvgFilter
                 filterRegion.Width, filterRegion.Height,
                 sourceSurface.PixelWidth, sourceSurface.PixelHeight);
         }
-        long tEnd = sw.ElapsedTicks;
-        sw.Stop();
-
-#if DEBUG
-        double f = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-        var nodeNames = string.Join("→", primitives.Select(p => p.GetType().Name.Replace("Svg", "").Replace("Filter", "")));
-        Console.WriteLine(
-            $"[FilterTime] elem={element.GetType().Name} src={pixelWidth}x{pixelHeight} " +
-            $"nodes=[{nodeNames}] " +
-            $"total={(tEnd - tStart) * f:F1}ms | " +
-            $"createRT={(tCreateRT - tStart) * f:F1} " +
-            $"sourceRender={(tSourceRender - tCreateRT) * f:F1} " +
-            $"graph={(tGraphBuild - tSourceRender) * f:F1} " +
-            $"ctxBuild={(tCtxBuild - tGraphBuild) * f:F1} " +
-            $"exec={(tExec - tCtxBuild) * f:F1} " +
-            $"draw={(tDraw - tExec) * f:F1} " +
-            $"cache={(tEnd - tDraw) * f:F1}");
-#endif
     }
 
     /// <summary>Draws the filter output onto the main render context using the fast

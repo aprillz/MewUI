@@ -1,21 +1,30 @@
 # Aprillz.MewUI.Svg
 
-SVG parsing and rendering for [MewUI](https://github.com/aprillz/MewUI), drawn through MewUI's
-`IGraphicsContext`. **Pure managed, no System.Drawing** — built on [SVG.NET](https://github.com/svg-net/SVG)
-with a MewUI rendering backend, so it works on every MewUI backend (Direct2D, GDI, MewVG/OpenGL) and is
+SVG rendering for [MewUI](https://github.com/aprillz/MewUI), drawn through MewUI's `IGraphicsContext`.
+**Pure managed, no System.Drawing** — built on [SVG.NET](https://github.com/svg-net/SVG) with a MewUI
+rendering backend, so it works on every MewUI backend (Direct2D, GDI, MewVG/OpenGL) and is
 NativeAOT/trim compatible.
 
+`SvgImageSource` plugs into the standard `Image` control and stays crisp at any size (it re-renders
+at the laid-out size, not a stretched bitmap):
+
 ```csharp
-using Svg;
+using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Svg;
 
-// load
-var document = SvgDocument.Open("icon.svg");   // or .Parse(svgMarkup)
+var image = new Image
+{
+    Source = SvgImageSource.FromFile("icon.svg"),   // or FromString / FromStream / FromResource
+    StretchMode = Stretch.Uniform,
+}.Size(24, 24);
 
-// render into any element's OnRender(IGraphicsContext context)
-document.Render(context, new Rect(0, 0, ActualWidth, ActualHeight));
+// recolor a monochrome icon (re-renders automatically)
+var src = SvgImageSource.FromFile("home.svg");
+src.Tint = Colors.White;
 ```
 
-Use `document.ViewBoxWidth` / `ViewBoxHeight` to preserve aspect ratio when sizing the destination rect.
+For direct document access the SVG.NET engine type `Svg.SvgDocument` is also available
+(`SvgDocument.Open/Parse` + `doc.Render(context, rect)`).
 
 Depends on `Aprillz.MewUI` and `ExCSS`. Bundles SVG.NET (Ms-PL); see `THIRD_PARTY_NOTICES.md`.
 

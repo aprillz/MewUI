@@ -14,47 +14,55 @@ dotnet add package Aprillz.MewUI.Svg
 
 ## 빠른 시작
 
-`SvgDocument`를 로드해 요소의 `OnRender`에서 렌더링합니다:
+`SvgImageSource`는 표준 `Image` 컨트롤에 그대로 꽂혀, SVG를 일반 이미지처럼 표시하면서 **어떤 크기에서도 선명**합니다(비트맵을 늘리는 게 아니라 레이아웃 크기로 다시 그림):
 
 ```csharp
-using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Rendering;
-using Svg;
+using Aprillz.MewUI.Svg;
 
-sealed class SvgView : FrameworkElement
+var image = new Image
 {
-    public SvgDocument? Document { get; set; }
-
-    protected override void OnRender(IGraphicsContext context)
-    {
-        base.OnRender(context);
-        Document?.Render(context, new Rect(0, 0, ActualWidth, ActualHeight));
-    }
-}
-
-// 사용
-var view = new SvgView { Document = SvgDocument.Open("icon.svg") };
+    Source = SvgImageSource.FromFile("icon.svg"),
+    StretchMode = Stretch.Uniform,
+}.Size(24, 24);
 ```
+
+`SvgImageSource`는 `IVectorImageSource`라, `Image`가 매 페인트마다 현재 크기로 벡터를 그립니다. 리사이즈/고DPI에서도 선명합니다.
 
 ## 로딩
 
-`SvgDocument`(네임스페이스 `Svg`)는 파일, 스트림, 문자열에서 파싱합니다:
-
-| 메서드 | 소스 |
-|---|---|
-| `SvgDocument.Open(path)` | 파일 경로 |
-| `SvgDocument.Load(path)` | 파일 경로 (MewUI 오버로드) |
-| `SvgDocument.Parse(svg)` | SVG 마크업 문자열 |
-| `SvgDocument.Parse(svg, baseUri)` | 마크업 + 상대 참조용 base URI |
-
-## 렌더링
-
 ```csharp
-document.Render(IGraphicsContext context, Rect destRect);
+SvgImageSource.FromFile(path);                 // 파일 경로
+SvgImageSource.FromString(svgMarkup);          // SVG 마크업
+SvgImageSource.FromStream(stream);             // 임의 스트림 (예: ZIP 엔트리)
+SvgImageSource.FromResource(assembly, name);   // 임베드 리소스
 ```
 
-문서가 `destRect`에 맞춰 스케일됩니다. 비율을 유지하려면 `document.ViewBoxWidth` / `document.ViewBoxHeight`로 `destRect`를 계산하세요. 더 저수준이 필요하면 `ISvgRenderer`(예: `MewSvgRenderer`)를 구현해 `document.Draw(renderer)`를 호출합니다.
+## 재색칠 (단색 아이콘)
+
+`Tint`를 설정하면 fill이 상속되는(요소별 명시 fill이 없는) 아이콘을 재색칠합니다. 변경 시 호스트 컨트롤이 자동으로 다시 그립니다:
+
+```csharp
+var source = SvgImageSource.FromFile("home.svg");
+source.Tint = theme.Foreground;
+new Image { Source = source };
+```
+
+- `IntrinsicSize` — SVG viewBox 크기(`Image` 측정에 사용).
+- `RasterWidth` / `RasterHeight` — `CreateImage` 래스터 폴백(픽셀이 필요한 소비자용)에만 영향. 벡터 `Image` 경로는 무시.
+
+## 고급: SvgDocument
+
+문서에 직접 접근하려면 SVG.NET 엔진 타입 `SvgDocument`(네임스페이스 `Svg`)를 쓸 수 있습니다:
+
+```csharp
+using Svg;
+
+var doc = SvgDocument.Open("icon.svg");   // 또는 .Parse(markup) / .Parse(markup, baseUri)
+doc.Render(context, new Rect(0, 0, width, height));   // IGraphicsContext에 그리기
+```
+
+비율 유지에는 `doc.ViewBoxWidth` / `doc.ViewBoxHeight`. 대부분의 경우 `SvgImageSource` + `Image`를 권장합니다.
 
 ## 백엔드
 

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <MewUITargetFrameworks>net10.0</MewUITargetFrameworks>
     <LangVersion>latest</LangVersion>
@@ -55,5 +55,6 @@
     <None Include="..\..\extensions\MewUI.Svg\ThirdParty\SvgNet\Tests\Issues\**\*"
           Link="issue\%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Update="icons.zip" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

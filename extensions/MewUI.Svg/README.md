@@ -14,47 +14,55 @@ Targets `net8.0` and `net10.0`.
 
 ## Quick start
 
-Load an `SvgDocument` and render it into any element's `OnRender`:
+`SvgImageSource` plugs into the standard `Image` control, so an SVG renders like any other image — and stays crisp at any size (it re-renders at the laid-out size instead of stretching a bitmap):
 
 ```csharp
-using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
-using Aprillz.MewUI.Rendering;
-using Svg;
+using Aprillz.MewUI.Svg;
 
-sealed class SvgView : FrameworkElement
+var image = new Image
 {
-    public SvgDocument? Document { get; set; }
-
-    protected override void OnRender(IGraphicsContext context)
-    {
-        base.OnRender(context);
-        Document?.Render(context, new Rect(0, 0, ActualWidth, ActualHeight));
-    }
-}
-
-// usage
-var view = new SvgView { Document = SvgDocument.Open("icon.svg") };
+    Source = SvgImageSource.FromFile("icon.svg"),
+    StretchMode = Stretch.Uniform,
+}.Size(24, 24);
 ```
+
+`SvgImageSource` is an `IVectorImageSource`: `Image` draws it vector at the current size each paint, so it stays sharp when resized or on high-DPI displays.
 
 ## Loading
 
-`SvgDocument` (namespace `Svg`) parses from a file, stream, or string:
-
-| Method | Source |
-|---|---|
-| `SvgDocument.Open(path)` | file path |
-| `SvgDocument.Load(path)` | file path (MewUI overload) |
-| `SvgDocument.Parse(svg)` | SVG markup string |
-| `SvgDocument.Parse(svg, baseUri)` | markup + base URI for relative references |
-
-## Rendering
-
 ```csharp
-document.Render(IGraphicsContext context, Rect destRect);
+SvgImageSource.FromFile(path);                 // file path
+SvgImageSource.FromString(svgMarkup);          // SVG markup
+SvgImageSource.FromStream(stream);             // any stream (e.g. a ZIP entry)
+SvgImageSource.FromResource(assembly, name);   // embedded assembly resource
 ```
 
-The document is scaled into `destRect`. Use `document.ViewBoxWidth` / `document.ViewBoxHeight` to preserve aspect ratio when computing `destRect`. For a lower-level path, implement `ISvgRenderer` (see `MewSvgRenderer`) and call `document.Draw(renderer)`.
+## Recoloring (monochrome icons)
+
+Set `Tint` to recolor icons whose fill is inherited (no explicit per-element fill). Changing it re-renders the hosting control automatically:
+
+```csharp
+var source = SvgImageSource.FromFile("home.svg");
+source.Tint = theme.Foreground;
+new Image { Source = source };
+```
+
+- `IntrinsicSize` — the SVG viewBox size (used by `Image` for measuring).
+- `RasterWidth` / `RasterHeight` — only affect the `CreateImage` raster fallback (e.g. when something asks the source for pixels); the vector `Image` path ignores them.
+
+## Advanced: SvgDocument
+
+For direct document access, the SVG.NET engine type `SvgDocument` (namespace `Svg`) is available:
+
+```csharp
+using Svg;
+
+var doc = SvgDocument.Open("icon.svg");   // or .Parse(markup) / .Parse(markup, baseUri)
+doc.Render(context, new Rect(0, 0, width, height));   // draw into an IGraphicsContext
+```
+
+Use `doc.ViewBoxWidth` / `doc.ViewBoxHeight` for aspect ratio. For most cases prefer `SvgImageSource` + `Image`.
 
 ## Backends
 

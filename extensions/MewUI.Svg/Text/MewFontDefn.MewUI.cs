@@ -5,7 +5,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Svg;
 
-public sealed class MewFontDefn : IFontDefn
+internal sealed class MewFontDefn : IFontDefn
 {
     private readonly IFont _font;
     private readonly IGlyphOutlineFont? _outlineFont;

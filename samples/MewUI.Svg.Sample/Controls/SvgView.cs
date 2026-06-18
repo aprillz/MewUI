@@ -341,7 +341,6 @@ public sealed class SvgView : FrameworkElement
                 using var workerScope = factory.AcquireBackgroundRenderScope();
 
                 var sw = Stopwatch.StartNew();
-                long tStart = sw.ElapsedTicks;
                 // GPU-preferring offscreen target so SvgView's render pass lives on the
                 // shared filter device. D2D MULTI_THREADED factory permits this from a
                 // worker thread; GDI's HDC operations are HDC-local so concurrent
@@ -357,41 +356,22 @@ public sealed class SvgView : FrameworkElement
                     surface.Dispose();
                     throw new NotSupportedException($"{nameof(SvgView)} cache rebuild requires a CPU-writable render surface.");
                 }
-                long tCreateRT = sw.ElapsedTicks;
                 try
                 {
                     pixels.Clear(Color.Transparent);
-                    long tClear = sw.ElapsedTicks;
-                    long tBegin, tRender, tEnd;
                     using (var bmpContext = renderDevice.CreateContext(surface))
                     {
-                        long tCtx = sw.ElapsedTicks;
                         bmpContext.BeginFrame(surface);
-                        tBegin = sw.ElapsedTicks;
                         try
                         {
                             bmpContext.Translate(-request.VisibleLocalRect.X, -request.VisibleLocalRect.Y);
                             bmpContext.IntersectClip(request.VisibleLocalRect);
                             request.Document.Render(bmpContext, request.RenderBounds);
-                            tRender = sw.ElapsedTicks;
                         }
                         finally
                         {
                             bmpContext.EndFrame();
-                            tEnd = sw.ElapsedTicks;
                         }
-#if DEBUG
-                        double f = 1000.0 / Stopwatch.Frequency;
-                        Console.WriteLine(
-                            $"[SvgViewCache] target={surface.GetType().Name} {request.PixelWidth}x{request.PixelHeight} | " +
-                            $"createRT={(tCreateRT - tStart) * f:F1}ms " +
-                            $"clear={(tClear - tCreateRT) * f:F1} " +
-                            $"createCtx={(tCtx - tClear) * f:F1} " +
-                            $"begin={(tBegin - tCtx) * f:F1} " +
-                            $"render={(tRender - tBegin) * f:F1} " +
-                            $"end={(tEnd - tRender) * f:F1} | " +
-                            $"total={(tEnd - tStart) * f:F1}ms");
-#endif
                     }
                     newImage = renderDevice.CreateImageView(surface);
                     newSurface = surface;

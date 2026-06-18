@@ -1,3 +1,8 @@
+using System.Globalization;
+using System.IO.Compression;
+using System.Text;
+using System.Text.Json;
+
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Svg;
@@ -34,19 +39,16 @@ var root = new Window()
     .Resizable(1180, 760)
     .OnBuild(x => x
         .Ref(out window)
-        .Title("Aprillz.MewUI SVG Issues Viewer")
+        .Title("Aprillz.MewUI.Svg Sample")
         .Content(
-            new DockPanel()
-                .Padding(12)
-                .Spacing(12)
-                .Children(
-                    Toolbar()
-                        .DockTop(),
-
-                    StatusBar()
-                        .DockBottom(),
-
-                    Body()
+            new TabControl()
+                .TabItems(
+                    new TabItem()
+                        .Header("Icons")
+                        .Content(IconsView()),
+                    new TabItem()
+                        .Header("Issues")
+                        .Content(IssuesView())
                 )
         )
         .OnLoaded(() =>
@@ -79,6 +81,167 @@ var root = new Window()
     );
 
 Application.Run(root);
+
+// The original SVG issue viewer (file list + source editor + vector/PNG preview).
+Element IssuesView() => new DockPanel()
+    .Padding(12)
+    .Spacing(12)
+    .Children(
+        Toolbar().DockTop(),
+        StatusBar().DockBottom(),
+        Body()
+    );
+
+// Loads every .svg entry from icons.zip as an SvgImageSource and shows them in a WrapPanel.
+// Parses every .svg in icons.zip up front (data), then shows them through a virtualized
+// WrapPresenter (only visible rows are realized). Loads all entries to exercise parse-all cost
+// while keeping the visual tree bounded by virtualization.
+Element IconsView()
+{
+    var sources = new List<SvgImageSource>();
+    string header;
+
+    string zipPath = Path.Combine(AppContext.BaseDirectory, "icons.zip");
+    if (File.Exists(zipPath))
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        using (var archive = ZipFile.OpenRead(zipPath))
+        {
+            // simple-icons.json (bundled in the zip) maps each icon to its brand color (hex).
+            var hexBySlug = LoadIconColors(archive);
+
+            foreach (var entry in archive.Entries
+                .Where(entry => entry.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    using var stream = entry.Open();
+                    var source = SvgImageSource.FromStream(stream);
+                    // Tint each (monochrome) icon with its simple-icons brand color.
+                    if (hexBySlug.TryGetValue(Path.GetFileNameWithoutExtension(entry.Name), out var hex))
+                    {
+                        source.Tint = Color.FromHex(hex);
+                    }
+                    sources.Add(source);
+                }
+                catch
+                {
+                    // Skip icons that fail to parse.
+                }
+            }
+        }
+        stopwatch.Stop();
+
+        header = $"icons.zip — {sources.Count} icons (ZIP entry -> SvgImageSource), virtualized WrapPresenter | parse {stopwatch.ElapsedMilliseconds} ms";
+    }
+    else
+    {
+        header = "icons.zip was not found in the output directory.";
+    }
+
+    var icons = new ItemsControl()
+        .WrapPresenter(48, 48)
+        .ItemsSource(ItemsView.Create(sources))
+        .ItemTemplate(new DelegateTemplate<SvgImageSource>(
+            build: ctx => new Image()
+                .Register(ctx, "Img")
+                .StretchMode(Stretch.Uniform),
+            bind: (view, item, index, ctx) =>
+                ctx.Get<Image>("Img").Source(item)));
+
+    // S/M/L radio buttons resize the virtualized tiles by re-applying the WrapPresenter
+    // (SetPresenter keeps ItemsSource/ItemTemplate + scroll offset).
+    void SetIconSize(double size) => icons.WrapPresenter(size, size);
+
+    var sizeBar = new StackPanel()
+        .Horizontal()
+        .Spacing(8)
+        .Children(
+            new Label().Text("Size:").CenterVertical(),
+            new RadioButton().Content("S").GroupName("IconSize").CenterVertical().OnChecked(() => SetIconSize(32)),
+            new RadioButton().Content("M").GroupName("IconSize").CenterVertical().IsChecked().OnChecked(() => SetIconSize(64)),
+            new RadioButton().Content("L").GroupName("IconSize").CenterVertical().OnChecked(() => SetIconSize(128)));
+
+    return new DockPanel()
+        .Padding(12)
+        .Spacing(8)
+        .Children(
+            new Label()
+                .Text(header)
+                .DockTop(),
+
+            sizeBar.DockTop(),
+
+            icons
+        );
+}
+
+// Reads simple-icons.json from the archive into a slug -> hex map. simple-icons names each SVG
+// file by the slug derived from its title, so we derive the same slug to match files to colors.
+static Dictionary<string, string> LoadIconColors(ZipArchive archive)
+{
+    var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    var entry = archive.GetEntry("simple-icons.json");
+    if (entry is null)
+    {
+        return map;
+    }
+
+    try
+    {
+        using var stream = entry.Open();
+        using var json = JsonDocument.Parse(stream);
+        foreach (var icon in json.RootElement.EnumerateArray())
+        {
+            if (icon.TryGetProperty("title", out var titleEl) &&
+                icon.TryGetProperty("hex", out var hexEl) &&
+                titleEl.GetString() is string title &&
+                hexEl.GetString() is string hex)
+            {
+                map[TitleToSlug(title)] = hex;
+            }
+        }
+    }
+    catch
+    {
+        // No color metadata — icons render untinted.
+    }
+
+    return map;
+}
+
+// Mirrors simple-icons' titleToSlug: special-char words, strip diacritics, keep [a-z0-9].
+static string TitleToSlug(string title)
+{
+    var pre = title.ToLowerInvariant()
+        .Replace("+", "plus")
+        .Replace(".", "dot")
+        .Replace("&", "and")
+        .Replace("đ", "d")
+        .Replace("ħ", "h")
+        .Replace("ı", "i")
+        .Replace("ŀ", "l")
+        .Replace("ł", "l")
+        .Replace("ß", "ss")
+        .Replace("ŧ", "t")
+        .Normalize(NormalizationForm.FormD);
+
+    var sb = new StringBuilder(pre.Length);
+    foreach (var ch in pre)
+    {
+        if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark)
+        {
+            continue;
+        }
+        if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))
+        {
+            sb.Append(ch);
+        }
+    }
+
+    return sb.ToString();
+}
 
 Element Toolbar() => new DockPanel()
     .Spacing(8)
