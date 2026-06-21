@@ -3,8 +3,6 @@
 ![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
 
 <div align="center">
-  <img src="https://shields.io" alt="In Memory of April">
-  <br>
   🎗️ <b>In loving memory of my beloved cat and companion, April. Forever in my heart.</b>
 </div>
 
