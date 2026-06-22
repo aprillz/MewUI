@@ -17,7 +17,8 @@
 
 🎗️ <b>In loving memory of my beloved cat and companion, April. Forever in my heart.</b>
 <p align="center">
-<img  height="600" alt="Untitled-2" src="https://github.com/user-attachments/assets/c9d7c42b-2a74-4e09-8dca-119041b990cf" />
+<img width="1280" height="560" alt="Untitled-2 (2)" src="https://github.com/user-attachments/assets/8b3bfa9e-714d-439c-9f2b-7b2fb5a9794d" />
+  
 </p>
 
 `2012.04.15 – 2026.06.20`
