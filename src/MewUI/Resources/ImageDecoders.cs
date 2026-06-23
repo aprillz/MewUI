@@ -106,29 +106,25 @@ public static class ImageDecoders
     }
 
     /// <summary>
-    /// Attempts to decode an encoded image byte array into a <see cref="Bgra32PixelBuffer"/>.
+    /// Attempts to decode an encoded image byte array into a <see cref="Bgra32PixelBuffer"/>. Use the
+    /// <see cref="TryDecode(byte[], out Bgra32PixelBuffer, out ImageOrientation)"/> overload when the
+    /// source orientation is also needed.
     /// </summary>
-    /// <param name="encoded">Encoded image bytes.</param>
-    /// <param name="bitmap">Decoded bitmap on success.</param>
-    /// <returns><see langword="true"/> if a decoder matched and decoding succeeded; otherwise, <see langword="false"/>.</returns>
     public static bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap)
+        => TryDecode(encoded, out bitmap, out _);
+
+    /// <summary>
+    /// Attempts to decode an encoded image byte array into pixels plus the orientation parsed from its
+    /// metadata. Uses the same fast byte[] pixel path as <see cref="TryDecode(byte[], out Bgra32PixelBuffer)"/>;
+    /// orientation comes from <see cref="IImageDecoder.ReadOrientation"/> (a cheap, copy-free metadata scan)
+    /// and is <see cref="ImageOrientation.Identity"/> for formats without orientation metadata.
+    /// </summary>
+    public static bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation)
     {
         ArgumentNullException.ThrowIfNull(encoded);
+        orientation = ImageOrientation.Identity;
 
-        IImageDecoder? decoder = null;
-        lock (_lock)
-        {
-            for (int i = 0; i < _decoders.Count; i++)
-            {
-                var d = _decoders[i].Decoder;
-                if (d.CanDecode(encoded))
-                {
-                    decoder = d;
-                    break;
-                }
-            }
-        }
-
+        IImageDecoder? decoder = FindDecoder(encoded);
         if (decoder == null)
         {
             DiagLog.Write("ImageDecoders: No decoder matched input.");
@@ -136,22 +132,33 @@ public static class ImageDecoders
             return false;
         }
 
-        bool ok;
-        if (decoder is IByteArrayImageDecoder fast)
-        {
-            ok = fast.TryDecode(encoded, out bitmap);
-        }
-        else
-        {
-            ok = decoder.TryDecode(encoded, out bitmap);
-        }
-
+        bool ok = decoder is IByteArrayImageDecoder fast
+            ? fast.TryDecode(encoded, out bitmap)
+            : decoder.TryDecode(encoded, out bitmap);
         if (!ok)
         {
             DiagLog.Write($"ImageDecoders: Decode failed for '{decoder.Id}' (length={encoded.Length}).");
+            return false;
         }
 
-        return ok;
+        orientation = decoder.ReadOrientation(encoded);
+        return true;
+    }
+
+    private static IImageDecoder? FindDecoder(ReadOnlySpan<byte> encoded)
+    {
+        lock (_lock)
+        {
+            for (int i = 0; i < _decoders.Count; i++)
+            {
+                if (_decoders[i].Decoder.CanDecode(encoded))
+                {
+                    return _decoders[i].Decoder;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

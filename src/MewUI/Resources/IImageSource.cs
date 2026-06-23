@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI;
 
@@ -12,6 +13,17 @@ public interface IImageSource
     /// </summary>
     /// <param name="factory">The graphics factory used to create backend resources.</param>
     IImage CreateImage(IGraphicsFactory factory);
+}
+
+/// <summary>
+/// An image source that carries the orientation parsed from its metadata (e.g. JPEG EXIF). The raw pixels
+/// stay in their as-decoded order; consumers apply <see cref="Orientation"/> at layout/draw time. Sources
+/// without orientation metadata (raw pixels, vectors) report <see cref="ImageOrientation.Identity"/>.
+/// </summary>
+public interface IOrientedImageSource : IImageSource
+{
+    /// <summary>Orientation parsed from the source, or <see cref="ImageOrientation.Identity"/> when none.</summary>
+    ImageOrientation Orientation { get; }
 }
 
 /// <summary>

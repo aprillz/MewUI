@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -30,6 +31,10 @@ public sealed partial class Image : FrameworkElement
         MewProperty<IImageSource?>.Register<Image>(nameof(Source), null,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
             static (self, oldValue, newValue) => self.OnSourcePropertyChanged(oldValue, newValue));
+
+    public static readonly MewProperty<ImageOrientationMode> OrientationModeProperty =
+        MewProperty<ImageOrientationMode>.Register<Image>(nameof(OrientationMode), ImageOrientationMode.FromImage,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
 
     // A control renders through a single graphics factory (registered once at startup), so one cached
     // backend image suffices. The factory is tracked only to defensively rebuild if it ever changes.
@@ -100,6 +105,24 @@ public sealed partial class Image : FrameworkElement
         get => GetValue(SourceProperty);
         set => SetValue(SourceProperty, value);
     }
+
+    /// <summary>
+    /// Gets or sets whether the source's orientation (e.g. JPEG EXIF) is applied. Defaults to
+    /// <see cref="ImageOrientationMode.FromImage"/> (upright); <see cref="ImageOrientationMode.Ignore"/>
+    /// shows the raw decoded pixels.
+    /// </summary>
+    public ImageOrientationMode OrientationMode
+    {
+        get => GetValue(OrientationModeProperty);
+        set => SetValue(OrientationModeProperty, value);
+    }
+
+    // Effective orientation to apply: Normal unless the mode is FromImage and the source carries one.
+    // Read after GetImage() so the source has been decoded and its orientation resolved.
+    private ImageOrientation GetEffectiveOrientation() =>
+        OrientationMode == ImageOrientationMode.Ignore || Source is not IOrientedImageSource oriented
+            ? ImageOrientation.Normal
+            : OrientationTransform.Normalize(oriented.Orientation);
 
     private void OnSourcePropertyChanged(IImageSource? _, IImageSource? newValue)
     {
@@ -214,7 +237,11 @@ public sealed partial class Image : FrameworkElement
             return Size.Empty;
         }
 
-        var src = GetViewBoxPixels(img.PixelWidth, img.PixelHeight);
+        // Measurement and ViewBox are in oriented space, so a quarter-turned image measures with its
+        // width and height swapped.
+        var orientation = GetEffectiveOrientation();
+        var orientedSize = OrientationTransform.GetOrientedSize(orientation, img.PixelWidth, img.PixelHeight);
+        var src = GetViewBoxPixels((int)orientedSize.Width, (int)orientedSize.Height);
 
         // Pixels are treated as DIPs for now (1px == 1dip at 96dpi).
         return new Size(src.Width, src.Height);
@@ -247,18 +274,26 @@ public sealed partial class Image : FrameworkElement
 
         try
         {
-            var srcRect = GetViewBoxPixels(img.PixelWidth, img.PixelHeight);
-            var srcSize = srcRect.Size;
-            if (srcSize.IsEmpty)
+            int rawWidth = img.PixelWidth;
+            int rawHeight = img.PixelHeight;
+            var orientation = GetEffectiveOrientation();
+            var orientedSize = OrientationTransform.GetOrientedSize(orientation, rawWidth, rawHeight);
+
+            // ViewBox, Stretch and alignment are computed in oriented space (what the viewer sees).
+            var srcRect = GetViewBoxPixels((int)orientedSize.Width, (int)orientedSize.Height);
+            if (srcRect.Size.IsEmpty)
             {
                 return;
             }
 
             ComputeRects(srcRect, Bounds, StretchMode, AlignmentX, AlignmentY, out var dest, out var src);
-            if (dest.Width > 0 && dest.Height > 0 && src.Width > 0 && src.Height > 0)
+            if (dest.Width <= 0 || dest.Height <= 0 || src.Width <= 0 || src.Height <= 0)
             {
-                context.DrawImage(img, dest, src);
+                return;
             }
+
+            // src is in oriented space; the shared helper applies the orientation (no-op for Normal).
+            context.DrawImageOriented(img, orientation, rawWidth, rawHeight, src, dest);
         }
         finally
         {

@@ -17,7 +17,7 @@ namespace Aprillz.MewUI;
 /// <see cref="IGraphicsFactory.CreateImageFromBytes(byte[])"/> so custom factories can
 /// handle additional formats. Sources created from raw pixels skip the decoder path entirely.
 /// </summary>
-public sealed class ImageSource : IImageSource
+public sealed class ImageSource : IOrientedImageSource
 {
     private readonly object _decodeLock = new();
     private byte[]? _encoded;
@@ -25,6 +25,7 @@ public sealed class ImageSource : IImageSource
     private bool _formatIdComputed;
     private Bgra32PixelBuffer _decodedBitmap;
     private bool _decodedValid;
+    private ImageOrientation _orientation = ImageOrientation.Identity;
     private StaticPixelBufferSource? _decodedPixelSource;
 
     private ImageSource(byte[] encoded)
@@ -80,6 +81,12 @@ public sealed class ImageSource : IImageSource
 
     /// <summary>Whether the source carries a meaningful alpha channel.</summary>
     public bool HasAlpha => !_decodedValid || _decodedBitmap.HasAlpha;
+
+    /// <summary>
+    /// Orientation parsed from the source metadata. <see cref="ImageOrientation.Identity"/> until the source
+    /// has been decoded, for raw-pixel sources, and for formats without orientation metadata.
+    /// </summary>
+    public ImageOrientation Orientation => _orientation;
 
     /// <summary>
     /// Creates an <see cref="ImageSource"/> from encoded image bytes.
@@ -288,15 +295,15 @@ public sealed class ImageSource : IImageSource
                 return true;
             }
 
-            if (_encoded is null || !ImageDecoders.TryDecode(_encoded, out var decoded))
+            if (_encoded is null || !ImageDecoders.TryDecode(_encoded, out _decodedBitmap, out _orientation))
             {
                 pixelSource = null!;
                 return false;
             }
 
-            _decodedBitmap = decoded;
             _decodedValid = true;
-            _decodedPixelSource = new StaticPixelBufferSource(decoded.WidthPx, decoded.HeightPx, decoded.Data, decoded.HasAlpha);
+            _decodedPixelSource = new StaticPixelBufferSource(
+                _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
             pixelSource = _decodedPixelSource;
             // Cache FormatId before releasing encoded bytes so it remains available.
             if (!_formatIdComputed)
