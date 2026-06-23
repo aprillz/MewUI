@@ -45,14 +45,16 @@ public sealed class FloodFilter(Color color) : ImageFilter
 }
 
 /// <summary>
-/// Separable Gaussian blur with independent X / Y standard deviations.
+/// Separable Gaussian blur with independent X / Y blur radii (in DIPs). The radius is the
+/// kernel's reach; the executor converts it to a Gaussian standard deviation via
+/// <see cref="BlurKernel.RadiusToSigma"/> (sigma = radius / 3).
 /// </summary>
-public sealed class BlurFilter(double sigmaX, double sigmaY, ImageFilter? input = null) : ImageFilter
+public sealed class BlurFilter(double radiusX, double radiusY, ImageFilter? input = null) : ImageFilter
 {
-    public BlurFilter(double sigma, ImageFilter? input = null) : this(sigma, sigma, input) { }
+    public BlurFilter(double radius, ImageFilter? input = null) : this(radius, radius, input) { }
 
-    public double SigmaX { get; } = Math.Max(0, sigmaX);
-    public double SigmaY { get; } = Math.Max(0, sigmaY);
+    public double RadiusX { get; } = Math.Max(0, radiusX);
+    public double RadiusY { get; } = Math.Max(0, radiusY);
     public ImageFilter? Input { get; } = input;
 
     public override IReadOnlyList<ImageFilter?> Inputs => new[] { Input };
@@ -158,12 +160,12 @@ public enum DropShadowMode
     DrawShadowOnly,
 }
 
-public sealed class DropShadowFilter(double dx, double dy, double sigma, Color color,
+public sealed class DropShadowFilter(double dx, double dy, double radius, Color color,
     DropShadowMode mode = DropShadowMode.DrawShadowAndForeground, ImageFilter? input = null) : ImageFilter
 {
     public double Dx { get; } = dx;
     public double Dy { get; } = dy;
-    public double Sigma { get; } = Math.Max(0, sigma);
+    public double Radius { get; } = Math.Max(0, radius);
     public Color Color { get; } = color;
     public DropShadowMode Mode { get; } = mode;
     public ImageFilter? Input { get; } = input;

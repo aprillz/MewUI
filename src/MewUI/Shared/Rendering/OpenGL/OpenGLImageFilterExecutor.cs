@@ -35,7 +35,6 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
                 return context.Source;
             case BlurFilter b:
             {
-                // TryGpuBlur logs the specific reason on each null-return path itself.
                 var gpuResult = TryGpuBlur(b, context);
                 return gpuResult ?? _fallback.Execute(filter, context);
             }
@@ -47,11 +46,10 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
 
     private FilterResult? TryGpuBlur(BlurFilter b, IImageFilterContext ctx)
     {
-        // Sigma is in logical/DIP units; the FBO we sample is at the source layer's pixel
-        // resolution, so convert via the context's input-to-pixel scale before handing the
-        // value to the GLSL pass.
-        double rawSigmaX = b.SigmaX * ctx.LogicalToPixelScaleX;
-        double rawSigmaY = b.SigmaY * ctx.LogicalToPixelScaleY;
+        // Radius is in logical/DIP units; convert to a pixel sigma (radius / 3, then by the
+        // context's input-to-pixel scale) before handing the value to the GLSL pass.
+        double rawSigmaX = BlurKernel.RadiusToSigma(b.RadiusX) * ctx.LogicalToPixelScaleX;
+        double rawSigmaY = BlurKernel.RadiusToSigma(b.RadiusY) * ctx.LogicalToPixelScaleY;
         // Collapse anisotropic sigma to the geometric mean — matches Metal MPS's isotropic
         // Gaussian (which can't do separable per-axis without a custom compute shader).
         // Both backends now produce the same shape for σx ≠ σy / non-uniform-zoom inputs.

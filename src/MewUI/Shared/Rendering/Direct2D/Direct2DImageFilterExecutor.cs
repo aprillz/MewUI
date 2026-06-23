@@ -97,7 +97,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     private FilterResult? TryGpuBlur(BlurFilter b, IImageFilterContext ctx)
     {
-        if (b.SigmaX <= 0 && b.SigmaY <= 0)
+        if (b.RadiusX <= 0 && b.RadiusY <= 0)
         {
             return b.Input is null ? ctx.Source : Execute(b.Input, ctx);
         }
@@ -114,8 +114,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         // of the clamp.
         double bitmapDpiScaleX = input.UnderlyingSurface?.DpiScale ?? 1.0;
         double bitmapDpiScaleY = bitmapDpiScaleX;
-        double sigmaXDip = b.SigmaX * (ctx.LogicalToPixelScaleX / Math.Max(1e-9, bitmapDpiScaleX));
-        double sigmaYDip = b.SigmaY * (ctx.LogicalToPixelScaleY / Math.Max(1e-9, bitmapDpiScaleY));
+        double sigmaXDip = BlurKernel.RadiusToSigma(b.RadiusX) * (ctx.LogicalToPixelScaleX / Math.Max(1e-9, bitmapDpiScaleX));
+        double sigmaYDip = BlurKernel.RadiusToSigma(b.RadiusY) * (ctx.LogicalToPixelScaleY / Math.Max(1e-9, bitmapDpiScaleY));
 
         // D2D1GaussianBlur is isotropic — collapse anisotropic σ via geometric mean to
         // match Metal MPS (which does sqrt(σx·σy) inside MetalGaussianBlur.TryEncode).

@@ -74,11 +74,10 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
 
     private FilterResult? TryGpuBlur(BlurFilter b, IImageFilterContext ctx)
     {
-        // Sigma is in logical/DIP units; the texture we sample is at the source layer's
-        // pixel resolution, so convert via the context's input-to-pixel scale before
-        // handing the value to MPS.
-        double pxSigmaX = b.SigmaX * ctx.LogicalToPixelScaleX;
-        double pxSigmaY = b.SigmaY * ctx.LogicalToPixelScaleY;
+        // Radius is in logical/DIP units; convert to a pixel sigma (radius / 3, then by the
+        // context's input-to-pixel scale) before handing the value to MPS.
+        double pxSigmaX = BlurKernel.RadiusToSigma(b.RadiusX) * ctx.LogicalToPixelScaleX;
+        double pxSigmaY = BlurKernel.RadiusToSigma(b.RadiusY) * ctx.LogicalToPixelScaleY;
         if (pxSigmaX <= 0 && pxSigmaY <= 0)
         {
             return b.Input is null ? ctx.Source : Execute(b.Input, ctx);
