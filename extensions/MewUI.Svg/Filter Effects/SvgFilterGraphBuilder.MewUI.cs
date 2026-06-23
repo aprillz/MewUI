@@ -98,9 +98,12 @@ internal static class SvgFilterGraphBuilder
     private static ImageFilter BuildNode(SvgFilterPrimitive primitive, ImageFilter? input,
         Dictionary<string, ImageFilter> resultMap, ImageFilter? previousOutput, ISvgRenderer renderer) => primitive switch
         {
-            // stdDeviation / dx / dy are in user space (= logical/DIP); the executor multiplies
-            // by IImageFilterContext.LogicalToPixelScale at evaluation time.
-            SvgGaussianBlur b => new BlurFilter(GetSigmaX(b), GetSigmaY(b), input),
+            // stdDeviation / dx / dy are in user space (= logical/DIP). SVG stdDeviation is the
+            // Gaussian sigma; BlurFilter takes a radius (= 3*sigma), so convert here. The executor
+            // multiplies by IImageFilterContext.LogicalToPixelScale at evaluation time and divides
+            // the radius back to sigma, so the net SVG sigma is unchanged.
+            SvgGaussianBlur b => new BlurFilter(
+                BlurKernel.SigmaToRadius(GetSigmaX(b)), BlurKernel.SigmaToRadius(GetSigmaY(b)), input),
 
             SvgFlood f => new FloodFilter(ExtractFloodColor(f)),
 
