@@ -490,7 +490,9 @@ public sealed partial class MewVGWin32GraphicsFactory
             // PooledPboTexture which returns the uploader to the pool instead of
             // destroying the GL resources.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
+            // ownsSource: the image is the sole owner of the pooled texture; disposing it returns the
+            // uploader to the pool (otherwise a fresh uploader is allocated every frame -> leak).
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool), ownsSource: true);
         }
         catch
         {

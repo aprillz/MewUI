@@ -326,7 +326,8 @@ public sealed partial class MewVGX11GraphicsFactory
         {
             // See Win32 partial for the pooling rationale — same applies on X11/GLX.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
+            // ownsSource: image is sole owner; dispose returns the uploader to the pool (else leak).
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool), ownsSource: true);
         }
         catch
         {

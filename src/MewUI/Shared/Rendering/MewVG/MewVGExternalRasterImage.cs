@@ -24,6 +24,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 internal sealed class MewVGExternalRasterImage : IImage
 {
     private readonly IExternalRasterSource _source;
+    private readonly bool _ownsSource;
     private readonly Dictionary<(NanoVG vg, nint handle), int> _images = new();
     private bool _disposed;
 
@@ -32,10 +33,18 @@ internal sealed class MewVGExternalRasterImage : IImage
     public int PixelWidth => _source.PixelWidth;
     public int PixelHeight => _source.PixelHeight;
 
-    public MewVGExternalRasterImage(IExternalRasterSource source)
+    /// <param name="source">The external raster texture this image samples from.</param>
+    /// <param name="ownsSource">
+    /// When true, disposing this image also disposes <paramref name="source"/>. Used for sources the
+    /// image is the sole owner of (e.g. a pooled PBO uploader, whose dispose returns it to its pool).
+    /// Leave false for caller-owned / cached sources (e.g. a reused WGL interop texture) so the image
+    /// does not free a resource the caller still holds.
+    /// </param>
+    public MewVGExternalRasterImage(IExternalRasterSource source, bool ownsSource = false)
     {
         ArgumentNullException.ThrowIfNull(source);
         _source = source;
+        _ownsSource = ownsSource;
     }
 
     /// <summary>
@@ -92,5 +101,12 @@ internal sealed class MewVGExternalRasterImage : IImage
             }
         }
         _images.Clear();
+
+        // Release the source only when this image owns it (e.g. a pooled PBO uploader -> returns to
+        // its pool). Caller-owned / cached sources are left untouched.
+        if (_ownsSource)
+        {
+            (_source as IDisposable)?.Dispose();
+        }
     }
 }
