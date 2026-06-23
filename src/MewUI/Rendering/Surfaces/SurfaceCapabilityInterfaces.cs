@@ -12,6 +12,15 @@ public interface ICpuPixelSurface : IRenderSurface
 
     void IncrementVersion();
 
+    /// <summary>
+    /// Flushes pixels written through <see cref="GetWritablePixelSpan"/> to the surface's GPU resource so a
+    /// later draw or sample reflects them. No-op for surfaces whose CPU buffer IS the drawn memory (GDI/
+    /// Direct2D DIB) or that already upload from the CPU mirror on consume (MewVG Metal); GPU-texture-backed
+    /// surfaces that sample the texture directly (MewVG OpenGL FBO) override it to upload. Called by the CPU
+    /// filter executor after writing a result, on the render thread with the backend context current.
+    /// </summary>
+    void CommitCpuWrite() { }
+
     void Clear(Color color)
     {
         var span = GetWritablePixelSpan();
