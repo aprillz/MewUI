@@ -9,7 +9,7 @@ public static class Easing
     /// <summary>
     /// The default easing function used by animations when none is specified.
     /// </summary>
-    public static readonly Func<double, double> Default = EaseOutCubic;
+    public static readonly Func<double, double> Default = EaseInOutBack;
 
     public static double Linear(double t) => t;
 
