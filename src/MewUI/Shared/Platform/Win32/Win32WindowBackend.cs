@@ -34,6 +34,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private uint _savedConversion;
     private uint _savedSentence;
     private nint _currentCursor;
+    private bool _cursorHidden;
     private bool _isTrackingMouseLeave;
     private const uint MonitorDefaultToPrimary = 1;
     private const uint MonitorDefaultToNearest = 2;
@@ -556,12 +557,20 @@ internal sealed class Win32WindowBackend : IWindowBackend
         switch (msg)
         {
             case WindowMessages.WM_SETCURSOR:
-                // If we have a custom cursor and the hit test is in the client area, apply it
-                // and return TRUE to prevent DefWindowProc from resetting the cursor.
-                if ((lParam & 0xFFFF) == 1 /* HTCLIENT */ && _currentCursor != 0)
+                // For a client-area hit, apply our cursor (or hide it) and return TRUE to prevent
+                // DefWindowProc from resetting it to the arrow on every move.
+                if ((lParam & 0xFFFF) == 1 /* HTCLIENT */)
+                {
+                    if (_cursorHidden)
+                    {
+                        User32.SetCursor(0);
+                        return 1;
+                    }
+                    if (_currentCursor != 0)
                 {
                     User32.SetCursor(_currentCursor);
                     return 1;
+                }
                 }
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
@@ -2463,6 +2472,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public void SetCursor(CursorType cursorType)
     {
+        if (cursorType == CursorType.None)
+        {
+            _cursorHidden = true;
+            _currentCursor = 0;
+            User32.SetCursor(0);
+            return;
+        }
+
+        _cursorHidden = false;
+
         nint id = cursorType switch
         {
             CursorType.Arrow => SystemCursors.IDC_ARROW,

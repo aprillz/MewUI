@@ -116,22 +116,27 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     /// <summary>
     /// Resolves the effective cursor for the given element by walking up the visual tree
-    /// until a non-None cursor is found, then applies it via the backend.
+    /// until an element with a non-null cursor is found, then applies it via the backend.
     /// </summary>
     internal void UpdateCursorForElement(UIElement? element)
     {
-        var cursor = CursorType.None;
+        CursorType? cursor = null;
         for (var current = element; current != null; current = current.Parent as UIElement)
         {
             var c = current.Cursor;
-            if (c != CursorType.None)
+            if (c.HasValue)
             {
                 cursor = c;
                 break;
             }
         }
 
-        _backend?.SetCursor(cursor == CursorType.None ? CursorType.Arrow : cursor);
+        // The element chain can be empty (no hit-test target under the pointer, e.g. a kiosk background)
+        // or never override the cursor, so fall back to the window's own cursor (which may be
+        // CursorType.None to hide it), then to the platform arrow default. A resolved
+        // CursorType.None means "hide the cursor".
+        cursor ??= Cursor;
+        _backend?.SetCursor(cursor ?? CursorType.Arrow);
     }
 
     internal void UpdateLastMousePosition(Point positionDip, Point screenPositionPx)

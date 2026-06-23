@@ -82,10 +82,11 @@ public abstract partial class UIElement : Element
 
     /// <summary>
     /// Specifies the cursor to display when the mouse is over this element.
-    /// <see cref="CursorType.None"/> means no override (inherit from parent or platform default).
+    /// <see langword="null"/> means no override (inherit from parent or platform default);
+    /// <see cref="CursorType.None"/> hides the cursor.
     /// </summary>
-    public static readonly MewProperty<CursorType> CursorProperty =
-        MewProperty<CursorType>.Register<UIElement>(nameof(Cursor), CursorType.None,
+    public static readonly MewProperty<CursorType?> CursorProperty =
+        MewProperty<CursorType?>.Register<UIElement>(nameof(Cursor), null,
             MewPropertyOptions.None);
 
     /// <summary>
@@ -249,9 +250,10 @@ public abstract partial class UIElement : Element
 
     /// <summary>
     /// Gets or sets the cursor to display when the mouse is over this element.
-    /// <see cref="CursorType.None"/> means no override (inherit from parent or platform default).
+    /// <see langword="null"/> means no override (inherit from parent or platform default);
+    /// <see cref="CursorType.None"/> hides the cursor.
     /// </summary>
-    public CursorType Cursor
+    public CursorType? Cursor
     {
         get => GetValue(CursorProperty);
         set => SetValue(CursorProperty, value);

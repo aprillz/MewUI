@@ -240,6 +240,15 @@ internal static partial class X11
     public static partial int XFreeCursor(nint display, nint cursor);
 
     [LibraryImport(LibraryName)]
+    public static partial nint XCreateBitmapFromData(nint display, nint drawable, ReadOnlySpan<byte> data, uint width, uint height);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint XCreatePixmapCursor(nint display, nint source, nint mask, ref XColor foreground, ref XColor background, uint x, uint y);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XFreePixmap(nint display, nint pixmap);
+
+    [LibraryImport(LibraryName)]
     public static partial int XTranslateCoordinates(
         nint display,
         nint src_w,
@@ -378,6 +387,17 @@ internal struct XMotionEvent
     public byte is_hint;
     [MarshalAs(UnmanagedType.Bool)]
     public bool same_screen;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XColor
+{
+    public ulong pixel;
+    public ushort red;
+    public ushort green;
+    public ushort blue;
+    public byte flags;
+    public byte pad;
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 192)]

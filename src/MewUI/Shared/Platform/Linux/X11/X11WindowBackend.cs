@@ -59,6 +59,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _allowsTransparency;
     private bool _enabled = true;
     private nint _currentCursor;
+    private CursorType? _currentCursorType;
     private IX11InputMethod? _inputMethod;
 
     // XInput2 scroll handling. _xi2Opcode is the per-display extension opcode discovered
@@ -2690,6 +2691,15 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
+        // Called on every hovered-element change. Skip the create/free churn when the type is unchanged;
+        // repeatedly recreating and freeing the same font cursor can trigger BadCursor on XFreeCursor.
+        if (_currentCursorType == cursorType)
+        {
+            return;
+        }
+
+        _currentCursorType = cursorType;
+
         // X11 standard cursor font shape constants (X11/cursorfont.h)
         const uint XC_left_ptr = 68;
         const uint XC_xterm = 152;
@@ -2725,12 +2735,14 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         try
         {
-            nint newCursor = NativeX11.XCreateFontCursor(Display, shape);
+            nint newCursor = cursorType == CursorType.None
+                ? CreateInvisibleCursor()
+                : NativeX11.XCreateFontCursor(Display, shape);
             if (newCursor != 0)
             {
                 NativeX11.XDefineCursor(Display, Handle, newCursor);
 
-                if (_currentCursor != 0)
+                if (_currentCursor != 0 && _currentCursor != newCursor)
                 {
                     NativeX11.XFreeCursor(Display, _currentCursor);
                 }
@@ -2743,6 +2755,23 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             // Best-effort.
         }
+    }
+
+    // A 1x1 fully-transparent pixmap cursor: the standard way to hide the pointer on X11.
+    private nint CreateInvisibleCursor()
+    {
+        var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
+        Span<byte> emptyBits = stackalloc byte[1];
+        nint bitmap = NativeX11.XCreateBitmapFromData(Display, root, emptyBits, 1, 1);
+        if (bitmap == 0)
+        {
+            return 0;
+        }
+
+        var color = default(XColor);
+        nint cursor = NativeX11.XCreatePixmapCursor(Display, bitmap, bitmap, ref color, ref color, 0, 0);
+        NativeX11.XFreePixmap(Display, bitmap);
+        return cursor;
     }
 
     public void SetImeMode(ImeMode mode)

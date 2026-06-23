@@ -131,12 +131,31 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelOpenHandCursor;
     private static nint SelCursorSet;
 
+    // NSCursor hide/unhide are stacked (counted); keep them balanced so the pointer reappears exactly once.
+    private static bool _cursorHidden;
+
     public static void SetCursor(CursorType cursorType)
     {
         EnsureInitialized();
         if (ClsNSCursor == 0 || SelCursorSet == 0)
         {
             return;
+        }
+
+        if (cursorType == CursorType.None)
+        {
+            if (!_cursorHidden)
+            {
+                _cursorHidden = true;
+                ObjC.MsgSend_void(ClsNSCursor, ObjC.Sel("hide"));
+            }
+            return;
+        }
+
+        if (_cursorHidden)
+        {
+            _cursorHidden = false;
+            ObjC.MsgSend_void(ClsNSCursor, ObjC.Sel("unhide"));
         }
 
         nint sel = cursorType switch
