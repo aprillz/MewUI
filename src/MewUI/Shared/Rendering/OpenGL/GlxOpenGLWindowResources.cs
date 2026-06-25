@@ -18,6 +18,8 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
 
     public nint GlxContext { get; }
 
+    public nint NativeContext => GlxContext;
+
     public bool SupportsBgra { get; }
 
     public bool SupportsNpotTextures { get; }
@@ -149,7 +151,7 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
         }
     }
 
-    public static GlxOpenGLWindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo)
+    public static GlxOpenGLWindowResources Create(nint display, nint window, X11GLVisualInfo visualInfo)
         => Create(display, window, visualInfo, shareContext: 0);
 
     /// <summary>Create a window's GLX context, optionally sharing texture/buffer
@@ -157,7 +159,7 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
     /// context). Required for the background offscreen render pipeline so worker-rendered
     /// FBO textures are sample-able from the window context. shareContext = 0 means
     /// no sharing (standalone usage).</summary>
-    public static GlxOpenGLWindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo, nint shareContext)
+    public static GlxOpenGLWindowResources Create(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext)
     {
         DiagLog.Write($"GLX create: display=0x{display.ToInt64():X} window=0x{window.ToInt64():X} share=0x{shareContext.ToInt64():X} (provided visual)");
 

@@ -29,6 +29,8 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
 
     public nint Hglrc { get; }
 
+    public nint NativeContext => Hglrc;
+
     public bool SupportsBgra { get; }
 
     public bool SupportsNpotTextures { get; }

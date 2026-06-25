@@ -11,6 +11,9 @@ internal static partial class X11
     public static partial nint XFree(nint data);
 
     [LibraryImport(LibraryName)]
+    public static partial nint XGetVisualInfo(nint display, long vinfoMask, ref XVisualInfo vinfoTemplate, out int nitems);
+
+    [LibraryImport(LibraryName)]
     public static partial nint XOpenDisplay(nint displayName);
 
     [LibraryImport(LibraryName)]

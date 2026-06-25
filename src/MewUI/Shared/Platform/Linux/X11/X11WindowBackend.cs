@@ -50,7 +50,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private DragDropEffects _xdndLastEffect;
     private bool _allowDrop;
     private long _lastRenderTick;
-    private X11GlxVisualInfo? _glxVisualInfo;
+    private X11GLVisualInfo? _glVisualInfo;
 
     private readonly ClickCountTracker _clickCountTracker = new();
     private readonly int[] _lastPressClickCounts = new int[5];
@@ -538,193 +538,20 @@ internal sealed class X11WindowBackend : IWindowBackend
             y = Math.Max(0, (rootAttrs.height - (int)height) / 2);
         }
 
-        // Choose a GLX visual for OpenGL rendering and create the window with that visual.
-        // When transparency is requested, prefer a 32-bit ARGB visual via FBConfig.
-        const int GLX_X_RENDERABLE = 0x8012;
-        const int GLX_DRAWABLE_TYPE = 0x8010;
-        const int GLX_RENDER_TYPE = 0x8011;
-        const int GLX_WINDOW_BIT = 0x00000001;
-        const int GLX_RGBA_BIT = 0x00000001;
-        const int GLX_ALPHA_SIZE = 11;
-        const int GLX_DEPTH_SIZE = 12;
-        const int GLX_STENCIL_SIZE = 13;
+        // The GL-compatible visual is chosen by the registered rendering backend (GLX today, EGL
+        // later) so this platform/windowing layer carries no GL-API calls. See IX11GLVisualChooser
+        // / X11GLVisualChooserRegistry. The window itself (colormap + XCreateWindow below) is pure
+        // X11 and uses only the returned neutral visual data.
+        var visualChooser = X11GLVisualChooserRegistry.Current
+            ?? throw new InvalidOperationException(
+                "No X11 GL visual chooser registered. Register a rendering backend (e.g. MewVGX11Backend.Register()) before creating windows.");
 
-        XVisualInfo visualInfo = default;
-        bool usedFbConfig = false;
-        bool hasVisualInfo = false;
-
-        if (_allowsTransparency)
+        if (!visualChooser.TryChooseVisual(Display, screen, _allowsTransparency, out X11GLVisualInfo chosen))
         {
-            int[] fbAttribs =
-            {
-                GLX_X_RENDERABLE, 1,
-                GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
-                GLX_RENDER_TYPE, GLX_RGBA_BIT,
-                4,  // GLX_RGBA
-                5,  // GLX_DOUBLEBUFFER
-                8,  // GLX_RED_SIZE
-                8,
-                9,  // GLX_GREEN_SIZE
-                8,
-                10, // GLX_BLUE_SIZE
-                8,
-                GLX_ALPHA_SIZE,
-                8,
-                GLX_DEPTH_SIZE,
-                24,
-                GLX_STENCIL_SIZE,
-                8,
-                0
-            };
-
-            nint fbConfigs = LibGL.glXChooseFBConfig(Display, screen, fbAttribs, out int fbCount);
-            if (fbConfigs != 0 && fbCount > 0)
-            {
-                XVisualInfo? best = null;
-                int bestStencil = -1;
-
-                for (int i = 0; i < fbCount; i++)
-                {
-                    nint fb = Marshal.ReadIntPtr(fbConfigs, i * IntPtr.Size);
-                    if (fb == 0)
-                    {
-                        continue;
-                    }
-
-                    int alphaSize = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_ALPHA_SIZE, out alphaSize);
-                    if (alphaSize < 8)
-                    {
-                        continue;
-                    }
-
-                    int depthSize = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_DEPTH_SIZE, out depthSize);
-
-                    int stencilSize = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(Display, fb, GLX_STENCIL_SIZE, out stencilSize);
-                    if (depthSize < 16 || stencilSize < 8)
-                    {
-                        continue;
-                    }
-
-                    nint viPtr = LibGL.glXGetVisualFromFBConfig(Display, fb);
-                    if (viPtr == 0)
-                    {
-                        continue;
-                    }
-
-                    var vi = Marshal.PtrToStructure<XVisualInfo>(viPtr);
-                    NativeX11.XFree(viPtr);
-
-                    if (vi.depth != 32)
-                    {
-                        continue;
-                    }
-
-                    // Prefer configs with a stencil buffer for rounded clip and path fills.
-                    if (best == null || stencilSize > bestStencil)
-                    {
-                        best = vi;
-                        bestStencil = stencilSize;
-                    }
-                }
-
-                NativeX11.XFree(fbConfigs);
-
-                if (best.HasValue)
-                {
-                    visualInfo = best.Value;
-                    usedFbConfig = true;
-                    hasVisualInfo = true;
-                }
-            }
+            throw new InvalidOperationException("X11 GL visual chooser failed to select a suitable visual.");
         }
 
-        if (!usedFbConfig)
-        {
-            int[] attribs =
-            {
-                4,  // GLX_RGBA
-                5,  // GLX_DOUBLEBUFFER
-                8,  // GLX_RED_SIZE
-                8,
-                9,  // GLX_GREEN_SIZE
-                8,
-                10, // GLX_BLUE_SIZE
-                8,
-                GLX_ALPHA_SIZE,
-                8,
-                GLX_DEPTH_SIZE,
-                24,
-                GLX_STENCIL_SIZE,
-                8,
-                0
-            };
-
-            nint visualInfoPtr;
-            unsafe
-            {
-                fixed (int* p = attribs)
-                {
-                    visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
-                }
-            }
-
-            if (visualInfoPtr == 0)
-            {
-                // Last resort: allow a visual without stencil (rounded clip may not work).
-                int[] attribsNoStencil =
-                {
-                    4,  // GLX_RGBA
-                    5,  // GLX_DOUBLEBUFFER
-                    8,  // GLX_RED_SIZE
-                    8,
-                    9,  // GLX_GREEN_SIZE
-                    8,
-                    10, // GLX_BLUE_SIZE
-                    8,
-                    GLX_ALPHA_SIZE,
-                    8,
-                    GLX_DEPTH_SIZE,
-                    24,
-                    0
-                };
-
-                unsafe
-                {
-                    fixed (int* p = attribsNoStencil)
-                    {
-                        visualInfoPtr = LibGL.glXChooseVisual(Display, screen, (nint)p);
-                    }
-                }
-
-                if (visualInfoPtr == 0)
-                {
-                    throw new InvalidOperationException("glXChooseVisual failed.");
-                }
-            }
-
-            visualInfo = Marshal.PtrToStructure<XVisualInfo>(visualInfoPtr);
-            NativeX11.XFree(visualInfoPtr);
-            hasVisualInfo = true;
-        }
-
-        if (!hasVisualInfo)
-        {
-            throw new InvalidOperationException("Failed to select a suitable X11 visual.");
-        }
-        _glxVisualInfo = new X11GlxVisualInfo(
-            visualInfo.visual,
-            visualInfo.visualid,
-            visualInfo.screen,
-            visualInfo.depth,
-            visualInfo.@class,
-            visualInfo.red_mask,
-            visualInfo.green_mask,
-            visualInfo.blue_mask,
-            visualInfo.colormap_size,
-            visualInfo.bits_per_rgb);
+        _glVisualInfo = chosen;
 
         const int AllocNone = 0;
         const ulong CWBackPixel = 1UL << 1;
@@ -741,7 +568,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         var attrs = new XSetWindowAttributes
         {
-            colormap = NativeX11.XCreateColormap(Display, root, visualInfo.visual, AllocNone),
+            colormap = NativeX11.XCreateColormap(Display, root, chosen.Visual, AllocNone),
             event_mask = (nint)windowEventMask,
         };
 
@@ -757,7 +584,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             // Opaque window: with no background pixel the server leaves the client area undefined from map until
             // the first paint, briefly showing the desktop behind it. Seed the same color the window clears to on
             // paint, so the surface is filled on map and any resize-edge fill is effectively invisible.
-            attrs.background_pixel = PackVisualPixel(Window.EffectiveOpaqueBackground, visualInfo.red_mask, visualInfo.green_mask, visualInfo.blue_mask);
+            attrs.background_pixel = PackVisualPixel(Window.EffectiveOpaqueBackground, chosen.RedMask, chosen.GreenMask, chosen.BlueMask);
             valueMask |= CWBackPixel;
         }
 
@@ -776,9 +603,9 @@ internal sealed class X11WindowBackend : IWindowBackend
             x, y,
             width, height,
             0,
-            visualInfo.depth,
+            chosen.Depth,
             1, // InputOutput
-            visualInfo.visual,
+            chosen.Visual,
             valueMask,
             ref attrs);
 
@@ -2423,7 +2250,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         Window.PerformLayout();
-        if (_glxVisualInfo is not { } visualInfo)
+        if (_glVisualInfo is not { } visualInfo)
         {
             return;
         }
@@ -2431,7 +2258,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         var client = Window.ClientSize;
         int pixelWidth = (int)Math.Max(1, Math.Ceiling(client.Width * Window.DpiScale));
         int pixelHeight = (int)Math.Max(1, Math.Ceiling(client.Height * Window.DpiScale));
-        var surface = new X11GlxWindowSurface(Display, Handle, visualInfo, Window.DpiScale, pixelWidth, pixelHeight);
+        var surface = new X11GLWindowSurface(Display, Handle, visualInfo, Window.DpiScale, pixelWidth, pixelHeight);
         Window.RenderFrame(surface);
     }
 
@@ -2833,7 +2660,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         _inputMethod?.Reset();
     }
 
-    private sealed class X11GlxWindowSurface : IX11GlxWindowSurface
+    private sealed class X11GLWindowSurface : IX11GLWindowSurface
     {
         public nint Handle => Window;
 
@@ -2854,9 +2681,9 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         public nint Window { get; }
 
-        public X11GlxVisualInfo VisualInfo { get; }
+        public X11GLVisualInfo VisualInfo { get; }
 
-        public X11GlxWindowSurface(nint display, nint window, X11GlxVisualInfo visualInfo, double dpiScale, int pixelWidth, int pixelHeight)
+        public X11GLWindowSurface(nint display, nint window, X11GLVisualInfo visualInfo, double dpiScale, int pixelWidth, int pixelHeight)
         {
             Display = display;
             Window = window;

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\build\MewUI.Common.props" />
 
@@ -47,6 +47,7 @@
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\OpenGLMeasurementContext.X11.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\GlxOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
+    <Compile Include="..\MewUI\Shared\Rendering\OpenGL\EglOpenGLWindowResources.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploader.cs" LinkBase="Rendering\OpenGL" />
     <Compile Include="..\MewUI\Shared\Rendering\OpenGL\PboFenceUploaderPool.cs" LinkBase="Rendering\OpenGL" />
 
@@ -54,6 +55,7 @@
 
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibEgl.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\GL.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\OpenGLExt.X11.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\FreeType\**\*.cs" LinkBase="Native\FreeType" />
