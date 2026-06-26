@@ -1198,7 +1198,12 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         if (_xi2Enabled && ev.type == X11EventType.GenericEvent && ev.xcookie.extension == _xi2Opcode)
         {
-            HandleXI2GenericEvent(ref ev);
+            // Modal disable: a disabled owner must ignore pointer input. XI2 motion bypasses the
+            // core-event guard above, so drop it here too.
+            if (_enabled)
+            {
+                HandleXI2GenericEvent(ref ev);
+            }
             return;
         }
 
