@@ -1256,6 +1256,25 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             throw new ArgumentException("Owner cannot be the dialog itself.", nameof(owner));
         }
 
+        // Release modal state from the Closed event, which fires before the native window is destroyed, so the
+        // owner is re-enabled/activated *before* destruction. Doing it after the loop (post-destroy) makes Win32
+        // hand the foreground elsewhere for a frame, flickering the top-level window. The finally is an
+        // idempotent safety net for early loop exit (e.g. Application.Quit before the dialog closed).
+        bool modalEnded = false;
+        void EndModalOnce()
+        {
+            if (modalEnded)
+            {
+                return;
+            }
+            modalEnded = true;
+            Closed -= OnClosed;
+            EndModal(owner);
+        }
+        void OnClosed() => EndModalOnce();
+
+        Closed += OnClosed;
+
         try
         {
             BeginModal(owner);
@@ -1263,7 +1282,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
         finally
         {
-            EndModal(owner);
+            EndModalOnce();
         }
     }
 
