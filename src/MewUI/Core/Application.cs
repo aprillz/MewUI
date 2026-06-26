@@ -173,13 +173,17 @@ public sealed class Application
     /// Gets or sets the default graphics factory used by windows/controls.
     /// In trim/AOT-friendly setups, backend packages register factories via <see cref="RegisterGraphicsFactory"/>.
     /// </summary>
-    internal static IGraphicsFactory DefaultGraphicsFactory
+    /// <summary>
+    /// Gets the default graphics factory (the pre-<see cref="Current"/> reference). Rendering code that may run
+    /// before <see cref="Run"/> uses this as a fallback. The setter is internal — backends register the factory.
+    /// </summary>
+    public static IGraphicsFactory DefaultGraphicsFactory
     {
         // Application owns the single process-wide factory: the provider is invoked once and cached (no
         // per-class singleton). It is process-scoped, so it is not cleared or disposed across runs.
         get => _defaultGraphicsFactory ??= (_graphicsFactoryProvider ?? throw new InvalidOperationException(
             "No graphics backend registered. Add a backend package (Aprillz.MewUI.Backend.Direct2D / Gdi / MewVG.*)."))();
-        set
+        internal set
         {
             ArgumentNullException.ThrowIfNull(value);
             EnsureNotRunning("graphics backend");
