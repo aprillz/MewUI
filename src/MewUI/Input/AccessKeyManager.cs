@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Platform;
 
 namespace Aprillz.MewUI.Input;
 
@@ -56,7 +57,7 @@ internal sealed class AccessKeyManager
         if (e.Handled) return;
 
         // macOS: access keys disabled
-        if (!PlatformKeyConfiguration.Current.SupportsAccessKeys)
+        if (!PlatformConventions.Current.SupportsAccessKeys)
             return;
 
         var showAccessKeys = _window.ShowAccessKeys;

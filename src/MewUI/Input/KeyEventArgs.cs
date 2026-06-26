@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Platform;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -19,7 +21,7 @@ public enum ModifierKeys
 
     /// <summary>
     /// Platform primary command modifier. Resolved to Control or Meta at matching/display time
-    /// via <see cref="PlatformKeyConfiguration.Current"/>.
+    /// via <see cref="PlatformConventions.Current"/>.
     /// </summary>
     Primary = 16,
 }
@@ -97,7 +99,7 @@ public class KeyEventArgs
     /// <summary>
     /// Gets whether the platform's primary command modifier is pressed (Ctrl on Windows/Linux, Cmd on macOS).
     /// </summary>
-    public bool PrimaryKey => (Modifiers & PlatformKeyConfiguration.Current.PrimaryModifier) != 0;
+    public bool PrimaryKey => (Modifiers & PlatformConventions.Current.PrimaryModifier) != 0;
 }
 
 /// <summary>
