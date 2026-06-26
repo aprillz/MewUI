@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Native;
 
 using NativeX11 = Aprillz.MewUI.Native.X11;
@@ -31,6 +32,12 @@ public sealed class X11PlatformHost : IPlatformHost
     private nint _xsettingsOwnerWindow;
     private nint _netWmCmSelectionAtom;
     private nint _rootWindow;
+
+    // Cursors are owned per-display, not per-window: each shape is created once, shared by every window
+    // (via XDefineCursor), and freed exactly once when the display closes. Freeing themed (libXcursor)
+    // font cursors repeatedly mid-session is unsafe - it corrupts libXcursor's per-display cache and a
+    // later free hits an already-invalid XID (BadCursor on X_FreeCursor). Create-once / free-once avoids it.
+    private readonly Dictionary<CursorType, nint> _cursorCache = new();
 
     private int _xConnectionFd = -1;
     private int _wakeReadFd = -1;
@@ -138,6 +145,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
         if (Display != 0)
         {
+            FreeCursorCache();   // release shared cursors before the display goes away
             try
             {
                 NativeX11.XCloseDisplay(Display);
@@ -425,6 +433,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
         if (Display != 0)
         {
+            FreeCursorCache();   // release shared cursors before the display goes away
             try
             {
                 NativeX11.XCloseDisplay(Display);
@@ -436,6 +445,106 @@ public sealed class X11PlatformHost : IPlatformHost
         }
 
         CloseWakePipe();
+    }
+
+    /// <summary>
+    /// Returns the shared cursor for <paramref name="cursorType"/>, creating it once and caching it for the
+    /// lifetime of the display. Windows apply it via XDefineCursor and never free it (see <see cref="FreeCursorCache"/>).
+    /// </summary>
+    internal nint GetCursor(CursorType cursorType)
+    {
+        if (Display == 0)
+        {
+            return 0;
+        }
+
+        if (_cursorCache.TryGetValue(cursorType, out nint cached))
+        {
+            return cached;
+        }
+
+        nint cursor = cursorType == CursorType.None
+            ? CreateInvisibleCursor()
+            : NativeX11.XCreateFontCursor(Display, ShapeFor(cursorType));
+
+        if (cursor != 0)
+        {
+            _cursorCache[cursorType] = cursor;
+        }
+
+        return cursor;
+    }
+
+    // X11 standard cursor font shape constants (X11/cursorfont.h).
+    private static uint ShapeFor(CursorType cursorType)
+    {
+        const uint XC_left_ptr = 68;
+        const uint XC_xterm = 152;
+        const uint XC_watch = 150;
+        const uint XC_crosshair = 34;
+        const uint XC_sb_h_double_arrow = 108;
+        const uint XC_sb_v_double_arrow = 116;
+        const uint XC_fleur = 52;
+        const uint XC_X_cursor = 0;
+        const uint XC_hand2 = 60;
+        const uint XC_question_arrow = 92;
+        const uint XC_top_left_corner = 134;
+        const uint XC_top_right_corner = 136;
+        const uint XC_center_ptr = 22;
+
+        return cursorType switch
+        {
+            CursorType.Arrow => XC_left_ptr,
+            CursorType.IBeam => XC_xterm,
+            CursorType.Wait => XC_watch,
+            CursorType.Cross => XC_crosshair,
+            CursorType.UpArrow => XC_center_ptr,
+            CursorType.SizeNWSE => XC_top_left_corner,
+            CursorType.SizeNESW => XC_top_right_corner,
+            CursorType.SizeWE => XC_sb_h_double_arrow,
+            CursorType.SizeNS => XC_sb_v_double_arrow,
+            CursorType.SizeAll => XC_fleur,
+            CursorType.No => XC_X_cursor,
+            CursorType.Hand => XC_hand2,
+            CursorType.Help => XC_question_arrow,
+            _ => XC_left_ptr,
+        };
+    }
+
+    // A 1x1 fully-transparent pixmap cursor: the standard way to hide the pointer on X11.
+    private nint CreateInvisibleCursor()
+    {
+        var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
+        Span<byte> emptyBits = stackalloc byte[1];
+        nint bitmap = NativeX11.XCreateBitmapFromData(Display, root, emptyBits, 1, 1);
+        if (bitmap == 0)
+        {
+            return 0;
+        }
+
+        var color = default(XColor);
+        nint cursor = NativeX11.XCreatePixmapCursor(Display, bitmap, bitmap, ref color, ref color, 0, 0);
+        NativeX11.XFreePixmap(Display, bitmap);
+        return cursor;
+    }
+
+    // Frees every shared cursor exactly once. Called just before XCloseDisplay so each XID is released by its
+    // single owner (the cache), never per-window - which is what previously double-freed/invalidated cursors.
+    private void FreeCursorCache()
+    {
+        if (Display != 0)
+        {
+            foreach (nint cursor in _cursorCache.Values)
+            {
+                if (cursor != 0)
+                {
+                    try { NativeX11.XFreeCursor(Display, cursor); }
+                    catch { }
+                }
+            }
+        }
+
+        _cursorCache.Clear();
     }
 
     internal nint Display

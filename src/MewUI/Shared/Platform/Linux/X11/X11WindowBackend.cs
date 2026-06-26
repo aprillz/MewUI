@@ -58,7 +58,6 @@ internal sealed class X11WindowBackend : IWindowBackend
     private double _opacity = 1.0;
     private bool _allowsTransparency;
     private bool _enabled = true;
-    private nint _currentCursor;
     private CursorType? _currentCursorType;
     private IX11InputMethod? _inputMethod;
 
@@ -2301,12 +2300,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         try
         {
-            if (_currentCursor != 0)
-            {
-                NativeX11.XFreeCursor(Display, _currentCursor);
-                _currentCursor = 0;
-            }
-
+            // Cursors are owned by the platform host's per-display cache, not by the window - nothing to free here.
             if (_inputMethod != null)
             {
                 _inputMethod.CommitText -= OnImeCommitText;
@@ -2544,8 +2538,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        // Called on every hovered-element change. Skip the create/free churn when the type is unchanged;
-        // repeatedly recreating and freeing the same font cursor can trigger BadCursor on XFreeCursor.
+        // Called on every hovered-element change. Skip redundant XDefineCursor churn when unchanged.
         if (_currentCursorType == cursorType)
         {
             return;
@@ -2553,54 +2546,13 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         _currentCursorType = cursorType;
 
-        // X11 standard cursor font shape constants (X11/cursorfont.h)
-        const uint XC_left_ptr = 68;
-        const uint XC_xterm = 152;
-        const uint XC_watch = 150;
-        const uint XC_crosshair = 34;
-        const uint XC_sb_h_double_arrow = 108;
-        const uint XC_sb_v_double_arrow = 116;
-        const uint XC_fleur = 52;
-        const uint XC_X_cursor = 0;
-        const uint XC_hand2 = 60;
-        const uint XC_question_arrow = 92;
-        const uint XC_top_left_corner = 134;
-        const uint XC_top_right_corner = 136;
-        const uint XC_center_ptr = 22;
-
-        uint shape = cursorType switch
-        {
-            CursorType.Arrow => XC_left_ptr,
-            CursorType.IBeam => XC_xterm,
-            CursorType.Wait => XC_watch,
-            CursorType.Cross => XC_crosshair,
-            CursorType.UpArrow => XC_center_ptr,
-            CursorType.SizeNWSE => XC_top_left_corner,
-            CursorType.SizeNESW => XC_top_right_corner,
-            CursorType.SizeWE => XC_sb_h_double_arrow,
-            CursorType.SizeNS => XC_sb_v_double_arrow,
-            CursorType.SizeAll => XC_fleur,
-            CursorType.No => XC_X_cursor,
-            CursorType.Hand => XC_hand2,
-            CursorType.Help => XC_question_arrow,
-            _ => XC_left_ptr,
-        };
-
         try
         {
-            nint newCursor = cursorType == CursorType.None
-                ? CreateInvisibleCursor()
-                : NativeX11.XCreateFontCursor(Display, shape);
-            if (newCursor != 0)
+            // The cursor is created/owned/freed by the host's per-display cache; the window only applies it.
+            nint cursor = _host.GetCursor(cursorType);
+            if (cursor != 0)
             {
-                NativeX11.XDefineCursor(Display, Handle, newCursor);
-
-                if (_currentCursor != 0 && _currentCursor != newCursor)
-                {
-                    NativeX11.XFreeCursor(Display, _currentCursor);
-                }
-
-                _currentCursor = newCursor;
+                NativeX11.XDefineCursor(Display, Handle, cursor);
                 NativeX11.XFlush(Display);
             }
         }
@@ -2608,23 +2560,6 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             // Best-effort.
         }
-    }
-
-    // A 1x1 fully-transparent pixmap cursor: the standard way to hide the pointer on X11.
-    private nint CreateInvisibleCursor()
-    {
-        var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
-        Span<byte> emptyBits = stackalloc byte[1];
-        nint bitmap = NativeX11.XCreateBitmapFromData(Display, root, emptyBits, 1, 1);
-        if (bitmap == 0)
-        {
-            return 0;
-        }
-
-        var color = default(XColor);
-        nint cursor = NativeX11.XCreatePixmapCursor(Display, bitmap, bitmap, ref color, ref color, 0, 0);
-        NativeX11.XFreePixmap(Display, bitmap);
-        return cursor;
     }
 
     public void SetImeMode(ImeMode mode)
