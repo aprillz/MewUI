@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Platform.MacOS;
 
 public sealed class MacOSPlatformHost : IPlatformHost
 {
+    public const string PlatformIdentifier = "MacOS";
+
     private readonly Dictionary<nint, MacOSWindowBackend> _windows = new();
     private readonly List<MacOSWindowBackend> _renderBackends = new();
     private MacOSDispatcher? _dispatcher;

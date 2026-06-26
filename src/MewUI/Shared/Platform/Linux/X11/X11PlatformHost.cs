@@ -15,6 +15,8 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 /// </summary>
 public sealed class X11PlatformHost : IPlatformHost
 {
+    public const string PlatformIdentifier = "X11";
+
     private readonly Dictionary<nint, X11WindowBackend> _windows = new();
     private readonly List<X11WindowBackend> _renderBackends = new(capacity: 8);
     private bool _running;

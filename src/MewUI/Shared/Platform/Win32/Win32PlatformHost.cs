@@ -11,6 +11,8 @@ namespace Aprillz.MewUI.Platform.Win32;
 
 public sealed class Win32PlatformHost : IPlatformHost
 {
+    public const string PlatformIdentifier = "Win32";
+
     internal const string WindowClassName = "AprillzMewUIWindow";
 
     private readonly Dictionary<nint, Win32WindowBackend> _windows = new();
