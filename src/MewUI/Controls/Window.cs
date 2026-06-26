@@ -1210,16 +1210,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         void OnClosed()
         {
             Closed -= OnClosed;
-            if (owner != null)
-            {
-                owner.ReleaseModalDisable();
-                owner.UnregisterModalChild(this);
-                if (owner._lifetimeState != WindowLifetimeState.Closed)
-                {
-                    var target = owner.GetTopModalChild() ?? owner;
-                    target.Activate();
-                }
-            }
+            EndModal(owner);
             tcs.TrySetResult();
         }
 
@@ -1227,35 +1218,97 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            _isDialogWindow = true;
-            if (owner != null)
-            {
-                owner.AcquireModalDisable();
-                owner.RegisterModalChild(this);
-            }
-
-            if (owner != null && Icon == null && owner.Icon != null)
-                Icon = owner.Icon;
-
-            Show(owner);
-            if (owner != null && _backend != null && Handle != 0)
-            {
-                _backend.SetOwner(owner.Handle);
-            }
-            Activate();
+            BeginModal(owner);
         }
         catch (Exception ex)
         {
             Closed -= OnClosed;
-            if (owner != null)
-            {
-                owner.ReleaseModalDisable();
-                owner.UnregisterModalChild(this);
-            }
+            EndModal(owner);
             tcs.TrySetException(ex);
         }
 
         return tcs.Task;
+    }
+
+    /// <summary>
+    /// Shows the window as a modal dialog and blocks the caller until it is closed, running a nested
+    /// message loop so input, rendering, timers, and animation stay responsive. Requires a running
+    /// application loop and must be called on the UI thread; otherwise use <see cref="ShowDialogAsync"/>.
+    /// </summary>
+    /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
+    public void ShowDialog(Window? owner = null)
+    {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+        {
+            throw new InvalidOperationException("Cannot show a closed window.");
+        }
+
+        if (!Application.IsRunning)
+        {
+            throw new InvalidOperationException("ShowDialog requires a running application loop. Use Application.Run, or call ShowDialogAsync.");
+        }
+
+        // Auto-resolve owner from running application when not specified.
+        owner ??= ResolveDefaultOwner();
+
+        if (owner != null && ReferenceEquals(owner, this))
+        {
+            throw new ArgumentException("Owner cannot be the dialog itself.", nameof(owner));
+        }
+
+        try
+        {
+            BeginModal(owner);
+            Application.Current.PlatformHost.RunNestedLoop(() => _lifetimeState != WindowLifetimeState.Closed);
+        }
+        finally
+        {
+            EndModal(owner);
+        }
+    }
+
+    /// <summary>
+    /// Applies modal state and shows the window: marks it as a dialog, disables and parents to the owner,
+    /// inherits the owner icon, then shows and activates. Shared by <see cref="ShowDialog"/> and <see cref="ShowDialogAsync"/>.
+    /// </summary>
+    private void BeginModal(Window? owner)
+    {
+        _isDialogWindow = true;
+        if (owner != null)
+        {
+            owner.AcquireModalDisable();
+            owner.RegisterModalChild(this);
+        }
+
+        if (owner != null && Icon == null && owner.Icon != null)
+            Icon = owner.Icon;
+
+        Show(owner);
+        if (owner != null && _backend != null && Handle != 0)
+        {
+            _backend.SetOwner(owner.Handle);
+        }
+        Activate();
+    }
+
+    /// <summary>
+    /// Releases modal state acquired by <see cref="BeginModal"/>: re-enables the owner, unregisters this dialog,
+    /// and reactivates the next topmost modal (or the owner). Safe to call even when setup failed partway.
+    /// </summary>
+    private void EndModal(Window? owner)
+    {
+        if (owner == null)
+        {
+            return;
+        }
+
+        owner.ReleaseModalDisable();
+        owner.UnregisterModalChild(this);
+        if (owner._lifetimeState != WindowLifetimeState.Closed)
+        {
+            var target = owner.GetTopModalChild() ?? owner;
+            target.Activate();
+        }
     }
 
     private void RegisterModalChild(Window child)

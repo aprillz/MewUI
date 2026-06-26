@@ -223,7 +223,24 @@ public sealed class MacOSPlatformHost : IPlatformHost
         mainWindow.Show();
 
         // Basic manual event loop (NSApplication without calling [NSApp run]).
-        while (_running)
+        PumpLoop(null);
+
+        app.Dispatcher = null;
+        _app = null;
+        MacOSInterop.TrySetThemeChangedCallback(null);
+    }
+
+    /// <summary>
+    /// Runs the event/render loop until the app quits and, when <paramref name="keepRunning"/> is supplied,
+    /// until it returns false. Shared by <see cref="Run"/> and <see cref="RunNestedLoop"/>.
+    /// </summary>
+    private void PumpLoop(Func<bool>? keepRunning)
+    {
+        var app = _app!;
+        _lastFrameTicks = Stopwatch.GetTimestamp();
+        _lastContinuous = app.RenderLoopSettings.IsContinuous;
+
+        while (_running && (keepRunning == null || keepRunning()))
         {
             try
             {
@@ -316,12 +333,12 @@ public sealed class MacOSPlatformHost : IPlatformHost
             if (scheduler.IsContinuous && scheduler.TargetFps <= 0)
             {
                 Thread.Yield();
-                _dispatcher.ClearWakeRequest();
+                _dispatcher!.ClearWakeRequest();
                 continue;
             }
 
             int timeoutMs;
-            if (_dispatcher.HasPendingWork)
+            if (_dispatcher!.HasPendingWork)
             {
                 timeoutMs = 0;
             }
@@ -384,10 +401,15 @@ public sealed class MacOSPlatformHost : IPlatformHost
             }
             _dispatcher.ClearWakeRequest();
         }
+    }
 
-        app.Dispatcher = null;
-        _app = null;
-        MacOSInterop.TrySetThemeChangedCallback(null);
+    public void RunNestedLoop(Func<bool> keepRunning)
+    {
+        ArgumentNullException.ThrowIfNull(keepRunning);
+        if (_running)
+        {
+            PumpLoop(keepRunning);
+        }
     }
 
     private void CleanupClosedWindows()

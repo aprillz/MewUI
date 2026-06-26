@@ -134,12 +134,41 @@ public sealed class X11PlatformHost : IPlatformHost
             throw new InvalidOperationException("X11 main window backend not registered.");
         }
 
-        nint display = Display;
+        PumpLoop(null);
+
+        if (Display != 0)
+        {
+            try
+            {
+                NativeX11.XCloseDisplay(Display);
+            }
+            catch
+            {
+            }
+            Display = 0;
+        }
+
+        CloseWakePipe();
+        _gsettingsThemeMonitor?.Dispose();
+        _gsettingsThemeMonitor = null;
+        _dispatcher = null;
+        _app = null;
+        app.Dispatcher = null;
+        SynchronizationContext.SetSynchronizationContext(previousContext);
+    }
+
+    /// <summary>
+    /// Runs the event/render loop until the app quits and, when <paramref name="keepRunning"/> is supplied,
+    /// until it returns false. Shared by <see cref="Run"/> and <see cref="RunNestedLoop"/>.
+    /// </summary>
+    private void PumpLoop(Func<bool>? keepRunning)
+    {
+        var app = _app!;
         var scheduler = app.RenderLoopSettings;
         long ticksPerSecond = Stopwatch.Frequency;
         long lastFrameTicks = Stopwatch.GetTimestamp();
 
-        while (_running)
+        while (_running && (keepRunning == null || keepRunning()))
         {
             try
             {
@@ -195,26 +224,15 @@ public sealed class X11PlatformHost : IPlatformHost
 
             WaitForWorkOrEvents();
         }
+    }
 
-        if (Display != 0)
+    public void RunNestedLoop(Func<bool> keepRunning)
+    {
+        ArgumentNullException.ThrowIfNull(keepRunning);
+        if (_running)
         {
-            try
-            {
-                NativeX11.XCloseDisplay(Display);
-            }
-            catch
-            {
-            }
-            Display = 0;
+            PumpLoop(keepRunning);
         }
-
-        CloseWakePipe();
-        _gsettingsThemeMonitor?.Dispose();
-        _gsettingsThemeMonitor = null;
-        _dispatcher = null;
-        _app = null;
-        app.Dispatcher = null;
-        SynchronizationContext.SetSynchronizationContext(previousContext);
     }
 
     internal void RequestWake()

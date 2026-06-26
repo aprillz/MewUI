@@ -173,77 +173,96 @@ public sealed class Win32PlatformHost : IPlatformHost
             // Show after dispatcher is ready so timers/postbacks work immediately (WPF-style dispatcher lifetime).
             mainWindow.Show();
 
-            var scheduler = app.RenderLoopSettings;
-            long ticksPerSecond = Stopwatch.Frequency;
-            long lastFrameTicks = Stopwatch.GetTimestamp();
-
-            while (_running)
-            {
-                if (scheduler.IsContinuous)
-                {
-                    try
-                    {
-                        ProcessMessages();
-                    }
-                    catch (Exception ex)
-                    {
-                        if (!HandleLoopException(app, ex)) break;
-                    }
-                    if (!_running) break;
-
-                    try
-                    {
-                        RenderAllWindows();
-                    }
-                    catch (Exception ex)
-                    {
-                        if (!HandleLoopException(app, ex)) break;
-                    }
-
-                    int fps = scheduler.TargetFps;
-                    if (fps > 0)
-                    {
-                        long frameTicks = ticksPerSecond / fps;
-                        long now = Stopwatch.GetTimestamp();
-                        long elapsed = now - lastFrameTicks;
-                        if (elapsed < frameTicks)
-                        {
-                            var waitMs = (frameTicks - elapsed) * 1000 / ticksPerSecond;
-                            if (waitMs > 0)
-                            {
-                                WaitForMessagesOrRender((uint)waitMs, renderOnSignal: false);
-                            }
-                        }
-                        lastFrameTicks = Stopwatch.GetTimestamp();
-                    }
-                    else
-                    {
-                        WaitForMessagesOrRender(0, renderOnSignal: false);
-                    }
-                }
-                else
-                {
-                    WaitForMessagesOrRender(0xFFFFFFFF, renderOnSignal: true);
-
-                    try
-                    {
-                        ProcessMessages();
-                    }
-                    catch (Exception ex)
-                    {
-                        if (!HandleLoopException(app, ex)) break;
-                    }
-
-                    if (_running && AnyWindowNeedsRender())
-                    {
-                        RequestRender();
-                    }
-                }
-            }
+            PumpLoop(null);
         }
         finally
         {
             Shutdown(app);
+        }
+    }
+
+    /// <summary>
+    /// Runs the message/render loop until the app quits and, when <paramref name="keepRunning"/> is supplied,
+    /// until it returns false. Shared by <see cref="Run"/> and <see cref="RunNestedLoop"/>.
+    /// </summary>
+    private void PumpLoop(Func<bool>? keepRunning)
+    {
+        var app = _app!;
+        var scheduler = app.RenderLoopSettings;
+        long ticksPerSecond = Stopwatch.Frequency;
+        long lastFrameTicks = Stopwatch.GetTimestamp();
+
+        while (_running && (keepRunning == null || keepRunning()))
+        {
+            if (scheduler.IsContinuous)
+            {
+                try
+                {
+                    ProcessMessages();
+                }
+                catch (Exception ex)
+                {
+                    if (!HandleLoopException(app, ex)) break;
+                }
+                if (!_running) break;
+
+                try
+                {
+                    RenderAllWindows();
+                }
+                catch (Exception ex)
+                {
+                    if (!HandleLoopException(app, ex)) break;
+                }
+
+                int fps = scheduler.TargetFps;
+                if (fps > 0)
+                {
+                    long frameTicks = ticksPerSecond / fps;
+                    long now = Stopwatch.GetTimestamp();
+                    long elapsed = now - lastFrameTicks;
+                    if (elapsed < frameTicks)
+                    {
+                        var waitMs = (frameTicks - elapsed) * 1000 / ticksPerSecond;
+                        if (waitMs > 0)
+                        {
+                            WaitForMessagesOrRender((uint)waitMs, renderOnSignal: false);
+                        }
+                    }
+                    lastFrameTicks = Stopwatch.GetTimestamp();
+                }
+                else
+                {
+                    WaitForMessagesOrRender(0, renderOnSignal: false);
+                }
+            }
+            else
+            {
+                WaitForMessagesOrRender(0xFFFFFFFF, renderOnSignal: true);
+
+                try
+                {
+                    ProcessMessages();
+                }
+                catch (Exception ex)
+                {
+                    if (!HandleLoopException(app, ex)) break;
+                }
+
+                if (_running && AnyWindowNeedsRender())
+                {
+                    RequestRender();
+                }
+            }
+        }
+    }
+
+    public void RunNestedLoop(Func<bool> keepRunning)
+    {
+        ArgumentNullException.ThrowIfNull(keepRunning);
+        if (_running)
+        {
+            PumpLoop(keepRunning);
         }
     }
 

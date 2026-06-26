@@ -91,6 +91,15 @@ public interface IPlatformHost : IDisposable
     void DoEvents();
 
     /// <summary>
+    /// Runs a nested message loop that pumps platform events and rendering until <paramref name="keepRunning"/>
+    /// returns false (or the application quits). Reuses the same per-frame pump as <see cref="Run"/>, so timers
+    /// and animation keep ticking while nested. Used to implement synchronous modal dialogs (Window.ShowDialog).
+    /// </summary>
+    /// <param name="keepRunning">Evaluated before each frame; the loop exits when it returns false.</param>
+    void RunNestedLoop(Func<bool> keepRunning)
+        => throw new NotSupportedException("This platform host does not support nested modal loops.");
+
+    /// <summary>
     /// Gets the current cursor position in screen-pixel coordinates (Y-down).
     /// Used by framework drag-and-drop to resolve which window the cursor is over during a session.
     /// </summary>
