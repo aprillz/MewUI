@@ -129,7 +129,7 @@ public sealed class Application
     /// <summary>
     /// Gets the active platform host responsible for windowing and input.
     /// </summary>
-    public IPlatformHost PlatformHost { get; }
+    internal IPlatformHost PlatformHost { get; }
 
     internal static event Action<IDispatcher?>? DispatcherChanged;
 
@@ -235,7 +235,7 @@ public sealed class Application
         }
     }
 
-    public static IPlatformHost DefaultPlatformHost
+    internal static IPlatformHost DefaultPlatformHost
     {
         get
         {
@@ -441,7 +441,7 @@ public sealed class Application
     /// <summary>
     /// Registers a platform host by id. Platform packages should call this at startup.
     /// </summary>
-    public static void RegisterPlatformHost(string id, Func<IPlatformHost> factory)
+    internal static void RegisterPlatformHost(string id, Func<IPlatformHost> factory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(factory);

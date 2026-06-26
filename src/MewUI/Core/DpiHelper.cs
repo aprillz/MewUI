@@ -39,6 +39,12 @@ public static class DpiHelper
         => Application.IsRunning ? Application.Current.PlatformHost.GetSystemDpi() : 96u;
 
     /// <summary>
+    /// Gets the DPI of the monitor that contains the given screen-pixel point (Y-down).
+    /// </summary>
+    public static uint GetDpiForPoint(Point screenPositionPx)
+        => Application.IsRunning ? Application.Current.PlatformHost.GetDpiForPoint(screenPositionPx) : GetSystemDpi();
+
+    /// <summary>
     /// Gets the scale factor for a specific window (DPI / 96).
     /// </summary>
     public static double GetScaleFactor(nint hwnd) => GetDpiForWindow(hwnd) / DefaultDpi;

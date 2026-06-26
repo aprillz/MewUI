@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Platform;
 /// <summary>
 /// Abstracts platform-specific services such as windowing, input, clipboard, dialogs, and UI dispatching.
 /// </summary>
-public interface IPlatformHost : IDisposable
+internal interface IPlatformHost : IDisposable
 {
     /// <summary>
     /// Gets the platform message box service.
