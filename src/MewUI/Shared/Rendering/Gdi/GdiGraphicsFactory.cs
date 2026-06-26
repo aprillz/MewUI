@@ -18,12 +18,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
 
     public string Backend => BackendIdentifier;
 
-    /// <summary>
-    /// Gets the singleton instance of the GDI graphics factory.
-    /// </summary>
-    public static GdiGraphicsFactory Instance => field ??= new GdiGraphicsFactory();
-
-    private GdiGraphicsFactory() { }
+    internal GdiGraphicsFactory() { }
 
     private readonly RenderResourceCache _renderResourceCache = new();
 

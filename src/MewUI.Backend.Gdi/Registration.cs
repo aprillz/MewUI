@@ -10,7 +10,7 @@ public static class GdiBackend
     public static string BackendIdentifier => GdiGraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => GdiGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(static () => new GdiGraphicsFactory());
 
     public static ApplicationBuilder UseGdi(this ApplicationBuilder builder)
     {

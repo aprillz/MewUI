@@ -10,13 +10,12 @@ public static class MewVGWin32Backend
     public static string BackendIdentifier => MewVGWin32GraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => MewVGWin32GraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(static () => new MewVGWin32GraphicsFactory());
 
     public static ApplicationBuilder UseMewVGWin32(this ApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
         Register();
-        Application.SetDefaultGraphicsFactory(BackendIdentifier);
         return builder;
     }
 }

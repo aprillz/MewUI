@@ -18,7 +18,7 @@ public static class MewVGX11Backend
         // path is chosen in exactly one place. The chooser keeps glX/egl out of the platform layer.
         X11GLBackendRegistry.Current ??= new GlxBackend();
         X11GLVisualChooserRegistry.Current ??= X11GLBackendRegistry.Current.VisualChooser;
-        Application.RegisterGraphicsFactory(BackendIdentifier, static () => MewVGX11GraphicsFactory.Instance);
+        Application.RegisterGraphicsFactory(static () => new MewVGX11GraphicsFactory());
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ public static class MewVGX11Backend
     {
         X11GLBackendRegistry.Current = new EglBackend();
         X11GLVisualChooserRegistry.Current = X11GLBackendRegistry.Current.VisualChooser;
-        Application.RegisterGraphicsFactory(BackendIdentifier, static () => MewVGX11GraphicsFactory.Instance);
+        Application.RegisterGraphicsFactory(static () => new MewVGX11GraphicsFactory());
     }
 
     public static ApplicationBuilder UseMewVGX11(this ApplicationBuilder builder)

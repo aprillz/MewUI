@@ -10,7 +10,7 @@ public static class Direct2DBackend
     public static string BackendIdentifier => Direct2DGraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(BackendIdentifier, static () => Direct2DGraphicsFactory.Instance);
+        => Application.RegisterGraphicsFactory(static () => new Direct2DGraphicsFactory());
 
     public static ApplicationBuilder UseDirect2D(this ApplicationBuilder builder)
     {
