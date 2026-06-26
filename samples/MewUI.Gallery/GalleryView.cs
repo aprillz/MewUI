@@ -84,6 +84,7 @@ partial class GalleryView : UserControl
                 Section("Selection", SelectionPage()),
                 Section("Window/Menu", WindowsMenuPage()),
                 Section("MessageBox", MessageBoxPage()),
+                Section("ShowDialog", ShowDialogPage()),
                 Section("Lists", ListsPage()),
                 Section("GridView", GridViewPage()),
                 Section("Panels", PanelsPage()),
