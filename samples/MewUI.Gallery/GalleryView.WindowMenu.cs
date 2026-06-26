@@ -18,7 +18,7 @@ partial class GalleryView
         {
             dialogStatus.Value = "Dialog: opening...";
 
-            var dlg = new Window()
+            var dialog = new Window()
                 .Resizable(420, 220)
                 .StartCenterScreen()
                 .OnBuild(x => x
@@ -49,7 +49,7 @@ partial class GalleryView
 
             try
             {
-                await dlg.ShowDialogAsync(window);
+                await dialog.ShowDialogAsync(window);
                 dialogStatus.Value = "Dialog: closed";
             }
             catch (Exception ex)
@@ -769,11 +769,9 @@ partial class GalleryView
 
         static Point GetScreenDip(Window window, MouseEventArgs e)
         {
+            // ClientToScreen now returns top-left, Y-down pixels on every platform.
             var screen = window.ClientToScreen(e.GetPosition(window));
             var scale = Math.Max(1.0, window.DpiScale);
-            if (OperatingSystem.IsMacOS())
-                return new Point(screen.X / scale, -screen.Y / scale); // Cocoa Y (bottom-up) -> top-down
-
             return new Point(screen.X / scale, screen.Y / scale);
         }
     }

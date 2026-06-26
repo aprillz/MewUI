@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Gallery;
@@ -19,13 +18,12 @@ partial class GalleryView
                     .Children(
                         new TextBlock()
                             .FontSize(11)
-                            .Text("ShowDialog() blocks this click handler (no await)\nwhile a nested loop keeps input, timers, and paint live."),
+                            .Text("ShowDialog() blocks this click handler (no await)\nwhile a nested loop keeps input and paint live."),
                         new Button()
                             .Content("Show (sync)")
                             .OnClick(() =>
                             {
-                                // Note: this handler is NOT async. ShowDialog blocks here until the
-                                // dialog closes; the live counter inside proves the loop keeps pumping.
+                                // Note: this handler is NOT async. ShowDialog blocks here until the dialog closes.
                                 var dialog = new SyncDialogWindow();
                                 dialog.ShowDialog(window);
                                 syncStatus.Value = $"Result: {dialog.Result}, clicks={dialog.ClickCount}";
@@ -58,15 +56,12 @@ partial class GalleryView
 }
 
 /// <summary>
-/// A minimal managed modal window used to exercise <see cref="Window.ShowDialog"/> and its nested loop.
-/// A background task updates a live elapsed counter via the dispatcher; if the nested loop did not keep
-/// pumping, the counter would freeze while the dialog is open.
+/// A minimal managed modal window used to exercise <see cref="Window.ShowDialog"/>.
 /// </summary>
 internal sealed class SyncDialogWindow : Window
 {
-    private readonly ObservableValue<string> _elapsed = new("Elapsed (live): 0.0s");
     private readonly ObservableValue<string> _clicks = new("Clicks: 0");
-    private volatile bool _running = true;
+    private bool _confirmedClose;
 
     public bool? Result { get; private set; }
     public int ClickCount { get; private set; }
@@ -76,13 +71,32 @@ internal sealed class SyncDialogWindow : Window
         Title = "ShowDialog sample";
         Padding = new Thickness(16);
         StartupLocation = WindowStartupLocation.CenterOwner;
-        WindowSize = WindowSize.FitContentSize(380, 280);
+        WindowSize = WindowSize.FitContentSize(380, 300);
 
-        Closed += () => _running = false;
+        Closing += OnClosing;
         PreviewKeyDown += OnPreviewKeyDown;
 
         Content = BuildContent();
-        StartElapsedTimer();
+    }
+
+    // Demonstrates a SYNC dialog shown from inside the Closing event (issue #131 scenario):
+    // closing via the title-bar X runs a nested ShowDialog confirm and can cancel the close.
+    private void OnClosing(ClosingEventArgs e)
+    {
+        if (_confirmedClose)
+        {
+            return; // OK/Cancel/Escape already chose a result — no prompt
+        }
+
+        // Sync MessageBox shown from inside Closing (nested loop via ShowDialog).
+        if (MessageBox.AskYesNo("Close this dialog?", PromptIconKind.Question, owner: this))
+        {
+            Result = null; // closed via X, no explicit OK/Cancel result
+        }
+        else
+        {
+            e.Cancel = true; // keep the dialog open
+        }
     }
 
     private Element BuildContent()
@@ -102,8 +116,7 @@ internal sealed class SyncDialogWindow : Window
             .Children(
                 new TextBlock()
                     .TextWrapping(TextWrapping.Wrap)
-                    .Text("This is a managed modal dialog shown with ShowDialog().\nThe owner is disabled until you close it."),
-                new TextBlock().BindText(_elapsed),
+                    .Text("Managed modal dialog (ShowDialog). The owner is disabled until closed.\nClose via the title-bar X to see a sync confirm shown from the Closing event."),
                 new TextBlock().BindText(_clicks),
                 new Button()
                     .Content("Click me (+1)")
@@ -114,24 +127,6 @@ internal sealed class SyncDialogWindow : Window
                     }),
                 buttons
             );
-    }
-
-    private void StartElapsedTimer()
-    {
-        var dispatcher = Application.Current.Dispatcher!;
-        long start = Stopwatch.GetTimestamp();
-
-        _ = Task.Run(async () =>
-        {
-            while (_running)
-            {
-                await Task.Delay(100);
-                if (!_running) break;
-
-                double seconds = Stopwatch.GetElapsedTime(start).TotalSeconds;
-                dispatcher.BeginInvoke(() => _elapsed.Value = $"Elapsed (live): {seconds:0.0}s");
-            }
-        });
     }
 
     private void OnPreviewKeyDown(KeyEventArgs e)
@@ -146,6 +141,7 @@ internal sealed class SyncDialogWindow : Window
     private void CloseWith(bool? result)
     {
         Result = result;
+        _confirmedClose = true; // explicit choice — skip the Closing confirm prompt
         Close();
     }
 }
