@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.MacOS;
 
 namespace Aprillz.MewUI;
@@ -12,7 +13,7 @@ public static class MacOSPlatform
     public static void Register()
     {
         Application.RegisterPlatformHost(PlatformId, CreateHost);
-        PlatformKeyConfiguration.Current = new MacOSKeyConfiguration();
+        PlatformConventions.Current = new MacOSConventions();
     }
 
     private static MacOSPlatformHost CreateHost()
