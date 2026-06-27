@@ -581,12 +581,6 @@ public sealed class X11PlatformHost : IPlatformHost
             return;
         }
 
-        // Before the first Xlib call: enable Xlib's internal locking. The offscreen GLX worker context is
-        // made current and renders FBOs on background threads while the main thread renders the UI window and
-        // pumps events - concurrent access to the same Display. Without this, Xlib's unlocked request buffer
-        // corrupts under that race (garbage XErrorEvents, occasional SIGSEGV).
-        NativeX11.XInitThreads();
-
         Display = NativeX11.XOpenDisplay(0);
         if (Display == 0)
         {

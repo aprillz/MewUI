@@ -13,12 +13,6 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static partial nint XGetVisualInfo(nint display, long vinfoMask, ref XVisualInfo vinfoTemplate, out int nitems);
 
-    // Must be called before any other Xlib function. Makes Xlib lock its internal per-display structures so
-    // the protocol stream stays consistent when more than one thread touches the same Display (here: the UI
-    // render/event thread and the offscreen GLX worker thread). Returns nonzero on success.
-    [LibraryImport(LibraryName)]
-    public static partial int XInitThreads();
-
     [LibraryImport(LibraryName)]
     public static partial nint XOpenDisplay(nint displayName);
 
