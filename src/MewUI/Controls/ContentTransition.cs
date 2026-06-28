@@ -62,49 +62,50 @@ public sealed class ContentTransition
     /// </summary>
     public Func<double, double> Easing { get; init; } = Animation.Easing.Default;
 
-    /// <summary>
-    /// Creates a fade transition.
-    /// </summary>
-    public static ContentTransition CreateFade(int durationMs = 250, int delayMs = 0) =>
+    public static ContentTransition CreateFade(int durationMs = 250, int delayMs = 0, Func<double, double>? easing = null) =>
         new()
         {
             Kind = ContentTransitionKind.Fade,
             Duration = TimeSpan.FromMilliseconds(durationMs),
             Delay = TimeSpan.FromMilliseconds(delayMs),
+            Easing = easing ?? Animation.Easing.Default
         };
 
     /// <summary>
     /// Creates a slide transition in the specified direction.
     /// </summary>
-    public static ContentTransition CreateSlide(SlideDirection direction, int durationMs = 250, int delayMs = 0) =>
+    public static ContentTransition CreateSlide(SlideDirection direction, int durationMs = 250, int delayMs = 0, Func<double, double>? easing = null) =>
         new()
         {
             Kind = ContentTransitionKind.Slide,
             Direction = direction,
             Duration = TimeSpan.FromMilliseconds(durationMs),
             Delay = TimeSpan.FromMilliseconds(delayMs),
+            Easing = easing ?? Animation.Easing.Default
         };
 
     /// <summary>
     /// Creates a scale transition (zoom out old, zoom in new).
     /// </summary>
-    public static ContentTransition CreateScale(int durationMs = 250, int delayMs = 0) =>
+    public static ContentTransition CreateScale(int durationMs = 250, int delayMs = 0, Func<double, double>? easing = null) =>
         new()
         {
             Kind = ContentTransitionKind.Scale,
             Duration = TimeSpan.FromMilliseconds(durationMs),
             Delay = TimeSpan.FromMilliseconds(delayMs),
+            Easing = easing ?? Animation.Easing.Default
         };
 
     /// <summary>
     /// Creates a rotate transition.
     /// </summary>
-    public static ContentTransition CreateRotate(int durationMs = 300, int delayMs = 0) =>
+    public static ContentTransition CreateRotate(int durationMs = 300, int delayMs = 0, Func<double, double>? easing = null) =>
         new()
         {
             Kind = ContentTransitionKind.Rotate,
             Duration = TimeSpan.FromMilliseconds(durationMs),
             Delay = TimeSpan.FromMilliseconds(delayMs),
+            Easing = easing ?? Animation.Easing.Default
         };
 
     /// <summary>
