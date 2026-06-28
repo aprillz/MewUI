@@ -32,6 +32,10 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
 
     private readonly SvgDocument _document;
 
+    // Serializes the document mutation in Render: a host may rasterize on a background thread, and a
+    // shared source could be drawn by more than one host at once.
+    private readonly object _renderLock = new();
+
     // CreateImage raster-fallback cache (the vector Render path does not use these).
     private IRenderSurface? _surface;
     private IImage? _image;
@@ -95,17 +99,53 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
     public Size IntrinsicSize => new(Math.Max(0, _document.ViewBoxWidth), Math.Max(0, _document.ViewBoxHeight));
 
     /// <summary>
-    /// Total <see cref="Render"/> calls across all instances (diagnostic — e.g. sampling renders-per-second).
+    /// Total SVG rasterizations across all instances (diagnostic — e.g. sampling rasters-per-second).
+    /// Incremented on each actual <see cref="Render"/> (SVG drawn to pixels). The host <see cref="Aprillz.MewUI.Controls.Image"/>
+    /// caches the rastered bitmap, so Render runs only on the host's cache miss (size/tint/DPI change).
     /// </summary>
-    public static long TotalRenderCount => System.Threading.Interlocked.Read(ref _renderCount);
+    public static long TotalRasterCount => System.Threading.Interlocked.Read(ref _rasterCount);
 
-    private static long _renderCount;
+    private static long _rasterCount;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Stateless direct draw — the SVG is drawn into <paramref name="context"/> at <paramref name="destRect"/>
+    /// every call. Any rasterized-bitmap caching is the host's concern (the <see cref="Aprillz.MewUI.Controls.Image"/>
+    /// vector path caches per control), so this stays free of per-source cache state.
+    /// </remarks>
     public void Render(IGraphicsContext context, Rect destRect)
     {
-        System.Threading.Interlocked.Increment(ref _renderCount);
-        RenderDocument(context, destRect);
+        if (destRect.Width <= 0 || destRect.Height <= 0)
+        {
+            return;
+        }
+
+        System.Threading.Interlocked.Increment(ref _rasterCount);
+
+        // Snapshot the tint (set on the UI thread) and serialize the document mutation, since Render may
+        // run on a background thread (Image's async raster) and the source may be shared.
+        var tint = Tint;
+        lock (_renderLock)
+        {
+            if (tint is Color color)
+            {
+                // Override the root fill so inheriting (monochrome) icon paths pick up the tint, then restore.
+                var previous = _document.Fill;
+                _document.Fill = new SvgColourServer(System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B));
+                try
+                {
+                    _document.Render(context, destRect);
+                }
+                finally
+                {
+                    _document.Fill = previous;
+                }
+            }
+            else
+            {
+                _document.Render(context, destRect);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -118,10 +158,13 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
         int height = Math.Max(1, RasterHeight ?? (int)Math.Ceiling(intrinsic.Height));
         uint tintKey = Tint is Color t ? (uint)((t.A << 24) | (t.R << 16) | (t.G << 8) | t.B) : 0u;
 
+        // CreateImage rasterizes at the intrinsic/RasterWidth size, which is the same for every consumer of
+        // this source, so a single self-managed entry suffices here (unlike the per-control display size).
         if (_image is not null && _cacheKey == (width, height, tintKey))
         {
             return _image;
         }
+
         InvalidateRaster();
 
         var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(width, height, 1.0, "SvgImageSource"));
@@ -134,7 +177,7 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
                 {
                     cpu.Clear(Color.Transparent);
                 }
-                RenderDocument(context, new Rect(0, 0, width, height));
+                Render(context, new Rect(0, 0, width, height));
             }
             finally
             {
@@ -146,33 +189,6 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
         _surface = surface;
         _cacheKey = (width, height, tintKey);
         return _image;
-    }
-
-    private void RenderDocument(IGraphicsContext context, Rect destRect)
-    {
-        if (destRect.Width <= 0 || destRect.Height <= 0)
-        {
-            return;
-        }
-
-        if (Tint is Color tint)
-        {
-            // Override the root fill so inheriting (monochrome) icon paths pick up the tint, then restore.
-            var previous = _document.Fill;
-            _document.Fill = new SvgColourServer(System.Drawing.Color.FromArgb(tint.A, tint.R, tint.G, tint.B));
-            try
-            {
-                _document.Render(context, destRect);
-            }
-            finally
-            {
-                _document.Fill = previous;
-            }
-        }
-        else
-        {
-            _document.Render(context, destRect);
-        }
     }
 
     // A Tint/Raster* property changed: drop the cached raster and notify the host control to repaint.
