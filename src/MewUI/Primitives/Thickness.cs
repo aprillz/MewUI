@@ -130,5 +130,7 @@ public readonly struct Thickness : IEquatable<Thickness>
         HashCode.Combine(Left, Top, Right, Bottom);
 
     public override string ToString() =>
-        $"Thickness({Left:0.##}, {Top:0.##}, {Right:0.##}, {Bottom:0.##})";
+        Left == Top && Top == Right && Right == Bottom
+            ? $"Thickness({Left:0.##})"
+            : $"Thickness({Left:0.##}, {Top:0.##}, {Right:0.##}, {Bottom:0.##})";
 }
