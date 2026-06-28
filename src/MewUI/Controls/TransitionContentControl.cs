@@ -14,6 +14,9 @@ public class TransitionContentControl : Control, IVisualTreeHost
     private AnimationClock? _delayClock;
     private AnimationClock? _clock;
     private double _progress = 1.0;
+    // Starting alpha of the outgoing layer: 1.0 normally, but lower when a crossfade was interrupted so
+    // the carried-out content continues from its current (partial) alpha instead of snapping to opaque.
+    private double _oldContentAlpha = 1.0;
 
     /// <summary>
     /// Gets or sets the transition applied when content changes.
@@ -42,8 +45,21 @@ public class TransitionContentControl : Control, IVisualTreeHost
                 return;
             }
 
-            // Finish any in-progress transition immediately.
-            FinishTransition();
+            // If a crossfade is still running, the current content has only faded part-way in. Carry it out
+            // from its current alpha rather than snapping it to fully opaque first - otherwise an interrupting
+            // change (e.g. clicking to the next slide mid-fade) makes it flash fully visible and then fade
+            // out. Any older outgoing layer is dropped (it was already on its way out).
+            double carryAlpha = _progress < 1.0 ? _progress : 1.0;
+
+            _delayClock?.Stop();
+            _delayClock = null;
+            _clock?.Stop();
+            _clock = null;
+            if (_oldContent != null)
+            {
+                _oldContent.Parent = null;
+                _oldContent = null;
+            }
 
             var oldContent = _currentContent;
             _currentContent = value;
@@ -53,14 +69,12 @@ public class TransitionContentControl : Control, IVisualTreeHost
                 _currentContent.Parent = this;
             }
 
-            if (oldContent != null || _currentContent != null)
-            {
-                // Animate: exit old (if any), enter new (if any).
-                // Content→null = exit-only fade-out.
-                // null→Content = enter-only fade-in.
-                _oldContent = oldContent;
-                StartTransition();
-            }
+            // At least one of old/new is non-null here (an identical no-op set returned early above), so
+            // there is always something to animate: exit old (if any) from carryAlpha, enter new (if any).
+            // Content→null = exit-only fade-out; null→Content = enter-only fade-in.
+            _oldContent = oldContent;
+            _oldContentAlpha = carryAlpha;
+            StartTransition();
 
             InvalidateMeasure();
         }
@@ -113,6 +127,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
     {
         _clock = null;
         _progress = 1.0;
+        _oldContentAlpha = 1.0;
 
         if (_oldContent != null)
         {
@@ -131,6 +146,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
         _clock?.Stop();
         _clock = null;
         _progress = 1.0;
+        _oldContentAlpha = 1.0;
 
         if (_oldContent != null)
         {
@@ -206,7 +222,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
             context.Save();
             context.TextPixelSnap = false;
             ApplyExitTransform(context, transition, p, Bounds);
-            context.GlobalAlpha *= (float)(1.0 - p);
+            context.GlobalAlpha *= (float)(_oldContentAlpha * (1.0 - p));
             _oldContent.Render(context);
             context.Restore();
         }
@@ -217,7 +233,9 @@ public class TransitionContentControl : Control, IVisualTreeHost
             context.Save();
             context.TextPixelSnap = false;
             ApplyEnterTransform(context, transition, p, Bounds);
-            context.GlobalAlpha = (float)p;
+            // Multiply (not assign) so the entering content respects any inherited opacity, matching the
+            // exiting branch above. Identical to a plain assign when GlobalAlpha is 1 (the common case).
+            context.GlobalAlpha *= (float)p;
             _currentContent.Render(context);
             context.Restore();
         }
