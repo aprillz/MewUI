@@ -67,10 +67,10 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
     private FilterResult RenderBlur(BlurFilter b, IImageFilterContext ctx)
     {
-        // Sigma is in logical/DIP units; convert to pixel sigma using the source layer's
-        // input-to-pixel scale so the blur tracks zoom and DPI like Skia/WPF effects.
-        double pxSigmaX = b.SigmaX * ctx.LogicalToPixelScaleX;
-        double pxSigmaY = b.SigmaY * ctx.LogicalToPixelScaleY;
+        // Radius is in logical/DIP units; convert to a pixel sigma (radius / 3, then by the
+        // source layer's input-to-pixel scale) so the blur tracks zoom and DPI.
+        double pxSigmaX = BlurKernel.RadiusToSigma(b.RadiusX) * ctx.LogicalToPixelScaleX;
+        double pxSigmaY = BlurKernel.RadiusToSigma(b.RadiusY) * ctx.LogicalToPixelScaleY;
         if (pxSigmaX <= 0 && pxSigmaY <= 0)
         {
             return ResolveInput(b.Input, ctx);
@@ -311,7 +311,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         var input = ds.Input ?? SourceFilter.Instance;
         ImageFilter shadow = new CompositeFilter(
             foreground: new FloodFilter(ds.Color),
-            background: new OffsetFilter(ds.Dx, ds.Dy, new BlurFilter(ds.Sigma, input)),
+            background: new OffsetFilter(ds.Dx, ds.Dy, new BlurFilter(ds.Radius, input)),
             op: CompositeOp.In);
 
         ImageFilter graph = ds.Mode == DropShadowMode.DrawShadowOnly
@@ -345,6 +345,9 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         int needed = Math.Min(pixels.Length, dest.Length);
         pixels.AsSpan(0, needed).CopyTo(dest);
         target.IncrementVersion();
+        // Push the CPU bytes to the backend's GPU resource if it samples a texture rather than the CPU
+        // buffer (no-op for CPU/DIB-backed surfaces). Without this a GPU-texture scratch renders empty.
+        target.CommitCpuWrite();
     }
 
     private static void FillSolid(ScratchFilterResult scratch, int width, int height, Color color)
@@ -364,6 +367,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             span[i + 3] = a;
         }
         target.IncrementVersion();
+        target.CommitCpuWrite();
     }
 
     /// <summary>

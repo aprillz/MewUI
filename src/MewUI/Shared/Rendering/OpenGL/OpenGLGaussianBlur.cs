@@ -38,8 +38,12 @@ internal static unsafe class OpenGLGaussianBlur
     private static int _scratchW;
     private static int _scratchH;
 
-    private const string VertexShaderSource = @"#version 330 core
-layout(location = 0) in vec2 a_pos;
+    // GLSL 1.40 (OpenGL 3.1): the lowest version that has in/out, texture() and user-defined fragment
+    // outputs, so the same shader compiles on a 3.1 GLX context (e.g. Mesa/d3d12 under WSL, which caps at
+    // GLSL 1.40) and on the 3.3+ contexts used elsewhere. 1.40 has no layout(location=) qualifier; the
+    // single vertex attribute is reliably assigned location 0 by the linker (matched in TryCreateQuad).
+    private const string VertexShaderSource = @"#version 140
+in vec2 a_pos;
 out vec2 v_uv;
 void main() {
     v_uv = a_pos * 0.5 + 0.5;
@@ -50,7 +54,7 @@ void main() {
     // around index 0 (passed by absolute index). Loop bound is MaxRadius (compile-time
     // constant) — the actual iteration count is u_radius via early break, so the GPU
     // pays only for the kernel actually requested.
-    private static readonly string FragmentShaderSource = $@"#version 330 core
+    private static readonly string FragmentShaderSource = $@"#version 140
 in vec2 v_uv;
 out vec4 fragColor;
 uniform sampler2D u_tex;
