@@ -91,18 +91,13 @@ public partial class SvgElement
     {
         try
         {
-            return Application.Current.PlatformHost.DefaultFontFamily;
+            // The platform default font is copied into the active theme metrics at startup, so the
+            // public Theme path yields the same value (or the user's UseMetrics override).
+            return Application.Current.Theme.Metrics.FontFamily;
         }
         catch
         {
-            try
-            {
-                return Application.DefaultPlatformHost.DefaultFontFamily;
-            }
-            catch
-            {
-                return "sans-serif";
-            }
+            return ThemeMetrics.Default.FontFamily;
         }
     }
 
