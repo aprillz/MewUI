@@ -63,6 +63,7 @@ public static class FileDialog
     {
         options ??= new OpenFileDialogOptions();
         options.Multiselect = false;
+        options.Owner = ResolveOwner(options.Owner);
 
         var host = Application.IsRunning ? Application.Current.PlatformHost : Application.DefaultPlatformHost;
         var result = host.FileDialog.OpenFile(options);
@@ -76,6 +77,7 @@ public static class FileDialog
     {
         options ??= new OpenFileDialogOptions();
         options.Multiselect = true;
+        options.Owner = ResolveOwner(options.Owner);
 
         var host = Application.IsRunning ? Application.Current.PlatformHost : Application.DefaultPlatformHost;
         return host.FileDialog.OpenFile(options);
@@ -87,6 +89,7 @@ public static class FileDialog
     public static string? SaveFile(SaveFileDialogOptions? options = null)
     {
         options ??= new SaveFileDialogOptions();
+        options.Owner = ResolveOwner(options.Owner);
 
         var host = Application.IsRunning ? Application.Current.PlatformHost : Application.DefaultPlatformHost;
         return host.FileDialog.SaveFile(options);
@@ -98,8 +101,38 @@ public static class FileDialog
     public static string? SelectFolder(FolderDialogOptions? options = null)
     {
         options ??= new FolderDialogOptions();
+        options.Owner = ResolveOwner(options.Owner);
 
         var host = Application.IsRunning ? Application.Current.PlatformHost : Application.DefaultPlatformHost;
         return host.FileDialog.SelectFolder(options);
+    }
+
+    // Resolve the active window's native handle as the dialog owner when the caller didn't set one, so the
+    // native/portal dialog is parented (transient + modal) to the application window instead of floating free.
+    private static nint ResolveOwner(nint current)
+    {
+        if (current != 0 || !Application.IsRunning)
+        {
+            return current;
+        }
+
+        var windows = Application.Current.AllWindows;
+        for (int i = 0; i < windows.Count; i++)
+        {
+            if (windows[i].IsActive && windows[i].Handle != 0)
+            {
+                return windows[i].Handle;
+            }
+        }
+
+        for (int i = 0; i < windows.Count; i++)
+        {
+            if (windows[i].Handle != 0)
+            {
+                return windows[i].Handle;
+            }
+        }
+
+        return 0;
     }
 }
