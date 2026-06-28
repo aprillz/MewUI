@@ -12,6 +12,9 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
     public bool CanDecode(ReadOnlySpan<byte> encoded) =>
         encoded.Length >= 3 && encoded[0] == 0xFF && encoded[1] == 0xD8 && encoded[2] == 0xFF;
 
+    public ImageOrientation ReadOrientation(ReadOnlySpan<byte> encoded) =>
+        ExifOrientationReader.ReadJpegOrientation(encoded);
+
     public bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
         bitmap = default;

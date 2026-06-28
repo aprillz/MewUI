@@ -24,4 +24,12 @@ public interface IImageDecoder
     /// <param name="bitmap">Decoded bitmap on success.</param>
     /// <returns><see langword="true"/> if decoding succeeded; otherwise, <see langword="false"/>.</returns>
     bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap);
+
+    /// <summary>
+    /// Reads the image orientation from the encoded metadata without decoding pixels. Kept separate from
+    /// <see cref="TryDecode(ReadOnlySpan{byte}, out Bgra32PixelBuffer)"/> so the fast byte[] pixel path is
+    /// preserved and the cheap metadata scan never forces an array copy. Defaults to
+    /// <see cref="ImageOrientation.Identity"/>; formats without orientation metadata need not override it.
+    /// </summary>
+    ImageOrientation ReadOrientation(ReadOnlySpan<byte> encoded) => ImageOrientation.Identity;
 }
