@@ -1683,6 +1683,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     {
         gdiImage.EnsureUpToDate();
 
+        // Honor the context's global alpha so image fades / opacity work. AlphaBlend's
+        // SourceConstantAlpha multiplies the (premultiplied) per-pixel alpha.
+        byte constAlpha = (byte)Math.Clamp((int)Math.Round(_stateManager.GlobalAlpha * 255.0), 0, 255);
+        if (constAlpha == 0)
+        {
+            return;
+        }
+
         // Check if the current transform requires GDI+ (rotation/skew).
         // GDI AlphaBlend only supports axis-aligned blitting.
         var m = _stateManager.Transform;
@@ -1730,7 +1738,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                 int oldStretchMode = Gdi32.SetStretchBltMode(Hdc, GdiConstants.COLORONCOLOR);
                 try
                 {
-                    var blend = BLENDFUNCTION.SourceOver(255);
+                    var blend = BLENDFUNCTION.SourceOver(constAlpha);
                     Gdi32.AlphaBlend(
                         Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
                         memDc, srcX, srcY, srcW, srcH,
@@ -1751,16 +1759,16 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             // per-frame box-filter copy (identity scale still walks pixel-by-pixel there).
             if (destPx.Width == srcW && destPx.Height == srcH)
             {
-                if (gdiImage.IsOpaque)
+                if (gdiImage.IsOpaque && constAlpha == 255)
                 {
-                    // All pixels alpha == 255 → SRCCOPY (~2-3x faster than AlphaBlend).
+                    // All pixels alpha == 255 and no global alpha → SRCCOPY (~2-3x faster than AlphaBlend).
                     Gdi32.BitBlt(
                         Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
                         memDc, srcX, srcY, GdiConstants.SRCCOPY);
                 }
                 else
                 {
-                    var blend11 = BLENDFUNCTION.SourceOver(255);
+                    var blend11 = BLENDFUNCTION.SourceOver(constAlpha);
                     Gdi32.AlphaBlend(
                         Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
                         memDc, srcX, srcY, srcW, srcH,
@@ -1808,7 +1816,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                 var oldScaled = Gdi32.SelectObject(scaledDc, scaledBmp);
                 try
                 {
-                    var blendScaled = BLENDFUNCTION.SourceOver(255);
+                    var blendScaled = BLENDFUNCTION.SourceOver(constAlpha);
                     Gdi32.AlphaBlend(
                         Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
                         scaledDc, 0, 0, destPx.Width, destPx.Height,
@@ -1837,7 +1845,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
             try
             {
-                var blend = BLENDFUNCTION.SourceOver(255);
+                var blend = BLENDFUNCTION.SourceOver(constAlpha);
                 Gdi32.AlphaBlend(
                     Hdc, destPx.left, destPx.top, destPx.Width, destPx.Height,
                     memDc, srcX, srcY, srcW, srcH,
@@ -1872,6 +1880,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var m = _stateManager.Transform;
         float dpi = (float)_dpiScale;
 
+        // Honor global alpha (applied via AlphaBlend on the cached path below). The uncached
+        // GDI+ DrawImageRectRect fallback does not yet apply it (rare rotated/skewed case).
+        byte constAlpha = (byte)Math.Clamp((int)Math.Round(_stateManager.GlobalAlpha * 255.0), 0, 255);
+        if (constAlpha == 0)
+        {
+            return;
+        }
+
         var effective = ImageScaleQuality == ImageScaleQuality.Default
             ? (_imageScaleQuality == ImageScaleQuality.Default ? ImageScaleQuality.Normal : _imageScaleQuality)
             : ImageScaleQuality;
@@ -1900,7 +1916,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             var oldTx = Gdi32.SelectObject(txDc, txBmp);
             try
             {
-                var blend = BLENDFUNCTION.SourceOver(255);
+                var blend = BLENDFUNCTION.SourceOver(constAlpha);
                 Gdi32.AlphaBlend(
                     Hdc, blitX, blitY, txW, txH,
                     txDc, 0, 0, txW, txH,

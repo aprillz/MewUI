@@ -1737,6 +1737,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         // typical cached-image-sized bitmaps and removes the aliasing seen on zoom-out /
         // window-shrink where cache pixels > target pixels. Fast keeps NEAREST for the
         // pan-responsiveness opt-out callers use during interaction.
+        // Honor the context's global alpha so image fades / opacity work (matches the image-brush
+        // path which already multiplies by _globalAlpha).
+        float opacity = _globalAlpha;
+
         if (_deviceContext != 0)
         {
             var interpolation = ImageScaleQuality switch
@@ -1746,7 +1750,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             };
             D2D1VTable.DrawBitmap(
                 (ID2D1DeviceContext*)_deviceContext,
-                bmp, dst, opacity: 1.0f, interpolation, src);
+                bmp, dst, opacity, interpolation, src);
             return;
         }
 
@@ -1756,7 +1760,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             ImageScaleQuality.Fast => D2D1_BITMAP_INTERPOLATION_MODE.NEAREST_NEIGHBOR,
             _ => D2D1_BITMAP_INTERPOLATION_MODE.LINEAR,
         };
-        D2D1VTable.DrawBitmap((ID2D1RenderTarget*)_renderTarget, bmp, dst, opacity: 1.0f, legacyInterp, src);
+        D2D1VTable.DrawBitmap((ID2D1RenderTarget*)_renderTarget, bmp, dst, opacity, legacyInterp, src);
     }
 
     /// <summary>
