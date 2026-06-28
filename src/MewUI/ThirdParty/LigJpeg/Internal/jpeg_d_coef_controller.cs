@@ -163,6 +163,25 @@ struct jpeg_d_coef_controller
                     m_MCU_ctr = MCU_col_num;
                     return ReadResult.JPEG_SUSPENDED;
                 }
+
+                /* JBLOCK is a value type, so the gather above copied blocks out of the virtual
+                 * array and decode_mcu refined those copies. Store them back, or every
+                 * progressive scan is lost and the image decodes to all-zero coefficients
+                 * (uniform mid-gray). */
+                int blknStore = 0;
+                for (int ci = 0; ci < m_cinfo.m_comps_in_scan; ci++)
+                {
+                    jpeg_component_info storeComp = m_cinfo.Comp_info![m_cinfo.m_cur_comp_info[ci]];
+                    int storeStartCol = MCU_col_num * storeComp.MCU_width;
+                    for (int yindex = 0; yindex < storeComp.MCU_height; yindex++)
+                    {
+                        for (int xindex = 0; xindex < storeComp.MCU_width; xindex++)
+                        {
+                            buffer[ci][yindex + yoffset][storeStartCol + xindex] = m_MCU_buffer[blknStore];
+                            blknStore++;
+                        }
+                    }
+                }
             }
             /* Completed an MCU row, but perhaps not an iMCU row */
             m_MCU_ctr = 0;

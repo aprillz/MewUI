@@ -17,7 +17,6 @@ namespace BitMiracle.LibJpeg.Classic;
 /// Contains simple error-reporting and trace-message routines.
 /// </summary>
 /// <remarks>This class is used by both the compression and decompression code.</remarks>
-/// <seealso href="41dc1a3b-0dea-4594-87d2-c213ab1049e1.htm" target="_self">Error handling</seealso>
 internal class jpeg_error_mgr
 {
     // The message ID code and any parameters are saved in fields below. 
@@ -45,7 +44,9 @@ internal class jpeg_error_mgr
     /// </value>
     /// <seealso cref="emit_message"/>
     public int Trace_level
-    { get => m_trace_level; set => m_trace_level = value;
+    {
+        get => m_trace_level; 
+        set => m_trace_level = value;
     }
 
     /// <summary>
@@ -56,10 +57,7 @@ internal class jpeg_error_mgr
     /// unless <see cref="emit_message">emit_message</see> chooses to abort. 
     /// <c>emit_message</c> should count warnings in <c>Num_warnings</c>. The surrounding application 
     /// can check for bad data by seeing if <c>Num_warnings</c> is nonzero at the end of processing.</remarks>
-    public int Num_warnings
-    {
-        get { return m_num_warnings; }
-    }
+    public int Num_warnings => m_num_warnings;
 
     /// <summary>
     /// Receives control for a fatal error.
@@ -92,7 +90,6 @@ internal class jpeg_error_mgr
     /// An application might override this method if it wanted to abort on 
     /// warnings or change the policy about which messages to display.
     /// </remarks>
-    /// <seealso href="41dc1a3b-0dea-4594-87d2-c213ab1049e1.htm" target="_self">Error handling</seealso>
     public virtual void emit_message(int msg_level)
     {
         if (msg_level < 0)
@@ -126,14 +123,11 @@ internal class jpeg_error_mgr
     /// Note that this method does not know how to generate a message, only where to send it.
     /// For extending a generation of messages see <see cref="format_message">format_message</see>.
     /// </remarks>
-    /// <seealso href="41dc1a3b-0dea-4594-87d2-c213ab1049e1.htm" target="_self">Error handling</seealso>
     public virtual void output_message()
     {
-        // Create the message
-        string buffer = format_message();
-
-        // Send it to console, adding a newline */
-        Console.WriteLine(buffer);
+        // Route JPEG warning/trace messages to the debugger only (no console noise).
+        // Debug.WriteLine is compiled out in Release, so this is a no-op there.
+        System.Diagnostics.Debug.WriteLine(format_message());
     }
 
     /// <summary>
@@ -143,7 +137,6 @@ internal class jpeg_error_mgr
     /// Few applications should need to override this method. One possible reason for doing so is to 
     /// implement dynamic switching of error message language.</remarks>
     /// <returns>The formatted message</returns>
-    /// <seealso href="41dc1a3b-0dea-4594-87d2-c213ab1049e1.htm" target="_self">Error handling</seealso>
     public virtual string format_message()
     {
         string msgtext = GetMessageText(m_msg_code);
@@ -185,7 +178,6 @@ internal class jpeg_error_mgr
     /// with the library's built-in messages.
     /// </remarks>
     /// <seealso cref="J_MESSAGE_CODE"/>
-    /// <seealso href="41dc1a3b-0dea-4594-87d2-c213ab1049e1.htm" target="_self">Error handling</seealso>
     protected virtual string GetMessageText(int code)
     {
         switch ((J_MESSAGE_CODE)code)
