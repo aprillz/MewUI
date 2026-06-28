@@ -3,16 +3,16 @@ using System.Text;
 
 namespace Aprillz.MewUI.Resources;
 
-internal static class TrueTypeNameTable
+internal static class OpenTypeNameTable
 {
-    public static bool TryGetFamilyName(string path, out string familyName)
+    public static bool TryGetFamilyName(string path, out string familyName, bool preferLegacyFamily = false)
     {
         familyName = string.Empty;
 
         try
         {
             using var fs = File.OpenRead(path);
-            return TryGetFamilyName(fs, out familyName);
+            return TryGetFamilyName(fs, out familyName, preferLegacyFamily);
         }
         catch
         {
@@ -21,7 +21,7 @@ internal static class TrueTypeNameTable
         }
     }
 
-    public static bool TryGetFamilyName(Stream stream, out string familyName)
+    public static bool TryGetFamilyName(Stream stream, out string familyName, bool preferLegacyFamily = false)
     {
         familyName = string.Empty;
 
@@ -31,7 +31,7 @@ internal static class TrueTypeNameTable
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
             ms.Position = 0;
-            return TryGetFamilyName(ms, out familyName);
+            return TryGetFamilyName(ms, out familyName, preferLegacyFamily);
         }
 
         long start = stream.Position;
@@ -46,11 +46,11 @@ internal static class TrueTypeNameTable
             // TTC header: 'ttcf'
             if (header[0] == (byte)'t' && header[1] == (byte)'t' && header[2] == (byte)'c' && header[3] == (byte)'f')
             {
-                return TryGetFamilyNameFromTtc(stream, start, out familyName);
+                return TryGetFamilyNameFromTtc(stream, start, out familyName, preferLegacyFamily);
             }
 
             stream.Position = start;
-            return TryGetFamilyNameFromSfnt(stream, start, out familyName);
+            return TryGetFamilyNameFromSfnt(stream, start, out familyName, preferLegacyFamily);
         }
         finally
         {
@@ -58,7 +58,7 @@ internal static class TrueTypeNameTable
         }
     }
 
-    private static bool TryGetFamilyNameFromTtc(Stream stream, long baseOffset, out string familyName)
+    private static bool TryGetFamilyNameFromTtc(Stream stream, long baseOffset, out string familyName, bool preferLegacyFamily)
     {
         familyName = string.Empty;
 
@@ -83,10 +83,10 @@ internal static class TrueTypeNameTable
         }
 
         uint firstFontOffset = ReadU32BE(offsetBytes);
-        return TryGetFamilyNameFromSfnt(stream, baseOffset + firstFontOffset, out familyName);
+        return TryGetFamilyNameFromSfnt(stream, baseOffset + firstFontOffset, out familyName, preferLegacyFamily);
     }
 
-    private static bool TryGetFamilyNameFromSfnt(Stream stream, long offset, out string familyName)
+    private static bool TryGetFamilyNameFromSfnt(Stream stream, long offset, out string familyName, bool preferLegacyFamily)
     {
         familyName = string.Empty;
         stream.Position = offset;
@@ -189,7 +189,7 @@ internal static class TrueTypeNameTable
             }
 
             var candidate = new NameRecordCandidate(platformId, languageId, nameId, length, strPos);
-            if (!hasBest || candidate.IsBetterThan(best))
+            if (!hasBest || candidate.IsBetterThan(best, preferLegacyFamily))
             {
                 best = candidate;
                 hasBest = true;
@@ -224,10 +224,10 @@ internal static class TrueTypeNameTable
 
     private readonly record struct NameRecordCandidate(ushort PlatformId, ushort LanguageId, ushort NameId, ushort Length, long StringPos)
     {
-        public bool IsBetterThan(NameRecordCandidate other)
+        public bool IsBetterThan(NameRecordCandidate other, bool preferLegacyFamily)
         {
-            int score = Score();
-            int otherScore = other.Score();
+            int score = Score(preferLegacyFamily);
+            int otherScore = other.Score(preferLegacyFamily);
             if (score != otherScore)
             {
                 return score > otherScore;
@@ -236,12 +236,13 @@ internal static class TrueTypeNameTable
             return Length > other.Length;
         }
 
-        private int Score()
+        private int Score(bool preferLegacyFamily)
         {
             int score = 0;
 
-            // Prefer typographic family.
-            if (NameId == 16)
+            // Prefer the Typographic Family (name 16) by default, or the legacy Font Family (name 1) when
+            // the caller requests it - some consumers match by the legacy family name, not the typographic.
+            if (NameId == (preferLegacyFamily ? 1 : 16))
             {
                 score += 20;
             }

@@ -18,12 +18,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
 
     public string Backend => BackendIdentifier;
 
-    /// <summary>
-    /// Gets the singleton instance of the GDI graphics factory.
-    /// </summary>
-    public static GdiGraphicsFactory Instance => field ??= new GdiGraphicsFactory();
-
-    private GdiGraphicsFactory() { }
+    internal GdiGraphicsFactory() { }
 
     private readonly RenderResourceCache _renderResourceCache = new();
 
@@ -68,7 +63,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         if (resolved != null)
         {
             _ = Win32Fonts.EnsurePrivateFont(resolved.Value.FilePath);
-            return resolved.Value.FamilyName;
+            return GdiFamilyName(resolved.Value.FilePath, resolved.Value.FamilyName);
         }
 
         // 2. Legacy: file path directly in FontFamily
@@ -80,10 +75,19 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         var path = Path.GetFullPath(familyOrPath);
         _ = Win32Fonts.EnsurePrivateFont(path);
 
-        return FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
+        var fallback = FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
             ? parsed
             : "Segoe UI";
+        return GdiFamilyName(path, fallback);
     }
+
+    // GDI's CreateFont matches the legacy Windows family name (name ID 1), not the typographic name
+    // (name ID 16) used elsewhere; for multi-weight fonts they differ and GDI would substitute a fallback.
+    private static string GdiFamilyName(string filePath, string fallbackFamily)
+        => OpenTypeNameTable.TryGetFamilyName(filePath, out var windowsFamily, preferLegacyFamily: true)
+                && !string.IsNullOrWhiteSpace(windowsFamily)
+            ? windowsFamily
+            : fallbackFamily;
 
     public IImage CreateImageFromFile(string path) =>
         CreateImageFromBytes(File.ReadAllBytes(path));

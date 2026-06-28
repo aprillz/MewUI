@@ -6,7 +6,9 @@ namespace Aprillz.MewUI.Rendering;
 public interface IFont : IDisposable
 {
     /// <summary>
-    /// Gets the font family name.
+    /// Gets the requested font family name - the family this font was created for, as the caller asked.
+    /// Implementations must report this (not a backend-resolved/substituted face name), so consumers can
+    /// compare against their requested family. Any internal name resolution stays inside the implementation.
     /// </summary>
     string Family { get; }
 

@@ -16,6 +16,10 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
     private nint _outlineDc;
     private nint _outlineOldObject;
 
+    // The weight-resolved GDI face name used to actually create the font, which can differ from the
+    // requested family. Kept internal so IFont.Family reports the requested family, not the resolved name.
+    private readonly string _gdiFace;
+
     internal nint Handle { get; private set; }
     private uint Dpi { get; }
 
@@ -26,9 +30,10 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
     private static readonly Dictionary<(string Family, FontWeight Weight), string?> _weightFaceCache = new();
 
     public GdiFont(string family, double size, FontWeight weight, bool italic, bool underline, bool strikethrough, uint dpi)
-        : base(ResolveFamily(family, weight), size, weight, italic, underline, strikethrough)
+        : base(family, size, weight, italic, underline, strikethrough)   // IFont.Family = the REQUESTED family
     {
         Dpi = dpi;
+        _gdiFace = ResolveFamily(family, weight);
 
         // Font size in this framework is in DIPs (1/96 inch). Convert to pixels for GDI.
         // Negative height means use character height, not cell height.
@@ -76,7 +81,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
             GdiConstants.CLIP_DEFAULT_PRECIS,
             quality,
             GdiConstants.DEFAULT_PITCH | GdiConstants.FF_DONTCARE,
-            Family
+            _gdiFace
         );
     }
 
@@ -111,14 +116,25 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
         var matrix = MAT2.Identity;
         GLYPHMETRICS metrics;
         uint glyph = ch;
-        uint size = GetGlyphOutlineW(_outlineDc, glyph, GdiConstants.GGO_NATIVE, &metrics, 0, null, &matrix);
+
+        // CFF / PostScript-outline OpenType fonts (.otf) reject GGO_NATIVE (0xFFFFFFFF); GGO_BEZIER
+        // returns cubic splines instead, handled by ParseGlyphOutline's TT_PRIM_CSPLINE branch. Without
+        // this fallback such fonts extract no outline at all (blank text).
+        uint format = GdiConstants.GGO_NATIVE;
+        uint size = GetGlyphOutlineW(_outlineDc, glyph, format, &metrics, 0, null, &matrix);
+        if (size == 0xFFFFFFFF)
+        {
+            format = GdiConstants.GGO_BEZIER;
+            size = GetGlyphOutlineW(_outlineDc, glyph, format, &metrics, 0, null, &matrix);
+        }
+
         advance = metrics.gmCellIncX * (96.0 / Dpi);
         if (size == 0xFFFFFFFF || size == 0) return size != 0xFFFFFFFF;
 
         var buffer = new byte[size];
         fixed (byte* bufferPtr = buffer)
         {
-            uint result = GetGlyphOutlineW(_outlineDc, glyph, GdiConstants.GGO_NATIVE, &metrics, size, bufferPtr, &matrix);
+            uint result = GetGlyphOutlineW(_outlineDc, glyph, format, &metrics, size, bufferPtr, &matrix);
             if (result == 0xFFFFFFFF)
             {
                 advance = metrics.gmCellIncX * (96.0 / Dpi);

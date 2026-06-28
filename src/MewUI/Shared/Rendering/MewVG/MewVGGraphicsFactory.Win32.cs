@@ -59,7 +59,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         if (resolved != null)
         {
             _ = Win32Fonts.EnsurePrivateFontFamily(resolved.Value.FilePath);
-            return resolved.Value.FamilyName;
+            return GdiFamilyName(resolved.Value.FilePath, resolved.Value.FamilyName);
         }
 
         // 2. Legacy: file path directly in FontFamily
@@ -71,10 +71,20 @@ public sealed partial class MewVGWin32GraphicsFactory
         var path = Path.GetFullPath(familyOrPath);
         _ = Win32Fonts.EnsurePrivateFontFamily(path);
 
-        return FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
+        var fallback = FontResources.TryGetParsedFamilyName(path, out var parsed) && !string.IsNullOrWhiteSpace(parsed)
             ? parsed
             : "Segoe UI";
+        return GdiFamilyName(path, fallback);
     }
+
+    // GDI's CreateFont matches the legacy Windows family name (name ID 1), while the rest of the
+    // framework (and DirectWrite) use the typographic family name (name ID 16). For multi-weight fonts
+    // these differ, so resolving by the typographic name makes GDI silently substitute a fallback face.
+    private static string GdiFamilyName(string filePath, string fallbackFamily)
+        => OpenTypeNameTable.TryGetFamilyName(filePath, out var windowsFamily, preferLegacyFamily: true)
+                && !string.IsNullOrWhiteSpace(windowsFamily)
+            ? windowsFamily
+            : fallbackFamily;
 
     private partial IDisposable CreateWindowResources(IWindowSurface surface)
     {
@@ -480,7 +490,9 @@ public sealed partial class MewVGWin32GraphicsFactory
             // PooledPboTexture which returns the uploader to the pool instead of
             // destroying the GL resources.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
+            // ownsSource: the image is the sole owner of the pooled texture; disposing it returns the
+            // uploader to the pool (otherwise a fresh uploader is allocated every frame -> leak).
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool), ownsSource: true);
         }
         catch
         {

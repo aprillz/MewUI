@@ -123,7 +123,7 @@ public static class FontResources
 
     private static FontEntry CreateEntry(string path)
     {
-        var parsed = TrueTypeNameTable.TryGetFamilyName(path, out var name) ? name : string.Empty;
+        var parsed = OpenTypeNameTable.TryGetFamilyName(path, out var name) ? name : string.Empty;
         // For a stream-supplied font, the control-level value is the cached file path.
         return new FontEntry(path, path, parsed);
     }
