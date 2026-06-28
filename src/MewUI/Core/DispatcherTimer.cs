@@ -171,6 +171,14 @@ public sealed class DispatcherTimer : IDisposable
                 return;
             }
 
+            // The handler may have re-armed us (e.g. Stop()+Start() inside Tick): in that case _scheduled
+            // is already a fresh tick, so re-arming again here would leak it and double-fire. Only schedule
+            // when the handler left us without a pending tick.
+            if (_scheduled != null)
+            {
+                return;
+            }
+
             _scheduled = (dispatcher as IDispatcherCore)!.Schedule(_interval, OnTick);
         }
     }
