@@ -139,6 +139,75 @@ public static class MessageBox
         return dlg.DialogResult;
     }
 
+    // Synchronous overloads. Block via a nested event loop (Window.ShowDialog) so they can be used from
+    // synchronous contexts such as Window.Closing. Prefer the *Async versions elsewhere.
+
+    public static void Notify(string message, PromptIconKind icon = PromptIconKind.Info, string? detail = null, Window? owner = null)
+    {
+        Prompt(new MessageBoxOptions
+        {
+            Message = message,
+            Icon = icon,
+            Detail = detail,
+            Owner = owner,
+            Buttons = MessageBoxWindow.ButtonsOk
+        });
+    }
+
+    public static bool Confirm(string message, PromptIconKind icon = PromptIconKind.Question, string? detail = null, Window? owner = null)
+    {
+        return Prompt(new MessageBoxOptions
+        {
+            Message = message,
+            Icon = icon,
+            Detail = detail,
+            Owner = owner,
+            Buttons = MessageBoxWindow.ButtonsOkCancel
+        }) == true;
+    }
+
+    public static bool AskYesNo(string message, PromptIconKind icon = PromptIconKind.Question, string? detail = null, Window? owner = null)
+    {
+        return Prompt(new MessageBoxOptions
+        {
+            Message = message,
+            Icon = icon,
+            Detail = detail,
+            Owner = owner,
+            Buttons = MessageBoxWindow.ButtonsYesNo
+        }) == true;
+    }
+
+    public static bool? AskYesNoCancel(string message, PromptIconKind icon = PromptIconKind.Question, string? detail = null, Window? owner = null)
+    {
+        return Prompt(new MessageBoxOptions
+        {
+            Message = message,
+            Icon = icon,
+            Detail = detail,
+            Owner = owner,
+            Buttons = MessageBoxWindow.ButtonsYesNoCancel
+        });
+    }
+
+    public static bool? Prompt(MessageBoxOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var owner = options.Owner ?? FindActiveWindow();
+
+        var dlg = new MessageBoxWindow(
+            message: options.Message,
+            icon: options.Icon,
+            buttons: options.Buttons,
+            detail: options.Detail,
+            checkBoxes: options.CheckBoxes,
+            title: options.Title);
+        dlg.SetMaxHeightFromOwner(owner);
+        dlg.ShowDialog(owner);
+        return dlg.DialogResult;
+    }
+
     private static Window? FindActiveWindow()
     {
         if (!Application.IsRunning) return null;
