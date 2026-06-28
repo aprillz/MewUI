@@ -158,6 +158,20 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     Span<byte> ICpuPixelSurface.GetWritablePixelSpan() => GetPixelSpan();
 
+    void ICpuPixelSurface.CommitCpuWrite()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // The CPU filter executor wrote into our pixel mirror (_pixels). Our draw/sample path reads the GL
+        // texture, not _pixels, so push the CPU bytes up to the texture - otherwise a CPU-fallback filter
+        // result (e.g. blur when the GLSL pass is unavailable) stays in CPU memory and renders empty.
+        InitializeFbo();
+        UploadToFbo();
+    }
+
     bool IDeferredCpuReadableSurface.HasPendingReadback => LockMode == LockMode.Readback;
 
     IRenderOperation IDeferredCpuReadableSurface.RequestReadback()
