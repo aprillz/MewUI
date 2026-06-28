@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Platform.MacOS;
 
 public sealed class MacOSPlatformHost : IPlatformHost
 {
+    public const string PlatformIdentifier = "MacOS";
+
     private readonly Dictionary<nint, MacOSWindowBackend> _windows = new();
     private readonly List<MacOSWindowBackend> _renderBackends = new();
     private MacOSDispatcher? _dispatcher;
@@ -11,9 +13,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
     private bool _running;
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
     private nint _lastInputWindow;
-    private long _lastFrameTicks;
     private int _themeUpdateRequested;
-    private bool _lastContinuous;
 
     public MacOSPlatformHost()
     {
@@ -216,14 +216,29 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
         _running = true;
         app.Dispatcher = _dispatcher;
-        _lastFrameTicks = Stopwatch.GetTimestamp();
-        _lastContinuous = app.RenderLoopSettings.IsContinuous;
 
         // Note: Window backend will create NSWindow on Show().
         mainWindow.Show();
 
         // Basic manual event loop (NSApplication without calling [NSApp run]).
-        while (_running)
+        PumpLoop(null);
+
+        app.Dispatcher = null;
+        _app = null;
+        MacOSInterop.TrySetThemeChangedCallback(null);
+    }
+
+    /// <summary>
+    /// Runs the event/render loop until the app quits and, when <paramref name="keepRunning"/> is supplied,
+    /// until it returns false. Shared by <see cref="Run"/> and <see cref="RunNestedLoop"/>.
+    /// </summary>
+    private void PumpLoop(Func<bool>? keepRunning)
+    {
+        var app = _app!;
+        long lastFrameTicks = Stopwatch.GetTimestamp();
+        bool lastContinuous = app.RenderLoopSettings.IsContinuous;
+
+        while (_running && (keepRunning == null || keepRunning()))
         {
             try
             {
@@ -238,7 +253,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
             }
 
             var scheduler = app.RenderLoopSettings;
-            if (_lastContinuous && !scheduler.IsContinuous)
+            if (lastContinuous && !scheduler.IsContinuous)
             {
                 foreach (var backend in _windows.Values)
                 {
@@ -306,7 +321,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
                     RequestRender();
                 }
             }
-            _lastContinuous = scheduler.IsContinuous;
+            lastContinuous = scheduler.IsContinuous;
 
             if (!_running)
             {
@@ -316,12 +331,12 @@ public sealed class MacOSPlatformHost : IPlatformHost
             if (scheduler.IsContinuous && scheduler.TargetFps <= 0)
             {
                 Thread.Yield();
-                _dispatcher.ClearWakeRequest();
+                _dispatcher!.ClearWakeRequest();
                 continue;
             }
 
             int timeoutMs;
-            if (_dispatcher.HasPendingWork)
+            if (_dispatcher!.HasPendingWork)
             {
                 timeoutMs = 0;
             }
@@ -335,7 +350,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
                         long ticksPerSecond = Stopwatch.Frequency;
                         long frameTicks = ticksPerSecond / fps;
                         long now = Stopwatch.GetTimestamp();
-                        long elapsed = now - _lastFrameTicks;
+                        long elapsed = now - lastFrameTicks;
 
                         int frameWaitMs = 0;
                         if (elapsed < frameTicks)
@@ -345,7 +360,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
                         int timerWaitMs = _dispatcher.GetPollTimeoutMs(maxMs: frameWaitMs <= 0 ? 1000 : frameWaitMs);
                         timeoutMs = frameWaitMs <= 0 ? timerWaitMs : (timerWaitMs < 0 ? frameWaitMs : Math.Min(frameWaitMs, timerWaitMs));
-                        _lastFrameTicks = Stopwatch.GetTimestamp();
+                        lastFrameTicks = Stopwatch.GetTimestamp();
                     }
                     else
                     {
@@ -384,10 +399,15 @@ public sealed class MacOSPlatformHost : IPlatformHost
             }
             _dispatcher.ClearWakeRequest();
         }
+    }
 
-        app.Dispatcher = null;
-        _app = null;
-        MacOSInterop.TrySetThemeChangedCallback(null);
+    public void RunNestedLoop(Func<bool> keepRunning)
+    {
+        ArgumentNullException.ThrowIfNull(keepRunning);
+        if (_running)
+        {
+            PumpLoop(keepRunning);
+        }
     }
 
     private void CleanupClosedWindows()

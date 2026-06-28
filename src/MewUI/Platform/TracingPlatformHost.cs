@@ -65,6 +65,12 @@ internal sealed class TracingPlatformHost : IPlatformHost
         _inner.DoEvents();
     }
 
+    public void RunNestedLoop(Func<bool> keepRunning)
+    {
+        DiagLog.Write($"[PlatformHost#{_id}] RunNestedLoop");
+        _inner.RunNestedLoop(keepRunning);
+    }
+
     public void Dispose()
     {
         DiagLog.Write($"[PlatformHost#{_id}] Dispose");
