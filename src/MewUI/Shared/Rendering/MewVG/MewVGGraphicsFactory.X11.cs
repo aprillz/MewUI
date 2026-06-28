@@ -13,8 +13,17 @@ public sealed partial class MewVGX11GraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.X11";
 
+    /// <summary>The active GL backend (GLX or EGL), chosen once at registration via
+    /// <c>MewVGX11Backend.Register</c> / <c>RegisterEgl</c>.</summary>
+    private static IX11GLBackend GLBackend =>
+        X11GLBackendRegistry.Current ?? throw new InvalidOperationException("MewVG X11 GL backend not registered.");
+
+    /// <summary>Current GL context handle on the calling thread for the active backend.</summary>
+    internal static nint GetCurrentGLContextStatic()
+        => X11GLBackendRegistry.Current?.GetCurrentContext() ?? 0;
+
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
-        new MewVGGLOffscreenSurfaceProvider(LibGL.glXGetCurrentContext);
+        new MewVGGLOffscreenSurfaceProvider(GetCurrentGLContextStatic);
 
     // -------------------------------------------------------------------------
     // Shared worker GLX context (background offscreen render support).
@@ -30,14 +39,16 @@ public sealed partial class MewVGX11GraphicsFactory
 
     private readonly object _workerActivationLock = new();
     private readonly object _workerCtxInitLock = new();
-    private nint _workerCtx;
+    // Shared offscreen "share-list root" GL context (GLX or EGL). Window contexts share with it
+    // so worker-rendered FBO textures are sample-able from window contexts.
+    private IOpenGLWindowResources? _worker;
     // First-window display + drawable + visual — captured at first window
     // creation and reused for worker context init / activation. Single-display
     // X11 process is the assumed common case; multi-display would need per-
     // display worker contexts (not supported here).
     private nint _workerDisplay;
     private nint _workerDrawable;
-    private X11GlxVisualInfo _workerVisualInfo;
+    private X11GLVisualInfo _workerVisualInfo;
     private bool _workerHasVisualInfo;
     private bool _workerInitFailed;
 
@@ -50,7 +61,7 @@ public sealed partial class MewVGX11GraphicsFactory
         get
         {
             EnsureWorkerContext();
-            return _workerCtx;
+            return _worker?.NativeContext ?? 0;
         }
     }
 
@@ -58,7 +69,7 @@ public sealed partial class MewVGX11GraphicsFactory
     /// created so the worker context can be initialized lazily against the same
     /// GLX visual. Called from <see cref="CreateWindowResources"/> before the
     /// window's own context is made.</summary>
-    private void CaptureFirstWindowGlxInfo(nint display, nint window, X11GlxVisualInfo visualInfo)
+    private void CaptureFirstWindowGLInfo(nint display, nint window, X11GLVisualInfo visualInfo)
     {
         if (_workerHasVisualInfo) return;
         lock (_workerCtxInitLock)
@@ -73,51 +84,21 @@ public sealed partial class MewVGX11GraphicsFactory
 
     private void EnsureWorkerContext()
     {
-        if (_workerCtx != 0 || _workerInitFailed) return;
+        if (_worker != null || _workerInitFailed) return;
         lock (_workerCtxInitLock)
         {
-            if (_workerCtx != 0 || _workerInitFailed) return;
+            if (_worker != null || _workerInitFailed) return;
             if (!_workerHasVisualInfo)
             {
                 // No window has been created yet — can't initialize without a
-                // GLX visual. Caller should retry after a window exists.
+                // visual. Caller should retry after a window exists.
                 return;
             }
 
             try
             {
-                var native = new XVisualInfo
-                {
-                    visual = _workerVisualInfo.Visual,
-                    visualid = _workerVisualInfo.VisualId,
-                    screen = _workerVisualInfo.Screen,
-                    depth = _workerVisualInfo.Depth,
-                    @class = _workerVisualInfo.Class,
-                    red_mask = _workerVisualInfo.RedMask,
-                    green_mask = _workerVisualInfo.GreenMask,
-                    blue_mask = _workerVisualInfo.BlueMask,
-                    colormap_size = _workerVisualInfo.ColormapSize,
-                    bits_per_rgb = _workerVisualInfo.BitsPerRgb,
-                };
-
-                nint visualInfoMem = Marshal.AllocHGlobal(Marshal.SizeOf<XVisualInfo>());
-                try
-                {
-                    Marshal.StructureToPtr(native, visualInfoMem, fDeleteOld: false);
-                    // shareList = 0 — worker context is the SHARE-LIST ROOT. All
-                    // window contexts created henceforth share with it.
-                    nint ctx = LibGL.glXCreateContext(_workerDisplay, visualInfoMem, 0, 1);
-                    if (ctx == 0)
-                    {
-                        throw new InvalidOperationException("Worker GLX context: glXCreateContext failed.");
-                    }
-                    _workerCtx = ctx;
-                    DiagLog.Write($"[GLX] Worker context created ctx=0x{ctx.ToInt64():X}");
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(visualInfoMem);
-                }
+                // Backend creates the share-root context (GLX share-list root, or surfaceless EGL).
+                _worker = GLBackend.CreateWorkerResources(_workerDisplay, _workerDrawable, _workerVisualInfo);
             }
             catch
             {
@@ -131,11 +112,8 @@ public sealed partial class MewVGX11GraphicsFactory
     {
         lock (_workerCtxInitLock)
         {
-            if (_workerCtx != 0 && _workerDisplay != 0)
-            {
-                LibGL.glXDestroyContext(_workerDisplay, _workerCtx);
-                _workerCtx = 0;
-            }
+            _worker?.Dispose();
+            _worker = null;
         }
     }
 
@@ -164,7 +142,7 @@ public sealed partial class MewVGX11GraphicsFactory
 
     private partial IDisposable CreateWindowResources(IWindowSurface surface)
     {
-        if (surface is not IX11GlxWindowSurface glx)
+        if (surface is not IX11GLWindowSurface glx)
         {
             throw new ArgumentException("MewVG (X11) requires an X11 GLX window surface.", nameof(surface));
         }
@@ -174,15 +152,15 @@ public sealed partial class MewVGX11GraphicsFactory
         // we can pass the worker context as shareList. Window contexts created
         // before any worker scope can still proceed (no share); only background
         // rendering benefits from sharing.
-        CaptureFirstWindowGlxInfo(glx.Display, glx.Window, glx.VisualInfo);
+        CaptureFirstWindowGLInfo(glx.Display, glx.Window, glx.VisualInfo);
         EnsureWorkerContext();
 
-        return MewVGX11WindowResources.Create(glx.Display, glx.Window, glx.VisualInfo, _workerCtx);
+        return MewVGX11WindowResources.Create(glx.Display, glx.Window, glx.VisualInfo, _worker?.NativeContext ?? 0);
     }
 
     private partial IGraphicsContext CreateContextCore(WindowRenderTarget target, IDisposable resources)
     {
-        if (target.Surface is not IX11GlxWindowSurface glx)
+        if (target.Surface is not IX11GLWindowSurface glx)
         {
             throw new ArgumentException("MewVG (X11) requires an X11 GLX window surface.", nameof(target));
         }
@@ -208,7 +186,7 @@ public sealed partial class MewVGX11GraphicsFactory
             pixelHeight,
             dpiScale,
             _offscreenProvider.QueueTargetDisposal,
-            LibGL.glXGetCurrentContext,
+            GetCurrentGLContextStatic,
             hasAlpha);
         handled = true;
     }
@@ -249,13 +227,13 @@ public sealed partial class MewVGX11GraphicsFactory
     {
         // Safety: if a context is already current on this thread (UI thread
         // re-entering during render, or re-entrant Task.Run), don't disturb it.
-        if (LibGL.glXGetCurrentContext() != 0)
+        if (GetCurrentGLContextStatic() != 0)
         {
             return MewVGNoOpRenderScope.Instance;
         }
 
         EnsureWorkerContext();
-        if (_workerCtx == 0)
+        if (_worker == null)
         {
             // Worker context isn't available yet (no window has been created, so
             // we don't have a GLX visual). Caller proceeds without a worker scope
@@ -270,12 +248,11 @@ public sealed partial class MewVGX11GraphicsFactory
         Monitor.Enter(_workerActivationLock);
         try
         {
-            // Worker context renders only into FBOs, so the drawable just needs
-            // to be GLX-compatible — reusing the first window's drawable is
-            // safe and avoids the Pbuffer setup boilerplate.
-            if (!LibGL.glXMakeCurrent(_workerDisplay, _workerDrawable, _workerCtx))
+            // Worker context renders only into FBOs. GLX reuses the first window's
+            // drawable; EGL uses a surfaceless current (EGL_KHR_surfaceless_context).
+            if (!MakeWorkerCurrent())
             {
-                throw new InvalidOperationException("glXMakeCurrent (worker) failed.");
+                throw new InvalidOperationException("MakeCurrent (worker) failed.");
             }
         }
         catch
@@ -283,19 +260,28 @@ public sealed partial class MewVGX11GraphicsFactory
             Monitor.Exit(_workerActivationLock);
             throw;
         }
-        return new X11WorkerContextScope(_workerActivationLock, _workerDisplay);
+        return new X11WorkerContextScope(_workerActivationLock, this);
     }
+
+    private bool MakeWorkerCurrent()
+    {
+        _worker!.MakeCurrent(_workerDisplay);
+        // IOpenGLWindowResources.MakeCurrent has no return; confirm via the active context handle.
+        return GLBackend.GetCurrentContext() == _worker.NativeContext;
+    }
+
+    internal void ReleaseWorkerCurrentInternal() => _worker?.ReleaseCurrent();
 
     private sealed class X11WorkerContextScope : IDisposable
     {
         private readonly object _activationLock;
-        private readonly nint _display;
+        private readonly MewVGX11GraphicsFactory _factory;
         private bool _disposed;
 
-        public X11WorkerContextScope(object activationLock, nint display)
+        public X11WorkerContextScope(object activationLock, MewVGX11GraphicsFactory factory)
         {
             _activationLock = activationLock;
-            _display = display;
+            _factory = factory;
         }
 
         public void Dispose()
@@ -306,9 +292,9 @@ public sealed partial class MewVGX11GraphicsFactory
             {
                 // Block until all pending GPU work on the worker context completes
                 // so FBO texture content is fully committed before any UI window
-                // context (share-listed with us) samples it.
+                // context (shared with us) samples it.
                 LibGL.glFinish();
-                LibGL.glXMakeCurrent(_display, 0, 0);
+                _factory.ReleaseWorkerCurrentInternal();
             }
             finally
             {
@@ -326,7 +312,8 @@ public sealed partial class MewVGX11GraphicsFactory
         {
             // See Win32 partial for the pooling rationale — same applies on X11/GLX.
             var uploader = _pboPool.Rent(source);
-            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool));
+            // ownsSource: image is sole owner; dispose returns the uploader to the pool (else leak).
+            image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool), ownsSource: true);
         }
         catch
         {

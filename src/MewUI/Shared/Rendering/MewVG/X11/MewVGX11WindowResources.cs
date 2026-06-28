@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 internal sealed class MewVGX11WindowResources : IDisposable
 {
     private readonly nint _display;
-    private readonly GlxOpenGLWindowResources _gl;
+    private readonly IOpenGLWindowResources _gl;
     private bool _disposed;
 
     public NanoVGGL Vg { get; }
@@ -33,23 +33,24 @@ internal sealed class MewVGX11WindowResources : IDisposable
         }
     }
 
-    private MewVGX11WindowResources(nint display, GlxOpenGLWindowResources gl, NanoVGGL vg, nint shareContext)
+    private MewVGX11WindowResources(nint display, IOpenGLWindowResources gl, NanoVGGL vg, nint shareContext)
     {
         _display = display;
         _gl = gl;
         Vg = vg;
         TextCache = new MewVGTextCache(vg);
-        OpenGLShareGroup = shareContext != 0 ? shareContext : gl.GlxContext;
+        OpenGLShareGroup = shareContext != 0 ? shareContext : gl.NativeContext;
     }
 
-    public static MewVGX11WindowResources Create(nint display, nint window, X11GlxVisualInfo visualInfo, nint shareContext = 0)
+    public static MewVGX11WindowResources Create(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext = 0)
     {
-        DiagLog.Write($"MewVG X11 create: display=0x{display.ToInt64():X} window=0x{window.ToInt64():X} share=0x{shareContext.ToInt64():X}");
+        DiagLog.Write($"MewVG X11 create: display=0x{display.ToInt64():X} window=0x{window.ToInt64():X} share=0x{shareContext.ToInt64():X} backend={X11GLBackendRegistry.Current?.GetType().Name}");
 
-        // NanoVG uses stencil for AA and clipping; request a stencil buffer via GLX visual info.
-        // shareContext = factory's worker GLX context, so worker-rendered FBO textures are
-        // sample-able from this window context (background offscreen handoff).
-        var gl = GlxOpenGLWindowResources.Create(display, window, visualInfo, shareContext);
+        // NanoVG uses stencil for AA and clipping; request a stencil buffer via the visual info.
+        // shareContext = factory's worker context, so worker-rendered FBO textures are sample-able
+        // from this window context (background offscreen handoff). The active backend (GLX by
+        // default, EGL when selected for dma_buf/EGLImage zero-copy) creates the window context.
+        IOpenGLWindowResources gl = X11GLBackendRegistry.Current!.CreateWindowResources(display, window, visualInfo, shareContext);
         gl.MakeCurrent(display);
         try
         {

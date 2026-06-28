@@ -4,19 +4,19 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 /// Minimal GLX surface information for an X11 window.
 /// This is produced by the X11 platform backend and consumed by OpenGL (GLX) backends.
 /// </summary>
-public interface IX11GlxWindowSurface : IWindowSurface
+public interface IX11GLWindowSurface : IWindowSurface
 {
     nint Display { get; }
 
     nint Window { get; }
 
-    X11GlxVisualInfo VisualInfo { get; }
+    X11GLVisualInfo VisualInfo { get; }
 }
 
 /// <summary>
 /// Portable representation of XVisualInfo used for GLX context creation.
 /// </summary>
-public readonly struct X11GlxVisualInfo
+public readonly struct X11GLVisualInfo
 {
     public nint Visual { get; }
     public nint VisualId { get; }
@@ -29,7 +29,7 @@ public readonly struct X11GlxVisualInfo
     public int ColormapSize { get; }
     public int BitsPerRgb { get; }
 
-    public X11GlxVisualInfo(
+    public X11GLVisualInfo(
         nint visual,
         nint visualId,
         int screen,
