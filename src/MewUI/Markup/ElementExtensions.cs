@@ -425,6 +425,19 @@ public static class ElementExtensions
     }
 
     /// <summary>
+    /// Sets whether the entire native non-client area (title bar and border) is removed.
+    /// </summary>
+    /// <typeparam name="T">Window type.</typeparam>
+    /// <param name="window">Target window.</param>
+    /// <param name="value">Whether the window is borderless.</param>
+    /// <returns>The window for chaining.</returns>
+    public static T Borderless<T>(this T window, bool value = true) where T : Window
+    {
+        window.Borderless = value;
+        return window;
+    }
+
+    /// <summary>
     /// Sets platform-specific window options.
     /// </summary>
     /// <typeparam name="T">Window type.</typeparam>
@@ -450,6 +463,21 @@ public static class ElementExtensions
         where T : Window
     {
         window.WindowState = value;
+        return window;
+    }
+
+    /// <summary>
+    /// Puts the window into fullscreen, or restores it to normal when <paramref name="value"/> is false.
+    /// </summary>
+    /// <typeparam name="T">Window type.</typeparam>
+    /// <param name="window">Target window.</param>
+    /// <param name="value">Whether the window is fullscreen.</param>
+    /// <returns>The window for chaining.</returns>
+    public static T FullScreen<T>(this T window, bool value = true) where T : Window
+    {
+        window.WindowState = value
+            ? global::Aprillz.MewUI.Controls.WindowState.FullScreen
+            : global::Aprillz.MewUI.Controls.WindowState.Normal;
         return window;
     }
 

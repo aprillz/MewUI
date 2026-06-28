@@ -189,6 +189,13 @@ public interface IWindowBackend : IDisposable
     void SetExtendClientAreaToTitleBar(double titleBarHeight) { }
 
     /// <summary>
+    /// Removes (or restores) the entire native non-client area (title bar and border).
+    /// Independent of <see cref="SetWindowState"/>; the value is preserved across fullscreen transitions.
+    /// </summary>
+    /// <param name="value"><see langword="true"/> for a borderless window; otherwise, <see langword="false"/>.</param>
+    void SetBorderless(bool value) { }
+
+    /// <summary>
     /// Sets the native window border color (Win11+, macOS).
     /// Use <see langword="null"/> to restore the default.
     /// </summary>

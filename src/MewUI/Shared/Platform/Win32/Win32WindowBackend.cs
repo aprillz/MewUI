@@ -34,7 +34,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private uint _savedConversion;
     private uint _savedSentence;
     private nint _currentCursor;
+    private bool _cursorHidden;
     private bool _isTrackingMouseLeave;
+    private bool _isFullScreen;
+    private RECT _savedFullScreenRect;
     private const uint MonitorDefaultToPrimary = 1;
     private const uint MonitorDefaultToNearest = 2;
 
@@ -82,6 +85,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
         CreateWindow();
         Window.PerformLayout();
         ApplyResolvedStartupPosition();
+
+        // No SW_* command maps to fullscreen. Apply the fullscreen geometry while the window is still
+        // hidden so the first paint is already full-screen (avoids a small-window-then-grow flash).
+        if (Window.WindowState == Controls.WindowState.FullScreen)
+        {
+            EnterFullScreen();
+        }
+
         var showCmd = Window.IsOverlayWindow
             // Input-transparent overlays must not take activation away from the source window.
             ? ShowWindowCommands.SW_SHOWNOACTIVATE
@@ -133,6 +144,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         if (Handle == 0) return;
 
+        if (state == Controls.WindowState.FullScreen)
+        {
+            EnterFullScreen();
+            return;
+        }
+
+        if (_isFullScreen)
+        {
+            ExitFullScreen();
+        }
+
         var cmd = state switch
         {
             Controls.WindowState.Minimized => ShowWindowCommands.SW_MINIMIZE,
@@ -153,6 +175,62 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 SetClientSize(rb.Width, rb.Height);
             }
         }
+    }
+
+    public void SetBorderless(bool value)
+    {
+        if (Handle == 0) return;
+        // Borderless is read from Window.Borderless inside GetWindowStyle; recompute the native style.
+        ApplyWindowStyle();
+    }
+
+    // Reapplies the recomputed window style (preserving the visible bit) and forces a frame recalc.
+    private void ApplyWindowStyle()
+    {
+        const int GWL_STYLE = -16;
+        const uint WS_VISIBLE = 0x10000000;
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_FRAMECHANGED = 0x0020;
+
+        uint current = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
+        uint style = GetWindowStyle() | (current & WS_VISIBLE);
+        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    }
+
+    private void EnterFullScreen()
+    {
+        if (_isFullScreen) return;
+
+        User32.GetWindowRect(Handle, out _savedFullScreenRect);
+        _isFullScreen = true;
+        ApplyWindowStyle(); // GetWindowStyle now returns WS_POPUP
+
+        var monitor = User32.MonitorFromWindow(Handle, MonitorDefaultToNearest);
+        var mi = MONITORINFO.Create();
+        if (User32.GetMonitorInfo(monitor, ref mi))
+        {
+            // Cover the full monitor (rcMonitor), not the work area, so the taskbar is hidden.
+            var r = mi.rcMonitor;
+            const uint SWP_NOZORDER = 0x0004;
+            const uint SWP_FRAMECHANGED = 0x0020;
+            User32.SetWindowPos(Handle, 0, r.left, r.top, r.Width, r.Height, SWP_NOZORDER | SWP_FRAMECHANGED);
+        }
+    }
+
+    private void ExitFullScreen()
+    {
+        if (!_isFullScreen) return;
+
+        _isFullScreen = false;
+        ApplyWindowStyle(); // restore borderless or overlapped style per Window.Borderless
+
+        var r = _savedFullScreenRect;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_FRAMECHANGED = 0x0020;
+        User32.SetWindowPos(Handle, 0, r.left, r.top, r.Width, r.Height, SWP_NOZORDER | SWP_FRAMECHANGED);
     }
 
     public void SetCanMinimize(bool value)
@@ -556,12 +634,20 @@ internal sealed class Win32WindowBackend : IWindowBackend
         switch (msg)
         {
             case WindowMessages.WM_SETCURSOR:
-                // If we have a custom cursor and the hit test is in the client area, apply it
-                // and return TRUE to prevent DefWindowProc from resetting the cursor.
-                if ((lParam & 0xFFFF) == 1 /* HTCLIENT */ && _currentCursor != 0)
+                // For a client-area hit, apply our cursor (or hide it) and return TRUE to prevent
+                // DefWindowProc from resetting it to the arrow on every move.
+                if ((lParam & 0xFFFF) == 1 /* HTCLIENT */)
                 {
-                    User32.SetCursor(_currentCursor);
-                    return 1;
+                    if (_cursorHidden)
+                    {
+                        User32.SetCursor(0);
+                        return 1;
+                    }
+                    if (_currentCursor != 0)
+                    {
+                        User32.SetCursor(_currentCursor);
+                        return 1;
+                    }
                 }
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
@@ -1220,6 +1306,12 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return WindowStyles.WS_POPUP | WindowStyles.WS_SYSMENU | WindowStyles.WS_THICKFRAME;
         }
 
+        // Borderless or fullscreen: strip the entire native non-client frame.
+        if (Window.Borderless || _isFullScreen)
+        {
+            return WindowStyles.WS_POPUP;
+        }
+
         {
             uint style = WindowStyles.WS_OVERLAPPEDWINDOW;
             if (Window.IsDialogWindow)
@@ -1714,7 +1806,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             SIZE_RESTORED => Controls.WindowState.Normal,
             _ => Window.WindowState,
         };
-        if (newState != Window.WindowState)
+        // While fullscreen, the monitor-cover SetWindowPos emits SIZE_RESTORED; do not let it revert the state.
+        if (!_isFullScreen && newState != Window.WindowState)
             Window.SetWindowStateFromBackend(newState);
 
         Window.RaiseClientSizeChanged(widthPx / Window.DpiScale, heightPx / Window.DpiScale);
@@ -2463,6 +2556,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public void SetCursor(CursorType cursorType)
     {
+        if (cursorType == CursorType.None)
+        {
+            _cursorHidden = true;
+            _currentCursor = 0;
+            User32.SetCursor(0);
+            return;
+        }
+
+        _cursorHidden = false;
+
         nint id = cursorType switch
         {
             CursorType.Arrow => SystemCursors.IDC_ARROW,

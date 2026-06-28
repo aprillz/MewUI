@@ -11,10 +11,19 @@ internal static partial class X11
     public static partial nint XFree(nint data);
 
     [LibraryImport(LibraryName)]
+    public static partial nint XGetVisualInfo(nint display, long vinfoMask, ref XVisualInfo vinfoTemplate, out int nitems);
+
+    [LibraryImport(LibraryName)]
     public static partial nint XOpenDisplay(nint displayName);
 
     [LibraryImport(LibraryName)]
     public static partial int XCloseDisplay(nint display);
+
+    // Installs a process-wide async error handler (returns the previous one). The handler is a native
+    // function pointer: int handler(Display*, XErrorEvent*). Used to log/swallow Xlib's async protocol
+    // errors instead of the default handler's print-and-exit.
+    [LibraryImport(LibraryName)]
+    public static partial nint XSetErrorHandler(nint handler);
 
     [LibraryImport(LibraryName)]
     public static partial int XDefaultScreen(nint display);
@@ -240,6 +249,15 @@ internal static partial class X11
     public static partial int XFreeCursor(nint display, nint cursor);
 
     [LibraryImport(LibraryName)]
+    public static partial nint XCreateBitmapFromData(nint display, nint drawable, ReadOnlySpan<byte> data, uint width, uint height);
+
+    [LibraryImport(LibraryName)]
+    public static partial nint XCreatePixmapCursor(nint display, nint source, nint mask, ref XColor foreground, ref XColor background, uint x, uint y);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XFreePixmap(nint display, nint pixmap);
+
+    [LibraryImport(LibraryName)]
     public static partial int XTranslateCoordinates(
         nint display,
         nint src_w,
@@ -378,6 +396,17 @@ internal struct XMotionEvent
     public byte is_hint;
     [MarshalAs(UnmanagedType.Bool)]
     public bool same_screen;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XColor
+{
+    public ulong pixel;
+    public ushort red;
+    public ushort green;
+    public ushort blue;
+    public byte flags;
+    public byte pad;
 }
 
 [StructLayout(LayoutKind.Explicit, Size = 192)]

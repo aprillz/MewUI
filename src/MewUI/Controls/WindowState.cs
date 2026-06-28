@@ -13,4 +13,7 @@ public enum WindowState
 
     /// <summary>The window is maximized to fill the screen work area.</summary>
     Maximized,
+
+    /// <summary>The window covers the entire monitor with no chrome, over the taskbar/panel/menu bar.</summary>
+    FullScreen,
 }

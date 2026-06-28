@@ -131,12 +131,31 @@ internal static unsafe class MacOSWindowInterop
     private static nint SelOpenHandCursor;
     private static nint SelCursorSet;
 
+    // NSCursor hide/unhide are stacked (counted); keep them balanced so the pointer reappears exactly once.
+    private static bool _cursorHidden;
+
     public static void SetCursor(CursorType cursorType)
     {
         EnsureInitialized();
         if (ClsNSCursor == 0 || SelCursorSet == 0)
         {
             return;
+        }
+
+        if (cursorType == CursorType.None)
+        {
+            if (!_cursorHidden)
+            {
+                _cursorHidden = true;
+                ObjC.MsgSend_void(ClsNSCursor, ObjC.Sel("hide"));
+            }
+            return;
+        }
+
+        if (_cursorHidden)
+        {
+            _cursorHidden = false;
+            ObjC.MsgSend_void(ClsNSCursor, ObjC.Sel("unhide"));
         }
 
         nint sel = cursorType switch
@@ -2023,7 +2042,7 @@ internal static unsafe class MacOSWindowInterop
             nint window = GetWindowFromNotification(notification);
             if (window != 0 && TryGetWindowCloseTarget(window, out var backend))
             {
-                backend.Window.SetWindowStateFromBackend(Controls.WindowState.Maximized);
+                backend.Window.SetWindowStateFromBackend(Controls.WindowState.FullScreen);
                 // Re-apply extended client area after fullscreen transition completes.
                 if (backend._extendTitleBarHeight > 0)
                 {
@@ -2050,8 +2069,14 @@ internal static unsafe class MacOSWindowInterop
             if (window != 0 && TryGetWindowCloseTarget(window, out var backend))
             {
                 backend.Window.SetWindowStateFromBackend(Controls.WindowState.Normal);
+                // Restore the borderless mask if the window was promoted to titled just for fullscreen.
+                if (backend._borderlessBeforeFullScreen)
+                {
+                    backend._borderlessBeforeFullScreen = false;
+                    MacOSWindowInterop.SetWindowStyleMask(window, 0);
+                }
                 // Re-apply extended client area after fullscreen transition completes.
-                if (backend._extendTitleBarHeight > 0)
+                else if (backend._extendTitleBarHeight > 0)
                 {
                     const ulong ExtendedStyleMask = 1ul | 2ul | 4ul | 8ul | (1ul << 15);
                     MacOSWindowInterop.SetWindowStyleMask(window, ExtendedStyleMask);

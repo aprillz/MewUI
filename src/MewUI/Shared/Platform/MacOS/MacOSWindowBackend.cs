@@ -61,6 +61,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private int _reshapeRendering;
     private long _defaultWindowLevel;
     private ulong _defaultStyleMask;
+    // Set when a borderless window was temporarily promoted to titled to allow native fullscreen.
+    internal bool _borderlessBeforeFullScreen;
     private bool? _lastMetalDisplaySyncEnabled;
     private bool? _lastMetalPresentsWithTransaction;
 
@@ -364,6 +366,30 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
+        bool isFullScreen = IsNativeFullScreen();
+
+        if (state == Controls.WindowState.FullScreen)
+        {
+            if (!isFullScreen)
+            {
+                // Native fullscreen requires a titled window; promote a borderless one for the duration.
+                if (MacOSWindowInterop.GetWindowStyleMask(_nsWindow) == 0)
+                {
+                    _borderlessBeforeFullScreen = true;
+                    MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _defaultStyleMask);
+                }
+                ObjC.MsgSend_void_nint_nint(_nsWindow, ObjC.Sel("toggleFullScreen:"), 0);
+            }
+            return;
+        }
+
+        if (isFullScreen)
+        {
+            // Exit native fullscreen; windowDidExitFullScreen reports the resulting Normal state asynchronously.
+            ObjC.MsgSend_void_nint_nint(_nsWindow, ObjC.Sel("toggleFullScreen:"), 0);
+            return;
+        }
+
         switch (state)
         {
             case Controls.WindowState.Minimized:
@@ -413,6 +439,23 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     }
 
     private bool IsZoomed() => ObjC.MsgSend_bool(_nsWindow, ObjC.Sel("isZoomed"));
+
+    private bool IsNativeFullScreen()
+    {
+        const ulong NSWindowStyleMaskFullScreen = 1ul << 14;
+        return (MacOSWindowInterop.GetWindowStyleMask(_nsWindow) & NSWindowStyleMaskFullScreen) != 0;
+    }
+
+    public void SetBorderless(bool value)
+    {
+        // Transparency already manages a borderless mask; do not fight it. styleMask must not change mid-fullscreen.
+        if (_nsWindow == 0 || _allowsTransparency || IsNativeFullScreen())
+        {
+            return;
+        }
+
+        MacOSWindowInterop.SetWindowStyleMask(_nsWindow, value ? 0 : _defaultStyleMask);
+    }
 
     public void Invalidate(bool erase)
     {
@@ -909,6 +952,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
             MacOSWindowInterop.RegisterWindowCloseTarget(_nsWindow, this);
 
+            // Opt standard top-level windows into native fullscreen so WindowState.FullScreen / the green button work.
+            if (!_window.IsOverlayWindow && !_allowsTransparency && !_window.IsToolWindow)
+            {
+                const ulong NSWindowCollectionBehaviorFullScreenPrimary = 1ul << 7;
+                ulong behavior = ObjC.MsgSend_ulong(_nsWindow, ObjC.Sel("collectionBehavior"));
+                ObjC.MsgSend_void_nint_ulong(_nsWindow, ObjC.Sel("setCollectionBehavior:"),
+                    behavior | NSWindowCollectionBehaviorFullScreenPrimary);
+            }
+
             // Apply extended client area if set before window creation.
             if (_extendTitleBarHeight > 0)
             {
@@ -916,6 +968,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 if (_window.WindowSize.IsResizable) extMask |= 8ul;
                 MacOSWindowInterop.SetWindowStyleMask(_nsWindow, extMask);
                 MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, true);
+            }
+            else if (_window.Borderless && !_allowsTransparency)
+            {
+                MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0); // NSWindowStyleMaskBorderless
             }
         }
     }

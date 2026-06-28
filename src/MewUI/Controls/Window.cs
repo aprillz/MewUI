@@ -116,22 +116,27 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     /// <summary>
     /// Resolves the effective cursor for the given element by walking up the visual tree
-    /// until a non-None cursor is found, then applies it via the backend.
+    /// until an element with a non-null cursor is found, then applies it via the backend.
     /// </summary>
     internal void UpdateCursorForElement(UIElement? element)
     {
-        var cursor = CursorType.None;
+        CursorType? cursor = null;
         for (var current = element; current != null; current = current.Parent as UIElement)
         {
             var c = current.Cursor;
-            if (c != CursorType.None)
+            if (c.HasValue)
             {
                 cursor = c;
                 break;
             }
         }
 
-        _backend?.SetCursor(cursor == CursorType.None ? CursorType.Arrow : cursor);
+        // The element chain can be empty (no hit-test target under the pointer, e.g. a kiosk background)
+        // or never override the cursor, so fall back to the window's own cursor (which may be
+        // CursorType.None to hide it), then to the platform arrow default. A resolved
+        // CursorType.None means "hide the cursor".
+        cursor ??= Cursor;
+        _backend?.SetCursor(cursor ?? CursorType.Arrow);
     }
 
     internal void UpdateLastMousePosition(Point positionDip, Point screenPositionPx)
@@ -400,6 +405,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         MewProperty<double>.Register<Window>(nameof(ExtendClientAreaTitleBarHeight), 0.0, MewPropertyOptions.None,
             static (self, _, _) => self.OnExtendClientAreaChanged());
 
+    public static readonly MewProperty<bool> BorderlessProperty =
+        MewProperty<bool>.Register<Window>(nameof(Borderless), false, MewPropertyOptions.None,
+            static (self, _, _) => self.OnBorderlessChanged());
+
     public static readonly MewProperty<PlatformWindowOptions?> PlatformOptionsProperty =
         MewProperty<PlatformWindowOptions?>.Register<Window>(nameof(PlatformOptions), null, MewPropertyOptions.None,
             static (self, _, _) => self._backend?.SetPlatformOptions(self.PlatformOptions));
@@ -562,6 +571,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
+    /// Gets or sets whether the entire native non-client area (title bar and border) is removed.
+    /// Independent of <see cref="WindowState"/> and preserved across fullscreen transitions.
+    /// A borderless window has no native resize/move grips; use <see cref="DragMove"/> / <see cref="DragResize"/>.
+    /// </summary>
+    public bool Borderless
+    {
+        get => GetValue(BorderlessProperty);
+        set => SetValue(BorderlessProperty, value);
+    }
+
+    /// <summary>
     /// Gets or sets the platform-specific window options.
     /// Setting options for a mismatched platform throws
     /// <see cref="InvalidOperationException"/> at backend attach time.
@@ -603,6 +623,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private void OnAllowsTransparencyChanged() => _backend?.SetAllowsTransparency(AllowsTransparency);
 
     private void OnExtendClientAreaChanged() => _backend?.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
+
+    private void OnBorderlessChanged() => _backend?.SetBorderless(Borderless);
 
     /// <summary>
     /// Gets the actual window client width in DIPs.
@@ -1188,16 +1210,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         void OnClosed()
         {
             Closed -= OnClosed;
-            if (owner != null)
-            {
-                owner.ReleaseModalDisable();
-                owner.UnregisterModalChild(this);
-                if (owner._lifetimeState != WindowLifetimeState.Closed)
-                {
-                    var target = owner.GetTopModalChild() ?? owner;
-                    target.Activate();
-                }
-            }
+            EndModal(owner);
             tcs.TrySetResult();
         }
 
@@ -1205,35 +1218,116 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            _isDialogWindow = true;
-            if (owner != null)
-            {
-                owner.AcquireModalDisable();
-                owner.RegisterModalChild(this);
-            }
-
-            if (owner != null && Icon == null && owner.Icon != null)
-                Icon = owner.Icon;
-
-            Show(owner);
-            if (owner != null && _backend != null && Handle != 0)
-            {
-                _backend.SetOwner(owner.Handle);
-            }
-            Activate();
+            BeginModal(owner);
         }
         catch (Exception ex)
         {
             Closed -= OnClosed;
-            if (owner != null)
-            {
-                owner.ReleaseModalDisable();
-                owner.UnregisterModalChild(this);
-            }
+            EndModal(owner);
             tcs.TrySetException(ex);
         }
 
         return tcs.Task;
+    }
+
+    /// <summary>
+    /// Shows the window as a modal dialog and blocks the caller until it is closed, running a nested
+    /// message loop so input, rendering, timers, and animation stay responsive. Requires a running
+    /// application loop and must be called on the UI thread; otherwise use <see cref="ShowDialogAsync"/>.
+    /// </summary>
+    /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
+    public void ShowDialog(Window? owner = null)
+    {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+        {
+            throw new InvalidOperationException("Cannot show a closed window.");
+        }
+
+        if (!Application.IsRunning)
+        {
+            throw new InvalidOperationException("ShowDialog requires a running application loop. Use Application.Run, or call ShowDialogAsync.");
+        }
+
+        // Auto-resolve owner from running application when not specified.
+        owner ??= ResolveDefaultOwner();
+
+        if (owner != null && ReferenceEquals(owner, this))
+        {
+            throw new ArgumentException("Owner cannot be the dialog itself.", nameof(owner));
+        }
+
+        // Release modal state from the Closed event, which fires before the native window is destroyed, so the
+        // owner is re-enabled/activated *before* destruction. Doing it after the loop (post-destroy) makes Win32
+        // hand the foreground elsewhere for a frame, flickering the top-level window. The finally is an
+        // idempotent safety net for early loop exit (e.g. Application.Quit before the dialog closed).
+        bool modalEnded = false;
+        void EndModalOnce()
+        {
+            if (modalEnded)
+            {
+                return;
+            }
+            modalEnded = true;
+            Closed -= OnClosed;
+            EndModal(owner);
+        }
+        void OnClosed() => EndModalOnce();
+
+        Closed += OnClosed;
+
+        try
+        {
+            BeginModal(owner);
+            Application.Current.PlatformHost.RunNestedLoop(() => _lifetimeState != WindowLifetimeState.Closed);
+        }
+        finally
+        {
+            EndModalOnce();
+        }
+    }
+
+    /// <summary>
+    /// Applies modal state and shows the window: marks it as a dialog, disables and parents to the owner,
+    /// inherits the owner icon, then shows and activates. Shared by <see cref="ShowDialog"/> and <see cref="ShowDialogAsync"/>.
+    /// </summary>
+    private void BeginModal(Window? owner)
+    {
+        _isDialogWindow = true;
+        if (owner != null)
+        {
+            owner.AcquireModalDisable();
+            owner.RegisterModalChild(this);
+        }
+
+        if (owner != null && Icon == null && owner.Icon != null)
+            Icon = owner.Icon;
+
+        Show(owner);
+        if (owner != null && _backend != null && Handle != 0)
+        {
+            _backend.SetOwner(owner.Handle);
+        }
+        Activate();
+    }
+
+    /// <summary>
+    /// Releases modal state acquired by <see cref="BeginModal"/>: re-enables the owner, unregisters this dialog,
+    /// and reactivates the next topmost modal (or the owner). Safe to call even when setup failed partway.
+    /// </summary>
+    private void EndModal(Window? owner)
+    {
+        if (owner == null)
+        {
+            return;
+        }
+
+        owner.ReleaseModalDisable();
+        owner.UnregisterModalChild(this);
+        if (owner._lifetimeState != WindowLifetimeState.Closed)
+        {
+            var target = owner.GetTopModalChild() ?? owner;
+            target.Activate();
+        }
     }
 
     private void RegisterModalChild(Window child)
@@ -1341,7 +1435,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         child?.Activate();
     }
 
-    private void AcquireModalDisable()
+    // Internal so platform services (e.g. the X11 portal file dialog) can make a native dialog modal by
+    // disabling the owner window for the dialog's duration, mirroring what Win32 does via the owner HWND.
+    internal void AcquireModalDisable()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -1355,7 +1451,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
-    private void ReleaseModalDisable()
+    internal void ReleaseModalDisable()
     {
         if (_modalDisableCount <= 0)
         {
@@ -1820,6 +1916,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _backend.SetAllowsTransparency(AllowsTransparency);
         if (ExtendClientAreaTitleBarHeight > 0)
             _backend.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
+        if (Borderless)
+            _backend.SetBorderless(true);
         if (!double.IsNaN(WindowSize.Width) && !double.IsNaN(WindowSize.Height))
             _backend.SetClientSize(WindowSize.Width, WindowSize.Height);
         if (Topmost)
@@ -1842,6 +1940,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             return;
         }
+
+        // Release parked vector-cache surfaces (tied to this device) before the context goes away so
+        // their deferred GPU disposal drains under a still-valid context.
+        DisposeVectorSurfaceReclaimer();
 
         // Dispose the cached render context BEFORE the factory tears down its window
         // resources — backends may still hold references that the factory is about to free.
