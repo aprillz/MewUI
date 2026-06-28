@@ -7,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class X11Platform
 {
-    public const string PlatformId = "x11";
+    public static string PlatformIdentifier => X11PlatformHost.PlatformIdentifier;
 
     public static void Register()
-        => Application.RegisterPlatformHost(PlatformId, static () => new X11PlatformHost());
+        => Application.RegisterPlatformHost(static () => new X11PlatformHost());
 
     public static ApplicationBuilder UseX11(this ApplicationBuilder builder)
     {

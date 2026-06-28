@@ -7,10 +7,10 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class Win32Platform
 {
-    public const string PlatformId = "win32";
+    public static string PlatformIdentifier => Win32PlatformHost.PlatformIdentifier;
 
     public static void Register()
-        => Application.RegisterPlatformHost(PlatformId, static () => new Win32PlatformHost());
+        => Application.RegisterPlatformHost(static () => new Win32PlatformHost());
 
     public static ApplicationBuilder UseWin32(this ApplicationBuilder builder)
     {

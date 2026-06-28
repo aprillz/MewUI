@@ -12,7 +12,6 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IDisposable
 {
     public const string BackendIdentifier = "Direct2D";
-    public static Direct2DGraphicsFactory Instance => field ??= new Direct2DGraphicsFactory();
 
     public string Backend => BackendIdentifier;
 
@@ -56,7 +55,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         TransparentComposition,
     }
 
-    private Direct2DGraphicsFactory() { }
+    internal Direct2DGraphicsFactory() { }
 
     public void Dispose()
     {
