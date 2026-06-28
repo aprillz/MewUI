@@ -72,7 +72,23 @@ public sealed class ItemsControl : VirtualizedItemsBase
     /// Gets or sets the padding for each item.
     /// </summary>
     public static readonly MewProperty<Thickness> ItemPaddingProperty =
-        MewProperty<Thickness>.Register<ItemsControl>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout);
+        MewProperty<Thickness>.Register<ItemsControl>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
+            static (self, _, newValue) =>
+            {
+                // Propagate to the live presenter. InitializePresenter only copies ItemPadding when a
+                // presenter is created, so without this a later ItemPadding change would not reach an
+                // already-created presenter. (_presenter is null while the constructor sets the initial
+                // theme value before creating the presenter.)
+                if (self._presenter == null)
+                {
+                    return;
+                }
+
+                self._presenter.ItemPadding = newValue;
+                var presenterElement = (UIElement)self._presenter;
+                presenterElement.InvalidateMeasure();
+                presenterElement.InvalidateVisual();
+            });
 
     public Thickness ItemPadding
     {
