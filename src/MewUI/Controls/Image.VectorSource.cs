@@ -3,10 +3,11 @@ using Aprillz.MewUI.Rendering;
 namespace Aprillz.MewUI.Controls;
 
 // Vector-source (IVectorImageSource) rendering for Image: a per-control bitmap cache. The vector is
-// rasterized into an offscreen surface sized to the control's pixel bounds; idle/unrelated repaints
-// (immediate mode repaints the whole window) just blit it. The surface is reused across content changes
-// at the same size (e.g. a virtualized tile rebinding to a new icon) — only a size/DPI change reallocates.
-// All fields here are touched on the UI thread only.
+// rasterized into an offscreen surface sized to the painted region (the dest rect clipped to Bounds, so
+// stretch mode and clipping both factor in); idle/unrelated repaints (immediate mode repaints the whole
+// window) just blit it. The surface is reused across content changes at the same painted size (e.g. a
+// virtualized tile rebinding to a same-aspect icon); a size/DPI change reallocates. Detached controls
+// hand their surface to the window's reclaimer pool for same-size reuse. UI-thread only.
 public sealed partial class Image
 {
     private IRenderSurface? _vectorSurface;
@@ -28,7 +29,12 @@ public sealed partial class Image
         try
         {
             var dest = ComputeVectorDest(intrinsic, Bounds, StretchMode, AlignmentX, AlignmentY);
-            if (dest.Width <= 0 || dest.Height <= 0)
+            // Cache only the region actually painted: dest clipped to Bounds. This is the minimum that
+            // accounts for both the stretch mode (which sizes and positions dest) and the Bounds clip, so
+            // the surface holds neither invisible overflow (UniformToFill / large None) nor empty padding
+            // (Uniform / small None). Same-size painted regions share a pooled surface across rebinds.
+            var visible = dest.Intersect(Bounds);
+            if (visible.Width <= 0 || visible.Height <= 0)
             {
                 return;
             }
@@ -36,24 +42,27 @@ public sealed partial class Image
             var factory = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
             if (factory == null)
             {
-                vector.Render(context, dest); // No device to cache into — draw straight to the context.
+                vector.Render(context, dest); // No device to cache into: draw straight to the context.
                 return;
             }
 
-            // Cache bitmap sized to the control's pixel bounds. Keying on Bounds (not dest) means a tile
-            // keeps the same surface across content changes (a virtualized rebind to a different-aspect
-            // icon) — only a size/DPI change reallocates.
             double effectiveScale = ComputeEffectiveScale(context);
             const int maxExtent = 4096;
-            int surfaceWidth = Math.Clamp((int)Math.Ceiling(Bounds.Width * effectiveScale), 1, maxExtent);
-            int surfaceHeight = Math.Clamp((int)Math.Ceiling(Bounds.Height * effectiveScale), 1, maxExtent);
+            int surfaceWidth = Math.Clamp((int)Math.Ceiling(visible.Width * effectiveScale), 1, maxExtent);
+            int surfaceHeight = Math.Clamp((int)Math.Ceiling(visible.Height * effectiveScale), 1, maxExtent);
 
             if (_vectorSurface == null || _vectorSize != (surfaceWidth, surfaceHeight))
             {
                 ClearVectorCache();
-                _vectorSurface = factory.CreateSurface(
-                    RenderSurfaceDescriptor.CachedImage(surfaceWidth, surfaceHeight, 1.0, "ImageVectorCache"));
-                _vectorSize = (surfaceWidth, surfaceHeight);
+                // Reuse a surface this control parked on a recent detach/recycle if one of the exact
+                // size survived; otherwise allocate. Reusing it keeps the offscreen surface (and its
+                // device resources) intact, so only the content is repainted.
+                if (!TryReclaimVectorSurface(surfaceWidth, surfaceHeight))
+                {
+                    _vectorSurface = factory.CreateSurface(
+                        RenderSurfaceDescriptor.CachedImage(surfaceWidth, surfaceHeight, 1.0, "ImageVectorCache"));
+                    _vectorSize = (surfaceWidth, surfaceHeight);
+                }
                 _vectorContentValid = false;
             }
 
@@ -61,13 +70,13 @@ public sealed partial class Image
             // an unrelated repaint just blits the cached bitmap.
             if (!_vectorContentValid)
             {
-                RenderIntoVectorSurface(factory, vector, dest, effectiveScale);
+                RenderIntoVectorSurface(factory, vector, dest, visible, effectiveScale);
                 _vectorContentValid = true;
             }
 
             if (_vectorImage != null)
             {
-                context.DrawImage(_vectorImage, Bounds);
+                context.DrawImage(_vectorImage, visible);
             }
         }
         finally
@@ -90,9 +99,10 @@ public sealed partial class Image
         return dpiScale * transformScale;
     }
 
-    // Rasterizes the vector into the (reused) offscreen surface. The vector is drawn at its dest rect
-    // mapped into the surface's pixel space (Bounds origin -> surface origin, scaled by effectiveScale).
-    private void RenderIntoVectorSurface(IGraphicsFactory factory, IVectorImageSource vector, Rect dest, double effectiveScale)
+    // Rasterizes the vector into the (reused) offscreen surface, whose origin is the visible region's
+    // top-left. dest is mapped relative to that origin (scaled by effectiveScale); any part of dest
+    // outside the surface (overflow that Bounds clips away) falls off the surface and is clipped by it.
+    private void RenderIntoVectorSurface(IGraphicsFactory factory, IVectorImageSource vector, Rect dest, Rect visible, double effectiveScale)
     {
         var surface = _vectorSurface!;
         using (var offscreen = factory.CreateContext(surface))
@@ -106,8 +116,8 @@ public sealed partial class Image
                 }
 
                 var destInSurface = new Rect(
-                    (dest.X - Bounds.X) * effectiveScale,
-                    (dest.Y - Bounds.Y) * effectiveScale,
+                    (dest.X - visible.X) * effectiveScale,
+                    (dest.Y - visible.Y) * effectiveScale,
                     dest.Width * effectiveScale,
                     dest.Height * effectiveScale);
                 vector.Render(offscreen, destInSurface);
@@ -126,6 +136,52 @@ public sealed partial class Image
 
     // Marks the cached bitmap stale (content/tint changed) but keeps the surface for reuse at the same size.
     private void InvalidateVectorContent() => _vectorContentValid = false;
+
+    // Hands the live cache surface to the window's size-keyed reclaimer on detach (e.g. a virtualized
+    // tile recycled) so any same-size control can reuse it instead of rebuilding the offscreen
+    // surface. The image view is recreated on the next paint, so only the surface is parked. With no
+    // window to park with, releases it outright so the surface is never leaked.
+    internal void ParkVectorCache(Window? window)
+    {
+        if (_vectorSurface == null)
+        {
+            return;
+        }
+
+        if (window != null)
+        {
+            _vectorImage?.Dispose();
+            window.VectorSurfaceReclaimer.Park(_vectorSurface, _vectorSize.Width, _vectorSize.Height);
+            _vectorSurface = null;
+            _vectorImage = null;
+            _vectorSize = default;
+            _vectorContentValid = false;
+        }
+        else
+        {
+            ClearVectorCache();
+        }
+    }
+
+    // Rents a parked surface of the exact pixel size from the window's reclaimer, if one is retained.
+    // The image view is left null; RenderIntoVectorSurface creates it on the imminent repaint.
+    private bool TryReclaimVectorSurface(int pixelWidth, int pixelHeight)
+    {
+        if (FindVisualRoot() is not Window window)
+        {
+            return false;
+        }
+
+        var surface = window.VectorSurfaceReclaimer.Rent(pixelWidth, pixelHeight);
+        if (surface == null)
+        {
+            return false;
+        }
+
+        _vectorSurface = surface;
+        _vectorSize = (pixelWidth, pixelHeight);
+        return true;
+    }
 
     // Releases the cached surface entirely (detach/dispose or size change).
     private void ClearVectorCache()
