@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Platform;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -14,10 +16,10 @@ public readonly record struct KeyGesture(Key Key, ModifierKeys Modifiers = Modif
         => e.Key == Key && e.Modifiers == ResolveModifiers(Modifiers);
 
     /// <summary>
-    /// Returns a platform-appropriate display string using <see cref="PlatformKeyConfiguration.Current"/>.
+    /// Returns a platform-appropriate display string using <see cref="PlatformConventions.Current"/>.
     /// </summary>
     public string ToDisplayString()
-        => PlatformKeyConfiguration.Current.FormatGesture(Resolve());
+        => PlatformConventions.Current.FormatGesture(Resolve());
 
     /// <inheritdoc/>
     public override string ToString() => ToDisplayString();
@@ -31,7 +33,7 @@ public readonly record struct KeyGesture(Key Key, ModifierKeys Modifiers = Modif
     private static ModifierKeys ResolveModifiers(ModifierKeys m)
     {
         if ((m & ModifierKeys.Primary) != 0)
-            return (m & ~ModifierKeys.Primary) | PlatformKeyConfiguration.Current.PrimaryModifier;
+            return (m & ~ModifierKeys.Primary) | PlatformConventions.Current.PrimaryModifier;
         return m;
     }
 }

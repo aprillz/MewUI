@@ -1,19 +1,19 @@
 using System.Text;
 
-namespace Aprillz.MewUI;
+namespace Aprillz.MewUI.Platform;
 
 /// <summary>
-/// Platform-specific keyboard configuration: primary modifier key and gesture display formatting.
-/// The default instance uses Windows/Linux conventions (Ctrl, "Ctrl+S" format).
-/// macOS platform overrides this at registration time.
+/// Platform-specific UI conventions: the primary command modifier, gesture display formatting,
+/// access-key support, and dialog button ordering.
+/// The default instance uses Windows/Linux conventions. The macOS platform overrides this at registration time.
 /// </summary>
-public class PlatformKeyConfiguration
+public class PlatformConventions
 {
     /// <summary>
-    /// Gets or sets the current platform configuration.
-    /// Defaults to Windows/Linux conventions. macOS platform sets this during registration.
+    /// Gets or sets the current platform conventions.
+    /// Defaults to Windows/Linux conventions. The macOS platform sets this during registration.
     /// </summary>
-    public static PlatformKeyConfiguration Current { get; set; } = new();
+    public static PlatformConventions Current { get; set; } = new();
 
     /// <summary>
     /// The platform's primary command modifier: Ctrl on Windows/Linux, Cmd (Meta) on macOS.
@@ -25,6 +25,12 @@ public class PlatformKeyConfiguration
     /// False on macOS where Option is used for special character input.
     /// </summary>
     public virtual bool SupportsAccessKeys => true;
+
+    /// <summary>
+    /// Whether the dialog button row is laid out in reverse of the standard order.
+    /// Standard order places the primary action first; false on Windows/Linux, true on macOS.
+    /// </summary>
+    public virtual bool ReverseButtonOrder => false;
 
     /// <summary>
     /// Formats a <see cref="KeyGesture"/> for display (e.g. "Ctrl+S").

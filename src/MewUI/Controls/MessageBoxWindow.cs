@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Platform;
+
 namespace Aprillz.MewUI.Controls;
 
 public enum MessageButtonRole { Accept, Reject, Destructive }
@@ -195,10 +197,10 @@ public sealed class MessageBoxWindow : Window
 
     private void AddButtons(StackPanel panel)
     {
-        // Sort by platform convention.
-        // Windows: Accept → Destructive → Reject (left to right)
-        // macOS:   Reject → Destructive → Accept (left to right, primary on right)
-        var ordered = OperatingSystem.IsMacOS()
+        // Sort by platform convention. Standard order places the primary action first.
+        // Standard: Accept, Destructive, Reject (left to right)
+        // Reversed: Reject, Destructive, Accept (primary on the trailing side)
+        var ordered = PlatformConventions.Current.ReverseButtonOrder
             ? _buttons.OrderBy(b => b.Role switch
             {
                 MessageButtonRole.Reject => 0,
