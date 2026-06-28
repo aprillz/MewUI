@@ -1435,7 +1435,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         child?.Activate();
     }
 
-    private void AcquireModalDisable()
+    // Internal so platform services (e.g. the X11 portal file dialog) can make a native dialog modal by
+    // disabling the owner window for the dialog's duration, mirroring what Win32 does via the owner HWND.
+    internal void AcquireModalDisable()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -1449,7 +1451,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
     }
 
-    private void ReleaseModalDisable()
+    internal void ReleaseModalDisable()
     {
         if (_modalDisableCount <= 0)
         {

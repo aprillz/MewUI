@@ -8,6 +8,8 @@ internal static class LinuxExternalDialogs
 {
     public static bool? ShowMessageBox(nint owner, string text, string caption, NativeMessageBoxButtons buttons, NativeMessageBoxIcon icon)
     {
+        using var modal = NativeDialogHelper.BeginOwnerModal(owner);
+
         if (TryShowWithZenity(text, caption, buttons, icon, out var zenityResult))
         {
             return zenityResult;
@@ -24,6 +26,7 @@ internal static class LinuxExternalDialogs
     public static string[]? OpenFile(OpenFileDialogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
 
         if (TryOpenFileWithZenity(options, out var zenity))
         {
@@ -41,6 +44,7 @@ internal static class LinuxExternalDialogs
     public static string? SaveFile(SaveFileDialogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
 
         if (TrySaveFileWithZenity(options, out var zenity))
         {
@@ -58,6 +62,7 @@ internal static class LinuxExternalDialogs
     public static string? SelectFolder(FolderDialogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
 
         if (TrySelectFolderWithZenity(options, out var zenity))
         {
@@ -621,17 +626,24 @@ internal static class LinuxExternalDialogs
                 return false;
             }
 
-            stdout = process.StandardOutput.ReadToEnd();
-            _ = process.StandardError.ReadToEnd();
-
-            if (!process.WaitForExit(milliseconds: 5 * 60 * 1000))
+            // Read/wait on a worker thread and pump the UI loop meanwhile, so the app stays responsive
+            // (rendered, modal via the disabled owner) instead of freezing for the dialog's duration.
+            var runTask = Task.Run<(int Code, string? Output, bool Ok)>(() =>
             {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                return false;
-            }
+                string output = process.StandardOutput.ReadToEnd();
+                _ = process.StandardError.ReadToEnd();
+                if (!process.WaitForExit(milliseconds: 5 * 60 * 1000))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    return (-1, null, false);
+                }
+                return (process.ExitCode, output, true);
+            });
 
-            exitCode = process.ExitCode;
-            return true;
+            var result = NativeDialogHelper.PumpUntil(runTask);
+            exitCode = result.Code;
+            stdout = result.Output;
+            return result.Ok;
         }
         catch (Exception ex) when (IsToolMissing(ex))
         {

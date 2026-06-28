@@ -12,6 +12,17 @@
     <ProjectReference Include="..\MewUI\MewUI.csproj" />
   </ItemGroup>
 
+  <!-- XDG Desktop Portal (org.freedesktop.portal.FileChooser) via DBus. Linux-only assembly. -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
+    <PackageReference Include="Tmds.DBus.Generator" Version="0.94.2" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="DBusXml\org.freedesktop.portal.FileChooser.xml" Namespace="Aprillz.MewUI.Platform.Linux.X11.DBus" DBusGeneratorMode="Proxy" />
+    <AdditionalFiles Include="DBusXml\org.freedesktop.portal.Request.xml" Namespace="Aprillz.MewUI.Platform.Linux.X11.DBus" DBusGeneratorMode="Proxy" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="..\MewUI\Shared\Platform\Linux\**\*.cs" LinkBase="Platform\Linux" />
     <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
