@@ -24,14 +24,11 @@ public sealed partial class MewVGWin32GraphicsFactory
 
 
 #if MEWUI_MEWVG_MACOS
-    public static MewVGMacOSGraphicsFactory Instance => field ??= new();
-    private MewVGMacOSGraphicsFactory() { }
+    internal MewVGMacOSGraphicsFactory() { }
 #elif MEWUI_MEWVG_X11
-    public static MewVGX11GraphicsFactory Instance => field ??= new ();
-    private MewVGX11GraphicsFactory() { }
+    internal MewVGX11GraphicsFactory() { }
 #else
-        public static MewVGWin32GraphicsFactory Instance => field ??= new ();
-    private MewVGWin32GraphicsFactory() { }
+    internal MewVGWin32GraphicsFactory() { }
 #endif
 
     private readonly ConcurrentDictionary<nint, IDisposable> _windows = new();
