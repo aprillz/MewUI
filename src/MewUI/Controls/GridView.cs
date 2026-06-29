@@ -1293,7 +1293,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             // Update cursor based on separator hover
             Cursor = HitTestSeparator(pos.X) >= 0
                 ? CursorType.SizeWE
-                : CursorType.None;
+                : null;
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
@@ -1303,7 +1303,7 @@ public sealed class GridView : VirtualizedItemsBase, IFocusIntoViewHost, IVirtua
             if (_resizeColumnIndex < 0) return;
 
             _resizeColumnIndex = -1;
-            Cursor = CursorType.None;
+            Cursor = null;
 
             if (_owner.FindVisualRoot() is Window window)
                 window.ReleaseMouseCapture();
