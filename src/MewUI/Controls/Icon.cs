@@ -7,8 +7,6 @@ public sealed class Icon : FrameworkElement
     public static readonly MewProperty<PathGeometry?> DataProperty =
         MewProperty<PathGeometry?>.Register<Icon>(nameof(Data), null, MewPropertyOptions.AffectsLayout);
 
-    private Color? _foreground;
-
     public PathGeometry? Data
     {
         get => GetValue(DataProperty);
@@ -17,22 +15,8 @@ public sealed class Icon : FrameworkElement
 
     public Color Foreground
     {
-        get => _foreground ?? GetValue(Control.ForegroundProperty);
-        set
-        {
-            if (_foreground.HasValue && _foreground.Value == value)
-                return;
-            _foreground = value;
-            InvalidateVisual();
-        }
-    }
-
-    public void ClearForeground()
-    {
-        if (!_foreground.HasValue)
-            return;
-        _foreground = null;
-        InvalidateVisual();
+        get => GetValue(Control.ForegroundProperty);
+        set => SetValue(Control.ForegroundProperty, value);
     }
 
     public double FontSize
@@ -45,9 +29,7 @@ public sealed class Icon : FrameworkElement
     {
         base.OnMewPropertyChanged(property);
         if (property.Id == Control.FontSizeProperty.Id)
-        {
             InvalidateVisual();
-        }
     }
 
     protected override Size MeasureContent(Size availableSize)

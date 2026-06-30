@@ -22,4 +22,10 @@ public static class IconExtensions
         icon.Foreground = color;
         return icon;
     }
+
+    public static Icon FontSize(this Icon icon, double fontSize)
+    {
+        icon.FontSize = fontSize;
+        return icon;
+    }
 }
