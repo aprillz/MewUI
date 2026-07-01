@@ -520,6 +520,26 @@ public abstract class Element : MewObject
         return property.GetDefaultForType(PropertyStore.OwnerType);
     }
 
+    /// <summary>
+    /// Boxed, non-generic mirror of <see cref="ResolveInheritedValue{T}"/>. Resolves the inherited
+    /// value from the parent chain and caches it, so a re-resolve during inherited-change propagation
+    /// can read and forward the fresh value without knowing the property's static type.
+    /// </summary>
+    internal object? ResolveInheritedValueBoxed(MewProperty property)
+    {
+        for (var p = Parent; p != null; p = p.Parent)
+        {
+            if (p.HasPropertyStore && p.PropertyStore.HasOwnValue(property.Id))
+            {
+                var value = p.PropertyStore.GetBoxedValue(property);
+                PropertyStore.SetInheritedBoxed(property, value);
+                return value;
+            }
+        }
+
+        return property.GetBoxedDefaultForType(PropertyStore.OwnerType);
+    }
+
     private Size ApplyLayoutRounding(Size size)
     {
         var root = FindVisualRoot();

@@ -230,6 +230,19 @@ internal sealed class PropertyValueStore
     }
 
     /// <summary>
+    /// Boxed counterpart of <see cref="SetInherited{T}"/> used by the non-generic inherited-change
+    /// propagation path. Caches the resolved inherited value without firing notifications.
+    /// </summary>
+    internal void SetInheritedBoxed(MewProperty property, object? value)
+    {
+        ref var entry = ref EnsureEntry(property.Id);
+        if (entry.Source > ValueSource.Inherited)
+            return;
+        entry.Value = value;
+        entry.Source = ValueSource.Inherited;
+    }
+
+    /// <summary>
     /// Clears a cached inherited value, allowing the next GetValue call
     /// to re-resolve via the parent chain.
     /// </summary>
