@@ -1392,18 +1392,6 @@ public static class ControlExtensions
         return textBox;
     }
 
-    /// <summary>
-    /// Sets whether the text input accepts return characters.
-    /// </summary>
-    /// <typeparam name="T">Text input type.</typeparam>
-    /// <param name="textBox">Target text input.</param>
-    /// <param name="value">Whether return characters are accepted.</param>
-    /// <returns>The text input for chaining.</returns>
-    public static T AcceptReturn<T>(this T textBox, bool value = true) where T : TextBase
-    {
-        textBox.AcceptReturn = value;
-        return textBox;
-    }
 
     /// <summary>
     /// Sets the caret position.

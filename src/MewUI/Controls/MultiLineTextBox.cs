@@ -32,13 +32,11 @@ public sealed class MultiLineTextBox : TextBase
     private double _pendingViewAnchorYOffset;
     private double _pendingViewAnchorXOffset;
 
-    static MultiLineTextBox()
-    {
-        AcceptReturnProperty.OverrideDefaultValue<MultiLineTextBox>(true);
-    }
 
     public MultiLineTextBox()
     {
+        AcceptReturn = false;   
+
         _textView = new MultiLineTextView(
             () => DocumentVersion,
             () => _lineStarts.Count,
