@@ -663,29 +663,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_NCCALCSIZE:
-                if ((_allowsTransparency || _extendTitleBarHeight > 0) && wParam != 0)
-                {
-                    // Remove the default non-client area by not deflating the rect.
-                    // For transparent windows this keeps client-origin == window-origin while
-                    // preserving WS_THICKFRAME for native resize hit-test/tracking behavior.
-                    // When maximized, Windows extends the window by the resize border size beyond
-                    // the monitor edges. Compensate by inflating inward by the frame thickness.
-                    if (!_allowsTransparency && Window.WindowState == Controls.WindowState.Maximized)
-                    {
-                        int frame = User32.GetSystemMetrics(92 /* SM_CXPADDEDBORDER */)
-                                  + User32.GetSystemMetrics(33 /* SM_CYSIZEFRAME */);
-                        unsafe
-                        {
-                            var rgrc = (RECT*)lParam;
-                            rgrc->left += frame;
-                            rgrc->top += frame;
-                            rgrc->right -= frame;
-                            rgrc->bottom -= frame;
-                        }
-                    }
-                    return 0;
-                }
-                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+                return HandleNcCalcSize(wParam, lParam);
 
             case WindowMessages.WM_NCCREATE:
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
@@ -1206,7 +1184,57 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return 1;
     }
 
-    // (system backdrop support removed)
+    // ID2D1/DXGI-rendered windows show a black/stretched flash on the newly-exposed area during
+    // live resize because DWM's default resize BitBlt stretches the stale swap-chain content.
+    // Returning WVR_VALIDRECTS from WM_NCCALCSIZE tells DWM to copy the old client's top-left
+    // overlap 1:1 into the new client (no stretch) and invalidate the rest for a normal repaint,
+    // which matches the GDI/GL backends' smooth behavior. (Firefox bug 672885 technique.)
+    private unsafe nint HandleNcCalcSize(nint wParam, nint lParam)
+    {
+        const uint WVR_VALIDRECTS = 0x0400;
+
+        if (wParam == 0)
+        {
+            return User32.DefWindowProc(Handle, WindowMessages.WM_NCCALCSIZE, wParam, lParam);
+        }
+
+        var rgrc = (RECT*)lParam;
+
+        if (_allowsTransparency || _extendTitleBarHeight > 0)
+        {
+            // Custom chrome: client == window (no non-client deflate). Keep the original behavior
+            // exactly (return 0). WVR_VALIDRECTS is only meaningful for windows that composite
+            // through the redirection bitmap; transparent (NOREDIRECTIONBITMAP) windows don't, and
+            // returning it here breaks their sizing.
+            if (!_allowsTransparency && Window.WindowState == Controls.WindowState.Maximized)
+            {
+                int frame = User32.GetSystemMetrics(92 /* SM_CXPADDEDBORDER */)
+                          + User32.GetSystemMetrics(33 /* SM_CYSIZEFRAME */);
+                rgrc[0].left += frame;
+                rgrc[0].top += frame;
+                rgrc[0].right -= frame;
+                rgrc[0].bottom -= frame;
+            }
+            return 0;
+        }
+
+        // Opaque native chrome: let DefWindowProc compute the standard client rect into rgrc[0].
+        RECT oldClient = rgrc[2];
+        _ = User32.DefWindowProc(Handle, WindowMessages.WM_NCCALCSIZE, wParam, lParam);
+        RECT newClient = rgrc[0];
+
+        int validWidth = Math.Min(oldClient.Width, newClient.Width);
+        int validHeight = Math.Min(oldClient.Height, newClient.Height);
+        if (validWidth > 0 && validHeight > 0)
+        {
+            // rgrc[2] = source (old client, top-left aligned), rgrc[1] = destination (new client, top-left aligned).
+            rgrc[2] = new RECT(oldClient.left, oldClient.top, oldClient.left + validWidth, oldClient.top + validHeight);
+            rgrc[1] = new RECT(newClient.left, newClient.top, newClient.left + validWidth, newClient.top + validHeight);
+            return (nint)WVR_VALIDRECTS;
+        }
+
+        return 0;
+    }
 
     private void ApplyIcons()
     {
