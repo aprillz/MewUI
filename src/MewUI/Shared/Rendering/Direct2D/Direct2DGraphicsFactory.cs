@@ -156,8 +156,11 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         _initialized = true;
     }
 
-    public ISolidColorBrush CreateSolidColorBrush(Color color) =>
-        new Direct2DSolidColorBrush(color);
+    // Falls back to the default DIM (lightweight SolidColorBrush). Direct2DSolidColorBrush only stored
+    // the logical Color (no D2D handle) and the context realizes/caches the actual brush by color,
+    // so the override was an exact duplicate of the DIM.
+    // public ISolidColorBrush CreateSolidColorBrush(Color color) =>
+    //     new Direct2DSolidColorBrush(color);
 
     public IPen CreatePen(Color color, double thickness = 1.0, StrokeStyle? strokeStyle = null)
     {

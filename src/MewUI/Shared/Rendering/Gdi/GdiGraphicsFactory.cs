@@ -29,8 +29,11 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
     // Keep backend default aligned with other backends: Default => Linear unless the app explicitly overrides.
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Normal;
 
-    public ISolidColorBrush CreateSolidColorBrush(Color color) =>
-        new GdiSolidColorBrush(color);
+    // Falls back to the default DIM (lightweight SolidColorBrush): the fill/stroke paths only read
+    // ISolidColorBrush.Color and draw via the context's color-keyed cache, so GdiSolidColorBrush's
+    // HBRUSH was allocated but never consumed.
+    // public ISolidColorBrush CreateSolidColorBrush(Color color) =>
+    //     new GdiSolidColorBrush(color);
 
     public IPen CreatePen(Color color, double thickness = 1.0, StrokeStyle? strokeStyle = null) =>
         new GdiPen(color, thickness, strokeStyle ?? StrokeStyle.Default);
