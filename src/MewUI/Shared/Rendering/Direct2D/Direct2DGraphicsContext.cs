@@ -14,6 +14,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private const int D2DERR_RECREATE_TARGET = unchecked((int)0x8899000C);
     private const int D2DERR_WRONG_RESOURCE_DOMAIN = unchecked((int)0x88990015);
 
+    // ENABLE_COLOR_FONT is a Windows 8.1+ DrawText/DrawTextLayout option. On Win7 / Win8.0 the
+    // D2D runtime rejects it with a deferred E_INVALIDARG at EndDraw, which silently drops the
+    // whole frame (blank window). Resolve the supported flag once at startup.
+    private static readonly D2D1_DRAW_TEXT_OPTIONS _colorFontOption =
+        Native.Dxgi.IsWindows81OrLater
+            ? D2D1_DRAW_TEXT_OPTIONS.ENABLE_COLOR_FONT
+            : D2D1_DRAW_TEXT_OPTIONS.NONE;
+
     private readonly Direct2DGraphicsFactory _ownerFactory;
     private readonly nint _hwnd;
     private readonly nint _d2dFactory;
@@ -986,8 +994,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         nint brush = GetSolidBrush(color);
         var options = _textPixelSnap
-            ? D2D1_DRAW_TEXT_OPTIONS.CLIP | D2D1_DRAW_TEXT_OPTIONS.ENABLE_COLOR_FONT
-            : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP | D2D1_DRAW_TEXT_OPTIONS.ENABLE_COLOR_FONT;
+            ? D2D1_DRAW_TEXT_OPTIONS.CLIP | _colorFontOption
+            : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP | _colorFontOption;
 
         var rt = _deviceContext != 0 ? _deviceContext : _renderTarget;
         D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)rt,
@@ -1364,8 +1372,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         {
             nint brush = GetSolidBrush(color);
             var options = _textPixelSnap
-                ? D2D1_DRAW_TEXT_OPTIONS.CLIP | D2D1_DRAW_TEXT_OPTIONS.ENABLE_COLOR_FONT
-                : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP | D2D1_DRAW_TEXT_OPTIONS.ENABLE_COLOR_FONT;
+                ? D2D1_DRAW_TEXT_OPTIONS.CLIP | _colorFontOption
+                : D2D1_DRAW_TEXT_OPTIONS.NO_SNAP | D2D1_DRAW_TEXT_OPTIONS.CLIP | _colorFontOption;
 
             if (trimming == TextTrimming.CharacterEllipsis)
             {

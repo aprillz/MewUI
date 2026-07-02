@@ -7,16 +7,58 @@ namespace Aprillz.MewUI.Native;
 
 internal static unsafe partial class Dxgi
 {
+    internal static readonly Guid IID_IDXGIFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
     internal static readonly Guid IID_IDXGIFactory2 = new("50c83a1c-e072-4c48-87b0-3630fa36a6d0");
 
     public const uint DXGI_USAGE_RENDER_TARGET_OUTPUT = 0x00000020;
     public const uint DXGI_MWA_NO_ALT_ENTER = 0x00000002;
+
+    // CreateDXGIFactory2 is Windows 8.1+. Win7 (Platform Update) and Win8.0 only export
+    // CreateDXGIFactory1, whose returned factory still implements IDXGIFactory2 (queried via
+    // the riid). Probed once so the call site never throws EntryPointNotFoundException.
+    private static readonly bool _hasCreateDXGIFactory2 = CheckExport("dxgi.dll", "CreateDXGIFactory2");
+
+    /// <summary>
+    /// True on Windows 8.1+ (CreateDXGIFactory2 ships with DXGI 1.3). Doubles as a cheap probe
+    /// for other Win8.1-era features that lack their own export, e.g. D2D color-font text
+    /// rendering (<c>D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT</c>), which throws E_INVALIDARG
+    /// on Win7 / Win8.0.
+    /// </summary>
+    internal static bool IsWindows81OrLater => _hasCreateDXGIFactory2;
 
     [LibraryImport("dxgi.dll")]
     internal static partial int CreateDXGIFactory2(
         uint flags,
         in Guid riid,
         out nint ppFactory);
+
+    [LibraryImport("dxgi.dll")]
+    internal static partial int CreateDXGIFactory1(
+        in Guid riid,
+        out nint ppFactory);
+
+    /// <summary>
+    /// Creates an <c>IDXGIFactory2</c> via <c>CreateDXGIFactory2</c> when available
+    /// (Win8.1+), otherwise via <c>CreateDXGIFactory1</c> requesting the same interface
+    /// (Win7 Platform Update / Win8.0). Returns the HRESULT from the underlying call.
+    /// </summary>
+    public static int CreateFactory2OrFallback(out nint factory) =>
+        _hasCreateDXGIFactory2
+            ? CreateDXGIFactory2(0, IID_IDXGIFactory2, out factory)
+            : CreateDXGIFactory1(IID_IDXGIFactory2, out factory);
+
+    private static bool CheckExport(string library, string export)
+    {
+        try
+        {
+            return NativeLibrary.TryLoad(library, out nint handle)
+                && NativeLibrary.TryGetExport(handle, export, out _);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int EnumAdapters(nint factory, uint adapterIndex, out nint adapter)
@@ -231,6 +273,7 @@ internal readonly struct DXGI_SWAP_CHAIN_DESC1(
 internal enum DXGI_SCALING : uint
 {
     STRETCH = 0,
+    NONE = 1,
 }
 
 internal enum DXGI_MODE_ROTATION : uint

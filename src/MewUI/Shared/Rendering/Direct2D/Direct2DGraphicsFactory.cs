@@ -2,14 +2,13 @@ using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
 using Aprillz.MewUI.Native.DirectWrite;
-using Aprillz.MewUI.Native.Structs;
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Platform.Win32;
 using Aprillz.MewUI.Resources;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IDisposable
+public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IWindowSurfacePresenter, IDisposable
 {
     public const string BackendIdentifier = "Direct2D";
 
@@ -18,11 +17,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 
     /// <summary>
-    /// D2D presents transparent windows via a DXGI swap-chain (premultiplied alpha) attached
-    /// to a <c>WS_EX_NOREDIRECTIONBITMAP</c> window. This avoids the layered-DIB readback
-    /// path that <see cref="ID2D1DCRenderTarget"/> implicitly takes per frame.
+    /// When DirectComposition is present (Win8+), D2D presents transparent windows via a DXGI
+    /// swap-chain (premultiplied alpha) attached to a <c>WS_EX_NOREDIRECTIONBITMAP</c> window,
+    /// avoiding the per-frame layered-DIB readback. On Win7 (no DirectComposition) it falls back
+    /// to the layered (Bitmap) path that <see cref="Win32TransparencyMode.Bitmap"/> drives.
     /// </summary>
-    public Win32TransparencyMode TransparencyMode => Win32TransparencyMode.Surface;
+    public Win32TransparencyMode TransparencyMode =>
+        Dcomp.IsAvailable ? Win32TransparencyMode.Surface : Win32TransparencyMode.Bitmap;
 
     private nint _d2dFactory;
     private nint _dwriteFactory;
@@ -60,6 +61,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public void Dispose()
     {
         _renderResourceCache.Dispose();
+        DisposeLayeredTargets();
 
         lock (_rtLock)
         {
@@ -648,6 +650,8 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             _externalDxgiDeviceContextWindowTargets.Remove(hwnd);
             InvalidateCachedWindowTargetLocked(hwnd);
         }
+
+        ReleaseLayeredTarget(hwnd);
     }
 
     private void InvalidateAllFactoryRenderTargetsForDeviceLost()
@@ -716,7 +720,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         {
             int generation = 0;
             var mode = GetWindowTargetMode(hwnd, transparentComposition);
-            if (mode != WindowTargetMode.HwndRenderTarget
+            // TransparentComposition uses CreateSwapChainForComposition + DirectComposition, which
+            // require Windows 8+. SwapChainDeviceContext (opaque external-DXGI content, e.g. the GPU
+            // bitmap cache) uses CreateSwapChainForHwnd and works on Win7+PU, so it must NOT be
+            // gated on DirectComposition: forcing it to an HwndRenderTarget gives a separate D2D
+            // device that cannot bind the shared-device GPU bitmaps, breaking the bitmap cache.
+            bool swapChainEligible = mode == WindowTargetMode.SwapChainDeviceContext
+                || (mode == WindowTargetMode.TransparentComposition && Dcomp.IsAvailable);
+            if (swapChainEligible
                 && SharedFilterDeviceContext != 0
                 && _d2dDevice != 0
                 && _d3dDevice != 0)
@@ -889,7 +900,10 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
         try
         {
-            int hr = Dxgi.CreateDXGIFactory2(flags: 0, Dxgi.IID_IDXGIFactory2, out dxgiFactory);
+            // CreateDXGIFactory2 is Win8.1+; on Win7 Platform Update / Win8.0 this falls back to
+            // CreateDXGIFactory1 (still yields an IDXGIFactory2). Keeps the call from throwing
+            // EntryPointNotFoundException on those OSes.
+            int hr = Dxgi.CreateFactory2OrFallback(out dxgiFactory);
             if (hr < 0 || dxgiFactory == 0)
             {
                 return false;
@@ -907,13 +921,28 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 sampleDesc: new DXGI_SAMPLE_DESC(count: 1, quality: 0),
                 bufferUsage: Dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 bufferCount: 2,
+                // STRETCH for both: composition swap-chains reject DXGI_SCALING_NONE
+                // (DXGI_ERROR_INVALID_CALL — flip-hwnd only), and BitBlt needs STRETCH too.
                 scaling: DXGI_SCALING.STRETCH,
-                swapEffect: DXGI_SWAP_EFFECT.FLIP_SEQUENTIAL,
+                // Composition (transparent) requires the flip model. Opaque CreateSwapChainForHwnd
+                // windows use the BitBlt model (DISCARD) instead: the flip model composes the
+                // swap-chain directly in DWM, bypassing the redirection bitmap, so live resize shows
+                // a black flash that WM_NCCALCSIZE/WVR_VALIDRECTS cannot fix. BitBlt presents through
+                // the redirection surface, so DWM's resize honors the valid-rects (smooth like GDI).
+                swapEffect: transparentComposition ? DXGI_SWAP_EFFECT.FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT.DISCARD,
                 alphaMode: alphaMode,
                 flags: 0);
 
             if (transparentComposition)
             {
+                // Transparent composition requires DirectComposition (Win8+). When absent the
+                // window is routed to the layered (Bitmap) transparency path instead, so this
+                // branch should not be reached; guard defensively to avoid the Win7 DComp calls.
+                if (!Dcomp.IsAvailable)
+                {
+                    return false;
+                }
+
                 hr = Dxgi.CreateSwapChainForComposition(dxgiFactory, windowD3DDevice, swapChainDesc, out swapChain);
                 if (hr < 0 || swapChain == 0)
                 {
@@ -1025,6 +1054,17 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             dcompTarget = 0;
             dcompVisual = 0;
             return true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // A Win8+ DXGI/DComp export is missing (older OS reached this path). Fall back to
+            // the HwndRenderTarget / layered route rather than propagating a crash.
+            return false;
+        }
+        catch (DllNotFoundException)
+        {
+            // dcomp.dll (or another optional library) is absent on this OS. Same fallback.
+            return false;
         }
         finally
         {
