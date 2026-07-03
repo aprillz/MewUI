@@ -223,6 +223,44 @@ public sealed class CoreWebView2
     }
 
     /// <summary>
+    /// Maps a virtual host name to a local folder.
+    /// </summary>
+    /// <param name="hostName">The virtual host name.</param>
+    /// <param name="folderPath">The local folder path.</param>
+    /// <param name="accessKind">The resource access kind for the mapping.</param>
+    public void SetVirtualHostNameToFolderMapping(
+        string hostName,
+        string folderPath,
+        CoreWebView2HostResourceAccessKind accessKind)
+    {
+        if (_coreWebView2.IsDisposed) return;
+        if (_coreWebView2.Object is not ICoreWebView2_4 webView24)
+        {
+            throw new NotSupportedException("SetVirtualHostNameToFolderMapping is not available on this WebView2 instance.");
+        }
+
+        webView24.SetVirtualHostNameToFolderMapping(
+            PWSTR.From(hostName),
+            PWSTR.From(folderPath),
+            (COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND)accessKind).ThrowOnError();
+    }
+
+    /// <summary>
+    /// Removes a virtual host name to folder mapping.
+    /// </summary>
+    /// <param name="hostName">The virtual host name.</param>
+    public void ClearVirtualHostNameToFolderMapping(string hostName)
+    {
+        if (_coreWebView2.IsDisposed) return;
+        if (_coreWebView2.Object is not ICoreWebView2_4 webView24)
+        {
+            throw new NotSupportedException("ClearVirtualHostNameToFolderMapping is not available on this WebView2 instance.");
+        }
+
+        webView24.ClearVirtualHostNameToFolderMapping(PWSTR.From(hostName)).ThrowOnError();
+    }
+
+    /// <summary>
     /// Executes JavaScript code in the WebView.
     /// </summary>
     /// <param name="script">The JavaScript code to execute.</param>

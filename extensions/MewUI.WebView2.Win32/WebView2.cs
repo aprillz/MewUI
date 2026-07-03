@@ -41,6 +41,7 @@ public sealed partial class WebView2 : FrameworkElement
     private string? _browserExecutableFolder;
     private string? _userDataFolder;
     private Rect _lastArrangedBounds;
+    private Color _defaultBackgroundColor;
 
     private Rendering.IFont? _font;
     private WebViewEnvironmentOptions? _options;
@@ -282,6 +283,19 @@ public sealed partial class WebView2 : FrameworkElement
         }
     }
 
+    /// <summary>
+    /// Gets or sets the default background color used by the WebView controller.
+    /// </summary>
+    public Color DefaultBackgroundColor
+    {
+        get => _defaultBackgroundColor;
+        set
+        {
+            _defaultBackgroundColor = value;
+            UpdateWebViewBackground();
+        }
+    }
+
     public bool IsInitialized => _webView2 != null && !_webView2.IsDisposed;
 
     /// <summary>
@@ -314,6 +328,25 @@ public sealed partial class WebView2 : FrameworkElement
     /// Stops any in-progress navigation.
     /// </summary>
     public void Stop() => CoreWebView2?.Stop();
+
+    /// <summary>
+    /// Maps a virtual host name to a local folder.
+    /// </summary>
+    /// <param name="hostName">The virtual host name.</param>
+    /// <param name="folderPath">The local folder path.</param>
+    /// <param name="accessKind">The resource access kind for the mapping.</param>
+    public void SetVirtualHostNameToFolderMapping(
+        string hostName,
+        string folderPath,
+        CoreWebView2HostResourceAccessKind accessKind)
+        => CoreWebView2?.SetVirtualHostNameToFolderMapping(hostName, folderPath, accessKind);
+
+    /// <summary>
+    /// Removes a virtual host name to folder mapping.
+    /// </summary>
+    /// <param name="hostName">The virtual host name.</param>
+    public void ClearVirtualHostNameToFolderMapping(string hostName)
+        => CoreWebView2?.ClearVirtualHostNameToFolderMapping(hostName);
 
     /// <summary>
     /// Navigates to the specified HTML content.
@@ -410,6 +443,7 @@ public sealed partial class WebView2 : FrameworkElement
         base.OnParentChanged();
 
         UpdateWebViewVisibility();
+        UpdateWebViewBackground();
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -424,6 +458,7 @@ public sealed partial class WebView2 : FrameworkElement
     {
         base.OnVisualRootChanged(oldRoot, newRoot);
         UpdateWebViewVisibility();
+        UpdateWebViewBackground();
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -432,6 +467,7 @@ public sealed partial class WebView2 : FrameworkElement
         _ = EnsureWebView2LoadedAsync();
         UpdateWebViewBounds();
         UpdateWebViewVisibility();
+        UpdateWebViewBackground();
     }
 
     protected override void OnVisibilityChanged()
@@ -684,7 +720,6 @@ public sealed partial class WebView2 : FrameworkElement
 
                     _webView2 = new ComObject<ICoreWebView2>(webView);
                     CoreWebView2 = new CoreWebView2(_webView2);
-
                     // Configure defaults.
                     _webView2.Object.get_Settings(out var settingsObj).ThrowOnError();
                     using (var settings = new ComObject<ICoreWebView2Settings3>(settingsObj))
@@ -766,6 +801,7 @@ public sealed partial class WebView2 : FrameworkElement
 
                     UpdateWebViewBounds();
                     UpdateWebViewVisibility();
+                    UpdateWebViewBackground();
                     tcs.TrySetResult(_webView2);
                 }
                 catch (Exception ex)
@@ -860,9 +896,31 @@ public sealed partial class WebView2 : FrameworkElement
         {
             Interop.ShowWindow(_hostHandle, attached && IsVisible ? SW_SHOWNOACTIVATE : SW_HIDE);
         }
-
     }
 
+    private void UpdateWebViewBackground()
+    {
+        var controller = _controller;
+        if (controller == null || controller.IsDisposed)
+        {
+            return;
+        }
+
+        if (controller.Object is not ICoreWebView2Controller3 controller3)
+        {
+            throw new NotSupportedException("WebView2 controller settings are not available on this WebView2 instance.");
+        }
+
+        var webView2Color = new COREWEBVIEW2_COLOR()
+        {
+            A = _defaultBackgroundColor.A,
+            B = _defaultBackgroundColor.B,
+            G = _defaultBackgroundColor.G,
+            R = _defaultBackgroundColor.R
+        };
+        controller3.put_DefaultBackgroundColor(webView2Color).ThrowOnError();
+    }
+    
     private void EnsureHostWindow(Window window)
     {
         if (_hostHandle != 0)
