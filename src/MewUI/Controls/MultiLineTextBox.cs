@@ -35,7 +35,7 @@ public sealed class MultiLineTextBox : TextBase
 
     public MultiLineTextBox()
     {
-        AcceptReturn = false;   
+        AcceptReturn = true;   
 
         _textView = new MultiLineTextView(
             () => DocumentVersion,
