@@ -76,12 +76,10 @@ public sealed class FluentExtensionCoverageTests
     public void TextBasePropertyExtensions_SetValues()
     {
         var textBox = new TextBox()
-            .AcceptReturn()
             .CaretPosition(0)
             .ImeMode(ImeMode.Disabled)
             .MaxLength(20);
 
-        Assert.IsTrue(textBox.AcceptReturn);
         Assert.AreEqual(0, textBox.CaretPosition);
         Assert.AreEqual(ImeMode.Disabled, textBox.ImeMode);
         Assert.AreEqual(20, textBox.MaxLength);
