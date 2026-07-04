@@ -30,7 +30,7 @@ public interface IPixelBufferSource : IRasterSource
     /// <remarks>
     /// Lets consumers skip per-pixel alpha scans (the conservative "is every byte 0xFF?"
     /// check that runs before premultiply) and pick the opaque blending path, which avoids
-    /// per-fragment blend math. Default <c>true</c> is the safe choice — preserves
+    /// per-fragment blend math. Default <c>true</c> is the safe choice - preserves
     /// alpha-aware blending for any source that hasn't explicitly opted out.
     /// </remarks>
     bool HasAlpha => true;

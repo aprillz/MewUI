@@ -2,7 +2,7 @@ namespace Aprillz.MewUI.Resources;
 
 /// <summary>
 /// BGRA32 pixel buffer (8 bits per channel, straight alpha, tightly packed).
-/// Used as an API boundary container — decoder output and raw pixel input.
+/// Used as an API boundary container - decoder output and raw pixel input.
 /// </summary>
 /// <param name="WidthPx">Bitmap width in pixels.</param>
 /// <param name="HeightPx">Bitmap height in pixels.</param>

@@ -33,7 +33,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     // ShaderWrite is required so MPS / compute kernels (e.g. MPSImageGaussianBlur in
     // MetalImageFilterExecutor) can write into the color texture. Without it MPS encode
     // silently fails on production drivers (no error returned), leaving the destination
-    // unchanged — visible as stale content / disappearing filtered regions on zoom.
+    // unchanged - visible as stale content / disappearing filtered regions on zoom.
     private const ulong MTLTextureUsageRenderTargetShaderRead = (1ul << 2) | (1ul << 0) | (1ul << 1);
 
     // MTLStorageMode: Shared = 0 (CPU & GPU both addressable; works on Apple Silicon and Intel iGPU).
@@ -49,7 +49,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     private static readonly nint SelRelease = ObjCRuntime.RegisterSelector("release");
 
     /// <summary>CPU-side pixel mirror, lazily allocated. Only populated when a CPU consumer
-    /// (Lock / CopyPixels / GetPixelSpan / EndFrame readback) actually needs the bytes —
+    /// (Lock / CopyPixels / GetPixelSpan / EndFrame readback) actually needs the bytes -
     /// for the Metal pipeline, the source layer / scratch surface round-trip lives entirely on
     /// GPU (MTLTexture → MPS → MTLTexture → NVG sample), so a pure-GPU consumer chain
     /// never allocates this 4 × W × H buffer (32 MB for a 4096 × 2000 RT).</summary>
@@ -65,7 +65,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     /// Set by RequestDeferredReadback, consumed by FlushPendingReadback when a CPU consumer
     /// (Lock / CopyPixels / GetPixelSpan) finally needs the bytes. Retained so the underlying
     /// MTLCommandBuffer survives until we waitUntilCompleted on it. Replaced (with old released)
-    /// each time a new GPU pass completes — Metal command queue ordering guarantees waiting on
+    /// each time a new GPU pass completes - Metal command queue ordering guarantees waiting on
     /// the latest cmdBuf is sufficient (all earlier ones in the queue have already finished).</summary>
     private nint _pendingCommandBuffer;
     private bool _pendingReadback;
@@ -74,7 +74,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     /// <summary>Marks that <paramref name="commandBuffer"/> committed GPU work into ColorTexture
     /// that hasn't been mirrored to the CPU side yet. Defers the actual waitUntilCompleted +
-    /// MTLTexture → bytes copy until a CPU consumer asks for the pixels — for the common
+    /// MTLTexture → bytes copy until a CPU consumer asks for the pixels - for the common
     /// pure-GPU consumer chain (NVG samples ColorTexture in a later commandBuffer on the same
     /// queue), this readback never happens. Replaces any earlier pending commandBuffer (queue
     /// ordering ensures waiting on the latest covers all prior writes).</summary>
@@ -93,7 +93,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     }
 
     /// <summary>If a deferred readback is pending, block on the saved commandBuffer's GPU
-    /// completion and copy the MTLTexture into the CPU pixel mirror. Idempotent — clears the
+    /// completion and copy the MTLTexture into the CPU pixel mirror. Idempotent - clears the
     /// pending flag after a single execution. Called automatically from Lock / CopyPixels /
     /// GetPixelSpan; manual callers (e.g. cross-thread CPU mirror access) can invoke directly.</summary>
     private void FlushPendingReadbackIfNeeded()
@@ -133,7 +133,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         PixelHeight = pixelHeight;
         DpiScale = dpiScale;
         HasAlpha = hasAlpha;
-        // _pixels left null — lazily allocated by EnsurePixelBuffer when a CPU consumer
+        // _pixels left null - lazily allocated by EnsurePixelBuffer when a CPU consumer
         // (Lock / GetPixelSpan / EndFrame readback) actually needs the bytes. For pure-GPU
         // filter pipelines (MTLTexture → MPS → MTLTexture → NVG sample), this allocation
         // never happens.
@@ -155,7 +155,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     /// <summary>NanoVG (Metal backend) renders with premultiplied blending.</summary>
     public bool IsPremultiplied => true;
 
-    /// <summary>MTLTexture — <see cref="Lock"/> waits any pending GPU write then
+    /// <summary>MTLTexture - <see cref="Lock"/> waits any pending GPU write then
     /// [texture getBytes:] into the CPU mirror.</summary>
     public LockMode LockMode => LockMode.Readback;
 
@@ -223,7 +223,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         }
     }
 
-    // IMetalTextureSource — exposes the color MTLTexture for zero-copy NoDelete wrapping.
+    // IMetalTextureSource - exposes the color MTLTexture for zero-copy NoDelete wrapping.
     nint IMetalTextureSource.MtlTexture => _disposed ? 0 : ColorTexture;
 
     nint IMetalTextureSource.MtlDevice => _disposed ? 0 : _device;
@@ -272,7 +272,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     /// Copies the contents of an externally-owned MTLTexture into this target's CPU pixel
     /// buffer. Used by GPU filter passes (e.g. <see cref="MetalGaussianBlur"/>) that write
     /// into a temporary shared-storage texture and need the result mirrored on the CPU side
-    /// without touching this target's <see cref="ColorTexture"/> — leaving ColorTexture as 0
+    /// without touching this target's <see cref="ColorTexture"/> - leaving ColorTexture as 0
     /// keeps <see cref="MewVGImage"/>'s zero-copy path disengaged so the consumer's NanoVG
     /// instance uploads from <c>_pixels</c> instead of wrapping the externally-owned texture
     /// (whose lifetime is controlled by the caller).
@@ -285,7 +285,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     private void CopyTextureToPixelsCore(nint texture)
     {
-        // MTLRegion = { origin{x,y,z}, size{w,h,d} } — 6 nint slots on 64-bit.
+        // MTLRegion = { origin{x,y,z}, size{w,h,d} } - 6 nint slots on 64-bit.
         Span<nint> region = stackalloc nint[6]
         {
             0, 0, 0,
@@ -326,7 +326,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     public void Clear(Color color)
     {
-        // No-op — Metal RT's pixel state lives in the GPU MTLTexture. NVG BeginFrame
+        // No-op - Metal RT's pixel state lives in the GPU MTLTexture. NVG BeginFrame
         // clears it via glClear / Metal pass loadAction at the start of each render pass;
         // any CPU mirror (_pixels) gets repopulated from the GPU on EndFrame readback,
         // so clearing it pre-render would be overwritten anyway. Just bump the version
@@ -337,7 +337,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     /// <summary>Exposes the GPU MTLTexture so MewVG-Metal consumers can wrap it
     /// directly (zero-copy filter result reuse) without round-tripping through CPU.
-    /// Caller must use <c>NVGimageFlags.NoDelete</c> — the texture is owned here.</summary>
+    /// Caller must use <c>NVGimageFlags.NoDelete</c> - the texture is owned here.</summary>
     public nint GetTextureHandle() => _disposed ? 0 : ColorTexture;
 
     /// <inheritdoc cref="IGpuTextureSource.RetainGpuHandle"/>
@@ -346,7 +346,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         if (handle == 0) return false;
         // objc_retain is null-safe and idempotent w.r.t. the Cocoa retain count; we don't
         // need to gate on _disposed here because the texture's reference count is independent
-        // of this wrapper's lifecycle once handed out — that is the entire point of Retain.
+        // of this wrapper's lifecycle once handed out - that is the entire point of Retain.
         ObjCRuntime.Retain(handle);
         return true;
     }
@@ -444,7 +444,7 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     {
         if (_disposed) return;
         _disposed = true;
-        // Release any pending commandBuffer reference — we don't need its result anymore,
+        // Release any pending commandBuffer reference - we don't need its result anymore,
         // and not releasing leaks the MTLCommandBuffer until autorelease pool drain (which
         // for offscreen filter passes can be delayed indefinitely on the worker thread).
         if (_pendingCommandBuffer != 0)

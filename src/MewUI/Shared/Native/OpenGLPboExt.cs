@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Native;
 
 /// <summary>
 /// Cross-platform loader for the GL functions needed to do async pixel uploads via
-/// Pixel Buffer Objects + fence sync — none of which are part of the GL 1.1 ABI
+/// Pixel Buffer Objects + fence sync - none of which are part of the GL 1.1 ABI
 /// exported by <c>opengl32.dll</c> / <c>libGL.so.1</c>'s direct symbols on every
 /// system, so we resolve them dynamically through the platform's procaddress.
 /// </summary>
@@ -41,7 +41,7 @@ internal static unsafe class OpenGLPboExt
     public const uint GL_CLAMP_TO_EDGE               = 0x812F;
     public const uint GL_UNPACK_ROW_LENGTH           = 0x0CF2;
 
-    // Extension functions (GL 2.1+ / 3.2+) — must come from wglGetProcAddress on Win32
+    // Extension functions (GL 2.1+ / 3.2+) - must come from wglGetProcAddress on Win32
     // because opengl32.dll only exports the GL 1.1 ABI directly. On Linux libGL.so.1
     // dlsym works for all of these too.
     private static delegate* unmanaged[Stdcall]<int, uint*, void> _glGenBuffers;
@@ -53,7 +53,7 @@ internal static unsafe class OpenGLPboExt
     private static delegate* unmanaged[Stdcall]<nint, uint, ulong, uint> _glClientWaitSync;
     private static delegate* unmanaged[Stdcall]<nint, void> _glDeleteSync;
 
-    // GL 1.1 functions (texture management) are NOT loaded here — wglGetProcAddress
+    // GL 1.1 functions (texture management) are NOT loaded here - wglGetProcAddress
     // on Win32 explicitly returns 0 for the GL 1.1 ABI. They're routed through the
     // existing OpenGL32 / LibGL DllImport wrappers via the platform helpers below.
 
@@ -99,7 +99,7 @@ internal static unsafe class OpenGLPboExt
     {
 #if MEWUI_OPENGL_WIN32
         // Win32 opengl32.dll exports only GL 1.1; everything else (including
-        // PBO and fence sync) is ICD extension — wglGetProcAddress dispatches
+        // PBO and fence sync) is ICD extension - wglGetProcAddress dispatches
         // to the active driver. Returns 0 if no GL context is current.
         return OpenGL32.wglGetProcAddress(name);
 #elif MEWUI_OPENGL_X11
@@ -113,7 +113,7 @@ internal static unsafe class OpenGLPboExt
                 return sym;
             }
         }
-        catch { /* swallow — fall back to glXGetProcAddress */ }
+        catch { /* swallow - fall back to glXGetProcAddress */ }
 
         return LibGL.glXGetProcAddress(name);
 #else
@@ -132,7 +132,7 @@ internal static unsafe class OpenGLPboExt
     public static uint ClientWaitSync(nint sync, uint flags, ulong timeoutNs) => _glClientWaitSync(sync, flags, timeoutNs);
     public static void DeleteSync(nint sync) => _glDeleteSync(sync);
 
-    // GL 1.1 functions go through the platform's existing DllImport wrappers — these
+    // GL 1.1 functions go through the platform's existing DllImport wrappers - these
     // are exported directly from opengl32.dll / libGL.so.1 and never returned by
     // wglGetProcAddress (per Win32 GL spec).
     public static void GenTextures(int n, uint* textures)

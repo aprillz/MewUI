@@ -1,7 +1,7 @@
 namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
-/// Text format descriptor — style, alignment, wrapping, and trimming.
+/// Text format descriptor - style, alignment, wrapping, and trimming.
 /// <para>
 /// Pure managed value object. Created directly by user code or controls.
 /// Backend caches handle native resource lifecycle separately.

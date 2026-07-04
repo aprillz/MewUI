@@ -16,7 +16,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 public interface IGLTextureSource : IGpuTextureSource
 {
     /// <summary>
-    /// Native GL texture id. Lifetime is owned by the source — consumers MUST NOT call
+    /// Native GL texture id. Lifetime is owned by the source - consumers MUST NOT call
     /// <c>glDeleteTextures</c> on this id directly. Returns 0 when the texture hasn't
     /// been initialised yet (e.g. CPU-only consumer never triggered FBO setup).
     /// </summary>

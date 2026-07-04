@@ -51,7 +51,7 @@ internal sealed partial class MewVGX11GraphicsContext
             GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
 
             // Clear the window framebuffer for real. The public Clear(Color) is a NanoVG fill, which no-ops when
-            // clearing to a transparent colour (alpha-blend with alpha=0) — so on a transparent window the GLX
+            // clearing to a transparent colour (alpha-blend with alpha=0) - so on a transparent window the GLX
             // back buffer (preserved across swaps on some drivers) accumulates previous frames and the alpha
             // builds up. glClear zeroes the buffer incl. alpha; ColorMask is forced on first because NanoVG's
             // stencil-fill pass can leave colormask=(F,F,F,F) (same fix as the offscreen PreparePixelSurface).
@@ -442,7 +442,7 @@ internal sealed partial class MewVGX11GraphicsContext
     private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
     {
         // No-opinion bail-outs: nothing to compare against. The share-group equality check below
-        // is the real signal — cross-API pointer collisions don't happen in practice, so a
+        // is the real signal - cross-API pointer collisions don't happen in practice, so a
         // typed-backend discriminator isn't needed.
         if (lease is not IGpuResourceAffinityProvider affinityProvider ||
             affinityProvider.Affinity?.Device is not { } sourceDevice ||
@@ -559,7 +559,7 @@ internal sealed partial class MewVGX11GraphicsContext
         public void EndFrame()
         {
             _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
-            // Outermost session — drain FBO disposals only after every NVG (window + nested
+            // Outermost session - drain FBO disposals only after every NVG (window + nested
             // offscreen) has flushed; nested sessions wrap scratch FBO textures via
             // CreateImageFromHandle and the outer's queued draws still reference them.
             if (_offscreenProvider.ExitSession())
@@ -617,7 +617,7 @@ internal sealed partial class MewVGX11GraphicsContext
         {
             _pixelSurface.RequestDeferredReadback();
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
-            // Per-NVG drain — only this offscreen NVG's pending image-id deletions, on its
+            // Per-NVG drain - only this offscreen NVG's pending image-id deletions, on its
             // own thread inside its EndFrame. Avoids racing the window NVG mid-frame.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
             if (_offscreenProvider.ExitSession())
@@ -638,7 +638,7 @@ internal sealed partial class MewVGX11GraphicsContext
 
     private static void PreparePixelSurface(IMewVGOffscreenSurfaceProvider offscreenProvider, OpenGLPixelRenderSurface pixelSurface)
     {
-        // Don't drain pending target disposals here — see Win32 PreparePixelSurface for
+        // Don't drain pending target disposals here - see Win32 PreparePixelSurface for
         // the rationale. Drain happens at the outermost session's EndFrame instead.
         pixelSurface.InitializeFbo();
         if (!pixelSurface.IsFboInitialized || pixelSurface.Fbo == 0)
@@ -646,7 +646,7 @@ internal sealed partial class MewVGX11GraphicsContext
             throw new PlatformNotSupportedException("OpenGL FBOs are required for X11 pixel-surface rendering.");
         }
 
-        // Record the GLXContext that owns the FBO/RB handles — see Win32 path for
+        // Record the GLXContext that owns the FBO/RB handles - see Win32 path for
         // rationale (FBOs are not shared via glXCreateContext share, only textures).
         pixelSurface.RecordCreationContext(LibGL.glXGetCurrentContext());
 

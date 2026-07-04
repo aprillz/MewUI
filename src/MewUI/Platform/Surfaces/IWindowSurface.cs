@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Platform;
 /// <summary>
 /// Identifies the platform display/output associated with a window surface as an opaque
 /// (IdLow, IdHigh, NativeHandle) tuple. Equality is structural, so backends only need to
-/// know how to extract their own meaningful field — typically <see cref="NativeHandle"/>
+/// know how to extract their own meaningful field - typically <see cref="NativeHandle"/>
 /// (Win32 HMONITOR, macOS NSScreen*, etc.) plus an optional secondary index
 /// (<see cref="IdHigh"/> carries the X11 screen number).
 /// The Core type is platform-neutral; per-platform construction lives in the corresponding

@@ -113,7 +113,7 @@ internal static partial class X11
         out int firstEventReturn,
         out int firstErrorReturn);
 
-    // GenericEvent (XEvent.type == 35) cookies — used by XInput2 and other modern extensions.
+    // GenericEvent (XEvent.type == 35) cookies - used by XInput2 and other modern extensions.
     // These belong to core libX11; the extension-specific payload referenced through
     // XGenericEventCookie.data is interpreted by the receiving extension.
     [LibraryImport(LibraryName)]

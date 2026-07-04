@@ -129,7 +129,7 @@ internal static class ZoomPanCanvasTest
 
 /// <summary>
 /// A container that applies a zoom (scale) transform to a single child.
-/// Designed to be placed inside a ScrollViewer — measures at childSize * zoom
+/// Designed to be placed inside a ScrollViewer - measures at childSize * zoom
 /// so the ScrollViewer provides scrollbars automatically.
 /// Wheel zooms anchored to the cursor position.
 /// </summary>
@@ -420,7 +420,7 @@ public class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
         sv.SetScrollOffsets(sx, sy);
 
         e.Handled = true;
-        // Layout hasn't run yet — extent is stale, so the offset may be clamped to 0.
+        // Layout hasn't run yet - extent is stale, so the offset may be clamped to 0.
         // Re-apply after layout when extent reflects the new zoom.
         Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render, () =>
             sv.SetScrollOffsets(sx, sy));
@@ -442,7 +442,7 @@ public class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
         }
 
         _isPanning = true;
-        // Use window-relative position (DIPs) for stable delta — it doesn't
+        // Use window-relative position (DIPs) for stable delta - it doesn't
         // shift as the scroll offset changes during the drag, and the Y axis
         // is consistent across platforms (unlike ScreenPosition on macOS).
         _panStart = e.GetPosition((UIElement)FindVisualRoot()!);

@@ -113,7 +113,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     #endregion
 
-    #region State Management (template methods — cull rect tracking)
+    #region State Management (template methods - cull rect tracking)
 
     public void Save()
     {
@@ -245,7 +245,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     #endregion
 
-    #region Drawing Primitives (template methods — cull check)
+    #region Drawing Primitives (template methods - cull check)
 
     public void DrawLine(Point start, Point end, Color color, double thickness = 1)
     {
@@ -322,7 +322,7 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     #endregion
 
-    #region Abstract — non-culled (pass-through)
+    #region Abstract - non-culled (pass-through)
 
     public abstract double DpiScale { get; }
 

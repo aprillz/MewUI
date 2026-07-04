@@ -867,7 +867,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         // ── Pixel Snap Tests ──
 
-        _tests.Add(new TestCase("PixelSnap — H Lines", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - H Lines", (g, r) =>
         {
             // Dense horizontal lines at sub-pixel Y offsets.
             // With pixelSnap all lines should render as uniform 1px; without snap some blur.
@@ -886,7 +886,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("PixelSnap — V Lines", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - V Lines", (g, r) =>
         {
             // Dense vertical lines at sub-pixel X offsets.
             var c = Theme.Palette.WindowText;
@@ -904,7 +904,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("PixelSnap — Rects", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - Rects", (g, r) =>
         {
             // Dense rectangles with sub-pixel offsets (col * 0.3). 1px/2px stroke inset.
             var fill = Theme.Palette.Accent.WithAlpha(0x33);
@@ -924,7 +924,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("PixelSnap — RoundedRects", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - RoundedRects", (g, r) =>
         {
             // Dense rounded rectangles with sub-pixel offsets. 1px/2px stroke inset.
             var fill = Theme.Palette.Accent.WithAlpha(0x33);
@@ -944,7 +944,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("PixelSnap — Ellipses", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - Ellipses", (g, r) =>
         {
             // Dense ellipses with sub-pixel offsets. 1px/2px stroke inset.
             var fill = Theme.Palette.Accent.WithAlpha(0x33);
@@ -964,7 +964,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("PixelSnap — Grid", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - Grid", (g, r) =>
         {
             // Tight grid of H+V lines simulating table/grid rendering.
             var c = Theme.Palette.ControlBorder;
@@ -986,7 +986,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("PixelSnap — Mixed", (g, r) =>
+        _tests.Add(new TestCase("PixelSnap - Mixed", (g, r) =>
         {
             // All primitives at the same sub-pixel offsets for direct comparison.
             var fill = Theme.Palette.Accent.WithAlpha(0x33);

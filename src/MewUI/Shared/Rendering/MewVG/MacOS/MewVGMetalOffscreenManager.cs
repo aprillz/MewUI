@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// <remarks>
 /// <b>Pool semantics</b>: nested offscreen passes (e.g. a cached bitmap
 /// cache renders the document, which in turn invokes a Pattern brush that
-/// needs its own offscreen tile) require independent NVG instances — calling
+/// needs its own offscreen tile) require independent NVG instances - calling
 /// <c>nvgBeginFrame</c> on the inner pass would otherwise reset the outer
 /// pass's transform / scissor / draw queue, since NanoVG holds only one
 /// "frame" worth of state per instance. Each level of nesting acquires a fresh
@@ -43,7 +43,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     private readonly object _lock = new();
     private readonly Dictionary<nint, OffscreenPool> _poolsByDevice = new();
     // Per-NVG queue: see GL provider for the rationale. NVG instance state isn't
-    // thread-safe — calling vg.DeleteImage from a thread that doesn't own the NVG
+    // thread-safe - calling vg.DeleteImage from a thread that doesn't own the NVG
     // (or while the NVG is mid-frame elsewhere) corrupts the image table.
     private readonly Dictionary<NanoVG, Queue<(MewVGImage Image, NVGimageFlags Flags)>> _pendingImageDisposal = new();
     private nint _defaultDevice;
@@ -61,7 +61,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     /// Borrows an offscreen NVG instance bound to the given
     /// <paramref name="device"/>, or to the system-default <c>MTLDevice</c>
     /// when <paramref name="device"/> is 0. The returned instance has unique
-    /// transform / scissor / draw-queue state for this offscreen pass — safe
+    /// transform / scissor / draw-queue state for this offscreen pass - safe
     /// to use even when an outer pass is mid-frame on a different borrowed
     /// instance. Caller MUST <see cref="ReturnSurface"/> the same instance when
     /// finished, typically in the offscreen graphics context's Dispose.
@@ -86,7 +86,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             }
         }
 
-        // Create outside the lock — NanoVGMetal ctor compiles shaders and is
+        // Create outside the lock - NanoVGMetal ctor compiles shaders and is
         // expensive; serialising it across all threads is unnecessary. The
         // race only causes a tiny amount of over-allocation: two callers may
         // both find the pool empty and each create a fresh instance, with the
@@ -180,7 +180,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     /// <summary>
     /// Returns a long-lived <c>MTLCommandQueue</c> on the system-default device, dedicated to
     /// filter passes. Reused across calls so MPS / compute kernels don't pay queue-allocation
-    /// cost per blur. Returns 0 if the device isn't available. Owned by the provider — do not
+    /// cost per blur. Returns 0 if the device isn't available. Owned by the provider - do not
     /// release.
     /// </summary>
     internal nint TryGetFilterCommandQueue()
@@ -203,7 +203,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
 
     /// <summary>
     /// Queues a <see cref="MewVGImage"/> for deferred disposal. Splits the image's NVG
-    /// entries into per-NVG buckets — each NVG drains its own bucket from its own
+    /// entries into per-NVG buckets - each NVG drains its own bucket from its own
     /// EndFrame on the thread that owns it. Without this split, the window NVG's drain
     /// could call <c>vg.DeleteImage</c> on a worker NVG that's mid-frame elsewhere,
     /// corrupting the image table.
@@ -220,7 +220,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
         var entries = image.SnapshotPendingEntries();
         if (entries.Count == 0)
         {
-            // No NVG image-ids — nothing to defer; release inline so the post-release
+            // No NVG image-ids - nothing to defer; release inline so the post-release
             // callback (e.g. scratch surface pool return) still fires.
             image.ReleaseImagesImmediate();
             return;
@@ -266,7 +266,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
         }
     }
 
-    /// <summary>Drains every NVG's bucket — shutdown only, when all NVGs are idle.</summary>
+    /// <summary>Drains every NVG's bucket - shutdown only, when all NVGs are idle.</summary>
     internal int ReleasePendingImages()
     {
         int count = 0;

@@ -4,7 +4,7 @@
 
   <PropertyGroup>
     <PackageId>$(MewUITitle).Windows</PackageId>
-    <Description>MewUI metapackage for Windows — includes Core, Win32 platform host, and all Windows rendering backends (Direct2D, GDI, MewVG). Use MewUIBackend property at publish to select one.</Description>
+    <Description>MewUI metapackage for Windows - includes Core, Win32 platform host, and all Windows rendering backends (Direct2D, GDI, MewVG). Use MewUIBackend property at publish to select one.</Description>
     <PackageTags>mewui;windows;win32;direct2d;gdi;mewvg;gui;nativeaot;metapackage</PackageTags>
   </PropertyGroup>
 

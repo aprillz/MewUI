@@ -242,7 +242,7 @@ internal sealed class PopupManager
             case PopupCloseRequest.Trigger.PointerDown:
             {
                 var leaf = request.PointerLeaf;
-                // Hit-test-invisible popups (e.g. ToolTip) are never "related" — always close on any click.
+                // Hit-test-invisible popups (e.g. ToolTip) are never "related" - always close on any click.
                 CloseTransientPopups(leaf == null
                     ? null
                     : entry => entry.Element.IsHitTestVisible && IsRelated(leaf, entry, applyContextMenuOwnerPolicy: true));

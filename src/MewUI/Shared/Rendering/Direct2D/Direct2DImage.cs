@@ -49,13 +49,13 @@ internal sealed class Direct2DImage : IImage
 
         // GPU fast path via the ID2DTextureSource backend marker. When the source exposes
         // a native ID2D1Bitmap1* tied to the same device context as the consumer's render
-        // target, we return that bitmap directly — no Lock readback, no CPU premultiply,
+        // target, we return that bitmap directly - no Lock readback, no CPU premultiply,
         // no CreateBitmap upload. Offscreen render surfaces and image filter
         // outputs hit this when both share the factory's shared filter device context
         // (filter cache -> offscreen render = pure GPU draw, zero CPU touch).
         //
         // Cross-backend sources (GL FBO, Metal texture, etc.) don't implement
-        // ID2DTextureSource — the cast naturally fails and we fall through to the CPU
+        // ID2DTextureSource - the cast naturally fails and we fall through to the CPU
         // readback path below.
         if (_pixels is ID2DTextureSource d2dSource
             && d2dSource.OwningDeviceContext == renderTarget
@@ -139,7 +139,7 @@ internal sealed class Direct2DImage : IImage
         }
 
         // Opaque sources skip both the premultiply scan and the conservative "is every byte
-        // 0xFF?" check — there's no alpha to multiply. The bitmap is created with
+        // 0xFF?" check - there's no alpha to multiply. The bitmap is created with
         // ALPHA_MODE.IGNORE, so D2D treats the high byte as undefined regardless of contents.
         if (!_hasAlpha)
         {
@@ -149,7 +149,7 @@ internal sealed class Direct2DImage : IImage
 
         // D2D's BGRA8 format requires PREMULTIPLIED alpha mode (STRAIGHT is rejected by
         // ID2D1RenderTarget::CreateBitmap with WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT). If the
-        // source is already premultiplied (offscreen RT — the hot path) we use the buffer
+        // source is already premultiplied (offscreen RT - the hot path) we use the buffer
         // directly; only straight-alpha sources (PNG decode, raw bytes) pay the CPU
         // premultiply cost.
         _premultiplied = _pixels.IsPremultiplied ? l.Buffer : PremultiplyIfNeeded(l.Buffer);

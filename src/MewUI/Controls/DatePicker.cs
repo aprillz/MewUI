@@ -87,7 +87,7 @@ public sealed class DatePicker : DropDownBase
     protected override void SyncPopupContent(UIElement popup)
     {
         // Only sync lightweight properties that the owner may change while open.
-        // Avoid overwriting DisplayDate/DisplayMode/SelectedDate — the Calendar
+        // Avoid overwriting DisplayDate/DisplayMode/SelectedDate - the Calendar
         // manages those internally (nav buttons, mode drill-down, etc.) and
         // SyncPopupContent is called every render frame via UpdatePopupBoundsCore.
         if (_calendar == null) return;
@@ -125,7 +125,7 @@ public sealed class DatePicker : DropDownBase
 
     private void OnCalendarDateActivated(DateTime date)
     {
-        // Commit action (mouse click or Enter key) — close popup.
+        // Commit action (mouse click or Enter key) - close popup.
         SelectedDate = date;
         IsDropDownOpen = false;
     }
@@ -186,7 +186,7 @@ public sealed class DatePicker : DropDownBase
         var bounds = Bounds;
         var client = window.ClientSize;
 
-        // Calendar measures itself — use its desired size
+        // Calendar measures itself - use its desired size
         popup.Measure(new Size(client.Width, client.Height));
         double popupW = Math.Max(popup.DesiredSize.Width, bounds.Width);
         double popupH = popup.DesiredSize.Height;

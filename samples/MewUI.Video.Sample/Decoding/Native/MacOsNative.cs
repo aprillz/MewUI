@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 internal static partial class MacOsNative
 {
     // -------------------------------------------------------------------------
-    // task_info — process physical footprint (≈ Activity Monitor "Memory")
+    // task_info - process physical footprint (≈ Activity Monitor "Memory")
     // -------------------------------------------------------------------------
 
     private const uint TaskVmInfo = 22;
@@ -28,7 +28,7 @@ internal static partial class MacOsNative
     private const int PhysFootprintOffset = 144;
 
     // mach_task_self_ in libsystem_kernel.dylib is an exported VARIABLE (mach_port_t), not a
-    // function — calling it via P/Invoke jumps into __DATA_DIRTY and SIGBUSes. task_self_trap()
+    // function - calling it via P/Invoke jumps into __DATA_DIRTY and SIGBUSes. task_self_trap()
     // is the trap-style function that returns the same value (the current task's mach port).
     [LibraryImport("libSystem.dylib")]
     private static partial uint task_self_trap();
@@ -38,7 +38,7 @@ internal static partial class MacOsNative
         uint targetTask, uint flavor, void* taskInfoOut, ref uint taskInfoOutCount);
 
     /// <summary>
-    /// Returns the process physical footprint — the value macOS Activity Monitor
+    /// Returns the process physical footprint - the value macOS Activity Monitor
     /// shows as "Memory". Equivalent to Windows "Private Bytes".
     /// Returns false on any failure (non-macOS, kernel error).
     /// </summary>
@@ -68,7 +68,7 @@ internal static partial class MacOsNative
     }
 
     // -------------------------------------------------------------------------
-    // objc_msgSend — MTLDevice.currentAllocatedSize
+    // objc_msgSend - MTLDevice.currentAllocatedSize
     // -------------------------------------------------------------------------
 
     [LibraryImport("/usr/lib/libobjc.dylib", EntryPoint = "sel_registerName",

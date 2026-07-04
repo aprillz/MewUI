@@ -115,7 +115,7 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
 
         if (icon != NativeMessageBoxIcon.None)
         {
-            // Unknown icon type — let NSAlert use default (app icon).
+            // Unknown icon type - let NSAlert use default (app icon).
             return 0;
         }
 

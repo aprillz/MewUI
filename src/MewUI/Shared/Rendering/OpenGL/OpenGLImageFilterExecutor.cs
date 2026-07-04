@@ -13,7 +13,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// <remarks>
 /// The executor reaches into <see cref="FilterResult.UnderlyingSurface"/> to obtain the
 /// backend's <see cref="OpenGLPixelRenderSurface"/> and runs the shader with both source and
-/// destination FBOs — so input is never mutated and we avoid the readback / re-upload that
+/// destination FBOs - so input is never mutated and we avoid the readback / re-upload that
 /// plagued the older capability-based approach. When the input or scratch isn't an OpenGL
 /// target (e.g. a <see cref="FloodFilter"/> result built by the CPU executor), we fall back
 /// to CPU for that node only.
@@ -50,7 +50,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
         // context's input-to-pixel scale) before handing the value to the GLSL pass.
         double rawSigmaX = BlurKernel.RadiusToSigma(b.RadiusX) * ctx.LogicalToPixelScaleX;
         double rawSigmaY = BlurKernel.RadiusToSigma(b.RadiusY) * ctx.LogicalToPixelScaleY;
-        // Collapse anisotropic sigma to the geometric mean — matches Metal MPS's isotropic
+        // Collapse anisotropic sigma to the geometric mean - matches Metal MPS's isotropic
         // Gaussian (which can't do separable per-axis without a custom compute shader).
         // Both backends now produce the same shape for σx ≠ σy / non-uniform-zoom inputs.
         double pxSigma = (rawSigmaX > 0 && rawSigmaY > 0)
@@ -81,7 +81,7 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
             if (scratch.UnderlyingSurface is not OpenGLPixelRenderSurface glDest) return null;
 
-            // Lazy FBO init — pool gives back a fresh RT whose GPU resources haven't been
+            // Lazy FBO init - pool gives back a fresh RT whose GPU resources haven't been
             // created yet (no BeginFrame has run on it). We're inside the main render path
             // so the GL context is current.
             glDest.InitializeFbo();

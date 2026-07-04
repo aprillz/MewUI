@@ -99,7 +99,7 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
     public Size IntrinsicSize => new(Math.Max(0, _document.ViewBoxWidth), Math.Max(0, _document.ViewBoxHeight));
 
     /// <summary>
-    /// Total SVG rasterizations across all instances (diagnostic — e.g. sampling rasters-per-second).
+    /// Total SVG rasterizations across all instances (diagnostic - e.g. sampling rasters-per-second).
     /// Incremented on each actual <see cref="Render"/> (SVG drawn to pixels). The host <see cref="Aprillz.MewUI.Controls.Image"/>
     /// caches the rastered bitmap, so Render runs only on the host's cache miss (size/tint/DPI change).
     /// </summary>
@@ -109,7 +109,7 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
 
     /// <inheritdoc />
     /// <remarks>
-    /// Stateless direct draw — the SVG is drawn into <paramref name="context"/> at <paramref name="destRect"/>
+    /// Stateless direct draw - the SVG is drawn into <paramref name="context"/> at <paramref name="destRect"/>
     /// every call. Any rasterized-bitmap caching is the host's concern (the <see cref="Aprillz.MewUI.Controls.Image"/>
     /// vector path caches per control), so this stays free of per-source cache state.
     /// </remarks>

@@ -32,7 +32,7 @@ internal sealed class MewFontDefn : IFontDefn
         // but adjacent-character cursor positions must respect the kerning the layout
         // engine applied to the prefix. Earlier code used `cursor[i] = MeasureText(prefix
         // exclusive of char i)` which placed each char at the kerned end of the previous
-        // prefix — but the previous glyph was drawn at its un-kerned own advance, so the
+        // prefix - but the previous glyph was drawn at its un-kerned own advance, so the
         // two diverged by the kerning amount. Visible as adjacent kerning pairs (e.g.
         // Arial 'Te') overlapping the next glyph by ~5 px at 48 px font.
         //

@@ -457,7 +457,7 @@ internal static unsafe class DWriteFontFallbackBuilderVTable
 /// </summary>
 internal static unsafe class DWriteTextLayout2VTable
 {
-    // IDWriteTextLayout2 IID — required for SetFontFallback.
+    // IDWriteTextLayout2 IID - required for SetFontFallback.
     private static readonly Guid IID_IDWriteTextLayout2 = new("1093C18F-8D5E-43F0-B064-0917311B525E");
 
     // IDWriteTextFormat:  3 (IUnknown) + 25 methods = vtable[0..27]

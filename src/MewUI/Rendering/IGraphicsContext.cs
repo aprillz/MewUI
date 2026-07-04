@@ -253,13 +253,13 @@ namespace Aprillz.MewUI.Rendering
 
         /// <summary>
         /// Computes text layout from format and constraints.
-        /// Layout phase — must not perform any drawing.
+        /// Layout phase - must not perform any drawing.
         /// </summary>
         TextLayout? CreateTextLayout(ReadOnlySpan<char> text, TextFormat format, in TextLayoutConstraints constraints);
 
         /// <summary>
         /// Draws text using a precomputed <see cref="TextLayout"/>.
-        /// Draw phase — must not re-measure or re-compute layout.
+        /// Draw phase - must not re-measure or re-compute layout.
         /// </summary>
         void DrawTextLayout(ReadOnlySpan<char> text, TextFormat format, TextLayout layout, Color color);
 
@@ -270,7 +270,7 @@ namespace Aprillz.MewUI.Rendering
         /// mutates. The default implementation discards <paramref name="owner"/> and forwards
         /// to <see cref="DrawTextLayout(ReadOnlySpan{char}, TextFormat, TextLayout, Color)"/>;
         /// backends that don't benefit from the optimization simply inherit the default.
-        /// A <see langword="null"/> owner is equivalent to the default — falls back to
+        /// A <see langword="null"/> owner is equivalent to the default - falls back to
         /// content-keyed caching.
         /// </summary>
         void DrawTextLayout(ReadOnlySpan<char> text, TextFormat format, TextLayout layout, Color color, object? owner)
@@ -278,7 +278,7 @@ namespace Aprillz.MewUI.Rendering
 
         /// <summary>
         /// Draws text within the specified bounds with alignment options.
-        /// Convenience facade — internally uses CreateTextLayout + DrawTextLayout.
+        /// Convenience facade - internally uses CreateTextLayout + DrawTextLayout.
         /// </summary>
         void DrawText(ReadOnlySpan<char> text, Rect bounds, IFont font, Color color,
             TextAlignment horizontalAlignment = TextAlignment.Left,
@@ -288,13 +288,13 @@ namespace Aprillz.MewUI.Rendering
 
         /// <summary>
         /// Measures the size of the specified text.
-        /// Convenience facade — internally uses CreateTextLayout.
+        /// Convenience facade - internally uses CreateTextLayout.
         /// </summary>
         Size MeasureText(ReadOnlySpan<char> text, IFont font);
 
         /// <summary>
         /// Measures the size of the specified text within a constrained width.
-        /// Convenience facade — internally uses CreateTextLayout.
+        /// Convenience facade - internally uses CreateTextLayout.
         /// </summary>
         Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth);
 

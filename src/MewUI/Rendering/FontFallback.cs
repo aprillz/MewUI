@@ -154,7 +154,7 @@ public static class FontFallback
 
     /// <summary>
     /// Returns CJK font families ordered by <paramref name="locale"/> priority.
-    /// All four variants (KR, JP, SC, TC) are always included — the locale only
+    /// All four variants (KR, JP, SC, TC) are always included - the locale only
     /// determines which appears first.
     /// </summary>
     public static string[] OrderCjkByLocale(string locale, string kr, string jp, string sc, string tc)

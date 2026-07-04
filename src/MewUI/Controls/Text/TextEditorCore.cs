@@ -582,7 +582,7 @@ internal sealed class TextEditorCore
         // With merging, each replace-at-same-index collapses to a single Insert.
         //
         // Rule: if a Delete at index N exactly cancels the previous Insert at index N
-        // (same index, same text), remove both — the next Insert will take the slot.
+        // (same index, same text), remove both - the next Insert will take the slot.
         if (edit.Kind == EditKind.Delete && _undo.Count >= 1)
         {
             var prev = _undo[^1];
@@ -590,7 +590,7 @@ internal sealed class TextEditorCore
                 && prev.Index == edit.Index
                 && prev.Text == edit.Text)
             {
-                // Delete cancels previous Insert at same position — remove the Insert,
+                // Delete cancels previous Insert at same position - remove the Insert,
                 // skip recording this Delete. Net effect: slot is empty for next Insert.
                 _undo.RemoveAt(_undo.Count - 1);
                 _redo.Clear();

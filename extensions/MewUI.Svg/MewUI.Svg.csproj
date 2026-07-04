@@ -9,7 +9,7 @@
     <Nullable>disable</Nullable>
     <NoWarn>$(NoWarn);CS8632</NoWarn>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <Description>SVG rendering support for $(MewUITitle). Pure managed implementation via System.Xml.Linq — no System.Drawing dependency, NativeAOT compatible.</Description>
+    <Description>SVG rendering support for $(MewUITitle). Pure managed implementation via System.Xml.Linq - no System.Drawing dependency, NativeAOT compatible.</Description>
   </PropertyGroup>
 
   <PropertyGroup>

@@ -13,11 +13,11 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// </summary>
 internal static unsafe class DWriteGeometrySink
 {
-    // ID2D1SimplifiedGeometrySink IID — needed for QueryInterface response.
+    // ID2D1SimplifiedGeometrySink IID - needed for QueryInterface response.
     private static readonly Guid _iidSimplifiedSink = new("2cd9069e-12e2-11dc-9fed-001143a055f9");
     private static readonly Guid _iidUnknown = new("00000000-0000-0000-c000-000000000046");
 
-    // Single shared vtable for every Sink instance (stateless dispatch — `self` is the
+    // Single shared vtable for every Sink instance (stateless dispatch - `self` is the
     // first parameter and carries the instance state via the GCHandle slot).
     private static readonly IntPtr* _vtable = BuildVtable();
 
@@ -116,7 +116,7 @@ internal static unsafe class DWriteGeometrySink
         if (*riid == _iidUnknown || *riid == _iidSimplifiedSink)
         {
             *ppvObject = self;
-            // Manually bump refcount — UnmanagedCallersOnly methods can't be called
+            // Manually bump refcount - UnmanagedCallersOnly methods can't be called
             // from managed code, so we duplicate the AddRef body here.
             Interlocked.Increment(ref ((Instance*)self)->RefCount);
             return 0;
@@ -137,7 +137,7 @@ internal static unsafe class DWriteGeometrySink
     {
         var inst = (Instance*)self;
         int n = Interlocked.Decrement(ref inst->RefCount);
-        // We never let DWrite free us — Destroy is called explicitly by the C# owner —
+        // We never let DWrite free us - Destroy is called explicitly by the C# owner -
         // so just report the reduced count here.
         return (uint)Math.Max(0, n);
     }
@@ -153,7 +153,7 @@ internal static unsafe class DWriteGeometrySink
     {
         var sink = GetSink(self);
         // DWrite outline coords are Y-down (positive y = below baseline) in the same
-        // direction as SVG/Direct2D screen coords — direct addition, no flip.
+        // direction as SVG/Direct2D screen coords - direct addition, no flip.
         sink.Path.MoveTo(sink.BaselineX + startPoint.x, sink.BaselineY + startPoint.y);
         sink.InFigure = true;
     }

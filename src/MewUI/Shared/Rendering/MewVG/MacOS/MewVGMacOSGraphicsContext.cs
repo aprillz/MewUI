@@ -327,9 +327,9 @@ internal sealed partial class MewVGMacOSGraphicsContext
         {
             // waitUntilCompleted is required: the rendered ColorTexture is consumed by the
             // filter executor's MPS on a DIFFERENT command queue (filter queue vs offscreen
-            // surface queue). Cross-queue MTLTexture access without explicit sync races —
+            // surface queue). Cross-queue MTLTexture access without explicit sync races -
             // MPS reads pre-render content. NVG's outer DrawImage consumer is also a fresh
-            // commandBuffer (typically window queue) — same cross-queue issue.
+            // commandBuffer (typically window queue) - same cross-queue issue.
             //
             // What we DO defer is the much heavier MTLTexture → CPU getBytes (32 MB per
             // 4096 × 2000 RT). CPU consumers (Lock / CopyPixels / GetPixelSpan) trigger it
@@ -341,7 +341,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         public void ReleasePendingFrameResources()
         {
             // Per-NVG drain for the offscreen NVG that just rendered. We're inside its
-            // EndFrame on the thread that owns it — only safe time to call DeleteImage on
+            // EndFrame on the thread that owns it - only safe time to call DeleteImage on
             // this NVG without racing the window NVG mid-frame on another thread.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
         }
@@ -375,7 +375,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             ObjCRuntime.SendMessageNoReturn(color0, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));
         }
 
-        // colorAttachments[1] — coverage AA scratch (alpha8 / R8). Present so
+        // colorAttachments[1] - coverage AA scratch (alpha8 / R8). Present so
         // transparent stroke / fill calls can build coverage and composite within
         // the same render encoder via FB fetch (no tile flush). Memoryless on
         // Apple Silicon: never lands in DRAM. Cleared per frame so subsequent
@@ -857,7 +857,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
     {
         // No-opinion bail-outs: nothing to compare against, or lease doesn't expose affinity.
-        // The pointer equality check below is the real signal — cross-API pointer collisions
+        // The pointer equality check below is the real signal - cross-API pointer collisions
         // (a GL share-group handle matching a Metal device pointer) don't happen in practice,
         // so we no longer need a typed-backend discriminator to gate this check.
         if (_currentFrameDevice == 0 ||

@@ -11,7 +11,7 @@ namespace Aprillz.MewUI;
 ///
 /// For built-in backends, decoded pixels are shared and cached so rendering and pixel
 /// sampling (e.g. <c>Image.TryPeekColor</c>) reuse a single buffer. After a successful
-/// decode the encoded bytes are released — see <see cref="EncodedBytes"/>.
+/// decode the encoded bytes are released - see <see cref="EncodedBytes"/>.
 ///
 /// If the built-in decoders cannot decode the payload, creation falls back to
 /// <see cref="IGraphicsFactory.CreateImageFromBytes(byte[])"/> so custom factories can
@@ -51,14 +51,14 @@ public sealed class ImageSource : IOrientedImageSource
 
     /// <summary>
     /// Gets the encoded image payload. Empty once the source has been successfully
-    /// decoded — the encoded buffer is released to reclaim memory. Raw-pixel sources
+    /// decoded - the encoded buffer is released to reclaim memory. Raw-pixel sources
     /// never carry encoded data.
     /// </summary>
     internal ReadOnlyMemory<byte> EncodedBytes => _encoded ?? ReadOnlyMemory<byte>.Empty;
 
     /// <summary>
     /// Best-effort detected format id from registered decoders (diagnostics only).
-    /// Cached after first access — survives encoded-bytes release.
+    /// Cached after first access - survives encoded-bytes release.
     /// </summary>
     public string? FormatId
     {
@@ -163,7 +163,7 @@ public sealed class ImageSource : IOrientedImageSource
         TryFromResource(typeof(TAnchor).Assembly, resourceName, out source);
 
     /// <summary>
-    /// Wraps a pre-decoded BGRA32 buffer. The array is referenced (not copied) — caller must
+    /// Wraps a pre-decoded BGRA32 buffer. The array is referenced (not copied) - caller must
     /// not mutate after handing it over.
     /// </summary>
     public static ImageSource FromBgraPixels(int width, int height, byte[] bgra, bool hasAlpha = true)
@@ -288,7 +288,7 @@ public sealed class ImageSource : IOrientedImageSource
 
             if (_decodedValid)
             {
-                // Raw-pixel source — wrap the existing buffer without invoking the decoder.
+                // Raw-pixel source - wrap the existing buffer without invoking the decoder.
                 _decodedPixelSource = new StaticPixelBufferSource(
                     _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
                 pixelSource = _decodedPixelSource;

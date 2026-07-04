@@ -126,7 +126,7 @@ internal sealed class SkiaGLSurfaceHost : ISkiaSurfaceHost
     {
         if (_grContext != null) return;
         _glInterface = GRGlInterface.Create()
-            ?? throw new InvalidOperationException("GRGlInterface.Create returned null — no GL context current on this thread.");
+            ?? throw new InvalidOperationException("GRGlInterface.Create returned null - no GL context current on this thread.");
         _grContext = GRContext.CreateGl(_glInterface)
             ?? throw new InvalidOperationException("GRContext.CreateGl returned null for the current GL context.");
     }

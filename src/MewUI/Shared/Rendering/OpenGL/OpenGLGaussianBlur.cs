@@ -10,7 +10,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 internal static unsafe class OpenGLGaussianBlur
 {
     /// <summary>Maximum kernel radius supported by the shader. Raised from 32 to 256 to
-    /// match Metal MPS's effectively-unlimited kernel — at high zoom (σ_pixel ≥ 32/3 ≈ 10.67)
+    /// match Metal MPS's effectively-unlimited kernel - at high zoom (σ_pixel ≥ 32/3 ≈ 10.67)
     /// the previous cap truncated the Gaussian and made GL look noticeably less blurred than
     /// Metal for the same input. GLSL 330 fragment uniform float arrays are guaranteed up to
     /// 1024 elements so a 257-entry weights array stays well within spec.</summary>
@@ -52,7 +52,7 @@ void main() {
 
     // Fragment: variable-radius separable Gaussian. Weights array is symmetric
     // around index 0 (passed by absolute index). Loop bound is MaxRadius (compile-time
-    // constant) — the actual iteration count is u_radius via early break, so the GPU
+    // constant) - the actual iteration count is u_radius via early break, so the GPU
     // pays only for the kernel actually requested.
     private static readonly string FragmentShaderSource = $@"#version 140
 in vec2 v_uv;
@@ -179,7 +179,7 @@ void main() {{
 
     private static bool EnsureScratch(int width, int height)
     {
-        // Exact match required — the blur shader uses v_uv ∈ [0,1] to sample the entire
+        // Exact match required - the blur shader uses v_uv ∈ [0,1] to sample the entire
         // scratch texture in pass 2. If we reused an oversized scratch (e.g. previous frame
         // was zoomed in) the stale border outside the current write region would alias into
         // pass 2's samples, producing visible "ghost" copies of older zoom levels.
@@ -287,7 +287,7 @@ void main() {{
                 OpenGLExt.BindVertexArray(0);
                 OpenGLExt.UseProgram(0);
                 OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, (uint)prevCopyFbo);
-                // Deferred readback — the immediate version was the per-filter sync barrier
+                // Deferred readback - the immediate version was the per-filter sync barrier
                 // that turned 100 small filters into a 1+ second frame. The CPU mirror is
                 // populated lazily when something actually reads it.
                 dest.RequestDeferredReadback();
@@ -302,7 +302,7 @@ void main() {{
         if (!EnsureScratch(w, h)) return false;
 
         // Snapshot only the active FBO. NVG re-sets viewport at the next BeginFrame, so
-        // letting it drift here is harmless — but a stale FBO binding could cause an
+        // letting it drift here is harmless - but a stale FBO binding could cause an
         // outer NVG pass to flush into the wrong target.
         int prevFbo = GL.GetInteger(OpenGLExt.GL_FRAMEBUFFER_BINDING);
 
@@ -341,7 +341,7 @@ void main() {{
         OpenGLExt.UseProgram(0);
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, (uint)prevFbo);
 
-        // Deferred readback — see the early-return path's note. The first CPU consumer
+        // Deferred readback - see the early-return path's note. The first CPU consumer
         // (Lock / CopyPixels / GetPixelSpan on dest) triggers a single glReadPixels then.
         dest.RequestDeferredReadback();
         dest.IncrementVersion();

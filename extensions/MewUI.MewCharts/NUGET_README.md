@@ -2,7 +2,7 @@
 
 Charting for [MewUI](https://github.com/aprillz/MewUI), powered by the
 [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2) engine compiled into a pure MewUI
-`IGraphicsContext` backend. **No SkiaSharp dependency** — it renders on every MewUI backend
+`IGraphicsContext` backend. **No SkiaSharp dependency** - it renders on every MewUI backend
 (Direct2D, GDI, MewVG/OpenGL) across Win32, macOS, and X11.
 
 ```csharp

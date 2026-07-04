@@ -24,7 +24,7 @@ ObservableValue<bool> maxFpsEnabled = new(false);
 ObservableValue<bool> whiteBgEnabled = new(false);
 
 // Single multiline overlay observable. Five separate TextBlocks each invalidating the
-// stack panel on every 1 Hz publish was producing a visible frame hitch — collapsing into
+// stack panel on every 1 Hz publish was producing a visible frame hitch - collapsing into
 // one observable means one layout pass + one text raster + one MTLTexture upload per
 // publish (the owner-keyed text cache reuses the same slot across renders).
 ObservableValue<string> overlayText = new("FPS: - / CPU: - / GPU: -\nWS: - / PB: - / MH: -");
@@ -48,7 +48,7 @@ int fpsFrames = 0;
 
 // Cached reference of canvas.PathDescription so OnFrameRendered can skip the
 // `$"Path: ..."` interpolation when the path hasn't changed. PathDescription returns
-// interned string literals — reference comparison is enough.
+// interned string literals - reference comparison is enough.
 string _lastPathDesc = "";
 
 // SK object cache reused by PaintScene. Native-handle wrappers cost P/Invoke + native
@@ -222,7 +222,7 @@ bool UpdateFps()
     _latestFpsText = $"{rate:0.0}";
     fpsFrames = 0;
     fpsStopwatch.Restart();
-    // Don't publish here — ApplyStats fires shortly after (same 1 Hz tick boundary) and will
+    // Don't publish here - ApplyStats fires shortly after (same 1 Hz tick boundary) and will
     // pick up _latestFpsText. Keeps the overlay TextBlock to a single invalidation per second
     // instead of two (fps + stats).
     return true;
@@ -289,7 +289,7 @@ FrameworkElement TopBar() => new Border()
                                 .BindIsChecked(whiteBgEnabled)
                                 .OnCheckedChanged(OnWhiteBgToggled)),
 
-                        // One multiline TextBlock for all 6 stats — single layout pass + single
+                        // One multiline TextBlock for all 6 stats - single layout pass + single
                         // text raster + single owner-cache texture update per publish (1 Hz).
                         // Width is fixed so digit-count changes don't cascade a measure pass
                         // up through the parent StackPanel / DockPanel.
@@ -324,10 +324,10 @@ void PaintScene(SKCanvas canvas, SKImageInfo info)
     float width = info.Width;
     float height = info.Height;
     float minSide = MathF.Min(width, height);
-    // Phase comes from wall-clock elapsed seconds × speed — frame-rate-independent.
+    // Phase comes from wall-clock elapsed seconds × speed - frame-rate-independent.
     float t = (float)(animationClock.Elapsed.TotalSeconds * 2.1);
 
-    // Card background — gradient shader depends on (width, height), so rebuild only on resize.
+    // Card background - gradient shader depends on (width, height), so rebuild only on resize.
     if (sBackgroundShader is null || sBackgroundShaderWidth != width || sBackgroundShaderHeight != height)
     {
         sBackgroundShader?.Dispose();
@@ -348,7 +348,7 @@ void PaintScene(SKCanvas canvas, SKImageInfo info)
     canvas.DrawRoundRect(panelRect, 28, 28, sBackgroundPaint);
     canvas.DrawRoundRect(innerRect, 26, 26, sCardStrokePaint);
 
-    // Animated wave — reset the shared path and refill points each frame.
+    // Animated wave - reset the shared path and refill points each frame.
     sWavePaint.StrokeWidth = MathF.Max(2f, minSide * 0.018f);
     sWavePath.Reset();
 
@@ -387,7 +387,7 @@ void PaintScene(SKCanvas canvas, SKImageInfo info)
         canvas.DrawCircle(x, y, radius, sDotPaint);
     }
 
-    // Accent pill + label — font size depends on minSide, only update on change.
+    // Accent pill + label - font size depends on minSide, only update on change.
     float accentFontSize = MathF.Max(20f, minSide * 0.11f);
     if (sAccentFont.Size != accentFontSize)
     {

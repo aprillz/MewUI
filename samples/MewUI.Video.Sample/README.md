@@ -14,8 +14,8 @@ Cross-platform video playback demo built on top of `FFmpeg.AutoGen` 8.0.x with b
 ## FFmpeg dependency
 
 The sample uses:
-- `FFmpeg.AutoGen` 8.0.0.1 — managed bindings
-- `FFmpeg.AutoGen.Bindings.DynamicallyLoaded` — runtime resolution
+- `FFmpeg.AutoGen` 8.0.0.1 - managed bindings
+- `FFmpeg.AutoGen.Bindings.DynamicallyLoaded` - runtime resolution
 
 It searches the runtime DLLs in this order (per platform):
 
@@ -39,9 +39,9 @@ Downloads a pinned Gyan shared build (FFmpeg 8.0 by default) and extracts to `FF
 Refresh: `.\FFmpeg\download-ffmpeg.ps1 -Force` (or `-Version 8.1` etc).
 
 Backends:
-- **Direct2D** (default) — D3D11 hardware decode + DXGI surface interop
-- **MewVG.Win32** (`--vg`) — D3D11 decode + WGL_NV_DX_interop GL sample
-- **GDI** (`--gdi`) — software present, CPU readback
+- **Direct2D** (default) - D3D11 hardware decode + DXGI surface interop
+- **MewVG.Win32** (`--vg`) - D3D11 decode + WGL_NV_DX_interop GL sample
+- **GDI** (`--gdi`) - software present, CPU readback
 
 ## macOS
 
@@ -64,7 +64,7 @@ VAAPI HW decode + `scale_vaapi` filter for in-GPU NV12→BGRA + dma_buf zero-cop
 
 ## WSL2 with NVIDIA dGPU
 
-VAAPI is **not usable** in WSL — `/dev/dri/renderD128` is a dxg shim and `vaInitialize` fails. The decoder falls back to CUDA NVDEC, but only when FFmpeg is built with `--enable-cuda-llvm --enable-cuvid --enable-nvdec`. Distro FFmpeg lacks these.
+VAAPI is **not usable** in WSL - `/dev/dri/renderD128` is a dxg shim and `vaInitialize` fails. The decoder falls back to CUDA NVDEC, but only when FFmpeg is built with `--enable-cuda-llvm --enable-cuvid --enable-nvdec`. Distro FFmpeg lacks these.
 
 Custom build steps:
 ```bash

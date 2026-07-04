@@ -18,7 +18,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// </para>
 /// <para>
 /// Same-device requirement: D2D bitmaps are device-bound. The wrapped bitmap must live on
-/// the same <c>ID2D1Device</c> as the factory that produced this image — otherwise
+/// the same <c>ID2D1Device</c> as the factory that produced this image - otherwise
 /// <c>DrawBitmap</c> on the consuming render target will fail. Use
 /// <see cref="Direct2DGraphicsFactory.NativeD2DDevice"/> when constructing the bitmap to
 /// guarantee this.

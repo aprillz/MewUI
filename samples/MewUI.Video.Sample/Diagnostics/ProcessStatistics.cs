@@ -186,7 +186,7 @@ internal sealed class ProcessStatistics : IDisposable
 }
 
 #if DEBUG
-/// <summary>Debug-only GPU load via Windows PerformanceCounter "GPU Engine". Trim/AOT-unsafe — gated to Debug builds.</summary>
+/// <summary>Debug-only GPU load via Windows PerformanceCounter "GPU Engine". Trim/AOT-unsafe - gated to Debug builds.</summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416", Justification = "PerformanceCounter calls gated by OperatingSystem.IsWindows() at runtime.")]
 internal sealed class GpuLoadSampler : IDisposable
 {

@@ -284,7 +284,7 @@ public sealed class PathGeometry : IFreezable
         double cosPhi = Math.Cos(phi);
         double sinPhi = Math.Sin(phi);
 
-        // Step 1: Compute (x1', y1') — rotated midpoint.
+        // Step 1: Compute (x1', y1') - rotated midpoint.
         double mx = (x1 - x2) / 2.0;
         double my = (y1 - y2) / 2.0;
         double x1p = cosPhi * mx + sinPhi * my;
@@ -367,7 +367,7 @@ public sealed class PathGeometry : IFreezable
     /// Returns a new <see cref="PathGeometry"/> with every command's coordinates transformed
     /// by <paramref name="matrix"/>. Cubic Béziers are affine-invariant, so transforming the
     /// control points is exact. Use this to bake a stretch/scale matrix into the geometry
-    /// when subsequent draws need to be transform-independent — e.g. so that <c>Stroke</c>
+    /// when subsequent draws need to be transform-independent - e.g. so that <c>Stroke</c>
     /// thickness (which under MewUI's Model D scales with the active context transform)
     /// stays in element-DIP regardless of the bake. Returns <c>this</c> if the matrix is the
     /// identity. Cheap; consider caching at the call site if invoked per-frame on a hot path.
@@ -694,7 +694,7 @@ public sealed class PathGeometry : IFreezable
         double c2x = p3x + k * rx * sin1, c2y = p3y - k * ry * cos1;
 
         // Position at the arc start.  Skip the LineTo when the current point
-        // is already (nearly) at p0 — this avoids a micro-segment caused by
+        // is already (nearly) at p0 - this avoids a micro-segment caused by
         // the atan2→cos/sin roundtrip in ArcTo, which would create spurious
         // stroke joins in some backends (especially GDI+).
         if (_commands.Count == 0 || _commands[^1].Type == PathCommandType.Close)

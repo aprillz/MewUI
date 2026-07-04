@@ -155,13 +155,13 @@ public class ProgressRing : Control
     {
         if (newRoot == null)
         {
-            // Detached from visual tree — stop clock to prevent AnimationManager leak.
+            // Detached from visual tree - stop clock to prevent AnimationManager leak.
             _clock?.Stop();
             _clock = null;
         }
         else if (IsActive && _clock == null)
         {
-            // Re-attached while still active — restart.
+            // Re-attached while still active - restart.
             _clock = new AnimationClock(TimeSpan.FromMilliseconds(StoryboardDurationMs), Easing.Linear)
             {
                 RepeatCount = -1,

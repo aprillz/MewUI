@@ -127,7 +127,7 @@ internal static unsafe class FreeTypeText
                         int ellipsisW = MeasureRunWidthPx("...", face, font.PixelHeight, font.Weight, font.IsItalic);
                         int maxTextW = Math.Max(0, widthPx - ellipsisW);
 
-                        // Don't use TrimLineWithEllipsis here — its fast path skips the
+                        // Don't use TrimLineWithEllipsis here - its fast path skips the
                         // ellipsis when text fits, but wrap overflow always needs "...".
                         int trimLen = lastLine.Length;
                         int textW = MeasureRunWidthPx(lineText, face, font.PixelHeight, font.Weight, font.IsItalic);
@@ -177,7 +177,7 @@ internal static unsafe class FreeTypeText
                 trimmedFlags.Add(false);
         }
 
-        // Use actual text width for centering — padding is for external Measure() only.
+        // Use actual text width for centering - padding is for external Measure() only.
         int contentW = Math.Min(widthPx, maxLineWidth);
         int contentH = Math.Min(heightPx, lines.Count * lineHeightPx);
 
@@ -445,11 +445,11 @@ internal static unsafe class FreeTypeText
         {
             ref readonly var g = ref glyphs[i];
 
-            // Detect .notdef glyph (glyph ID 0) — try fallback with ZWJ-aware reshaping
+            // Detect .notdef glyph (glyph ID 0) - try fallback with ZWJ-aware reshaping
             if (g.GlyphId == 0 && !sourceText.IsEmpty)
             {
                 // Use grapheme cluster boundary (not consecutive .notdef) to capture
-                // the full ZWJ sequence — intermediate chars like ZWJ/VS16 may have
+                // the full ZWJ sequence - intermediate chars like ZWJ/VS16 may have
                 // valid glyphs in the primary font but must be re-shaped together.
                 int textStart = (int)g.Cluster;
                 int clusterLen = StringInfo.GetNextTextElementLength(sourceText.Slice(textStart));
@@ -844,7 +844,7 @@ internal static unsafe class FreeTypeText
             return;
         }
 
-        // Cache miss — load, scale, cache.
+        // Cache miss - load, scale, cache.
         int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT | FreeTypeLoad.FT_LOAD_COLOR;
         lock (face.SyncRoot)
         {

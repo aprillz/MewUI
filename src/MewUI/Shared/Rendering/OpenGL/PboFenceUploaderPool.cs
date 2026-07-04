@@ -10,13 +10,13 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// </summary>
 /// <remarks>
 /// Without pooling, each video frame allocates a new 4K BGRA texture (33 MB) plus
-/// two PBOs (33 MB each) and frees them next frame — driver-side allocator overhead
+/// two PBOs (33 MB each) and frees them next frame - driver-side allocator overhead
 /// then exceeds the saved sync upload cost, making PBO upload measurably worse than
 /// the plain <c>glTexSubImage2D</c> path. Pool keeps the same set of uploaders alive
 /// across frames; <see cref="PboFenceUploader.Rebind"/> swaps the source pointer and
 /// triggers a fresh upload.
 /// <para/>
-/// Pool key is the (PixelWidth, PixelHeight) tuple — sources of the same dimensions
+/// Pool key is the (PixelWidth, PixelHeight) tuple - sources of the same dimensions
 /// share a bucket. Per-bucket cap (<see cref="MaxPerBucket"/>) bounds memory under
 /// "many one-shot" workloads; overflow uploaders are disposed immediately on return.
 /// </remarks>

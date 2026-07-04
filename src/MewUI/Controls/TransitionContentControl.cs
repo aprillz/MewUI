@@ -199,7 +199,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
         var transition = Transition;
         double p = _progress;
 
-        // No transition or completed — render current content only.
+        // No transition or completed - render current content only.
         if (p >= 1.0 || transition.Kind == ContentTransitionKind.None)
         {
             _currentContent?.Render(context);
@@ -216,7 +216,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
             context.SetClip(Bounds);
         }
 
-        // Old content — exit animation
+        // Old content - exit animation
         if (_oldContent != null)
         {
             context.Save();
@@ -227,7 +227,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
             context.Restore();
         }
 
-        // New content — enter animation
+        // New content - enter animation
         if (_currentContent != null)
         {
             context.Save();

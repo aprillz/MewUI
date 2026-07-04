@@ -12,7 +12,7 @@ control so you can draw with SkiaSharp inside a MewUI window, plus the `ISkiaInt
 dotnet add package Aprillz.MewUI.Skia
 ```
 
-Then add the interop package for the backend you run on (optional — without it, the CPU fallback is used):
+Then add the interop package for the backend you run on (optional - without it, the CPU fallback is used):
 
 | Interop package | Backend | Activate at startup |
 |---|---|---|
@@ -46,8 +46,8 @@ canvas.PaintSurface += (s, e) =>
 
 ## Packages in this family
 
-- **`Aprillz.MewUI.Skia`** (this package) — `SkiaCanvasView`, the interop registry, and the CPU fallback.
-- **`Aprillz.MewUI.Skia.Interop.*`** — per-backend zero-copy GPU bridges (table above).
-- **`Aprillz.MewUI.Skia.{Windows,Linux,MacOS,All}`** — metapackages bundling the core + the interops for a platform.
+- **`Aprillz.MewUI.Skia`** (this package) - `SkiaCanvasView`, the interop registry, and the CPU fallback.
+- **`Aprillz.MewUI.Skia.Interop.*`** - per-backend zero-copy GPU bridges (table above).
+- **`Aprillz.MewUI.Skia.{Windows,Linux,MacOS,All}`** - metapackages bundling the core + the interops for a platform.
 
 Full docs: https://github.com/aprillz/MewUI

@@ -140,7 +140,7 @@ public sealed class Border : Control, IVisualTreeHost
 
         if (metrics.IsSimple)
         {
-            // Background only — border is drawn after subtree in RenderSubtree.
+            // Background only - border is drawn after subtree in RenderSubtree.
             if (bg.A == 0)
             {
                 return;
@@ -161,7 +161,7 @@ public sealed class Border : Control, IVisualTreeHost
         else
         {
             // Non-uniform: border first (outer fill), then background on top (inner fill).
-            // Border color extends under background — no seam at boundary.
+            // Border color extends under background - no seam at boundary.
             if (borderBrush.A > 0 && metrics.BorderThickness != Thickness.Zero)
             {
                 _cachedOuterPath ??= new PathGeometry();

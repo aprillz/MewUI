@@ -14,13 +14,13 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// <para>
 /// Currently handles <see cref="BlurFilter"/> via <see cref="MetalGaussianBlur"/> (Apple's
 /// MPS framework). ColorMatrix / Composite / Merge / Offset / DropShadow still fall back to
-/// the CPU executor pending dedicated MPS / shader implementations — adding one is the same
+/// the CPU executor pending dedicated MPS / shader implementations - adding one is the same
 /// shape as <see cref="TryGpuBlur"/>: recurse on the input, verify it's Metal-backed, acquire
 /// a Metal scratch, encode the pass.
 /// </para>
 /// <para>
 /// The executor reaches into <see cref="FilterResult.UnderlyingSurface"/> to obtain the
-/// backend's <see cref="MewVGMetalPixelRenderSurface"/> — when either input or scratch isn't
+/// backend's <see cref="MewVGMetalPixelRenderSurface"/> - when either input or scratch isn't
 /// Metal-backed (e.g. a <see cref="FloodFilter"/> result built by the CPU executor), the GPU
 /// path bails for that node. Cross-backend handoff goes through <see cref="FilterResult.ReadPixels"/>.
 /// </para>
@@ -56,7 +56,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
                 return gpuResult ?? _fallback.Execute(filter, context);
             }
             // ColorMatrix / Composite / Merge / Offset / DropShadow:
-            // GPU shaders not yet shipped — fall back to CPU. Adding a GPU path here is
+            // GPU shaders not yet shipped - fall back to CPU. Adding a GPU path here is
             // the same shape as TryGpuBlur: recurse on the input, verify it's a Metal-backed
             // target, acquire a Metal scratch, run the pass.
             default:
@@ -66,7 +66,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
 
     /// <summary>
     /// True when <paramref name="result"/>'s underlying target is a Metal-backed pixel surface
-    /// whose color texture is realized — required precondition before sampling on the GPU.
+    /// whose color texture is realized - required precondition before sampling on the GPU.
     /// </summary>
     internal static bool LooksLikeMetalSource(FilterResult result)
         => result.UnderlyingSurface is MewVGMetalPixelRenderSurface metal
@@ -100,7 +100,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
             scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
             if (scratch.UnderlyingSurface is not MewVGMetalPixelRenderSurface metalDest) return null;
 
-            // Lazy GPU-texture init — pool gives back a fresh RT whose MTLTexture hasn't been
+            // Lazy GPU-texture init - pool gives back a fresh RT whose MTLTexture hasn't been
             // created yet (no offscreen frame has run on it). MPS needs the destination
             // texture realised before encoding.
             metalDest.EnsureGpuTextures(device, queue);
@@ -126,7 +126,7 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
                 // waitUntilCompleted is required here for correctness: MPS runs on the filter
                 // command queue (offscreenProvider.TryGetFilterCommandQueue), but NVG's
                 // offscreen pass that consumes metalDest.ColorTexture as a sample input
-                // runs on the offscreen-surface queue — different queue. Metal only
+                // runs on the offscreen-surface queue - different queue. Metal only
                 // guarantees ordering within a single queue; cross-queue access to the same
                 // MTLTexture without explicit sync (waitUntilCompleted, MTLSharedEvent, etc.)
                 // races. Without this wait, NVG samples the texture before MPS has finished

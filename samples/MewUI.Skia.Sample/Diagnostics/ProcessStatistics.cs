@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Skia.Sample.Diagnostics;
 
 /// <summary>
 /// 1Hz CPU / GPU / memory snapshot. CPU via <see cref="Process.TotalProcessorTime"/>
-/// (AOT-safe); GPU via Windows <c>PerformanceCounter "GPU Engine"</c> — Debug builds only,
+/// (AOT-safe); GPU via Windows <c>PerformanceCounter "GPU Engine"</c> - Debug builds only,
 /// since the counter package has trim / NativeAOT compatibility issues.
 /// </summary>
 internal sealed class ProcessStatistics : IDisposable
@@ -104,7 +104,7 @@ internal readonly record struct StatsSnapshot(
     long ManagedHeapBytes);
 
 #if DEBUG
-/// <summary>Debug-only GPU load via Windows PerformanceCounter "GPU Engine". Trim/AOT-unsafe — gated to Debug builds.</summary>
+/// <summary>Debug-only GPU load via Windows PerformanceCounter "GPU Engine". Trim/AOT-unsafe - gated to Debug builds.</summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416", Justification = "PerformanceCounter calls gated by OperatingSystem.IsWindows() at runtime.")]
 internal sealed class GpuLoadSampler : IDisposable
 {

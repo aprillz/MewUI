@@ -262,7 +262,7 @@ internal sealed class VirtualizedItemsPresenter
                 }
                 else
                 {
-                    // Don't rebind focus-pinned items immediately — it can reset
+                    // Don't rebind focus-pinned items immediately - it can reset
                     // user-interaction state (e.g. ToggleSwitch.IsChecked).
                     // Defer rebind + style snap until the item re-enters the visible range.
                     (_pendingRebind ??= new()).Add(key);

@@ -1,7 +1,7 @@
 # Aprillz.MewUI.Svg
 
 SVG rendering for [MewUI](https://github.com/aprillz/MewUI), drawn through MewUI's `IGraphicsContext`.
-**Pure managed, no System.Drawing** — built on [SVG.NET](https://github.com/svg-net/SVG) with a MewUI
+**Pure managed, no System.Drawing** - built on [SVG.NET](https://github.com/svg-net/SVG) with a MewUI
 rendering backend, so it works on every MewUI backend (Direct2D, GDI, MewVG/OpenGL) and is
 NativeAOT/trim compatible.
 

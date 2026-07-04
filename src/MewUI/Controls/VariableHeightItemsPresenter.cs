@@ -37,7 +37,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     private double[]? _prefix; // length = count+1
     private bool _prefixValid;
 
-    // Running statistics over measured heights — used to estimate unmeasured items.
+    // Running statistics over measured heights - used to estimate unmeasured items.
     // Replaces the fixed EstimatedItemHeight default for items that haven't been arranged yet.
     private double _measuredHeightSum;
     private int _measuredHeightCount;
@@ -325,7 +325,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 }
                 else
                 {
-                    // Don't rebind focus-pinned items immediately — it can reset
+                    // Don't rebind focus-pinned items immediately - it can reset
                     // user-interaction state (e.g. ToggleSwitch.IsChecked).
                     // Defer rebind + style snap until the item re-enters the visible range.
                     (_pendingRebind ??= new()).Add(key);
@@ -434,7 +434,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             // Anchor correction: preserve the logical position within the anchor item.
             // Skip on the first render after a DPI change: ScrollViewer already preserved the
             // logical DIP offset, and only visible items have been re-measured so the prefix is
-            // partially stale — computing a correction from it would produce a wrong result.
+            // partially stale - computing a correction from it would produce a wrong result.
             if (_suppressAnchorCorrectionForDpiChange)
             {
                 _suppressAnchorCorrectionForDpiChange = false;

@@ -4,7 +4,7 @@
 
   <PropertyGroup>
     <PackageId>$(MewUITitle).MacOS</PackageId>
-    <Description>MewUI metapackage for macOS — includes Core, macOS platform host, and MewVG (NanoVG/Metal) rendering backend.</Description>
+    <Description>MewUI metapackage for macOS - includes Core, macOS platform host, and MewVG (NanoVG/Metal) rendering backend.</Description>
     <PackageTags>mewui;macos;metal;mewvg;gui;nativeaot;metapackage</PackageTags>
   </PropertyGroup>
 

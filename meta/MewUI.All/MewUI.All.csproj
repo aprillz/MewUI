@@ -4,7 +4,7 @@
 
   <PropertyGroup>
     <PackageId>$(MewUITitle)</PackageId>
-    <Description>MewUI all-in-one metapackage — includes Core, all platforms, and all rendering backends. Use RuntimeIdentifier and MewUIBackend properties at publish to filter.</Description>
+    <Description>MewUI all-in-one metapackage - includes Core, all platforms, and all rendering backends. Use RuntimeIdentifier and MewUIBackend properties at publish to filter.</Description>
     <PackageTags>mewui;windows;linux;macos;cross-platform;gui;nativeaot;metapackage</PackageTags>
   </PropertyGroup>
 

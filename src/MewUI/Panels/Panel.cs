@@ -189,7 +189,7 @@ public abstract class Panel : FrameworkElement
             }
         }
 
-        // Self-hit (point is in Bounds — verified above).
+        // Self-hit (point is in Bounds - verified above).
         return this;
     }
 

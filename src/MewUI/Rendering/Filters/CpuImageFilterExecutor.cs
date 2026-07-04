@@ -14,7 +14,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// Used as:
 /// <list type="bullet">
 /// <item>The default executor when no GPU backend is available.</item>
-/// <item>The fallback executor for GPU backends — they delegate unsupported nodes here.
+/// <item>The fallback executor for GPU backends - they delegate unsupported nodes here.
 /// In that case the GPU result is read back via <see cref="FilterResult.ReadPixels"/> and
 /// processed on CPU; subsequent GPU nodes re-upload the CPU result.</item>
 /// </list>
@@ -77,7 +77,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         }
 
         using var input = ResolveInput(b.Input, ctx) is var raw && ReferenceEquals(raw, ctx.Source)
-            ? null  // borrowed source — don't dispose, but we still want pixel access
+            ? null  // borrowed source - don't dispose, but we still want pixel access
             : raw as IDisposable;
 
         var inputResult = ResolveInput(b.Input, ctx);
@@ -94,7 +94,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             byte[] working = pixels.ToArray();
 
             // Premultiply if source isn't already (linear convolution requires premultiplied
-            // alpha for correctness — straight-alpha blur darkens semi-transparent edges).
+            // alpha for correctness - straight-alpha blur darkens semi-transparent edges).
             if (!inputResult.IsPremultiplied)
             {
                 PremultiplyInPlace(working);
@@ -102,13 +102,13 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
             // CPU Gaussian is O(W·H·kernel) per axis; at high zoom the source layer is
             // upscaled (e.g. 1440×1440, σ=80, kernel radius 240 → ~2 GOps × 2 axes = seconds).
-            // Downsample to 100% logical size before blur. We DON'T upsample back — the
+            // Downsample to 100% logical size before blur. We DON'T upsample back - the
             // scratch is emitted at the downsampled dimensions and the final DrawImage at
             // the caller stretches it to the filter region using the backend's hardware
             // bilinear path, which is essentially free vs a CPU upsample pass.
             // NOTE: this means the result has fewer pixels than the source layer.
             // Downstream filter nodes that align by raw pixel index (Composite/Merge's
-            // MaterializeAt) would mis-align here — fine for plain feGaussianBlur but a
+            // MaterializeAt) would mis-align here - fine for plain feGaussianBlur but a
             // future fix when complex filter chains land for the CPU executor.
             int dsFactor = ChooseDownsampleFactor(ctx.LogicalToPixelScaleX, ctx.LogicalToPixelScaleY, w, h);
             int blurW = w / dsFactor;
@@ -129,7 +129,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
             }
 
             var output = ctx.AcquireScratch(blurW, blurH, inputResult.Bounds);
-            // Match the scratch surface's pixel contract — some scratch backings report
+            // Match the scratch surface's pixel contract - some scratch backings report
             // IsPremultiplied=false, meaning their pixel buffer must contain straight-alpha
             // bytes. We blurred in premultiplied space for correctness, so unpremultiply
             // back before writing if the scratch expects straight. Otherwise the next
@@ -191,7 +191,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         // Dx/Dy are in logical/DIP units; convert to pixel offset for bounds translation.
         double pxDx = o.Dx * ctx.LogicalToPixelScaleX;
         double pxDy = o.Dy * ctx.LogicalToPixelScaleY;
-        // Offset is purely a bounds change — the pixels stay the same. Wrap the input
+        // Offset is purely a bounds change - the pixels stay the same. Wrap the input
         // result in a new BorrowedFilterResult with translated bounds (cheaper than
         // copying pixels to a scratch).
         var newBounds = new Rect(input.Bounds.X + pxDx, input.Bounds.Y + pxDy,
@@ -384,7 +384,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         int scaleFactor = Math.Max(1, (int)Math.Floor(scale));
 
         // Pixel-budget factor: CPU blur is O(W·H·kernel) per axis with a fresh byte[] per
-        // pass — at 4096² that's 64 MB per allocation × multiple passes per filter ×
+        // pass - at 4096² that's 64 MB per allocation × multiple passes per filter ×
         // many filters per frame = GB of GC pressure. Cap input pixel count regardless of
         // scale (independent of the scale-driven factor above) so that large filter
         // regions from unitless SVG values (e.g. width="200" in objectBoundingBox =
@@ -408,7 +408,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
     /// Box-filter downsample by integer factor. Operates in premultiplied alpha (linear
     /// blendable). Output dimensions are <c>width / factor</c> × <c>height / factor</c>.
     /// Implemented as two separable passes (horizontal then vertical) using unsafe pointer
-    /// access — ~10× faster than the nested-loop byte[] indexing version that suffered
+    /// access - ~10× faster than the nested-loop byte[] indexing version that suffered
     /// O(W·H·factor²) from bounds-checked inner reads. At 1440² → 180² (factor 8) this
     /// drops from ~300 ms to ~20 ms.
     /// </summary>
@@ -496,7 +496,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         var kernel = BuildKernel(sigma, out int radius);
         var dst = new byte[src.Length];
 
-        // Parallelize across rows (or columns for vertical pass) — each output row only
+        // Parallelize across rows (or columns for vertical pass) - each output row only
         // reads from src and writes to its own dst row, no cross-thread dependency.
         // Doubles to triples throughput on 4+ core machines for blur-dominated frames.
         Parallel.For(0, height, y =>
@@ -556,7 +556,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
 
         for (int i = 0; i + 3 < pixels.Length; i += 4)
         {
-            // Pixels are BGRA; matrix expects RGBA — swizzle on read.
+            // Pixels are BGRA; matrix expects RGBA - swizzle on read.
             var rgba = new Vector4(
                 pixels[i + 2],
                 pixels[i + 1],
@@ -582,7 +582,7 @@ public sealed class CpuImageFilterExecutor : IImageFilterExecutor
         => SimdDispatcher.UnpremultiplyBgra(pixels, pixels);
 
     // ─────────────────────────────────────────────────────────────────────
-    // Composition primitives — all in premultiplied alpha
+    // Composition primitives - all in premultiplied alpha
     // ─────────────────────────────────────────────────────────────────────
 
     private FilterResult SourceOver(FilterResult fg, FilterResult bg, IImageFilterContext ctx)

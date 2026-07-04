@@ -15,7 +15,7 @@ internal static unsafe partial class OpenGLExt
         _glFramebufferRenderbuffer = (delegate* unmanaged<uint, uint, uint, uint, void>)LibGL.glXGetProcAddress("glFramebufferRenderbuffer");
         _glCheckFramebufferStatus = (delegate* unmanaged<uint, uint>)LibGL.glXGetProcAddress("glCheckFramebufferStatus");
 
-        // Shader / program / VAO / buffer entrypoints (GL 2.0+ / 3.0+) — required by
+        // Shader / program / VAO / buffer entrypoints (GL 2.0+ / 3.0+) - required by
         // OpenGLGaussianBlur and any other GPU effect pass. Without these, IsShaderPipelineSupported
         // returns false and every blur silently falls back to the CPU executor (slow + visible
         // pipeline divergence vs Win32/Mac).

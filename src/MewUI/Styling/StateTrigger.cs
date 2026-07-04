@@ -33,7 +33,7 @@ public sealed class StateTrigger
         => (flags & Match) == Match && (flags & Exclude) == 0;
 
     /// <summary>
-    /// Specificity — number of bits set in <see cref="Match"/>.
+    /// Specificity - number of bits set in <see cref="Match"/>.
     /// Higher specificity wins when multiple triggers match for the same property.
     /// Ties are broken by declaration order (later wins).
     /// </summary>
@@ -49,7 +49,7 @@ public enum VisualStateFlags : uint
 {
     None = 0,
 
-    // Tier 1 — common (all Controls)
+    // Tier 1 - common (all Controls)
     /// <summary>Control is effectively enabled.</summary>
     Enabled = 1 << 0,
     /// <summary>Mouse is over or captured.</summary>
@@ -59,13 +59,13 @@ public enum VisualStateFlags : uint
     /// <summary>Mouse button or activation key is held down.</summary>
     Pressed = 1 << 3,
 
-    // Tier 2 — toggle (ToggleBase family)
+    // Tier 2 - toggle (ToggleBase family)
     /// <summary>Toggle is in the on/checked state.</summary>
     Checked = 1 << 4,
     /// <summary>CheckBox three-state null value.</summary>
     Indeterminate = 1 << 5,
 
-    // Tier 3 — control-specific opt-in
+    // Tier 3 - control-specific opt-in
     /// <summary>Sub-element is open/active (dropdown, expander).</summary>
     Active = 1 << 6,
     /// <summary>Item is selected (tab, list item).</summary>

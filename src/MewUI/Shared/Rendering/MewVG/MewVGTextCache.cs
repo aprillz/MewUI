@@ -68,7 +68,7 @@ internal sealed class MewVGTextCache : IDisposable
             return default;
         }
 
-        // Source bitmap is BGRA — feed straight to NVG; GL backend uses GL_BGRA upload, no
+        // Source bitmap is BGRA - feed straight to NVG; GL backend uses GL_BGRA upload, no
         // CPU swap. Backends without native BGRA fall back to a one-time conversion in
         // NanoVG.CreateImageBGRA's default implementation.
         // Nearest keeps pixel-snapped axis-aligned text crisp; rotated text asks for linear so it interpolates
@@ -121,7 +121,7 @@ internal sealed class MewVGTextCache : IDisposable
                 // mid-frame text rendering (CreateImage), but the main NVG has
                 // already buffered draw calls referencing this imageId. Deleting
                 // the GL texture before NVG.Flush leaves those draws sampling a
-                // freed texture name — they render as opaque black, with a
+                // freed texture name - they render as opaque black, with a
                 // different set of text boxes affected each frame as the LRU
                 // boundary moves. The graphics context drains this queue right
                 // after Flush, when no draw call still references the IDs.

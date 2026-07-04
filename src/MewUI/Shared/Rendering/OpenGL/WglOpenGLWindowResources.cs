@@ -92,7 +92,7 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         }
 
         // Share textures/buffers with the worker context (if provided). Must happen
-        // before either context starts rendering. Failure is non-fatal — the window
+        // before either context starts rendering. Failure is non-fatal - the window
         // context still works, but background-rebuild texture handoff will fall back
         // to synchronous readback. Log it so we can spot it on Intel iGPU / mismatched
         // pixel format cases.

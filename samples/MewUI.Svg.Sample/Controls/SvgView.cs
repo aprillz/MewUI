@@ -14,7 +14,7 @@ public sealed class SvgView : FrameworkElement
     private const int MaxCachePixelExtent = 4096;
 
     // Diagnostic toggle. When false, every frame re-renders the SVG into a fresh bitmap
-    // — no pan reuse, no cache hit. Used to A/B test whether per-frame perf or memory
+    // - no pan reuse, no cache hit. Used to A/B test whether per-frame perf or memory
     // issues stem from the cache itself or from the render pipeline underneath.
     public bool CacheEnabled { get; set; } = true;
 
@@ -27,7 +27,7 @@ public sealed class SvgView : FrameworkElement
     private IImage? _cachedImage;
 
     // Background-rebuild state. _rebuildInProgress is read/written from both UI and
-    // worker threads — volatile is sufficient (no compound state, just gate the kickoff).
+    // worker threads - volatile is sufficient (no compound state, just gate the kickoff).
     private volatile bool _rebuildInProgress;
     // Snapshot of the request that triggered the in-progress rebuild. UI thread compares
     // current view params against this on subsequent OnRender calls so it doesn't queue
@@ -41,7 +41,7 @@ public sealed class SvgView : FrameworkElement
     /// <summary>
     /// Time taken by the most recent cached-bitmap rebuild (i.e. the last full SVG render).
     /// <see cref="TimeSpan.Zero"/> when no rebuild has occurred yet, or when the last render
-    /// hit the cache. Bindable — host UI can observe via the standard binding pipeline.
+    /// hit the cache. Bindable - host UI can observe via the standard binding pipeline.
     /// </summary>
     public static readonly MewProperty<TimeSpan> LastDrawTimeProperty = LastDrawTimePropertyKey.Property;
 
@@ -72,7 +72,7 @@ public sealed class SvgView : FrameworkElement
 
     /// <summary>
     /// Forces the next render to rebuild the cached bitmap. Call this after mutating the
-    /// <see cref="Document"/> in place — assigning a different document is detected
+    /// <see cref="Document"/> in place - assigning a different document is detected
     /// automatically, but in-place edits keep the same reference and bypass the check.
     /// </summary>
     public void InvalidateCache()
@@ -126,7 +126,7 @@ public sealed class SvgView : FrameworkElement
 
         // Reduce the cached region to whatever portion of renderBounds is actually visible
         // on screen. When the SvgView lives inside a ZoomPanCanvas zoomed in 4×, the visible
-        // strip is ~25% of renderBounds — caching the whole renderBounds at 4× resolution
+        // strip is ~25% of renderBounds - caching the whole renderBounds at 4× resolution
         // would allocate 16× the necessary bitmap.
         var visibleLocalRect = ComputeVisibleLocalRect(context, renderBounds);
         if (visibleLocalRect.Width <= 0 || visibleLocalRect.Height <= 0)
@@ -211,7 +211,7 @@ public sealed class SvgView : FrameworkElement
 
         if (!TryComputeRebuildRequest(context, visibleLocalRect, renderBounds, doc, out var request))
         {
-            return; // Cache valid for this view — nothing to do.
+            return; // Cache valid for this view - nothing to do.
         }
 
         if (_rebuildInProgress
@@ -221,9 +221,9 @@ public sealed class SvgView : FrameworkElement
             return; // Same rebuild already in flight; let it finish.
         }
 
-        // Different request OR no rebuild active — queue one. (If a stale rebuild is
+        // Different request OR no rebuild active - queue one. (If a stale rebuild is
         // still running for an outdated zoom, we let it complete and discard its result
-        // on commit — see CommitRebuild below.)
+        // on commit - see CommitRebuild below.)
         if (_rebuildInProgress) return;
         _rebuildInProgress = true;
         _pendingDpiScale = request.EffectiveScale;
@@ -232,7 +232,7 @@ public sealed class SvgView : FrameworkElement
     }
 
     /// <summary>Reproduces EnsureCachedBitmap's UI-thread phase: compute effectiveScale,
-    /// inflate the visible rect, clamp pixel size — but DON'T touch the factory or build
+    /// inflate the visible rect, clamp pixel size - but DON'T touch the factory or build
     /// the bitmap. Returns false when the existing cache covers the request, true with
     /// the rebuild parameters otherwise.</summary>
     private bool TryComputeRebuildRequest(IGraphicsContext context, Rect visibleLocalRect, Rect renderBounds, SvgDocument doc, out RebuildRequest request)
@@ -269,7 +269,7 @@ public sealed class SvgView : FrameworkElement
             && _cachedDpiScale == effectiveScale
             && _cachedLocalRect.Contains(visibleLocalRect))
         {
-            return false; // Cache hit — current rendering already covers the visible.
+            return false; // Cache hit - current rendering already covers the visible.
         }
 
         // Inflate the cache region beyond the visible viewport so subsequent small pans
@@ -293,7 +293,7 @@ public sealed class SvgView : FrameworkElement
             inflated = ClampToRect(
                 new Rect(inflated.X, inflated.Y, newWidth, newHeight),
                 renderBounds);
-            // Fallback if clamping pushed the new rect off the visible — use visible only.
+            // Fallback if clamping pushed the new rect off the visible - use visible only.
             if (!inflated.Contains(visibleLocalRect))
             {
                 inflated = visibleLocalRect;
@@ -387,14 +387,14 @@ public sealed class SvgView : FrameworkElement
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[SvgView] RebuildAsync EXCEPTION: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
-            // Build failed — drop any partial state, leave existing cache untouched.
+            // Build failed - drop any partial state, leave existing cache untouched.
             newImage?.Dispose();
             newSurface?.Dispose();
             newImage = null;
             newSurface = null;
         }
 
-        // Marshal to UI thread for the field swap. BeginInvoke (async) is fine —
+        // Marshal to UI thread for the field swap. BeginInvoke (async) is fine -
         // OnRender will pick up the new fields on its next pass after InvalidateVisual.
         var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
         Action commit = () => CommitRebuild(request, newSurface, newImage, elapsed);
@@ -436,7 +436,7 @@ public sealed class SvgView : FrameworkElement
             _rebuildInProgress = false;
             // Re-paint with the new cache. If the user has zoomed/panned during the
             // background build, the next OnRender will see params don't match and queue
-            // another rebuild — that's the natural way to handle stale rebuilds.
+            // another rebuild - that's the natural way to handle stale rebuilds.
             InvalidateVisual();
         }
     }

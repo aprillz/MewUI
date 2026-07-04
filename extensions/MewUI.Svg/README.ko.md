@@ -48,8 +48,8 @@ source.Tint = theme.Foreground;
 new Image { Source = source };
 ```
 
-- `IntrinsicSize` — SVG viewBox 크기(`Image` 측정에 사용).
-- `RasterWidth` / `RasterHeight` — `CreateImage` 래스터 폴백(픽셀이 필요한 소비자용)에만 영향. 벡터 `Image` 경로는 무시.
+- `IntrinsicSize` - SVG viewBox 크기(`Image` 측정에 사용).
+- `RasterWidth` / `RasterHeight` - `CreateImage` 래스터 폴백(픽셀이 필요한 소비자용)에만 영향. 벡터 `Image` 경로는 무시.
 
 ## 고급: SvgDocument
 

@@ -27,7 +27,7 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
     private bool _disposed;
     private bool _transferSessionLogged;
 
-    // BGRA destination-buffer pool — concurrent because Rent runs on the decoder thread
+    // BGRA destination-buffer pool - concurrent because Rent runs on the decoder thread
     // (FFmpeg/VT) and Return runs on the render thread (FrameTexture.Dispose during
     // PresentFrame). Plain Queue<T> races and produced intermittent stutter.
     private readonly System.Collections.Concurrent.ConcurrentQueue<nint> _bgraPool = new();
@@ -50,7 +50,7 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
 
         _metalDevice = metalDevice;
 
-        // Lazy one-time load of CFBoolean / CFType dict-callback globals — required for
+        // Lazy one-time load of CFBoolean / CFType dict-callback globals - required for
         // building the pixel-buffer attribute dicts handed to CVPixelBufferCreate.
         CoreVideoInterop.EnsureGlobalsLoaded();
 
@@ -75,13 +75,13 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
         _metalCompatibilityKey = CoreVideoInterop.CFStringCreateWithCString(
             0, "MetalCompatibility", CoreVideoInterop.kCFStringEncodingUTF8);
 
-        // kCFBooleanTrue is a process-wide singleton owned by CoreFoundation — no retain
+        // kCFBooleanTrue is a process-wide singleton owned by CoreFoundation - no retain
         // needed and we must NOT release it.
         _cfTrueNumber = CoreVideoInterop.CFBooleanTrue;
 
         // Build the BGRA destination-buffer attribute dictionary once. CVPixelBufferCreate
         // doesn't retain a reference to the dict beyond the call, but rebuilding it per
-        // frame allocates 2 CFDictionaries + holds short-lived CFRefs every wrap — at
+        // frame allocates 2 CFDictionaries + holds short-lived CFRefs every wrap - at
         // 60 fps that's a measurable CPU/GC cost on the decode thread. Reusing the same
         // dict drops it to zero allocations per frame.
         _bgraDestAttrs = BuildBgraDestAttributes();
@@ -121,7 +121,7 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
     ///   <item>Source is BGRA → wrap directly via CVMetalTextureCache (true zero-copy).</item>
     ///   <item>Source is NV12 (420v / 420f) → allocate a BGRA destination CVPixelBuffer
     ///         and run a GPU-side <c>VTPixelTransferSessionTransferImage</c> to convert.
-    ///         Result is wrapped via the same cache path (still GPU-only — no CPU
+    ///         Result is wrapped via the same cache path (still GPU-only - no CPU
     ///         readback in either branch).</item>
     /// </list>
     /// Returns null on any failure; caller falls back to CPU readback.
@@ -250,7 +250,7 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
             }
 
             // Pool-returned destBuffer: the FrameTexture borrows it for the wrap lifetime.
-            // Its Dispose calls back into ReturnBgraDestBuffer instead of releasing — keeps
+            // Its Dispose calls back into ReturnBgraDestBuffer instead of releasing - keeps
             // the IOSurface alive for the next frame's transfer.
             return new VideoToolboxFrameTexture(
                 cvMetalTexture: cvMetalTexture,
@@ -334,7 +334,7 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
 
     /// <summary>
     /// Build a fresh IOSurface-backed BGRA CVPixelBuffer of the given dimensions. The
-    /// IOSurface backing is required for Metal sampling — heap-only buffers cannot be
+    /// IOSurface backing is required for Metal sampling - heap-only buffers cannot be
     /// wrapped via CVMetalTextureCache.
     /// </summary>
     private nint CreateIoSurfaceBackedBgraBuffer(nuint width, nuint height)
@@ -398,7 +398,7 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
             _bgraDestAttrs = 0;
         }
 
-        // _cfTrueNumber is the kCFBooleanTrue singleton — owned by CoreFoundation, never released.
+        // _cfTrueNumber is the kCFBooleanTrue singleton - owned by CoreFoundation, never released.
         _cfTrueNumber = 0;
 
         if (_textureCache != 0)
@@ -413,17 +413,17 @@ internal sealed class VideoToolboxMetalBridge : IDisposable
 /// One frame's worth of CoreVideo→Metal wrapper state. Implements
 /// <see cref="IExternalRasterSource"/> so the render device's external raster path
 /// can wrap the underlying MTLTexture as an
-/// <c>IImage</c> with NoDelete semantics — zero-copy display from VideoToolbox decode
+/// <c>IImage</c> with NoDelete semantics - zero-copy display from VideoToolbox decode
 /// to NanoVG sampling.
 /// </summary>
 /// <remarks>
 /// Encapsulates three CoreFoundation/CoreVideo refcounted resources:
 /// <list type="bullet">
-///   <item><c>CVMetalTextureRef</c> — keeps the IOSurface mapped into the Metal device's
+///   <item><c>CVMetalTextureRef</c> - keeps the IOSurface mapped into the Metal device's
 ///         resource table. Released last on Dispose.</item>
-///   <item><c>CVPixelBufferRef</c> — explicit retain so the IOSurface page stays
+///   <item><c>CVPixelBufferRef</c> - explicit retain so the IOSurface page stays
 ///         resident even if the AVFrame slot is recycled before the GPU draws.</item>
-///   <item><c>id&lt;MTLTexture&gt;</c> — borrowed pointer owned by the CVMetalTextureRef.
+///   <item><c>id&lt;MTLTexture&gt;</c> - borrowed pointer owned by the CVMetalTextureRef.
 ///         No separate retain.</item>
 /// </list>
 /// Acquire/Release are no-ops: the underlying texture is always GPU-resident from

@@ -39,9 +39,9 @@ public sealed class ApplicationBuilder
             throw new InvalidOperationException("Main window is not configured. Use UseMainWindow(...) or Run<TWindow>().");
         }
 
-        // 1. Platform setup — establishes platform font and system theme detection.
+        // 1. Platform setup - establishes platform font and system theme detection.
         _ = Application.DefaultPlatformHost;
-        // 2. Theme/options — user overrides applied on top of platform defaults.
+        // 2. Theme/options - user overrides applied on top of platform defaults.
         ApplyOptions();
 
         var mainWindow = MainWindowFactory();

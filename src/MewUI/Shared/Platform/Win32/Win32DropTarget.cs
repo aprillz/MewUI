@@ -17,9 +17,9 @@ namespace Aprillz.MewUI.Platform.Win32;
 internal static unsafe class Win32DropTarget
 {
     // Layout of the unmanaged object handed to OLE:
-    //   [ +0  ] lpVtbl     — pointer to the shared vtable
-    //   [ +ptr] refCount   — 4 bytes, padded
-    //   [ +ptr+8] gcHandle — GCHandle of the managed adapter (IntPtr-sized)
+    //   [ +0  ] lpVtbl     - pointer to the shared vtable
+    //   [ +ptr] refCount   - 4 bytes, padded
+    //   [ +ptr+8] gcHandle - GCHandle of the managed adapter (IntPtr-sized)
     [StructLayout(LayoutKind.Sequential)]
     private struct Object
     {
@@ -99,7 +99,7 @@ internal static unsafe class Win32DropTarget
         if (*riid == IID_IDropTarget || *riid == IID_IUnknown)
         {
             *ppvObject = pThis;
-            // Increment ref count directly — UnmanagedCallersOnly methods cannot be invoked from managed code.
+            // Increment ref count directly - UnmanagedCallersOnly methods cannot be invoked from managed code.
             var ptr = (Object*)pThis;
             System.Threading.Interlocked.Increment(ref ptr->refCount);
             return Ole32.S_OK;
@@ -203,7 +203,7 @@ internal sealed unsafe class Win32DropTargetAdapter
     private void TryCreateDropTargetHelper()
     {
         // The shell helper renders OS-native drag images (file icons, thumbnails) on top of our window
-        // as the cursor moves. Falls back silently when unavailable — drag still works, just without preview.
+        // as the cursor moves. Falls back silently when unavailable - drag still works, just without preview.
         int hr = Ole32.CoCreateInstance(
             in Ole32.CLSID_DragDropHelper,
             0,
@@ -306,7 +306,7 @@ internal sealed unsafe class Win32DropTargetAdapter
         var allowed = FromDropEffect(requestedEffect);
         if (allowed == DragDropEffects.None)
         {
-            // Some sources advertise None during DragEnter but want effect negotiation — let the target pick.
+            // Some sources advertise None during DragEnter but want effect negotiation - let the target pick.
             allowed = DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link;
         }
 

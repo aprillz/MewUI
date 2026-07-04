@@ -21,7 +21,7 @@ public partial class SvgDocument
 
     /// <summary>Parses SVG content and stamps <see cref="BaseUri"/> with <paramref name="baseUri"/>
     /// so SvgImage/SvgUse can resolve relative href values (e.g. <c>../images/foo.png</c>).
-    /// Use this overload when the SVG text was loaded from a known on-disk path —
+    /// Use this overload when the SVG text was loaded from a known on-disk path -
     /// <see cref="Parse(string)"/> alone has no anchor for relative href resolution.</summary>
     public static SvgDocument Parse(string svg, Uri baseUri)
     {
@@ -58,7 +58,7 @@ public partial class SvgDocument
 
             // GetDimensions() implements the SVG spec resolution: Width/Height default
             // to 100%, and on the document fragment 100% is resolved against the union
-            // of children's bounds. Don't read Width.Value directly — that returns 100
+            // of children's bounds. Don't read Width.Value directly - that returns 100
             // (the percent's numeric value) and yields a 1:1 viewport for SVGs without
             // explicit width/height (e.g. `<svg><rect width="120" height="60"/>...</svg>`).
             var size = GetDimensions();

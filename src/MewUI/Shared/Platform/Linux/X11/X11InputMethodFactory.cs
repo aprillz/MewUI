@@ -46,7 +46,7 @@ internal static class X11InputMethodFactory
             ImeLogger.Write("IBus not available");
         }
 
-        // TODO: Phase 4 — try Fcitx5InputMethod
+        // TODO: Phase 4 - try Fcitx5InputMethod
         if (hintFcitx)
         {
             ImeLogger.Write("fcitx hinted, trying IBus as fallback...");

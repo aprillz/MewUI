@@ -245,7 +245,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     // the UI's window context (see WglOpenGLWindowResources.Create).
     //
     // Lazy: created on first call to SharedWorkerContext / SharedWorkerHdc.
-    // Worker NVG instances are managed separately by the offscreen provider —
+    // Worker NVG instances are managed separately by the offscreen provider -
     // this factory only owns the HGLRC/HDC/HWND triple.
     // -------------------------------------------------------------------------
 
@@ -406,7 +406,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         EnsureWorkerContext();
         if (_workerHglrc == 0)
         {
-            // Init failed earlier — let the caller proceed without a worker scope.
+            // Init failed earlier - let the caller proceed without a worker scope.
             return MewVGNoOpRenderScope.Instance;
         }
 
@@ -469,7 +469,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// <summary>Cross-backend entrypoint for <see cref="IGraphicsFactory.AcquireConcurrentRenderUnit"/>.
     /// No-op on the MewVG GL backend: UI ↔ worker serialization is no longer enforced at
     /// the frame-bracket level (the previous broad mutex was removed). The remaining
-    /// concurrent-access concern — scratch surface pool reuse mid-flight — is handled in
+    /// concurrent-access concern - scratch surface pool reuse mid-flight - is handled in
     /// <c>DefaultFilterContext.AcquireScratch</c> via <c>IImage.TrySetPostReleaseCallback</c>,
     /// which defers pool return until the consumer's NVG draw queue has flushed.
     /// Worker-vs-worker MakeCurrent serialization still happens inside the worker context
@@ -496,7 +496,7 @@ public sealed partial class MewVGWin32GraphicsFactory
         }
         catch
         {
-            // Async is opt-in for performance — silent fall-through to the sync path.
+            // Async is opt-in for performance - silent fall-through to the sync path.
         }
     }
 }

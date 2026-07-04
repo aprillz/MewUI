@@ -28,7 +28,7 @@ public sealed class Calendar : Control, IVisualTreeHost
     // Navigation buttons (FlatButton style)
     private readonly Button _prevButton;
     private readonly Button _nextButton;
-    private readonly Button _headerButton; // "March 2026" — click to switch mode
+    private readonly Button _headerButton; // "March 2026" - click to switch mode
 
     // Cached header text
     private DateTime _cachedHeaderDate;
@@ -181,7 +181,7 @@ public sealed class Calendar : Control, IVisualTreeHost
         _prevButton.Measure(new Size(NavButtonWidth, HeaderHeight));
         _nextButton.Measure(new Size(NavButtonWidth, HeaderHeight));
         _headerButton.Measure(new Size(Math.Max(0, width - NavButtonWidth * 2), HeaderHeight));
-        // Layout: [Header] [Prev] [Next] — both nav buttons on the right
+        // Layout: [Header] [Prev] [Next] - both nav buttons on the right
 
         return new Size(width, height).Inflate(Padding).Inflate(border);
     }

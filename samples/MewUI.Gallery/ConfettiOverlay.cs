@@ -16,7 +16,7 @@ public sealed class ConfettiOverlay : FrameworkElement
 {
     private enum ParticleShape { Rectangle, Ellipse, Triangle }
 
-    // 128 bytes — doubles first, small fields packed at end. No IsDead (swap-remove instead).
+    // 128 bytes - doubles first, small fields packed at end. No IsDead (swap-remove instead).
     private struct Particle
     {
         // 8-byte aligned fields (15 doubles = 120B)
@@ -31,7 +31,7 @@ public sealed class ConfettiOverlay : FrameworkElement
         // 4-byte fields (4B + 4B = 8B)
         public Color Color;
         public ParticleShape Shape;
-        // 1-byte field (1B + 7B padding — but shares 8B block above if Shape < 4B... still 128B total)
+        // 1-byte field (1B + 7B padding - but shares 8B block above if Shape < 4B... still 128B total)
         public bool IsWide;
     }
 

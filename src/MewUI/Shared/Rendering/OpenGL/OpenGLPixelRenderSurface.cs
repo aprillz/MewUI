@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// </summary>
 internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, IGLTextureSource, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
 {
-    // Lazily allocated — only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
+    // Lazily allocated - only when a CPU consumer (Lock / CopyPixels / GetPixelSpan)
     // actually requests pixel bytes. The pure GPU-only path (MewVGImage zero-copy via
     // CreateImageFromHandle) never touches this. At 100 source layers × ~5 MB each per
     // frame, eager allocation here was ~500 MB of GC churn for memory that nothing read.
@@ -41,7 +41,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     // Set by GPU writers (blur shader, NVG render) to signal that the FBO contents are
     // newer than the CPU-side _pixels mirror. Cleared by the next readback. Used to defer
-    // glReadPixels until something actually requests the CPU bytes — folding 100 sync
+    // glReadPixels until something actually requests the CPU bytes - folding 100 sync
     // points (one per filter) into 0 or 1 across a render pass with N filtered elements.
     private bool _fboNewerThanCpu;
 
@@ -73,7 +73,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         HasAlpha = hasAlpha;
         _glDisposeRequested = glDisposeRequested;
         _currentContextProvider = currentContextProvider;
-        // _pixels left null — see EnsurePixelBuffer.
+        // _pixels left null - see EnsurePixelBuffer.
     }
 
     private byte[] EnsurePixelBuffer()
@@ -128,7 +128,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     /// the FBO color attachment, producing premultiplied output.</summary>
     public bool IsPremultiplied => true;
 
-    /// <summary>FBO color attachment — <see cref="Lock"/> issues glReadPixels (sync barrier)
+    /// <summary>FBO color attachment - <see cref="Lock"/> issues glReadPixels (sync barrier)
     /// to populate the CPU mirror.</summary>
     public LockMode LockMode => LockMode.Readback;
 
@@ -180,7 +180,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     bool IDeferredCpuReadableSurface.TryFlushReadback()
         => RenderSurfaceDefaults.TryFlushReadback(LockMode == LockMode.Readback, CopyPixels);
 
-    // IGLTextureSource — exposes the FBO color texture for zero-copy NoDelete wrapping.
+    // IGLTextureSource - exposes the FBO color texture for zero-copy NoDelete wrapping.
     uint IGLTextureSource.TextureId => _disposed || !_fboInitialized ? 0u : _texture;
 
     nint IGLTextureSource.ShareGroup => _creationContext;
@@ -188,7 +188,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     void IGLTextureSource.ConfigureWrap(bool repeatX, bool repeatY)
         => ConfigureGpuTextureWrap((nint)_texture, repeatX, repeatY);
 
-    // IGpuTextureSource — GL FBOs store row 0 at the bottom of the image (bottom-up).
+    // IGpuTextureSource - GL FBOs store row 0 at the bottom of the image (bottom-up).
     // Consumers that mix FBO output with top-down sources flip V at sample time.
     bool IGpuTextureSource.YFlipped => true;
 
@@ -266,7 +266,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         // FBO color attachment is created with GL_CLAMP_TO_EDGE (right for filter sampling,
         // wrong for tiled image-brush use). Force the wrap mode here so the next sampler that
         // binds this texture (NVG image-brush draw) actually tiles. Persistent state mutation
-        // is OK — other consumers (filter executor) bind their own samplers and don't depend
+        // is OK - other consumers (filter executor) bind their own samplers and don't depend
         // on a specific wrap default.
         if (handle == 0 || handle != (nint)_texture || _disposed) return;
         int wrapS = repeatX ? (int)GL_REPEAT : (int)GL.GL_CLAMP_TO_EDGE;
@@ -343,7 +343,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         }
         if (remaining == 0 && _disposeDeferredForRetain)
         {
-            // Deferred Dispose was waiting on the last retain — finish it now via the
+            // Deferred Dispose was waiting on the last retain - finish it now via the
             // queue so the GL release runs under the owning context.
             _disposeDeferredForRetain = false;
             if (_glDisposeRequested is { } hook)
@@ -443,12 +443,12 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         }
 
         // GL resources (FBO, texture, renderbuffer) live in whichever context
-        // created them — typically the offscreen context on Win32. Deleting
+        // created them - typically the offscreen context on Win32. Deleting
         // them against the wrong current context (e.g., the main window's)
         // silently fails AND corrupts that context's object namespace. Queue
         // the release so the owning context can drain it under its own
         // wglMakeCurrent scope; if no queuing hook is attached, fall back to
-        // releasing under whatever context is current (best-effort only — may
+        // releasing under whatever context is current (best-effort only - may
         // leak if none is active).
         if (_fboInitialized)
         {
@@ -600,7 +600,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
     /// <summary>
     /// Marks the FBO contents as newer than the CPU pixel mirror. Use after a GPU write
-    /// (e.g. <see cref="OpenGL.OpenGLGaussianBlur"/>) instead of an immediate readback —
+    /// (e.g. <see cref="OpenGL.OpenGLGaussianBlur"/>) instead of an immediate readback -
     /// the next CPU consumer of <c>_pixels</c> (Lock / CopyPixels / GetPixelSpan) flushes
     /// it via <see cref="FlushFboReadbackIfNeeded"/>. Folds N per-filter sync points into
     /// at most one when many GPU passes feed a single CPU consumer.

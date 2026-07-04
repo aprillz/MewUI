@@ -40,7 +40,7 @@ internal sealed class IconDecoder : IImageDecoder
             return false;
         }
 
-        // Pick a large size — 256 is the max standard ICO size.
+        // Pick a large size - 256 is the max standard ICO size.
         var source = icon.Pick(256);
         if (source == null)
         {

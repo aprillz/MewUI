@@ -55,7 +55,7 @@ internal static class LinuxFontFallbackResolver
         {
             // Cache as negative chain index (-2 means "fontconfig resolved, not in user chain")
             // We don't cache fontconfig results in L1 by chain index since they're outside the chain.
-            // Instead, just return the face — subsequent calls for the same codepoint will re-query
+            // Instead, just return the face - subsequent calls for the same codepoint will re-query
             // fontconfig, but that's rare since most CJK/emoji should be in the user chain.
             return fcFace;
         }

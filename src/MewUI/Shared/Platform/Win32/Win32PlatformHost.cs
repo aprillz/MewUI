@@ -270,7 +270,7 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     /// <summary>
     /// Returns true if the exception was handled and the loop can continue.
-    /// Returns false if fatal — caller should break.
+    /// Returns false if fatal - caller should break.
     /// </summary>
     private bool HandleLoopException(Application app, Exception ex)
     {

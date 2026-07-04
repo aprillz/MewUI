@@ -27,12 +27,12 @@ public sealed partial class MewVGX11GraphicsFactory
 
     // -------------------------------------------------------------------------
     // Shared worker GLX context (background offscreen render support).
-    // Mirrors the Win32 hidden-window worker context — a single GLX context
+    // Mirrors the Win32 hidden-window worker context - a single GLX context
     // share-listed with all window contexts, made current on worker threads
     // for offscreen FBO rendering. _workerActivationLock now serializes only
     // worker-vs-worker MakeCurrent (a single shared GLX context can only be
     // current on one thread at a time). UI render and worker scope no longer
-    // share the lock — the previous broad UI mutex was removed, with the
+    // share the lock - the previous broad UI mutex was removed, with the
     // scratch surface pool reuse race instead handled at DefaultFilterContext via
     // IImage.TrySetPostReleaseCallback.
     // -------------------------------------------------------------------------
@@ -42,7 +42,7 @@ public sealed partial class MewVGX11GraphicsFactory
     // Shared offscreen "share-list root" GL context (GLX or EGL). Window contexts share with it
     // so worker-rendered FBO textures are sample-able from window contexts.
     private IOpenGLWindowResources? _worker;
-    // First-window display + drawable + visual — captured at first window
+    // First-window display + drawable + visual - captured at first window
     // creation and reused for worker context init / activation. Single-display
     // X11 process is the assumed common case; multi-display would need per-
     // display worker contexts (not supported here).
@@ -90,7 +90,7 @@ public sealed partial class MewVGX11GraphicsFactory
             if (_worker != null || _workerInitFailed) return;
             if (!_workerHasVisualInfo)
             {
-                // No window has been created yet — can't initialize without a
+                // No window has been created yet - can't initialize without a
                 // visual. Caller should retry after a window exists.
                 return;
             }
@@ -237,13 +237,13 @@ public sealed partial class MewVGX11GraphicsFactory
         {
             // Worker context isn't available yet (no window has been created, so
             // we don't have a GLX visual). Caller proceeds without a worker scope
-            // — they'll fail to CreateContext on this thread, which their try /
+            // - they'll fail to CreateContext on this thread, which their try /
             // catch handles by skipping the rebuild.
             return MewVGNoOpRenderScope.Instance;
         }
 
         // Same broad mutex as Win32: worker scope ↔ UI window frame fully
-        // serialize. UI freezes for the duration of any worker rebuild —
+        // serialize. UI freezes for the duration of any worker rebuild -
         // accepted in favor of correctness on share-listed GLX contexts.
         Monitor.Enter(_workerActivationLock);
         try
@@ -310,14 +310,14 @@ public sealed partial class MewVGX11GraphicsFactory
         if (!PboFenceUploader.IsSupported) return;
         try
         {
-            // See Win32 partial for the pooling rationale — same applies on X11/GLX.
+            // See Win32 partial for the pooling rationale - same applies on X11/GLX.
             var uploader = _pboPool.Rent(source);
             // ownsSource: image is sole owner; dispose returns the uploader to the pool (else leak).
             image = new MewVGExternalRasterImage(new PooledPboTexture(uploader, _pboPool), ownsSource: true);
         }
         catch
         {
-            // Async is opt-in for performance — silent fall-through to the sync path.
+            // Async is opt-in for performance - silent fall-through to the sync path.
         }
     }
 }

@@ -31,7 +31,7 @@ public sealed class FocusManager
     /// <param name="resolveDefault">
     /// When true, applies <see cref="UIElement.GetDefaultFocusTarget"/> redirection (e.g. a container
     /// forwards focus to its first focusable child). Programmatic and keyboard-driven focus should use
-    /// this path. Mouse-click-driven focus should pass false — the click already expresses a precise
+    /// this path. Mouse-click-driven focus should pass false - the click already expresses a precise
     /// location, so silently redirecting focus elsewhere (possibly off-screen) violates user intent
     /// and can trigger unwanted scroll-into-view.
     /// </param>
@@ -89,7 +89,7 @@ public sealed class FocusManager
         // Walk up the visual tree, notifying every host along the way. Scroll-into-view must bubble so
         // that nested scrollable containers (e.g. inner ScrollViewer inside outer ScrollViewer, or a
         // TabControl nested in another TabControl) can each adjust their own viewport to make the
-        // focused element visible. The return value is informational only — a host signaling `true`
+        // focused element visible. The return value is informational only - a host signaling `true`
         // (e.g. TreeView/GridView claiming selection) does not block outer hosts from also running
         // their scroll-into-view logic.
         for (Element? current = focusedElement; current != null; current = current.Parent)

@@ -18,7 +18,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     /// <summary>
     /// Drains pending NVG image-id deletions belonging to <paramref name="vg"/>. Call from
     /// that NVG's <c>EndFrame</c> on the thread that owns the NVG. This is the per-NVG
-    /// safe-drain entry point — preferred over <see cref="ReleasePendingImages"/>, which
+    /// safe-drain entry point - preferred over <see cref="ReleasePendingImages"/>, which
     /// fans out to every NVG and is therefore unsafe when other threads are mid-frame.
     /// </summary>
     int ReleasePendingImagesForVg(NanoVG vg);
@@ -32,7 +32,7 @@ internal interface IMewVGOffscreenSurfaceProvider : IDisposable
     /// <summary>Tracks render-session nesting. Pending FBO target disposals only drain
     /// when the outermost session ends, since nested sessions (e.g. filter source
     /// layers) may have wrapped scratch FBO textures via CreateImageFromHandle into the
-    /// outer NVG's deferred draw queue — those textures must outlive the outer flush.</summary>
+    /// outer NVG's deferred draw queue - those textures must outlive the outer flush.</summary>
     void EnterSession();
 
     /// <summary>Returns true if this was the outermost session (caller should drain).</summary>
@@ -61,7 +61,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
     private readonly object _lock = new();
     private readonly Dictionary<nint, SurfacePool> _poolsByContext = new();
 
-    // List, not Queue, because the drain filters by each target's CreationContext —
+    // List, not Queue, because the drain filters by each target's CreationContext -
     // a target queued by the worker thread (FBO created on the worker HGLRC) must
     // not be dequeued and released by the UI thread (running under the window
     // HGLRC), since FBOs aren't shared. Walking the list lets us pick out only the
@@ -70,7 +70,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
     // Per-NVG queue: each NVG drains only its own bucket from its EndFrame on the thread
     // that owns it. NanoVG instance state (image table, draw queue, transform stack) is not
-    // thread-safe — calling vg.DeleteImage on a NVG that's mid-frame on another thread
+    // thread-safe - calling vg.DeleteImage on a NVG that's mid-frame on another thread
     // corrupts the image table and surfaces as wrong-texture binding on the next flush.
     // The previous flat queue let UI's EndFrame drain images whose NVG was the worker's,
     // racing the worker mid-frame.
@@ -241,7 +241,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         var entries = image.SnapshotPendingEntries();
         if (entries.Count == 0)
         {
-            // No NVG image-ids attached — nothing to defer; release inline so the
+            // No NVG image-ids attached - nothing to defer; release inline so the
             // post-release callback (e.g. scratch surface pool return) still fires.
             image.ReleaseImagesImmediate();
             return;
@@ -289,7 +289,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
 
     public int ReleasePendingImages()
     {
-        // Shutdown / fallback path — drain every NVG's bucket. Caller must guarantee no
+        // Shutdown / fallback path - drain every NVG's bucket. Caller must guarantee no
         // NVG is mid-frame (e.g. provider Dispose at process teardown).
         int count = 0;
         List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> all = new();
@@ -365,7 +365,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
         foreach (var target in targets)
         {
             // Best-effort release: skip targets whose creation context is non-zero
-            // and doesn't match the current — releasing under the wrong context is
+            // and doesn't match the current - releasing under the wrong context is
             // a silent no-op anyway and would leak. The factory's full Dispose path
             // sees this only when the host process is tearing down, so the leak is
             // bounded.

@@ -15,7 +15,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 public interface IMetalTextureSource : IGpuTextureSource
 {
     /// <summary>
-    /// Native <c>MTLTexture*</c>. Lifetime is owned by the source — consumers MUST NOT
+    /// Native <c>MTLTexture*</c>. Lifetime is owned by the source - consumers MUST NOT
     /// release this pointer directly without taking a retain via
     /// <see cref="IGpuTextureSource.RetainGpuHandle"/> first. Returns 0 when the texture
     /// hasn't been allocated yet (e.g. CPU-only consumer never triggered GPU init).
@@ -24,7 +24,7 @@ public interface IMetalTextureSource : IGpuTextureSource
 
     /// <summary>
     /// Native <c>MTLDevice*</c> the texture was created on. Cross-device texture sampling
-    /// is not supported by Metal — consumers compare this by reference equality against
+    /// is not supported by Metal - consumers compare this by reference equality against
     /// their own device before issuing zero-copy.
     /// </summary>
     nint MtlDevice { get; }

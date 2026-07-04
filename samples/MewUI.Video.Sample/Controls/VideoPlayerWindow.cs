@@ -10,7 +10,7 @@ using Aprillz.MewUI.Video.Sample.Playback;
 namespace Aprillz.MewUI.Video.Sample.Controls;
 
 /// <summary>
-/// The playback window — owns the UI shell (path/open/checkboxes on top, seek slider /
+/// The playback window - owns the UI shell (path/open/checkboxes on top, seek slider /
 /// play button at the bottom, video view + stats overlay in the middle) and the
 /// <see cref="VideoPlayer"/> that drives it. Originally inlined in Program.cs; pulled out
 /// so the program entry stays focused on bootstrapping (FFmpeg, backend registration,

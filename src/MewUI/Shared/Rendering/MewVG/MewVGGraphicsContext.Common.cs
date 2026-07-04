@@ -761,7 +761,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         }
 
         // Outline AA only matters when the rect is rasterised non-axis-aligned
-        // (rotation/skew). Axis-aligned image fills land on integer pixel boundaries —
+        // (rotation/skew). Axis-aligned image fills land on integer pixel boundaries -
         // the texture's own sampling handles edges and shape AA would add a needless
         // half-pixel feather. D2D applies the same coverage AA implicitly on its
         // bitmap draw; this matches that behaviour.

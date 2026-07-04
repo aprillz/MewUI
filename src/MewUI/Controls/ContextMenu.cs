@@ -539,7 +539,7 @@ public sealed class ContextMenu : Control, IPopupOwner
             return;
         }
 
-        // Access key matching — character only, no modifiers (except Shift for uppercase)
+        // Access key matching - character only, no modifiers (except Shift for uppercase)
         if (!e.AltKey && !e.ControlKey && !e.MetaKey)
         {
             TryActivateByAccessKey(e);

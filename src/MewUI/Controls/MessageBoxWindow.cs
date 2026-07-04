@@ -90,7 +90,7 @@ public sealed class MessageBoxWindow : Window
     {
         bool hasDetail = !string.IsNullOrEmpty(_detail);
 
-        // Buttons — ordered by platform convention
+        // Buttons - ordered by platform convention
         var buttonPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -279,7 +279,7 @@ public sealed class MessageBoxWindow : Window
         // If closed without clicking a button (X button, Escape, etc.), treat as Reject.
         if (DialogResult == null && !_buttons.Any(b => b.Role == MessageButtonRole.Destructive))
         {
-            // No destructive button exists — null is unambiguous "closed without choice".
+            // No destructive button exists - null is unambiguous "closed without choice".
             // If a reject button exists, use false; otherwise true (OK-only dialog).
             DialogResult = _buttons.Any(b => b.Role == MessageButtonRole.Reject) ? false : true;
         }

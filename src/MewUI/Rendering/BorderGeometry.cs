@@ -182,7 +182,7 @@ internal static class BorderGeometry
     }
 
     /// <summary>
-    /// CCW contour — same vertices, reverse traversal.
+    /// CCW contour - same vertices, reverse traversal.
     /// </summary>
     private static void GenerateContourReversed(
         PathGeometry path, Rect rect,

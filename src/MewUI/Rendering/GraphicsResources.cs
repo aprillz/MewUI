@@ -87,7 +87,7 @@ internal sealed class LinearGradientBrush : ILinearGradientBrush
 /// <summary>
 /// Backend-agnostic image brush used as a DIM fallback. Backends that support
 /// tile-pattern rendering should override the factory method to return a native wrapper.
-/// The fallback does not actually tile — callers should check for backend-specific types.
+/// The fallback does not actually tile - callers should check for backend-specific types.
 /// </summary>
 internal sealed class ImageBrush : IImageBrush
 {

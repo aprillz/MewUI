@@ -105,7 +105,7 @@ static void InitializeFFmpegBindings()
     SampleLog.Write("InitializeFFmpegBindings begin.");
     string[] candidates = BuildFFmpegSearchPaths();
 
-    // Pick the first candidate that actually contains FFmpeg shared libs — checking
+    // Pick the first candidate that actually contains FFmpeg shared libs - checking
     // Directory.Exists alone short-circuits on AppContext.BaseDirectory (always exists)
     // and prevents fall-through to Homebrew / system paths.
     string? libraryPath = candidates.FirstOrDefault(ContainsFFmpegLibs);
@@ -132,7 +132,7 @@ static bool ContainsFFmpegLibs(string directory)
     }
 
     // Match the platform's library naming for libavformat (the most identifying FFmpeg
-    // module). Versioned suffixes vary across distros and Homebrew formula bumps —
+    // module). Versioned suffixes vary across distros and Homebrew formula bumps -
     // wildcard matching catches all of them.
     string[] patterns = OperatingSystem.IsWindows()
         ? ["avformat*.dll"]
@@ -151,7 +151,7 @@ static bool ContainsFFmpegLibs(string directory)
         }
         catch
         {
-            // Permission / IO error on a candidate — skip silently and try the next.
+            // Permission / IO error on a candidate - skip silently and try the next.
         }
     }
 
@@ -203,7 +203,7 @@ static string[] BuildFFmpegSearchPaths()
         // Common standalone-install prefixes (statically-linked FFmpeg drops, e.g.
         // /opt/ffmpeg-8.0.1, BtbN's master builds, custom /usr/local prefixes).
         // These come before the distro paths so newer custom builds shadow older
-        // packaged ones — apt's libavcodec is often a major version behind.
+        // packaged ones - apt's libavcodec is often a major version behind.
         foreach (var prefix in new[] { "/opt/ffmpeg-8.0.1", "/opt/ffmpeg", "/usr/local" })
         {
             paths.Add(Path.Combine(prefix, "lib"));

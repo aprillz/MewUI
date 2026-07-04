@@ -16,7 +16,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 public interface ID2DTextureSource : IGpuTextureSource
 {
     /// <summary>
-    /// Native <c>ID2D1Bitmap1*</c>. Lifetime is owned by the source — consumers MUST NOT
+    /// Native <c>ID2D1Bitmap1*</c>. Lifetime is owned by the source - consumers MUST NOT
     /// release this pointer. Returns 0 when the bitmap hasn't been realised yet (e.g.
     /// CPU-only consumer never triggered GPU init).
     /// </summary>
@@ -24,7 +24,7 @@ public interface ID2DTextureSource : IGpuTextureSource
 
     /// <summary>
     /// The <c>ID2D1DeviceContext*</c> that produced <see cref="NativeBitmap"/>. D2D
-    /// bitmaps are device-bound — consumers compare this against their own context's
+    /// bitmaps are device-bound - consumers compare this against their own context's
     /// device (or shared filter device context) by reference equality to decide whether
     /// they can sample the bitmap directly without a copy.
     /// </summary>

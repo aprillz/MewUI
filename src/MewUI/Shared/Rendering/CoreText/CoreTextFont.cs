@@ -16,7 +16,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
     /// <summary>True when bold weight was requested but the font's actual face has no bold
     /// trait (CoreText doesn't synthesize bold like GDI / DirectWrite / FreeType do). When
     /// set, glyph outline emission also appends a stroked copy of the path to thicken the
-    /// rendered shape — Apple's recommended path-based fake-bold technique.</summary>
+    /// rendered shape - Apple's recommended path-based fake-bold technique.</summary>
     private readonly bool _synthesizeBold;
 
     public CoreTextFont(
@@ -102,7 +102,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
             }
 
             // Detect bold-synthesis need: bold-class weight requested but the resulting
-            // font's symbolic traits don't have kCTFontTraitBold set — the family lacks a
+            // font's symbolic traits don't have kCTFontTraitBold set - the family lacks a
             // bold face on this system. CoreText (unlike GDI/DirectWrite/FreeType) doesn't
             // auto-thicken; the fake-bold path-stroke pass in TryAppendGlyphOutline picks
             // up this flag.
@@ -154,22 +154,22 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         nint styled = TryCopyWithTraits(baseFont, sizePx, weight, italic);
         nint chosen = styled != 0 ? styled : baseFont;
 
-        // CoreText doesn't synthesize italic — if the font family has no italic face,
+        // CoreText doesn't synthesize italic - if the font family has no italic face,
         // CTFontCreateCopyWithAttributes returns a copy without the italic trait set
         // (silently). GDI / DirectWrite / FreeType all auto-skew when an italic face is
         // missing; mirror that here by recreating the font with an X-shear matrix when
         // italic was requested but the result lacks the kCTFontTraitItalic bit.
         if (italic && (CoreText.CTFontGetSymbolicTraits(chosen) & kCTFontTraitItalic) == 0)
         {
-            // ~12° forward slant — matches GDI/DirectWrite synthesized oblique. The matrix is
+            // ~12° forward slant - matches GDI/DirectWrite synthesized oblique. The matrix is
             // {a=1, b=0, c=tan(12°), d=1, tx=0, ty=0}: shears X by tan(12°) per unit Y, so
-            // a glyph at (x, y) renders at (x + y·tan(12°), y) — visual oblique.
+            // a glyph at (x, y) renders at (x + y·tan(12°), y) - visual oblique.
             var skew = new CGAffineTransform { a = 1.0, b = 0.0, c = 0.21255656167002213, d = 1.0, tx = 0.0, ty = 0.0 };
             nint skewedRegular = CoreText.CTFontCreateWithNameAndMatrix(cfFamilyName, sizePx, &skew);
             if (skewedRegular != 0)
             {
                 // Re-apply weight on top of the skewed font. CTFontCreateCopyWithAttributes
-                // preserves the source font's matrix when its matrix parameter is null —
+                // preserves the source font's matrix when its matrix parameter is null -
                 // so the shear from skewedRegular carries through to the weight-applied copy.
                 nint skewedWeighted = TryCopyWithTraits(skewedRegular, sizePx, weight, italic: false);
                 nint finalFont = skewedWeighted != 0 ? skewedWeighted : skewedRegular;
@@ -238,7 +238,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
                 return 0;
             }
 
-            // Build attributes dictionary with traits only (no family name needed — we copy from baseFont).
+            // Build attributes dictionary with traits only (no family name needed - we copy from baseFont).
             nint* attrKeys = stackalloc nint[1];
             nint* attrValues = stackalloc nint[1];
             attrKeys[0] = CTConstants.TraitsAttribute;
@@ -506,7 +506,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
     }
 
     /// <summary>CGAffineTransform layout: <c>{ a, b, c, d, tx, ty }</c> as 6 CGFloats (double on 64-bit).
-    /// Used as the matrix parameter for CTFont creation calls — a non-identity matrix lets CoreText apply
+    /// Used as the matrix parameter for CTFont creation calls - a non-identity matrix lets CoreText apply
     /// affine transforms (e.g. X-shear for synthesized italic) to all glyph rendering and metrics.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct CGAffineTransform
@@ -519,10 +519,10 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         public double ty;
     }
 
-    /// <summary>kCTFontTraitItalic bit in CTFontSymbolicTraits — set when the font has an italic face.</summary>
+    /// <summary>kCTFontTraitItalic bit in CTFontSymbolicTraits - set when the font has an italic face.</summary>
     private const uint kCTFontTraitItalic = 1u;
 
-    /// <summary>kCTFontTraitBold bit in CTFontSymbolicTraits — set when the font has a bold face.</summary>
+    /// <summary>kCTFontTraitBold bit in CTFontSymbolicTraits - set when the font has a bold face.</summary>
     private const uint kCTFontTraitBold = 2u;
 
     private static partial class CoreTextNative
@@ -593,7 +593,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
                 {
                     // Apple's recommended fake-bold: stroke the glyph outline at ~4% of font
                     // size, then fill BOTH original and stroked-outline paths together. The
-                    // stroked outline is itself a closed path tracing the stroke envelope —
+                    // stroked outline is itself a closed path tracing the stroke envelope -
                     // filling it produces a thin "halo" around the original glyph that fuses
                     // visually into a thicker shape. Stroke width is in font/raw units (same
                     // coordinate space as the glyph path returned by CTFontCreatePathForGlyph),
@@ -602,7 +602,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
                     // Butt caps + miter joins so the stroked outline preserves the original
                     // glyph's sharp corners and pointed tips (e.g. tops of A/V/W). Round
                     // caps/joins blunt those features and make the bold-synthesized glyph
-                    // look soft / mushy — matches what GDI's bold-synthesis-by-overstrike
+                    // look soft / mushy - matches what GDI's bold-synthesis-by-overstrike
                     // and FreeType's emboldener avoid.
                     strokedPath = CoreGraphics.CGPathCreateCopyByStrokingPath(
                         glyphPath, transform: 0, strokeWidthRaw,
@@ -717,7 +717,7 @@ internal sealed unsafe partial class CoreTextFont : FontBase, IGlyphOutlineFont
         internal static unsafe partial void CGPathApply(nint path, nint info, delegate* unmanaged[Cdecl]<nint, CGPathElement*, void> function);
 
         /// <summary>
-        /// CGPathCreateCopyByStrokingPath — returns a new path that traces the OUTLINE of
+        /// CGPathCreateCopyByStrokingPath - returns a new path that traces the OUTLINE of
         /// stroking the source with the given line width / cap / join. Filling that outline
         /// produces a "halo" around the original glyph; appending it alongside the original
         /// fills both regions, effectively thickening the glyph (Apple's recommended fake-bold

@@ -4,8 +4,8 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// Direct2D pen resource.
 /// <para>
 /// Stores the stroke color (via a <see cref="Direct2DSolidColorBrush"/>), thickness, and
-/// <see cref="StrokeStyle"/> attributes.  The <c>ID2D1StrokeStyle</c> COM object — which is
-/// factory-level and <em>not</em> render-target-specific — is created on first use and cached
+/// <see cref="StrokeStyle"/> attributes.  The <c>ID2D1StrokeStyle</c> COM object - which is
+/// factory-level and <em>not</em> render-target-specific - is created on first use and cached
 /// in <see cref="StrokeStyleHandle"/>.
 /// </para>
 /// <para>

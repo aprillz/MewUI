@@ -34,7 +34,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     public int StrideBytes => PixelWidth * 4;
 
     /// <summary>
-    /// Whether this bitmap is expected to carry alpha. Set at construction time —
+    /// Whether this bitmap is expected to carry alpha. Set at construction time -
     /// callers that know their content is opaque (video frames, photo decoders, etc.)
     /// can pass <c>false</c> so backends pick <c>ALPHA_MODE.IGNORE</c> on the GPU side
     /// and skip per-pixel alpha scans on upload. Default <c>true</c> preserves alpha
@@ -60,7 +60,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// <param name="clear"><see langword="true"/> to clear the buffer to zero; otherwise leaves it uninitialized.</param>
     /// <param name="hasAlpha">
     /// <see langword="false"/> when callers guarantee every pixel is opaque (video frames,
-    /// JPEG-derived content, etc.) — backends use this to pick <c>ALPHA_MODE.IGNORE</c>
+    /// JPEG-derived content, etc.) - backends use this to pick <c>ALPHA_MODE.IGNORE</c>
     /// over <c>PREMULTIPLIED</c> and skip the per-pixel alpha scan on upload. Default
     /// <see langword="true"/> preserves alpha for general-purpose drawing.
     /// </param>

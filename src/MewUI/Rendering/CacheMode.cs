@@ -11,7 +11,7 @@ public abstract class CacheMode
 /// Caches an element's rendered output (its own <c>OnRender</c> plus its subtree) into an
 /// offscreen bitmap and blits that bitmap each frame until the element's content, size, or DPI
 /// changes. The visual tree is kept intact: layout, hit testing, focus, and state continue to run
-/// on the live element — only painting is served from the cache. Clearing <c>CacheMode</c> resumes
+/// on the live element - only painting is served from the cache. Clearing <c>CacheMode</c> resumes
 /// live rendering immediately. Backing bitmaps are released while their subtree is hidden,
 /// outside the window viewport, or detached, and are recreated when rendered again.
 /// <para/>

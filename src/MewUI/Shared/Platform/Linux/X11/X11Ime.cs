@@ -435,7 +435,7 @@ internal static partial class X11Ime
 
     /// <summary>
     /// Updates the XIM spot location for the preedit position.
-    /// Creates a new nested list each call (SFML pattern — reusing is unsafe).
+    /// Creates a new nested list each call (SFML pattern - reusing is unsafe).
     /// </summary>
     internal static unsafe void UpdateSpotLocation(nint ic, int x, int y)
     {

@@ -106,7 +106,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
             }
 
             cinfo.jpeg_finish_decompress();
-            // JPEG has no alpha channel — output is opaque by construction.
+            // JPEG has no alpha channel - output is opaque by construction.
             bitmap = new Bgra32PixelBuffer(width, height, dst, HasAlpha: false);
             return true;
         }

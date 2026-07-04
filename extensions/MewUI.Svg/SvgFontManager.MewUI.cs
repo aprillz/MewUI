@@ -55,7 +55,7 @@ public sealed class SvgFontManager : IDisposable
             return generic;
         }
 
-        // Not in registered/private fonts and not a generic family — assume it's a
+        // Not in registered/private fonts and not a generic family - assume it's a
         // system-installed family (e.g. "Verdana", "Arial") and let the backend's
         // CreateFont resolve via the OS font enumeration. Without this, ValidateFontFamily
         // skips to the next entry in the font-family list and ultimately falls through

@@ -33,7 +33,7 @@ public enum Win32TransparencyMode
 /// Implemented by an <see cref="Rendering.IGraphicsFactory"/> that wants the
 /// Win32 platform to use a specific transparency presentation strategy. Backends that do
 /// not implement this interface are treated as <see cref="Win32TransparencyMode.Bitmap"/>
-/// (safe default — the existing layered-DIB path).
+/// (safe default - the existing layered-DIB path).
 /// </summary>
 public interface IWin32TransparencyCapabilities
 {

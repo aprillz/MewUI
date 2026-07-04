@@ -68,7 +68,7 @@ public partial class TextBlock : FrameworkElement, IDisposable
 
     /// <summary>
     /// Gets or sets the text foreground color.
-    /// Shares <see cref="Control.ForegroundProperty"/> — inherits from the nearest parent Control.
+    /// Shares <see cref="Control.ForegroundProperty"/> - inherits from the nearest parent Control.
     /// </summary>
     public Color Foreground
     {
@@ -78,7 +78,7 @@ public partial class TextBlock : FrameworkElement, IDisposable
 
     /// <summary>
     /// Gets or sets the font family.
-    /// Shares <see cref="Control.FontFamilyProperty"/> — inherits from the nearest parent Control.
+    /// Shares <see cref="Control.FontFamilyProperty"/> - inherits from the nearest parent Control.
     /// </summary>
     public string FontFamily
     {
@@ -88,7 +88,7 @@ public partial class TextBlock : FrameworkElement, IDisposable
 
     /// <summary>
     /// Gets or sets the font size.
-    /// Shares <see cref="Control.FontSizeProperty"/> — inherits from the nearest parent Control.
+    /// Shares <see cref="Control.FontSizeProperty"/> - inherits from the nearest parent Control.
     /// </summary>
     public double FontSize
     {
@@ -98,7 +98,7 @@ public partial class TextBlock : FrameworkElement, IDisposable
 
     /// <summary>
     /// Gets or sets the font weight.
-    /// Shares <see cref="Control.FontWeightProperty"/> — inherits from the nearest parent Control.
+    /// Shares <see cref="Control.FontWeightProperty"/> - inherits from the nearest parent Control.
     /// </summary>
     public FontWeight FontWeight
     {

@@ -27,7 +27,7 @@ internal sealed class PropertyAnimator
     {
         int id = property.Id;
 
-        // First time this property is set — snap (no animation from default value)
+        // First time this property is set - snap (no animation from default value)
         if (!_store.HasTargetValue(id))
         {
             _store.SetValue(property, value, source);
@@ -51,7 +51,7 @@ internal sealed class PropertyAnimator
         // Capture the "from" value (current visual state)
         object from = currentVisual!;
 
-        // Type cannot lerp — snap immediately
+        // Type cannot lerp - snap immediately
         if (!TypeLerp.CanLerp(property.ValueType))
         {
             _store.SetValue(property, value, source);
@@ -120,7 +120,7 @@ internal sealed class PropertyAnimator
 
         if (progress >= 1.0)
         {
-            // Animation complete — clear animated overlay, target value takes effect
+            // Animation complete - clear animated overlay, target value takes effect
             _store.ClearAnimatedValue(propertyId);
         }
         else

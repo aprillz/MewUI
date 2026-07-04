@@ -277,7 +277,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
     // GenericEvent (XInput2 etc.) carries its target window inside the cookie payload, not
     // in any XEvent union field. Fetch once, read XIDeviceEvent.event, deliver to that one
-    // backend, then free — backend sees an already-fetched cookie and must NOT re-fetch/free.
+    // backend, then free - backend sees an already-fetched cookie and must NOT re-fetch/free.
     private void DispatchGenericEvent(ref XEvent ev)
     {
         if (!NativeX11.XGetEventData(Display, ref ev.xcookie))

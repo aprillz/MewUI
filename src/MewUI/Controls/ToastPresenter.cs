@@ -33,7 +33,7 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
     {
         //if (_currentText != null)
         //{
-        //    // Already showing — defer until current toast dismisses.
+        //    // Already showing - defer until current toast dismisses.
         //    _pendingText = text;
         //    return;
         //}
@@ -69,12 +69,12 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
 
         //if (pending != null && pending != current)
         //{
-        //    // Different text queued — transition to it.
+        //    // Different text queued - transition to it.
         //    Show(pending, ComputeDuration(pending));
         //}
         //else
         //{
-        // Same text or nothing queued — dismiss.
+        // Same text or nothing queued - dismiss.
         _transition.Content = null;
         //}
     }

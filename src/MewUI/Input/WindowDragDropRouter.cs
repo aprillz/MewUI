@@ -31,7 +31,7 @@ internal static class WindowDragDropRouter
     /// <summary>Records a drag candidate when a mouse-down lands on a <see cref="UIElement.CanDrag"/> element (or its ancestor).</summary>
     public static void OnMouseDown(Window window, Point positionInWindow, Point screenPosition, UIElement? leaf)
     {
-        // An active drag in progress consumes new presses (shouldn't normally happen — capture diverts them).
+        // An active drag in progress consumes new presses (shouldn't normally happen - capture diverts them).
         if (_activeSession != null) return;
 
         _candidate = null;
@@ -69,7 +69,7 @@ internal static class WindowDragDropRouter
             return false;
         }
 
-        // Threshold exceeded — try to promote to an active session.
+        // Threshold exceeded - try to promote to an active session.
         return TryPromoteCandidate();
     }
 
@@ -88,7 +88,7 @@ internal static class WindowDragDropRouter
         if (_candidate != null)
         {
             _candidate = null;
-            return false; // candidate was a click, not a drag — let normal MouseUp routing run
+            return false; // candidate was a click, not a drag - let normal MouseUp routing run
         }
 
         return false;
@@ -146,7 +146,7 @@ internal static class WindowDragDropRouter
     {
         if (args.Data == null) return false;
 
-        // When the caller did not specify a hotspot, anchor the preview where the user grabbed the source —
+        // When the caller did not specify a hotspot, anchor the preview where the user grabbed the source -
         // this keeps the preview visually aligned with the original at drag-start.
         var hotspot = args.Preview?.Hotspot ?? args.StartPositionInElement;
 
@@ -192,7 +192,7 @@ internal static class WindowDragDropRouter
         // DragLeave on entries removed (those in oldChain not in newChain, or when window changed).
         if (!ReferenceEquals(oldWindow, targetWindow))
         {
-            // Different window — leave everything in old chain.
+            // Different window - leave everything in old chain.
             for (int i = 0; i < oldChain.Count; i++)
             {
                 oldChain[i].RaiseDragLeave(args);
@@ -201,7 +201,7 @@ internal static class WindowDragDropRouter
         }
         else
         {
-            // Same window — leave entries no longer present.
+            // Same window - leave entries no longer present.
             for (int i = 0; i < oldChain.Count; i++)
             {
                 if (!_scratchNewChain.Contains(oldChain[i]))
@@ -339,7 +339,7 @@ internal static class WindowDragDropRouter
         screenPosition = cursorScreen;
 
         var windows = app.AllWindows;
-        // Iterate in reverse — later-registered windows are heuristically more likely to be on top.
+        // Iterate in reverse - later-registered windows are heuristically more likely to be on top.
         for (int i = windows.Count - 1; i >= 0; i--)
         {
             var candidate = windows[i];
@@ -375,7 +375,7 @@ internal static class WindowDragDropRouter
             return candidate;
         }
 
-        // Cursor not over any MewUI window — return null so the chain leaves and the preview shows a rejected state.
+        // Cursor not over any MewUI window - return null so the chain leaves and the preview shows a rejected state.
         return null;
     }
 
@@ -670,7 +670,7 @@ internal static class WindowDragDropRouter
         if (!args.Accepted) return DragDropEffects.None;
         var effect = args.Effect & args.AllowedEffects;
         if (effect != DragDropEffects.None) return effect;
-        // Target said accepted without picking a specific effect — pick the first allowed one.
+        // Target said accepted without picking a specific effect - pick the first allowed one.
         if ((args.AllowedEffects & DragDropEffects.Copy) != 0) return DragDropEffects.Copy;
         if ((args.AllowedEffects & DragDropEffects.Move) != 0) return DragDropEffects.Move;
         if ((args.AllowedEffects & DragDropEffects.Link) != 0) return DragDropEffects.Link;

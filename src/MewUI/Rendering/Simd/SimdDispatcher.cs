@@ -146,7 +146,7 @@ internal static class SimdDispatcher
 
     /// <summary>
     /// Un-premultiplies a BGRA buffer (per-pixel alpha). Inverse of <see cref="PremultiplyBgra"/>.
-    /// Uses a 16.16-fixed-point reciprocal table for the per-pixel division by alpha — about
+    /// Uses a 16.16-fixed-point reciprocal table for the per-pixel division by alpha - about
     /// 2-3x faster than naive integer division. Channel value is clamped to alpha to avoid
     /// overshoot when source pixels were rounded above a (rare in well-formed premul data).
     /// </summary>

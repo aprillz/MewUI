@@ -73,7 +73,7 @@ internal static class SvgFilterGraphBuilder
         {
             SvgFilterPrimitive.SourceGraphic => SourceFilter.Instance,
             // SVG spec: SourceAlpha = the source graphic's alpha channel only, with RGB
-            // forced to zero. Implemented as a ColorMatrix on top of SourceFilter — the
+            // forced to zero. Implemented as a ColorMatrix on top of SourceFilter - the
             // backend already supports feColorMatrix, so this composes naturally without
             // a new primitive type. Drop-shadow filters depend on this (gaussian blur of
             // SourceAlpha → dark halo behind the source graphic).
@@ -86,7 +86,7 @@ internal static class SvgFilterGraphBuilder
         };
     }
 
-    // 4×5 ColorMatrix that zeroes RGB and preserves alpha — equivalent to SourceAlpha.
+    // 4×5 ColorMatrix that zeroes RGB and preserves alpha - equivalent to SourceAlpha.
     private static readonly float[] SourceAlphaMatrix =
     [
         0, 0, 0, 0, 0,
