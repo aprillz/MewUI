@@ -1,11 +1,11 @@
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Base class for virtualized, scrollable items controls.
-/// Provides shared infrastructure: ScrollViewer hosting, item binding generation, deferred scroll-into-view request,
-/// pending tab-focus helper, and default visual properties common to ListBox, GridView, and TreeView.
+/// Base class for scrollable items controls: hosts a <see cref="ScrollViewer"/> over an
+/// <see cref="IItemsPresenter"/> and provides item-binding generation, deferred scroll-into-view,
+/// a pending tab-focus helper, and shared list chrome. Virtualization is a presenter concern, not this base.
 /// </summary>
-public abstract class VirtualizedItemsBase : Control, ISubtreeInvalidationHost
+public abstract class ScrollableItemsBase : Control, ISubtreeInvalidationHost
 {
     protected readonly ScrollViewer _scrollViewer;
 
@@ -17,7 +17,7 @@ public abstract class VirtualizedItemsBase : Control, ISubtreeInvalidationHost
     private protected uint _itemBindingGeneration;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
 
-    protected VirtualizedItemsBase()
+    protected ScrollableItemsBase()
     {
         _scrollViewer = new ScrollViewer
         {

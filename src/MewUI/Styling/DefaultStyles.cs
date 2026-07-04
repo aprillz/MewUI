@@ -97,7 +97,7 @@ public static class DefaultStyles
             Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
             Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
 
-        Register(styles, CreateControlBasedStyle(typeof(VirtualizedItemsBase),
+        Register(styles, CreateControlBasedStyle(typeof(ScrollableItemsBase),
             Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
             Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
 

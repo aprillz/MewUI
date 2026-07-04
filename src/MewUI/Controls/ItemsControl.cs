@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollable items host without built-in selection semantics.
 /// </summary>
-public sealed class ItemsControl : VirtualizedItemsBase
+public sealed class ItemsControl : ScrollableItemsBase
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private IItemsPresenter _presenter;
