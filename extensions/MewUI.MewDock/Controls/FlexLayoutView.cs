@@ -248,7 +248,7 @@ internal class FlexLayoutView : Panel
             // mixed-DPI monitor in one shot - no create-then-move flicker.
             if (rect.X != 0 || rect.Y != 0)
             {
-                uint targetDpi = Application.Current.PlatformHost.GetDpiForPoint(new Point(rect.X, rect.Y));
+                uint targetDpi = DpiHelper.GetDpiForPoint(new Point(rect.X, rect.Y));
                 double targetScale = targetDpi > 0 ? targetDpi / 96.0 : 1.0;
                 window.StartManualPosition(rect.X / targetScale - 20, rect.Y / targetScale - 10);
             }
