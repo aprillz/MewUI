@@ -1,6 +1,6 @@
 # Aprillz.MewUI
 
-A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT.
+A cross-platform, lightweight, code-first .NET GUI framework for building and shipping NativeAOT/Trim-friendly desktop apps without requiring a separate .NET runtime installation.
 
 - GitHub: https://github.com/aprillz/MewUI
 - License: MIT
@@ -9,7 +9,12 @@ A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeA
 
 - Fluent **C# markup** (no XAML)
 - Designed for **small footprint** (AOT/Trim-friendly), **fast startup**, and **low memory usage**
-- Keep the binding model simple (no complex, reflection-heavy path binding)
+- Explicit **AOT-friendly binding** (no reflection-heavy path binding as the primary model)
+- Thin core with optional extension packages for larger features
+
+## Project status
+
+MewUI is actively developed, with published packages, cross-platform hosts, multiple rendering backends, and optional extension packages. The public API surface is still being stabilized, so breaking changes can happen between minor releases.
 
 ## Install
 

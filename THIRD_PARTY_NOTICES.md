@@ -115,3 +115,14 @@ https://p.yusukekamiyamane.com/
 Copyright (c) Yusuke Kamiyamane. Licensed under the Creative Commons Attribution 3.0 license.
 https://creativecommons.org/licenses/by/3.0/
 
+## Simple Icons
+
+The `Aprillz.MewUI.Svg` sample (`samples/MewUI.Svg.Sample`) bundles icons and metadata from Simple Icons.
+https://github.com/simple-icons/simple-icons
+
+Licensed under the Creative Commons Zero v1.0 Universal (CC0-1.0) license.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Brand icons/logos remain trademarks of their respective owners; Simple Icons and this project are not
+affiliated with, endorsed by, or sponsored by those owners. Use of a logo does not imply any endorsement.
+
