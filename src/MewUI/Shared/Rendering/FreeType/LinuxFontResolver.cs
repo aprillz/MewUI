@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 
-using Aprillz.MewUI.Native.Fontconfig;
 using Aprillz.MewUI.Resources;
 
 using FC = Aprillz.MewUI.Native.Fontconfig.Fontconfig;
