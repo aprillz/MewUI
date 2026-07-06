@@ -79,7 +79,7 @@ public static class BuiltInStyles
     {
         return new Style(typeof(ListBox))
         {
-            BasedOn = Style.ForType<VirtualizedItemsBase>(),
+            BasedOn = Style.ForType<ScrollableItemsBase>(),
             Setters =
             [
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),

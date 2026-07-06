@@ -409,7 +409,6 @@ public static class DefaultStyles
 
     }
     // No triggers - thumb uses PickAccentBorder with its own thumbState (includes _isDragging).
-    }
 
     private static Style CreateSliderStyle()
     {
