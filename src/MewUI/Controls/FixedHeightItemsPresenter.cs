@@ -17,6 +17,12 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
     private double _itemRadius;
     private int _pendingScrollIntoViewIndex = -1;
 
+    // Cached composed GetContainerRect delegates (avoid closure allocation per ArrangeContent).
+    // Both read ItemPadding/GetContainerRect live through the properties, so they stay valid
+    // across ItemPadding/GetContainerRect changes without needing invalidation.
+    private Func<int, Rect, Rect>? _cachedGetContainerRectWithPad;
+    private Func<int, Rect, Rect>? _cachedDeflateOnlyGetContainerRect;
+
     public IItemsView ItemsSource
     {
         get => _itemsSource;
@@ -274,20 +280,18 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
             ItemBindingGeneration = ItemBindingGeneration,
         };
 
-        var userGetContainerRect = GetContainerRect;
-        var pad = ItemPadding;
         Func<int, Rect, Rect>? effectiveGetContainerRect;
-        if (pad == default)
+        if (ItemPadding == default)
         {
-            effectiveGetContainerRect = userGetContainerRect;
+            effectiveGetContainerRect = GetContainerRect;
         }
-        else if (userGetContainerRect != null)
+        else if (GetContainerRect != null)
         {
-            effectiveGetContainerRect = (i, r) => userGetContainerRect(i, r).Deflate(pad);
+            effectiveGetContainerRect = _cachedGetContainerRectWithPad ??= (i, r) => GetContainerRect!(i, r).Deflate(ItemPadding);
         }
         else
         {
-            effectiveGetContainerRect = (_, r) => r.Deflate(pad);
+            effectiveGetContainerRect = _cachedDeflateOnlyGetContainerRect ??= (_, r) => r.Deflate(ItemPadding);
         }
 
         _itemsHost.Options = new TemplatedItemsHost.ItemsRangeOptions

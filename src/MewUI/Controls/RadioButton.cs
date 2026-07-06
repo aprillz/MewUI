@@ -149,6 +149,22 @@ public class RadioButton : ToggleBase
         return new Size(width, height).Inflate(Padding);
     }
 
+    protected override void ArrangeContent(Rect bounds)
+    {
+        if (Content == null)
+        {
+            return;
+        }
+
+        var contentBounds = bounds.Deflate(Padding);
+        var textBounds = new Rect(
+            contentBounds.X + BoxSize + SpacingValue,
+            contentBounds.Y,
+            Math.Max(0, contentBounds.Width - BoxSize - SpacingValue),
+            contentBounds.Height);
+        Content.Arrange(textBounds);
+    }
+
     protected override void OnRender(IGraphicsContext context)
     {
         EnsureGroupRegistered();
@@ -174,16 +190,6 @@ public class RadioButton : ToggleBase
             var inner = circleRect.Inflate(-4, -4);
             var dot = state.IsEnabled ? Theme.Palette.Accent : Theme.Palette.DisabledAccent;
             context.FillEllipse(inner, dot);
-        }
-
-        if (Content != null)
-        {
-            var textBounds = new Rect(
-                contentBounds.X + BoxSize + SpacingValue,
-                contentBounds.Y,
-                Math.Max(0, contentBounds.Width - BoxSize - SpacingValue),
-                contentBounds.Height);
-            Content.Arrange(textBounds);
         }
     }
 

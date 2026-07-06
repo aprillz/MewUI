@@ -21,6 +21,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     private readonly Dictionary<int, FrameworkElement> _recycledByIndex = new();
     private readonly List<int> _recycleScratch = new();
     private readonly List<(int Index, Rect ItemRect)> _arrangedItems = new();
+    private readonly List<(int OldIndex, FrameworkElement Element)> _remapScratch = new();
+    private readonly List<double> _insertHeightScratch = new(); // reused -1 fill buffer for InsertRange, avoids Enumerable.Repeat allocation
+    private double[] _oldPrefixScratch = Array.Empty<double>(); // reused prefix-sum buffer for OnItemsChanged anchor calc, grow-only
     private HashSet<int>? _pendingRebind;
 
     private UIElement? _deferredFocusedElement;
@@ -1042,32 +1045,32 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
         if (_realized.Count > 0)
         {
-            var remapped = new Dictionary<int, FrameworkElement>(_realized.Count);
-            foreach (var (index, element) in _realized)
-            {
-                int newIndex = index >= insertIndex ? index + count : index;
-                remapped[newIndex] = element;
-            }
-            _realized.Clear();
-            foreach (var (idx, el) in remapped)
-            {
-                _realized[idx] = el;
-            }
+            RemapDictionaryAfterInsert(_realized, insertIndex, count);
         }
 
         if (_recycledByIndex.Count > 0)
         {
-            var remapped = new Dictionary<int, FrameworkElement>(_recycledByIndex.Count);
-            foreach (var (index, element) in _recycledByIndex)
-            {
-                int newIndex = index >= insertIndex ? index + count : index;
-                remapped[newIndex] = element;
-            }
-            _recycledByIndex.Clear();
-            foreach (var (idx, el) in remapped)
-            {
-                _recycledByIndex[idx] = el;
-            }
+            RemapDictionaryAfterInsert(_recycledByIndex, insertIndex, count);
+        }
+    }
+
+    // Remaps dictionary keys in place using the reused _remapScratch pair list, avoiding a
+    // replacement dictionary allocation per mutation. Keys can't be shifted while enumerating
+    // the same dictionary, so entries are copied out to the scratch list first.
+    private void RemapDictionaryAfterInsert(Dictionary<int, FrameworkElement> dictionary, int insertIndex, int count)
+    {
+        _remapScratch.Clear();
+        foreach (var (index, element) in dictionary)
+        {
+            _remapScratch.Add((index, element));
+        }
+
+        dictionary.Clear();
+        for (int i = 0; i < _remapScratch.Count; i++)
+        {
+            var (oldIndex, element) = _remapScratch[i];
+            int newIndex = oldIndex >= insertIndex ? oldIndex + count : oldIndex;
+            dictionary[newIndex] = element;
         }
     }
 
@@ -1110,17 +1113,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
         if (_realized.Count > 0)
         {
-            var remapped = new Dictionary<int, FrameworkElement>(_realized.Count);
-            foreach (var (index, element) in _realized)
-            {
-                int newIndex = index >= removeEndExclusive ? index - removeCount : index;
-                remapped[newIndex] = element;
-            }
-            _realized.Clear();
-            foreach (var (idx, el) in remapped)
-            {
-                _realized[idx] = el;
-            }
+            RemapDictionaryAfterRemove(_realized, removeEndExclusive, removeCount);
         }
 
         if (_recycledByIndex.Count > 0)
@@ -1145,18 +1138,25 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
             if (_recycledByIndex.Count > 0)
             {
-                var remapped = new Dictionary<int, FrameworkElement>(_recycledByIndex.Count);
-                foreach (var (index, element) in _recycledByIndex)
-                {
-                    int newIndex = index >= removeEndExclusive ? index - removeCount : index;
-                    remapped[newIndex] = element;
-                }
-                _recycledByIndex.Clear();
-                foreach (var (idx, el) in remapped)
-                {
-                    _recycledByIndex[idx] = el;
-                }
+                RemapDictionaryAfterRemove(_recycledByIndex, removeEndExclusive, removeCount);
             }
+        }
+    }
+
+    private void RemapDictionaryAfterRemove(Dictionary<int, FrameworkElement> dictionary, int removeEndExclusive, int removeCount)
+    {
+        _remapScratch.Clear();
+        foreach (var (index, element) in dictionary)
+        {
+            _remapScratch.Add((index, element));
+        }
+
+        dictionary.Clear();
+        for (int i = 0; i < _remapScratch.Count; i++)
+        {
+            var (oldIndex, element) = _remapScratch[i];
+            int newIndex = oldIndex >= removeEndExclusive ? oldIndex - removeCount : oldIndex;
+            dictionary[newIndex] = element;
         }
     }
 
@@ -1264,7 +1264,13 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         double alignedOffsetY = LayoutRounding.RoundToPixel(_offset.Y, dpiScale);
 
         // Local prefix for old count (pre-change), to avoid IndexOutOfRange during Add/Remove.
-        double[] oldPrefix = new double[oldCountForAnchor + 1];
+        // Reuses a grow-only scratch buffer instead of allocating a new array every mutation.
+        if (_oldPrefixScratch.Length < oldCountForAnchor + 1)
+        {
+            _oldPrefixScratch = new double[oldCountForAnchor + 1];
+        }
+
+        double[] oldPrefix = _oldPrefixScratch;
         double sum = 0;
         oldPrefix[0] = 0;
         for (int i = 0; i < oldCountForAnchor; i++)
@@ -1290,7 +1296,12 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
                 if (change.Count > 0)
                 {
                     int insertIndex = Math.Clamp(change.Index, 0, _heights.Count);
-                    _heights.InsertRange(insertIndex, Enumerable.Repeat(-1d, change.Count));
+                    _insertHeightScratch.Clear();
+                    for (int i = 0; i < change.Count; i++)
+                    {
+                        _insertHeightScratch.Add(-1d);
+                    }
+                    _heights.InsertRange(insertIndex, _insertHeightScratch);
                     RemapRealizedIndicesAfterInsert(insertIndex, change.Count);
 
                     if (insertIndex <= anchorIndex)

@@ -7,6 +7,8 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class ToggleSwitch : ToggleBase
 {
+    private const double SPACING = 8;
+
     public static readonly MewProperty<Color> ThumbBrushProperty =
         MewProperty<Color>.Register<ToggleSwitch>(nameof(ThumbBrush), default, MewPropertyOptions.AffectsRender);
 
@@ -22,7 +24,6 @@ public sealed class ToggleSwitch : ToggleBase
         _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
 
-        _pressCapture = new PressCaptureHelper(this, SetPressed);
     public Color ThumbBrush
     {
         get => GetValue(ThumbBrushProperty);
@@ -51,14 +52,38 @@ public sealed class ToggleSwitch : ToggleBase
         if (Content != null)
         {
             var contentAvailable = new Size(
-                Math.Max(0, availableSize.Width - width - Spacing - Padding.HorizontalThickness),
+                Math.Max(0, availableSize.Width - width - SPACING - Padding.HorizontalThickness),
                 double.PositiveInfinity);
             Content.Measure(contentAvailable);
-            width += Spacing + Content.DesiredSize.Width;
+            width += SPACING + Content.DesiredSize.Width;
             height = Math.Max(height, Content.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        if (Content == null)
+        {
+            return;
+        }
+
+        var snappedBounds = GetSnappedBorderBounds(bounds);
+        var contentBounds = snappedBounds.Deflate(Padding);
+
+        var (trackWidth, trackHeight) = GetTrackSize();
+
+        double y = contentBounds.Y + (contentBounds.Height - trackHeight) / 2;
+        var trackRect = new Rect(contentBounds.X, y, trackWidth, trackHeight);
+        trackRect = LayoutRounding.SnapBoundsRectToPixels(trackRect, GetDpi() / 96.0);
+
+        var labelBounds = new Rect(
+            trackRect.Right + SPACING,
+            contentBounds.Y,
+            Math.Max(0, contentBounds.Width - trackRect.Width - SPACING),
+            contentBounds.Height);
+        Content.Arrange(labelBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -95,16 +120,6 @@ public sealed class ToggleSwitch : ToggleBase
         double thumbX = IsChecked ? thumbXMax : thumbXMin;
         var thumbRect = new Rect(thumbX, trackRect.Y + thumbInset, thumbSize, thumbSize);
         context.FillEllipse(thumbRect, thumbFill);
-
-        if (Content != null)
-        {
-            var labelBounds = new Rect(
-                trackRect.Right + Spacing,
-                contentBounds.Y,
-                Math.Max(0, contentBounds.Width - trackRect.Width - Spacing),
-                contentBounds.Height);
-            Content.Arrange(labelBounds);
-        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
