@@ -13,6 +13,8 @@ public abstract class DropDownBase : Control, IPopupOwner
     private UIElement? _popup;
     private Rect? _lastPopupBounds;
     private bool _closingPopup;
+    private bool _popupBoundsDirty = true;
+    private Window? _popupBoundsWindow;
 
     public static readonly MewProperty<bool> IsDropDownOpenProperty =
         MewProperty<bool>.Register<DropDownBase>(nameof(IsDropDownOpen), false,
@@ -35,7 +37,7 @@ public abstract class DropDownBase : Control, IPopupOwner
     private void OnMaxDropDownHeightChanged(double oldValue, double newValue)
     {
         if (IsDropDownOpen)
-            UpdatePopupBoundsCore();
+            _popupBoundsDirty = true;
     }
 
     protected virtual void OnIsDropDownOpenChanged(bool oldValue, bool newValue)
@@ -138,18 +140,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         }
 
         var client = window.ClientSize;
-        double x = bounds.X;
-
-        // Clamp horizontally to client area.
-        if (x + width > client.Width)
-        {
-            x = Math.Max(0, client.Width - width);
-        }
-
-        if (x < 0)
-        {
-            x = 0;
-        }
+        double x = PopupPlacement.ClampHorizontal(bounds.X, width, client.Width, floorToZero: true);
 
         double maxHeight = Math.Max(0, MaxDropDownHeight);
         if (maxHeight <= 0)
@@ -162,40 +153,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         double desiredHeight = Math.Min(Math.Max(0, popup.DesiredSize.Height), maxHeight);
 
         double belowY = bounds.Y + ResolveHeaderHeight();
-        double availableBelow = Math.Max(0, client.Height - belowY);
-        double availableAbove = Math.Max(0, bounds.Y);
-
-        bool preferBelow = availableBelow >= availableAbove;
-
-        double height;
-        double y;
-
-        if (preferBelow)
-        {
-            if (availableBelow > 0 || availableAbove <= 0)
-            {
-                y = belowY;
-                height = Math.Min(desiredHeight, availableBelow);
-            }
-            else
-            {
-                height = Math.Min(desiredHeight, availableAbove);
-                y = bounds.Y - height;
-            }
-        }
-        else
-        {
-            if (availableAbove > 0 || availableBelow <= 0)
-            {
-                height = Math.Min(desiredHeight, availableAbove);
-                y = bounds.Y - height;
-            }
-            else
-            {
-                y = belowY;
-                height = Math.Min(desiredHeight, availableBelow);
-            }
-        }
+        var (y, height) = PopupPlacement.ResolveVerticalPreferMoreSpace(bounds.Y, belowY, client.Height, desiredHeight);
 
         return new Rect(x, y, width, height);
     }
@@ -207,6 +165,18 @@ public abstract class DropDownBase : Control, IPopupOwner
         var innerWidth = Math.Max(0, availableSize.Width - hInset);
         var header = MeasureHeader(new Size(innerWidth, availableSize.Height));
         return new Size(header.Width + hInset, header.Height);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        base.ArrangeContent(bounds);
+
+        // Arrange runs on any bounds change, including a position-only move (e.g. a parent
+        // panel reflows without resizing this control), which OnSizeChanged would miss.
+        if (IsDropDownOpen)
+        {
+            _popupBoundsDirty = true;
+        }
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
@@ -240,15 +210,22 @@ public abstract class DropDownBase : Control, IPopupOwner
         var innerHeaderRect = headerRect.Deflate(new Thickness(borderInset));
 
         ArrowForeground = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-        using (PerformanceProfiler.Instance.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this))
+        var profiler = PerformanceProfiler.Instance;
+        using (profiler.IsEnabled ? profiler.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this) : default)
         {
             RenderHeaderContent(context, headerRect, innerHeaderRect);
         }
 
         DrawArrow(context, innerHeaderRect, ArrowForeground, IsDropDownOpen);
 
-        if (IsDropDownOpen)
+        // Popup bounds only depend on: this control's own bounds (ArrangeContent/OnSizeChanged),
+        // MaxDropDownHeight (OnMaxDropDownHeightChanged), the window's client size (ClientSizeChanged,
+        // subscribed while open) and the popup content's own desired size. The first three are event-driven
+        // via _popupBoundsDirty; the popup content's layout has no invalidation event, so IsMeasureDirty is
+        // checked here as a cheap per-frame fallback.
+        if (IsDropDownOpen && (_popupBoundsDirty || (_popup != null && _popup.IsMeasureDirty)))
         {
+            _popupBoundsDirty = false;
             UpdatePopupBoundsCore();
         }
     }
@@ -258,7 +235,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         base.OnSizeChanged(e);
         if (IsDropDownOpen)
         {
-            UpdatePopupBoundsCore();
+            _popupBoundsDirty = true;
         }
     }
 
@@ -406,9 +383,24 @@ public abstract class DropDownBase : Control, IPopupOwner
         var popupBounds = CalculatePopupBounds(window, popup);
         window.ShowPopup(this, popup, popupBounds);
         _lastPopupBounds = popupBounds;
+        _popupBoundsDirty = false;
+
+        // Client size has no per-frame-cheap invalidation path (unlike this control's own bounds),
+        // so subscribe for the duration the popup is open instead of polling it every frame.
+        if (_popupBoundsWindow != null)
+        {
+            _popupBoundsWindow.ClientSizeChanged -= OnPopupBoundsWindowClientSizeChanged;
+        }
+        _popupBoundsWindow = window;
+        window.ClientSizeChanged += OnPopupBoundsWindowClientSizeChanged;
 
         var focusTarget = GetPopupFocusTarget(popup);
         window.FocusManager.SetFocus(focusTarget);
+    }
+
+    private void OnPopupBoundsWindowClientSizeChanged(Size newClientSize)
+    {
+        _popupBoundsDirty = true;
     }
 
     private void ClosePopupCore()
@@ -458,6 +450,16 @@ public abstract class DropDownBase : Control, IPopupOwner
         if (_popup == null || !ReferenceEquals(popup, _popup))
         {
             return;
+        }
+
+        // window.ClosePopup always reaches this callback (see PopupManager.CloseAndDetachEntry),
+        // regardless of which code path triggered the close, so unsubscribing here alone is enough.
+        // Use the cached window (not FindVisualRoot()) since a lifecycle close may run after this
+        // control has already been detached from the window that owns the popup.
+        if (_popupBoundsWindow != null)
+        {
+            _popupBoundsWindow.ClientSizeChanged -= OnPopupBoundsWindowClientSizeChanged;
+            _popupBoundsWindow = null;
         }
 
         _closingPopup = true;

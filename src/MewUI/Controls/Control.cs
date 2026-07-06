@@ -1041,10 +1041,7 @@ public abstract class Control : FrameworkElement
         double w = Math.Max(0, desired.Width);
         double h = Math.Max(0, desired.Height);
 
-        if (x + w > client.Width)
-        {
-            x = Math.Max(0, client.Width - w);
-        }
+        x = PopupPlacement.ClampHorizontal(x, w, client.Width, floorToZero: false);
 
         if (y + h > client.Height)
         {
