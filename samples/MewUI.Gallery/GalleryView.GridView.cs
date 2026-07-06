@@ -18,7 +18,7 @@ partial class GalleryView
 
     private FrameworkElement SimpleGridViewCard()
     {
-        var gridItems = Enumerable.Range(1, 1_000)
+        var gridItems = Enumerable.Range(1, 100)
             .Select(i => new SimpleGridRow(i, $"Item {i}", (i % 6) switch { 1 => "Warning", 2 => "Error", _ => "Normal" }))
             .ToArray();
         GridView simple = null!;

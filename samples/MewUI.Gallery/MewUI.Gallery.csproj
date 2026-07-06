@@ -30,6 +30,12 @@
     <DefineConstants>$(DefineConstants);MEWUI_GALLERY_WIN</DefineConstants>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">
+    <DefineConstants Condition="'$(MewUIBackend)' == 'Gdi'">$(DefineConstants);MEWUI_GALLERY_BACKEND_GDI</DefineConstants>
+    <DefineConstants Condition="'$(MewUIBackend)' == 'Direct2D'">$(DefineConstants);MEWUI_GALLERY_BACKEND_DIRECT2D</DefineConstants>
+    <DefineConstants Condition="'$(MewUIBackend)' == 'MewVG'">$(DefineConstants);MEWUI_GALLERY_BACKEND_MEWVG</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
     <DefineConstants>$(DefineConstants);MEWUI_GALLERY_LINUX</DefineConstants>
   </PropertyGroup>
@@ -38,7 +44,7 @@
     <DefineConstants>$(DefineConstants);MEWUI_GALLERY_OSX</DefineConstants>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == ''">
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
@@ -47,6 +53,26 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj"
+                      Condition="'$(MewUIBackend)' == '' Or '$(MewUIBackend)' == 'Direct2D'" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj"
+                      Condition="'$(MewUIBackend)' == '' Or '$(MewUIBackend)' == 'Gdi'" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.Win32\MewUI.Backend.MewVG.Win32.csproj"
+                      Condition="'$(MewUIBackend)' == '' Or '$(MewUIBackend)' == 'MewVG'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.X11\MewUI.Backend.MewVG.X11.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
+    <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
 
@@ -59,11 +85,6 @@
 
     <None Include="Resources\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <!--<ItemGroup>
-    <None Remove="Resources\folder-horizontal-open.png" />
-    <None Remove="Resources\folder-horizontal.png" />
-  </ItemGroup>-->
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\icon\appicon.ico"  />

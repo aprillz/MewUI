@@ -5,7 +5,13 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private FrameworkElement WindowsMenuPage()
+    private FrameworkElement MenuPage() =>
+        CardGrid(
+            MenusCard(),
+            AccessKeyCard()
+        );
+
+    private FrameworkElement WindowPage()
     {
         var dialogStatus = new ObservableValue<string>("Dialog: -");
         var transparentStatus = new ObservableValue<string>("Transparent: -");
@@ -18,7 +24,7 @@ partial class GalleryView
         {
             dialogStatus.Value = "Dialog: opening...";
 
-            var dlg = new Window()
+            var dialog = new Window()
                 .Resizable(420, 220)
                 .StartCenterScreen()
                 .OnBuild(x => x
@@ -49,7 +55,7 @@ partial class GalleryView
 
             try
             {
-                await dlg.ShowDialogAsync(window);
+                await dialog.ShowDialogAsync(window);
                 dialogStatus.Value = "Dialog: closed";
             }
             catch (Exception ex)
@@ -177,8 +183,6 @@ partial class GalleryView
         }
 
         return CardGrid(
-            MenusCard(),
-
             Card(
                 "Native Custom Chrome",
                 new StackPanel()
@@ -349,8 +353,6 @@ partial class GalleryView
             PromptDialogCard(),
 
             NativeMessageHookCard(),
-
-            AccessKeyCard(),
 
             DevToolsCard()
         );
@@ -641,17 +643,23 @@ partial class GalleryView
             messageCount++;
             switch (args)
             {
+#if MEWUI_GALLERY_WIN || (!MEWUI_GALLERY_LINUX && !MEWUI_GALLERY_OSX)
                 case Win32NativeMessageEventArgs win32:
                     hookLog.Value = $"Win32 #{messageCount}: msg=0x{win32.Msg:X4} wParam=0x{win32.WParam:X} lParam=0x{win32.LParam:X}";
                     break;
+#endif
 
+#if MEWUI_GALLERY_LINUX || (!MEWUI_GALLERY_WIN && !MEWUI_GALLERY_OSX)
                 case X11NativeMessageEventArgs x11:
                     hookLog.Value = $"X11 #{messageCount}: type={x11.EventType}";
                     break;
+#endif
 
+#if MEWUI_GALLERY_OSX || (!MEWUI_GALLERY_WIN && !MEWUI_GALLERY_LINUX)
                 case MacOSNativeMessageEventArgs macos:
                     hookLog.Value = $"macOS #{messageCount}: type={macos.EventType}";
                     break;
+#endif
             }
         }
 
