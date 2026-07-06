@@ -60,6 +60,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
         _core.ItemsChanged += OnItemsChanged;
         _core.SelectionChanged += _ => OnItemsSelectionChanged();
+        _core.SelectedIndicesChanged += () =>
+        {
+            SelectedIndicesChanged?.Invoke();
+            InvalidateItemBindings();
+            InvalidateVisual();
+        };
         _core.ColumnsChanged += () =>
         {
             _header.SetColumns(_core.Columns);
@@ -126,6 +132,43 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     public object? SelectedItem => _core.SelectedItem;
 
+    /// <summary>
+    /// Gets or sets the selection mode. Requires an items source created from a typed list
+    /// (e.g. <see cref="SetItemsSource{TItem}(IReadOnlyList{TItem})"/>); otherwise stays <see cref="ItemsSelectionMode.Single"/>.
+    /// </summary>
+    public ItemsSelectionMode SelectionMode
+    {
+        get => _core.SelectionMode;
+        set => _core.SelectionMode = value;
+    }
+
+    /// <summary>Gets the selected row indices in ascending order.</summary>
+    public IReadOnlyList<int> SelectedIndices => _core.SelectedIndices;
+
+    /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
+    public event Action? SelectedIndicesChanged;
+
+    // Shared selection entry for row/cell pointer-down. Sets Handled so row and cell handlers don't double-apply.
+    internal void HandleRowPointerDown(int rowIndex, MouseEventArgs e)
+    {
+        if (!IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        var multi = _core.MultiView;
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+        {
+            ItemsSelectionInput.HandleClick(multi, rowIndex, e.Modifiers);
+        }
+        else
+        {
+            SelectedIndex = rowIndex;
+        }
+
+        e.Handled = true;
+    }
+
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
@@ -149,42 +192,41 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         }
 
         int current = SelectedIndex >= 0 ? SelectedIndex : 0;
+        var multi = _core.MultiView;
 
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && IsSelectAllShortcut(e))
+        {
+            multi.SelectRange(0, count - 1, clearExisting: true);
+            e.Handled = true;
+            Focus();
+            InvalidateVisual();
+            return;
+        }
+
+        int target = current;
         switch (e.Key)
         {
             case Key.Up:
-                SelectedIndex = Math.Max(0, current - 1);
-                e.Handled = true;
-                break;
-
             case Key.Down:
-                SelectedIndex = Math.Min(count - 1, current + 1);
-                e.Handled = true;
-                break;
-
             case Key.Home:
-                SelectedIndex = 0;
-                e.Handled = true;
-                break;
-
             case Key.End:
-                SelectedIndex = count - 1;
-                e.Handled = true;
-                break;
-
             case Key.PageUp:
-                SelectedIndex = Math.Max(0, current - ResolvePageStep(count));
-                e.Handled = true;
-                break;
-
             case Key.PageDown:
-                SelectedIndex = Math.Min(count - 1, current + ResolvePageStep(count));
-                e.Handled = true;
+                e.Handled = TryGetListNavigationTarget(e.Key, current, count, ResolvePageStep(count), supportsPaging: true, out target);
                 break;
         }
 
         if (e.Handled)
         {
+            if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+            {
+                ItemsSelectionInput.HandleKeyboardMove(multi, target, (e.Modifiers & ModifierKeys.Shift) != 0);
+            }
+            else
+            {
+                SelectedIndex = target;
+            }
+
             Focus();
             InvalidateVisual();
         }
@@ -221,21 +263,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
         EnsureHorizontalIntoView(focusedElement);
 
-        int found = -1;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (found != -1)
-            {
-                return;
-            }
-
-            if (VisualTree.IsInSubtreeOf(focusedElement, element))
-            {
-                found = i;
-            }
-        });
-
-        if (found < 0 || found >= _core.ItemsSource.Count)
+        if (!TryFindRealizedIndex(_presenter, focusedElement, out int found, out _) || found >= _core.ItemsSource.Count)
         {
             return false;
         }
@@ -329,23 +357,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             return false;
         }
 
-        int found = -1;
-        FrameworkElement? foundContainer = null;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (found != -1)
-            {
-                return;
-            }
-
-            if (VisualTree.IsInSubtreeOf(focusedElement, element))
-            {
-                found = i;
-                foundContainer = element;
-            }
-        });
-
-        if (found < 0 || foundContainer == null)
+        if (!TryFindRealizedIndex(_presenter, focusedElement, out int found, out var foundContainer))
         {
             return false;
         }
@@ -1347,7 +1359,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 return;
             }
 
-            _owner.SelectedIndex = _rowIndex;
+            _owner.HandleRowPointerDown(_rowIndex, e);
         }
 
         public void EnsureDpi(uint dpi)
@@ -1495,7 +1507,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             var theme = Theme;
             var snapped = GetSnappedBorderBounds(Bounds);
-            var isSelected = _rowIndex == _owner.SelectedIndex;
+            var isSelected = _owner._core.IsRowSelected(_rowIndex);
 
             var r = theme.Metrics.ControlCornerRadius - 2;
             if (isSelected)
@@ -1621,7 +1633,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                     return;
                 }
 
-                _row._owner.SelectedIndex = _row._rowIndex;
+                _row._owner.HandleRowPointerDown(_row._rowIndex, e);
             }
         }
     }
@@ -1666,6 +1678,21 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
         public object? SelectedItem => _itemsView.SelectedItem;
 
+        /// <summary>The current items view as a multi-selection view, or null when it does not support multi-select.</summary>
+        public IMultiSelectableItemsView? MultiView => ScrollableItemsBase.AsMultiSelectable(_itemsView);
+
+        public ItemsSelectionMode SelectionMode
+        {
+            get => ScrollableItemsBase.GetSelectionMode(_itemsView);
+            set => ScrollableItemsBase.SetSelectionMode(_itemsView, value);
+        }
+
+        public IReadOnlyList<int> SelectedIndices => ScrollableItemsBase.GetSelectedIndices(_itemsView);
+
+        public bool IsRowSelected(int index) => ScrollableItemsBase.IsItemSelected(_itemsView, index);
+
+        public event Action? SelectedIndicesChanged;
+
         public event Action<ItemsChange>? ItemsChanged;
 
         public event Action<object?>? SelectionChanged;
@@ -1678,15 +1705,32 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
             var old = _itemsView;
             int previousSelectedIndex = old.SelectedIndex;
+            object? previousSelectedItem = previousSelectedIndex >= 0 && previousSelectedIndex < old.Count
+                ? old.GetItem(previousSelectedIndex)
+                : null;
             UnhookItemsView(old);
 
             _itemsView = itemsView;
             HookItemsView(_itemsView);
 
-            if (previousSelectedIndex != -1)
+            if (_itemsView is IMultiSelectableItemsView newMulti)
             {
-                _itemsView.SelectedIndex = previousSelectedIndex;
+                newMulti.ClearSelection();
             }
+
+            // Only preserve the selected index when the item at that index in the new view is confirmed to
+            // be the same item (by reference, or by key when the view provides a KeySelector). Otherwise the
+            // previous index would silently select an unrelated row belonging to the new source.
+            bool sameItem = false;
+            if (previousSelectedItem != null && previousSelectedIndex >= 0 && previousSelectedIndex < _itemsView.Count)
+            {
+                var candidate = _itemsView.GetItem(previousSelectedIndex);
+                var keySelector = _itemsView.KeySelector;
+                sameItem = ReferenceEquals(candidate, previousSelectedItem)
+                    || (keySelector != null && Equals(keySelector(candidate), keySelector(previousSelectedItem)));
+            }
+
+            _itemsView.SelectedIndex = sameItem ? previousSelectedIndex : -1;
 
             ItemsChanged?.Invoke(new ItemsChange(ItemsChangeKind.Reset, 0, _itemsView.Count));
         }
@@ -1735,16 +1779,26 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             view.Changed += OnItemsChanged;
             view.SelectionChanged += OnItemsSelectionChanged;
+            if (view is IMultiSelectableItemsView multi)
+            {
+                multi.SelectedIndicesChanged += OnSelectedIndicesChanged;
+            }
         }
 
         private void UnhookItemsView(ISelectableItemsView view)
         {
             view.Changed -= OnItemsChanged;
             view.SelectionChanged -= OnItemsSelectionChanged;
+            if (view is IMultiSelectableItemsView multi)
+            {
+                multi.SelectedIndicesChanged -= OnSelectedIndicesChanged;
+            }
         }
 
         private void OnItemsChanged(ItemsChange change) => ItemsChanged?.Invoke(change);
 
         private void OnItemsSelectionChanged(int _) => SelectionChanged?.Invoke(SelectedItem);
+
+        private void OnSelectedIndicesChanged() => SelectedIndicesChanged?.Invoke();
     }
 }

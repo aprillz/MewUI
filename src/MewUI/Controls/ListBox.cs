@@ -58,10 +58,18 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         _itemsSource.Changed -= OnItemsChanged;
         _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+        if (_itemsSource is IMultiSelectableItemsView oldMulti)
+        {
+            oldMulti.SelectedIndicesChanged -= OnItemsSelectedIndicesChanged;
+        }
 
         _itemsSource = value;
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
         _itemsSource.Changed += OnItemsChanged;
+        if (_itemsSource is IMultiSelectableItemsView newMulti)
+        {
+            newMulti.SelectedIndicesChanged += OnItemsSelectedIndicesChanged;
+        }
 
         _presenter.ItemsSource = _itemsSource;
 
@@ -115,6 +123,26 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// Gets the currently selected item object.
     /// </summary>
     public object? SelectedItem => ItemsSource.SelectedItem;
+
+    private IMultiSelectableItemsView? MultiView => AsMultiSelectable(_itemsSource);
+
+    /// <summary>
+    /// Gets or sets the selection mode. Requires an items source that supports multi-selection
+    /// (e.g. created from a typed list); otherwise stays <see cref="ItemsSelectionMode.Single"/>.
+    /// </summary>
+    public ItemsSelectionMode SelectionMode
+    {
+        get => GetSelectionMode(_itemsSource);
+        set => SetSelectionMode(_itemsSource, value);
+    }
+
+    /// <summary>Gets the selected item indices in ascending order.</summary>
+    public IReadOnlyList<int> SelectedIndices => GetSelectedIndices(_itemsSource);
+
+    /// <summary>Occurs when the set of selected items changes (multi-select).</summary>
+    public event Action? SelectedIndicesChanged;
+
+    private bool IsItemSelected(int index) => ScrollableItemsBase.IsItemSelected(_itemsSource, index);
 
     /// <summary>
     /// Gets the currently selected item text.
@@ -207,6 +235,10 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
         _itemsSource.Changed += OnItemsChanged;
+        if (_itemsSource is IMultiSelectableItemsView multi)
+        {
+            multi.SelectedIndicesChanged += OnItemsSelectedIndicesChanged;
+        }
 
         _itemTemplate = CreateDefaultItemTemplate();
         _presenter = CreateDefaultPresenter();
@@ -477,7 +509,16 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         if (TryGetItemIndexAt(e, out int index))
         {
-            SelectedIndex = index;
+            var multi = MultiView;
+            if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+            {
+                ItemsSelectionInput.HandleClick(multi, index, e.Modifiers);
+            }
+            else
+            {
+                SelectedIndex = index;
+            }
+
             ItemActivated?.Invoke(index);
             InvalidateVisual();
             e.Handled = true;
@@ -492,43 +533,59 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             return;
         }
 
-        if (ItemsSource.Count == 0)
+        int count = ItemsSource.Count;
+        if (count == 0)
         {
             return;
         }
 
-        int index = SelectedIndex;
+        var multi = MultiView;
+
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && IsSelectAllShortcut(e))
+        {
+            multi.SelectRange(0, count - 1, clearExisting: true);
+            e.Handled = true;
+            InvalidateVisual();
+            return;
+        }
+
+        int current = SelectedIndex;
+        int target = current;
+        bool navigated = false;
         switch (e.Key)
         {
             case Key.Up:
-                index = Math.Max(0, index <= 0 ? 0 : index - 1);
-                e.Handled = true;
-                break;
             case Key.Down:
-                index = Math.Min(ItemsSource.Count - 1, index < 0 ? 0 : index + 1);
-                e.Handled = true;
-                break;
             case Key.Home:
-                index = 0;
-                e.Handled = true;
-                break;
             case Key.End:
-                index = ItemsSource.Count - 1;
-                e.Handled = true;
+                navigated = TryGetListNavigationTarget(e.Key, current, count, pageStep: 1, supportsPaging: false, out target);
+                e.Handled = navigated;
                 break;
             case Key.Enter:
-                if (index >= 0)
+                if (current >= 0)
                 {
-                    ItemActivated?.Invoke(index);
+                    ItemActivated?.Invoke(current);
                     e.Handled = true;
                 }
                 break;
         }
 
-        if (e.Handled)
+        if (navigated)
         {
-            SelectedIndex = index;
-            ScrollIntoView(index);
+            if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+            {
+                ItemsSelectionInput.HandleKeyboardMove(multi, target, (e.Modifiers & ModifierKeys.Shift) != 0);
+            }
+            else
+            {
+                SelectedIndex = target;
+            }
+
+            ScrollIntoView(target);
+            InvalidateVisual();
+        }
+        else if (e.Handled)
+        {
             InvalidateVisual();
         }
     }
@@ -568,38 +625,23 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             return false;
         }
 
-        if (_presenter is not Element presenterElement)
-        {
-            return false;
-        }
-
-        var dpiScale = GetDpi() / 96.0;
-        var local = TranslatePoint(position, presenterElement);
-        var presenterRect = new Rect(0, 0, presenterElement.RenderSize.Width, presenterElement.RenderSize.Height);
-        if (!presenterRect.Contains(local))
-        {
-            return false;
-        }
-
-        double alignedLocalY = LayoutRounding.RoundToPixel(local.Y, dpiScale);
-        double alignedOffsetY = LayoutRounding.RoundToPixel(_scrollViewer.VerticalOffset, dpiScale);
-        double yContent = alignedLocalY + alignedOffsetY;
-        double xContent = local.X;
-        return _presenter.TryGetItemIndexAt(xContent, yContent, out index);
+        return TryMapPointToItemIndex(position, _presenter, out index);
     }
 
     private void OnBeforeItemRender(IGraphicsContext context, int i, Rect itemRect)
     {
         double itemRadius = _presenter.ItemRadius;
 
-        if (ZebraStriping && (i & 1) == 1 && i != SelectedIndex && i != _hoverIndex)
+        bool selected = IsItemSelected(i);
+
+        if (ZebraStriping && (i & 1) == 1 && !selected && i != _hoverIndex)
         {
             var theme = Theme;
             var bg = theme.Palette.ControlBackground.Lerp(theme.Palette.ButtonFace, theme.IsDark ? 0.45 : 0.33);
             context.FillRectangle(itemRect, bg);
         }
 
-        if (i == SelectedIndex)
+        if (selected)
         {
             var selectionBg = Theme.Palette.SelectionBackground;
             if (itemRadius > 0)
@@ -664,7 +706,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
                     tb.IsEnabled = enabled;
                 }
 
-                var fg = ResolveItemForeground(index == SelectedIndex);
+                var fg = ResolveItemForeground(IsItemSelected(index));
 
                 if (tb.Foreground != fg)
                 {
@@ -755,23 +797,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             return false;
         }
 
-        int found = -1;
-        FrameworkElement? foundContainer = null;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (found != -1)
-            {
-                return;
-            }
-
-            if (VisualTree.IsInSubtreeOf(focusedElement, element))
-            {
-                found = i;
-                foundContainer = element;
-            }
-        });
-
-        if (found < 0 || foundContainer == null)
+        if (!TryFindRealizedIndex(_presenter, focusedElement, out int found, out var foundContainer))
         {
             return false;
         }
@@ -800,5 +826,16 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     {
         _itemsSource.Changed -= OnItemsChanged;
         _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+        if (_itemsSource is IMultiSelectableItemsView multi)
+        {
+            multi.SelectedIndicesChanged -= OnItemsSelectedIndicesChanged;
+        }
+    }
+
+    private void OnItemsSelectedIndicesChanged()
+    {
+        SelectedIndicesChanged?.Invoke();
+        InvalidateItemBindings();
+        InvalidateVisual();
     }
 }

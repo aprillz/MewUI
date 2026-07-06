@@ -400,29 +400,9 @@ public sealed class ItemsControl : ScrollableItemsBase
             return false;
         }
 
-        // Map to presenter-local coordinates to avoid duplicating ScrollViewer viewport math
-        // (padding/scrollbar visibility/snapping) which can drift at fractional DPI.
-        if (_presenter is not Element presenterElement)
-        {
-            return false;
-        }
-
-        var dpiScale = GetDpi() / 96.0;
-        var local = TranslatePoint(position, presenterElement);
-        var presenterRect = new Rect(0, 0, presenterElement.RenderSize.Width, presenterElement.RenderSize.Height);
-
-        if (!presenterRect.Contains(local))
-        {
-            return false;
-        }
-
-        // Map presenter-local position to content-space and ask the presenter to resolve index.
-        // Keep rounding consistent with presenters (they align offsets to device pixels).
-        double alignedLocalY = LayoutRounding.RoundToPixel(local.Y, dpiScale);
-        double alignedOffsetY = LayoutRounding.RoundToPixel(_scrollViewer.VerticalOffset, dpiScale);
-        double yContent = alignedLocalY + alignedOffsetY;
-        double xContent = local.X;
-        return _presenter.TryGetItemIndexAt(xContent, yContent, out index);
+        // Unlike ListBox/NavigationList, no scrollbar-hit guard here: ItemsControl only uses this
+        // for hover highlighting (no click/selection), so a hover landing under the scrollbar is harmless.
+        return TryMapPointToItemIndex(position, _presenter, out index);
     }
 
     private double ResolveItemHeight()
