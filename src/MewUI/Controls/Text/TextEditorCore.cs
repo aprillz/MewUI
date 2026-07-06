@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Controls.Text;
 
 internal sealed class TextEditorCore
 {
+    private const int MAX_UNDO_ENTRIES = 1000;
+
     private readonly Func<int> _getLength;
     private readonly Func<int, char> _getChar;
     private readonly Func<int, int, string> _getSubstring;
@@ -11,11 +13,11 @@ internal sealed class TextEditorCore
     private readonly Action<int, int> _applyRemove;
     private readonly Action _onEditCommitted;
 
-    private int _selectionStart;
-    private int _selectionLength;
-
     private readonly List<Edit> _undo = new();
     private readonly List<Edit> _redo = new();
+
+    private int _selectionStart;
+    private int _selectionLength;
     private bool _suppressUndoRecording;
 
     public TextEditorCore(
@@ -599,6 +601,11 @@ internal sealed class TextEditorCore
         }
 
         _undo.Add(edit);
+        if (_undo.Count > MAX_UNDO_ENTRIES)
+        {
+            _undo.RemoveAt(0);
+        }
+
         _redo.Clear();
     }
 
