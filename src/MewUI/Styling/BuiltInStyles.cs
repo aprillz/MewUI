@@ -22,10 +22,10 @@ public static class BuiltInStyles
 
     internal static void Register(StyleSheet sheet)
     {
-        sheet.Define(FlatButton, CreateFlatButtonStyle());
-        sheet.Define(AccentButton, CreateAccentButtonStyle());
-        sheet.Define(ComboBoxPopup, CreateComboBoxPopupStyle());
-        sheet.Define(DatePickerPopup, CreateDatePickerPopupStyle());
+        sheet.Define(FlatButton, CreateFlatButtonStyle);
+        sheet.Define(AccentButton, CreateAccentButtonStyle);
+        sheet.Define(ComboBoxPopup, CreateComboBoxPopupStyle);
+        sheet.Define(DatePickerPopup, CreateDatePickerPopupStyle);
     }
 
     private static Style CreateFlatButtonStyle()

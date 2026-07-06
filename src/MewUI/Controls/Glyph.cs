@@ -15,6 +15,9 @@ public enum GlyphKind
     CheckMark,
     IndeterminateMark,
 
+    // Three stacked lines (navigation / menu toggle)
+    Hamburger,
+
     // Window chrome
     WindowMinimize,
 
@@ -82,6 +85,16 @@ public static class Glyph
             case GlyphKind.IndeterminateMark:
                 context.DrawLine(new Point(center.X - half, center.Y), new Point(center.X + half, center.Y), color, thickness);
                 return;
+
+            case GlyphKind.Hamburger:
+            {
+                double gap = half * 0.5;
+                // Axis-aligned lines: let the context snap each to the pixel grid rather than rounding here.
+                context.DrawLine(new Point(center.X - half, center.Y - gap), new Point(center.X + half, center.Y - gap), color, thickness, true);
+                context.DrawLine(new Point(center.X - half, center.Y), new Point(center.X + half, center.Y), color, thickness, true);
+                context.DrawLine(new Point(center.X - half, center.Y + gap), new Point(center.X + half, center.Y + gap), color, thickness, true);
+                return;
+            }
 
             case GlyphKind.WindowMinimize:
                 context.DrawLine(new Point(center.X - half, center.Y + half), new Point(center.X + half, center.Y + half), color, thickness);

@@ -8,16 +8,20 @@ namespace Aprillz.MewUI;
 public sealed class StyleSheet
 {
     private readonly Dictionary<string, Style> _namedStyles = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Func<Style>> _namedStyleFactories = new(StringComparer.Ordinal);
     private List<(Type Type, Style Style)>? _typeRules;
 
     /// <summary>
-    /// Defines a named style.
+    /// Defines a named style factory. The style is created on first lookup.
     /// </summary>
     /// <param name="name">The style name (matched via <c>Control.StyleName</c>).</param>
-    /// <param name="style">The style to register.</param>
-    public void Define(string name, Style style)
+    /// <param name="factory">The style factory to invoke lazily.</param>
+    public void Define(string name, Func<Style> factory)
     {
-        _namedStyles[name] = style;
+        ArgumentNullException.ThrowIfNull(factory);
+
+        _namedStyles.Remove(name);
+        _namedStyleFactories[name] = factory;
     }
 
     /// <summary>
@@ -35,7 +39,20 @@ public sealed class StyleSheet
     /// </summary>
     public Style? Get(string name)
     {
-        return _namedStyles.GetValueOrDefault(name);
+        if (_namedStyles.TryGetValue(name, out var style))
+        {
+            return style;
+        }
+
+        if (!_namedStyleFactories.TryGetValue(name, out var factory))
+        {
+            return null;
+        }
+
+        style = factory();
+        _namedStyleFactories.Remove(name);
+        _namedStyles[name] = style;
+        return style;
     }
 
     /// <summary>

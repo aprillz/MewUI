@@ -6,15 +6,15 @@ namespace Aprillz.MewUI.Controls;
 public static class StyleSheetExtensions
 {
     /// <summary>
-    /// Defines a named style and returns the sheet for chaining.
+    /// Defines a named style factory and returns the sheet for chaining.
     /// </summary>
     /// <param name="sheet">Target style sheet.</param>
     /// <param name="name">Style name.</param>
-    /// <param name="style">Style definition.</param>
+    /// <param name="factory">Style factory.</param>
     /// <returns>The style sheet for chaining.</returns>
-    public static StyleSheet With(this StyleSheet sheet, string name, Style style)
+    public static StyleSheet With(this StyleSheet sheet, string name, Func<Style> factory)
     {
-        sheet.Define(name, style);
+        sheet.Define(name, factory);
         return sheet;
     }
 

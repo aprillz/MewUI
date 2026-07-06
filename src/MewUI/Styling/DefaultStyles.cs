@@ -1,6 +1,5 @@
 using Aprillz.MewUI.Controls;
 
-
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -8,155 +7,95 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class DefaultStyles
 {
-    private static readonly Transition[] ColorTransitions =
-    [
-        Transition.Create(Control.BackgroundProperty),
-        Transition.Create(Control.BorderBrushProperty),
-        Transition.Create(Control.ForegroundProperty),
-    ];
-
-    private static readonly Transition[] SliderColorTransitions =
-    [
-        ..ColorTransitions,
-        Transition.Create(Slider.ThumbBrushProperty),
-        Transition.Create(Slider.ThumbBorderBrushProperty),
-    ];
-
-    private static readonly Transition[] ToggleSwitchColorTransitions =
-    [
-        ..ColorTransitions,
-        Transition.Create(ToggleSwitch.ThumbBrushProperty),
-    ];
-
     private static Dictionary<Type, Style>? _styles;
+
+    private static IReadOnlyDictionary<Type, Func<Style>> StyleFactories =>
+        field ??= CreateStyleFactories();
+
+    private static Transition[] ColorTransitions =>
+        field ??=
+        [
+            Transition.Create(Control.BackgroundProperty),
+            Transition.Create(Control.BorderBrushProperty),
+            Transition.Create(Control.ForegroundProperty),
+        ];
+
+    private static Transition[] SliderColorTransitions =>
+        field ??=
+        [
+            ..ColorTransitions,
+            Transition.Create(Slider.ThumbBrushProperty),
+            Transition.Create(Slider.ThumbBorderBrushProperty),
+        ];
+
+    private static Transition[] ToggleSwitchColorTransitions =>
+        field ??=
+        [
+            ..ColorTransitions,
+            Transition.Create(ToggleSwitch.ThumbBrushProperty),
+        ];
+
+    private static IReadOnlyDictionary<Type, Func<Style>> CreateStyleFactories()
+    {
+        return new Dictionary<Type, Func<Style>>
+        {
+            [typeof(Control)] = CreateControlBaseStyle,
+            [typeof(Button)] = CreateButtonStyle,
+            [typeof(ToggleButton)] = CreateToggleButtonStyle,
+            [typeof(DropDownBase)] = CreateDropDownBaseStyle,
+            [typeof(TabHeaderButton)] = CreateTabHeaderButtonStyle,
+            [typeof(SegmentedControl)] = CreateSegmentedControlStyle,
+            [typeof(SegmentButton)] = CreateSegmentButtonStyle,
+            [typeof(ButtonGroup)] = CreateButtonGroupStyle,
+            [typeof(MenuBar)] = CreateMenuBarStyle,
+            [typeof(TextBase)] = CreateTextBaseStyle,
+            [typeof(CheckBox)] = CreateCheckBoxStyle,
+            [typeof(RadioButton)] = CreateRadioButtonStyle,
+            [typeof(ToggleSwitch)] = CreateToggleSwitchStyle,
+            [typeof(NumericUpDown)] = CreateNumericUpDownStyle,
+            [typeof(ProgressBar)] = CreateProgressBarStyle,
+            [typeof(Slider)] = CreateSliderStyle,
+            [typeof(ItemsControl)] = CreateItemsControlStyle,
+            [typeof(ScrollableItemsBase)] = CreateScrollableItemsBaseStyle,
+            [typeof(TreeView)] = CreateTreeViewStyle,
+            [typeof(GridView)] = CreateGridViewStyle,
+            [typeof(NavigationView)] = CreateNavigationViewStyle,
+            [typeof(ContextMenu)] = CreateContextMenuStyle,
+            [typeof(ToolTip)] = CreateToolTipStyle,
+            [typeof(Expander)] = CreateExpanderStyle,
+            [typeof(GroupBox)] = CreateGroupBoxStyle,
+            [typeof(TabControl)] = CreateTabControlStyle,
+            [typeof(Window)] = CreateWindowStyle,
+            [typeof(Calendar)] = CreateCalendarStyle,
+            [typeof(Border)] = CreateBorderStyle,
+            [typeof(SplitPanel.SplitterThumb)] = CreateSplitterThumbStyle,
+            [typeof(ScrollBar)] = CreateScrollBarStyle,
+        };
+    }
 
     /// <summary>
     /// Gets the default style for the specified control type, or null if none registered.
     /// </summary>
     public static Style? GetStyle(Type controlType)
     {
-        _styles ??= BuildDefaultStyles();
-        return _styles.GetValueOrDefault(controlType);
-    }
-
-    /// <summary>
-    /// Registers an additional default style. Can be used by application code to add
-    /// styles for custom control types.
-    /// </summary>
-    public static void RegisterStyle(Style style)
-    {
-        _styles ??= BuildDefaultStyles();
-        _styles[style.TargetType] = style;
-    }
-
-    private static Dictionary<Type, Style> BuildDefaultStyles()
-    {
-        var styles = new Dictionary<Type, Style>();
-
-        // Base
-        Register(styles, CreateControlBaseStyle());
-
-        // Button-like
-        Register(styles, CreateButtonStyle());
-
-        Register(styles, CreateToggleButtonStyle());
-
-        Register(styles, CreateDropDownBaseStyle());
-
-        Register(styles, CreateTabHeaderButtonStyle());
-
-        Register(styles, CreateMenuBarStyle());
-
-        // Input controls
-        Register(styles, CreateTextBaseStyle());
-
-        Register(styles, CreateControlBasedStyle(typeof(CheckBox),
-            Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        Register(styles, CreateControlBasedStyle(typeof(RadioButton),
-            Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        Register(styles, CreateToggleSwitchStyle());
-
-        Register(styles, CreateControlBasedStyle(typeof(NumericUpDown),
-            Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
-            Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        Register(styles, CreateProgressBarStyle());
-
-        Register(styles, CreateSliderStyle());
-
-        // List / item controls
-        Register(styles, CreateControlBasedStyle(typeof(ItemsControl),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        Register(styles, CreateControlBasedStyle(typeof(VirtualizedItemsBase),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        Register(styles, CreateControlBasedStyle(typeof(TreeView),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        Register(styles, CreateControlBasedStyle(typeof(GridView),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        // Popups
-        Register(styles, new Style(typeof(ContextMenu))
+        _styles ??= new Dictionary<Type, Style>();
+        if (_styles.TryGetValue(controlType, out var style))
         {
-            Setters =
-            [
-                Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
-                Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),
-                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-                Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
-            ],
-        });
+            return style;
+        }
 
-        Register(styles, CreateControlBasedStyle(typeof(ToolTip),
-            Setter.Create(Control.PaddingProperty, new Thickness(8, 4, 8, 4)),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
+        if (!StyleFactories.TryGetValue(controlType, out var factory))
+        {
+            return null;
+        }
 
-        // Containers
-        Register(styles, CreateExpanderStyle());
-        Register(styles, CreateContainerStyle(typeof(GroupBox)));
-
-        Register(styles, CreateTabControlStyle());
-
-        Register(styles, CreateWindowStyle());
-
-        // Calendar
-        Register(styles, CreateControlBasedStyle(typeof(Calendar),
-            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness)));
-
-        // Misc
-        Register(styles, CreateBorderStyle());
-
-        Register(styles, CreateSplitterThumbStyle());
-
-        Register(styles, CreateScrollBarStyle());
-
-        return styles;
+        style = factory();
+        _styles[controlType] = style;
+        return style;
     }
 
-    private static void Register(Dictionary<Type, Style> styles, Style style)
-    {
-        styles[style.TargetType] = style;
-    }
-
-    private static Style CreateControlBaseStyle()
-    {
-        return new Style(typeof(Control))
+    private static Style CreateControlBaseStyle() =>
+        new(typeof(Control))
         {
             Setters =
             [
@@ -167,11 +106,9 @@ public static class DefaultStyles
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
             ],
         };
-    }
 
-    private static Style CreateControlBasedStyle(Type targetType, params SetterBase[] extraSetters)
-    {
-        return new Style(targetType)
+    private static Style CreateControlBasedStyle(Type targetType, params SetterBase[] extraSetters) =>
+        new(targetType)
         {
             Transitions = ColorTransitions,
             Setters =
@@ -205,11 +142,85 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateBorderStyle()
-    {
-        return new Style(typeof(Border))
+    private static Style CreateCheckBoxStyle()
+        => CreateControlBasedStyle(typeof(CheckBox),
+            Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateRadioButtonStyle()
+        => CreateControlBasedStyle(typeof(RadioButton),
+            Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateNumericUpDownStyle()
+        => CreateControlBasedStyle(typeof(NumericUpDown),
+            Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
+            Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateItemsControlStyle()
+        => CreateControlBasedStyle(typeof(ItemsControl),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateScrollableItemsBaseStyle()
+        => CreateControlBasedStyle(typeof(ScrollableItemsBase),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateTreeViewStyle()
+        => CreateControlBasedStyle(typeof(TreeView),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateGridViewStyle()
+        => CreateControlBasedStyle(typeof(GridView),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateNavigationViewStyle() =>
+        new(typeof(NavigationView))
+        {
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+            ],
+        };
+
+    private static Style CreateContextMenuStyle() =>
+        new(typeof(ContextMenu))
+        {
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
+                Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),
+                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+                Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+            ],
+        };
+
+    private static Style CreateToolTipStyle()
+        => CreateControlBasedStyle(typeof(ToolTip),
+            Setter.Create(Control.PaddingProperty, new Thickness(8, 4, 8, 4)),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateGroupBoxStyle()
+        => CreateContainerStyle(typeof(GroupBox));
+
+    private static Style CreateCalendarStyle()
+        => CreateControlBasedStyle(typeof(Calendar),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+
+    private static Style CreateBorderStyle() =>
+        new(typeof(Border))
         {
             Setters =
             [
@@ -217,11 +228,9 @@ public static class DefaultStyles
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
             ],
         };
-    }
 
-    private static Style CreateContainerStyle(Type targetType, params SetterBase[] extraSetters)
-    {
-        return new Style(targetType)
+    private static Style CreateContainerStyle(Type targetType, params SetterBase[] extraSetters) =>
+        new(targetType)
         {
             Setters =
             [
@@ -233,11 +242,9 @@ public static class DefaultStyles
                 ..extraSetters,
             ],
         };
-    }
 
-    private static Style CreateWindowStyle()
-    {
-        return new Style(typeof(Window))
+    private static Style CreateWindowStyle() =>
+        new(typeof(Window))
         {
             Setters =
             [
@@ -249,11 +256,9 @@ public static class DefaultStyles
                 Setter.Create(Control.PaddingProperty, t=>t.Metrics.ContainerPadding),
             ],
         };
-    }
 
-    private static Style CreateSplitterThumbStyle()
-    {
-        return new Style(typeof(SplitPanel.SplitterThumb))
+    private static Style CreateSplitterThumbStyle() =>
+        new(typeof(SplitPanel.SplitterThumb))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -283,11 +288,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateScrollBarStyle()
-    {
-        return new Style(typeof(ScrollBar))
+    private static Style CreateScrollBarStyle() =>
+        new(typeof(ScrollBar))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -309,11 +312,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateToggleSwitchStyle()
-    {
-        return new Style(typeof(ToggleSwitch))
+    private static Style CreateToggleSwitchStyle() =>
+        new(typeof(ToggleSwitch))
         {
             Transitions = ToggleSwitchColorTransitions,
             Setters =
@@ -407,13 +408,10 @@ public static class DefaultStyles
             ],
         };
 
-    }
     // No triggers - thumb uses PickAccentBorder with its own thumbState (includes _isDragging).
 
-    private static Style CreateSliderStyle()
-    {
-        // No triggers — thumb uses PickAccentBorder with its own thumbState (includes _isDragging).
-        return new Style(typeof(Slider))
+    private static Style CreateSliderStyle() =>
+        new(typeof(Slider))
         {
             Transitions = SliderColorTransitions,
             Setters =
@@ -456,11 +454,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateProgressBarStyle()
-    {
-        return new Style(typeof(ProgressBar))
+    private static Style CreateProgressBarStyle() =>
+        new(typeof(ProgressBar))
         {
             Setters =
             [
@@ -470,11 +466,9 @@ public static class DefaultStyles
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
             ],
         };
-    }
 
-    private static Style CreateExpanderStyle()
-    {
-        return new Style(typeof(Expander))
+    private static Style CreateExpanderStyle() =>
+        new(typeof(Expander))
         {
             Setters =
             [
@@ -498,11 +492,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateTabControlStyle()
-    {
-        return new Style(typeof(TabControl))
+    private static Style CreateTabControlStyle() =>
+        new(typeof(TabControl))
         {
             Setters =
             [
@@ -521,11 +513,116 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateMenuBarStyle()
-    {
-        return new Style(typeof(MenuBar))
+    private static Style CreateSegmentedControlStyle() =>
+        new(typeof(SegmentedControl))
+        {
+            Transitions = ColorTransitions,
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace),
+                Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
+                Setter.Create(Control.PaddingProperty, Thickness.Zero),
+                // The control owns the height; segments stretch to fill it (segments carry no min-height).
+                Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
+                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+                Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+            ],
+            Triggers =
+            [
+                // Focus ring on the container.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused,
+                    Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
+                },
+            ],
+        };
+
+    private static Style CreateSegmentButtonStyle() =>
+        new(typeof(SegmentButton))
+        {
+            Transitions = ColorTransitions,
+            Setters =
+            [
+                // Matches the other button-like controls; the container shares the same face.
+                // Padding comes from SegmentedControl.ItemPadding; height follows the control.
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace),
+                Setter.Create(Control.ForegroundProperty, t => t.Palette.WindowText),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground)],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
+                },
+                // Selected: accent-tinted face, matching ToggleButton's Checked state
+                // (a segmented control is a mutually exclusive toggle group). Foreground stays WindowText.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Selected,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonFace, t.Palette.Accent.WithAlpha(96)))],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Selected | VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonHoverBackground, t.Palette.Accent.WithAlpha(96)))],
+                },
+                // Disabled (non-selected).
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.None,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
+                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                    ],
+                },
+                // Disabled + Selected ??mirror ToggleButton's disabled-checked face.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Selected,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonFace, t.Palette.WindowText.WithAlpha(48)))],
+                },
+            ],
+        };
+
+    private static Style CreateButtonGroupStyle() =>
+        new(typeof(ButtonGroup))
+        {
+            Transitions = ColorTransitions,
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace),
+                Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
+                Setter.Create(Control.PaddingProperty, Thickness.Zero),
+                Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
+                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+                Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+            ],
+            Triggers =
+            [
+                // Focus ring on the container when any segment is focused.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused,
+                    Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
+                },
+            ],
+        };
+
+    private static Style CreateMenuBarStyle() =>
+        new(typeof(MenuBar))
         {
             Setters =
             [
@@ -536,11 +633,9 @@ public static class DefaultStyles
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
             ],
         };
-    }
 
-    private static Style CreateButtonStyle()
-    {
-        return new Style(typeof(Button))
+    private static Style CreateButtonStyle() =>
+        new(typeof(Button))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -594,11 +689,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateToggleButtonStyle()
-    {
-        return new Style(typeof(ToggleButton))
+    private static Style CreateToggleButtonStyle() =>
+        new(typeof(ToggleButton))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -685,11 +778,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateTextBaseStyle()
-    {
-        return new Style(typeof(TextBase))
+    private static Style CreateTextBaseStyle() =>
+        new(typeof(TextBase))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -727,11 +818,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateDropDownBaseStyle()
-    {
-        return new Style(typeof(DropDownBase))
+    private static Style CreateDropDownBaseStyle() =>
+        new(typeof(DropDownBase))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -787,11 +876,9 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 
-    private static Style CreateTabHeaderButtonStyle()
-    {
-        return new Style(typeof(TabHeaderButton))
+    private static Style CreateTabHeaderButtonStyle() =>
+        new(typeof(TabHeaderButton))
         {
             Transitions = ColorTransitions,
             Setters =
@@ -865,5 +952,4 @@ public static class DefaultStyles
                 },
             ],
         };
-    }
 }
