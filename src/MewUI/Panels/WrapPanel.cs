@@ -108,8 +108,8 @@ public class WrapPanel : Panel
                 var child = item.child;
 
                 var childRect = horizontal
-                    ? new Rect(contentBounds.X + mainOffset, contentBounds.Y + crossOffset, item.width, item.height)
-                    : new Rect(contentBounds.X + crossOffset, contentBounds.Y + mainOffset, item.width, item.height);
+                    ? new Rect(contentBounds.X + mainOffset, contentBounds.Y + crossOffset, item.width, line.size)
+                    : new Rect(contentBounds.X + crossOffset, contentBounds.Y + mainOffset, line.size, item.height);
 
                 child.Arrange(childRect);
                 mainOffset += item.main;
