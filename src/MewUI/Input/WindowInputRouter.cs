@@ -34,6 +34,9 @@ internal static class WindowInputRouter
         window.UpdateCursorForElement(newLeaf);
     }
 
+    // Delivers events to the captured element regardless of pointer position. Callers that need
+    // the true element under the pointer (mouse-over state, focus/popup-close policy) should call
+    // window.HitTest directly instead, since capture must not affect those decisions.
     public static UIElement? HitTest(Window window, Point positionInWindow)
         => window.CapturedElement ?? window.HitTest(positionInWindow);
 
@@ -58,9 +61,12 @@ internal static class WindowInputRouter
         }
 
         var element = HitTest(window, positionInWindow);
-        UpdateMouseOver(window, element);
 
-        var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown);
+        // Mouse-over must reflect the real element under the pointer, not the capture target,
+        // so IsMouseOver stops tracking a captured element once the pointer leaves it.
+        var actualHit = window.HitTest(positionInWindow);
+        UpdateMouseOver(window, actualHit);
+
         var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown, modifiers: modifiers)
         {
             OriginalSource = element,
@@ -68,6 +74,7 @@ internal static class WindowInputRouter
         };
         for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
+            args.Source = current;
             current.RaiseMouseMove(args);
         }
     }
@@ -90,10 +97,15 @@ internal static class WindowInputRouter
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
         var element = HitTest(window, positionInWindow);
+
+        // Focus and popup-close policy must react to the real element under the pointer, not the
+        // capture target, so clicking elsewhere while capture is active does not re-focus/keep-open
+        // whatever currently holds capture.
+        var actualHit = window.HitTest(positionInWindow);
         if (isDown)
         {
             window.AccessKeyManager.OnPointerDown();
-            window.OnAfterMouseDownHitTest(positionInWindow, button, element);
+            window.OnAfterMouseDownHitTest(positionInWindow, button, actualHit);
 
             // Record a drag candidate before routing - gesture promotion happens on later MouseMove.
             if (button == MewUI.MouseButton.Left)
@@ -110,7 +122,7 @@ internal static class WindowInputRouter
             }
         }
 
-        UpdateMouseOver(window, element);
+        UpdateMouseOver(window, actualHit);
 
         var args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: clickCount, modifiers: modifiers)
         {
@@ -122,20 +134,20 @@ internal static class WindowInputRouter
             // Close transient popups before routing the click.
             // This prevents a popup opened by the click (e.g. ContextMenu) from being immediately closed
             // by the post-bubbling close policy pass.
-            window.RequestClosePopups(PopupCloseRequest.PointerDown(element));
+            window.RequestClosePopups(PopupCloseRequest.PointerDown(actualHit));
 
-            if (element?.Focusable == true)
+            if (actualHit?.Focusable == true)
             {
                 // Mouse click expresses a precise location; skip GetDefaultFocusTarget redirection
                 // so focus lands where the user clicked, not on some off-screen "default" child.
-                window.FocusManager.SetFocus(element, resolveDefault: false);
+                window.FocusManager.SetFocus(actualHit, resolveDefault: false);
             }
             else
             {
                 // WPF-like: focus the nearest focusable ancestor instead of requiring the leaf hit-test target
                 // to be focusable (e.g. clicking a Label inside a focusable control should focus the control).
                 UIElement? focusTarget = null;
-                for (var current = element; current != null; current = GetInputBubbleParent(window, current))
+                for (var current = actualHit; current != null; current = GetInputBubbleParent(window, current))
                 {
                     if (current.Focusable)
                     {

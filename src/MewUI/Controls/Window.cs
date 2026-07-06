@@ -154,7 +154,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             // When layout/scroll offsets change without an actual mouse move, the element under the cursor can change.
             // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
-            var leaf = WindowInputRouter.HitTest(this, _lastMousePositionDip);
+            // Use a real hit test: mouse-over must track the pointer's actual target even during capture.
+            var leaf = HitTest(_lastMousePositionDip);
             WindowInputRouter.UpdateMouseOver(this, leaf);
         });
     }

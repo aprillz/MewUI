@@ -79,7 +79,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
             return null;
 
         var hit = _scrollViewer.HitTest(point);

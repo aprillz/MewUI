@@ -125,7 +125,7 @@ public sealed class ShadowDecorator : FrameworkElement, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible) return null;
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled) return null;
         return Child?.HitTest(point);
     }
 

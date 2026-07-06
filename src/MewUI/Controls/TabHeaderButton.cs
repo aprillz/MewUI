@@ -105,22 +105,7 @@ internal sealed class TabHeaderButton : ContentControl
         {
             return null;
         }
-
-        // If the click landed on (or inside) any focusable descendant — close button, checkbox,
-        // slider, etc. — let that control own the click. Non-focusable hits (Label, Glyph, empty
-        // space) fall through to the header itself as the tab-select surface.
-        var hit = base.OnHitTest(point);
-        if (hit == null)
-        {
-            return null;
-        }
-
-        for (var cur = hit; cur != null && cur != this; cur = cur.Parent as UIElement)
-        {
-            if (cur.Focusable)
-            {
-                return cur;
-            }
+        return base.OnHitTest(point); 
         }
 
         return this;

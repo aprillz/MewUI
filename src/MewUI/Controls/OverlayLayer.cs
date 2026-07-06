@@ -136,14 +136,7 @@ public sealed class OverlayLayer
         return null;
     }
 
-    internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        for (int i = 0; i < _overlays.Count; i++)
-        {
-            if (_overlays[i] is FrameworkElement fe)
-                fe.NotifyThemeChanged(oldTheme, newTheme);
-        }
-    }
+    internal UIElement? HitTest(Point point) => _layer.HitTest(point);
 
     internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
     {
