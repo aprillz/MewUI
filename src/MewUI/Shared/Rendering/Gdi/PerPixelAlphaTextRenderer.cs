@@ -118,43 +118,7 @@ internal static class PerPixelAlphaTextRenderer
                 Gdi32.SelectObject(surface.MemDc, oldFont);
             }
 
-            byte aColor = color.A;
-            for (int y = 0; y < height; y++)
-            {
-                byte* row = surface.GetRowPointer(y);
-                if (row == null)
-                {
-                    continue;
-                }
-
-                for (int x = 0; x < width; x++)
-                {
-                    int i = x * 4;
-                    byte b = row[i + 0];
-                    byte g = row[i + 1];
-                    byte r = row[i + 2];
-                    byte coverage = b;
-                    if (g > coverage) coverage = g;
-                    if (r > coverage) coverage = r;
-
-                    if (coverage == 0 || aColor == 0)
-                    {
-                        row[i + 0] = 0;
-                        row[i + 1] = 0;
-                        row[i + 2] = 0;
-                        row[i + 3] = 0;
-                        continue;
-                    }
-
-                    // GDI grayscale coverage is gamma-encoded; apply a simple curve to avoid overly bold edges.
-                    coverage = (byte)((coverage * coverage + 127) / 255);
-                    byte a = (byte)((coverage * aColor + 127) / 255);
-                    row[i + 0] = (byte)((color.B * a + 127) / 255);
-                    row[i + 1] = (byte)((color.G * a + 127) / 255);
-                    row[i + 2] = (byte)((color.R * a + 127) / 255);
-                    row[i + 3] = a;
-                }
-            }
+            CoverageToPremultiplied(surface, width, height, color);
 
             if (pixelSurface != null)
             {
@@ -164,6 +128,151 @@ internal static class PerPixelAlphaTextRenderer
             {
                 surface.AlphaBlendTo(hdc, surfaceRect.left, surfaceRect.top, width, height, 0, 0);
             }
+        }
+        finally
+        {
+            surfacePool.Return(surface);
+        }
+    }
+
+    private static unsafe void CoverageToPremultiplied(AaSurface surface, int width, int height, Color color)
+    {
+        byte aColor = color.A;
+        for (int y = 0; y < height; y++)
+        {
+            byte* row = surface.GetRowPointer(y);
+            if (row == null)
+            {
+                continue;
+            }
+
+            for (int x = 0; x < width; x++)
+            {
+                int i = x * 4;
+                byte b = row[i + 0];
+                byte g = row[i + 1];
+                byte r = row[i + 2];
+                byte coverage = b;
+                if (g > coverage) coverage = g;
+                if (r > coverage) coverage = r;
+
+                if (coverage == 0 || aColor == 0)
+                {
+                    row[i + 0] = 0;
+                    row[i + 1] = 0;
+                    row[i + 2] = 0;
+                    row[i + 3] = 0;
+                    continue;
+                }
+
+                // GDI grayscale coverage is gamma-encoded; apply a simple curve to avoid overly bold edges.
+                coverage = (byte)((coverage * coverage + 127) / 255);
+                byte a = (byte)((coverage * aColor + 127) / 255);
+                row[i + 0] = (byte)((color.B * a + 127) / 255);
+                row[i + 1] = (byte)((color.G * a + 127) / 255);
+                row[i + 2] = (byte)((color.R * a + 127) / 255);
+                row[i + 3] = a;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Per-pixel-alpha text under a world transform (e.g. rotation) drawn into a cache surface.
+    /// The direct GDI <c>DrawText</c> path used for transformed text writes no alpha, so on a
+    /// transparent cache surface the glyphs end up fully transparent (the background shows through
+    /// as if the text were the background colour). This renders white coverage through the same
+    /// transform into a bounding-box-sized temp surface, converts it to premultiplied colour, then
+    /// alpha-composites into the pixel surface. Returns false when the bounding box is too large to
+    /// rent a temp surface, letting the caller fall back to its direct GDI path.
+    /// </summary>
+    public static unsafe bool DrawTextTransformed(
+        nint hdc,
+        GdiPixelRenderSurface pixelSurface,
+        AaSurfacePool surfacePool,
+        ReadOnlySpan<char> text,
+        RECT localTextRect,
+        RECT bboxDeviceRect,
+        XFORM transform,
+        GdiFont font,
+        Color color,
+        uint format,
+        int yOffsetPx,
+        int textHeightPx,
+        TextWrapping wrapping,
+        TextTrimming trimming,
+        TextAlignment hAlign,
+        TextAlignment vAlign)
+    {
+        int width = bboxDeviceRect.Width;
+        int height = bboxDeviceRect.Height;
+        if (width <= 0 || height <= 0)
+        {
+            return true;
+        }
+
+        if (width > GdiRenderingConstants.MaxAaSurfaceSize || height > GdiRenderingConstants.MaxAaSurfaceSize)
+        {
+            return false;
+        }
+
+        var surface = surfacePool.Rent(hdc, width, height);
+        if (!surface.IsValid)
+        {
+            surfacePool.Return(surface);
+            return false;
+        }
+
+        try
+        {
+            surface.Clear();
+
+            // The temp surface's local origin is the bounding box's device-space top-left, so the
+            // world transform's translation is shifted by that origin to keep the rotated glyphs
+            // inside the temp surface.
+            var localTransform = transform;
+            localTransform.eDx -= bboxDeviceRect.left;
+            localTransform.eDy -= bboxDeviceRect.top;
+
+            int savedDc = Gdi32.SaveDC(surface.MemDc);
+            Gdi32.SetGraphicsMode(surface.MemDc, GdiConstants.GM_ADVANCED);
+            Gdi32.SetWorldTransform(surface.MemDc, ref localTransform);
+
+            var oldFont = Gdi32.SelectObject(surface.MemDc, font.GetHandle(GdiFontRenderMode.Coverage));
+            _ = Gdi32.SetTextColor(surface.MemDc, 0x00FFFFFF);
+            _ = Gdi32.SetBkMode(surface.MemDc, GdiConstants.TRANSPARENT);
+
+            var r = localTextRect;
+            if (yOffsetPx != 0)
+            {
+                r.top += yOffsetPx;
+                r.bottom += yOffsetPx;
+            }
+            if (textHeightPx > 0)
+            {
+                r.bottom = r.top + textHeightPx;
+            }
+
+            bool drawn = false;
+            if (trimming == TextTrimming.CharacterEllipsis && wrapping != TextWrapping.NoWrap)
+            {
+                drawn = GdiWrappedEllipsisHelper.TryDrawWrappedWithEllipsis(
+                    surface.MemDc, text, r, r.Width, r.Height, hAlign, vAlign);
+            }
+
+            if (!drawn)
+            {
+                fixed (char* pText = text)
+                {
+                    Gdi32.DrawText(surface.MemDc, pText, text.Length, ref r, format);
+                }
+            }
+
+            Gdi32.SelectObject(surface.MemDc, oldFont);
+            Gdi32.RestoreDC(surface.MemDc, savedDc);
+
+            CoverageToPremultiplied(surface, width, height, color);
+            CompositeToPixelSurface(surface, pixelSurface, hdc, bboxDeviceRect.left, bboxDeviceRect.top, width, height);
+            return true;
         }
         finally
         {

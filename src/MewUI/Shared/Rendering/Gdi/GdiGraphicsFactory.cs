@@ -29,8 +29,11 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
     // Keep backend default aligned with other backends: Default => Linear unless the app explicitly overrides.
     public ImageScaleQuality ImageScaleQuality { get; set; } = ImageScaleQuality.Normal;
 
-    public ISolidColorBrush CreateSolidColorBrush(Color color) =>
-        new GdiSolidColorBrush(color);
+    // Falls back to the default DIM (lightweight SolidColorBrush): the fill/stroke paths only read
+    // ISolidColorBrush.Color and draw via the context's color-keyed cache, so GdiSolidColorBrush's
+    // HBRUSH was allocated but never consumed.
+    // public ISolidColorBrush CreateSolidColorBrush(Color color) =>
+    //     new GdiSolidColorBrush(color);
 
     public IPen CreatePen(Color color, double thickness = 1.0, StrokeStyle? strokeStyle = null) =>
         new GdiPen(color, thickness, strokeStyle ?? StrokeStyle.Default);
@@ -235,27 +238,27 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         GdiPlusGraphicsContext.ReleaseAllBackBuffers();
     }
 
-    public void ReleaseWindowResources(nint hwnd)
+    public void ReleaseWindowResources(nint windowHandle)
     {
-        if (hwnd == 0)
+        if (windowHandle == 0)
         {
             return;
         }
 
         lock (_layeredLock)
         {
-            if (_layeredTargets.Remove(hwnd, out var layered))
+            if (_layeredTargets.Remove(windowHandle, out var layered))
             {
                 layered.Dispose();
             }
 
-            if (_layeredStagingTargets.Remove(hwnd, out var staging))
+            if (_layeredStagingTargets.Remove(windowHandle, out var staging))
             {
                 staging.Dispose();
             }
         }
 
-        GdiPlusGraphicsContext.ReleaseForWindow(hwnd);
+        GdiPlusGraphicsContext.ReleaseForWindow(windowHandle);
     }
 
     private readonly object _layeredLock = new();

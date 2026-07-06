@@ -24,7 +24,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     private readonly GdiStateManager _stateManager;
     private readonly GdiPrimitiveRenderer _primitiveRenderer;
-    private readonly AaSurfacePool _surfacePool = new();
+
+    // Per-HWND contexts share the long-lived pool/caches owned by WindowRenderResources (survives across
+    // frames, since a new GdiPlusGraphicsContext is created every frame). Pixel-surface contexts (hwnd == 0,
+    // e.g. offscreen render targets) have no stable per-window key, so they fall back to a private pool
+    // scoped to this context's single frame, same as before this cache was introduced.
+    private readonly AaSurfacePool _surfacePool;
+    private readonly GdiTextCache? _textCache;
+    private readonly GdiPlusResourceCache? _penBrushCache;
 
     private nint _graphics;
     private nint _gpBitmap;
@@ -79,9 +86,17 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         return ctx;
     }
 
-    internal static void ReleaseForWindow(nint hwnd) => BackBuffer.Release(hwnd);
+    internal static void ReleaseForWindow(nint hwnd)
+    {
+        BackBuffer.Release(hwnd);
+        WindowRenderResources.Release(hwnd);
+    }
 
-    internal static void ReleaseAllBackBuffers() => BackBuffer.ReleaseAll();
+    internal static void ReleaseAllBackBuffers()
+    {
+        BackBuffer.ReleaseAll();
+        WindowRenderResources.ReleaseAll();
+    }
 
     internal GdiPlusGraphicsContext(
         nint hwnd,
@@ -105,6 +120,18 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         _stateManager = new GdiStateManager(hdc, dpiScale);
         _primitiveRenderer = new GdiPrimitiveRenderer(hdc, _stateManager);
 
+        if (hwnd != 0)
+        {
+            var resources = WindowRenderResources.GetOrCreate(hwnd);
+            _surfacePool = resources.SurfacePool;
+            _textCache = resources.TextCache;
+            _penBrushCache = resources.PenBrushCache;
+        }
+        else
+        {
+            _surfacePool = new AaSurfacePool();
+        }
+
         Gdi32.SetBkMode(Hdc, GdiConstants.TRANSPARENT);
         GdiPlusInterop.EnsureInitialized();
     }
@@ -120,7 +147,12 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void OnEndFrame()
     {
-        _surfacePool.Dispose();
+        // Windowed contexts share a pool owned by WindowRenderResources (lives across frames); only the
+        // pixel-surface fallback pool is scoped to this single frame and needs disposing here.
+        if (_hwnd == 0)
+        {
+            _surfacePool.Dispose();
+        }
 
         if (_graphics != 0)
         {
@@ -163,7 +195,16 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void OnDispose()
     {
-        CollectionPool<Stack<GraphicsStateSnapshot>>.Return(_states);
+        CollectionPool.Return(_states);
+
+        // An aborted frame (exception before OnEndFrame) would otherwise leak the pixel-surface fallback
+        // pool's DIB/DC. Idempotent: AaSurfacePool.Dispose is a no-op if already disposed. The windowed
+        // pool is owned by WindowRenderResources and must outlive this per-frame context, so it is not
+        // touched here.
+        if (_hwnd == 0)
+        {
+            _surfacePool.Dispose();
+        }
 
         if (_ownsDc && Hdc != 0)
         {
@@ -386,7 +427,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var (ax, ay) = ToDeviceCoords(start.X, start.Y);
         var (bx, by) = ToDeviceCoords(end.X, end.Y);
 
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        if (!TryRentPen(ToArgb(color), widthPx, out var pen, out var ownsPen))
         {
             return;
         }
@@ -397,7 +438,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            GdiPlusInterop.GdipDeletePen(pen);
+            ReleasePen(pen, ownsPen);
         }
     }
 
@@ -421,7 +462,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             var snappedThickness = LayoutRounding.SnapThicknessToPixels(thickness, _dpiScale, 1);
             var inner = ToDeviceRect(rect.Deflate(new Thickness(snappedThickness)));
 
-            if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+            if (!TryRentBrush(ToArgb(color), out var brush, out var ownsBrush))
                 return;
 
             try
@@ -433,7 +474,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             }
             finally
             {
-                GdiPlusInterop.GdipDeleteBrush(brush);
+                ReleaseBrush(brush, ownsBrush);
             }
         }
         else
@@ -442,7 +483,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             if (widthPx <= 0)
                 return;
 
-            if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+            if (!TryRentPen(ToArgb(color), widthPx, out var pen, out var ownsPen))
                 return;
 
             try
@@ -451,7 +492,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             }
             finally
             {
-                GdiPlusInterop.GdipDeletePen(pen);
+                ReleasePen(pen, ownsPen);
             }
         }
     }
@@ -470,7 +511,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb((color)), out var brush) != 0 || brush == 0)
+        if (!TryRentBrush(ToArgb(color), out var brush, out var ownsBrush))
         {
             return;
         }
@@ -481,7 +522,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            GdiPlusInterop.GdipDeleteBrush(brush);
+            ReleaseBrush(brush, ownsBrush);
         }
     }
 
@@ -504,14 +545,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
         int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb((color)), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        if (!TryRentPen(ToArgb(color), widthPx, out var pen, out var ownsPen))
         {
             return;
         }
 
         if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0)
         {
-            GdiPlusInterop.GdipDeletePen(pen);
+            ReleasePen(pen, ownsPen);
             return;
         }
 
@@ -526,7 +567,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally
         {
             GdiPlusInterop.GdipDeletePath(path);
-            GdiPlusInterop.GdipDeletePen(pen);
+            ReleasePen(pen, ownsPen);
         }
     }
 
@@ -548,14 +589,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         int ew = Math.Max(1, QuantizeLengthPx(radiusX * 2));
         int eh = Math.Max(1, QuantizeLengthPx(radiusY * 2));
 
-        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb((color)), out var brush) != 0 || brush == 0)
+        if (!TryRentBrush(ToArgb(color), out var brush, out var ownsBrush))
         {
             return;
         }
 
         if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var path) != 0 || path == 0)
         {
-            GdiPlusInterop.GdipDeleteBrush(brush);
+            ReleaseBrush(brush, ownsBrush);
             return;
         }
 
@@ -568,7 +609,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally
         {
             GdiPlusInterop.GdipDeletePath(path);
-            GdiPlusInterop.GdipDeleteBrush(brush);
+            ReleaseBrush(brush, ownsBrush);
         }
     }
 
@@ -587,7 +628,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
 
         float widthPx = QuantizeStrokePx(thickness);
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        if (!TryRentPen(ToArgb(color), widthPx, out var pen, out var ownsPen))
         {
             return;
         }
@@ -598,7 +639,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            GdiPlusInterop.GdipDeletePen(pen);
+            ReleasePen(pen, ownsPen);
         }
     }
 
@@ -616,7 +657,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        if (!TryRentBrush(ToArgb(color), out var brush, out var ownsBrush))
         {
             return;
         }
@@ -628,7 +669,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            GdiPlusInterop.GdipDeleteBrush(brush);
+            ReleaseBrush(brush, ownsBrush);
         }
     }
 
@@ -641,14 +682,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
 
         float widthPx = QuantizeStrokePx(thickness);
-        if (GdiPlusInterop.GdipCreatePen1(ToArgb(color), widthPx, GdiPlusInterop.Unit.Pixel, out var pen) != 0 || pen == 0)
+        if (!TryRentPen(ToArgb(color), widthPx, out var pen, out var ownsPen))
         {
             return;
         }
 
         if (GdiPlusInterop.GdipCreatePath(GdiPlusInterop.FillMode.Winding, out var gdipPath) != 0 || gdipPath == 0)
         {
-            GdiPlusInterop.GdipDeletePen(pen);
+            ReleasePen(pen, ownsPen);
             return;
         }
 
@@ -660,7 +701,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally
         {
             GdiPlusInterop.GdipDeletePath(gdipPath);
-            GdiPlusInterop.GdipDeletePen(pen);
+            ReleasePen(pen, ownsPen);
         }
     }
 
@@ -676,7 +717,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (GdiPlusInterop.GdipCreateSolidFill(ToArgb(color), out var brush) != 0 || brush == 0)
+        if (!TryRentBrush(ToArgb(color), out var brush, out var ownsBrush))
         {
             return;
         }
@@ -684,7 +725,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
         if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0)
         {
-            GdiPlusInterop.GdipDeleteBrush(brush);
+            ReleaseBrush(brush, ownsBrush);
             return;
         }
 
@@ -696,7 +737,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally
         {
             GdiPlusInterop.GdipDeletePath(gdipPath);
-            GdiPlusInterop.GdipDeleteBrush(brush);
+            ReleaseBrush(brush, ownsBrush);
         }
     }
 
@@ -993,6 +1034,55 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
+    // Rents a solid-ARGB pen from the per-window cache when one is available (windowed contexts), otherwise
+    // creates a throwaway pen the caller must delete via ReleasePen. Only used for the plain Color/IBrush
+    // draw calls above; TryCreateStyledPen below has its own per-call gradient/dash-array state and is not
+    // cached (see its remarks).
+    private bool TryRentPen(uint argb, float widthPx, out nint pen, out bool ownsPen)
+    {
+        if (_penBrushCache != null)
+        {
+            pen = _penBrushCache.GetOrCreatePen(argb, widthPx);
+            ownsPen = false;
+            return pen != 0;
+        }
+
+        ownsPen = true;
+        return GdiPlusInterop.GdipCreatePen1(argb, widthPx, GdiPlusInterop.Unit.Pixel, out pen) == 0 && pen != 0;
+    }
+
+    private void ReleasePen(nint pen, bool ownsPen)
+    {
+        if (ownsPen && pen != 0)
+        {
+            GdiPlusInterop.GdipDeletePen(pen);
+        }
+    }
+
+    private bool TryRentBrush(uint argb, out nint brush, out bool ownsBrush)
+    {
+        if (_penBrushCache != null)
+        {
+            brush = _penBrushCache.GetOrCreateBrush(argb);
+            ownsBrush = false;
+            return brush != 0;
+        }
+
+        ownsBrush = true;
+        return GdiPlusInterop.GdipCreateSolidFill(argb, out brush) == 0 && brush != 0;
+    }
+
+    private void ReleaseBrush(nint brush, bool ownsBrush)
+    {
+        if (ownsBrush && brush != 0)
+        {
+            GdiPlusInterop.GdipDeleteBrush(brush);
+        }
+    }
+
+    // Not cached: pens here may wrap a per-call gradient brush (arbitrary stops) or an arbitrary-length
+    // dash array, neither of which is a cheap cache key. Caching would need to hash the dash array and
+    // gradient stops on every call, which costs about as much as just creating the pen.
     private bool TryCreateStyledPen(IPen pen, float widthPx, out nint gdipPen)
     {
         gdipPen = 0;
@@ -1170,22 +1260,58 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     out textHeightPx);
             }
 
-            PerPixelAlphaTextRenderer.DrawText(
-                Hdc,
-                _pixelSurface,
-                _surfacePool,
-                text,
-                r,
-                gdiFont,
-                color,
-                format,
-                yOffsetPx,
-                textHeightPx,
-                wrapping,
-                trimming,
-                horizontalAlignment,
-                verticalAlignment);
+            // Windowed contexts have a per-HWND text cache (never set alongside _pixelSurface, which is
+            // only used by offscreen pixel-surface contexts); those keep re-rasterizing every call.
+            if (_textCache != null)
+            {
+                _textCache.DrawCached(
+                    Hdc, text, r, gdiFont, color, format, yOffsetPx, textHeightPx,
+                    wrapping, trimming, horizontalAlignment, verticalAlignment);
+            }
+            else
+            {
+                PerPixelAlphaTextRenderer.DrawText(
+                    Hdc,
+                    _pixelSurface,
+                    _surfacePool,
+                    text,
+                    r,
+                    gdiFont,
+                    color,
+                    format,
+                    yOffsetPx,
+                    textHeightPx,
+                    wrapping,
+                    trimming,
+                    horizontalAlignment,
+                    verticalAlignment);
+            }
             return;
+        }
+
+        if (hasTextTransform && _pixelSurface != null)
+        {
+            // Transformed text on a per-pixel-alpha cache: the direct GDI path below writes no
+            // alpha, so glyphs end up transparent (reading as the background colour). Render the
+            // rotated text with correct premultiplied alpha instead.
+            var rt = GetTextLayoutRect(drawBounds, wrapping);
+            uint fmt = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
+            int yOff = 0;
+            int txtH = 0;
+            if (wrapping != TextWrapping.NoWrap)
+            {
+                ComputeWrappedTextOffsetsPx(
+                    text, gdiFont.GetHandle(GdiFontRenderMode.Coverage), rt.Width, rt.Height,
+                    verticalAlignment, out yOff, out txtH);
+            }
+
+            if (PerPixelAlphaTextRenderer.DrawTextTransformed(
+                    Hdc, _pixelSurface, _surfacePool, text, rt, cullR, textTransform, gdiFont, color, fmt,
+                    yOff, txtH, wrapping, trimming, horizontalAlignment, verticalAlignment))
+            {
+                return;
+            }
+            // Oversized bounding box: fall through to the direct GDI path below.
         }
 
         int textState = 0;
@@ -1331,22 +1457,56 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     out textHeightPx);
             }
 
-            PerPixelAlphaTextRenderer.DrawText(
-                Hdc,
-                _pixelSurface,
-                _surfacePool,
-                text,
-                r,
-                gdiFont,
-                color,
-                gdiFormat,
-                yOffsetPx,
-                textHeightPx,
-                wrapping,
-                trimming,
-                horizontalAlignment,
-                verticalAlignment);
+            if (_textCache != null)
+            {
+                _textCache.DrawCached(
+                    Hdc, text, r, gdiFont, color, gdiFormat, yOffsetPx, textHeightPx,
+                    wrapping, trimming, horizontalAlignment, verticalAlignment);
+            }
+            else
+            {
+                PerPixelAlphaTextRenderer.DrawText(
+                    Hdc,
+                    _pixelSurface,
+                    _surfacePool,
+                    text,
+                    r,
+                    gdiFont,
+                    color,
+                    gdiFormat,
+                    yOffsetPx,
+                    textHeightPx,
+                    wrapping,
+                    trimming,
+                    horizontalAlignment,
+                    verticalAlignment);
+            }
             return;
+        }
+
+        if (hasTextTransform && _pixelSurface != null)
+        {
+            // Transformed text on a per-pixel-alpha cache: the direct GDI path below writes no
+            // alpha, so glyphs end up transparent (reading as the background colour). Render the
+            // rotated text with correct premultiplied alpha instead.
+            var rt = GetTextLayoutRect(bounds, wrapping);
+            uint fmt = BuildTextFormat(horizontalAlignment, verticalAlignment, wrapping, trimming);
+            int yOff = 0;
+            int txtH = 0;
+            if (wrapping != TextWrapping.NoWrap)
+            {
+                ComputeWrappedTextOffsetsPx(
+                    text, gdiFont.GetHandle(GdiFontRenderMode.Coverage), rt.Width, rt.Height,
+                    verticalAlignment, out yOff, out txtH);
+            }
+
+            if (PerPixelAlphaTextRenderer.DrawTextTransformed(
+                    Hdc, _pixelSurface, _surfacePool, text, rt, cullR, textTransform, gdiFont, color, fmt,
+                    yOff, txtH, wrapping, trimming, horizontalAlignment, verticalAlignment))
+            {
+                return;
+            }
+            // Oversized bounding box: fall through to the direct GDI path below.
         }
 
         int textState = 0;
@@ -2661,6 +2821,204 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
 
         public void Dispose() => Destroy();
+    }
+
+    #endregion
+
+    #region Window Render Resources (long-lived per-HWND: AA surface pool, text cache, GDI+ pen/brush cache)
+
+    // A new GdiPlusGraphicsContext is created every frame (see CreateContextCore), so anything that should
+    // survive across frames for a given window is parked here instead of on the context itself.
+    private sealed class WindowRenderResources : IDisposable
+    {
+        private static readonly Dictionary<nint, WindowRenderResources> Cache = new();
+
+        public static WindowRenderResources GetOrCreate(nint hwnd)
+        {
+            if (Cache.TryGetValue(hwnd, out var existing))
+            {
+                return existing;
+            }
+
+            var created = new WindowRenderResources();
+            Cache[hwnd] = created;
+            return created;
+        }
+
+        public static void Release(nint hwnd)
+        {
+            if (Cache.Remove(hwnd, out var resources))
+            {
+                resources.Dispose();
+            }
+        }
+
+        public static void ReleaseAll()
+        {
+            foreach (var (_, resources) in Cache)
+                resources.Dispose();
+            Cache.Clear();
+        }
+
+        public AaSurfacePool SurfacePool { get; } = new();
+
+        public GdiPlusResourceCache PenBrushCache { get; } = new();
+
+        public GdiTextCache TextCache { get; }
+
+        private WindowRenderResources()
+        {
+            TextCache = new GdiTextCache(SurfacePool);
+        }
+
+        public void Dispose()
+        {
+            // TextCache first: its Clear() hands surfaces back to SurfacePool, which then disposes
+            // everything (including those just-returned surfaces) in one pass.
+            TextCache.Dispose();
+            PenBrushCache.Dispose();
+            SurfacePool.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Caches GDI+ pen/brush handles for solid ARGB fills/strokes with no per-call stroke style, so the
+    /// common draw calls (rectangles, ellipses, plain paths) reuse a native handle instead of creating and
+    /// deleting one per call. Styled pens (custom dash arrays, gradient brushes) are not cached here; see
+    /// TryCreateStyledPen for why.
+    /// </summary>
+    private sealed class GdiPlusResourceCache : IDisposable
+    {
+        private readonly Dictionary<PenKey, CachedHandle> _pens = new();
+        private readonly Dictionary<uint, CachedHandle> _brushes = new();
+        private readonly LinkedList<PenKey> _penLru = new();
+        private readonly LinkedList<uint> _brushLru = new();
+        private bool _disposed;
+
+        private readonly struct PenKey : IEquatable<PenKey>
+        {
+            public readonly uint Argb;
+            public readonly float WidthPx;
+
+            public PenKey(uint argb, float widthPx)
+            {
+                Argb = argb;
+                WidthPx = widthPx;
+            }
+
+            public bool Equals(PenKey other) => Argb == other.Argb && WidthPx == other.WidthPx;
+            public override bool Equals(object? obj) => obj is PenKey other && Equals(other);
+            public override int GetHashCode() => HashCode.Combine(Argb, WidthPx);
+        }
+
+        private sealed class CachedHandle
+        {
+            public nint Handle;
+            public LinkedListNode<PenKey>? PenNode;
+            public LinkedListNode<uint>? BrushNode;
+        }
+
+        public nint GetOrCreatePen(uint argb, float widthPx)
+        {
+            if (_disposed)
+            {
+                return 0;
+            }
+
+            var key = new PenKey(argb, widthPx);
+
+            if (_pens.TryGetValue(key, out var cached))
+            {
+                _penLru.Remove(cached.PenNode!);
+                _penLru.AddFirst(cached.PenNode!);
+                return cached.Handle;
+            }
+
+            while (_pens.Count >= GdiRenderingConstants.MaxCachedPens && _penLru.Last != null)
+            {
+                var oldKey = _penLru.Last.Value;
+                if (_pens.Remove(oldKey, out var old) && old.Handle != 0)
+                {
+                    GdiPlusInterop.GdipDeletePen(old.Handle);
+                }
+                _penLru.RemoveLast();
+            }
+
+            if (GdiPlusInterop.GdipCreatePen1(argb, widthPx, GdiPlusInterop.Unit.Pixel, out var handle) != 0 || handle == 0)
+            {
+                return 0;
+            }
+
+            var node = _penLru.AddFirst(key);
+            _pens[key] = new CachedHandle { Handle = handle, PenNode = node };
+            return handle;
+        }
+
+        public nint GetOrCreateBrush(uint argb)
+        {
+            if (_disposed)
+            {
+                return 0;
+            }
+
+            if (_brushes.TryGetValue(argb, out var cached))
+            {
+                _brushLru.Remove(cached.BrushNode!);
+                _brushLru.AddFirst(cached.BrushNode!);
+                return cached.Handle;
+            }
+
+            while (_brushes.Count >= GdiRenderingConstants.MaxCachedBrushes && _brushLru.Last != null)
+            {
+                var oldKey = _brushLru.Last.Value;
+                if (_brushes.Remove(oldKey, out var old) && old.Handle != 0)
+                {
+                    GdiPlusInterop.GdipDeleteBrush(old.Handle);
+                }
+                _brushLru.RemoveLast();
+            }
+
+            if (GdiPlusInterop.GdipCreateSolidFill(argb, out var handle) != 0 || handle == 0)
+            {
+                return 0;
+            }
+
+            var node = _brushLru.AddFirst(argb);
+            _brushes[argb] = new CachedHandle { Handle = handle, BrushNode = node };
+            return handle;
+        }
+
+        public void Clear()
+        {
+            foreach (var (_, cached) in _pens)
+            {
+                if (cached.Handle != 0)
+                {
+                    GdiPlusInterop.GdipDeletePen(cached.Handle);
+                }
+            }
+            _pens.Clear();
+            _penLru.Clear();
+
+            foreach (var (_, cached) in _brushes)
+            {
+                if (cached.Handle != 0)
+                {
+                    GdiPlusInterop.GdipDeleteBrush(cached.Handle);
+                }
+            }
+            _brushes.Clear();
+            _brushLru.Clear();
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                Clear();
+                _disposed = true;
+            }
+        }
     }
 
     #endregion
