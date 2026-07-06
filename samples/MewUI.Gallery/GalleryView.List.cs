@@ -44,38 +44,32 @@ partial class GalleryView
 
             Card(
                 "ListBox (class items)",
-                ListBoxClassItemsCard()
+                ListBoxClassItemsCard(users)
             ),
 
             Card(
                 "ListBox (ItemsView + ItemTemplate)",
-                ListBoxItemsViewTemplateCard()
-            ),
-
-            Card(
-                "TreeView",
-                TreeViewCard()
-            ),
-
-            Card(
-                "TreeView (Async children)",
-                AsyncTreeViewCard()
+                ListBoxItemsViewTemplateCard(users)
             ),
 
             Card(
                 "ListBox (WrapPresenter)",
                 ListBoxWrapPresenterCard()
-            ),
-
-            Card(
-                "ItemsControl (WrapPresenter)",
-                ItemsControlWrapPresenterCard()
-            ),
-
-            ChatVariableHeightCard()
+            )
         );
+    }
 
-        FrameworkElement ListBoxWrapPresenterCard()
+    private FrameworkElement TreeViewPage() =>
+        CardGrid(
+            Card("TreeView", TreeViewCard()),
+            Card("TreeView (Async children)", AsyncTreeViewCard()));
+
+    private FrameworkElement ItemsControlPage() =>
+        CardGrid(
+            Card("ItemsControl (WrapPresenter)", ItemsControlWrapPresenterCard()),
+            ChatVariableHeightCard());
+
+    private FrameworkElement ListBoxWrapPresenterCard()
         {
             var colors = new[]
             {
@@ -84,7 +78,7 @@ partial class GalleryView
                 Color.FromRgb(180, 120, 220), Color.FromRgb(240, 140, 100),
                 Color.FromRgb(130, 200, 200), Color.FromRgb(200, 140, 170),
             };
-            var wrapItems = Enumerable.Range(0, 4800).Select(i => $"Tile {i + 1}").ToArray();
+            var wrapItems = Enumerable.Range(0, 1000).Select(i => $"Tile {i + 1}").ToArray();
 
             var selectedText = new TextBlock { Text = "Selected: (none)" };
 
@@ -154,7 +148,7 @@ partial class GalleryView
             return itemsControl;
         }
 
-        FrameworkElement ListBoxClassItemsCard()
+        FrameworkElement ListBoxClassItemsCard(ObservableCollection<DemoUser> users)
         {
             TextBlock selectedText = null!;
 
@@ -180,7 +174,7 @@ partial class GalleryView
                 );
         }
 
-        FrameworkElement ListBoxItemsViewTemplateCard()
+        FrameworkElement ListBoxItemsViewTemplateCard(ObservableCollection<DemoUser> users)
         {
             var view = new ItemsView<DemoUser>(
                 users,
@@ -479,7 +473,6 @@ partial class GalleryView
                 .Height(240)
                 .Children(treeView);
         }
-    }
 
     private FrameworkElement ChatVariableHeightCard()
     {

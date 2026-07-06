@@ -37,6 +37,13 @@ partial class GalleryView
         e.Handled = true;
     }
 
+    private FrameworkElement DragDropPage() =>
+        CardGrid(
+            WindowDragDropCard(),
+            ElementDragDropCard(),
+            CrossWindowDragDropCard()
+        );
+
     private FrameworkElement WindowDragDropCard() =>
         Card(
             "Window Drag and Drop",

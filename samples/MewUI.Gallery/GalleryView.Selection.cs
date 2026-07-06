@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Gallery;
 
@@ -6,8 +7,15 @@ partial class GalleryView
 {
     private FrameworkElement SelectionPage()
     {
-        var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
+        var items = Enumerable
+            .Range(1, 20)
+            .Select(i => $"Item {i}")
+            .Append("Item Long Long Long Long Long Long Long")
+            .ToArray();
+            
         Calendar calendar = null!;
+
+        var doneEnabled = new ObservableValue<bool>(false);
 
         FrameworkElement TabPlacementSample(
             string title,
@@ -35,9 +43,26 @@ partial class GalleryView
                         .Height(headerRotation is null ? 140 : 180)
                         .TabPlacement(placement)
                         .TabItems(
-                            new TabItem().Header(Header("Home")).Content(new TextBlock().Text("Home tab content")),
-                            new TabItem().Header(Header("Settings")).Content(new TextBlock().Text("Settings tab content")),
-                            new TabItem().Header(Header("About")).Content(new TextBlock().Text("About tab content"))
+                            new TabItem()
+                                .Header(Header("Home"))
+                                .Content(
+                                    new TextBlock()
+                                        .Text("Home tab content")
+                                ),
+
+                            new TabItem()
+                                .Header(Header("Settings"))
+                                .Content(
+                                    new TextBlock()
+                                        .Text("Settings tab content")
+                                ),
+
+                            new TabItem()
+                                .Header(Header("About"))
+                                .Content(
+                                    new TextBlock()
+                                        .Text("About tab content")
+                                )
                         )
                 );
         }
@@ -50,12 +75,32 @@ partial class GalleryView
                     .Rows("Auto,Auto,Auto")
                     .Spacing(8)
                     .Children(
-                        new CheckBox().Content("CheckBox"),
-                        new CheckBox().Content("Disabled").Disable(),
-                        new CheckBox().Content("Checked").IsChecked(true),
-                        new CheckBox().Content("Disabled (Checked)").IsChecked(true).Disable(),
-                        new CheckBox().Content("Three-state").IsThreeState(true).IsChecked(null),
-                        new CheckBox().Content("Disabled (Indeterminate)").IsThreeState(true).IsChecked(null).Disable()
+                        new CheckBox()
+                            .Content("CheckBox"),
+
+                        new CheckBox()
+                            .Content("Disabled")
+                            .Disable(),
+
+                        new CheckBox()
+                            .Content("Checked")
+                            .IsChecked(true),
+
+                        new CheckBox()
+                            .Content("Disabled (Checked)")
+                            .IsChecked(true)
+                            .Disable(),
+
+                        new CheckBox()
+                            .Content("Three-state")
+                            .IsThreeState(true)
+                            .IsChecked(null),
+
+                        new CheckBox()
+                            .Content("Disabled (Indeterminate)")
+                            .IsThreeState(true)
+                            .IsChecked(null)
+                            .Disable()
                     )
             ),
 
@@ -66,10 +111,25 @@ partial class GalleryView
                     .Rows("Auto,Auto")
                     .Spacing(8)
                     .Children(
-                        new RadioButton().Content("A").GroupName("g"),
-                        new RadioButton().Content("C (Disabled)").GroupName("g2").Disable(),
-                        new RadioButton().Content("B").GroupName("g").IsChecked(true),
-                        new RadioButton().Content("Disabled (Checked)").GroupName("g2").IsChecked(true).Disable()
+                        new RadioButton()
+                            .Content("A")
+                            .GroupName("g"),
+
+                        new RadioButton()
+                            .Content("C (Disabled)")
+                            .GroupName("g2")
+                            .Disable(),
+
+                        new RadioButton()
+                            .Content("B")
+                            .GroupName("g")
+                            .IsChecked(true),
+
+                        new RadioButton()
+                            .Content("Disabled (Checked)")
+                            .GroupName("g2")
+                            .IsChecked(true)
+                            .Disable()
                     )
             ),
 
@@ -97,6 +157,106 @@ partial class GalleryView
             ),
 
             Card(
+                "SegmentedControl",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(12)
+                    .Children(
+                        // Text only.
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(4)
+                            .Children(
+                                new TextBlock().Text("Text").FontSize(11),
+                                new SegmentedControl()
+                                    .Items("Day", "Week", "Month")
+                                    .SelectedIndex(0)),
+
+                        // Text + icon.
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(4)
+                            .Children(
+                                new TextBlock().Text("Text + Icon").FontSize(11),
+                                new SegmentedControl()
+                                    .Items(
+                                        new[]
+                                        {
+                                            new SegmentItem("apps_list_regular", "List"),
+                                            new SegmentItem("table_freeze_regular", "Table"),
+                                            new SegmentItem("data_pie_regular", "Chart"),
+                                        },
+                                        v => v.Label)
+                                    .ItemTemplate<SegmentItem>(
+                                        build: ctx =>
+                                        {
+                                            var icon = SegmentIconShape(16).CenterVertical();
+                                            var label = new TextBlock().CenterVertical();
+                                            ctx.Register("icon", icon);
+                                            ctx.Register("label", label);
+                                            return new StackPanel()
+                                                .Horizontal()
+                                                .Spacing(6)
+                                                .Center()
+                                                .Children(icon, label);
+                                        },
+                                        bind: (view, item, _, ctx) =>
+                                        {
+                                            ctx.Get<PathShape>("icon").Data = SegmentIcon(item.Icon);
+                                            ctx.Get<TextBlock>("label").Text = item.Label;
+                                        })
+                                    .SelectedIndex(0)),
+
+                        // Icon only.
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(4)
+                            .Children(
+                                new TextBlock().Text("Icon").FontSize(11),
+                                new SegmentedControl()
+                                    .Items(
+                                        new[]
+                                        {
+                                            new SegmentItem("home_regular", "Home"),
+                                            new SegmentItem("settings_regular", "Settings"),
+                                            new SegmentItem("calendar_reply_regular", "Calendar"),
+                                        },
+                                        v => v.Label)
+                                    .ItemTemplate<SegmentItem>(
+                                        build: _ => SegmentIconShape(18).Center(),
+                                        bind: (view, item, _, _) => ((PathShape)view).Data = SegmentIcon(item.Icon))
+                                    .SelectedIndex(1)),
+
+                        // One segment enabled via binding (PrepareContainer + BindIsEnabled).
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(4)
+                            .Children(
+                                new TextBlock().Text("Disabled segment (bound)").FontSize(11),
+                                new SegmentedControl()
+                                    .Items("All", "Active", "Done")
+                                    .PrepareContainer<string>((c, item, _) =>
+                                    {
+                                        if (item == "Done") c.BindIsEnabled(doneEnabled);
+                                    })
+                                    .SelectedIndex(0),
+                                new CheckBox().Content("Enable ¡®Done¡¯").BindIsChecked(doneEnabled)),
+
+                        // Whole control disabled.
+                        new StackPanel()
+                            .Vertical()
+                            .Spacing(4)
+                            .Children(
+                                new TextBlock().Text("Disabled").FontSize(11),
+                                new SegmentedControl()
+                                    .Items("Day", "Week", "Month")
+                                    .SelectedIndex(0)
+                                    .Disable())
+                    ),
+                minWidth: 320
+            ),
+
+            Card(
                 "Calendar",
                 new StackPanel()
                     .Vertical()
@@ -116,9 +276,15 @@ partial class GalleryView
                     .Vertical()
                     .Spacing(8)
                     .Children(
-                        new DatePicker().Placeholder("Select a date..."),
-                        new DatePicker().SelectedDate(DateTime.Today),
-                        new DatePicker().Placeholder("Disabled").Disable()
+                        new DatePicker()
+                            .Placeholder("Select a date..."),
+
+                        new DatePicker()
+                            .SelectedDate(DateTime.Today),
+
+                        new DatePicker()
+                            .Placeholder("Disabled")
+                            .Disable()
                     ),
                 minWidth: 250
             ),
@@ -130,16 +296,39 @@ partial class GalleryView
                     .Columns("Auto,*")
                     .Spacing(8)
                     .Children(
-                        new TextBlock().Text("Both"),
-                        new ColorPicker().SelectedColor(Color.FromRgb(255, 0, 0)),
-                        new TextBlock().Text("Wheel"),
-                        new ColorPicker().SelectedColor(Color.FromRgb(0, 128, 255)).Kind(ColorPickerKind.Wheel),
-                        new TextBlock().Text("Panel"),
-                        new ColorPicker().SelectedColor(Color.FromRgb(0, 200, 100)).Kind(ColorPickerKind.Panel),
-                        new TextBlock().Text("Alpha"),
-                        new ColorPicker().SelectedColor(Color.FromArgb(180, 255, 128, 0)).ShowAlpha(),
-                        new TextBlock().Text("Disabled"),
-                        new ColorPicker().SelectedColor(Color.FromRgb(80, 80, 80)).Disable()
+                        new TextBlock()
+                            .Text("Both"),
+
+                        new ColorPicker()
+                            .SelectedColor(Color.FromRgb(255, 0, 0)),
+
+                        new TextBlock()
+                            .Text("Wheel"),
+
+                        new ColorPicker()
+                            .SelectedColor(Color.FromRgb(0, 128, 255))
+                            .Kind(ColorPickerKind.Wheel),
+
+                        new TextBlock()
+                            .Text("Panel"),
+
+                        new ColorPicker()
+                            .SelectedColor(Color.FromRgb(0, 200, 100))
+                            .Kind(ColorPickerKind.Panel),
+
+                        new TextBlock()
+                            .Text("Alpha"),
+
+                        new ColorPicker()
+                            .SelectedColor(Color.FromArgb(180, 255, 128, 0))
+                            .ShowAlpha(),
+
+                        new TextBlock()
+                            .Text("Disabled"),
+
+                        new ColorPicker()
+                            .SelectedColor(Color.FromRgb(80, 80, 80))
+                            .Disable()
                     ),
                 minWidth: 250
             ),
@@ -177,5 +366,28 @@ partial class GalleryView
             )
         );
     }
-}
 
+    private sealed record SegmentItem(string Icon, string Label);
+
+    // Binds the icon fill to the inherited Foreground, so it follows selection, theme, and disabled
+    // dimming exactly like the text label. Inherited-value changes now notify property bindings, so
+    // this stays in sync; the factory returns a lightweight color holder on every backend.
+    private static PathShape SegmentIconShape(double size)
+    {
+        var shape = new PathShape()
+            .Stretch(Stretch.Uniform)
+            .Width(size).Height(size);
+
+        var factory = Application.DefaultGraphicsFactory;
+        shape.Bind(Shape.FillProperty, shape, Control.ForegroundProperty,
+            (Color color) => (IBrush)factory.CreateSolidColorBrush(color));
+        return shape;
+    }
+
+    private static PathGeometry SegmentIcon(string name)
+    {
+        var all = IconResource.GetAll();
+        var entry = Array.Find(all, e => e.Name == name) ?? all[0];
+        return PathGeometry.Parse(entry.PathData);
+    }
+}

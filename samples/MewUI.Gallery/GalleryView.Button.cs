@@ -4,8 +4,45 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private FrameworkElement ButtonsPage() =>
-        CardGrid(
+    private FrameworkElement ButtonsPage()
+    {
+        // Labeled variant (label above), mirroring the SegmentedControl samples.
+        static FrameworkElement Row(string name, FrameworkElement content) =>
+            new StackPanel()
+                .Vertical()
+                .Spacing(4)
+                .Children(
+                    new TextBlock().Text(name).FontSize(11),
+                    content);
+
+        // ButtonGroup of icon + text segments (recycle-safe template).
+        static ButtonGroup IconTextGroup(params SegmentItem[] items) =>
+            new ButtonGroup()
+                .Items(items, x => x.Label)
+                .ItemTemplate<SegmentItem>(
+                    build: ctx =>
+                    {
+                        var icon = SegmentIconShape(16).CenterVertical();
+                        var label = new TextBlock().CenterVertical();
+                        ctx.Register("icon", icon);
+                        ctx.Register("label", label);
+                        return new StackPanel().Horizontal().Spacing(6).Center().Children(icon, label);
+                    },
+                    bind: (view, item, _, ctx) =>
+                    {
+                        ctx.Get<PathShape>("icon").Data = SegmentIcon(item.Icon);
+                        ctx.Get<TextBlock>("label").Text = item.Label;
+                    });
+
+        // ButtonGroup of icon-only segments.
+        static ButtonGroup IconGroup(params SegmentItem[] items) =>
+            new ButtonGroup()
+                .Items(items, x => x.Label)
+                .ItemTemplate<SegmentItem>(
+                    build: _ => SegmentIconShape(18).Center(),
+                    bind: (view, item, _, _) => ((PathShape)view).Data = SegmentIcon(item.Icon));
+
+        return CardGrid(
             Card(
                 "Buttons",
                 new StackPanel()
@@ -47,6 +84,53 @@ partial class GalleryView
             ),
 
             Card(
+                "ButtonGroup",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        Row("Text",
+                            new ButtonGroup().Items("Cut", "Copy", "Paste").Left()),
+
+                        Row("Text + Icon",
+                            IconTextGroup(
+                                new SegmentItem("cut_regular", "Cut"),
+                                new SegmentItem("copy_regular", "Copy"),
+                                new SegmentItem("clipboard_paste_regular", "Paste")).Left()),
+
+                        Row("Icon",
+                            IconGroup(
+                                new SegmentItem("text_align_left_regular", "Left"),
+                                new SegmentItem("text_align_center_regular", "Center"),
+                                new SegmentItem("text_align_right_regular", "Right")).Left()),
+
+                        Row("Toggle",
+                            new ButtonGroup()
+                                .Items("Bold", "Italic", "Underline")
+                                .PrepareContainer<string>((seg, name, _) =>
+                                {
+                                    seg.IsCheckable = true;
+                                    if (name == "Italic") seg.IsChecked = true;
+                                })
+                                .Left()),
+
+                        Row("Uniform",
+                            new ButtonGroup()
+                                .Sizing(SegmentSizing.Uniform)
+                                .Items("Left", "Center", "Right")
+                                .Left()),
+
+                        Row("Disabled",
+                            IconGroup(
+                                new SegmentItem("text_align_left_regular", "Left"),
+                                new SegmentItem("text_align_center_regular", "Center"),
+                                new SegmentItem("text_align_right_regular", "Right"))
+                                .Disable()
+                                .Left())
+                    )
+            ),
+
+            Card(
                 "Toggle / Switch",
                 new StackPanel()
                     .Vertical()
@@ -73,5 +157,6 @@ partial class GalleryView
                     )
             )
         );
+    }
 }
 

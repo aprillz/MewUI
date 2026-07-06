@@ -52,6 +52,28 @@ partial class GalleryView
             ),
 
             Card(
+                "Expander",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Expander()
+                            .Header("Details")
+                            .Content(
+                                new StackPanel()
+                                    .Vertical()
+                                    .Spacing(6)
+                                    .Children(
+                                        new TextBlock().Text("Click the header to collapse."),
+                                        new Button().Content("Action")
+                                    )),
+                        new Expander { IsExpanded = false }
+                            .Header("More options")
+                            .Content(new TextBlock().Text("Hidden until expanded."))
+                    )
+            ),
+
+            Card(
                 "Border + Alignment",
                 new Border()
                     .Height(120)

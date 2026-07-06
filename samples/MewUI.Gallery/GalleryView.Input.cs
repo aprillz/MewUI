@@ -175,12 +175,6 @@ partial class GalleryView
                                         .Item("Disabled", isEnabled: false)
                                 )
                          )
-                 ),
-
-                WindowDragDropCard(),
-
-                ElementDragDropCard(),
-
-                CrossWindowDragDropCard()
+                 )
              );
 }
