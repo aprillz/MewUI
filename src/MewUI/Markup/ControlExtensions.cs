@@ -2375,6 +2375,208 @@ public static class ControlExtensions
 
     #endregion
 
+    #region SegmentedControl
+
+    /// <summary>
+    /// Sets the segments from a string array.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="items">Segment labels.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf Items<TSelf>(this TSelf control, params string[] items) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = ItemsView.Create(items ?? Array.Empty<string>());
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segments with a display-text selector.
+    /// </summary>
+    /// <typeparam name="TSelf">Control type.</typeparam>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="items">Items collection.</param>
+    /// <param name="textSelector">Text selector function.</param>
+    /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf Items<TSelf, T>(this TSelf control, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the items source.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="itemsSource">Items source.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf ItemsSource<TSelf>(this TSelf control, ISelectableItemsView itemsSource) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = itemsSource ?? ItemsView.EmptySelectable;
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segment template.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="template">Segment template.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf ItemTemplate<TSelf>(this TSelf control, IDataTemplate template) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(template);
+
+        control.ItemTemplate = template;
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segment template using delegate-based templating.
+    /// </summary>
+    /// <typeparam name="TItem">Item type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="build">Template build callback.</param>
+    /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl ItemTemplate<TItem>(
+        this SegmentedControl control,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => ItemTemplate(control, new DelegateTemplate<TItem>(build, bind, unbind));
+
+    /// <summary>
+    /// Sets the selected segment index.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="selectedIndex">Selected index.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl SelectedIndex(this SegmentedControl control, int selectedIndex)
+    {
+        control.SelectedIndex = selectedIndex;
+        return control;
+    }
+
+    /// <summary>
+    /// Configures each segment container after its content is bound. The callback receives the
+    /// container, the item, and its index; use it to set or bind any container property (enabled
+    /// state, tooltip, etc.). Applied on every rebuild.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="prepare">Container configuration callback.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl PrepareContainer<T>(this SegmentedControl control, Action<SegmentButton, T, int> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        control.SetPrepareContainer((container, item, index) => prepare(container, (T)item!, index));
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segment template for a <see cref="ButtonGroup"/> using delegate-based templating.
+    /// </summary>
+    public static ButtonGroup ItemTemplate<TItem>(
+        this ButtonGroup control,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+    {
+        control.ItemTemplate = new DelegateTemplate<TItem>(build, bind, unbind);
+        return control;
+    }
+
+    /// <summary>
+    /// Configures each <see cref="ButtonGroup"/> segment container after its content is bound. Use it
+    /// to wire the segment's <see cref="SegmentButton.Click"/> (command), <see cref="SegmentButton.IsCheckable"/>
+    /// / <see cref="SegmentButton.IsChecked"/> (independent toggle), enabled state, or tooltip.
+    /// </summary>
+    public static ButtonGroup PrepareContainer<T>(this ButtonGroup control, Action<SegmentButton, T, int> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        control.SetPrepareContainer((container, item, index) => prepare(container, (T)item!, index));
+        return control;
+    }
+
+    /// <summary>Sets how a segmented control sizes its segments along the horizontal axis.</summary>
+    public static TSelf Sizing<TSelf>(this TSelf control, SegmentSizing sizing) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.Sizing = sizing;
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the per-segment padding (mirrors ListBox.ItemPadding). Use a small value for compact,
+    /// icon-only strips; the strip height follows the control.
+    /// </summary>
+    public static TSelf ItemPadding<TSelf>(this TSelf control, Thickness padding) where TSelf : SegmentedBase
+    {
+        control.ItemPadding = padding;
+        return control;
+    }
+
+    /// <summary>
+    /// Adds a selection changed event handler.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="handler">Event handler.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl OnSelectionChanged(this SegmentedControl control, Action<object?> handler)
+    {
+        control.SelectionChanged += handler;
+        return control;
+    }
+
+    /// <summary>
+    /// Binds the selected index to an observable value.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl BindSelectedIndex(this SegmentedControl control, ObservableValue<int> source)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(source);
+
+        control.SetBinding(SegmentedControl.SelectedIndexProperty, source);
+        return control;
+    }
+
+    /// <summary>
+    /// Binds the selected index to a converted observable value (e.g. an enum).
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Source-to-index converter.</param>
+    /// <param name="convertBack">Optional index-to-source converter.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl BindSelectedIndex<TSource>(
+        this SegmentedControl control,
+        ObservableValue<TSource> source,
+        Func<TSource, int> convert,
+        Func<int, TSource>? convertBack = null)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        control.SetBinding(SegmentedControl.SelectedIndexProperty, source, convert, convertBack);
+        return control;
+    }
+
+    #endregion
     #region ItemsControl
 
     /// <summary>
