@@ -22,6 +22,7 @@ public partial class SvgImage
     // (a single tiny pattern-embedded PNG that should render in <1 ms).
     // Keyed by Href; on Href change the previous entry is dropped.
     private string? _cachedHref;
+
     private LoadedImage? _cachedImage;
 
     public override Rect Bounds
@@ -101,41 +102,46 @@ public partial class SvgImage
             try
             {
                 renderer.IntersectClip(destClip);
-                SetClip(renderer);
-
-                switch (loaded)
+                var hasClip = SetClip(renderer);
+                try
                 {
-                    case LoadedRaster raster:
-                        renderer.DrawImage(raster.Image, destRect, srcRect, FixOpacityValue(Opacity));
-                        break;
-                    case LoadedSvg svg:
-                        renderer.Save();
-                        try
-                        {
-                            renderer.Transform =
-                                System.Numerics.Matrix3x2.CreateScale(
-                                    (float)(destRect.Width / Math.Max(srcRect.Width, double.Epsilon)),
-                                    (float)(destRect.Height / Math.Max(srcRect.Height, double.Epsilon))) *
-                                System.Numerics.Matrix3x2.CreateTranslation((float)destRect.X, (float)destRect.Y) *
-                                renderer.Transform;
-                            renderer.SetBoundable(new GenericBoundable(srcRect));
+                    switch (loaded)
+                    {
+                        case LoadedRaster raster:
+                            renderer.DrawImage(raster.Image, destRect, srcRect, FixOpacityValue(Opacity));
+                            break;
+
+                        case LoadedSvg svg:
+                            renderer.Save();
                             try
                             {
-                                svg.Document.RenderElement(renderer);
+                                renderer.Transform =
+                                    System.Numerics.Matrix3x2.CreateScale(
+                                        (float)(destRect.Width / Math.Max(srcRect.Width, double.Epsilon)),
+                                        (float)(destRect.Height / Math.Max(srcRect.Height, double.Epsilon))) *
+                                    System.Numerics.Matrix3x2.CreateTranslation((float)destRect.X, (float)destRect.Y) *
+                                    renderer.Transform;
+                                renderer.SetBoundable(new GenericBoundable(srcRect));
+                                try
+                                {
+                                    svg.Document.RenderElement(renderer);
+                                }
+                                finally
+                                {
+                                    renderer.PopBoundable();
+                                }
                             }
                             finally
                             {
-                                renderer.PopBoundable();
+                                renderer.Restore();
                             }
-                        }
-                        finally
-                        {
-                            renderer.Restore();
-                        }
-                        break;
+                            break;
+                    }
                 }
-
-                ResetClip(renderer);
+                finally
+                {
+                    ResetClip(renderer, hasClip);
+                }
             }
             finally
             {

@@ -9,6 +9,8 @@ internal sealed class MewSvgRenderer : ISvgRenderer
 {
     private readonly Stack<ISvgBoundable> _boundables = new();
 
+    private int _saveDepth;
+
     public MewSvgRenderer(IGraphicsFactory graphicsFactory, IGraphicsContext graphicsContext)
     {
         GraphicsFactory = graphicsFactory;
@@ -89,11 +91,32 @@ internal sealed class MewSvgRenderer : ISvgRenderer
     public void Save()
     {
         GraphicsContext.Save();
+        _saveDepth++;
     }
 
     public void Restore()
     {
+        // Mirrors GraphicsContextBase's own empty-stack guard, but at the renderer level:
+        // never forward a Restore this renderer didn't Save for, so an unmatched Restore
+        // elsewhere in the SVG tree can't consume a Save pushed by an unrelated ancestor.
+        if (_saveDepth <= 0)
+        {
+            return;
+        }
+
         GraphicsContext.Restore();
+        _saveDepth--;
+    }
+
+    /// <summary>Restores down to this renderer's baseline. Called after a full document
+    /// render so a mid-render exception (thrown between some element's Save and its
+    /// intended Restore) can't leave pushed state on the context past the Render call.</summary>
+    internal void DrainToBaseline()
+    {
+        while (_saveDepth > 0)
+        {
+            Restore();
+        }
     }
 
     public void SetClip(Rect rect)

@@ -113,7 +113,9 @@ public partial class SvgDocument
         }
         finally
         {
-            renderer.Restore();
+            // DrainToBaseline (not just Restore) so a mid-render exception that skipped some
+            // element's own cleanup can't leave the context with leftover pushed state.
+            renderer.DrainToBaseline();
         }
     }
 
