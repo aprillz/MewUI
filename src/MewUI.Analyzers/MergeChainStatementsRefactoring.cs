@@ -16,8 +16,8 @@ namespace Aprillz.MewUI.Analyzers;
 //   - an event subscription `x.Click += handler;`      -> appends `.OnClick(handler)`
 //
 //   _btn = new Button().Tooltip("Min");       _btn = new Button()
-//   _btn.Click += () => Minimize();      ->        .Tooltip("Min")
-//                                                  .OnClick(() => Minimize());
+//   _btn.Click += () => Minimize();      ->            .Tooltip("Min")
+//                                                      .OnClick(() => Minimize());
 //
 // Each appended call must return x's own type, so chaining and assigning back to x stays valid.
 // Offered as a refactoring (caret on the anchor statement).

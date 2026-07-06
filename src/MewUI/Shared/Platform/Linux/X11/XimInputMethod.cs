@@ -142,7 +142,7 @@ internal sealed class XimInputMethod : IX11InputMethod
             string s = Encoding.UTF8.GetString(buf[..byteCount]);
             if (!string.IsNullOrEmpty(s))
             {
-                ImeLogger.Write($"  -> text '{s}'");
+                ImeLogger.Write($" -> text '{s}'");
                 return s;
             }
         }

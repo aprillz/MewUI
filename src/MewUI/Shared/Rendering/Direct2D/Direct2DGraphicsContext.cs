@@ -81,7 +81,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     // GPU pixel-surface mode: when the active target is a Direct2DGpuPixelRenderSurface,
     // we render via the factory's shared filter device context (no DC RT, no DIB), with the
     // GPU bitmap set as the device target via dc.SetTarget. Subsequent draws and any effect
-    // pass land directly on GPU memory — full zero-copy parity with MewVG's FBO path.
+    // pass land directly on GPU memory - full zero-copy parity with MewVG's FBO path.
     private nint _gpuPixelSurfaceBitmap; // ID2D1Bitmap1* currently set as target (0 = DIB/normal mode)
     private nint _previousDeviceTarget; // saved for SetTarget restore at EndFrame
     private float _previousDcDpiX; // saved DC dpi for restore at EndFrame (GPU pixel-surface path)
@@ -172,7 +172,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private void BeginGpuPixelSurfaceFrame(Direct2DGpuPixelRenderSurface gpuTarget)
     {
         // Release any device context held from a previous BeginFrame on this same context
-        // instance — keeps refcounting balanced when the context is reused across frames.
+        // instance - keeps refcounting balanced when the context is reused across frames.
         if (_deviceContext != 0)
         {
             ComHelpers.Release(_deviceContext);
@@ -180,7 +180,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         // Use the factory's shared filter device context (NOT a DC RT). The bitmap was
-        // created on this DC — they MUST stay paired (cross-DC bitmap usage is undefined).
+        // created on this DC - they MUST stay paired (cross-DC bitmap usage is undefined).
         nint sharedDc = _ownerFactory.SharedFilterDeviceContext;
         if (sharedDc == 0 || !gpuTarget.IsDeviceCurrent || gpuTarget.Bitmap == 0)
         {
@@ -191,9 +191,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         // _renderTarget and _deviceContext point at the SAME COM object (DeviceContext IS-A
-        // RenderTarget) — existing draw methods that take ID2D1RenderTarget* operate on it
+        // RenderTarget) - existing draw methods that take ID2D1RenderTarget* operate on it
         // transparently. _renderTarget is borrowed (matches _ownsRenderTarget=false set at
-        // ctor — no Release in OnDispose). _deviceContext is AddRef'd because the existing
+        // ctor - no Release in OnDispose). _deviceContext is AddRef'd because the existing
         // OnDispose unconditionally Releases it; the AddRef balances that release so the
         // factory-owned shared DC isn't accidentally disposed.
         ComHelpers.AddRef(sharedDc);
@@ -202,14 +202,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _renderTargetGeneration = 0;
 
         // Save the DC's previous target so we can restore it on EndFrame. Multiple nested
-        // GPU passes (filter source then scratch) chain through the same DC — preserving
+        // GPU passes (filter source then scratch) chain through the same DC - preserving
         // the parent's target lets nesting work without a per-context push/pop stack.
         D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out _previousDeviceTarget);
         D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, gpuTarget.Bitmap);
         _gpuPixelSurfaceBitmap = gpuTarget.Bitmap;
 
         // Sync the DC's DPI to the bound bitmap's DPI. SetTarget does NOT auto-adopt the
-        // bitmap's DPI — the DC keeps whatever DPI was last set on it (default 96). If the
+        // bitmap's DPI - the DC keeps whatever DPI was last set on it (default 96). If the
         // bitmap's effective scale is e.g. 6× but the DC stays at 96 DPI, user-space
         // drawing coords map 1:1 to pixels, only filling the upper-left 1/6 of the bitmap.
         // We push the bitmap's DPI here so user-space coords scale correctly into pixel
@@ -224,7 +224,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, bitmapDpi, bitmapDpi);
 
         // Save the parent's transform on the DC so we can restore it on EndFrame. This pass
-        // is about to push Identity onto the DC for its own clear/draws — without restore,
+        // is about to push Identity onto the DC for its own clear/draws - without restore,
         // the parent pass continues with our Identity instead of its own translate/scale,
         // and any subsequent draws (cache hits, post-filter content) end up at the wrong
         // pixel positions.
@@ -236,7 +236,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _transform = Matrix3x2.Identity;
         _clipBoundsWorld = null;
 
-        // Only the outermost BeginGpuPixelSurfaceFrame issues BeginDraw — D2D rejects nested
+        // Only the outermost BeginGpuPixelSurfaceFrame issues BeginDraw - D2D rejects nested
         // BeginDraw on the same DC with WRONG_STATE. Inner filter/source passes rendered
         // while the outer pass is still drawing into its own GPU pixel surface on the same
         // shared DC just swap the DC's target via SetTarget;
@@ -246,7 +246,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         {
             D2D1VTable.BeginDraw((ID2D1RenderTarget*)_renderTarget);
         }
-        // Reset DC transform — the shared DC carries state across BeginDraw cycles AND
+        // Reset DC transform - the shared DC carries state across BeginDraw cycles AND
         // across nested SetTarget swaps. Push Identity now so the upcoming Clear / first
         // draw can't accidentally inherit a stale matrix from a parent pass.
         D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, D2D1_MATRIX_3X2_F.Identity);
@@ -349,7 +349,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             if (_gpuPixelSurfaceBitmap != 0 && _renderTarget != 0)
             {
                 // Restore parent's target so the next draw on the shared DC isn't writing into
-                // our scratch bitmap. _previousDeviceTarget may be 0 (no parent target) — that
+                // our scratch bitmap. _previousDeviceTarget may be 0 (no parent target) - that
                 // also restores cleanly because SetTarget(NULL) resets to "no target".
                 D2D1VTable.SetTarget((ID2D1DeviceContext*)_renderTarget, _previousDeviceTarget);
                 if (_previousDeviceTarget != 0)
@@ -1384,7 +1384,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 }
             }
 
-            // Use ID2D1DeviceContext (D2D 1.1) when available — required for ENABLE_COLOR_FONT.
+            // Use ID2D1DeviceContext (D2D 1.1) when available - required for ENABLE_COLOR_FONT.
             var rt = _deviceContext != 0 ? _deviceContext : _renderTarget;
             D2D1VTable.DrawText((ID2D1RenderTarget*)rt, text, textFormat, layoutRect, brush, options);
         }
@@ -1656,7 +1656,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     /// Applies the user-configured font fallback chain to a text layout (if any).
     /// Uses IDWriteTextLayout2::SetFontFallback with a custom IDWriteFontFallback
     /// built from <see cref="FontFallback.FallbackChain"/>.
-    /// Safe to call on any layout — silently no-ops if IDWriteFactory2 is unavailable.
+    /// Safe to call on any layout - silently no-ops if IDWriteFactory2 is unavailable.
     /// </summary>
     private void ApplyCustomFontFallback(nint textLayout)
     {
@@ -1671,7 +1671,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        // This may fail if the layout doesn't support IDWriteTextLayout2 — that's fine.
+        // This may fail if the layout doesn't support IDWriteTextLayout2 - that's fine.
         _ = DWriteTextLayout2VTable.SetFontFallback(textLayout, fallback);
     }
 
@@ -1729,7 +1729,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             right: (float)sourceRect.Right,
             bottom: (float)sourceRect.Bottom);
 
-        // When the active target is a DeviceContext (the common case — shared filter DC,
+        // When the active target is a DeviceContext, use the DrawBitmap overload
         // window via QI'd DC), route through the DC-overload of DrawBitmap which accepts
         // the full D2D1_INTERPOLATION_MODE enum. Default → HIGH_QUALITY_CUBIC: D2D
         // handles down-sampling on the GPU (no CPU mip pyramid, no per-pixel cost the

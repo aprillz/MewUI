@@ -150,7 +150,7 @@ internal sealed class PropertyValueStore
             value = property.CoerceCallback(coerceOwner, value);
         }
 
-        // No change — skip to avoid infinite invalidation loops
+        // No change - skip to avoid infinite invalidation loops
         if (entry.Source == source && entry.Value is not AnimatedEntry && Equals(entry.Value, value))
             return;
 
@@ -198,7 +198,7 @@ internal sealed class PropertyValueStore
     }
 
     /// <summary>
-    /// Backward-compatible SetTarget — maps to Trigger source.
+    /// Backward-compatible SetTarget - maps to Trigger source.
     /// Used by existing code (PropertyForward, MewObjectPropertyBinding, etc.)
     /// </summary>
     public void SetTarget(MewProperty property, object value)
@@ -216,7 +216,7 @@ internal sealed class PropertyValueStore
 
     /// <summary>
     /// Caches an inherited property value. Does not fire change notifications
-    /// because the effective value hasn't actually changed — it was already
+    /// because the effective value hasn't actually changed - it was already
     /// resolved via parent chain traversal; we're just caching the result.
     /// </summary>
     internal void SetInherited<T>(MewProperty<T> property, T value)
@@ -316,7 +316,7 @@ internal sealed class PropertyValueStore
                 // during the animation see the post-animation source. Without this,
                 // a Style-source restoration animation leaves entry.Source at the
                 // prior Trigger value, and a later SetStyle is rejected as lower
-                // priority — pinning the stale animated target.
+                // priority - pinning the stale animated target.
                 entry.Source = source.Value;
             }
         }

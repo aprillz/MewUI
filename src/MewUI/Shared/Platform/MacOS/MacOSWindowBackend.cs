@@ -105,7 +105,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         // frame is presented inside AppKit's resize CA transaction, preventing the
         // "scaled cached frame" artifact. Outside of live-resize it must be false:
         // Apple's documentation states that presentsWithTransaction overrides
-        // displaySyncEnabled — leaving it always-on defeats VSync pacing and causes the
+        // displaySyncEnabled - leaving it always-on defeats VSync pacing and causes the
         // render loop to run at 2x the display refresh rate instead of 1x.
         bool needed = MacOSWindowInterop.IsViewInLiveResize(_nsView);
         if (_lastMetalPresentsWithTransaction.HasValue && _lastMetalPresentsWithTransaction.Value == needed)
@@ -229,7 +229,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             const ulong ExtendedStyleMask = 1ul | 2ul | 4ul | 8ul | (1ul << 15);
             MacOSWindowInterop.SetWindowStyleMask(_nsWindow, ExtendedStyleMask);
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, true);
-            // setStyleMask: can alter the frame — restore the intended client size.
+            // setStyleMask: can alter the frame - restore the intended client size.
             ApplyRequestedClientSize();
         }
 
@@ -731,7 +731,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        // Do not change styleMask during fullscreen transitions — macOS will throw.
+        // Do not change styleMask during fullscreen transitions - macOS will throw.
         var currentMask = MacOSWindowInterop.GetWindowStyleMask(_nsWindow);
         const ulong NSWindowStyleMaskFullScreen = 1ul << 14;
         if ((currentMask & NSWindowStyleMaskFullScreen) != 0)
@@ -775,7 +775,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 return default;
             }
 
-            // In fullscreen, traffic light buttons are auto-hidden — no inset needed.
+            // In fullscreen, traffic light buttons are auto-hidden - no inset needed.
             var mask = MacOSWindowInterop.GetWindowStyleMask(_nsWindow);
             const ulong NSWindowStyleMaskFullScreen = 1ul << 14;
             if ((mask & NSWindowStyleMaskFullScreen) != 0)
@@ -918,7 +918,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         if (_nsWindow != 0)
         {
-            // CAMetalLayer is the only supported surface — render from the layer's draw cycle to
+            // CAMetalLayer is the only supported surface - render from the layer's draw cycle to
             // avoid AppKit's "stretch last frame" behavior during live-resize. (The NSOpenGLView
             // legacy fallback was removed once the macOS backend stabilized on Metal.)
             var (view, layer) = MacOSWindowInterop.AttachMetalLayerView(_nsWindow, _window.Width, _window.Height);
@@ -1350,7 +1350,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     // Trackpad point-delta → notch normalization.
     // Matches Avalonia AvnView.mm (precise speed=50) for macOS-native feel.
-    // Backend-private — never references Theme or any input-layer constant.
+    // Backend-private - never references Theme or any input-layer constant.
     private const double TrackpadPointsPerNotch = 50.0;
 
     private void HandleMouseWheel(nint ev, Point pos, Point screenPos)
@@ -1372,7 +1372,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         // Convert to MouseWheelEventArgs.Delta convention (notches, +Y = up, +X = left).
         // NSEvent's scrollingDelta already uses the "+Y = scroll up, +X = scroll left" sign
-        // convention so no sign flip is needed — only unit normalization.
+        // convention so no sign flip is needed - only unit normalization.
         double notchesY;
         double notchesX;
         if (precise)

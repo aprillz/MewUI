@@ -446,7 +446,7 @@ public sealed partial class Image : FrameworkElement
             return _cachedImage;
         }
 
-        // First use, or the graphics factory changed (rare — a runtime backend swap).
+        // First use, or the graphics factory changed (rare - a runtime backend swap).
         _cachedImage?.Dispose();
         _cachedImage = Source.CreateImage(factory);
         _cachedFactory = factory;
@@ -491,7 +491,7 @@ public sealed partial class Image : FrameworkElement
     private void OnSourceChanged()
     {
         // Raster IImage instances refresh from the source themselves (e.g. WriteableBitmap.Version); the
-        // rasterized vector bitmap is a snapshot — mark it stale (keep the surface) so a content change
+        // rasterized vector bitmap is a snapshot - mark it stale (keep the surface) so a content change
         // (e.g. tint) re-renders into it.
         InvalidateVectorContent();
         InvalidateVisual();

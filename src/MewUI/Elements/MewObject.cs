@@ -14,7 +14,7 @@ public abstract class MewObject : IPropertyOwner
 
     /// <summary>
     /// Per-instance value storage and animation management.
-    /// Lazy — objects that don't use MewProperty have no allocation.
+    /// Lazy - objects that don't use MewProperty have no allocation.
     /// </summary>
     internal PropertyValueStore PropertyStore
         => _propertyStore ??= new PropertyValueStore(this);
@@ -26,10 +26,10 @@ public abstract class MewObject : IPropertyOwner
     internal bool HasPropertyStore => _propertyStore != null;
 
     /// <summary>
-    /// IPropertyOwner — notification pipeline:
-    /// 1. OnMewPropertyChanged (virtual) — cross-cutting: layout/render invalidation, font cache, inheritance
-    /// 2. ChangedCallback — per-property side effects registered at MewProperty.Register time
-    /// 3. Binding callbacks — propagate final value to bound ObservableValues
+    /// IPropertyOwner - notification pipeline:
+    /// 1. OnMewPropertyChanged (virtual) - cross-cutting: layout/render invalidation, font cache, inheritance
+    /// 2. ChangedCallback - per-property side effects registered at MewProperty.Register time
+    /// 3. Binding callbacks - propagate final value to bound ObservableValues
     /// </summary>
     void IPropertyOwner.OnPropertyChanged(MewProperty property, object? oldValue, object? newValue)
     {

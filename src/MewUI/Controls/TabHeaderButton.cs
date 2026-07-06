@@ -48,7 +48,7 @@ internal sealed class TabHeaderButton : ContentControl
 
     /// <summary>
     /// Called when the header is clicked (tab selection request).
-    /// Single-owner callback — no multicast, no cleanup needed.
+    /// Single-owner callback - no multicast, no cleanup needed.
     /// </summary>
     internal Action<int>? ClickedCallback { get; set; }
 

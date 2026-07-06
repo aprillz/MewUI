@@ -1140,7 +1140,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return;
         }
 
-        // GDI text bypasses GDI+ WorldTransform — apply transform manually.
+        // GDI text bypasses GDI+ WorldTransform - apply transform manually.
         bool hasTextTransform = TryGetTextWorldTransform(out var textTransform);
         var drawBounds = hasTextTransform ? bounds : TransformRect(bounds);
         var cullBounds = hasTextTransform ? TransformRect(bounds) : drawBounds;
@@ -1301,7 +1301,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         var wrapping = format.Wrapping;
         var trimming = format.Trimming;
 
-        // GDI text bypasses GDI+ WorldTransform — apply transform manually.
+        // GDI text bypasses GDI+ WorldTransform - apply transform manually.
         bool hasTextTransform = TryGetTextWorldTransform(out var textTransform);
         var bounds = hasTextTransform ? layout.EffectiveBounds : TransformRect(layout.EffectiveBounds);
         var cullBounds = hasTextTransform ? TransformRect(layout.EffectiveBounds) : bounds;
@@ -1728,7 +1728,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             int srcW = (int)sourceRect.Width;
             int srcH = (int)sourceRect.Height;
 
-            // Large upscales (dest >> src) are expensive to resample — fall back to
+            // Large upscales (dest >> src) are expensive to resample - fall back to
             // GDI stretch which is hardware-accelerated and handles its own clipping.
             const int MaxResamplePixels = 2048 * 2048;
             if (effective == ImageScaleQuality.Fast ||
@@ -1897,7 +1897,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
         if (destWPx <= 0 || destHPx <= 0) return;
 
-        // Try cached transformed bitmap — avoids per-frame GDI+ rendering in immediate mode.
+        // Try cached transformed bitmap - avoids per-frame GDI+ rendering in immediate mode.
         if (gdiImage.TryGetTransformedBitmap(
                 m.M11, m.M12, m.M21, m.M22,
                 sourceRect, destWPx, destHPx,
@@ -2292,7 +2292,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
         m *= System.Numerics.Matrix3x2.CreateScale((float)_dpiScale);
 
-        // Seam avoidance — same reasoning as D2D backend: pixel-snap translate when axis-aligned,
+        // Seam avoidance - same reasoning as D2D backend: pixel-snap translate when axis-aligned,
         // otherwise sub-pixel tile origins create visible seams at every tile boundary from
         // interpolated AA-edge texels bleeding across the wrap.
         bool axisAligned = m.M12 == 0f && m.M21 == 0f;
@@ -2374,7 +2374,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             // a non-identity gradientTransform, user space and canonical space differ,
             // so corners must be mapped through the inverse gradientTransform first
             // (otherwise the computed expansion is garbage and the path gradient can
-            // miss the geometry entirely — visible at low zoom where GDI+ flattens
+            // miss the geometry entirely - visible at low zoom where GDI+ flattens
             // the ellipse path more coarsely, leaving large empty/tiled regions).
             Matrix3x2 inverseGradTransform = Matrix3x2.Identity;
             if (brush.GradientTransform is Matrix3x2 gt)

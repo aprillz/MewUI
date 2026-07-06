@@ -307,7 +307,7 @@ public sealed class MultiLineTextBox : TextBase
         double desiredH = Math.Min(contentH, 2048) + chromeH + 4;
 
         // When a finite size is available (e.g. inside a TabControl, Grid, or WrapPanel),
-        // don't request more than available — the internal scroll handles overflow.
+        // don't request more than available - the internal scroll handles overflow.
         if (!double.IsPositiveInfinity(availableSize.Width) && desiredW > availableSize.Width)
         {
             desiredW = availableSize.Width;

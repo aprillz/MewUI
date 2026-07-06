@@ -628,7 +628,7 @@ internal static unsafe class MacOSWindowInterop
         else if (isToolWindow)
         {
             // Floating tool/utility window: an NSPanel with the utility-window mask (thin title bar, floats
-            // above the app). Close button only — no miniaturizable. MewUIPanel subclass so the panel can
+            // above the app). Close button only - no miniaturizable. MewUIPanel subclass so the panel can
             // become key for text input. (UtilityWindow=1<<4 only takes effect on NSPanel, not NSWindow.)
             EnsureMewUIPanelClass();
             windowClass = ClsMewUIPanel != 0 ? ClsMewUIPanel : (ClsNSPanel != 0 ? ClsNSPanel : ClsNSWindow);

@@ -139,7 +139,7 @@ public sealed class ScrollViewer : ContentControl
             return false;
         }
 
-        // Don't scroll when the focused element is the direct content itself —
+        // Don't scroll when the focused element is the direct content itself -
         // it spans the entire scrollable area and scrolling it "into view" is nonsensical.
         if (focusedElement == Content)
         {

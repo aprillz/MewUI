@@ -88,7 +88,7 @@ internal static class WindowInputRouter
             window.AccessKeyManager.OnPointerDown();
             window.OnAfterMouseDownHitTest(positionInWindow, button, element);
 
-            // Record a drag candidate before routing — gesture promotion happens on later MouseMove.
+            // Record a drag candidate before routing - gesture promotion happens on later MouseMove.
             if (button == MewUI.MouseButton.Left)
             {
                 WindowDragDropRouter.OnMouseDown(window, positionInWindow, screenPosition, element);

@@ -68,7 +68,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _xi2Enabled;
     private int _xi2Opcode;
     private readonly Dictionary<(int deviceId, int valuator), XI2ScrollAxis> _scrollAxes = new();
-    // True when at least one master pointer has a scroll axis cached — only then is XI_Motion
+    // True when at least one master pointer has a scroll axis cached - only then is XI_Motion
     // guaranteed to deliver high-res scroll, so only then should legacy core wheel be suppressed.
     private bool _xi2MasterHasScrollAxis;
 
@@ -697,7 +697,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     /// <summary>
     /// Initializes XInput2 for high-resolution scroll. Falls back silently when the
-    /// extension is unavailable — legacy button 4–7 wheel events continue to work.
+    /// extension is unavailable - legacy button 4–7 wheel events continue to work.
     /// </summary>
     private void TryInitializeXI2()
     {
@@ -712,7 +712,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             // Subscribe to XI_Motion only. Including XI_ButtonPress in the mask causes some
             // X servers to stop delivering core button events without reliably delivering XI
-            // button events — we lose both. Core buttons 4-7 stay on the legacy path and are
+            // button events - we lose both. Core buttons 4-7 stay on the legacy path and are
             // suppressed in HandleButton when XI2 scroll axes are active to avoid doubling.
             const int evtypeBits = 8;
             int maskBytes = (XI2.XI_Motion / evtypeBits) + 1;
@@ -770,7 +770,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                     if (device.num_classes <= 0 || device.classes == 0)
                         continue;
 
-                    // classes is XIAnyClassInfo** — an array of pointers to per-class headers.
+                    // classes is XIAnyClassInfo** - an array of pointers to per-class headers.
                     nint* classPtrs = (nint*)device.classes;
                     for (int c = 0; c < device.num_classes; c++)
                     {
@@ -799,7 +799,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     }
 
     // Caller (PlatformHost) has already fetched the cookie via XGetEventData and owns the
-    // matching XFreeEventData — do not re-fetch or free here.
+    // matching XFreeEventData - do not re-fetch or free here.
     private void HandleXI2GenericEvent(ref XEvent ev)
     {
         if (ev.xcookie.data == 0) return;
@@ -815,7 +815,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         var dev = Marshal.PtrToStructure<XIDeviceEvent>(dataPtr);
 
-        // XIAllDevices delivers each physical motion twice — once via the slave
+        // XIAllDevices delivers each physical motion twice - once via the slave
         // (deviceid==sourceid) and once via the master mirror. Skip slaves.
         if (dev.deviceid == dev.sourceid)
             return;
@@ -1931,7 +1931,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        // Pick a single action atom — Xdnd carries one action at a time.
+        // Pick a single action atom - Xdnd carries one action at a time.
         nint actionAtom = 0;
         if ((effect & DragDropEffects.Move) != 0) actionAtom = _xdndActionMoveAtom;
         else if ((effect & DragDropEffects.Copy) != 0) actionAtom = _xdndActionCopyAtom;
@@ -2426,7 +2426,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             NativeX11.XSetTransientForHint(Display, Handle, ownerHandle);
 
-            // EWMH modal hint — ONLY for true modal dialogs (ShowDialog). A plain owned window (Show(owner))
+            // EWMH modal hint - ONLY for true modal dialogs (ShowDialog). A plain owned window (Show(owner))
             // must not be modal, otherwise the WM/compositor (e.g. XWayland) dims the owner and treats it as a
             // dialog. Setting transient-for alone is enough to keep an owned window above its owner. Best-effort.
             if (Window.IsDialogWindow)
@@ -2451,7 +2451,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     // Marks the window as a floating tool/utility window: _NET_WM_WINDOW_TYPE_UTILITY (thin WM decoration) +
     // skip-taskbar. Set as properties before the window is mapped (a _NET_WM_STATE ClientMessage only applies
-    // once the WM manages the window). Owner/transient is set separately via SetOwner. Best-effort — WMs vary
+    // once the WM manages the window). Owner/transient is set separately via SetOwner. Best-effort - WMs vary
     // in utility-type support, degrading to a normal (skip-taskbar) window. Mutually exclusive with transparency.
     private void ApplyToolWindowHints()
     {
@@ -2486,7 +2486,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
         catch
         {
-            // Best-effort — WMs vary in utility-type support.
+            // Best-effort - WMs vary in utility-type support.
         }
     }
 
@@ -2506,7 +2506,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyOpacity();
     }
 
-    // X11 WM removes all decorations (title bar + border + shadow) — not a true
+    // X11 WM removes all decorations (title bar + border + shadow) - not a true
     // "extend client area" like Win32/macOS. Reported as None so NativeCustomWindow
     // keeps the default title bar on X11.
     public WindowChromeCapabilities ChromeCapabilities =>
@@ -2581,7 +2581,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void CancelImeComposition()
     {
-        // Commit rather than reset — Reset() tells IBus to discard preedit,
+        // Commit rather than reset - Reset() tells IBus to discard preedit,
         // which triggers HidePreeditText → EndTextCompositionInternal → text loss.
         // Instead, commit the current composition so text is preserved with undo.
         if (Window.FocusManager.FocusedElement is ITextCompositionClient { IsComposing: true } client)

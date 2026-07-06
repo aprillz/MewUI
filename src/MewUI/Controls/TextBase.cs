@@ -907,7 +907,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         base.OnLostFocus();
         if (_isTextComposing)
         {
-            // Commit rather than discard — preserves typed text and records undo.
+            // Commit rather than discard - preserves typed text and records undo.
             CommitTextCompositionInternal();
             InvalidateMeasure();
             InvalidateVisual();
@@ -992,7 +992,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
 
         // Record the committed composition text for undo.
-        // The text is already in the document (placed by CompositionUpdate), so we only record — not apply.
+        // The text is already in the document (placed by CompositionUpdate), so we only record - not apply.
         // Split into individual characters so that Undo removes one character at a time
         // (macOS Korean IME may commit multi-character compositions).
         if (_compositionLength > 0)
@@ -1050,7 +1050,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
         Focus();
 
-        // Skip caret/selection setup on 2nd click of a double-click —
+        // Skip caret/selection setup on 2nd click of a double-click -
         // OnMouseDoubleClick will handle word selection instead.
         if (e.ClickCount >= 2)
         {

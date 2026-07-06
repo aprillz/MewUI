@@ -215,7 +215,7 @@ public abstract class Element : MewObject
         Parent?.InvalidateMeasure();
 
         // The marker gates the *entry* of a cascade. Once started, the subtree is descended
-        // unconditionally via the helper — otherwise a non-marker intermediate like ScrollViewer
+        // unconditionally via the helper - otherwise a non-marker intermediate like ScrollViewer
         // would halt the cascade before it reaches the presenter that needs to re-measure.
         if (this is ISubtreeInvalidationHost)
         {

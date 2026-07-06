@@ -118,7 +118,7 @@ internal static unsafe partial class Dxgi
         fixed (DXGI_SWAP_CHAIN_DESC1* pDesc = &desc)
         {
             var vtbl = *(nint**)factory2;
-            // IDXGIFactory2 vtbl[24] — CreateSwapChainForComposition.
+            // IDXGIFactory2 vtbl[24] - CreateSwapChainForComposition.
             var fn = (delegate* unmanaged[Stdcall]<nint, nint, DXGI_SWAP_CHAIN_DESC1*, nint, nint*, int>)vtbl[24];
             int hr = fn(factory2, device, pDesc, 0, &localSwapChain);
             swapChain = localSwapChain;

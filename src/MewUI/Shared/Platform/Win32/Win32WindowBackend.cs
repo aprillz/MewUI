@@ -455,7 +455,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         const int HTBOTTOMLEFT = 16;
         const int HTBOTTOMRIGHT = 17;
 
-        // Resize borders (skip when maximized — no resize in maximized state).
+        // Resize borders (skip when maximized - no resize in maximized state).
         if (Window.WindowState != Controls.WindowState.Maximized && Window.WindowSize.IsResizable)
         {
             bool left = pt.x < borderPx;
@@ -482,7 +482,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 dipX + Window.Padding.Left,
                 dipY + Window.Padding.Top));
 
-            // Interactive control — let it handle the click.
+            // Interactive control - let it handle the click.
             if (hit != null && hit != Window.Content && (hit.Focusable || hit is not Controls.Panel))
                 return HTCLIENT;
 
@@ -841,7 +841,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 {
                     // AnimationManager.Update runs inside RenderFrameCore, so we must force a
                     // render every tick while animations are active to advance their clocks.
-                    // Otherwise honor the standard NeedsRender flag — the dispatcher will dispatch
+                    // Otherwise honor the standard NeedsRender flag - the dispatcher will dispatch
                     // its own WM_INVOKE inside the modal pump and flip the flag at its own pace.
                     if (AnimationManager.Instance.ActiveCount > 0)
                     {
@@ -862,7 +862,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case WindowMessages.WM_DROPFILES:
-                // Legacy file-drop path — used as a fallback on MTA threads where IDropTarget cannot be
+                // Legacy file-drop path - used as a fallback on MTA threads where IDropTarget cannot be
                 // registered. STA threads use IDropTarget instead (Shell32.DragAcceptFiles is not called).
                 return HandleDropFiles(wParam);
 
@@ -1008,7 +1008,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                     DragDropEffects.Copy);
 
                 // Route through the framework so element-level Drop handlers fire (and window-level fallback).
-                // No DragEnter/Over/Leave with WM_DROPFILES — only the final Drop is delivered.
+                // No DragEnter/Over/Leave with WM_DROPFILES - only the final Drop is delivered.
                 WindowDragDropRouter.OnExternalDrop(Window, args);
                 return 0;
             }
@@ -1383,7 +1383,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     /// <summary>
     /// Resolves the backend's preferred Win32 transparency strategy. Backends that don't
     /// implement <see cref="IWin32TransparencyCapabilities"/> default to
-    /// <see cref="Win32TransparencyMode.Bitmap"/> — the existing layered-DIB path.
+    /// <see cref="Win32TransparencyMode.Bitmap"/> - the existing layered-DIB path.
     /// </summary>
     private Win32TransparencyMode ResolveTransparencyMode()
         => (Window.GraphicsFactory as IWin32TransparencyCapabilities)?.TransparencyMode
@@ -1486,7 +1486,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             NeedsRender = false;
             if (_allowsTransparency && ResolveTransparencyMode() == Win32TransparencyMode.Bitmap)
             {
-                // Layered (DIB) windows are updated via UpdateLayeredWindow — paint DC isn't used.
+                // Layered (DIB) windows are updated via UpdateLayeredWindow - paint DC isn't used.
                 RenderNowCore();
             }
             else
@@ -1529,7 +1529,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private void RenderNowCore()
     {
-        // Bitmap-mode transparency goes through UpdateLayeredWindow — no HDC required.
+        // Bitmap-mode transparency goes through UpdateLayeredWindow - no HDC required.
         if (_allowsTransparency && ResolveTransparencyMode() == Win32TransparencyMode.Bitmap)
         {
             RenderNowLayered();
@@ -1635,7 +1635,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         bool hasNoRedirection = (exStyle & WindowStylesEx.WS_EX_NOREDIRECTIONBITMAP) != 0;
 
         // Surface-mode (NOREDIRECTIONBITMAP) windows are fixed at creation; do not toggle
-        // WS_EX_LAYERED on/off — that bit is only meaningful when the window has a
+        // WS_EX_LAYERED on/off - that bit is only meaningful when the window has a
         // redirection surface, and switching transparency strategy on the fly requires a
         // window recreate which is outside this hook's contract.
         if (hasNoRedirection)
@@ -1880,7 +1880,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     }
 
     // WM_MOUSELEAVE is only delivered after an explicit TrackMouseEvent(TME_LEAVE) registration,
-    // and the registration is consumed on each leave — so we re-register on every MouseMove until leave fires.
+    // and the registration is consumed on each leave - so we re-register on every MouseMove until leave fires.
     private void EnsureMouseLeaveTracking()
     {
         if (_isTrackingMouseLeave || Handle == 0)
