@@ -2566,6 +2566,199 @@ public static class ControlExtensions
     }
 
     #endregion
+
+    #region NavigationList
+
+    /// <summary>
+    /// Binds items with a custom template. Generics are inferred once from <paramref name="items"/>;
+    /// kind and key are selectors, not chained generic calls.
+    /// </summary>
+    public static NavigationList Items<T>(
+        this NavigationList control,
+        IReadOnlyList<T> items,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, T, int, TemplateContext> bind,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = ItemsView.Create(items, textSelector: null, keySelector);
+        control.ItemTemplate = new DelegateTemplate<T>(build, bind);
+        control.KindSelector = kind == null ? null : o => kind((T)o!);
+        return control;
+    }
+
+    /// <summary>Binds items using the default text template.</summary>
+    public static NavigationList Items<T>(
+        this NavigationList control,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = ItemsView.Create(items, textSelector, keySelector);
+        control.KindSelector = kind == null ? null : o => kind((T)o!);
+        return control;
+    }
+
+    public static NavigationList OnSelectionChanged(this NavigationList control, Action<object?> handler)
+    {
+        control.SelectionChanged += handler;
+        return control;
+    }
+
+    public static NavigationList OnItemInvoked(this NavigationList control, Action<object?> handler)
+    {
+        control.ItemInvoked += handler;
+        return control;
+    }
+
+    public static NavigationList BindSelectedIndex(this NavigationList control, ObservableValue<int> source)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(source);
+        control.SetBinding(NavigationList.SelectedIndexProperty, source);
+        return control;
+    }
+
+    #endregion
+
+    #region NavigationView
+
+    /// <summary>Sets the navigation pane width.</summary>
+    public static NavigationView PaneWidth(this NavigationView view, double width)
+    {
+        view.PaneWidth = width;
+        return view;
+    }
+
+    /// <summary>Adds a selection changed handler.</summary>
+    public static NavigationView OnSelectionChanged(this NavigationView view, Action<object?> handler)
+    {
+        view.SelectionChanged += handler;
+        return view;
+    }
+
+    /// <summary>
+    /// Configures the navigation pane items, their icons, and the selected-item-to-content mapping in one
+    /// typed call. Rows show an icon (when provided) plus text; <see cref="NavigationItemKind.Header"/> rows
+    /// are bold group titles, items are indented, and text is hidden when the pane is compact.
+    /// </summary>
+    public static NavigationView Items<T>(
+        this NavigationView view,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, PathGeometry?>? icon = null,
+        Func<T, Element?>? content = null,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(textSelector);
+
+        ApplyNavItems(view, view.Pane, items, textSelector, icon, kind, keySelector);
+        if (content != null)
+        {
+            view.ContentSelector = o => o is T t ? content(t) : null;
+        }
+        return view;
+    }
+
+    /// <summary>
+    /// Configures the bottom-pinned footer items (e.g. a Settings entry) with the same shape as the main
+    /// <c>Items</c> call. Selection is shared with the main items, so only one entry is selected across the
+    /// whole pane and its content shows in the content region.
+    /// </summary>
+    public static NavigationView FooterItems<T>(
+        this NavigationView view,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, PathGeometry?>? icon = null,
+        Func<T, Element?>? content = null,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(textSelector);
+
+        ApplyNavItems(view, view.FooterPane, items, textSelector, icon, kind, keySelector);
+        if (content != null)
+        {
+            view.FooterContentSelector = o => o is T t ? content(t) : null;
+        }
+        return view;
+    }
+
+    // Shared row template used by both the main and footer lists; both read the same pane mode from the view.
+    private static void ApplyNavItems<T>(
+        NavigationView view,
+        NavigationList pane,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, PathGeometry?>? icon,
+        Func<T, NavigationItemKind>? kind,
+        Func<T, object?>? keySelector)
+    {
+        pane.ItemsSource = ItemsView.Create(items, textSelector, keySelector);
+        pane.KindSelector = kind == null ? null : o => kind((T)o!);
+        pane.ItemTemplate = new DelegateTemplate<T>(
+            build: _ =>
+            {
+                var iconShape = new PathShape()
+                    .Stretch(Stretch.Uniform).Size(16).CenterVertical();
+                // Icon fill follows the inherited foreground, so it tracks theme, app overrides, and disabled
+                // dimming exactly like the text label.
+                var factory = Application.DefaultGraphicsFactory;
+                iconShape.Bind(Shape.FillProperty, iconShape, Control.ForegroundProperty,
+                    (Color color) => (IBrush)factory.CreateSolidColorBrush(color));
+                var label = new TextBlock().CenterVertical();
+                return new StackPanel().Horizontal().Spacing(10).CenterVertical().Children(iconShape, label);
+            },
+            bind: (element, item, index, ctx) =>
+            {
+                var row = (StackPanel)element;
+                var iconShape = (PathShape)row.Children[0];
+                var label = (TextBlock)row.Children[1];
+                bool isHeader = (kind == null ? NavigationItemKind.Item : kind(item)) == NavigationItemKind.Header;
+                bool rail = view.PaneIsRail;
+                bool showText = view.PaneShowsText;
+
+                iconShape.Data = icon?.Invoke(item);
+
+                if (isHeader)
+                {
+                    // Group headers: small uppercase with space above, no icon. In the compact rail they collapse to a spacer.
+                    iconShape.IsVisible = false;
+                    label.IsVisible = !rail && showText;
+                    label.Text = textSelector(item).ToUpperInvariant();
+                    label.FontSize = 11;
+                    label.FontWeight = MewUI.FontWeight.SemiBold;
+                    row.Margin = new Thickness(0, 12, 0, 2);
+                    row.HorizontalAlignment = MewUI.HorizontalAlignment.Left;
+                }
+                else
+                {
+                    // Items: larger text, indented under their group header; icon-only and centered in the rail.
+                    iconShape.IsVisible = iconShape.Data != null;
+                    label.IsVisible = showText;
+                    label.Text = textSelector(item);
+                    label.FontSize = 13;
+                    label.FontWeight = MewUI.FontWeight.Normal;
+                    row.Margin = showText && !rail ? new Thickness(12, 0, 0, 0) : default;
+                    row.HorizontalAlignment = rail ? MewUI.HorizontalAlignment.Center : MewUI.HorizontalAlignment.Left;
+                }
+
+                // Compact rail hides the label; surface it as a tooltip on the host so icons stay identifiable.
+                if (element.Parent is Border host)
+                {
+                    host.ToolTip(rail && !isHeader ? textSelector(item) : null);
+                }
+            });
+    }
+
+    #endregion
+
     #region ItemsControl
 
     /// <summary>
