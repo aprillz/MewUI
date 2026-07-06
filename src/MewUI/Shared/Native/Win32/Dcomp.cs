@@ -14,9 +14,28 @@ internal static unsafe partial class Dcomp
     internal static readonly Guid IID_IDCompositionDevice = new("c37ea93a-e7aa-450d-b16f-9746cb0407f3");
     internal static readonly Guid IID_IDXGIDevice = new("54ec77fa-1377-44e6-8c32-88fd5f44c84c");
 
+    // DirectComposition (dcomp.dll) is Windows 8+. On Win7 the DLL is absent, so callers must
+    // gate on this before touching the composition swap-chain path and fall back to the layered
+    // (UpdateLayeredWindow) transparency mode. Probed once; the P/Invokes never get a chance to
+    // throw DllNotFoundException when this is false.
+    internal static readonly bool IsAvailable = CheckAvailable();
+
+    private static bool CheckAvailable()
+    {
+        try
+        {
+            return NativeLibrary.TryLoad("dcomp.dll", out nint handle)
+                && NativeLibrary.TryGetExport(handle, "DCompositionCreateDevice", out _);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// Creates a DirectComposition device against a Direct3D device exposed through DXGI.
-    /// The first parameter must be an <c>IDXGIDevice</c> — callers QueryInterface from
+    /// The first parameter must be an <c>IDXGIDevice</c> - callers QueryInterface from
     /// their <c>ID3D11Device</c> first.
     /// </summary>
     [LibraryImport("dcomp.dll")]
@@ -69,7 +88,7 @@ internal static unsafe partial class Dcomp
         return fn(target, visual);
     }
 
-    // IDCompositionVisual (IUnknown 0-2). SetContent is at vtbl[15] — order:
+    // IDCompositionVisual (IUnknown 0-2). SetContent is at vtbl[15] - order:
     //   3  SetOffsetX(float)
     //   4  SetOffsetX(IDCompositionAnimation*)
     //   5  SetOffsetY(float)
