@@ -167,9 +167,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     public static readonly MewProperty<bool> AcceptTabProperty =
         MewProperty<bool>.Register<TextBase>(nameof(AcceptTab), false, MewPropertyOptions.None);
 
-    public static readonly MewProperty<bool> AcceptReturnProperty =
-        MewProperty<bool>.Register<TextBase>(nameof(AcceptReturn), false, MewPropertyOptions.None);
-
     /// <summary>
     /// Gets or sets the placeholder text shown when the control is empty.
     /// </summary>
@@ -206,11 +203,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         set => SetValue(AcceptTabProperty, value);
     }
 
-    public bool AcceptReturn
-    {
-        get => GetValue(AcceptReturnProperty);
-        set => SetValue(AcceptReturnProperty, value);
-    }
+    protected bool AcceptReturn { get; set; }
 
     public int CaretPosition
     {
