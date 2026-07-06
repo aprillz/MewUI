@@ -35,61 +35,63 @@ public class NativeCustomWindow : Window
     }
 
 
-    private static readonly Style ChromeButtonStyle = new(typeof(Button))
-    {
-        Transitions = [Transition.Create(Control.BackgroundProperty)],
-        Setters =
-        [
-            Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace.WithAlpha(0)),
-            Setter.Create(Control.BorderThicknessProperty, 0.0),
-            Setter.Create(Control.CornerRadiusProperty, 0.0),
-            Setter.Create(Control.PaddingProperty, new Thickness(0)),
-        ],
-        Triggers =
-        [
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Hot,
-                Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace)],
-            },
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Pressed,
-                Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
-            },
-        ],
-    };
+    private static Style CreateChromeButtonStyle()
+        => new(typeof(Button))
+        {
+            Transitions = [Transition.Create(Control.BackgroundProperty)],
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace.WithAlpha(0)),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+                Setter.Create(Control.PaddingProperty, new Thickness(0)),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace)],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
+                },
+            ],
+        };
 
-    private static readonly Style CloseButtonStyle = new(typeof(Button))
-    {
-        Transitions = [Transition.Create(Control.BackgroundProperty)],
-        Setters =
-        [
-            Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35).WithAlpha(0)),
-            Setter.Create(Control.BorderThicknessProperty, 0.0),
-            Setter.Create(Control.CornerRadiusProperty, 0.0),
-            Setter.Create(Control.PaddingProperty, new Thickness(0)),
-        ],
-        Triggers =
-        [
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Hot,
-                Setters = [
-                    Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35)),
-                    Setter.Create(Control.ForegroundProperty, Color.White),
-                ],
-            },
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Pressed,
-                Setters = [
-                    Setter.Create(Control.BackgroundProperty, Color.FromRgb(200, 12, 28)),
-                    Setter.Create(Control.ForegroundProperty, Color.White),
-                ],
-            },
-        ],
-    };
+    private static Style CreateCloseButtonStyle()
+        => new(typeof(Button))
+        {
+            Transitions = [Transition.Create(Control.BackgroundProperty)],
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35).WithAlpha(0)),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+                Setter.Create(Control.PaddingProperty, new Thickness(0)),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [
+                        Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35)),
+                        Setter.Create(Control.ForegroundProperty, Color.White),
+                    ],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [
+                        Setter.Create(Control.BackgroundProperty, Color.FromRgb(200, 12, 28)),
+                        Setter.Create(Control.ForegroundProperty, Color.White),
+                    ],
+                },
+            ],
+        };
 
     public NativeCustomWindow()
     {
@@ -97,8 +99,8 @@ public class NativeCustomWindow : Window
         base.Padding = new Thickness(0);
 
         StyleSheet = new StyleSheet();
-        StyleSheet.Define("chrome", ChromeButtonStyle);
-        StyleSheet.Define("close", CloseButtonStyle);
+        StyleSheet.Define("chrome", CreateChromeButtonStyle);
+        StyleSheet.Define("close", CreateCloseButtonStyle);
 
         // Title text
         var titleText = new TextBlock

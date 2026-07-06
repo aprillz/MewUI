@@ -19,7 +19,7 @@ public class CustomWindow : Window
     private const double ChromeButtonSize = 4;
     private const double ChromeCornerRadius = 8;
     private const double ShadowExtent = 12;
-    private const double ShadowOffset = 2; 
+    private const double ShadowOffset = 2;
     private readonly ShadowDecorator _shadow;
     private readonly Border _contentArea;
     private readonly Border _chromeBorder;
@@ -31,61 +31,63 @@ public class CustomWindow : Window
     private readonly Button _minimizeBtn;
     private readonly Button _maximizeBtn;
 
-    private static readonly Style ChromeButtonStyle = new(typeof(Button))
-    {
-        Transitions = [Transition.Create(Control.BackgroundProperty)],
-        Setters =
-        [
-            Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace.WithAlpha(0)),
-            Setter.Create(Control.BorderThicknessProperty, 0.0),
-            Setter.Create(Control.CornerRadiusProperty, 0.0),
-            Setter.Create(Control.PaddingProperty, new Thickness(0)),
-        ],
-        Triggers =
-        [
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Hot,
-                Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace)],
-            },
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Pressed,
-                Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
-            },
-        ],
-    };
+    private static Style CreateChromeButtonStyle()
+        => new(typeof(Button))
+        {
+            Transitions = [Transition.Create(Control.BackgroundProperty)],
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace.WithAlpha(0)),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+                Setter.Create(Control.PaddingProperty, new Thickness(0)),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace)],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
+                },
+            ],
+        };
 
-    private static readonly Style CloseButtonStyle = new(typeof(Button))
-    {
-        Transitions = [Transition.Create(Control.BackgroundProperty)],
-        Setters =
-        [
-            Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35).WithAlpha(0)),
-            Setter.Create(Control.BorderThicknessProperty, 0.0),
-            Setter.Create(Control.CornerRadiusProperty, 0.0),
-            Setter.Create(Control.PaddingProperty, new Thickness(0)),
-        ],
-        Triggers =
-        [
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Hot,
-                Setters = [
-                    Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35)),
-                    Setter.Create(Control.ForegroundProperty, Color.White),
-                ],
-            },
-            new StateTrigger
-            {
-                Match = VisualStateFlags.Pressed,
-                Setters = [
-                    Setter.Create(Control.BackgroundProperty, Color.FromRgb(200, 12, 28)),
-                    Setter.Create(Control.ForegroundProperty, Color.White),
-                ],
-            },
-        ],
-    };
+    private static Style CreateCloseButtonStyle()
+        => new(typeof(Button))
+        {
+            Transitions = [Transition.Create(Control.BackgroundProperty)],
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35).WithAlpha(0)),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.CornerRadiusProperty, 0.0),
+                Setter.Create(Control.PaddingProperty, new Thickness(0)),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [
+                        Setter.Create(Control.BackgroundProperty, Color.FromRgb(232, 17, 35)),
+                        Setter.Create(Control.ForegroundProperty, Color.White),
+                    ],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [
+                        Setter.Create(Control.BackgroundProperty, Color.FromRgb(200, 12, 28)),
+                        Setter.Create(Control.ForegroundProperty, Color.White),
+                    ],
+                },
+            ],
+        };
 
     public CustomWindow()
     {
@@ -94,17 +96,19 @@ public class CustomWindow : Window
         base.Padding = new Thickness(0);
 
         StyleSheet = new StyleSheet();
-        StyleSheet.Define("chrome", ChromeButtonStyle);
-        StyleSheet.Define("close", CloseButtonStyle);
+        StyleSheet.Define("chrome", CreateChromeButtonStyle);
+        StyleSheet.Define("close", CreateCloseButtonStyle);
 
         // Title text
-        var titleText = new TextBlock()
-            .IsHitTestVisible(false)
-            .FontWeight(FontWeight.SemiBold)
-            .FontSize(13)
-            .Margin(new Thickness(8, 0))
-            .HorizontalAlignment(HorizontalAlignment.Center)
-            .VerticalAlignment(VerticalAlignment.Center);
+        var titleText = new TextBlock
+        {
+            IsHitTestVisible = false,
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 13,
+            Margin = new Thickness(8, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
         titleText.SetBinding(TextBlock.TextProperty, this, TitleProperty);
         _titleText = titleText;
 
@@ -138,27 +142,36 @@ public class CustomWindow : Window
         _rightArea = new StackPanel { Orientation = Orientation.Horizontal };
 
         // Title bar
-        _titleBar = new Border
-        {
-            Padding = new Thickness(0),
-            MinHeight = TitleBarHeight,
-        };
-        _titleBar.Child = new DockPanel().Children(
-            new Border().DockRight().Child(_controlButtons),
-            new Border().DockRight().Child(_rightArea),
-            new Border().DockLeft().Child(_leftArea),
-            titleText
-        );
+        _titleBar = new Border()
+            .Padding(new Thickness(0))
+            .MinHeight(TitleBarHeight)
+            .Child(
+                new DockPanel()
+                    .Children(
+                        new Border()
+                            .DockRight()
+                            .Child(_controlButtons),
 
-        // DragMove on title bar
-        _titleBar.MouseDown += e =>
-        {
-            if (e.Button == MouseButton.Left)
+                        new Border()
+                            .DockRight()
+                            .Child(_rightArea),
+
+                        new Border()
+                            .DockLeft()
+                            .Child(_leftArea),
+
+                        titleText
+                    )
+            )
+            .OnMouseDown(e =>
             {
-                DragMove();
-                e.Handled = true;
-            }
-        };
+                if (e.Button == MouseButton.Left)
+                {
+                    DragMove();
+                    e.Handled = true;
+                }
+            });
+
         _titleBar.SetBinding(BackgroundProperty, this, BackgroundProperty);
 
         // Title bar: double-click to maximize/restore
@@ -195,7 +208,7 @@ public class CustomWindow : Window
             Child = new DockPanel().Children(
                 _titleBar.DockTop(),
                 _contentArea
-			)
+            )
         };
         _chromeBorder.WithTheme((t, b) => b.Background = t.Palette.WindowBackground);
         _chromeBorder.SetBinding(Border.BorderBrushProperty, this, BorderBrushProperty);
@@ -223,7 +236,6 @@ public class CustomWindow : Window
         Activated += UpdateChromeAppearance;
         Deactivated += UpdateChromeAppearance;
         this.WithTheme((_, _) => UpdateChromeAppearance());
-
     }
 
     /// <summary>Left area of the title bar (e.g. MenuBar).</summary>
@@ -312,4 +324,3 @@ public static class CustomWindowExtensions
         return cw;
     }
 }
-
