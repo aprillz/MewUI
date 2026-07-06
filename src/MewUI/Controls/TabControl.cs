@@ -8,6 +8,7 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class TabControl : Control
     , IVisualTreeHost
+    , IFocusTraversalScope
 {
     private readonly List<TabItem> _tabs = new();
     private readonly StackPanel _headerStrip;
@@ -236,6 +237,8 @@ public sealed class TabControl : Control
         var content = SelectedTab?.Content;
         return content == null || visitor(content);
     }
+
+    Element? IFocusTraversalScope.ActiveTraversalRoot => SelectedTab?.Content;
 
     public void AddTabs(params TabItem[] tabs)
     {
