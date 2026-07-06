@@ -190,7 +190,7 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)wrapping,
             (int)trimming));
 
-        if (!_textCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, text, out var entry))
         {
             var bmp = FreeTypeText.Rasterize(
                 text,
@@ -202,7 +202,7 @@ internal sealed partial class MewVGX11GraphicsContext
                 verticalAlignment,
                 wrapping,
                 trimming);
-            entry = _textCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, text, ref bmp);
         }
 
         if (entry.ImageId == 0)
@@ -339,7 +339,7 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming));
 
-        if (!_textCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, text, out var entry))
         {
             var bmp = FreeTypeText.Rasterize(
                 text,
@@ -351,7 +351,7 @@ internal sealed partial class MewVGX11GraphicsContext
                 format.VerticalAlignment,
                 format.Wrapping,
                 format.Trimming);
-            entry = _textCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, text, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -567,6 +567,7 @@ internal sealed partial class MewVGX11GraphicsContext
                 _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
             }
             TextCache.ReleasePendingDeletes();
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
             _resources.SetSwapInterval(GetSwapInterval());
             _resources.SwapBuffers(_display, _window);
             _resources.ReleaseCurrent();
@@ -620,6 +621,7 @@ internal sealed partial class MewVGX11GraphicsContext
             // Per-NVG drain - only this offscreen NVG's pending image-id deletions, on its
             // own thread inside its EndFrame. Avoids racing the window NVG mid-frame.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
             if (_offscreenProvider.ExitSession())
             {
                 _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();

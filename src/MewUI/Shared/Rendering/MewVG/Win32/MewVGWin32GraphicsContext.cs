@@ -220,12 +220,12 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)horizontalAlignment, (int)verticalAlignment,
             (int)wrapping, (int)trimming), needsLinear);
 
-        if (!_textCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, text, out var entry))
         {
             var bmp = OpenGLTextRasterizer.Rasterize(
                 _frameSession.Hdc, gdiFont, text, widthPx, heightPx, color,
                 horizontalAlignment, verticalAlignment, wrapping, trimming);
-            entry = _textCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, text, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -391,7 +391,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming), needsLinear);
 
-        if (!_textCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, text, out var entry))
         {
             var bmp = OpenGLTextRasterizer.Rasterize(
                 _frameSession.Hdc,
@@ -404,7 +404,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 format.VerticalAlignment,
                 format.Wrapping,
                 format.Trimming);
-            entry = _textCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, text, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -617,6 +617,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             // its own pending bucket from its own EndFrame on the thread that owns it.
             _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
             TextCache.ReleasePendingDeletes();
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
             _resources.SetSwapInterval(GetSwapInterval());
             _resources.SwapBuffers(_hdc, _hwnd);
         }
@@ -678,6 +679,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
             }
             TextCache.ReleasePendingDeletes();
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
             _resources.ReleaseCurrent();
         }
 
@@ -737,6 +739,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             // on this NVG instance without racing a concurrent BeginFrame...EndFrame on the
             // window thread.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
             bool outermost = _offscreenProvider.ExitSession();
             if (outermost)
             {

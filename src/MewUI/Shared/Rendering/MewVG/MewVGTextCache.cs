@@ -37,14 +37,16 @@ internal sealed class MewVGTextCache : IDisposable
         _vg = vg;
     }
 
-    public bool TryGet(MewVGTextCacheKey key, out MewVGTextEntry entry)
+    public bool TryGet(MewVGTextCacheKey key, ReadOnlySpan<char> text, out MewVGTextEntry entry)
     {
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(MewVGTextCache));
         }
 
-        if (_map.TryGetValue(key, out var node))
+        // Key.Core.TextHash only narrows the dictionary bucket; two different strings can share
+        // a hash, so the actual text is checked here and a mismatch is treated as a miss.
+        if (_map.TryGetValue(key, out var node) && text.SequenceEqual(node.Value.Text))
         {
             _lru.Remove(node);
             _lru.AddFirst(node);
@@ -56,7 +58,7 @@ internal sealed class MewVGTextCache : IDisposable
         return false;
     }
 
-    public MewVGTextEntry CreateImage(MewVGTextCacheKey key, ref TextBitmap bmp)
+    public MewVGTextEntry CreateImage(MewVGTextCacheKey key, ReadOnlySpan<char> text, ref TextBitmap bmp)
     {
         if (_disposed)
         {
@@ -82,7 +84,7 @@ internal sealed class MewVGTextCache : IDisposable
 
         var entry = new MewVGTextEntry(imageId, bmp.WidthPx, bmp.HeightPx, 0, 0, bmp.WidthPx, bmp.HeightPx);
         long bytes = EstimateBytes(bmp.WidthPx, bmp.HeightPx);
-        var newNode = new LinkedListNode<CacheEntry>(new CacheEntry(key, entry, bytes));
+        var newNode = new LinkedListNode<CacheEntry>(new CacheEntry(key, text.ToString(), entry, bytes));
         _lru.AddFirst(newNode);
         _map[key] = newNode;
         _currentBytes += bytes;
@@ -185,9 +187,12 @@ internal sealed class MewVGTextCache : IDisposable
             return;
         }
 
-        _disposed = true;
+        // Clear() and ReleasePendingDeletes() both early-return once _disposed is set,
+        // so both must run before the flag flips or their releases would be dropped.
         Clear();
+        ReleasePendingDeletes();
+        _disposed = true;
     }
 
-    private readonly record struct CacheEntry(MewVGTextCacheKey Key, MewVGTextEntry Entry, long Bytes);
+    private readonly record struct CacheEntry(MewVGTextCacheKey Key, string Text, MewVGTextEntry Entry, long Bytes);
 }

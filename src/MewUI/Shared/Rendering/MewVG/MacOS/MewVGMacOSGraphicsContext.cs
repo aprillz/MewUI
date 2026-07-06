@@ -283,6 +283,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             // offscreen NVG entries stay queued until the worker session's EndFrame.
             _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
             TextCache.ReleasePendingDeletes();
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
         }
 
         public void DisposeContext(MewVGMacOSGraphicsContext context)
@@ -344,6 +345,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             // EndFrame on the thread that owns it - only safe time to call DeleteImage on
             // this NVG without racing the window NVG mid-frame on another thread.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
         }
 
         public void DisposeContext(MewVGMacOSGraphicsContext context)

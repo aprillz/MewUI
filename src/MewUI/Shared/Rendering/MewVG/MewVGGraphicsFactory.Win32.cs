@@ -17,11 +17,12 @@ public sealed partial class MewVGWin32GraphicsFactory
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
         new MewVGGLOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
 
-#pragma warning disable CS0649
-    [ThreadStatic]
-    private static nint _pixelSurfacePresentHwnd;
-    [ThreadStatic]
-    private static nint _pixelSurfacePresentHdc;
+    // Instance-scoped (not static): this state is per-factory, and [ThreadStatic] only applies
+    // to static fields, so per-thread isolation is provided by ThreadLocal<T> instead. A static
+    // field here would let a second factory instance (or any future multi-instance scenario)
+    // clobber another instance's in-flight present state.
+    private readonly ThreadLocal<nint> _pixelSurfacePresentHwnd = new();
+    private readonly ThreadLocal<nint> _pixelSurfacePresentHdc = new();
     /// <summary>
     /// The specific pixel surface that the layered-window present is rendering
     /// INTO. Set by <see cref="MewVGWin32LayeredPresenter.Present"/>. Distinguishes
@@ -30,10 +31,8 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// targets must not share the layered window's NVG instance, otherwise
     /// their <c>BeginFrame</c> wipes out main's accumulated draw commands.
     /// </summary>
-    [ThreadStatic]
-    private static OpenGLPixelRenderSurface? _pixelSurfacePresentTarget;
-#pragma warning restore CS0649
-    
+    private readonly ThreadLocal<OpenGLPixelRenderSurface?> _pixelSurfacePresentTarget = new();
+
     public string Backend => BackendIdentifier;
 
     private MewVGWin32LayeredPresenter LayeredPresenter => _layeredPresenterField ??= new MewVGWin32LayeredPresenter(_offscreenProvider, () => SharedWorkerContext);
@@ -147,14 +146,14 @@ public sealed partial class MewVGWin32GraphicsFactory
             return;
         }
 
-        var hwnd = _pixelSurfacePresentHwnd;
-        var hdc = _pixelSurfacePresentHdc;
+        var hwnd = _pixelSurfacePresentHwnd.Value;
+        var hdc = _pixelSurfacePresentHdc.Value;
         // Layered window's primary pixel surface is the one passed to Present;
         // anything else (filter / pattern scratch FBOs) must use the
         // single-context offscreen path so its NVG.BeginFrame doesn't reset
         // the layered window's shared NVG mid-render.
         bool isLayeredPresentTarget = hwnd != 0 && hdc != 0
-            && ReferenceEquals(_pixelSurfacePresentTarget, pixelSurface);
+            && ReferenceEquals(_pixelSurfacePresentTarget.Value, pixelSurface);
         if (!isLayeredPresentTarget)
         {
             // Single-context offscreen: stay on whatever HGLRC is currently
@@ -213,18 +212,18 @@ public sealed partial class MewVGWin32GraphicsFactory
             opacity,
             render: ctx =>
             {
-                _pixelSurfacePresentHwnd = ctx.Hwnd;
-                _pixelSurfacePresentHdc = ctx.Hdc;
-                _pixelSurfacePresentTarget = ctx.RenderTarget;
+                _pixelSurfacePresentHwnd.Value = ctx.Hwnd;
+                _pixelSurfacePresentHdc.Value = ctx.Hdc;
+                _pixelSurfacePresentTarget.Value = ctx.RenderTarget;
                 try
                 {
                     window.RenderFrameToSurface(ctx.RenderTarget);
                 }
                 finally
                 {
-                    _pixelSurfacePresentTarget = null;
-                    _pixelSurfacePresentHwnd = 0;
-                    _pixelSurfacePresentHdc = 0;
+                    _pixelSurfacePresentTarget.Value = null;
+                    _pixelSurfacePresentHwnd.Value = 0;
+                    _pixelSurfacePresentHdc.Value = 0;
                 }
             });
     }
@@ -234,6 +233,9 @@ public sealed partial class MewVGWin32GraphicsFactory
         _layeredPresenterField?.Dispose();
         _offscreenProvider.Dispose();
         DisposeWorkerContext();
+        _pixelSurfacePresentHwnd.Dispose();
+        _pixelSurfacePresentHdc.Dispose();
+        _pixelSurfacePresentTarget.Dispose();
     }
 
     // -------------------------------------------------------------------------
