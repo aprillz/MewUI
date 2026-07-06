@@ -284,6 +284,12 @@ internal static partial class Gdi32
     [LibraryImport(LibraryName)]
     public static partial nint CreateDIBSection(nint hdc, ref BITMAPINFO pbmi, uint usage, out nint ppvBits, nint hSection, uint offset);
 
+    // Flushes the calling thread's GDI batch so DIB-section bytes are settled before a
+    // consumer (e.g. UpdateLayeredWindow) reads them after GDI-backed rendering.
+    [LibraryImport(LibraryName)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GdiFlush();
+
     [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool BitBlt(nint hdc, int x, int y, int cx, int cy, nint hdcSrc, int x1, int y1, uint rop);
