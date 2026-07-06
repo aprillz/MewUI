@@ -57,8 +57,8 @@ internal interface IPlatformHost : IDisposable
     /// <summary>
     /// Gets the DPI value for a specific window.
     /// </summary>
-    /// <param name="hwnd">Native window handle.</param>
-    uint GetDpiForWindow(nint hwnd);
+    /// <param name="windowHandle">Native window handle.</param>
+    uint GetDpiForWindow(nint windowHandle);
 
     /// <summary>
     /// Enables per-monitor DPI awareness if supported by the platform.

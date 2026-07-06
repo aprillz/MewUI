@@ -209,5 +209,5 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
 /// </summary>
 public interface IWindowResourceReleaser
 {
-    void ReleaseWindowResources(nint hwnd);
+    void ReleaseWindowResources(nint windowHandle);
 }

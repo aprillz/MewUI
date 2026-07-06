@@ -36,7 +36,7 @@ internal sealed class TracingPlatformHost : IPlatformHost
 
     public ThemeVariant GetSystemThemeVariant() => _inner.GetSystemThemeVariant();
 
-    public uint GetDpiForWindow(nint hwnd) => _inner.GetDpiForWindow(hwnd);
+    public uint GetDpiForWindow(nint windowHandle) => _inner.GetDpiForWindow(windowHandle);
 
     public bool EnablePerMonitorDpiAwareness() => _inner.EnablePerMonitorDpiAwareness();
 
