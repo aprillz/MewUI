@@ -38,8 +38,16 @@ public sealed class DockPanel : Panel
     {
         ArgumentNullException.ThrowIfNull(element);
 
-        DockMap.GetOrCreateValue(element).Dock = dock;
-        element.InvalidateArrange();
+        var data = DockMap.GetOrCreateValue(element);
+        if (data.Dock == dock)
+        {
+            return;
+        }
+
+        data.Dock = dock;
+        // Dock side determines the measurement axis (see ArrangeContent/MeasureContent below),
+        // so a dock change must invalidate measure, not just arrange.
+        element.InvalidateMeasure();
     }
 
     /// <summary>
