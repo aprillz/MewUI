@@ -294,18 +294,7 @@ public sealed partial class ComboBox : DropDownBase
         }
 
         var client = window.ClientSize;
-        double x = bounds.X;
-
-        // Clamp horizontally to client area.
-        if (x + width > client.Width)
-        {
-            x = Math.Max(0, client.Width - width);
-        }
-
-        if (x < 0)
-        {
-            x = 0;
-        }
+        double x = PopupPlacement.ClampHorizontal(bounds.X, width, client.Width, floorToZero: true);
 
         // Do not measure the popup ListBox with infinite height; it can reset its scroll state.
         double itemHeight = ResolveItemHeight();
@@ -315,40 +304,7 @@ public sealed partial class ComboBox : DropDownBase
         double desiredClamped = Math.Min(desiredHeight, maxHeight);
 
         double belowY = bounds.Bottom;
-        double availableBelow = Math.Max(0, client.Height - belowY);
-        double availableAbove = Math.Max(0, bounds.Y);
-
-        bool preferBelow = availableBelow >= availableAbove;
-
-        double height;
-        double y;
-
-        if (preferBelow)
-        {
-            if (availableBelow > 0 || availableAbove <= 0)
-            {
-                y = belowY;
-                height = Math.Min(desiredClamped, availableBelow);
-            }
-            else
-            {
-                height = Math.Min(desiredClamped, availableAbove);
-                y = bounds.Y - height;
-            }
-        }
-        else
-        {
-            if (availableAbove > 0 || availableBelow <= 0)
-            {
-                height = Math.Min(desiredClamped, availableAbove);
-                y = bounds.Y - height;
-            }
-            else
-            {
-                y = belowY;
-                height = Math.Min(desiredClamped, availableBelow);
-            }
-        }
+        var (y, height) = PopupPlacement.ResolveVerticalPreferMoreSpace(bounds.Y, belowY, client.Height, desiredClamped);
 
         return new Rect(x, y, width, height);
     }

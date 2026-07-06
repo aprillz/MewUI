@@ -191,13 +191,8 @@ public sealed class ContextMenu : Control, IPopupOwner
             height = Math.Min(height, maxH);
         }
 
-        double x = positionInWindow.X;
+        double x = PopupPlacement.ClampHorizontal(positionInWindow.X, width, client.Width, floorToZero: false);
         double y = positionInWindow.Y;
-
-        if (x + width > client.Width)
-        {
-            x = Math.Max(0, client.Width - width);
-        }
 
         if (y + height > client.Height)
         {
