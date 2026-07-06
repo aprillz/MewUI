@@ -464,11 +464,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        // Coalesce invalidations.
-        if (Interlocked.Exchange(ref _needsRender, 1) == 1)
-        {
-            return;
-        }
+        // Coalesce the render flag, but always wake the loop: a stale pending flag from a previous frame must still produce a wake, otherwise a drain-time invalidation can be swallowed.
+        Interlocked.Exchange(ref _needsRender, 1);
 
         _host.RequestRender();
     }
