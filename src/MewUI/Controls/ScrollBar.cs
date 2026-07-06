@@ -29,6 +29,12 @@ public sealed class ScrollBar : RangeBase
     private double _dragStartValue;
     private WheelNotchAccumulator _wheelAccumulator;
 
+    /// <summary>
+    /// Multiplies the rendered thumb alpha (0..1). Used by an owner to fade the bar in/out; layout and
+    /// hit-testing are unaffected.
+    /// </summary>
+    public double RenderOpacity { get; set; } = 1.0;
+
     private bool IsDragging
     {
         get => GetValue(IsDraggingProperty);
@@ -90,9 +96,19 @@ public sealed class ScrollBar : RangeBase
 
         var bounds = Bounds;
 
+        double opacity = Math.Clamp(RenderOpacity, 0, 1);
+        if (opacity <= 0)
+        {
+            return;
+        }
+
         var track = GetTrackRect(bounds, Theme);
         var thumb = GetThumbRect(track, Theme);
         var thumbColor = GetValue(BackgroundProperty);
+        if (opacity < 1)
+        {
+            thumbColor = thumbColor.WithAlpha((byte)Math.Round(thumbColor.A * opacity));
+        }
 
         double radius = Theme.Metrics.ScrollBarThickness / 2;
         if (thumb.Width > 0 && thumb.Height > 0 && thumbColor.A > 0)
