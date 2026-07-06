@@ -17,6 +17,7 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
     private static nint SelSetIcon;
     private static nint SelImageNamed;
     private static nint SelInitWithSize;
+    private static nint SelRelease;
 
     public bool? Show(nint owner, string text, string caption, NativeMessageBoxButtons buttons, NativeMessageBoxIcon icon)
     {
@@ -36,16 +37,23 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
         ObjC.MsgSend_void_nint_nint(alert, SelSetInformativeText, ObjC.CreateNSString(text ?? string.Empty));
         ObjC.MsgSend_void_nint_int(alert, SelSetAlertStyle, GetAlertStyle(icon));
 
-        var iconImage = CreateIconImage(icon);
+        var iconImage = CreateIconImage(icon, out bool ownsIconImage);
         if (iconImage != 0)
         {
             ObjC.MsgSend_void_nint_nint(alert, SelSetIcon, iconImage);
+            if (ownsIconImage)
+            {
+                // setIcon: retains; drop our alloc/init +1 so the alert is the sole owner.
+                ObjC.MsgSend_void(iconImage, SelRelease);
+            }
         }
 
         // Button ordering matters: NSAlert returns 1000 + index.
         AddButtons(alert, buttons);
 
         long response = ObjC.MsgSend_long(alert, SelRunModal);
+        // Balance the alloc/init +1; the alert is not reused across calls.
+        ObjC.MsgSend_void(alert, SelRelease);
         int index = (int)(response - 1000);
         return MapResult(buttons, index);
     }
@@ -72,12 +80,16 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
         SelSetIcon = ObjC.Sel("setIcon:");
         SelImageNamed = ObjC.Sel("imageNamed:");
         SelInitWithSize = ObjC.Sel("initWithSize:");
+        SelRelease = ObjC.Sel("release");
 
         _initialized = true;
     }
 
-    private static nint CreateIconImage(NativeMessageBoxIcon icon)
+    // ownsImage is true only for the alloc/init path; imageNamed: results are not owned by the caller.
+    private static nint CreateIconImage(NativeMessageBoxIcon icon, out bool ownsImage)
     {
+        ownsImage = false;
+
         // On macOS, NSAlert defaults to the app icon. If the app has no icon, this can look like a generic "folder/app" icon.
         // For NativeMessageBoxIcon.None we prefer not to show an icon at all, so we set an empty 1x1 NSImage.
         if (ClsNSImage == 0)
@@ -122,6 +134,7 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
         // Empty image to suppress the default app icon.
         nint img = ObjC.MsgSend_nint(ClsNSImage, SelAlloc);
         img = ObjC.MsgSend_nint_size(img, SelInitWithSize, new NSSize(1, 1));
+        ownsImage = img != 0;
         return img;
     }
 

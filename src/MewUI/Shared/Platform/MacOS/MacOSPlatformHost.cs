@@ -14,6 +14,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
     private nint _lastInputWindow;
     private int _themeUpdateRequested;
+    // 0 = the pump loop is active/running, 1 = it is blocked in WaitForNextEventDequeue.
+    private int _parked;
 
     public MacOSPlatformHost()
     {
@@ -110,7 +112,18 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
     internal void RequestRender()
     {
-        MacOSInterop.PostWakeEvent();
+        WakeIfParked();
+    }
+
+    // Post an OS wake only when the loop is actually parked. A request made while the loop is active is
+    // caught by the pre-park recheck (HasPendingWork / AnyWindowNeedsRender), so no wake is needed here;
+    // posting one anyway would linger in the event queue and cause a spurious extra wakeup on the next park.
+    private void WakeIfParked()
+    {
+        if (Volatile.Read(ref _parked) != 0)
+        {
+            MacOSInterop.PostWakeEvent();
+        }
     }
 
     private bool AnyWindowNeedsRender()
@@ -194,13 +207,19 @@ public sealed class MacOSPlatformHost : IPlatformHost
         ArgumentNullException.ThrowIfNull(mainWindow);
 
         _app = app;
+        var previousContext = SynchronizationContext.Current;
         _dispatcher = new MacOSDispatcher();
 
         // Ensure dispatcher wake can break the event wait.
-        _dispatcher.SetWake(static () =>
+        _dispatcher.SetWake(() =>
         {
-            // Post an empty event into the Cocoa queue.
-            MacOSInterop.PostWakeEvent();
+            // Only interrupt the OS wait when the loop is actually parked. A UI-thread post while the loop
+            // is active is picked up by the pre-park recheck below, so no wake event is needed (and posting
+            // one would linger in the event queue and cause a spurious extra wakeup).
+            if (Volatile.Read(ref _parked) != 0)
+            {
+                MacOSInterop.PostWakeEvent();
+            }
         });
 
         MacOSInterop.EnsureApplicationInitialized();
@@ -216,6 +235,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
         _running = true;
         app.Dispatcher = _dispatcher;
+        // Install the dispatcher as the SynchronizationContext so await continuations return to the UI thread.
+        SynchronizationContext.SetSynchronizationContext(_dispatcher);
 
         // Note: Window backend will create NSWindow on Show().
         mainWindow.Show();
@@ -226,6 +247,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
         app.Dispatcher = null;
         _app = null;
         MacOSInterop.TrySetThemeChangedCallback(null);
+        SynchronizationContext.SetSynchronizationContext(previousContext);
     }
 
     /// <summary>
@@ -305,6 +327,15 @@ public sealed class MacOSPlatformHost : IPlatformHost
             }
             else
             {
+                // Drain dispatcher work that cascaded during this iteration (e.g. a layout pass posting a
+                // render request at a priority already passed this Process() pass) so one update settles in a
+                // single render instead of spilling a second render into the next iteration.
+                int cascadeDrainGuard = 0;
+                while (_dispatcher!.HasPendingWork && cascadeDrainGuard < 8)
+                {
+                    _dispatcher.ProcessWorkItems();
+                    cascadeDrainGuard++;
+                }
                 try
                 {
                     RenderInvalidatedWindows();
@@ -372,6 +403,13 @@ public sealed class MacOSPlatformHost : IPlatformHost
                     timeoutMs = _dispatcher.GetPollTimeoutMs(maxMs: 1000);
                 }
             }
+
+            // Never park while any window needs render, because drains can invalidate after the render section already ran.
+            if (timeoutMs != 0 && AnyWindowNeedsRender())
+            {
+                timeoutMs = 0;
+            }
+
             bool updateWindows = timeoutMs == 0;
             if (timeoutMs == 0)
             {
@@ -379,21 +417,36 @@ public sealed class MacOSPlatformHost : IPlatformHost
             }
             else
             {
-                using var pool = new MacOSInterop.AutoReleasePool();
-                try
+                // Publish parked=1 BEFORE the final work check. Pair with the wake gate: a post that enqueued
+                // work and then read _parked==0 must have happened before we set _parked=1, so our recheck here
+                // sees that work and we do not block. A post that reads _parked==1 will post a wake that unblocks us.
+                // Interlocked.Exchange provides the full StoreLoad fence the double-checked park needs on ARM64.
+                Interlocked.Exchange(ref _parked, 1);
+                if (_dispatcher!.HasPendingWork || AnyWindowNeedsRender())
                 {
-                    if (MacOSInterop.WaitForNextEventDequeue(timeoutMs, updateWindows: false, out var ev))
-                    {
-                        ProcessSingleEvent(ev);
-                    }
-
-                    DrainEventsAndDispatcher();
+                    Volatile.Write(ref _parked, 0);
                 }
-                catch (Exception ex)
+                else
                 {
-                    if (!HandleLoopException(app, ex))
+                    using var pool = new MacOSInterop.AutoReleasePool();
+                    try
                     {
-                        break;
+                        bool gotEvent = MacOSInterop.WaitForNextEventDequeue(timeoutMs, updateWindows: false, out var ev);
+                        Volatile.Write(ref _parked, 0);
+                        if (gotEvent)
+                        {
+                            ProcessSingleEvent(ev);
+                        }
+
+                        DrainEventsAndDispatcher();
+                    }
+                    catch (Exception ex)
+                    {
+                        Volatile.Write(ref _parked, 0);
+                        if (!HandleLoopException(app, ex))
+                        {
+                            break;
+                        }
                     }
                 }
             }
@@ -703,6 +756,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
         }
 
         Interlocked.Exchange(ref _themeUpdateRequested, 1);
+        // Intentionally ungated: the pre-park recheck does not observe _themeUpdateRequested, so gating this
+        // wake on _parked (like WakeIfParked does) could delay a theme change until the next unrelated wake.
         MacOSInterop.PostWakeEvent();
     }
 

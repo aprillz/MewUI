@@ -464,11 +464,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        // Coalesce invalidations.
-        if (Interlocked.Exchange(ref _needsRender, 1) == 1)
-        {
-            return;
-        }
+        // Coalesce the render flag, but always wake the loop: a stale pending flag from a previous frame must still produce a wake, otherwise a drain-time invalidation can be swallowed.
+        Interlocked.Exchange(ref _needsRender, 1);
 
         _host.RequestRender();
     }
@@ -1345,7 +1342,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             _leftDown,
             _rightDown,
             _middleDown,
-            clickCount);
+            clickCount,
+            GetModifierKeys(ev));
     }
 
     // Trackpad point-delta → notch normalization.
@@ -1396,7 +1394,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         WindowInputRouter.MouseWheel(
             _window, pos, screenPos,
             new Vector(notchesX, notchesY),
-            _leftDown, _rightDown, _middleDown);
+            _leftDown, _rightDown, _middleDown, GetModifierKeys(ev));
     }
 
     private void HandleKeyDown(nint ev)
