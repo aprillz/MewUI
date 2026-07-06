@@ -104,7 +104,7 @@ public static class TreeItemsView
 /// Default <see cref="ITreeItemsView"/> implementation for a hierarchical data source.
 /// </summary>
 /// <typeparam name="T">Item type.</typeparam>
-public sealed class TreeItemsView<T> : ITreeItemsView
+public sealed class TreeItemsView<T> : ITreeItemsView, IMultiSelectableItemsView
 {
     private readonly Func<T, IReadOnlyList<T>> _childrenSelector;
     private readonly Func<T, string> _textSelector;
@@ -113,6 +113,10 @@ public sealed class TreeItemsView<T> : ITreeItemsView
     private readonly Func<T, bool>? _isExpandableSelector;
 
     private readonly HashSet<object?> _expandedKeys = new();
+    // Multi-selection is tracked by key (not index) so it survives expand/collapse rebuilds.
+    private readonly HashSet<object?> _selectedKeys = new();
+    private object? _anchorKey;
+    private ItemsSelectionMode _selectionMode = ItemsSelectionMode.Single;
     private readonly List<Entry> _visible = new();
     private readonly HashSet<INotifyCollectionChanged> _subscribedChildCollections =
         new(ReferenceEqualityComparer<INotifyCollectionChanged>.Instance);
@@ -181,8 +185,222 @@ public sealed class TreeItemsView<T> : ITreeItemsView
 
             _selectedIndex = clamped;
             _selectedKey = _selectedIndex >= 0 && _selectedIndex < Count ? _visible[_selectedIndex].Key : null;
+
+            // Keep the multi-selection set consistent with single-selection usage.
+            _selectedKeys.Clear();
+            if (_selectedKey != null)
+            {
+                _selectedKeys.Add(_selectedKey);
+            }
+            _anchorKey = _selectedKey;
+
             SelectionChanged?.Invoke(_selectedIndex);
+            SelectedIndicesChanged?.Invoke();
         }
+    }
+
+    /// <inheritdoc />
+    public ItemsSelectionMode SelectionMode
+    {
+        get => _selectionMode;
+        set
+        {
+            if (_selectionMode == value)
+            {
+                return;
+            }
+
+            _selectionMode = value;
+            if (_selectionMode == ItemsSelectionMode.Single)
+            {
+                CollapseSelectionToPrimary();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<int> SelectedIndices
+    {
+        get
+        {
+            if (_selectedKeys.Count == 0)
+            {
+                return Array.Empty<int>();
+            }
+
+            var indices = new List<int>(_selectedKeys.Count);
+            for (int i = 0; i < _visible.Count; i++)
+            {
+                if (_selectedKeys.Contains(_visible[i].Key))
+                {
+                    indices.Add(i);
+                }
+            }
+            return indices;
+        }
+    }
+
+    /// <inheritdoc />
+    public int AnchorIndex => _anchorKey != null ? IndexOfKey(_anchorKey) : -1;
+
+    /// <inheritdoc />
+    public event Action? SelectedIndicesChanged;
+
+    /// <inheritdoc />
+    public bool IsSelected(int index)
+        => index >= 0 && index < _visible.Count && _selectedKeys.Contains(_visible[index].Key);
+
+    /// <inheritdoc />
+    public void SelectSingle(int index)
+    {
+        _selectedKeys.Clear();
+        if (index >= 0 && index < _visible.Count)
+        {
+            var key = _visible[index].Key;
+            _selectedKeys.Add(key);
+            _anchorKey = key;
+            SetPrimaryIndex(index);
+        }
+        else
+        {
+            _anchorKey = null;
+            SetPrimaryIndex(-1);
+        }
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void ToggleSelected(int index)
+    {
+        if (index < 0 || index >= _visible.Count)
+        {
+            return;
+        }
+
+        var key = _visible[index].Key;
+        if (!_selectedKeys.Remove(key))
+        {
+            _selectedKeys.Add(key);
+        }
+        _anchorKey = key;
+        SetPrimaryIndex(ResolvePrimaryIndexAfterChange(index));
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void SetSelected(int index, bool selected)
+    {
+        if (index < 0 || index >= _visible.Count)
+        {
+            return;
+        }
+
+        var key = _visible[index].Key;
+        bool changed = selected ? _selectedKeys.Add(key) : _selectedKeys.Remove(key);
+        if (!changed)
+        {
+            return;
+        }
+
+        SetPrimaryIndex(ResolvePrimaryIndexAfterChange(index));
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void SelectRange(int anchorIndex, int targetIndex, bool clearExisting)
+    {
+        if (_visible.Count == 0)
+        {
+            return;
+        }
+
+        anchorIndex = ItemsView.ClampIndex(anchorIndex, _visible.Count);
+        targetIndex = ItemsView.ClampIndex(targetIndex, _visible.Count);
+        if (targetIndex < 0)
+        {
+            return;
+        }
+
+        if (clearExisting)
+        {
+            _selectedKeys.Clear();
+        }
+
+        if (anchorIndex < 0)
+        {
+            anchorIndex = targetIndex;
+        }
+
+        int low = Math.Min(anchorIndex, targetIndex);
+        int high = Math.Max(anchorIndex, targetIndex);
+        for (int i = low; i <= high; i++)
+        {
+            _selectedKeys.Add(_visible[i].Key);
+        }
+
+        SetPrimaryIndex(targetIndex);
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void ClearSelection()
+    {
+        if (_selectedKeys.Count == 0 && _selectedIndex < 0)
+        {
+            return;
+        }
+
+        _selectedKeys.Clear();
+        _anchorKey = null;
+        SetPrimaryIndex(-1);
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    // Sets the primary index and its key without resetting the multi-selection set.
+    private void SetPrimaryIndex(int index)
+    {
+        if (_selectedIndex == index)
+        {
+            // Key may need refresh if the visible row at this index changed.
+            _selectedKey = index >= 0 && index < _visible.Count ? _visible[index].Key : _selectedKey;
+            return;
+        }
+
+        _selectedIndex = index;
+        _selectedKey = index >= 0 && index < _visible.Count ? _visible[index].Key : null;
+        SelectionChanged?.Invoke(_selectedIndex);
+    }
+
+    private int ResolvePrimaryIndexAfterChange(int preferred)
+    {
+        if (preferred >= 0 && preferred < _visible.Count && _selectedKeys.Contains(_visible[preferred].Key))
+        {
+            return preferred;
+        }
+
+        for (int i = 0; i < _visible.Count; i++)
+        {
+            if (_selectedKeys.Contains(_visible[i].Key))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void CollapseSelectionToPrimary()
+    {
+        _selectedKeys.Clear();
+        if (_selectedKey != null)
+        {
+            _selectedKeys.Add(_selectedKey);
+            _anchorKey = _selectedKey;
+        }
+        else
+        {
+            _anchorKey = null;
+        }
+        SelectedIndicesChanged?.Invoke();
     }
 
     /// <summary>

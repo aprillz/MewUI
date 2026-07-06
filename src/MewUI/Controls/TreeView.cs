@@ -39,15 +39,69 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
 
             _itemsSource.Changed -= OnItemsChanged;
             _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+            if (_itemsSource is IMultiSelectableItemsView oldMulti)
+            {
+                oldMulti.SelectedIndicesChanged -= OnItemsSelectedIndicesChanged;
+            }
 
             _itemsSource = value;
             _itemsSource.Changed += OnItemsChanged;
             _itemsSource.SelectionChanged += OnItemsSelectionChanged;
+            if (_itemsSource is IMultiSelectableItemsView newMulti)
+            {
+                newMulti.SelectedIndicesChanged += OnItemsSelectedIndicesChanged;
+            }
+
+            // The old source's selection no longer applies; re-sync from the new source
+            // rather than leaving stale references to the previous source's item/node.
+            _selectedNode = _itemsSource.SelectedItem as TreeViewNode;
+            _selectedItem = _itemsSource.SelectedItem;
 
             _presenter.ItemsSource = _itemsSource;
             _presenter.RecycleAll();
             InvalidateItemBindings();
         }
+    }
+
+    private IMultiSelectableItemsView? MultiView => ScrollableItemsBase.AsMultiSelectable(_itemsSource);
+
+    /// <summary>
+    /// Gets or sets the selection mode. Requires a multi-selection-capable items source
+    /// (e.g. <see cref="TreeItemsView{T}"/>); otherwise stays <see cref="ItemsSelectionMode.Single"/>.
+    /// Range selection follows the flattened visible-row order. Parent/child propagation is not applied.
+    /// </summary>
+    public ItemsSelectionMode SelectionMode
+    {
+        get => ScrollableItemsBase.GetSelectionMode(_itemsSource);
+        set => ScrollableItemsBase.SetSelectionMode(_itemsSource, value);
+    }
+
+    /// <summary>Gets the selected visible-row indices in ascending order.</summary>
+    public IReadOnlyList<int> SelectedIndices => ScrollableItemsBase.GetSelectedIndices(_itemsSource);
+
+    /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
+    public event Action? SelectedIndicesChanged;
+
+    private bool IsRowSelected(int index) => ScrollableItemsBase.IsItemSelected(_itemsSource, index);
+
+    private void ApplyKeyboardSelect(int target, ModifierKeys modifiers)
+    {
+        var multi = MultiView;
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+        {
+            ItemsSelectionInput.HandleKeyboardMove(multi, target, (modifiers & ModifierKeys.Shift) != 0);
+        }
+        else
+        {
+            _itemsSource.SelectedIndex = target;
+        }
+    }
+
+    private void OnItemsSelectedIndicesChanged()
+    {
+        SelectedIndicesChanged?.Invoke();
+        InvalidateItemBindings();
+        InvalidateVisual();
     }
 
     /// <summary>
@@ -241,7 +295,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     {
         double itemRadius = _presenter.ItemRadius;
 
-        bool selected = i == _itemsSource.SelectedIndex;
+        bool selected = IsRowSelected(i);
         if (selected)
         {
             var selectionBg = Theme.Palette.SelectionBackground;
@@ -686,7 +740,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
                     tb.IsEnabled = enabled;
                 }
 
-                bool selected = index == _itemsSource.SelectedIndex;
+                bool selected = IsRowSelected(index);
                 var fg = !enabled
                     ? Theme.Palette.DisabledText
                     : selected ? Theme.Palette.SelectionText : Theme.Palette.WindowText;
@@ -727,7 +781,16 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             return;
         }
 
-        _itemsSource.SelectedIndex = index;
+        var multi = MultiView;
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
+        {
+            ItemsSelectionInput.HandleClick(multi, index, e.Modifiers);
+        }
+        else
+        {
+            _itemsSource.SelectedIndex = index;
+        }
+
         bool hasChildren = _itemsSource.GetHasChildren(index);
         if (hasChildren && (onGlyph || ExpandTrigger == TreeViewExpandTrigger.ClickNode))
         {
@@ -845,26 +908,26 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         int selected = _itemsSource.SelectedIndex;
         int current = selected >= 0 ? selected : 0;
 
+        var multiView = MultiView;
+        if (multiView != null && multiView.SelectionMode != ItemsSelectionMode.Single && ScrollableItemsBase.IsSelectAllShortcut(e))
+        {
+            multiView.SelectRange(0, count - 1, clearExisting: true);
+            e.Handled = true;
+            InvalidateVisual();
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.Up:
-                _itemsSource.SelectedIndex = Math.Max(0, current - 1);
-                e.Handled = true;
-                break;
-
             case Key.Down:
-                _itemsSource.SelectedIndex = Math.Min(count - 1, current + 1);
-                e.Handled = true;
-                break;
-
             case Key.Home:
-                _itemsSource.SelectedIndex = 0;
-                e.Handled = true;
-                break;
-
             case Key.End:
-                _itemsSource.SelectedIndex = count - 1;
-                e.Handled = true;
+                if (ScrollableItemsBase.TryGetListNavigationTarget(e.Key, current, count, pageStep: 1, supportsPaging: false, out int target))
+                {
+                    ApplyKeyboardSelect(target, e.Modifiers);
+                    e.Handled = true;
+                }
                 break;
 
             case Key.Space:
@@ -929,21 +992,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             return false;
         }
 
-        int found = -1;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (found != -1)
-            {
-                return;
-            }
-
-            if (VisualTree.IsInSubtreeOf(focusedElement, element))
-            {
-                found = i;
-            }
-        });
-
-        if (found < 0 || found >= _itemsSource.Count)
+        if (!ScrollableItemsBase.TryFindRealizedIndex(_presenter, focusedElement, out int found, out _) || found >= _itemsSource.Count)
         {
             return false;
         }
@@ -967,23 +1016,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             return false;
         }
 
-        int found = -1;
-        FrameworkElement? foundContainer = null;
-        _presenter.VisitRealized((i, element) =>
-        {
-            if (found != -1)
-            {
-                return;
-            }
-
-            if (VisualTree.IsInSubtreeOf(focusedElement, element))
-            {
-                found = i;
-                foundContainer = element;
-            }
-        });
-
-        if (found < 0 || foundContainer == null)
+        if (!ScrollableItemsBase.TryFindRealizedIndex(_presenter, focusedElement, out int found, out var foundContainer))
         {
             return false;
         }
