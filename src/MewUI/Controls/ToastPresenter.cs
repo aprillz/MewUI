@@ -8,10 +8,11 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal sealed class ToastPresenter : Control, IVisualTreeHost
 {
+    private const double SHADOW_BLUR_RADIUS = 24;
+    private const double SHADOW_OFFSET_Y = 4;
+
     private readonly TransitionContentControl _transition;
     private DispatcherTimer? _timer;
-    private const double ShadowBlurRadius = 24;
-    private const double ShadowOffsetY = 4;
 
     public ToastPresenter()
     {
@@ -29,17 +30,14 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
     /// </summary>
     public double VerticalPosition { get; set; } = 0.80;
 
+    /// <summary>
+    /// Raised once the toast has finished dismissing and holds no content. Lets the owning
+    /// service remove this presenter from the overlay layer instead of it sitting idle forever.
+    /// </summary>
+    public event Action? BecameIdle;
+
     public void Show(string text, TimeSpan duration)
     {
-        //if (_currentText != null)
-        //{
-        //    // Already showing - defer until current toast dismisses.
-        //    _pendingText = text;
-        //    return;
-        //}
-
-        //_currentText = text;
-        //_pendingText = null;
         _transition.Content = CreateDefaultContent(text);
 
         _timer?.Stop();
@@ -56,27 +54,14 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
     {
         _timer?.Stop();
         _transition.Content = null;
+        BecameIdle?.Invoke();
     }
 
     private void OnTimerTick()
     {
         _timer?.Stop();
-
-        //var pending = _pendingText;
-        //var current = _currentText;
-        //_pendingText = null;
-        //_currentText = null;
-
-        //if (pending != null && pending != current)
-        //{
-        //    // Different text queued - transition to it.
-        //    Show(pending, ComputeDuration(pending));
-        //}
-        //else
-        //{
-        // Same text or nothing queued - dismiss.
         _transition.Content = null;
-        //}
+        BecameIdle?.Invoke();
     }
 
     internal static TimeSpan ComputeDuration(string text)
@@ -122,8 +107,8 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
                     int strength = Theme.IsDark ? 128 : 64;
                     double cornerRadius = Theme.Metrics.ControlCornerRadius;
                     context.DrawBoxShadow(
-                        new Rect(cb.X, cb.Y + ShadowOffsetY, cb.Width, cb.Height - ShadowOffsetY),
-                        cornerRadius, ShadowBlurRadius,
+                        new Rect(cb.X, cb.Y + SHADOW_OFFSET_Y, cb.Width, cb.Height - SHADOW_OFFSET_Y),
+                        cornerRadius, SHADOW_BLUR_RADIUS,
                         Color.FromArgb((byte)strength, 0, 0, 0));
                 }
             }

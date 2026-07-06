@@ -16,53 +16,33 @@ public interface IOverlayService { }
 /// </summary>
 public sealed class OverlayLayer
 {
-    private readonly Window _window;
-    private readonly List<UIElement> _overlays = new();
+    private readonly ElementLayer _layer;
     private readonly Dictionary<Type, IOverlayService> _services = new();
 
     internal OverlayLayer(Window window)
     {
-        _window = window;
+        _layer = new ElementLayer(window);
     }
 
     /// <summary>
     /// Gets the number of active overlays.
     /// </summary>
-    public int Count => _overlays.Count;
+    public int Count => _layer.Count;
 
     /// <summary>
     /// Adds an overlay. Later-added overlays render on top.
     /// </summary>
-    public void Add(UIElement overlay)
-    {
-        ArgumentNullException.ThrowIfNull(overlay);
-        if (_overlays.Contains(overlay)) return;
-
-        overlay.Parent = _window;
-        _overlays.Add(overlay);
-        _window.RequestLayout();
-        _window.RequestRender();
-    }
+    public void Add(UIElement overlay) => _layer.Add(overlay);
 
     /// <summary>
     /// Removes a previously added overlay.
     /// </summary>
-    public bool Remove(UIElement overlay)
-    {
-        ArgumentNullException.ThrowIfNull(overlay);
-
-        if (!_overlays.Remove(overlay)) return false;
-
-        overlay.Parent = null;
-        _window.RequestLayout();
-        _window.RequestRender();
-        return true;
-    }
+    public bool Remove(UIElement overlay) => _layer.Remove(overlay);
 
     /// <summary>
     /// Checks whether the specified overlay is currently in this layer.
     /// </summary>
-    public bool Contains(UIElement overlay) => _overlays.Contains(overlay);
+    public bool Contains(UIElement overlay) => _layer.Contains(overlay);
 
     /// <summary>
     /// Registers (or replaces) a service of the given type.
@@ -95,21 +75,13 @@ public sealed class OverlayLayer
         return _services.TryGetValue(typeof(T), out var service) ? (T)service : null;
     }
 
-    internal bool HasLayoutDirty()
-    {
-        for (int i = 0; i < _overlays.Count; i++)
-        {
-            if (_overlays[i].IsMeasureDirty || _overlays[i].IsArrangeDirty)
-                return true;
-        }
-        return false;
-    }
+    internal bool HasLayoutDirty() => _layer.HasLayoutDirty();
 
     internal void Layout(Size clientSize)
     {
-        for (int i = 0; i < _overlays.Count; i++)
+        for (int i = 0; i < _layer.Count; i++)
         {
-            var overlay = _overlays[i];
+            var overlay = _layer[i];
             if (!overlay.IsVisible) continue;
 
             overlay.Measure(clientSize);
@@ -119,41 +91,23 @@ public sealed class OverlayLayer
 
     internal void Render(IGraphicsContext context)
     {
-        for (int i = 0; i < _overlays.Count; i++)
+        for (int i = 0; i < _layer.Count; i++)
         {
-            _overlays[i].Render(context);
+            _layer[i].Render(context);
         }
-    }
-
-    internal UIElement? HitTest(Point point)
-    {
-        for (int i = _overlays.Count - 1; i >= 0; i--)
-        {
-            var hit = _overlays[i].HitTest(point);
-            if (hit != null)
-                return hit;
-        }
-        return null;
     }
 
     internal UIElement? HitTest(Point point) => _layer.HitTest(point);
 
-    internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
-    {
-        for (int i = 0; i < _overlays.Count; i++)
-        {
-            if (_overlays[i] is FrameworkElement fe)
-                fe.NotifyDpiChanged(oldDpi, newDpi);
+    internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme) => _layer.NotifyThemeChanged(oldTheme, newTheme);
 
-            _overlays[i].ClearDpiCacheDeep();
-        }
-    }
+    internal void NotifyDpiChanged(uint oldDpi, uint newDpi) => _layer.NotifyDpiChanged(oldDpi, newDpi);
 
     internal void VisitAll(Action<Element> visitor)
     {
-        for (int i = 0; i < _overlays.Count; i++)
+        for (int i = 0; i < _layer.Count; i++)
         {
-            Window.VisitVisualTree(_overlays[i], visitor);
+            Window.VisitVisualTree(_layer[i], visitor);
         }
     }
 
@@ -166,13 +120,6 @@ public sealed class OverlayLayer
         }
         _services.Clear();
 
-        for (int i = 0; i < _overlays.Count; i++)
-        {
-            if (_overlays[i] is IDisposable disposable)
-                disposable.Dispose();
-
-            _overlays[i].Parent = null;
-        }
-        _overlays.Clear();
+        _layer.Dispose();
     }
 }
