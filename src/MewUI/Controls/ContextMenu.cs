@@ -299,7 +299,7 @@ public sealed class ContextMenu : Control, IPopupOwner
                 var size = _textLayouts.Measure(measure.Context, text, textFormat, double.PositiveInfinity);
                 _maxTextWidth = Math.Max(_maxTextWidth, size.Width);
 
-                var shortcutText = item.Shortcut?.ToDisplayString();
+                var shortcutText = item.GetShortcutDisplayText();
                 if (!string.IsNullOrEmpty(shortcutText))
                 {
                     _hasAnyShortcut = true;
@@ -860,9 +860,9 @@ public sealed class ContextMenu : Control, IPopupOwner
                     AccessKeyRenderer.DrawParsed(context, parsed.displayText, parsed.underlineIndex, textRect, textFormat, textLayout, fg, showAccessKeys, GetDpi() / 96.0, metrics);
                 }
 
-                if (_hasAnyShortcut && !string.IsNullOrEmpty(item.Shortcut?.ToDisplayString()))
+                var shortcutText = item.GetShortcutDisplayText();
+                if (_hasAnyShortcut && !string.IsNullOrEmpty(shortcutText))
                 {
-                    var shortcutText = item.Shortcut?.ToDisplayString() ?? string.Empty;
                     double shortcutRight = paddedRow.Right - chevronReserved;
                     double shortcutLeft = shortcutRight - _maxShortcutWidth;
                     var shortcutRect = new Rect(shortcutLeft, paddedRow.Y, Math.Max(0, shortcutRight - shortcutLeft), paddedRow.Height);

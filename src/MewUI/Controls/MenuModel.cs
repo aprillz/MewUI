@@ -20,6 +20,8 @@ public sealed class MenuItem : MenuEntry
     private string? _cachedDisplayText;
     private char _cachedAccessKey;
     private int _cachedUnderlineIndex = -1;
+    private KeyGesture? _shortcut;
+    private string? _cachedShortcutDisplayText;
 
     public MenuItem() { }
 
@@ -72,7 +74,28 @@ public sealed class MenuItem : MenuEntry
     /// <summary>
     /// Keyboard shortcut gesture. Auto-generates display text and registers with Window.KeyBindings.
     /// </summary>
-    public KeyGesture? Shortcut { get; set; }
+    public KeyGesture? Shortcut
+    {
+        get => _shortcut;
+        set
+        {
+            if (_shortcut == value) return;
+            _shortcut = value;
+            _cachedShortcutDisplayText = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns the cached shortcut display string (e.g. "Ctrl+S"), or null if no shortcut is set.
+    /// Computed once per <see cref="Shortcut"/> change.
+    /// </summary>
+    internal string? GetShortcutDisplayText()
+    {
+        if (_shortcut == null)
+            return null;
+
+        return _cachedShortcutDisplayText ??= _shortcut.Value.ToDisplayString();
+    }
 
     public Action? Click { get; set; }
 
