@@ -105,7 +105,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
     protected override void OnDispose()
     {
-        CollectionPool<Stack<(Rect? clipBoundsWorld, float globalAlpha, Matrix3x2 transform, bool textPixelSnap)>>.Return(_saveStack);
+        CollectionPool.Return(_saveStack);
         DestroyPlatform();
     }
 
