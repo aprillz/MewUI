@@ -556,7 +556,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         else
         {
             var rect = new RECT(0, 0, clientW, clientH);
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, GetWindowStyle(), false, 0, dpi);
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, GetWindowStyle(), false, GetWindowExStyle(), dpi);
             windowW = rect.Width;
             windowH = rect.Height;
         }
@@ -811,7 +811,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case Win32Dispatcher.WM_INVOKE:
-                (Window.ApplicationDispatcher as Win32Dispatcher)?.ProcessWorkItems();
+                // Clear before processing (same order as the host's dispatcher window) so work
+                // posted during processing can re-request a WM_INVOKE.
+                if (Window.ApplicationDispatcher is Win32Dispatcher invokeDispatcher)
+                {
+                    invokeDispatcher.ClearInvokeRequest();
+                    invokeDispatcher.ProcessWorkItems();
+                }
                 return 0;
 
             case WindowMessages.WM_TIMER:
@@ -857,14 +863,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         var rect = new RECT(0, 0, (int)(Window.Width * dpiScale), (int)(Window.Height * dpiScale));
         uint style = GetWindowStyle();
+        uint exStyle = GetWindowExStyle();
         if (!Window.AllowsTransparency)
         {
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, 0, initialDpi);
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, exStyle, initialDpi);
         }
 
         var (x, y) = ResolveInitialPosition(rect.Width, rect.Height, initialDpi);
-
-        uint exStyle = GetWindowExStyle();
 
         Handle = User32.CreateWindowEx(
             exStyle,
@@ -1452,6 +1457,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private Win32DropTargetAdapter? _dropTargetAdapter;
     private bool _legacyDropFilesRegistered;
+    private bool _oleInitialized;
 
     // STA → IDropTarget + IDropTargetHelper.   MTA → WM_DROPFILES fallback.
     // Apartment requirements and effect negotiation details: see remarks on UIElement.AllowDropProperty.
@@ -1469,6 +1475,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA &&
             Ole32.OleInitialize(0) >= 0)
         {
+            // Every successful OleInitialize must be balanced by OleUninitialize (revoke/destroy path).
+            _oleInitialized = true;
             _dropTargetAdapter = new Win32DropTargetAdapter(this);
             var pTarget = Win32DropTarget.Create(_dropTargetAdapter);
             int hr = Ole32.RegisterDragDrop(Handle, pTarget);
@@ -1479,6 +1487,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             }
             Win32DropTarget.Release(pTarget);
             _dropTargetAdapter = null;
+            Ole32.OleUninitialize();
+            _oleInitialized = false;
         }
 
         // Fallback: WM_DROPFILES will be delivered to WndProc; HandleDropFiles routes through the router.
@@ -1496,6 +1506,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             _dropTargetAdapter = null;
             Win32DropTarget.Release(_dropTargetCom);
             _dropTargetCom = 0;
+        }
+        if (_oleInitialized)
+        {
+            Ole32.OleUninitialize();
+            _oleInitialized = false;
         }
         if (_legacyDropFilesRegistered)
         {
@@ -1789,7 +1804,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 minH > 0 ? (int)Math.Ceiling(minH * dpiScale) : 0);
             if (!_allowsTransparency)
             {
-                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, GetWindowStyle(), false, 0, dpi);
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, GetWindowStyle(), false, GetWindowExStyle(), dpi);
             }
 
             if (minW > 0) info->ptMinTrackSize.x = minRect.Width;
@@ -1803,7 +1818,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 !double.IsPositiveInfinity(maxH) ? (int)Math.Ceiling(maxH * dpiScale) : 0);
             if (!_allowsTransparency)
             {
-                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, GetWindowStyle(), false, 0, dpi);
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, GetWindowStyle(), false, GetWindowExStyle(), dpi);
             }
 
             if (!double.IsPositiveInfinity(maxW)) info->ptMaxTrackSize.x = maxRect.Width;

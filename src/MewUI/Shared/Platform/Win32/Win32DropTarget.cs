@@ -54,11 +54,23 @@ internal static unsafe class Win32DropTarget
         return (nint)ptr;
     }
 
-    /// <summary>Releases an instance previously returned by <see cref="Create"/>.</summary>
+    /// <summary>
+    /// Drops the creator's reference from <see cref="Create"/>. The unmanaged object is freed only when
+    /// the COM refcount reaches zero, so OLE consumers still holding AddRef'd references stay valid.
+    /// </summary>
     public static void Release(nint instance)
     {
         if (instance == 0) return;
         var ptr = (Object*)instance;
+        var remaining = System.Threading.Interlocked.Decrement(ref ptr->refCount);
+        if (remaining <= 0)
+        {
+            Destroy(ptr);
+        }
+    }
+
+    private static void Destroy(Object* ptr)
+    {
         if (ptr->gcHandle != 0)
         {
             var handle = GCHandle.FromIntPtr(ptr->gcHandle);
@@ -122,7 +134,7 @@ internal static unsafe class Win32DropTarget
         var remaining = System.Threading.Interlocked.Decrement(ref ptr->refCount);
         if (remaining <= 0)
         {
-            Release(pThis);
+            Destroy(ptr);
             return 0;
         }
         return (uint)remaining;

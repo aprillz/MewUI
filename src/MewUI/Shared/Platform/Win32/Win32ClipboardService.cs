@@ -27,6 +27,7 @@ internal sealed class Win32ClipboardService : IClipboardService
             var ptr = Kernel32.GlobalLock(hGlobal);
             if (ptr == 0)
             {
+                Kernel32.GlobalFree(hGlobal);
                 return false;
             }
 
@@ -39,8 +40,12 @@ internal sealed class Win32ClipboardService : IClipboardService
                 Kernel32.GlobalUnlock(hGlobal);
             }
 
-            // CF_UNICODETEXT = 13
-            User32.SetClipboardData(13, hGlobal);
+            // CF_UNICODETEXT = 13. On success the system owns hGlobal; on failure we still own it and must free it.
+            if (User32.SetClipboardData(13, hGlobal) == 0)
+            {
+                Kernel32.GlobalFree(hGlobal);
+                return false;
+            }
             return true;
         }
         finally
