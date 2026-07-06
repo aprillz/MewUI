@@ -238,19 +238,19 @@ public sealed partial class MewVGWin32GraphicsFactory
         DisposePlatformResources();
     }
 
-    public void ReleaseWindowResources(nint hwnd)
+    public void ReleaseWindowResources(nint windowHandle)
     {
-        if (hwnd == 0)
+        if (windowHandle == 0)
         {
             return;
         }
 
-        if (_windows.TryRemove(hwnd, out var resources))
+        if (_windows.TryRemove(windowHandle, out var resources))
         {
             resources.Dispose();
         }
 
-        TryReleaseWindowResources(hwnd);
+        TryReleaseWindowResources(windowHandle);
     }
 
     private partial IDisposable CreateWindowResources(IWindowSurface surface);

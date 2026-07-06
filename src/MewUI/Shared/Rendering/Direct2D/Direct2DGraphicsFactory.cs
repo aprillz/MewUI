@@ -641,17 +641,17 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public Filters.IImageFilterExecutor CreateImageFilterExecutor()
         => new Direct2DImageFilterExecutor(this);
 
-    public void ReleaseWindowResources(nint hwnd)
+    public void ReleaseWindowResources(nint windowHandle)
     {
         lock (_rtLock)
         {
             // The context is owned by the Window and disposed there. Here we only
             // release factory-owned native handles (COM render targets).
-            _externalDxgiDeviceContextWindowTargets.Remove(hwnd);
-            InvalidateCachedWindowTargetLocked(hwnd);
+            _externalDxgiDeviceContextWindowTargets.Remove(windowHandle);
+            InvalidateCachedWindowTargetLocked(windowHandle);
         }
 
-        ReleaseLayeredTarget(hwnd);
+        ReleaseLayeredTarget(windowHandle);
     }
 
     private void InvalidateAllFactoryRenderTargetsForDeviceLost()
