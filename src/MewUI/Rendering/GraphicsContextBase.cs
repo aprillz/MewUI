@@ -1,4 +1,5 @@
 using System.Numerics;
+using Aprillz.MewUI.Diagnostics;
 
 namespace Aprillz.MewUI.Rendering;
 
@@ -9,6 +10,8 @@ namespace Aprillz.MewUI.Rendering;
 /// </summary>
 public abstract class GraphicsContextBase : IGraphicsContext
 {
+    private static readonly EnvDebugLogger _stateLogger = new("MEWUI_GRAPHICS_DEBUG", "[GraphicsContextBase]");
+    
     #region Viewport Culling
 
     private static readonly Rect InfiniteCullRect = new(-1_000_000, -1_000_000, 2_000_000, 2_000_000);
@@ -125,9 +128,24 @@ public abstract class GraphicsContextBase : IGraphicsContext
     public void Restore()
     {
         _restoreCount++;
+
+        // _cullStack depth mirrors the backend's native save depth (one push per Save()).
+        // An unmatched extra Restore would underflow the backend's state stack, so treat it
+        // as a no-op instead of forwarding to RestoreCore().
         if (_cullStack.Count > 0)
+        {
             _cullRect = _cullStack.Pop();
-        RestoreCore();
+            RestoreCore();
+        }
+        else
+        {
+            // Non-fatal: log and skip rather than crash, so a stray extra Restore() doesn't take down the app.
+#if DEBUG
+            _stateLogger.Write($"Restore() called without a matching Save(). {Environment.StackTrace}");
+#else
+            _stateLogger.Write("Restore() called without a matching Save().");
+#endif
+        }
     }
 
     public void SetClip(Rect rect)
@@ -440,7 +458,8 @@ public abstract class GraphicsContextBase : IGraphicsContext
         _disposed = true;
         if (IsActive) EndFrame();
         OnDispose();
-        CollectionPool<Stack<Rect>>.Return(_cullStack);
+        _boxShadowStopsCache.Clear();
+        CollectionPool.Return(_cullStack);
     }
 
     /// <summary>
@@ -473,14 +492,16 @@ public abstract class GraphicsContextBase : IGraphicsContext
     public virtual void DrawLine(Point start, Point end, IPen pen)
     {
         _drawLineCount++;
-        if (pen.Brush is ISolidColorBrush s) DrawLineCore(start, end, s.Color, pen.Thickness);
+        if (pen.Brush is ISolidColorBrush solidBrush) DrawLineCore(start, end, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is IGradientBrush gradientBrush) DrawLineCore(start, end, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
     public virtual void DrawRectangle(Rect rect, IPen pen)
     {
         _drawRectangleCount++;
         if (IsCulled(rect)) return;
-        if (pen.Brush is ISolidColorBrush s) DrawRectangleCore(rect, s.Color, pen.Thickness, false);
+        if (pen.Brush is ISolidColorBrush solidBrush) DrawRectangleCore(rect, solidBrush.Color, pen.Thickness, false);
+        else if (pen.Brush is IGradientBrush gradientBrush) DrawRectangleCore(rect, gradientBrush.GetRepresentativeColor(), pen.Thickness, false);
     }
 
     public virtual void FillRectangle(Rect rect, IBrush brush)
@@ -495,7 +516,8 @@ public abstract class GraphicsContextBase : IGraphicsContext
     {
         _drawRoundedRectangleCount++;
         if (IsCulled(rect)) return;
-        if (pen.Brush is ISolidColorBrush s) DrawRoundedRectangleCore(rect, radiusX, radiusY, s.Color, pen.Thickness);
+        if (pen.Brush is ISolidColorBrush solidBrush) DrawRoundedRectangleCore(rect, radiusX, radiusY, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is IGradientBrush gradientBrush) DrawRoundedRectangleCore(rect, radiusX, radiusY, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
     public virtual void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
@@ -510,7 +532,8 @@ public abstract class GraphicsContextBase : IGraphicsContext
     {
         _drawEllipseCount++;
         if (IsCulled(bounds)) return;
-        if (pen.Brush is ISolidColorBrush s) DrawEllipseCore(bounds, s.Color, pen.Thickness);
+        if (pen.Brush is ISolidColorBrush solidBrush) DrawEllipseCore(bounds, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is IGradientBrush gradientBrush) DrawEllipseCore(bounds, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
     public virtual void FillEllipse(Rect bounds, IBrush brush)
@@ -523,7 +546,8 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     public virtual void DrawPath(PathGeometry path, IPen pen)
     {
-        if (pen.Brush is ISolidColorBrush s) DrawPath(path, s.Color, pen.Thickness);
+        if (pen.Brush is ISolidColorBrush solidBrush) DrawPath(path, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is IGradientBrush gradientBrush) DrawPath(path, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
     public virtual void FillPath(PathGeometry path, IBrush brush)
@@ -541,6 +565,21 @@ public abstract class GraphicsContextBase : IGraphicsContext
     #endregion
 
     #region DrawBoxShadow
+
+    // Cache of the GradientStop arrays used to fade a box shadow's edges/corners, keyed by the
+    // inputs that fully determine their contents (shadow color, the clamped corner radius actually
+    // used, and blur radius). Bounds/offset are deliberately excluded: they only affect the gradient
+    // brushes' endpoints (see below), not stop content, so including them would defeat the cache.
+    // Capped and cleared wholesale on overflow rather than LRU-evicted since entries are cheap
+    // (small managed arrays, no native resources) and box-shadow styling has low cardinality in
+    // practice.
+    private const int MaxBoxShadowStopsCacheEntries = 32;
+    private readonly Dictionary<BoxShadowStopsKey, BoxShadowStopArrays> _boxShadowStopsCache = new();
+
+    private readonly record struct BoxShadowStopsKey(Color ShadowColor, double CornerRadius, double BlurRadius);
+
+    private readonly record struct BoxShadowStopArrays(
+        GradientStop[] FadeOut, GradientStop[] FadeIn, GradientStop[] CornerStops);
 
     public virtual void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius,
         Color shadowColor, double offsetX = 0, double offsetY = 0)
@@ -568,14 +607,35 @@ public abstract class GraphicsContextBase : IGraphicsContext
         var edgeColor = Color.FromArgb(edgeAlpha, shadowColor.R, shadowColor.G, shadowColor.B);
         var transparent = Color.FromArgb(0, shadowColor.R, shadowColor.G, shadowColor.B);
 
-        GradientStop[] fadeOut = [new(0, edgeColor), new(1, transparent)];
-        GradientStop[] fadeIn = [new(0, transparent), new(1, edgeColor)];
-
         double cornerSize = cr + br;
-        double innerStop = cr > 0 ? cr / cornerSize : 0;
-        GradientStop[] cornerStops = innerStop > 0
-            ? [new(0, shadowColor), new(innerStop, edgeColor), new(1, transparent)]
-            : [new(0, edgeColor), new(1, transparent)];
+
+        // The stop arrays only depend on (shadowColor, cr, blurRadius), so they are reused across
+        // calls that share those inputs (e.g. the same shadow style redrawn every frame at a
+        // different scroll position). The gradient brushes below are NOT cached: their Point
+        // geometry (edge/corner centers, endpoints) is baked in at construction and depends on
+        // bounds/offset, which vary per call.
+        var stopsKey = new BoxShadowStopsKey(shadowColor, cr, blurRadius);
+        if (!_boxShadowStopsCache.TryGetValue(stopsKey, out var stopArrays))
+        {
+            GradientStop[] newFadeOut = [new(0, edgeColor), new(1, transparent)];
+            GradientStop[] newFadeIn = [new(0, transparent), new(1, edgeColor)];
+            double innerStop = cr > 0 ? cr / cornerSize : 0;
+            GradientStop[] newCornerStops = innerStop > 0
+                ? [new(0, shadowColor), new(innerStop, edgeColor), new(1, transparent)]
+                : [new(0, edgeColor), new(1, transparent)];
+
+            stopArrays = new BoxShadowStopArrays(newFadeOut, newFadeIn, newCornerStops);
+
+            if (_boxShadowStopsCache.Count >= MaxBoxShadowStopsCacheEntries)
+            {
+                _boxShadowStopsCache.Clear();
+            }
+            _boxShadowStopsCache[stopsKey] = stopArrays;
+        }
+
+        GradientStop[] fadeOut = stopArrays.FadeOut;
+        GradientStop[] fadeIn = stopArrays.FadeIn;
+        GradientStop[] cornerStops = stopArrays.CornerStops;
 
         double edgeW = sw - 2 * cr;
         double edgeH = sh - 2 * cr;
