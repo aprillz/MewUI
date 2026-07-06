@@ -49,8 +49,11 @@ public abstract class Element : MewObject
     public Size DesiredSize { get; private set; }
 
     /// <summary>
-    /// Gets the final bounds calculated during the Arrange pass, in the parent's coordinate space.
-    /// Prefer <see cref="RenderSize"/> for WPF-like usage.
+    /// Gets the final bounds calculated during the Arrange pass, in window-absolute coordinates
+    /// (not the parent's coordinate space): panels arrange children by offsetting from their own
+    /// absolute <c>Bounds</c>, and element transforms are translate-only. Custom panels must pass
+    /// window-absolute rects to <see cref="Arrange"/>. Prefer <see cref="RenderSize"/> for
+    /// WPF-like usage.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Rect Bounds { get; private set; }
@@ -76,6 +79,22 @@ public abstract class Element : MewObject
                 InvalidateVisualRootCacheDeep();
                 ClearDpiCacheDeep();
                 OnParentChanged();
+
+                // A subtree already dirty (new elements default dirty, or invalidated while
+                // detached) must re-propagate into the new parent chain on attach - otherwise
+                // Window's O(1) descendant-dirty checks (HasMeasureDirty/IsLayoutDirty) would miss
+                // it, since those no longer walk the tree and only trust the root's own flag.
+                if (value != null)
+                {
+                    if (IsMeasureDirty)
+                    {
+                        value.InvalidateMeasure();
+                    }
+                    else if (IsArrangeDirty)
+                    {
+                        value.InvalidateArrange();
+                    }
+                }
 
                 var newRoot = FindVisualRoot();
                 if (!ReferenceEquals(oldRoot, newRoot))
@@ -207,6 +226,10 @@ public abstract class Element : MewObject
     {
         if (IsMeasureDirty)
         {
+            // Unconditional on purpose: an already-dirty parent's flag can be stale (a
+            // virtualizing presenter may have skipped a still-dirty child), so it cannot be
+            // trusted to have already notified its own ancestors. This walk also doubles as the
+            // render-request wake up to the Window, which must run every time.
             Parent?.InvalidateMeasure();
             return;
         }
@@ -283,8 +306,16 @@ public abstract class Element : MewObject
     /// <summary>
     /// Invalidates the visual representation, causing a repaint.
     /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="InvalidateMeasure"/> and <see cref="InvalidateArrange"/>, this walk is
+    /// intentionally left unbounded: bounding it would require a per-element dirty flag that gets
+    /// cleared on render, but <see cref="Render"/> is bypassed by <c>UIElement</c>'s sealed
+    /// override (which never calls the base implementation), so no in-scope hook exists to clear
+    /// such a flag. Since every element defaults to "dirty", an unclearable flag would get stuck
+    /// true and silently stop all repaint propagation after the first call. Left unoptimized until
+    /// UIElement gains a render-completion hook.
+    /// </remarks>
     public virtual void InvalidateVisual() =>
-        // Will be implemented to trigger repaint
         Parent?.InvalidateVisual();
 
     /// <summary>
