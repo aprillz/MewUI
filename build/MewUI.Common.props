@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <MewUITitle>Aprillz.MewUI</MewUITitle>
-    <MewUIVersion>0.16.0</MewUIVersion>
+    <MewUIVersion>0.19.0</MewUIVersion>
     <MewUIAuthor>Aprillz</MewUIAuthor>
     <MewUIDescription>A cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT</MewUIDescription>
 
@@ -10,10 +10,10 @@
     <MewUITargetFrameworks>net8.0;net10.0</MewUITargetFrameworks>
     <MewUIPackageLicenseExpression>MIT</MewUIPackageLicenseExpression>
     <MewUIRepositoryUrl>https://github.com/aprillz/MewUI</MewUIRepositoryUrl>
-    <MewVGVersion>0.5.3</MewVGVersion>
+    <MewVGVersion>0.6.0</MewVGVersion>
   </PropertyGroup>
 
-  <!-- Local development override (gitignored) — MewVGProjectPath, etc. -->
+  <!-- Local development override (gitignored) - MewVGProjectPath, etc. -->
   <Import Project="MewUI.Local.props" Condition="Exists('MewUI.Local.props')" />
 
   <PropertyGroup>
@@ -28,7 +28,7 @@
     <Copyright>Copyright (c) $(MewUIAuthor)</Copyright>
     <PackageIcon>logo_c-256.png</PackageIcon>
 
-    <LangVersion>latest</LangVersion>
+    <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
