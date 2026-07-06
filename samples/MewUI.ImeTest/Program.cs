@@ -23,7 +23,6 @@ Application.DispatcherUnhandledException += e =>
 var logBox = new MultiLineTextBox
 {
     Wrap = true,
-    AcceptReturn = true,
     IsHitTestVisible = false,
 };
 
