@@ -153,7 +153,9 @@ public sealed class ColorTests
     [TestMethod]
     public void StaticColors_HaveCorrectValues()
     {
-        Assert.AreEqual(new Color(0, 0, 0, 0), Color.Transparent);
+        // Transparent is WPF-style transparent white (0x00FFFFFF), not transparent black, so blending
+        // toward it introduces no dark fringe.
+        Assert.AreEqual(Color.FromArgb(0x00FFFFFF), Color.Transparent);
         Assert.AreEqual(new Color(0, 0, 0), Color.Black);
         Assert.AreEqual(new Color(255, 255, 255), Color.White);
         Assert.AreEqual(new Color(255, 0, 0), Color.Red);
