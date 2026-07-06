@@ -28,6 +28,22 @@ internal sealed class PngDecoder : IImageDecoder
             return false;
         }
 
+        try
+        {
+            return TryDecodeCore(encoded, out bitmap);
+        }
+        catch (Exception)
+        {
+            // TryDecode must never throw; treat any parse/arithmetic failure as a decode failure.
+            bitmap = default;
+            return false;
+        }
+    }
+
+    private static bool TryDecodeCore(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
+    {
+        bitmap = default;
+
         int width = 0;
         int height = 0;
         byte bitDepth = 0;
@@ -74,6 +90,14 @@ internal sealed class PngDecoder : IImageDecoder
                 interlace = data[12];
 
                 if (width <= 0 || height <= 0)
+                {
+                    return false;
+                }
+
+                // Decompression-bomb guard: reject implausibly large declared dimensions
+                // before allocating any buffers sized from them.
+                if (width > ImageDecoders.MAX_IMAGE_DIMENSION || height > ImageDecoders.MAX_IMAGE_DIMENSION
+                    || (long)width * height > ImageDecoders.MAX_IMAGE_PIXEL_COUNT)
                 {
                     return false;
                 }

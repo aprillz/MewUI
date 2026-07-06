@@ -11,6 +11,27 @@ internal sealed class BmpDecoder : IImageDecoder
 
     public bool TryDecode(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
     {
+        bitmap = default;
+
+        if (!CanDecode(encoded))
+        {
+            return false;
+        }
+
+        try
+        {
+            return TryDecodeCore(encoded, out bitmap);
+        }
+        catch (Exception)
+        {
+            // TryDecode must never throw; treat any parse/arithmetic failure as a decode failure.
+            bitmap = default;
+            return false;
+        }
+    }
+
+    private static bool TryDecodeCore(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
+    {
         // BMP loader:
         // - BITMAPFILEHEADER + BITMAPINFOHEADER (size >= 40)
         // - BI_RGB only (no compression)
@@ -20,11 +41,6 @@ internal sealed class BmpDecoder : IImageDecoder
         bitmap = default;
 
         if (encoded.Length < 14 + 40)
-        {
-            return false;
-        }
-
-        if (!CanDecode(encoded))
         {
             return false;
         }
@@ -45,6 +61,14 @@ internal sealed class BmpDecoder : IImageDecoder
 
         bool bottomUp = heightSigned > 0;
         int height = Math.Abs(heightSigned);
+
+        // Decompression-bomb guard: reject implausibly large declared dimensions
+        // before allocating any buffers sized from them.
+        if (width > ImageDecoders.MAX_IMAGE_DIMENSION || height > ImageDecoders.MAX_IMAGE_DIMENSION
+            || (long)width * height > ImageDecoders.MAX_IMAGE_PIXEL_COUNT)
+        {
+            return false;
+        }
 
         ushort planes = ReadUInt16LE(encoded, 26);
         if (planes != 1)
@@ -79,10 +103,11 @@ internal sealed class BmpDecoder : IImageDecoder
 
         // Read palette for indexed formats
         ReadOnlySpan<byte> palette = default;
+        int paletteCount = 0;
         if (bpp <= 8)
         {
             int clrUsed = ReadInt32LE(encoded, 46);
-            int paletteCount = clrUsed > 0 ? clrUsed : (1 << bpp);
+            paletteCount = clrUsed > 0 ? clrUsed : (1 << bpp);
             int paletteOffset = 14 + dibSize;
             int paletteSize = paletteCount * 4;
             if (paletteOffset + paletteSize > encoded.Length)
@@ -108,6 +133,11 @@ internal sealed class BmpDecoder : IImageDecoder
                     for (int x = 0; x < width; x++)
                     {
                         int idx = (src[x >> 3] >> (7 - (x & 7))) & 1;
+                        if ((uint)idx >= (uint)paletteCount)
+                        {
+                            idx = 0;
+                        }
+
                         int d = dstOffset + x * 4;
                         int p = idx * 4;
                         dst[d + 0] = palette[p + 0];
@@ -123,6 +153,11 @@ internal sealed class BmpDecoder : IImageDecoder
                         int idx = (x & 1) == 0
                             ? (src[x >> 1] >> 4) & 0xF
                             : src[x >> 1] & 0xF;
+                        if ((uint)idx >= (uint)paletteCount)
+                        {
+                            idx = 0;
+                        }
+
                         int d = dstOffset + x * 4;
                         int p = idx * 4;
                         dst[d + 0] = palette[p + 0];
@@ -136,6 +171,11 @@ internal sealed class BmpDecoder : IImageDecoder
                     for (int x = 0; x < width; x++)
                     {
                         int idx = src[x];
+                        if ((uint)idx >= (uint)paletteCount)
+                        {
+                            idx = 0;
+                        }
+
                         int d = dstOffset + x * 4;
                         int p = idx * 4;
                         dst[d + 0] = palette[p + 0];

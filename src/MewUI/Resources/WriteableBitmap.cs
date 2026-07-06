@@ -17,6 +17,8 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     private int _version;
     private bool _disposed;
     private PixelRegion? _dirtyRegion;
+    // Cached to avoid allocating a capturing lambda on every Lock() call (hot path for per-frame video/animation sources).
+    private readonly Action _releaseLock;
 
     /// <summary>
     /// Gets the bitmap width in pixels.
@@ -80,6 +82,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelHeight = heightPx;
         HasAlpha = hasAlpha;
         _bgra = GC.AllocateUninitializedArray<byte>(checked(widthPx * heightPx * 4));
+        _releaseLock = () => Monitor.Exit(_lock);
 
         if (clear)
         {
@@ -103,6 +106,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelHeight = bitmap.HeightPx;
         HasAlpha = bitmap.HasAlpha;
         _bgra = bitmap.Data ?? throw new ArgumentNullException(nameof(bitmap));
+        _releaseLock = () => Monitor.Exit(_lock);
         if (_bgra.Length != PixelWidth * PixelHeight * 4)
         {
             throw new ArgumentException("Invalid pixel buffer length.", nameof(bitmap));
@@ -255,7 +259,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelRegion? dirtyRegion = _dirtyRegion;
         _dirtyRegion = null;
 
-        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, v, dirtyRegion, () => Monitor.Exit(_lock));
+        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, v, dirtyRegion, _releaseLock);
     }
 
     internal Span<byte> GetPixelsMutableNoLock() => _bgra;

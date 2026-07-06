@@ -5,12 +5,23 @@ namespace Aprillz.MewUI.Resources;
 /// </summary>
 public static class ImageDecoders
 {
+    private const int DEFAULT_PRIORITY = 0;
+    private const int FALLBACK_PRIORITY = -1000;
+
+    /// <summary>
+    /// Maximum allowed width or height, in pixels, for a decoded image. Guards against
+    /// decompression-bomb inputs that declare implausibly large dimensions.
+    /// </summary>
+    internal const int MAX_IMAGE_DIMENSION = 32768;
+
+    /// <summary>
+    /// Maximum allowed total pixel count (width * height) for a decoded image.
+    /// </summary>
+    internal const long MAX_IMAGE_PIXEL_COUNT = 64L * 1024 * 1024;
+
     private static long _nextOrder;
     private static readonly object _lock = new();
     private static readonly List<Registration> _decoders = new();
-
-    private const int DefaultPriority = 0;
-    private const int FallbackPriority = -1000;
 
     static ImageDecoders()
     {
@@ -27,13 +38,13 @@ public static class ImageDecoders
     /// non-fallback decoders checked first. If multiple decoders report <see cref="IImageDecoder.CanDecode"/>
     /// for the same input, the first match wins.
     /// </summary>
-    public static void Register(IImageDecoder decoder) => RegisterCore(decoder, DefaultPriority);
+    public static void Register(IImageDecoder decoder) => RegisterCore(decoder, DEFAULT_PRIORITY);
 
     /// <summary>
     /// Registers a fallback decoder. Fallback decoders are only tried after all regular decoders.
     /// Use this for "try anything" decoders that might match ambiguous inputs.
     /// </summary>
-    public static void RegisterFallback(IImageDecoder decoder) => RegisterCore(decoder, FallbackPriority);
+    public static void RegisterFallback(IImageDecoder decoder) => RegisterCore(decoder, FALLBACK_PRIORITY);
 
     private static void RegisterCore(IImageDecoder decoder, int priority)
     {

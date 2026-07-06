@@ -1,5 +1,7 @@
 using System.Reflection;
 
+using Aprillz.MewUI.Resources;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -241,6 +243,14 @@ public sealed class IconSource
             return null;
         }
 
+        // Decompression-bomb guard: reject implausibly large declared dimensions
+        // before allocating any buffers sized from them.
+        if (biWidth > ImageDecoders.MAX_IMAGE_DIMENSION || actualHeight > ImageDecoders.MAX_IMAGE_DIMENSION
+            || (long)biWidth * actualHeight > ImageDecoders.MAX_IMAGE_PIXEL_COUNT)
+        {
+            return null;
+        }
+
         // Color table
         int colorTableEntries = 0;
         if (biBitCount <= 8)
@@ -280,6 +290,11 @@ public sealed class IconSource
                     case 1:
                     {
                         int idx = (icoData[srcRowOff + (x >> 3)] >> (7 - (x & 7))) & 1;
+                        if ((uint)idx >= (uint)colorTableEntries)
+                        {
+                            idx = 0;
+                        }
+
                         int p = paletteOff + idx * 4;
                         b = icoData[p]; g = icoData[p + 1]; r = icoData[p + 2];
                         break;
@@ -289,6 +304,11 @@ public sealed class IconSource
                         int idx = (x & 1) == 0
                             ? (icoData[srcRowOff + (x >> 1)] >> 4) & 0xF
                             : icoData[srcRowOff + (x >> 1)] & 0xF;
+                        if ((uint)idx >= (uint)colorTableEntries)
+                        {
+                            idx = 0;
+                        }
+
                         int p = paletteOff + idx * 4;
                         b = icoData[p]; g = icoData[p + 1]; r = icoData[p + 2];
                         break;
@@ -296,6 +316,11 @@ public sealed class IconSource
                     case 8:
                     {
                         int idx = icoData[srcRowOff + x];
+                        if ((uint)idx >= (uint)colorTableEntries)
+                        {
+                            idx = 0;
+                        }
+
                         int p = paletteOff + idx * 4;
                         b = icoData[p]; g = icoData[p + 1]; r = icoData[p + 2];
                         break;
