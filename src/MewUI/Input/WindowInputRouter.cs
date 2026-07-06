@@ -46,7 +46,8 @@ internal static class WindowInputRouter
         Point screenPosition,
         bool leftDown,
         bool rightDown,
-        bool middleDown)
+        bool middleDown,
+        ModifierKeys modifiers = ModifierKeys.None)
     {
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
@@ -60,6 +61,11 @@ internal static class WindowInputRouter
         UpdateMouseOver(window, element);
 
         var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown);
+        var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown, modifiers: modifiers)
+        {
+            OriginalSource = element,
+            Source = element,
+        };
         for (var current = element; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseMouseMove(args);
@@ -78,7 +84,8 @@ internal static class WindowInputRouter
         bool leftDown,
         bool rightDown,
         bool middleDown,
-        int clickCount)
+        int clickCount,
+        ModifierKeys modifiers = ModifierKeys.None)
     {
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
@@ -105,7 +112,7 @@ internal static class WindowInputRouter
 
         UpdateMouseOver(window, element);
 
-        var args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: clickCount)
+        var args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: clickCount, modifiers: modifiers)
         {
             OriginalSource = element,
             Source = element,
@@ -158,7 +165,7 @@ internal static class WindowInputRouter
 
             if (clickCount == 2)
             {
-                args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2)
+                args = new MouseEventArgs(positionInWindow, screenPosition, button, leftDown, rightDown, middleDown, clickCount: 2, modifiers: modifiers)
                 {
                     OriginalSource = element,
                     Source = element,
@@ -193,12 +200,13 @@ internal static class WindowInputRouter
         Vector delta,
         bool leftDown = false,
         bool rightDown = false,
-        bool middleDown = false)
+        bool middleDown = false,
+        ModifierKeys modifiers = ModifierKeys.None)
     {
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
         var element = window.HitTest(positionInWindow);
-        var args = new MouseWheelEventArgs(positionInWindow, screenPosition, delta, leftDown, rightDown, middleDown)
+        var args = new MouseWheelEventArgs(positionInWindow, screenPosition, delta, leftDown, rightDown, middleDown, modifiers)
         {
             OriginalSource = element,
             Source = element,

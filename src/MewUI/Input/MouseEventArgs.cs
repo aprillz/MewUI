@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Platform;
 
 namespace Aprillz.MewUI;
 
@@ -77,6 +78,26 @@ public class MouseEventArgs
     public int ClickCount { get; }
 
     /// <summary>
+    /// Gets the keyboard modifier keys held during this mouse event.
+    /// </summary>
+    public ModifierKeys Modifiers { get; }
+
+    /// <summary>Gets whether the Control key was held.</summary>
+    public bool ControlKey => (Modifiers & ModifierKeys.Control) != 0;
+
+    /// <summary>Gets whether the Shift key was held.</summary>
+    public bool ShiftKey => (Modifiers & ModifierKeys.Shift) != 0;
+
+    /// <summary>Gets whether the Alt key was held.</summary>
+    public bool AltKey => (Modifiers & ModifierKeys.Alt) != 0;
+
+    /// <summary>Gets whether the Meta key (Cmd/Win/Super) was held.</summary>
+    public bool MetaKey => (Modifiers & ModifierKeys.Meta) != 0;
+
+    /// <summary>Gets whether the platform primary command modifier (Ctrl on Windows/Linux, Cmd on macOS) was held.</summary>
+    public bool PrimaryKey => (Modifiers & PlatformConventions.Current.PrimaryModifier) != 0;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MouseEventArgs"/> class.
     /// </summary>
     /// <param name="positionInWindow">Mouse position relative to the window (root) (DIPs).</param>
@@ -86,8 +107,10 @@ public class MouseEventArgs
     /// <param name="rightButton">Whether the right button is pressed.</param>
     /// <param name="middleButton">Whether the middle button is pressed.</param>
     /// <param name="clickCount">Click count (1 = single, 2 = double).</param>
+    /// <param name="modifiers">Keyboard modifier keys held during the event.</param>
     public MouseEventArgs(Point positionInWindow, Point screenPosition, MouseButton button = MouseButton.Left,
-        bool leftButton = false, bool rightButton = false, bool middleButton = false, int clickCount = 1)
+        bool leftButton = false, bool rightButton = false, bool middleButton = false, int clickCount = 1,
+        ModifierKeys modifiers = ModifierKeys.None)
     {
         Position = positionInWindow;
         ScreenPosition = screenPosition;
@@ -96,6 +119,7 @@ public class MouseEventArgs
         RightButton = rightButton;
         MiddleButton = middleButton;
         ClickCount = clickCount;
+        Modifiers = modifiers;
     }
 
     /// <summary>
@@ -140,9 +164,12 @@ public class MouseWheelEventArgs : MouseEventArgs
     /// <param name="leftButton">Whether the left button is pressed.</param>
     /// <param name="rightButton">Whether the right button is pressed.</param>
     /// <param name="middleButton">Whether the middle button is pressed.</param>
+    /// <param name="modifiers">Keyboard modifier keys held during the event.</param>
     public MouseWheelEventArgs(Point position, Point screenPosition, Vector delta,
-        bool leftButton = false, bool rightButton = false, bool middleButton = false)
-        : base(position, screenPosition, MouseButton.Middle, leftButton, rightButton, middleButton)
+        bool leftButton = false, bool rightButton = false, bool middleButton = false,
+        ModifierKeys modifiers = ModifierKeys.None)
+        : base(position, screenPosition, MouseButton.Middle, leftButton, rightButton, middleButton,
+            clickCount: 1, modifiers: modifiers)
     {
         Delta = delta;
     }
