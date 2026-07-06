@@ -147,7 +147,8 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
         // Append at end (WPF-style). We intentionally move the caret to the end so ScrollToCaret works.
         _editor.SetCaretAndSelection(GetTextLengthCore(), extendSelection: false);
-        _editor.InsertTextAtCaretForEdit(normalized);
+        SyncSelectionProperties();
+        InsertTextAtCaretForEdit(normalized);
 
         if (scrollToCaret)
         {
@@ -212,6 +213,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         {
             int old = _editor.CaretPosition;
             _editor.SetCaretPosition(value);
+            SyncSelectionProperties();
             if (old != _editor.CaretPosition)
             {
                 ResetCaretBlink();
@@ -257,7 +259,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     public int SelectionLength => GetValue(SelectionLengthProperty);
 
     /// <summary>The currently selected text (empty when nothing is selected).</summary>
-    public string SelectedText
+    public virtual string SelectedText
     {
         get
         {
@@ -266,37 +268,15 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
     }
 
-    private bool _syncingSelection;
-
     // Selection/caret state lives in the editor; mirror it onto the read-only MewProperties so it is
-    // bindable/observable. Every selection or caret change funnels through InvalidateVisual (to repaint
-    // the caret/highlight) and the editor is always mutated before that call, so this is the single
-    // point where the mirror is guaranteed current. SetValue is a no-op when unchanged, so the repeated
-    // calls from caret-blink invalidations cost nothing. The guard avoids re-entry if a property change
-    // were ever to invalidate again.
+    // bindable/observable. _editor is private to this class, so every mutation of its caret/selection
+    // state happens in a method here - each such method calls this right after mutating. SetValue is a
+    // no-op when unchanged, so callers that end up not actually moving anything cost nothing.
     private void SyncSelectionProperties()
     {
         var (start, end) = _editor.GetSelectionRange();
         SetValue(SelectionStartPropertyKey, start);
         SetValue(SelectionLengthPropertyKey, end - start);
-    }
-
-    public override void InvalidateVisual()
-    {
-        if (_editor is not null && !_syncingSelection)
-        {
-            _syncingSelection = true;
-            try
-            {
-                SyncSelectionProperties();
-            }
-            finally
-            {
-                _syncingSelection = false;
-            }
-        }
-
-        base.InvalidateVisual();
     }
 
     // Platform text services (IME) sometimes report a replacement range (e.g. AppKit insertText/setMarkedText).
@@ -317,6 +297,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         // Select [start, end) with caret at end.
         _editor.SetCaretAndSelection(start, extendSelection: false);
         _editor.SetCaretAndSelection(end, extendSelection: true);
+        SyncSelectionProperties();
     }
 
     internal int TextLengthInternal => GetTextLengthCore();
@@ -529,6 +510,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         var contentBounds = GetInteractionContentBounds();
         SetCaretFromPoint(e.Position, contentBounds);
         _editor.SelectWordAt(CaretPosition);
+        SyncSelectionProperties();
 
         EnsureCaretVisibleCore(contentBounds);
         InvalidateVisual();
@@ -622,6 +604,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
                             _editor.Undo();
                         }
 
+                        SyncSelectionProperties();
                         EnsureCaretVisibleCore(GetInteractionContentBounds());
                         InvalidateVisual();
                     }
@@ -633,6 +616,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
                     if (!IsReadOnly)
                     {
                         _editor.Redo();
+                        SyncSelectionProperties();
                         EnsureCaretVisibleCore(GetInteractionContentBounds());
                         InvalidateVisual();
                     }
@@ -710,6 +694,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
                 if (!IsReadOnly)
                 {
                     _editor.BackspaceForEdit(e.ControlKey);
+                    SyncSelectionProperties();
                 }
 
                 e.Handled = true;
@@ -719,6 +704,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
                 if (!IsReadOnly)
                 {
                     _editor.DeleteForEdit(e.ControlKey);
+                    SyncSelectionProperties();
                 }
 
                 e.Handled = true;
@@ -728,6 +714,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
                 if (!IsReadOnly && AcceptTab)
                 {
                     _editor.InsertTextAtCaretForEdit("\t");
+                    SyncSelectionProperties();
                     _suppressTextInputTab = true;
                     e.Handled = true;
                 }
@@ -738,6 +725,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
                 if (!IsReadOnly && AcceptReturn)
                 {
                     _editor.InsertTextAtCaretForEdit("\n");
+                    SyncSelectionProperties();
                     _suppressTextInputNewline = true;
                     e.Handled = true;
                 }
@@ -1055,6 +1043,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
         SetCaretFromPoint(e.Position, contentBounds);
         _editor.BeginSelectionAtCaret();
+        SyncSelectionProperties();
 
         var root = FindVisualRoot();
         if (root is Window window)
@@ -1104,6 +1093,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         AutoScrollForSelectionDrag(e.Position, contentBounds);
         SetCaretFromPoint(e.Position, contentBounds);
         _editor.UpdateSelectionToCaret();
+        SyncSelectionProperties();
         EnsureCaretVisibleCore(contentBounds);
         InvalidateVisual();
         e.Handled = true;
@@ -1132,6 +1122,15 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     protected virtual void NotifyTextChanged()
     {
+        RaiseTextChanged();
+    }
+
+    /// <summary>
+    /// Raises <see cref="TextChanged"/> with the current text. Subclasses whose text must never
+    /// be exposed through this channel (e.g. <see cref="PasswordBox"/>) can override to suppress it.
+    /// </summary>
+    protected virtual void RaiseTextChanged()
+    {
         TextChanged?.Invoke(GetTextCore());
     }
 
@@ -1152,11 +1151,76 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         {
             SetTextCore(normalized);
             _editor.ResetAfterTextSet();
+            SyncSelectionProperties();
             InvalidateVisual();
             OnTextChanged(current, normalized);
         }
 
-        TextChanged?.Invoke(GetTextCore());
+        RaiseTextChanged();
+    }
+
+    private bool _syncingTextProperty;
+
+    /// <summary>
+    /// Shared reentrancy guard used by <see cref="SyncTextPropertyFromDocument"/> and
+    /// <see cref="ApplyExternalTextPropertyChange"/> so a subclass's mirrored string property
+    /// (e.g. <c>Text</c> or <c>Password</c>) does not bounce back and forth with the document.
+    /// </summary>
+    protected bool IsSyncingTextProperty => _syncingTextProperty;
+
+    /// <summary>
+    /// Common body for a mirrored string property's public setter: normalizes, skips if unchanged,
+    /// otherwise pushes the value through the MewProperty (which runs the registered changed callback).
+    /// </summary>
+    protected void SetMirroredTextProperty(MewProperty<string> property, string? value)
+    {
+        var normalized = NormalizeText(value ?? string.Empty);
+        if (GetTextCore() == normalized)
+        {
+            return;
+        }
+
+        SetValue(property, normalized);
+    }
+
+    /// <summary>
+    /// Pushes the current document text into <paramref name="property"/> without re-entering that
+    /// property's change callback. Call from a <see cref="NotifyTextChanged"/> override that mirrors
+    /// the document onto a MewProperty (e.g. <c>TextProperty</c> or <c>PasswordProperty</c>).
+    /// </summary>
+    protected void SyncTextPropertyFromDocument(MewProperty<string> property)
+    {
+        _syncingTextProperty = true;
+        try
+        {
+            SetValue(property, GetTextCore());
+        }
+        finally
+        {
+            _syncingTextProperty = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies an externally set value of a mirrored string property to the document, guarding against
+    /// reentrancy from <see cref="SyncTextPropertyFromDocument"/>. Call from that property's change callback.
+    /// </summary>
+    protected void ApplyExternalTextPropertyChange(string newValue)
+    {
+        if (_syncingTextProperty)
+        {
+            return;
+        }
+
+        _syncingTextProperty = true;
+        try
+        {
+            ApplyExternalTextChange(newValue);
+        }
+        finally
+        {
+            _syncingTextProperty = false;
+        }
     }
 
     public void Undo()
@@ -1167,6 +1231,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
 
         _editor.Undo();
+        SyncSelectionProperties();
     }
 
     public void Redo()
@@ -1177,6 +1242,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
 
         _editor.Redo();
+        SyncSelectionProperties();
     }
 
     protected void BumpDocumentVersion()
@@ -1243,6 +1309,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     protected virtual void SelectAllCore()
     {
         _editor.SelectAll();
+        SyncSelectionProperties();
         InvalidateVisual();
     }
 
@@ -1288,17 +1355,20 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     protected void SetCaretAndSelection(int newPos, bool extendSelection)
     {
         _editor.SetCaretAndSelection(newPos, extendSelection);
+        SyncSelectionProperties();
         ResetCaretBlink();
     }
 
     protected void MoveCaretHorizontal(int direction, bool extendSelection, bool word)
     {
         _editor.MoveCaretHorizontal(direction, extendSelection, word);
+        SyncSelectionProperties();
     }
 
     protected void MoveCaretToDocumentEdge(bool start, bool extendSelection)
     {
         _editor.MoveCaretToDocumentEdge(start, extendSelection);
+        SyncSelectionProperties();
     }
 
     protected virtual void MoveCaretToLineEdge(bool start, bool extendSelection)
@@ -1307,11 +1377,13 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     protected void BackspaceForEdit(bool word)
     {
         _editor.BackspaceForEdit(word);
+        SyncSelectionProperties();
     }
 
     protected void DeleteForEdit(bool word)
     {
         _editor.DeleteForEdit(word);
+        SyncSelectionProperties();
     }
 
     protected int FindPreviousWordBoundary(int from)
@@ -1326,7 +1398,9 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     protected virtual bool DeleteSelectionForEdit()
     {
-        return _editor.DeleteSelectionForEdit();
+        bool deleted = _editor.DeleteSelectionForEdit();
+        SyncSelectionProperties();
+        return deleted;
     }
 
     protected virtual void InsertTextAtCaretForEdit(string text)
@@ -1354,6 +1428,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
 
         _editor.InsertTextAtCaretForEdit(text);
+        SyncSelectionProperties();
     }
 
     protected bool TryClipboardSetText(string text)

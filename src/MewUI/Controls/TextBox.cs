@@ -5,12 +5,10 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class TextBox : SingleLineTextBase
 {
-    private bool _syncingText;
-
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<TextBox>(nameof(Text), string.Empty,
             MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, newVal) => self.OnTextPropertyChanged(newVal));
+            static (self, _, newVal) => self.ApplyExternalTextPropertyChange(newVal));
 
     /// <summary>
     /// Gets or sets the text content.
@@ -18,28 +16,12 @@ public sealed class TextBox : SingleLineTextBase
     public string Text
     {
         get => GetTextCore();
-        set
-        {
-            var normalized = NormalizeText(value ?? string.Empty);
-            if (GetTextCore() == normalized)
-                return;
-            SetValue(TextProperty, normalized);
-        }
+        set => SetMirroredTextProperty(TextProperty, value);
     }
 
     protected override void NotifyTextChanged()
     {
-        _syncingText = true;
-        try { SetValue(TextProperty, GetTextCore()); }
-        finally { _syncingText = false; }
+        SyncTextPropertyFromDocument(TextProperty);
         base.NotifyTextChanged();
-    }
-
-    private void OnTextPropertyChanged(string newValue)
-    {
-        if (_syncingText) return;
-        _syncingText = true;
-        try { ApplyExternalTextChange(newValue); }
-        finally { _syncingText = false; }
     }
 }
