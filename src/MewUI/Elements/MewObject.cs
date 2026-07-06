@@ -10,7 +10,9 @@ public abstract class MewObject : IPropertyOwner
     private PropertyValueStore? _propertyStore;
     private Dictionary<int, IDisposable>? _propertyBindings;
     private Dictionary<int, Action>? _propertyBindingCallbacks;
-    private Dictionary<int, PropertyForwardEntry>? _propertyForwards;
+    // Value is a PropertyForwardEntry for the common single-forward case, or a
+    // List<PropertyForwardEntry> once a second forward is registered for the same source property.
+    private Dictionary<int, object>? _propertyForwards;
 
     /// <summary>
     /// Per-instance value storage and animation management.
@@ -34,17 +36,47 @@ public abstract class MewObject : IPropertyOwner
     void IPropertyOwner.OnPropertyChanged(MewProperty property, object? oldValue, object? newValue)
     {
         OnMewPropertyChanged(property);
+        NotifyObservers(property, oldValue, newValue);
+    }
 
+    // Fires the binding-observer side of a value change (property forwards, binding callbacks,
+    // ChangedWithValues), WITHOUT the cross-cutting OnMewPropertyChanged work. The inherited-change
+    // propagation path uses this directly so it doesn't re-trigger inheritance recursion.
+    private void NotifyObservers(MewProperty property, object? oldValue, object? newValue)
+    {
         if (_propertyForwards != null && newValue != null &&
-            _propertyForwards.TryGetValue(property.Id, out var fwd))
+            _propertyForwards.TryGetValue(property.Id, out var forward))
         {
-            if (fwd.TryGetTarget(out var target))
+            if (forward is List<PropertyForwardEntry> list)
             {
-                target.PropertyStore.SetTarget(fwd.TargetProperty, newValue);
+                for (var index = 0; index < list.Count; index++)
+                {
+                    var entry = list[index];
+                    if (entry.TryGetTarget(out var target))
+                    {
+                        target.PropertyStore.SetTarget(entry.TargetProperty, newValue);
+                    }
+                    else
+                    {
+                        list.RemoveAt(index);
+                        index--;
+                    }
+                }
+
+                if (list.Count == 0)
+                    _propertyForwards.Remove(property.Id);
             }
             else
             {
-                _propertyForwards.Remove(property.Id);
+                var entry = (PropertyForwardEntry)forward;
+                if (entry.TryGetTarget(out var target))
+                {
+                    target.PropertyStore.SetTarget(entry.TargetProperty, newValue);
+                }
+                else
+                {
+                    _propertyForwards.Remove(property.Id);
+                }
             }
         }
 
@@ -54,6 +86,22 @@ public abstract class MewObject : IPropertyOwner
         }
         property.ChangedWithValuesCallback?.Invoke(this, oldValue, newValue);
     }
+
+    /// <summary>
+    /// True if a property-to-property forward or a binding callback is registered for the property.
+    /// Used by inherited-change propagation to decide whether to eagerly resolve + notify.
+    /// </summary>
+    internal bool HasChangeObservers(int propertyId)
+        => (_propertyForwards?.ContainsKey(propertyId) ?? false)
+           || (_propertyBindingCallbacks?.ContainsKey(propertyId) ?? false);
+
+    /// <summary>
+    /// Fires observers (forwards/binding callbacks) for an inherited-value change that was resolved
+    /// outside the normal SetValue path. Does not run OnMewPropertyChanged (the caller already
+    /// invalidates and walks descendants).
+    /// </summary>
+    internal void NotifyObserversBoxed(MewProperty property, object? oldValue, object? newValue)
+        => NotifyObservers(property, oldValue, newValue);
 
     /// <summary>
     /// Called when a MewProperty value changes. Override to add control-specific handling.
@@ -237,15 +285,46 @@ public abstract class MewObject : IPropertyOwner
         }
     }
 
-    internal void AddPropertyForward(int sourcePropertyId, MewObject target, MewProperty targetProperty)
+    // Returns the created entry so the caller can remove exactly this forward later,
+    // even if another forward is later added for the same source property.
+    internal PropertyForwardEntry AddPropertyForward(int sourcePropertyId, MewObject target, MewProperty targetProperty)
     {
         _propertyForwards ??= new(capacity: 2);
-        _propertyForwards[sourcePropertyId] = new PropertyForwardEntry(target, targetProperty);
+        var entry = new PropertyForwardEntry(target, targetProperty);
+        if (_propertyForwards.TryGetValue(sourcePropertyId, out var existing))
+        {
+            if (existing is List<PropertyForwardEntry> list)
+                list.Add(entry);
+            else
+                _propertyForwards[sourcePropertyId] = new List<PropertyForwardEntry> { (PropertyForwardEntry)existing, entry };
+        }
+        else
+        {
+            _propertyForwards[sourcePropertyId] = entry;
+        }
+
+        return entry;
     }
 
-    internal void RemovePropertyForward(int sourcePropertyId)
+    // Removes only the given entry, leaving any other forward registered for the same
+    // source property id intact.
+    internal void RemovePropertyForward(int sourcePropertyId, PropertyForwardEntry entry)
     {
-        _propertyForwards?.Remove(sourcePropertyId);
+        if (_propertyForwards == null || !_propertyForwards.TryGetValue(sourcePropertyId, out var existing))
+            return;
+
+        if (existing is List<PropertyForwardEntry> list)
+        {
+            list.Remove(entry);
+            if (list.Count == 0)
+                _propertyForwards.Remove(sourcePropertyId);
+            else if (list.Count == 1)
+                _propertyForwards[sourcePropertyId] = list[0];
+        }
+        else if (ReferenceEquals(existing, entry))
+        {
+            _propertyForwards.Remove(sourcePropertyId);
+        }
     }
 
     /// <summary>
