@@ -120,6 +120,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyResolvedStartupPosition();
 
         _shown = true;
+        if (Window.Owner is { Handle: not 0 } owner)
+        {
+            SetOwner(owner.Handle);
+        }
+
         NativeX11.XMapWindow(Display, Handle);
 
         if (Window.IsOverlayWindow)
@@ -465,12 +470,36 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void CaptureMouse()
     {
-        // TODO: XGrabPointer
+        if (Display == 0 || Handle == 0)
+        {
+            return;
+        }
+
+        // owner_events=true keeps normal in-window delivery; the grab only redirects motion/release
+        // that would otherwise leave the window, so drags keep flowing through HandleMotion/HandleButton.
+        const long ButtonMotionMask = 1L << 13;
+        const int GrabModeAsync = 1;
+        uint grabMask = (uint)(X11EventMask.ButtonReleaseMask | X11EventMask.PointerMotionMask | ButtonMotionMask);
+        _ = NativeX11.XGrabPointer(
+            Display, Handle,
+            ownerEvents: true,
+            grabMask,
+            GrabModeAsync, GrabModeAsync,
+            confineTo: 0,
+            cursor: 0,
+            time: 0); // CurrentTime
+        NativeX11.XFlush(Display);
     }
 
     public void ReleaseMouseCapture()
     {
-        // TODO: XUngrabPointer
+        if (Display == 0)
+        {
+            return;
+        }
+
+        NativeX11.XUngrabPointer(Display, 0); // CurrentTime
+        NativeX11.XFlush(Display);
     }
 
     public Point ClientToScreen(Point clientPointDip)
@@ -658,7 +687,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         ApplyOpacity();
         ApplyResizeMode();
-        ApplyToolWindowHints();
+        ApplyMotifHints();
+        ApplyWindowTypeHints();
 
         _inputMethod = X11InputMethodFactory.Create(Display, Handle);
         if (_inputMethod is XimInputMethod xim && xim.TryGetFilterEvents(out var imeFilterEvents))
@@ -825,7 +855,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         bool middleDown = (dev.mods.effective & (int)X11ModifierMask.Button2) != 0;
         bool rightDown = (dev.mods.effective & (int)X11ModifierMask.Button3) != 0;
 
-        WindowInputRouter.MouseMove(Window, pos, ClientToScreen(pos), leftDown: leftDown, rightDown: rightDown, middleDown: middleDown);
+        WindowInputRouter.MouseMove(Window, pos, ClientToScreen(pos), leftDown: leftDown, rightDown: rightDown, middleDown: middleDown, modifiers: GetModifiers((uint)dev.mods.effective));
 
         if (dev.valuators.mask_len <= 0 || dev.valuators.mask == 0 || dev.valuators.values == 0)
             return;
@@ -871,7 +901,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         WindowInputRouter.MouseWheel(
             Window, pos, ClientToScreen(pos),
             new Vector(notchesX, notchesY),
-            leftDown, rightDown, middleDown);
+            leftDown, rightDown, middleDown, GetModifiers((uint)dev.mods.effective));
     }
 
     private void ApplyResolvedStartupPosition()
@@ -979,7 +1009,9 @@ internal sealed class X11WindowBackend : IWindowBackend
         int smallPx = Math.Max(16, (int)Math.Round(16 * dpiScale));
         int bigPx = Math.Max(32, (int)Math.Round(32 * dpiScale));
 
-        var payload = new List<uint>(capacity: 16);
+        // Xlib expects format-32 client data as one C long per element (8 bytes on LP64), so each
+        // 32-bit CARDINAL rides in its own nint slot; nelements stays the logical 32-bit value count.
+        var payload = new List<nint>(capacity: 16);
         AppendNetWmIconPayload(payload, _icon, smallPx);
         if (bigPx != smallPx)
         {
@@ -994,7 +1026,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         var data = payload.ToArray();
-        fixed (uint* p = data)
+        fixed (nint* dataPtr = data)
         {
             NativeX11.XChangeProperty(
                 display: Display,
@@ -1003,7 +1035,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                 type: cardinalAtom,
                 format: 32,
                 mode: 0, // PropModeReplace
-                data: (nint)p,
+                data: (nint)dataPtr,
                 nelements: data.Length);
         }
 
@@ -1043,7 +1075,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         NativeX11.XFlush(Display);
     }
 
-    private static void AppendNetWmIconPayload(List<uint> dst, IconSource icon, int desiredSizePx)
+    private static void AppendNetWmIconPayload(List<nint> dst, IconSource icon, int desiredSizePx)
     {
         var src = icon.Pick(desiredSizePx);
         if (src == null)
@@ -1058,8 +1090,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         int w = Math.Max(1, bmp.WidthPx);
         int h = Math.Max(1, bmp.HeightPx);
-        dst.Add((uint)w);
-        dst.Add((uint)h);
+        dst.Add(w);
+        dst.Add(h);
 
         var pixels = bmp.Data;
         int idx = 0;
@@ -1070,7 +1102,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             byte g = pixels[idx++];
             byte r = pixels[idx++];
             byte a = pixels[idx++];
-            dst.Add(((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b);
+            dst.Add(unchecked((nint)(((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b)));
         }
     }
 
@@ -1682,7 +1714,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             bool middleDown = (e.state & X11ModifierMask.Button2) != 0;
             bool rightDown = (e.state & X11ModifierMask.Button3) != 0;
 
-            WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, leftDown, rightDown, middleDown);
+            WindowInputRouter.MouseWheel(Window, pos, ClientToScreen(pos), delta, leftDown, rightDown, middleDown, GetModifiers((uint)e.state));
 
             return;
         }
@@ -1751,7 +1783,8 @@ internal sealed class X11WindowBackend : IWindowBackend
             leftDown: left,
             rightDown: right,
             middleDown: middle,
-            clickCount: clickCount);
+            clickCount: clickCount,
+            modifiers: GetModifiers((uint)e.state));
     }
 
     private void HandleMotion(XMotionEvent e)
@@ -1763,7 +1796,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         bool middle = (e.state & X11ModifierMask.Button2) != 0;
         bool right = (e.state & X11ModifierMask.Button3) != 0;
 
-        WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown: left, rightDown: right, middleDown: middle);
+        WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown: left, rightDown: right, middleDown: middle, modifiers: GetModifiers((uint)e.state));
     }
 
     private unsafe void HandleXdndEnter(XClientMessageEvent client)
@@ -2453,9 +2486,9 @@ internal sealed class X11WindowBackend : IWindowBackend
     // skip-taskbar. Set as properties before the window is mapped (a _NET_WM_STATE ClientMessage only applies
     // once the WM manages the window). Owner/transient is set separately via SetOwner. Best-effort - WMs vary
     // in utility-type support, degrading to a normal (skip-taskbar) window. Mutually exclusive with transparency.
-    private void ApplyToolWindowHints()
+    private void ApplyWindowTypeHints()
     {
-        if (Display == 0 || Handle == 0 || !Window.IsToolWindow || _allowsTransparency)
+        if (Display == 0 || Handle == 0 || _allowsTransparency)
         {
             return;
         }
@@ -2463,24 +2496,31 @@ internal sealed class X11WindowBackend : IWindowBackend
         try
         {
             var windowType = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE", false);
-            var windowTypeUtility = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_UTILITY", false);
-            if (windowType != 0 && windowTypeUtility != 0)
+            var windowTypeValue = Window.IsDialogWindow
+                ? NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_DIALOG", false)
+                : Window.IsToolWindow
+                    ? NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_UTILITY", false)
+                    : 0;
+            if (windowType != 0 && windowTypeValue != 0)
             {
                 unsafe
                 {
-                    nint data = windowTypeUtility;
+                    nint data = windowTypeValue;
                     NativeX11.XChangeProperty(Display, Handle, windowType, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
                 }
             }
 
-            var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
-            var skipTaskbar = NativeX11.XInternAtom(Display, "_NET_WM_STATE_SKIP_TASKBAR", false);
-            if (netWmState != 0 && skipTaskbar != 0)
+            if (Window.IsToolWindow)
             {
-                unsafe
+                var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
+                var skipTaskbar = NativeX11.XInternAtom(Display, "_NET_WM_STATE_SKIP_TASKBAR", false);
+                if (netWmState != 0 && skipTaskbar != 0)
                 {
-                    nint data = skipTaskbar;
-                    NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                    unsafe
+                    {
+                        nint data = skipTaskbar;
+                        NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                    }
                 }
             }
         }

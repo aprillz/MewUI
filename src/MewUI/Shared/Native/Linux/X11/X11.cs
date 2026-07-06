@@ -13,6 +13,10 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static partial nint XGetVisualInfo(nint display, long vinfoMask, ref XVisualInfo vinfoTemplate, out int nitems);
 
+    // Must be the first Xlib call in the process to make the shared Display safe for multi-thread access.
+    [LibraryImport(LibraryName)]
+    public static partial int XInitThreads();
+
     [LibraryImport(LibraryName)]
     public static partial nint XOpenDisplay(nint displayName);
 
@@ -63,6 +67,18 @@ internal static partial class X11
 
     [LibraryImport(LibraryName)]
     public static partial int XRaiseWindow(nint display, nint window);
+
+    [LibraryImport(LibraryName)]
+    public static partial int XGrabPointer(
+        nint display,
+        nint grabWindow,
+        [MarshalAs(UnmanagedType.Bool)] bool ownerEvents,
+        uint eventMask,
+        int pointerMode,
+        int keyboardMode,
+        nint confineTo,
+        nint cursor,
+        nint time);
 
     [LibraryImport(LibraryName)]
     public static partial int XUngrabPointer(nint display, nint time);

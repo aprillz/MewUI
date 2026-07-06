@@ -24,17 +24,19 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
     private static uint _version;
     private static DBusConnection? _connection;
 
-    /// <summary>Whether xdg-desktop-portal FileChooser is reachable. Cached after first probe.</summary>
+    /// <summary>
+    /// Whether xdg-desktop-portal FileChooser is reachable. Cached after first probe.
+    /// </summary>
     internal static bool IsAvailable()
     {
-        if (_available is { } cached)
+        if (_available.HasValue)
         {
-            return cached;
+            return _available.Value;
         }
 
         try
         {
-            _version = NativeDialogHelper.PumpUntil(ProbeVersionAsync());
+            _version = NativeDialogHelper.PumpUntil(CheckVersionAsync());
             _available = _version >= 1;
         }
         catch
@@ -84,7 +86,7 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
         return connection;
     }
 
-    private static async Task<uint> ProbeVersionAsync()
+    private static async Task<uint> CheckVersionAsync()
     {
         var connection = await GetConnectionAsync();
         var chooser = new FileChooser(connection, Destination, ObjectPath);
