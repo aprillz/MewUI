@@ -556,7 +556,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         else
         {
             var rect = new RECT(0, 0, clientW, clientH);
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, GetWindowStyle(), false, 0, dpi);
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, GetWindowStyle(), false, GetWindowExStyle(), dpi);
             windowW = rect.Width;
             windowH = rect.Height;
         }
@@ -663,29 +663,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_NCCALCSIZE:
-                if ((_allowsTransparency || _extendTitleBarHeight > 0) && wParam != 0)
-                {
-                    // Remove the default non-client area by not deflating the rect.
-                    // For transparent windows this keeps client-origin == window-origin while
-                    // preserving WS_THICKFRAME for native resize hit-test/tracking behavior.
-                    // When maximized, Windows extends the window by the resize border size beyond
-                    // the monitor edges. Compensate by inflating inward by the frame thickness.
-                    if (!_allowsTransparency && Window.WindowState == Controls.WindowState.Maximized)
-                    {
-                        int frame = User32.GetSystemMetrics(92 /* SM_CXPADDEDBORDER */)
-                                  + User32.GetSystemMetrics(33 /* SM_CYSIZEFRAME */);
-                        unsafe
-                        {
-                            var rgrc = (RECT*)lParam;
-                            rgrc->left += frame;
-                            rgrc->top += frame;
-                            rgrc->right -= frame;
-                            rgrc->bottom -= frame;
-                        }
-                    }
-                    return 0;
-                }
-                return User32.DefWindowProc(Handle, msg, wParam, lParam);
+                return HandleNcCalcSize(wParam, lParam);
 
             case WindowMessages.WM_NCCREATE:
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
@@ -833,7 +811,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return 0;
 
             case Win32Dispatcher.WM_INVOKE:
-                (Window.ApplicationDispatcher as Win32Dispatcher)?.ProcessWorkItems();
+                // Clear before processing (same order as the host's dispatcher window) so work
+                // posted during processing can re-request a WM_INVOKE.
+                if (Window.ApplicationDispatcher is Win32Dispatcher invokeDispatcher)
+                {
+                    invokeDispatcher.ClearInvokeRequest();
+                    invokeDispatcher.ProcessWorkItems();
+                }
                 return 0;
 
             case WindowMessages.WM_TIMER:
@@ -879,14 +863,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         var rect = new RECT(0, 0, (int)(Window.Width * dpiScale), (int)(Window.Height * dpiScale));
         uint style = GetWindowStyle();
+        uint exStyle = GetWindowExStyle();
         if (!Window.AllowsTransparency)
         {
-            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, 0, initialDpi);
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(ref rect, style, false, exStyle, initialDpi);
         }
 
         var (x, y) = ResolveInitialPosition(rect.Width, rect.Height, initialDpi);
-
-        uint exStyle = GetWindowExStyle();
 
         Handle = User32.CreateWindowEx(
             exStyle,
@@ -1206,7 +1189,57 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return 1;
     }
 
-    // (system backdrop support removed)
+    // ID2D1/DXGI-rendered windows show a black/stretched flash on the newly-exposed area during
+    // live resize because DWM's default resize BitBlt stretches the stale swap-chain content.
+    // Returning WVR_VALIDRECTS from WM_NCCALCSIZE tells DWM to copy the old client's top-left
+    // overlap 1:1 into the new client (no stretch) and invalidate the rest for a normal repaint,
+    // which matches the GDI/GL backends' smooth behavior. (Firefox bug 672885 technique.)
+    private unsafe nint HandleNcCalcSize(nint wParam, nint lParam)
+    {
+        const uint WVR_VALIDRECTS = 0x0400;
+
+        if (wParam == 0)
+        {
+            return User32.DefWindowProc(Handle, WindowMessages.WM_NCCALCSIZE, wParam, lParam);
+        }
+
+        var rgrc = (RECT*)lParam;
+
+        if (_allowsTransparency || _extendTitleBarHeight > 0)
+        {
+            // Custom chrome: client == window (no non-client deflate). Keep the original behavior
+            // exactly (return 0). WVR_VALIDRECTS is only meaningful for windows that composite
+            // through the redirection bitmap; transparent (NOREDIRECTIONBITMAP) windows don't, and
+            // returning it here breaks their sizing.
+            if (!_allowsTransparency && Window.WindowState == Controls.WindowState.Maximized)
+            {
+                int frame = User32.GetSystemMetrics(92 /* SM_CXPADDEDBORDER */)
+                          + User32.GetSystemMetrics(33 /* SM_CYSIZEFRAME */);
+                rgrc[0].left += frame;
+                rgrc[0].top += frame;
+                rgrc[0].right -= frame;
+                rgrc[0].bottom -= frame;
+            }
+            return 0;
+        }
+
+        // Opaque native chrome: let DefWindowProc compute the standard client rect into rgrc[0].
+        RECT oldClient = rgrc[2];
+        _ = User32.DefWindowProc(Handle, WindowMessages.WM_NCCALCSIZE, wParam, lParam);
+        RECT newClient = rgrc[0];
+
+        int validWidth = Math.Min(oldClient.Width, newClient.Width);
+        int validHeight = Math.Min(oldClient.Height, newClient.Height);
+        if (validWidth > 0 && validHeight > 0)
+        {
+            // rgrc[2] = source (old client, top-left aligned), rgrc[1] = destination (new client, top-left aligned).
+            rgrc[2] = new RECT(oldClient.left, oldClient.top, oldClient.left + validWidth, oldClient.top + validHeight);
+            rgrc[1] = new RECT(newClient.left, newClient.top, newClient.left + validWidth, newClient.top + validHeight);
+            return (nint)WVR_VALIDRECTS;
+        }
+
+        return 0;
+    }
 
     private void ApplyIcons()
     {
@@ -1424,6 +1457,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private Win32DropTargetAdapter? _dropTargetAdapter;
     private bool _legacyDropFilesRegistered;
+    private bool _oleInitialized;
 
     // STA → IDropTarget + IDropTargetHelper.   MTA → WM_DROPFILES fallback.
     // Apartment requirements and effect negotiation details: see remarks on UIElement.AllowDropProperty.
@@ -1441,6 +1475,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA &&
             Ole32.OleInitialize(0) >= 0)
         {
+            // Every successful OleInitialize must be balanced by OleUninitialize (revoke/destroy path).
+            _oleInitialized = true;
             _dropTargetAdapter = new Win32DropTargetAdapter(this);
             var pTarget = Win32DropTarget.Create(_dropTargetAdapter);
             int hr = Ole32.RegisterDragDrop(Handle, pTarget);
@@ -1451,6 +1487,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             }
             Win32DropTarget.Release(pTarget);
             _dropTargetAdapter = null;
+            Ole32.OleUninitialize();
+            _oleInitialized = false;
         }
 
         // Fallback: WM_DROPFILES will be delivered to WndProc; HandleDropFiles routes through the router.
@@ -1468,6 +1506,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             _dropTargetAdapter = null;
             Win32DropTarget.Release(_dropTargetCom);
             _dropTargetCom = 0;
+        }
+        if (_oleInitialized)
+        {
+            Ole32.OleUninitialize();
+            _oleInitialized = false;
         }
         if (_legacyDropFilesRegistered)
         {
@@ -1761,7 +1804,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 minH > 0 ? (int)Math.Ceiling(minH * dpiScale) : 0);
             if (!_allowsTransparency)
             {
-                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, GetWindowStyle(), false, 0, dpi);
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref minRect, GetWindowStyle(), false, GetWindowExStyle(), dpi);
             }
 
             if (minW > 0) info->ptMinTrackSize.x = minRect.Width;
@@ -1775,7 +1818,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 !double.IsPositiveInfinity(maxH) ? (int)Math.Ceiling(maxH * dpiScale) : 0);
             if (!_allowsTransparency)
             {
-                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, GetWindowStyle(), false, 0, dpi);
+                Win32DpiApiResolver.AdjustWindowRectExForDpi(ref maxRect, GetWindowStyle(), false, GetWindowExStyle(), dpi);
             }
 
             if (!double.IsPositiveInfinity(maxW)) info->ptMaxTrackSize.x = maxRect.Width;
@@ -1874,7 +1917,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         bool leftDown = (User32.GetKeyState(VirtualKeys.VK_LBUTTON) & 0x8000) != 0;
         bool rightDown = (User32.GetKeyState(VirtualKeys.VK_RBUTTON) & 0x8000) != 0;
         bool middleDown = (User32.GetKeyState(VirtualKeys.VK_MBUTTON) & 0x8000) != 0;
-        WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown, rightDown, middleDown);
+        WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown, rightDown, middleDown, GetModifierKeys());
 
         return 0;
     }
@@ -1946,7 +1989,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             leftDown,
             rightDown,
             middleDown,
-            clickCount);
+            clickCount,
+            GetModifierKeys());
 
         return 0;
     }
@@ -1972,7 +2016,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         var pt = new POINT(screenX, screenY);
         User32.ScreenToClient(Handle, ref pt);
         var pos = new Point(pt.x / Window.DpiScale, pt.y / Window.DpiScale);
-        WindowInputRouter.MouseWheel(Window, pos, new Point(screenX, screenY), delta);
+        WindowInputRouter.MouseWheel(Window, pos, new Point(screenX, screenY), delta, modifiers: GetModifierKeys());
 
         return 0;
     }
@@ -2526,6 +2570,26 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         const int GWL_HWNDPARENT = -8;
         User32.SetWindowLongPtr(Handle, GWL_HWNDPARENT, ownerHandle);
+
+        // If the owner is topmost, an owned (non-topmost) window sits in the normal z-order band, which is
+        // entirely below the topmost band, so it would be hidden behind the owner. Match the owner's topmost
+        // state so the owned/dialog window stays above it. Ownership alone does not promote an already-shown
+        // window across bands. (macOS achieves the same by setting the owned level to ownerLevel + 1.)
+        if (ownerHandle != 0)
+        {
+            const int GWL_EXSTYLE = -20;
+            const uint WS_EX_TOPMOST = 0x00000008;
+            const int HWND_TOPMOST = -1;
+            const uint SWP_NOSIZE = 0x0001;
+            const uint SWP_NOMOVE = 0x0002;
+            const uint SWP_NOACTIVATE = 0x0010;
+
+            uint ownerExStyle = (uint)User32.GetWindowLongPtr(ownerHandle, GWL_EXSTYLE).ToInt64();
+            if ((ownerExStyle & WS_EX_TOPMOST) != 0)
+            {
+                User32.SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
     }
 
     public void CenterOnOwner()
