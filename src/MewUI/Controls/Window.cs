@@ -1782,6 +1782,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _popupManager.LayoutDirtyPopups();
     }
 
+    // Full tree walks on purpose: an O(1) root-flag check is unsound here because layout passes
+    // may legitimately clear a container's flag while skipping still-dirty descendants (virtualization).
     private static bool HasMeasureDirty(Element root)
         => VisualTree.Find(root, static e => e.IsMeasureDirty) != null;
 

@@ -8,7 +8,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract partial class UIElement : Element
 {
-
     private bool _suggestedIsEnabled = true;
     private bool _suggestedIsEnabledInitialized;
     private bool _visualStateDirty;
@@ -185,15 +184,29 @@ public abstract partial class UIElement : Element
 
     private static void PropagateToDescendant(Element child, MewProperty property)
     {
-        if (child is UIElement u && u.HasPropertyStore)
+        if (child is UIElement element && element.HasPropertyStore)
         {
-            var source = u.PropertyStore.GetSource(property.Id);
+            var source = element.PropertyStore.GetSource(property.Id);
             // Stop propagation if child has its own value (local, trigger, or style)
             if (source > ValueSource.Inherited)
                 return;
-            // Clear cached inherited value so it will be re-resolved on next access
-            if (source == ValueSource.Inherited)
-                u.PropertyStore.ClearInherited(property.Id);
+
+            if (element.HasChangeObservers(property.Id))
+            {
+                // A binding observes this inherited property: clearing the cache lazily would never
+                // notify it (inherited changes don't run the normal notification pipeline). Eagerly
+                // re-resolve, cache the fresh value, and fire observers so the binding updates.
+                object? oldValue = element.PropertyStore.GetBoxedValue(property);
+                element.PropertyStore.ClearInherited(property.Id);
+                object? newValue = element.ResolveInheritedValueBoxed(property);
+                if (!Equals(oldValue, newValue))
+                    element.NotifyObserversBoxed(property, oldValue, newValue);
+            }
+            else if (source == ValueSource.Inherited)
+            {
+                // Clear cached inherited value so it will be re-resolved on next access
+                element.PropertyStore.ClearInherited(property.Id);
+            }
         }
 
         // Invalidate font cache on controls for font property changes
