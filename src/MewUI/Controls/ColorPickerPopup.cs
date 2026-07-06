@@ -252,6 +252,13 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         private Orientation _orientation = Orientation.Horizontal;
         private bool _isDragging;
 
+        // Cached gradient brush for the track fill, keyed by base color and gradient endpoints
+        // (both of which are baked into the brush at creation time).
+        private ILinearGradientBrush? _cachedGradientBrush;
+        private Color _cachedGradientBaseColor;
+        private Point _cachedGradientStart;
+        private Point _cachedGradientEnd;
+
         public AlphaSlider(State state)
         {
             _state = state;
@@ -279,6 +286,13 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         private void OnStateChanged(object? source) => InvalidateVisual();
 
         public override bool Focusable => true;
+
+        protected override void OnDispose()
+        {
+            base.OnDispose();
+            _cachedGradientBrush?.Dispose();
+            _cachedGradientBrush = null;
+        }
 
         protected override Size MeasureContent(Size availableSize)
         {
@@ -336,12 +350,20 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
             AlphaCheckerboard.Fill(context, trackRect, Theme.IsDark);
 
             var baseColor = _state.Rgb;
-            var opaque = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
-            var transparent = Color.FromArgb(0, baseColor.R, baseColor.G, baseColor.B);
-            var stops = new[] { new GradientStop(0, transparent), new GradientStop(1, opaque) };
-            var factory = GetGraphicsFactory();
-            using var brush = factory.CreateLinearGradientBrush(gradStart, gradEnd, stops);
-            context.FillRectangle(trackRect, brush);
+            if (_cachedGradientBrush == null || _cachedGradientBaseColor != baseColor ||
+                _cachedGradientStart != gradStart || _cachedGradientEnd != gradEnd)
+            {
+                var opaque = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
+                var transparent = Color.FromArgb(0, baseColor.R, baseColor.G, baseColor.B);
+                var stops = new[] { new GradientStop(0, transparent), new GradientStop(1, opaque) };
+                _cachedGradientBrush?.Dispose();
+                _cachedGradientBrush = GetGraphicsFactory().CreateLinearGradientBrush(gradStart, gradEnd, stops);
+                _cachedGradientBaseColor = baseColor;
+                _cachedGradientStart = gradStart;
+                _cachedGradientEnd = gradEnd;
+            }
+
+            context.FillRectangle(trackRect, _cachedGradientBrush!);
             context.Restore();
 
             double alphaFraction = _state.A / 255.0;
