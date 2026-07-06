@@ -38,6 +38,25 @@ public sealed class Calendar : Control, IVisualTreeHost
     private Rect[] _cellRects = Array.Empty<Rect>();
     private int _hotCellIndex = -1;
 
+    // Culture-formatted digit strings for day-of-month cells (index 0 = day 1). Native digits
+    // (e.g. Arabic-indic) depend on culture, so the table is rebuilt only when culture changes.
+    private string[] _cachedDayNumbers = Array.Empty<string>();
+    private CultureInfo? _cachedDayNumbersCulture;
+
+    // Abbreviated day-of-week header labels, ordered starting at FirstDayOfWeek and truncated to 2 chars.
+    private string[] _cachedDayNames = Array.Empty<string>();
+    private CultureInfo? _cachedDayNamesCulture;
+    private DayOfWeek _cachedDayNamesFirstDayOfWeek;
+
+    // Abbreviated month names for the year view (index 0 = January).
+    private string[] _cachedMonthNames = Array.Empty<string>();
+    private CultureInfo? _cachedMonthNamesCulture;
+
+    // Year label strings for the decade view, keyed by the decade's start year.
+    private string[] _cachedDecadeYearNumbers = Array.Empty<string>();
+    private int _cachedDecadeStart = int.MinValue;
+    private CultureInfo? _cachedDecadeYearNumbersCulture;
+
     // Small font for cell text
     private const double CellFontSize = 11;
     private static readonly double DowFontSize = Math.Round(CellFontSize * 0.85);
@@ -317,6 +336,71 @@ public sealed class Calendar : Control, IVisualTreeHost
         };
     }
 
+    private string[] GetDayNumbers(CultureInfo culture)
+    {
+        if (_cachedDayNumbersCulture == culture && _cachedDayNumbers.Length == 31)
+            return _cachedDayNumbers;
+
+        var numbers = new string[31];
+        for (int day = 1; day <= 31; day++)
+            numbers[day - 1] = day.ToString(culture);
+
+        _cachedDayNumbers = numbers;
+        _cachedDayNumbersCulture = culture;
+        return numbers;
+    }
+
+    private string[] GetDayNames(CultureInfo culture, DayOfWeek firstDayOfWeek)
+    {
+        if (_cachedDayNamesCulture == culture && _cachedDayNamesFirstDayOfWeek == firstDayOfWeek && _cachedDayNames.Length == DaysPerWeek)
+            return _cachedDayNames;
+
+        var names = new string[DaysPerWeek];
+        for (int i = 0; i < DaysPerWeek; i++)
+        {
+            var dow = (DayOfWeek)(((int)firstDayOfWeek + i) % DaysPerWeek);
+            string dayName = culture.DateTimeFormat.GetAbbreviatedDayName(dow);
+            names[i] = dayName.Length > 2 ? dayName[..2] : dayName;
+        }
+
+        _cachedDayNames = names;
+        _cachedDayNamesCulture = culture;
+        _cachedDayNamesFirstDayOfWeek = firstDayOfWeek;
+        return names;
+    }
+
+    private string[] GetMonthNames(CultureInfo culture)
+    {
+        if (_cachedMonthNamesCulture == culture && _cachedMonthNames.Length == 12)
+            return _cachedMonthNames;
+
+        var names = new string[12];
+        for (int month = 1; month <= 12; month++)
+            names[month - 1] = culture.DateTimeFormat.GetAbbreviatedMonthName(month);
+
+        _cachedMonthNames = names;
+        _cachedMonthNamesCulture = culture;
+        return names;
+    }
+
+    private string[] GetDecadeYearNumbers(int decadeStart, CultureInfo culture)
+    {
+        if (_cachedDecadeStart == decadeStart && _cachedDecadeYearNumbersCulture == culture && _cachedDecadeYearNumbers.Length == YearDecadeCells)
+            return _cachedDecadeYearNumbers;
+
+        var numbers = new string[YearDecadeCells];
+        for (int i = 0; i < YearDecadeCells; i++)
+        {
+            int year = decadeStart - 1 + i; // decade: -1 to +10, matches RenderDecadeView
+            numbers[i] = year.ToString(culture);
+        }
+
+        _cachedDecadeYearNumbers = numbers;
+        _cachedDecadeStart = decadeStart;
+        _cachedDecadeYearNumbersCulture = culture;
+        return numbers;
+    }
+
     private void RenderMonthView(IGraphicsContext context)
     {
         var theme = Theme;
@@ -334,12 +418,13 @@ public sealed class Calendar : Control, IVisualTreeHost
         double headerY = inner.Y + HeaderHeight;
         double cellW = _cellRects.Length > 0 ? _cellRects[0].Width : 0;
         var fdow = FirstDayOfWeek;
+        var culture = CultureInfo.CurrentCulture;
+        var dayNames = GetDayNames(culture, fdow);
+        var dayNumbers = GetDayNumbers(culture);
 
         for (int i = 0; i < DaysPerWeek; i++)
         {
-            var dow = (DayOfWeek)(((int)fdow + i) % DaysPerWeek);
-            string dayName = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(dow);
-            if (dayName.Length > 2) dayName = dayName[..2];
+            string dayName = dayNames[i];
 
             var rect = new Rect(
                 inner.X + CellSpacing + i * (cellW + CellSpacing),
@@ -392,7 +477,7 @@ public sealed class Calendar : Control, IVisualTreeHost
                     ? palette.WindowText
                     : palette.DisabledText;
 
-            context.DrawText(date.Day.ToString(), cellRect, font, textColor,
+            context.DrawText(dayNumbers[date.Day - 1], cellRect, font, textColor,
                 TextAlignment.Center, TextAlignment.Center);
         }
     }
@@ -407,6 +492,7 @@ public sealed class Calendar : Control, IVisualTreeHost
         double dpiScale = GetDpi() / 96.0;
         double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
         double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
+        var monthNames = GetMonthNames(CultureInfo.CurrentCulture);
 
         for (int i = 0; i < YearDecadeCells; i++)
         {
@@ -438,7 +524,7 @@ public sealed class Calendar : Control, IVisualTreeHost
             }
 
             var textColor = isSelected ? palette.AccentText : palette.WindowText;
-            string label = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(month);
+            string label = monthNames[month - 1];
 
             context.DrawText(label, cellRect, font, textColor,
                 TextAlignment.Center, TextAlignment.Center);
@@ -456,6 +542,7 @@ public sealed class Calendar : Control, IVisualTreeHost
         double dpiScale = GetDpi() / 96.0;
         double snappedRadius = LayoutRounding.RoundToPixel(CellCornerRadius, dpiScale);
         double snappedStroke = LayoutRounding.SnapThicknessToPixels(TodayStrokeThickness, dpiScale, 1);
+        var yearNumbers = GetDecadeYearNumbers(decadeStart, CultureInfo.CurrentCulture);
 
         for (int i = 0; i < YearDecadeCells; i++)
         {
@@ -491,7 +578,7 @@ public sealed class Calendar : Control, IVisualTreeHost
                     ? palette.WindowText
                     : palette.DisabledText;
 
-            context.DrawText(year.ToString(), cellRect, font, textColor,
+            context.DrawText(yearNumbers[i], cellRect, font, textColor,
                 TextAlignment.Center, TextAlignment.Center);
         }
     }
@@ -762,6 +849,16 @@ public sealed class Calendar : Control, IVisualTreeHost
     }
 
     #endregion
+
+    protected override void OnDispose()
+    {
+        base.OnDispose();
+
+        _cellFont?.Dispose();
+        _cellFont = null;
+        _dowFont?.Dispose();
+        _dowFont = null;
+    }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
         => visitor(_prevButton) && visitor(_nextButton) && visitor(_headerButton);
