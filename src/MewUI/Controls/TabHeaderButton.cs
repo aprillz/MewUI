@@ -52,8 +52,11 @@ internal sealed class TabHeaderButton : ContentControl
     /// </summary>
     internal Action<int>? ClickedCallback { get; set; }
 
+    private readonly PressCaptureHelper _pressCapture;
+
     public TabHeaderButton()
     {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
 
     private void RefreshVisualState()
@@ -106,9 +109,6 @@ internal sealed class TabHeaderButton : ContentControl
             return null;
         }
         return base.OnHitTest(point); 
-        }
-
-        return this;
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -183,13 +183,7 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
-            SetPressed(true);
-
-            var root = FindVisualRoot();
-            if (root is Window window)
-            {
-                window.CaptureMouse(this);
-            }
+            _pressCapture.BeginPress();
 
             ClickedCallback?.Invoke(Index);
             e.Handled = true;
@@ -202,13 +196,7 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Button == MouseButton.Left && IsPressed)
         {
-            SetPressed(false);
-
-            var root = FindVisualRoot();
-            if (root is Window window)
-            {
-                window.ReleaseMouseCapture();
-            }
+            _pressCapture.EndPress();
 
             e.Handled = true;
         }
@@ -217,7 +205,7 @@ internal sealed class TabHeaderButton : ContentControl
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        SetPressed(false);
+        _pressCapture.CancelPress();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

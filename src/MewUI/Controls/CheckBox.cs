@@ -15,8 +15,11 @@ public class CheckBox : ContentControl
     public static readonly MewProperty<bool> IsThreeStateProperty =
         MewProperty<bool>.Register<CheckBox>(nameof(IsThreeState), false, MewPropertyOptions.None);
 
+    private readonly PressCaptureHelper _pressCapture;
+
     public CheckBox()
     {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
 
     public override bool Focusable => true;
@@ -166,14 +169,7 @@ public class CheckBox : ContentControl
             return;
         }
 
-        SetPressed(true);
-        Focus();
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.CaptureMouse(this);
-        }
+        _pressCapture.BeginPress(() => Focus());
 
         e.Handled = true;
     }
@@ -187,13 +183,7 @@ public class CheckBox : ContentControl
             return;
         }
 
-        SetPressed(false);
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.ReleaseMouseCapture();
-        }
+        _pressCapture.EndPress();
 
         if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {

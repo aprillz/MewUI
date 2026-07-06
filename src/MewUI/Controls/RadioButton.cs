@@ -47,8 +47,11 @@ public class RadioButton : ToggleBase
         }
     }
 
+    private readonly PressCaptureHelper _pressCapture;
+
     public RadioButton()
     {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
 
     protected override void OnIsCheckedChanged(bool value)
@@ -193,14 +196,7 @@ public class RadioButton : ToggleBase
             return;
         }
 
-        SetPressed(true);
-        Focus();
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.CaptureMouse(this);
-        }
+        _pressCapture.BeginPress(() => Focus());
 
         e.Handled = true;
     }
@@ -214,13 +210,7 @@ public class RadioButton : ToggleBase
             return;
         }
 
-        SetPressed(false);
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.ReleaseMouseCapture();
-        }
+        _pressCapture.EndPress();
 
         if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {

@@ -15,8 +15,14 @@ public sealed class ToggleSwitch : ToggleBase
         HorizontalAlignmentProperty.OverrideDefaultValue<ToggleSwitch>(HorizontalAlignment.Left);
     }
 
-    private const double Spacing = 8;
+    private readonly PressCaptureHelper _pressCapture;
 
+    public ToggleSwitch()
+    {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
+    }
+
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
     public Color ThumbBrush
     {
         get => GetValue(ThumbBrushProperty);
@@ -110,14 +116,7 @@ public sealed class ToggleSwitch : ToggleBase
             return;
         }
 
-        SetPressed(true);
-        Focus();
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.CaptureMouse(this);
-        }
+        _pressCapture.BeginPress(() => Focus());
 
         e.Handled = true;
     }
@@ -131,13 +130,7 @@ public sealed class ToggleSwitch : ToggleBase
             return;
         }
 
-        SetPressed(false);
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.ReleaseMouseCapture();
-        }
+        _pressCapture.EndPress();
 
         if (!IsEffectivelyEnabled)
         {
