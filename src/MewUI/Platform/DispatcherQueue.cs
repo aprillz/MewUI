@@ -96,6 +96,14 @@ internal sealed class DispatcherQueue
                     }
                 }
 
+                // Merge key lifetime is enqueue until execution starts: remove it here, before
+                // the action runs, so a re-post with the same key during execution enqueues a
+                // fresh item instead of being silently dropped by EnqueueMerged.
+                if (item.MergeKey != null)
+                {
+                    _mergeKeys.TryRemove(item.MergeKey, out _);
+                }
+
                 try
                 {
                     if (op != null && op.Status == DispatcherOperationStatus.Aborted)
@@ -127,11 +135,6 @@ internal sealed class DispatcherQueue
                 }
                 finally
                 {
-                    if (item.MergeKey != null)
-                    {
-                        _mergeKeys.TryRemove(item.MergeKey, out _);
-                    }
-
                     item.Signal?.Set();
                 }
             }
