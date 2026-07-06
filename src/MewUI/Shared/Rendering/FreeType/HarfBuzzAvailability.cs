@@ -12,14 +12,14 @@ internal static class HarfBuzzAvailability
         {
             if (_probed == 0)
             {
-                Probe();
+                CheckAvailable();
             }
 
             return _probed == 1;
         }
     }
 
-    private static void Probe()
+    private static void CheckAvailable()
     {
         bool ok = NativeLibrary.TryLoad("libharfbuzz.so.0", out var handle);
         if (!ok)

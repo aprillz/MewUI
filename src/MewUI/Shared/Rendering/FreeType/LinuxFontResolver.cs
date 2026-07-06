@@ -31,21 +31,6 @@ internal static class LinuxFontResolver
             return resolved.Value.FilePath;
         }
 
-        var envPath = Environment.GetEnvironmentVariable("MEWUI_FONT_PATH");
-        if (!string.IsNullOrWhiteSpace(envPath) && File.Exists(envPath))
-        {
-            return envPath;
-        }
-
-        var envDir = Environment.GetEnvironmentVariable("MEWUI_FONT_DIR");
-        if (!string.IsNullOrWhiteSpace(envDir))
-        {
-            var p = ProbeDir(envDir, family, weight, italic);
-            if (p != null)
-            {
-                return p;
-            }
-        }
 
         // Primary: use fontconfig for proper family/weight/style matching.
         var fcPath = FontconfigResolve(family, weight, italic);
@@ -54,7 +39,7 @@ internal static class LinuxFontResolver
             return fcPath;
         }
 
-        // Secondary fontconfig: requested family unavailable — try generic
+        // Secondary fontconfig: requested family unavailable - try generic
         // "sans-serif" so the system's configured sans default kicks in.
         if (!string.Equals(family, "sans-serif", StringComparison.OrdinalIgnoreCase))
         {
@@ -75,10 +60,10 @@ internal static class LinuxFontResolver
 
         foreach (var root in roots)
         {
-            var p = ProbeDir(root, family, weight, italic);
-            if (p != null)
+            var path = ProbeDirectory(root, family, weight, italic);
+            if (path != null)
             {
-                return p;
+                return path;
             }
         }
 
@@ -180,7 +165,7 @@ internal static class LinuxFontResolver
         }
         catch
         {
-            // Fontconfig call failed — fall through to heuristic.
+            // Fontconfig call failed - fall through to heuristic.
         }
 
         return null;
@@ -231,7 +216,7 @@ internal static class LinuxFontResolver
         return s.Contains('/') || s.Contains('\\');
     }
 
-    private static string? ProbeDir(string root, string family, FontWeight weight, bool italic)
+    private static string? ProbeDirectory(string root, string family, FontWeight weight, bool italic)
     {
         if (!Directory.Exists(root))
         {
@@ -268,7 +253,7 @@ internal static class LinuxFontResolver
 
         bool bold = weight >= FontWeight.SemiBold;
 
-        // Styled variants first — the unstyled name matches the regular weight file.
+        // Styled variants first - the unstyled name matches the regular weight file.
         if (bold && italic)
         {
             yield return normalized + "-BoldOblique";
@@ -286,7 +271,7 @@ internal static class LinuxFontResolver
             yield return normalized + "-Italic";
         }
 
-        // Regular (unstyled) last — fallback.
+        // Regular (unstyled) last - fallback.
         yield return normalized;
     }
 
