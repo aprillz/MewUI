@@ -429,7 +429,7 @@ public class Grid : Panel
 
         CommitActualSizes(columns, rows, useFinal: false);
 
-        CollectionPool<List<Placement>>.Return(placements);
+        CollectionPool.Return(placements);
 
         double totalWidth = SumMeasureSizes(columns, spacing);
         double totalHeight = SumMeasureSizes(rows, spacing);
@@ -464,7 +464,7 @@ public class Grid : Panel
             placement.Child.Arrange(new Rect(x, y, width, height));
         }
 
-        CollectionPool<List<Placement>>.Return(placements);
+        CollectionPool.Return(placements);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -1062,10 +1062,10 @@ public class Grid : Panel
             DistributeExtra(otherDefinitions, extra, useStarWeights: false);
         }
 
-        CollectionPool<List<T>>.Return(preferredDefinitions);
-        CollectionPool<List<T>>.Return(autoDefinitions);
-        CollectionPool<List<T>>.Return(starDefinitions);
-        CollectionPool<List<T>>.Return(otherDefinitions);
+        CollectionPool.Return(preferredDefinitions);
+        CollectionPool.Return(autoDefinitions);
+        CollectionPool.Return(starDefinitions);
+        CollectionPool.Return(otherDefinitions);
     }
 
     private static void DistributeExtra<T>(IReadOnlyList<T> definitions, double extra, bool useStarWeights)

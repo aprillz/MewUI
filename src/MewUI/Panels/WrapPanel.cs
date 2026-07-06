@@ -76,8 +76,8 @@ public class WrapPanel : Panel
             }
         }
 
-        CollectionPool<List<ChildInfo>>.Return(items);
-        CollectionPool<List<ChildInfo>>.Return(lines);
+        CollectionPool.Return(items);
+        CollectionPool.Return(lines);
 
         var contentSize = horizontal
             ? new Size(totalMain, totalCross)
@@ -126,8 +126,8 @@ public class WrapPanel : Panel
             }
         }
 
-        CollectionPool<List<ChildInfo>>.Return(items);
-        CollectionPool<List<ChildInfo>>.Return(lines);
+        CollectionPool.Return(items);
+        CollectionPool.Return(lines);
     }
 
 
