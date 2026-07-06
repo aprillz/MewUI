@@ -228,7 +228,7 @@ public sealed partial class Image : FrameworkElement
         if (Source is IVectorImageSource vector)
         {
             var intrinsic = vector.IntrinsicSize;
-            return intrinsic.Width > 0 && intrinsic.Height > 0 ? intrinsic : Size.Empty;
+            return MeasureStretchedSize(intrinsic, availableSize, StretchMode);
         }
 
         var img = GetImage();
@@ -244,7 +244,7 @@ public sealed partial class Image : FrameworkElement
         var src = GetViewBoxPixels((int)orientedSize.Width, (int)orientedSize.Height);
 
         // Pixels are treated as DIPs for now (1px == 1dip at 96dpi).
-        return new Size(src.Width, src.Height);
+        return MeasureStretchedSize(src.Size, availableSize, StretchMode);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -357,6 +357,58 @@ public sealed partial class Image : FrameworkElement
 
         return new Rect(x, y, w, h);
     }
+
+    private static Size MeasureStretchedSize(Size naturalSize, Size availableSize, Stretch stretch)
+    {
+        double nw = Math.Max(0, naturalSize.Width);
+        double nh = Math.Max(0, naturalSize.Height);
+        if (nw <= 0 || nh <= 0)
+        {
+            return Size.Empty;
+        }
+
+        bool widthConstrained = IsFiniteNonNegative(availableSize.Width);
+        bool heightConstrained = IsFiniteNonNegative(availableSize.Height);
+        double scaleX = widthConstrained ? availableSize.Width / nw : 1.0;
+        double scaleY = heightConstrained ? availableSize.Height / nh : 1.0;
+
+        switch (stretch)
+        {
+            case Stretch.Fill:
+                return new Size(nw * scaleX, nh * scaleY);
+
+            case Stretch.Uniform:
+            {
+                double scale = (widthConstrained, heightConstrained) switch
+                {
+                    (true, true) => Math.Min(scaleX, scaleY),
+                    (true, false) => scaleX,
+                    (false, true) => scaleY,
+                    _ => 1.0
+                };
+                return new Size(nw * scale, nh * scale);
+            }
+
+            case Stretch.UniformToFill:
+            {
+                double scale = (widthConstrained, heightConstrained) switch
+                {
+                    (true, true) => Math.Max(scaleX, scaleY),
+                    (true, false) => scaleX,
+                    (false, true) => scaleY,
+                    _ => 1.0
+                };
+                return new Size(nw * scale, nh * scale);
+            }
+
+            case Stretch.None:
+            default:
+                return new Size(nw, nh);
+        }
+    }
+
+    private static bool IsFiniteNonNegative(double value) =>
+        !double.IsNaN(value) && !double.IsInfinity(value) && value >= 0;
 
     private static void ComputeRects(
         Rect sourceRect,
