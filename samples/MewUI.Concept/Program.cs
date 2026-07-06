@@ -3,7 +3,8 @@ using Aprillz.MewUI.Concept;
 
 Startup(args);
 //Application.Run(FitContentGridTest.Create());
-Application.Run(ZoomPanCanvasTest.Create());
+Application.Run(MeasureConstraintTest.Create()); // issue #173 regression
+//Application.Run(ZoomPanCanvasTest.Create());
 
 static void Startup(string[] args)
 {

@@ -25,7 +25,7 @@ internal static class StyleTest
             new TextBlock { Text = "Default TextBlock (inherits Foreground from Window)" }
         ));
 
-        // 2. StyleSheet type rule — flat button
+        // 2. StyleSheet type rule - flat button
         var flatButtonStyle = CreateFlatButtonStyle();
 
         var scopePanel = new StackPanel().Vertical().Spacing(8);
@@ -35,14 +35,12 @@ internal static class StyleTest
         scopePanel.Add(new Button().Content("Another Flat Button"));
         scopePanel.Add(new CheckBox().Content("CheckBox (unaffected by Button rule)"));
 
-        root.Add(Section("2. StyleSheet Type Rule — Flat Button", scopePanel));
+        root.Add(Section("2. StyleSheet Type Rule - Flat Button", scopePanel));
 
         // 3. StyleName + StyleSheet
-        var accentButtonStyle = CreateAccentButtonStyle();
-
         var sheetPanel = new StackPanel().Vertical().Spacing(8);
         sheetPanel.StyleSheet = new StyleSheet();
-        sheetPanel.StyleSheet.Define("accent-button", accentButtonStyle);
+        sheetPanel.StyleSheet.Define("accent-button", CreateAccentButtonStyle);
 
         var namedBtn = new Button().Content("Accent Button (StyleName)");
         namedBtn.StyleName = "accent-button";
@@ -51,14 +49,14 @@ internal static class StyleTest
 
         root.Add(Section("3. StyleName + StyleSheet", sheetPanel));
 
-        // 4. Disabled — Foreground inheritance
+        // 4. Disabled - Foreground inheritance
         var disabledPanel = new StackPanel().Vertical().Spacing(8);
         disabledPanel.IsEnabled = false;
         disabledPanel.Add(new Button().Content("Disabled Button (gray text)"));
         disabledPanel.Add(new TextBlock { Text = "TextBlock in disabled container (should NOT be gray)" });
         disabledPanel.Add(new CheckBox().Content("Disabled CheckBox (gray text)"));
 
-        root.Add(Section("4. Disabled — Foreground Inheritance", disabledPanel));
+        root.Add(Section("4. Disabled - Foreground Inheritance", disabledPanel));
 
         // 5. Local value priority
         var localBtn = new Button().Content("Local Background=Red (hover should NOT change bg)");
@@ -79,7 +77,7 @@ internal static class StyleTest
         innerBorder.WithTheme((t, c) => c.Background = t.Palette.ContainerBackground);
         var innerStack = new StackPanel().Vertical().Spacing(4);
         innerStack.StyleSheet = new StyleSheet();
-        innerStack.StyleSheet.Define<Button>(accentButtonStyle);
+        innerStack.StyleSheet.Define<Button>(CreateAccentButtonStyle());
         innerStack.Add(new Button().Content("Inner: Accent Button"));
         innerStack.Add(new TextBlock { Text = "Inner type rule overrides outer" });
         innerBorder.Child = innerStack;
