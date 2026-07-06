@@ -1,3 +1,4 @@
+using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
@@ -38,6 +39,33 @@ public sealed class ScrollViewer : ContentControl
     private Size _lastNotifiedExtent = Size.Empty;
     private Size _lastNotifiedViewport = Size.Empty;
     private Point _lastNotifiedOffset = new(double.NaN, double.NaN);
+
+    // Whether content overflows on each axis (scrollable), independent of the bar's fade state.
+    private bool _canScrollV;
+    private bool _canScrollH;
+
+    // Overlay auto-hide fade state machine (macOS-style); only exercised when AutoHideScrollBars is set.
+    private readonly ScrollBarFade _barFade;
+
+    public static readonly MewProperty<bool> AutoHideScrollBarsProperty =
+        MewProperty<bool>.Register<ScrollViewer>(nameof(AutoHideScrollBars), false,
+            MewPropertyOptions.AffectsLayout,
+            static (self, _, newVal) => self.OnAutoHideScrollBarsChanged(newVal));
+
+    /// <summary>
+    /// When true, scroll bars overlay the content (no reserved width) and stay hidden until revealed: they
+    /// fade in on scroll or when the pointer is over the bar region, and fade out after leaving / going idle.
+    /// Default false (bars follow the normal visibility rules at full opacity).
+    /// </summary>
+    public bool AutoHideScrollBars
+    {
+        get => GetValue(AutoHideScrollBarsProperty);
+        set => SetValue(AutoHideScrollBarsProperty, value);
+    }
+
+    // Reset the fade state when the mode toggles at runtime so bars start hidden (auto-hide on) or
+    // return to full opacity (off); the next arrange applies the baseline.
+    private void OnAutoHideScrollBarsChanged(bool enabled) => _barFade.Reset(enabled);
 
     /// <summary>
     /// Raised when scroll metrics or offsets change.
@@ -168,7 +196,7 @@ public sealed class ScrollViewer : ContentControl
         double newOffsetX = HorizontalOffset;
         double newOffsetY = VerticalOffset;
 
-        if (_vBar.IsVisible)
+        if (_canScrollV)
         {
             if (rectInViewer.Y < vp.Y)
                 newOffsetY = VerticalOffset - (vp.Y - rectInViewer.Y);
@@ -176,7 +204,7 @@ public sealed class ScrollViewer : ContentControl
                 newOffsetY = VerticalOffset + (rectInViewer.Bottom - vp.Bottom);
         }
 
-        if (_hBar.IsVisible)
+        if (_canScrollH)
         {
             if (rectInViewer.X < vp.X)
                 newOffsetX = HorizontalOffset - (vp.X - rectInViewer.X);
@@ -208,6 +236,8 @@ public sealed class ScrollViewer : ContentControl
 
         _vBar.Parent = this;
         _hBar.Parent = this;
+
+        _barFade = new ScrollBarFade(_vBar, _hBar, InvalidateVisual);
 
         _vBar.ValueChanged += v =>
         {
@@ -354,8 +384,12 @@ public sealed class ScrollViewer : ContentControl
         // rounding differences at non-integer DPI scales.
         bool needV = (long)_scroll.GetExtentPx(1) > (long)_scroll.GetViewportPx(1) + 1;
         bool needH = (long)_scroll.GetExtentPx(0) > (long)_scroll.GetViewportPx(0) + 1;
-        _vBar.IsVisible = IsBarVisible(VerticalScroll, needV);
-        _hBar.IsVisible = IsBarVisible(HorizontalScroll, needH);
+        _canScrollV = IsBarVisible(VerticalScroll, needV);
+        _canScrollH = IsBarVisible(HorizontalScroll, needH);
+        _vBar.IsVisible = _canScrollV;
+        _hBar.IsVisible = _canScrollH;
+        _vBar.RenderOpacity = AutoHideScrollBars ? _barFade.Opacity : 1.0;
+        _hBar.RenderOpacity = AutoHideScrollBars ? _barFade.Opacity : 1.0;
 
         // Clamp offsets against the latest extent/viewport before arranging children.
         // Clamp using DIP offsets to avoid quantizing the logical offset via px roundtrips,
@@ -480,13 +514,18 @@ public sealed class ScrollViewer : ContentControl
             return;
         }
 
+        if (AutoHideScrollBars)
+        {
+            _barFade.UpdateHot();
+        }
+
         bool handled = false;
-        if (_vBar.IsVisible && e.Delta.Y != 0)
+        if (_canScrollV && e.Delta.Y != 0)
         {
             ScrollBy(-e.Delta.Y);
             handled = true;
         }
-        if (_hBar.IsVisible && e.Delta.X != 0)
+        if (_canScrollH && e.Delta.X != 0)
         {
             ScrollByHorizontal(-e.Delta.X);
             handled = true;
@@ -494,6 +533,24 @@ public sealed class ScrollViewer : ContentControl
         if (handled)
         {
             e.Handled = true;
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (AutoHideScrollBars)
+        {
+            _barFade.UpdateHot();
+        }
+    }
+
+    protected override void OnMouseLeave()
+    {
+        base.OnMouseLeave();
+        if (AutoHideScrollBars)
+        {
+            _barFade.ClearHot();
         }
     }
 
@@ -661,6 +718,13 @@ public sealed class ScrollViewer : ContentControl
             return;
         }
 
+        // Reveal auto-hidden bars only on actual scrolling (offset moved between two real values), not on
+        // layout/extent changes or the initial offset being established from its NaN sentinel.
+        if (!double.IsNaN(_lastNotifiedOffset.X) && _lastNotifiedOffset != offset)
+        {
+            OnScrolled();
+        }
+
         _lastNotifiedExtent = _extent;
         _lastNotifiedViewport = _viewport;
         _lastNotifiedOffset = offset;
@@ -673,8 +737,19 @@ public sealed class ScrollViewer : ContentControl
         }
     }
 
+    // Called when the offset actually moves; reveals the auto-hidden bars for the idle window.
+    private void OnScrolled()
+    {
+        if (AutoHideScrollBars)
+        {
+            _barFade.NotifyScrolled();
+        }
+    }
+
     protected override void OnDispose()
     {
+        _barFade.Dispose();
+
         if (_vBar is IDisposable dv)
         {
             dv.Dispose();
@@ -683,6 +758,139 @@ public sealed class ScrollViewer : ContentControl
         if (_hBar is IDisposable dh)
         {
             dh.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Overlay scroll-bar auto-hide fade state machine (macOS-style): bars stay hidden at rest and fade
+    /// in on scroll or hover, then fade back out after an idle delay / on leave. Groups the fade state so
+    /// <see cref="ScrollViewer"/> holds a single field instead of seven scattered ones.
+    /// </summary>
+    private sealed class ScrollBarFade
+    {
+        private readonly ScrollBar _vBar;
+        private readonly ScrollBar _hBar;
+        private readonly Action _invalidate;
+
+        private bool _hot;            // pointer over a bar region (sticky reveal until leave)
+        private bool _scrollActive;   // recently scrolled (transient reveal; idle timer running)
+        private double _opacity;      // current faded thumb opacity
+        private double _fadeFrom;
+        private double _fadeTarget;
+        private DispatcherTimer? _idleTimer;
+        private AnimationClock? _fadeClock;
+
+        public ScrollBarFade(ScrollBar vBar, ScrollBar hBar, Action invalidate)
+        {
+            _vBar = vBar;
+            _hBar = hBar;
+            _invalidate = invalidate;
+        }
+
+        /// <summary>Current thumb opacity (0 hidden .. 1 shown).</summary>
+        public double Opacity => _opacity;
+
+        /// <summary>Resets to the mode baseline: hidden when enabled, fully shown when disabled.</summary>
+        public void Reset(bool enabled)
+        {
+            _idleTimer?.Stop();
+            _fadeClock?.Stop();
+            _scrollActive = false;
+            _hot = false;
+            _opacity = enabled ? 0.0 : 1.0;
+        }
+
+        /// <summary>Reveals the bars on a real scroll, then fades them out after an idle delay.</summary>
+        public void NotifyScrolled()
+        {
+            _scrollActive = true;
+            (_idleTimer ??= CreateIdleTimer()).Stop();
+            _idleTimer.Start();
+            UpdateFade();
+        }
+
+        /// <summary>Recomputes hover from the bars (called on move/wheel) and refreshes the fade.</summary>
+        public void UpdateHot()
+        {
+            bool hot = (_vBar.IsVisible && _vBar.IsMouseOver) || (_hBar.IsVisible && _hBar.IsMouseOver);
+            if (hot == _hot)
+            {
+                return;
+            }
+
+            _hot = hot;
+            if (hot)
+            {
+                _idleTimer?.Stop();
+                _scrollActive = false;
+            }
+            UpdateFade();
+        }
+
+        /// <summary>Clears hover (pointer left the control) and lets the bars fade out.</summary>
+        public void ClearHot()
+        {
+            if (!_hot)
+            {
+                return;
+            }
+
+            _hot = false;
+            UpdateFade();
+        }
+
+        public void Dispose()
+        {
+            _idleTimer?.Stop();
+            _fadeClock?.Stop();
+        }
+
+        private DispatcherTimer CreateIdleTimer()
+        {
+            var timer = new DispatcherTimer(TimeSpan.FromMilliseconds(900));
+            timer.Tick += () =>
+            {
+                timer.Stop();
+                _scrollActive = false;
+                UpdateFade();
+            };
+            return timer;
+        }
+
+        // Bars are shown while the pointer is over them or scrolling is active; otherwise they fade out.
+        private void UpdateFade() => StartFade(_hot || _scrollActive ? 1.0 : 0.0);
+
+        private void StartFade(double target)
+        {
+            if (target.Equals(_fadeTarget) && _fadeClock is { IsRunning: true })
+            {
+                return;
+            }
+
+            _fadeFrom = _opacity;
+            _fadeTarget = target;
+            if (_fadeFrom.Equals(target))
+            {
+                return;
+            }
+
+            _fadeClock ??= CreateFadeClock();
+            _fadeClock.Stop();
+            _fadeClock.Duration = TimeSpan.FromMilliseconds(target > _fadeFrom ? 140 : 320);
+            _fadeClock.Start();
+        }
+
+        private AnimationClock CreateFadeClock()
+        {
+            var clock = new AnimationClock(TimeSpan.FromMilliseconds(200), Easing.EaseOutCubic);
+            clock.TickCallback = progress =>
+            {
+                _opacity = Math.Clamp(_fadeFrom + (_fadeTarget - _fadeFrom) * progress, 0, 1);
+                _vBar.RenderOpacity = _opacity;
+                _hBar.RenderOpacity = _opacity;
+                _invalidate();
+            };
+            return clock;
         }
     }
 }
