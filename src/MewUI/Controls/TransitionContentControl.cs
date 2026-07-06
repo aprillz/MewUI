@@ -206,43 +206,40 @@ public class TransitionContentControl : Control, IVisualTreeHost
             return;
         }
 
-        bool needsClip = transition.Kind is ContentTransitionKind.Slide
-                                           or ContentTransitionKind.Scale
-                                           or ContentTransitionKind.Rotate;
-        needsClip = false;
-        if (needsClip)
-        {
-            context.Save();
-            context.SetClip(Bounds);
-        }
-
         // Old content - exit animation
         if (_oldContent != null)
         {
             context.Save();
-            context.TextPixelSnap = false;
-            ApplyExitTransform(context, transition, p, Bounds);
-            context.GlobalAlpha *= (float)(_oldContentAlpha * (1.0 - p));
-            _oldContent.Render(context);
-            context.Restore();
+            try
+            {
+                context.TextPixelSnap = false;
+                ApplyExitTransform(context, transition, p, Bounds);
+                context.GlobalAlpha *= (float)(_oldContentAlpha * (1.0 - p));
+                _oldContent.Render(context);
+            }
+            finally
+            {
+                context.Restore();
+            }
         }
 
         // New content - enter animation
         if (_currentContent != null)
         {
             context.Save();
-            context.TextPixelSnap = false;
-            ApplyEnterTransform(context, transition, p, Bounds);
-            // Multiply (not assign) so the entering content respects any inherited opacity, matching the
-            // exiting branch above. Identical to a plain assign when GlobalAlpha is 1 (the common case).
-            context.GlobalAlpha *= (float)p;
-            _currentContent.Render(context);
-            context.Restore();
-        }
-
-        if (needsClip)
-        {
-            context.Restore();
+            try
+            {
+                context.TextPixelSnap = false;
+                ApplyEnterTransform(context, transition, p, Bounds);
+                // Multiply (not assign) so the entering content respects any inherited opacity, matching the
+                // exiting branch above. Identical to a plain assign when GlobalAlpha is 1 (the common case).
+                context.GlobalAlpha *= (float)p;
+                _currentContent.Render(context);
+            }
+            finally
+            {
+                context.Restore();
+            }
         }
     }
 
@@ -352,7 +349,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }
