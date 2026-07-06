@@ -276,6 +276,8 @@ internal sealed class AaSurface : IDisposable
         Height = 0;
     }
 
+    ~AaSurface() => Release();
+
     public void Dispose()
     {
         if (!_disposed)
@@ -283,5 +285,6 @@ internal sealed class AaSurface : IDisposable
             Release();
             _disposed = true;
         }
+        GC.SuppressFinalize(this);
     }
 }
