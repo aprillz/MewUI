@@ -308,7 +308,7 @@ public sealed class FocusManager
     {
         var result = _focusableScratch;
         result.Clear();
-        CollectFocusableElementsCore(root, result);
+        CollectScopeOrdered(root, result);
         return result;
     }
 
@@ -379,48 +379,87 @@ public sealed class FocusManager
         }
     }
 
-    private void CollectFocusableElementsCore(Element? element, List<UIElement> result)
+    private void CollectScopeOrdered(Element? root, List<UIElement> output)
     {
-        if (element is UIElement ue && (!ue.IsVisible || !ue.IsEffectivelyEnabled))
+        // Order is resolved per traversal scope: direct tab stops and nested scopes (as atomic
+        // blocks) sort by TabIndex - explicit non-negative finite values ascending first, then
+        // tree order (stable). With no explicit TabIndex anywhere this equals plain tree order.
+        var entries = new List<TabOrderEntry>();
+        CollectScopeEntries(root, entries);
+
+        entries.Sort(static (left, right) =>
+        {
+            int byKey = left.Key.CompareTo(right.Key);
+            return byKey != 0 ? byKey : left.Sequence.CompareTo(right.Sequence);
+        });
+
+        foreach (var entry in entries)
+        {
+            if (entry.Block != null)
+            {
+                output.AddRange(entry.Block);
+            }
+            else
+            {
+                output.Add(entry.Element!);
+            }
+        }
+    }
+
+    private void CollectScopeEntries(Element? element, List<TabOrderEntry> entries)
+    {
+        if (element is UIElement guarded && (!guarded.IsVisible || !guarded.IsEffectivelyEnabled))
         {
             return;
         }
 
         if (element is IFocusTraversalScope scope)
         {
-            int before = result.Count;
-            CollectFocusableElementsCore(scope.ActiveTraversalRoot, result);
+            // A nested scope joins this scope's order as one block keyed by the scope element's
+            // own TabIndex; its inner order is resolved recursively and never interleaves out.
+            var block = new List<UIElement>();
+            CollectScopeOrdered(scope.ActiveTraversalRoot, block);
 
             // WinForms-style: Tab navigation enters the selected tab's content.
             // If there are no focusable descendants, allow the scope element itself to be focused.
-            if (result.Count == before && element is UIElement scopeElement)
+            if (block.Count == 0 && element is UIElement scopeElement && IsTabStopTarget(scopeElement))
             {
-                AddIfFocusable(scopeElement, result);
+                block.Add(scopeElement);
+            }
+
+            if (block.Count > 0 && element is UIElement keyElement)
+            {
+                entries.Add(new TabOrderEntry(TabSortKey(keyElement), entries.Count, null, block));
             }
 
             return;
         }
 
-        if (element is UIElement uiElement)
+        if (element is UIElement uiElement && IsTabStopTarget(uiElement))
         {
-            AddIfFocusable(uiElement, result);
+            entries.Add(new TabOrderEntry(TabSortKey(uiElement), entries.Count, uiElement, null));
         }
 
         if (element is IVisualTreeHost host)
         {
             host.VisitChildren(child =>
             {
-                CollectFocusableElementsCore(child, result);
+                CollectScopeEntries(child, entries);
                 return true;
             });
         }
     }
 
-    private static void AddIfFocusable(UIElement uiElement, List<UIElement> result)
+    private readonly record struct TabOrderEntry(double Key, int Sequence, UIElement? Element, List<UIElement>? Block);
+
+    private static double TabSortKey(UIElement element)
     {
-        if (uiElement.Focusable && uiElement.IsEffectivelyEnabled && uiElement.IsVisible)
-        {
-            result.Add(uiElement);
-        }
+        // NaN (the default) fails the comparison and lands in the tree-order group, so the
+        // sort key can never itself be NaN.
+        double tabIndex = element.TabIndex;
+        return tabIndex >= 0 && double.IsFinite(tabIndex) ? tabIndex : double.PositiveInfinity;
     }
+
+    private static bool IsTabStopTarget(UIElement uiElement)
+        => uiElement.Focusable && uiElement.IsTabStop && uiElement.IsEffectivelyEnabled && uiElement.IsVisible;
 }

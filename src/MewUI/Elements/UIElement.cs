@@ -64,6 +64,22 @@ public abstract partial class UIElement : Element
             MewPropertyOptions.None);
 
     /// <summary>
+    /// Position in the Tab order. Non-negative finite values are visited ascending, before
+    /// elements without an explicit index; NaN (default), negative and infinite values keep tree order.
+    /// </summary>
+    public static readonly MewProperty<double> TabIndexProperty =
+        MewProperty<double>.Register<UIElement>(nameof(TabIndex), double.NaN);
+
+    /// <summary>
+    /// Whether a focusable element participates in Tab traversal. False only removes it from the
+    /// Tab order; click and programmatic focus are unaffected. Non-focusable elements are never
+    /// promoted into the Tab order by this property. Control authors exclude internal parts
+    /// (constructor/style); apps exclude individual instances.
+    /// </summary>
+    public static readonly MewProperty<bool> IsTabStopProperty =
+        MewProperty<bool>.Register<UIElement>(nameof(IsTabStop), true);
+
+    /// <summary>
     /// When <see langword="true"/>, the viewport-bounds cull check in <see cref="Render"/> is skipped.
     /// Set this on children whose layout bounds do not reflect their actual visible area
     /// (e.g. children rendered under a parent-applied scale/rotation transform).
@@ -259,6 +275,18 @@ public abstract partial class UIElement : Element
     {
         get => GetValue(IsHitTestVisibleProperty);
         set => SetValue(IsHitTestVisibleProperty, value);
+    }
+
+    public double TabIndex
+    {
+        get => GetValue(TabIndexProperty);
+        set => SetValue(TabIndexProperty, value);
+    }
+
+    public bool IsTabStop
+    {
+        get => GetValue(IsTabStopProperty);
+        set => SetValue(IsTabStopProperty, value);
     }
 
     /// <summary>
