@@ -358,7 +358,7 @@ public class NavigationList : ScrollableItemsBase
             return;
         }
 
-        if (TryGetItemIndexAt(e, out int index) && KindAt(index) == NavigationItemKind.Item)
+        if (e.Button == MouseButton.Left && TryGetItemIndexAt(e, out int index) && KindAt(index) == NavigationItemKind.Item)
         {
             SelectedIndex = index;
             ItemInvoked?.Invoke(_itemsSource.GetItem(index));
