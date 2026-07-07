@@ -278,8 +278,8 @@ public sealed class VideoPlayerWindow : Window
         SampleLog.Write("Opening file dialog.");
         var file = FileDialog.OpenFile(new OpenFileDialogOptions
         {
-            Owner = Handle,
-            Filter = "Video Files (*.mp4;*.mkv;*.avi;*.mov;*.webm)|*.mp4;*.mkv;*.avi;*.mov;*.webm|All Files (*.*)|*.*"
+            Owner = this,
+            Filters = FileFilter.Parse("Video Files (*.mp4;*.mkv;*.avi;*.mov;*.webm)|*.mp4;*.mkv;*.avi;*.mov;*.webm|All Files (*.*)|*.*")
         });
 
         if (string.IsNullOrWhiteSpace(file))
