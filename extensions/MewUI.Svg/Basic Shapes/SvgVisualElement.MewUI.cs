@@ -3,6 +3,7 @@ using System.Linq;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Rendering;
+
 using Svg.FilterEffects;
 using Svg.ExtensionMethods;
 
@@ -41,23 +42,28 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
         {
             if (PushTransforms(renderer))
             {
-                SetClip(renderer);
-                float elementOpacity = FixOpacityValue(Opacity);
-                if (elementOpacity < 1f)
+                var hasClip = SetClip(renderer);
+                try
                 {
-                    renderer.GraphicsContext.GlobalAlpha *= elementOpacity;
-                }
+                    float elementOpacity = FixOpacityValue(Opacity);
+                    if (elementOpacity < 1f)
+                    {
+                        renderer.GraphicsContext.GlobalAlpha *= elementOpacity;
+                    }
 
-                if (Renderable)
-                {
-                    RenderFillAndStroke(renderer);
+                    if (Renderable)
+                    {
+                        RenderFillAndStroke(renderer);
+                    }
+                    else
+                    {
+                        RenderChildren(renderer);
+                    }
                 }
-                else
+                finally
                 {
-                    RenderChildren(renderer);
+                    ResetClip(renderer, hasClip);
                 }
-
-                ResetClip(renderer);
             }
         }
         finally
@@ -222,6 +228,7 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
                 case PathCommandType.LineTo:
                     point = new Point(command.X0, command.Y0);
                     return true;
+
                 case PathCommandType.BezierTo:
                     point = new Point(command.X0, command.Y0);
                     return true;
@@ -232,7 +239,15 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
         return false;
     }
 
-    protected internal virtual void SetClip(ISvgRenderer renderer)
+    private bool _lastSetClipPushed;
+
+    /// <summary>Pushes a clip Save only when a clip-path/clip attribute actually resolves
+    /// to something drawable. Returns whether a Save was pushed - callers must pass this
+    /// back into <see cref="ResetClip(ISvgRenderer, bool)"/> so Restore only fires when
+    /// Save did, instead of re-deriving the same condition (which can drift out of sync,
+    /// e.g. when ClipPath references a missing/empty clip-path and Save is skipped but a
+    /// Restore-on-presence check would still fire).</summary>
+    protected internal virtual bool SetClip(ISvgRenderer renderer)
     {
         var hasClip = false;
 
@@ -271,11 +286,17 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
                     Math.Max(0, bounds.Height - (offsets[2] + offsets[0]))));
             }
         }
+
+        _lastSetClipPushed = hasClip;
+        return hasClip;
     }
 
-    protected internal virtual void ResetClip(ISvgRenderer renderer)
+    /// <summary>Restores the clip Save pushed by <see cref="SetClip"/>, if any. Takes the
+    /// exact boolean SetClip returned rather than re-checking ClipPath/Clip, so this can
+    /// never Restore without a matching Save.</summary>
+    protected internal virtual void ResetClip(ISvgRenderer renderer, bool hasClip)
     {
-        if (ClipPath is not null || (!string.IsNullOrEmpty(Clip) && Clip.StartsWith("rect(", StringComparison.Ordinal)))
+        if (hasClip)
         {
             renderer.GraphicsContext.Restore();
         }
@@ -283,5 +304,5 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
 
     void ISvgClipable.SetClip(ISvgRenderer renderer) => SetClip(renderer);
 
-    void ISvgClipable.ResetClip(ISvgRenderer renderer) => ResetClip(renderer);
+    void ISvgClipable.ResetClip(ISvgRenderer renderer) => ResetClip(renderer, _lastSetClipPushed);
 }
