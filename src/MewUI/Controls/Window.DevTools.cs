@@ -11,6 +11,7 @@ public partial class Window
     private DebugInspectorOverlay? _debugInspectorOverlay;
     private DebugVisualTreeWindow? _debugVisualTreeWindow;
     private UIElement? _lastInspectorHover;
+    private bool _lastInspectorInfoPanelAvoidsMouse;
 
     /// <summary>
     /// Called from <see cref="UpdateLastMousePosition"/>. Triggers an overlay redraw only
@@ -31,12 +32,15 @@ public partial class Window
             hovered = null;
         }
 
-        if (ReferenceEquals(hovered, _lastInspectorHover))
+        bool infoPanelAvoidsMouse = _debugInspectorOverlay.ShouldAvoidMouse(_lastMousePositionDip);
+        if (ReferenceEquals(hovered, _lastInspectorHover) &&
+            infoPanelAvoidsMouse == _lastInspectorInfoPanelAvoidsMouse)
         {
             return;
         }
 
         _lastInspectorHover = hovered;
+        _lastInspectorInfoPanelAvoidsMouse = infoPanelAvoidsMouse;
         _debugInspectorOverlay.InvalidateVisual();
     }
 
@@ -161,6 +165,20 @@ public partial class Window
 
     private sealed class DebugInspectorOverlay : Control
     {
+        private const byte OverlayAlpha = 160;
+        private const double PanelMargin = 8.0;
+        private const double PanelPadding = 8.0;
+        private const double PanelMaxTextWidth = 420.0;
+        private const double PanelCornerRadius = 6.0;
+        private const double PanelAvoidSlop = 24.0;
+        private const double PanelEstimatedHeight = 120.0;
+        private static readonly Color HoverBoundsColor = Color.FromRgb(80, 160, 255).WithAlpha(OverlayAlpha);
+        private static readonly Color FocusBoundsColor = Color.FromRgb(255, 120, 80).WithAlpha(OverlayAlpha);
+        private static readonly Color SelectedBoundsColor = Color.FromRgb(255, 120, 80).WithAlpha(OverlayAlpha);
+        private static readonly Color PanelBackgroundColor = Color.FromRgb(20, 20, 20).WithAlpha(OverlayAlpha);
+        private static readonly Color PanelBorderColor = Color.FromRgb(80, 160, 255).WithAlpha(OverlayAlpha);
+        private static readonly Color PanelTextColor = Color.FromRgb(255, 255, 255).WithAlpha(OverlayAlpha);
+
         private readonly Window _window;
         private string? _cachedText;
         private UIElement? _cachedHovered;
@@ -176,6 +194,9 @@ public partial class Window
         }
 
         public override bool Focusable => false;
+
+        public bool ShouldAvoidMouse(Point mousePosition)
+            => IsPointNearTopLeftInfoPanel(mousePosition);
 
         protected override void OnRender(IGraphicsContext context)
         {
@@ -193,19 +214,22 @@ public partial class Window
             var focused = _window.FocusManager.FocusedElement;
             var pinned = HighlightedElement;
 
-            if (hovered != null)
+            if (hovered != null &&
+                !ReferenceEquals(hovered, focused) &&
+                !ReferenceEquals(hovered, pinned))
             {
-                DrawElementBounds(context, hovered, Color.FromArgb(255, 80, 160, 255));
+                DrawElementBounds(context, hovered, HoverBoundsColor);
             }
 
-            if (focused != null)
+            if (focused != null &&
+                !ReferenceEquals(focused, pinned))
             {
-                DrawElementBounds(context, focused, Color.FromArgb(255, 80, 255, 120));
+                DrawElementBounds(context, focused, FocusBoundsColor);
             }
 
             if (pinned != null)
             {
-                DrawElementBounds(context, pinned, Color.FromArgb(255, 255, 120, 80));
+                DrawElementBounds(context, pinned, SelectedBoundsColor);
             }
 
             DrawInfoPanel(context, hovered, focused, pinned);
@@ -228,15 +252,38 @@ public partial class Window
             var font = GetFont();
             string text = GetOrBuildInspectorText(hovered, focused, pinned);
 
-            var pad = 8.0;
-            var size = context.MeasureText(text, font, maxWidth: 420);
-            var panelRect = new Rect(Bounds.X + 8, Bounds.Y + 8, size.Width + pad * 2, size.Height + pad * 2);
+            var size = context.MeasureText(text, font, maxWidth: PanelMaxTextWidth);
+            var panelRect = GetInfoPanelRect(size, _window.LastMousePositionDip);
             panelRect = LayoutRounding.SnapBoundsRectToPixels(panelRect, context.DpiScale);
-            var bg = Color.FromArgb(190, 20, 20, 20);
-            var border = Color.FromArgb(220, 80, 160, 255);
-            context.FillRoundedRectangle(panelRect, 6, 6, bg);
-            context.DrawRoundedRectangle(panelRect, 6, 6, border, 1, strokeInset: true);
-            context.DrawText(text, panelRect.Deflate(new Thickness(pad)), font, Color.White, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+            context.FillRoundedRectangle(panelRect, PanelCornerRadius, PanelCornerRadius, PanelBackgroundColor);
+            context.DrawRoundedRectangle(panelRect, PanelCornerRadius, PanelCornerRadius, PanelBorderColor, 1, strokeInset: true);
+            context.DrawText(text, panelRect.Deflate(new Thickness(PanelPadding)), font, PanelTextColor, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+        }
+
+        private Rect GetInfoPanelRect(Size contentSize, Point mousePosition)
+        {
+            double width = contentSize.Width + PanelPadding * 2;
+            double height = contentSize.Height + PanelPadding * 2;
+
+            if (IsPointNearTopLeftInfoPanel(mousePosition))
+            {
+                return new Rect(
+                    Math.Max(Bounds.X + PanelMargin, Bounds.Right - width - PanelMargin),
+                    Math.Max(Bounds.Y + PanelMargin, Bounds.Bottom - height - PanelMargin),
+                    width,
+                    height);
+            }
+
+            return new Rect(Bounds.X + PanelMargin, Bounds.Y + PanelMargin, width, height);
+        }
+
+        private bool IsPointNearTopLeftInfoPanel(Point point)
+        {
+            double width = PanelMaxTextWidth + PanelPadding * 2;
+            double height = PanelEstimatedHeight + PanelPadding * 2;
+            var topLeftPanelZone = new Rect(Bounds.X + PanelMargin, Bounds.Y + PanelMargin, width, height)
+                .Inflate(new Thickness(PanelAvoidSlop));
+            return topLeftPanelZone.Contains(point);
         }
 
         private string GetOrBuildInspectorText(UIElement? hovered, UIElement? focused, UIElement? pinned)
