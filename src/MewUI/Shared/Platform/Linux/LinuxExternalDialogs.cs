@@ -6,6 +6,47 @@ namespace Aprillz.MewUI.Platform.Linux;
 
 internal static class LinuxExternalDialogs
 {
+    private static bool? _toolAvailable;
+
+    // Whether zenity or kdialog is on PATH, so a native external dialog can actually be launched.
+    // Cached after the first probe.
+    public static bool IsToolAvailable()
+    {
+        if (_toolAvailable.HasValue)
+        {
+            return _toolAvailable.Value;
+        }
+
+        _toolAvailable = ExecutableOnPath("zenity") || ExecutableOnPath("kdialog");
+        return _toolAvailable.Value;
+    }
+
+    private static bool ExecutableOnPath(string name)
+    {
+        var pathVariable = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathVariable))
+        {
+            return false;
+        }
+
+        foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                if (File.Exists(Path.Combine(directory, name)))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Ignore malformed PATH entries.
+            }
+        }
+
+        return false;
+    }
+
     public static bool? ShowMessageBox(nint owner, string text, string caption, NativeMessageBoxButtons buttons, NativeMessageBoxIcon icon)
     {
         using var modal = NativeDialogHelper.BeginOwnerModal(owner);
@@ -26,7 +67,7 @@ internal static class LinuxExternalDialogs
     public static string[]? OpenFile(OpenFileDialogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
 
         if (TryOpenFileWithZenity(options, out var zenity))
         {
@@ -44,7 +85,7 @@ internal static class LinuxExternalDialogs
     public static string? SaveFile(SaveFileDialogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
 
         if (TrySaveFileWithZenity(options, out var zenity))
         {
@@ -62,7 +103,7 @@ internal static class LinuxExternalDialogs
     public static string? SelectFolder(FolderDialogOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
 
         if (TrySelectFolderWithZenity(options, out var zenity))
         {
@@ -258,7 +299,7 @@ internal static class LinuxExternalDialogs
             args.Add(EnsureTrailingSeparator(options.InitialDirectory!));
         }
 
-        foreach (var filterArg in BuildZenityFilterArgs(options.Filter))
+        foreach (var filterArg in BuildZenityFilterArgs(FileDialogFilters.ToLegacyFilterString(options.Filters)))
         {
             args.Add("--file-filter");
             args.Add(filterArg);
@@ -314,7 +355,7 @@ internal static class LinuxExternalDialogs
             args.Add(EnsureTrailingSeparator(options.InitialDirectory!));
         }
 
-        foreach (var filterArg in BuildZenityFilterArgs(options.Filter))
+        foreach (var filterArg in BuildZenityFilterArgs(FileDialogFilters.ToLegacyFilterString(options.Filters)))
         {
             args.Add("--file-filter");
             args.Add(filterArg);
@@ -394,7 +435,7 @@ internal static class LinuxExternalDialogs
             args.Add(start!);
         }
 
-        var filterString = BuildKDialogFilter(options.Filter);
+        var filterString = BuildKDialogFilter(FileDialogFilters.ToLegacyFilterString(options.Filters));
         if (!string.IsNullOrWhiteSpace(filterString))
         {
             args.Add(filterString!);
@@ -429,7 +470,7 @@ internal static class LinuxExternalDialogs
             args.Add(start!);
         }
 
-        var filterString = BuildKDialogFilter(options.Filter);
+        var filterString = BuildKDialogFilter(FileDialogFilters.ToLegacyFilterString(options.Filters));
         if (!string.IsNullOrWhiteSpace(filterString))
         {
             args.Add(filterString!);

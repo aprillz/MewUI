@@ -292,8 +292,8 @@ partial class GalleryView
                                     {
                                         var files = FileDialog.OpenFiles(new OpenFileDialogOptions
                                         {
-                                            Owner = window.Handle,
-                                            Filter = "All Files (*.*)|*.*"
+                                            Owner = window,
+                                            Filters = FileFilter.Parse("All Files (*.*)|*.*")
                                         });
 
                                         if (files is null || files.Length == 0)
@@ -315,8 +315,8 @@ partial class GalleryView
                                     {
                                         var file = FileDialog.SaveFile(new SaveFileDialogOptions
                                         {
-                                            Owner = window.Handle,
-                                            Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                                            Owner = window,
+                                            Filters = FileFilter.Parse("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"),
                                             FileName = "demo.txt"
                                         });
                                         saveFileStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
@@ -327,7 +327,7 @@ partial class GalleryView
                                     {
                                         var folder = FileDialog.SelectFolder(new FolderDialogOptions
                                         {
-                                            Owner = window.Handle
+                                            Owner = window
                                         });
                                         folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
                                     })

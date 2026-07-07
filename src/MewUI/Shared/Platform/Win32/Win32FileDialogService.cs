@@ -18,10 +18,10 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
 
         return ShowOpenOrSave(
             isSave: false,
-            owner: options.Owner,
+            owner: options.Owner?.Handle ?? 0,
             title: options.Title,
             initialDirectory: options.InitialDirectory,
-            filter: options.Filter,
+            filter: FileDialogFilters.ToLegacyFilterString(options.Filters),
             defaultExtension: null,
             fileName: null,
             flags: flags,
@@ -42,10 +42,10 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
 
         if (!ShowOpenOrSave(
                 isSave: true,
-                owner: options.Owner,
+                owner: options.Owner?.Handle ?? 0,
                 title: options.Title,
                 initialDirectory: options.InitialDirectory,
-                filter: options.Filter,
+                filter: FileDialogFilters.ToLegacyFilterString(options.Filters),
                 defaultExtension: options.DefaultExtension,
                 fileName: options.FileName,
                 flags: flags,
@@ -116,7 +116,7 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
                 }
             }
 
-            hr = FileDialogVTable.Show(dialog, options.Owner);
+            hr = FileDialogVTable.Show(dialog, options.Owner?.Handle ?? 0);
             if (hr == unchecked((int)0x800704C7)) // ERROR_CANCELLED
             {
                 return null;

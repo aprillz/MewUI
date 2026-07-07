@@ -109,7 +109,7 @@ internal sealed class MacOSFileDialogService : IFileDialogService
         ObjC.MsgSend_void_nint_bool(panel, SelSetCanCreateDirectories, true);
         ObjC.MsgSend_void_nint_bool(panel, SelSetAllowsMultipleSelection, options.Multiselect && !selectFolder);
 
-        var allowed = BuildAllowedFileTypes(options.Filter);
+        var allowed = BuildAllowedFileTypes(FileDialogFilters.ToLegacyFilterString(options.Filters));
         if (allowed != 0 && !selectFolder)
         {
             ObjC.MsgSend_void_nint_nint(panel, SelSetAllowedFileTypes, allowed);
@@ -176,7 +176,7 @@ internal sealed class MacOSFileDialogService : IFileDialogService
         }
 
         // If a filter or default extension is provided, restrict file types.
-        var allowed = BuildAllowedFileTypes(options.Filter, options.DefaultExtension);
+        var allowed = BuildAllowedFileTypes(FileDialogFilters.ToLegacyFilterString(options.Filters), options.DefaultExtension);
         if (allowed != 0)
         {
             ObjC.MsgSend_void_nint_nint(panel, SelSetAllowedFileTypes, allowed);

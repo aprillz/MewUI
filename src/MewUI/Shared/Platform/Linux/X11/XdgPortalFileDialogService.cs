@@ -49,23 +49,25 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
 
     public string[]? OpenFile(OpenFileDialogOptions options)
     {
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
         return NativeDialogHelper.PumpUntil(OpenFileAsync(options));
     }
 
     public string? SaveFile(SaveFileDialogOptions options)
     {
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
         var result = NativeDialogHelper.PumpUntil(SaveFileAsync(options));
         return result is { Length: > 0 } ? result[0] : null;
     }
 
     public string? SelectFolder(FolderDialogOptions options)
     {
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner);
+        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
         var result = NativeDialogHelper.PumpUntil(SelectFolderAsync(options));
         return result is { Length: > 0 } ? result[0] : null;
     }
+
+    public bool IsNativeDialogAvailable() => IsAvailable();
 
 
     // A single explicit (non-autoconnect) session connection: the portal needs a stable UniqueName for the
@@ -99,13 +101,13 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
         var chooser = new FileChooser(connection, Destination, ObjectPath);
 
         var chooserOptions = new Dictionary<string, VariantValue>();
-        AddFilters(chooserOptions, options.Filter);
+        AddFilters(chooserOptions, FileDialogFilters.ToLegacyFilterString(options.Filters));
         AddCurrentFolder(chooserOptions, options.InitialDirectory);
         chooserOptions.Add("multiple", VariantValue.Bool(options.Multiselect));
 
         var uris = await CallAsync(connection, chooserOptions,
             (parent, title, opts) => chooser.OpenFileAsync(parent, title, opts),
-            options.Owner, options.Title);
+            options.Owner?.Handle ?? 0, options.Title);
 
         return UrisToPaths(uris);
     }
@@ -116,7 +118,7 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
         var chooser = new FileChooser(connection, Destination, ObjectPath);
 
         var chooserOptions = new Dictionary<string, VariantValue>();
-        AddFilters(chooserOptions, options.Filter);
+        AddFilters(chooserOptions, FileDialogFilters.ToLegacyFilterString(options.Filters));
         if (!string.IsNullOrEmpty(options.FileName))
         {
             chooserOptions.Add("current_name", VariantValue.String(options.FileName!));
@@ -125,7 +127,7 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
 
         var uris = await CallAsync(connection, chooserOptions,
             (parent, title, opts) => chooser.SaveFileAsync(parent, title, opts),
-            options.Owner, options.Title);
+            options.Owner?.Handle ?? 0, options.Title);
 
         var paths = UrisToPaths(uris);
         if (paths is not { Length: > 0 })
@@ -155,7 +157,7 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
 
         var uris = await CallAsync(connection, chooserOptions,
             (parent, title, opts) => chooser.OpenFileAsync(parent, title, opts),
-            options.Owner, options.Title);
+            options.Owner?.Handle ?? 0, options.Title);
 
         var paths = UrisToPaths(uris);
         return paths?.Where(Directory.Exists).ToArray();

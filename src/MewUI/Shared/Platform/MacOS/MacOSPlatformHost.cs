@@ -52,6 +52,12 @@ public sealed class MacOSPlatformHost : IPlatformHost
         get;
     } = new MacOSFileDialogService();
 
+    public IShellIconProvider ShellIconProvider { get; } = new MacShellIconProvider();
+
+    public IMountedVolumeProvider MountedVolumeProvider { get; } = new MacMountedVolumeProvider();
+
+    public IPlacesProvider PlacesProvider { get; } = new MacPlacesProvider();
+
     public IClipboardService Clipboard
     {
         get;

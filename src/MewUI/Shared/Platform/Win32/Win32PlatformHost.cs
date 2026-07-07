@@ -90,6 +90,12 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     public IFileDialogService FileDialog { get; } = new Win32FileDialogService();
 
+    public IShellIconProvider ShellIconProvider { get; } = new WindowsShellIconProvider();
+
+    public IMountedVolumeProvider MountedVolumeProvider { get; } = new WindowsMountedVolumeProvider();
+
+    public IPlacesProvider PlacesProvider { get; } = new WindowsPlacesProvider();
+
     public IClipboardService Clipboard { get; } = new Win32ClipboardService();
 
     public IWindowBackend CreateWindowBackend(Window window) => new Win32WindowBackend(this, window);

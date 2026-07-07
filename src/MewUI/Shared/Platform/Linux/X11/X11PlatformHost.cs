@@ -73,6 +73,12 @@ public sealed class X11PlatformHost : IPlatformHost
 
     public IFileDialogService FileDialog { get; } = new X11FileDialogService();
 
+    public IShellIconProvider ShellIconProvider { get; } = new LinuxShellIconProvider();
+
+    public IMountedVolumeProvider MountedVolumeProvider { get; } = new UnixMountedVolumeProvider();
+
+    public IPlacesProvider PlacesProvider { get; } = new LinuxPlacesProvider();
+
     public IClipboardService Clipboard { get; } = new LinuxClipboardService();
 
     public IWindowBackend CreateWindowBackend(Window window) => new X11WindowBackend(this, window);

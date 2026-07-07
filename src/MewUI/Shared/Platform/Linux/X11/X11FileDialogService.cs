@@ -13,4 +13,7 @@ internal sealed class X11FileDialogService : IFileDialogService
 
     public string? SelectFolder(FolderDialogOptions options)
         => XdgPortalFileDialogService.IsAvailable() ? _portal.SelectFolder(options) : LinuxExternalDialogs.SelectFolder(options);
+
+    public bool IsNativeDialogAvailable()
+        => XdgPortalFileDialogService.IsAvailable() || LinuxExternalDialogs.IsToolAvailable();
 }

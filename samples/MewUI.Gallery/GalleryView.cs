@@ -178,6 +178,7 @@ partial class GalleryView : UserControl
             Page("Window", WindowPage, "window_regular"),
             Page("Menu", MenuPage, "navigation_regular"),
             Page("MessageBox", MessageBoxPage, "note_regular"),
+            Page("File Dialog", FileDialogPage, "folder_open_regular"),
             Page("ShowDialog", ShowDialogPage, "preview_link_regular"),
             Page("Overlay", OverlayPage, "tab_desktop_clock_regular"),
 

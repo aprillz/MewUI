@@ -117,4 +117,23 @@ internal interface IPlatformHost : IDisposable
     /// (continuous preview); when false it falls back to a per-window overlay (hidden between windows).
     /// </summary>
     bool SupportsTransparentOverlay => false;
+
+    /// <summary>
+    /// The OS shell icon provider (file-type icons, special-folder/drive icons). Platform hosts override with
+    /// their native implementation; the default falls back to bundled vector icons. See platform-seam-plan.md.
+    /// </summary>
+    IShellIconProvider ShellIconProvider => NullShellIconProvider.Instance;
+
+    /// <summary>
+    /// The OS mounted-volume enumerator for the dialog's Locations. Platform hosts override with their native
+    /// implementation; the default returns no volumes.
+    /// </summary>
+    IMountedVolumeProvider MountedVolumeProvider => EmptyMountedVolumeProvider.Instance;
+
+    /// <summary>
+    /// The OS shell sidebar layout (sections + entries) for the dialog. Platform hosts override with their
+    /// shell convention (Finder / Explorer / freedesktop); the default is empty. Core stays agnostic of the
+    /// per-OS layout - it only consumes <see cref="IPlacesProvider"/>.
+    /// </summary>
+    IPlacesProvider PlacesProvider => EmptyPlacesProvider.Instance;
 }
