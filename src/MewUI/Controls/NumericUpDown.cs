@@ -82,6 +82,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             MinHeight = 0,
             IsVisible = false,
             IsHitTestVisible = false,
+            // Focus enters via SetIsEditing, not Tab; keeps the control a single tab stop while editing.
+            IsTabStop = false,
             ImeMode = Input.ImeMode.Disabled
         };
         _textBox.TextChanged += OnTextBoxTextChanged;
