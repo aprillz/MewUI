@@ -183,7 +183,7 @@ partial class GalleryView
                                         new[]
                                         {
                                             new SegmentItem("apps_list_regular", "List"),
-                                            new SegmentItem("table_freeze_regular", "Table"),
+                                            new SegmentItem("table_regular", "Table"),
                                             new SegmentItem("data_pie_regular", "Chart"),
                                         },
                                         v => v.Label)
@@ -219,7 +219,7 @@ partial class GalleryView
                                         {
                                             new SegmentItem("home_regular", "Home"),
                                             new SegmentItem("settings_regular", "Settings"),
-                                            new SegmentItem("calendar_reply_regular", "Calendar"),
+                                            new SegmentItem("calendar_regular", "Calendar"),
                                         },
                                         v => v.Label)
                                     .ItemTemplate<SegmentItem>(
