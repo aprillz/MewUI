@@ -244,7 +244,7 @@ internal static class WindowInputRouter
             return;
         }
 
-        for (var current = window.FocusManager.FocusedElement; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+        for (var current = ResolveKeyRoutingStart(window); current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseKeyDown(args);
         }
@@ -255,9 +255,22 @@ internal static class WindowInputRouter
     /// </summary>
     public static void KeyUp(Window window, KeyEventArgs args)
     {
-        for (var current = window.FocusManager.FocusedElement; current != null && !args.Handled; current = GetInputBubbleParent(window, current))
+        for (var current = ResolveKeyRoutingStart(window); current != null && !args.Handled; current = GetInputBubbleParent(window, current))
         {
             current.RaiseKeyUp(args);
         }
+    }
+
+    private static UIElement ResolveKeyRoutingStart(Window window)
+    {
+        // A detached (stale) focused element counts as unfocused but is not cleared here:
+        // tab navigation anchors off it and virtualization detaches containers routinely.
+        var focused = window.FocusManager.FocusedElement;
+        if (focused != null && !ReferenceEquals(focused.FindVisualRoot(), window))
+        {
+            focused = null;
+        }
+
+        return focused ?? window;
     }
 }

@@ -198,6 +198,34 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the position in the Tab order.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="tabIndex">Tab order position.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T TabIndex<T>(this T element, double tabIndex) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.TabIndex = tabIndex;
+        return element;
+    }
+
+    /// <summary>
+    /// Sets whether the element participates in Tab traversal.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="isTabStop">Tab traversal participation.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T IsTabStop<T>(this T element, bool isTabStop = true) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.IsTabStop = isTabStop;
+        return element;
+    }
+
+    /// <summary>
     /// Enables the element.
     /// </summary>
     /// <typeparam name="T">Visual type.</typeparam>
