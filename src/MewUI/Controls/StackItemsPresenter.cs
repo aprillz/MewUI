@@ -348,10 +348,10 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
                 OffsetCorrectionRequested?.Invoke(new Point(_offset.X, desiredOffsetY));
                 InvalidateMeasure();
             }
-            else
-            {
-                _pendingScrollIntoViewIndex = -1;
-            }
+
+            // One-shot: heights are exact here (all items measured), so a single correction lands.
+            // Keeping the request pending would re-assert it against subsequent user scrolls.
+            _pendingScrollIntoViewIndex = -1;
         }
 
         double layoutWidth = UseHorizontalExtentForLayout
