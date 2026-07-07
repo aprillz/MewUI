@@ -180,10 +180,7 @@ partial class GalleryView : UserControl
             Page("MessageBox", MessageBoxPage, "alert_on_regular"),
             Page("File Dialog", FileDialogPage, "folder_open_regular"),
             Page("ShowDialog", ShowDialogPage, "window_new_regular"),
-            Page("Overlay", OverlayPage, "layer_regular"),
-
-            Group("System"),
-            Page("Threading", ThreadingPage, "tasks_app_regular"),
+            Page("Overlay", OverlayPage, "layer_regular")
         ];
     }
 }
