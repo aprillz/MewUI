@@ -919,7 +919,7 @@ FrameworkElement IconsPage()
         }
 
         var view = filtered.ToList();
-        grid.SetItemsSource(view);
+        grid.ItemsSource = ItemsView.Create(view);
         countText.Value = allIcons.Length == 0
             ? "0 icons (resource pending or failed)"
             : $"{view.Count} / {allIcons.Length} icons";
@@ -1188,7 +1188,7 @@ FrameworkElement GridViewPage()
         if (q.Length > 0) rows = rows.Where(r => r.Id.ToString().Contains(q, StringComparison.OrdinalIgnoreCase) || r.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
         if (onlyErrors.Value) rows = rows.Where(r => r.HasError.Value); rows = rows.Where(r => r.Amount.Value >= minAmt.Value);
         rows = sKey.Value switch { 1 => sDesc.Value ? rows.OrderByDescending(r => r.Name) : rows.OrderBy(r => r.Name), 2 => sDesc.Value ? rows.OrderByDescending(r => r.Amount.Value) : rows.OrderBy(r => r.Amount.Value), _ => sDesc.Value ? rows.OrderByDescending(r => r.Id) : rows.OrderBy(r => r.Id) };
-        var v = rows.ToList(); cg.SetItemsSource(v); sumText.Value = $"Rows:{v.Count}/{allRows.Count} Err:{v.Count(r => r.HasError.Value)} Sum:{v.Sum(r => r.Amount.Value):0.##}";
+        var v = rows.ToList(); cg.ItemsSource = ItemsView.Create(v); sumText.Value = $"Rows:{v.Count}/{allRows.Count} Err:{v.Count(r => r.HasError.Value)} Sum:{v.Sum(r => r.Amount.Value):0.##}";
     }
     query.Changed += AV; onlyErrors.Changed += AV; minAmt.Changed += AV; sKey.Changed += AV; sDesc.Changed += AV;
     cg = new GridView().Height(190).ItemsSource(allRows).Apply(g => g.SelectionChanged += o => selText.Value = o is ComplexGridRow r ? $"Selected:#{r.Id} {r.Name}" : "Selected:(none)")

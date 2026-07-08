@@ -141,7 +141,7 @@ partial class GalleryView
             };
 
             var view = rows.ToList();
-            grid.SetItemsSource(view);
+            grid.ItemsSource = ItemsView.Create(view);
 
             int errorCount = view.Count(r => r.HasError.Value);
             double sum = view.Sum(r => r.Amount.Value);
