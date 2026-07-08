@@ -65,7 +65,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         }
     }
 
-    private IMultiSelectableItemsView? MultiView => ScrollableItemsBase.AsMultiSelectable(_itemsSource);
+    private IMultiSelectableItemsView? MultiView => _itemsSource.AsMultiSelectable();
 
     /// <summary>
     /// Gets or sets the selection mode. Requires a multi-selection-capable items source
@@ -74,17 +74,17 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
-        get => ScrollableItemsBase.GetSelectionMode(_itemsSource);
-        set => ScrollableItemsBase.SetSelectionMode(_itemsSource, value);
+        get => _itemsSource.GetSelectionMode();
+        set => _itemsSource.SetSelectionMode(value);
     }
 
     /// <summary>Gets the selected visible-row indices in ascending order.</summary>
-    public IReadOnlyList<int> SelectedIndices => ScrollableItemsBase.GetSelectedIndices(_itemsSource);
+    public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
 
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
-    private bool IsRowSelected(int index) => ScrollableItemsBase.IsItemSelected(_itemsSource, index);
+    private bool IsItemSelected(int index) => _itemsSource.IsItemSelected(index);
 
     private void ApplyKeyboardSelect(int target, ModifierKeys modifiers)
     {
@@ -332,7 +332,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     {
         double itemRadius = _presenter.ItemRadius;
 
-        bool selected = IsRowSelected(i);
+        bool selected = IsItemSelected(i);
         if (selected)
         {
             var selectionBg = Theme.Palette.SelectionBackground;
@@ -773,7 +773,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
                     tb.IsEnabled = enabled;
                 }
 
-                bool selected = IsRowSelected(index);
+                bool selected = IsItemSelected(index);
                 var fg = !enabled
                     ? Theme.Palette.DisabledText
                     : selected ? Theme.Palette.SelectionText : Theme.Palette.WindowText;

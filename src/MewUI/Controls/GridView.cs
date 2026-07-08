@@ -1542,7 +1542,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             var theme = Theme;
             var snapped = GetSnappedBorderBounds(Bounds);
-            var isSelected = _owner._core.IsRowSelected(_rowIndex);
+            var isSelected = _owner._core.IsItemSelected(_rowIndex);
 
             var r = theme.Metrics.ControlCornerRadius - 2;
             if (isSelected)
@@ -1714,17 +1714,17 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         public object? SelectedItem => _itemsView.SelectedItem;
 
         /// <summary>The current items view as a multi-selection view, or null when it does not support multi-select.</summary>
-        public IMultiSelectableItemsView? MultiView => ScrollableItemsBase.AsMultiSelectable(_itemsView);
+        public IMultiSelectableItemsView? MultiView => _itemsView.AsMultiSelectable();
 
         public ItemsSelectionMode SelectionMode
         {
-            get => ScrollableItemsBase.GetSelectionMode(_itemsView);
-            set => ScrollableItemsBase.SetSelectionMode(_itemsView, value);
+            get => _itemsView.GetSelectionMode();
+            set => _itemsView.SetSelectionMode(value);
         }
 
-        public IReadOnlyList<int> SelectedIndices => ScrollableItemsBase.GetSelectedIndices(_itemsView);
+        public IReadOnlyList<int> SelectedIndices => _itemsView.GetSelectedIndices();
 
-        public bool IsRowSelected(int index) => ScrollableItemsBase.IsItemSelected(_itemsView, index);
+        public bool IsItemSelected(int index) => _itemsView.IsItemSelected(index);
 
         public event Action? SelectedIndicesChanged;
 

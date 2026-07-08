@@ -124,7 +124,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// </summary>
     public object? SelectedItem => ItemsSource.SelectedItem;
 
-    private IMultiSelectableItemsView? MultiView => AsMultiSelectable(_itemsSource);
+    private IMultiSelectableItemsView? MultiView => _itemsSource.AsMultiSelectable();
 
     /// <summary>
     /// Gets or sets the selection mode. Requires an items source that supports multi-selection
@@ -132,17 +132,17 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
-        get => GetSelectionMode(_itemsSource);
-        set => SetSelectionMode(_itemsSource, value);
+        get => _itemsSource.GetSelectionMode();
+        set => _itemsSource.SetSelectionMode(value);
     }
 
     /// <summary>Gets the selected item indices in ascending order.</summary>
-    public IReadOnlyList<int> SelectedIndices => GetSelectedIndices(_itemsSource);
+    public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
 
     /// <summary>Occurs when the set of selected items changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
-    private bool IsItemSelected(int index) => ScrollableItemsBase.IsItemSelected(_itemsSource, index);
+    private bool IsItemSelected(int index) => _itemsSource.IsItemSelected(index);
 
     /// <summary>
     /// Gets the currently selected item text.
