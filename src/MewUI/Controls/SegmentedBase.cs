@@ -112,6 +112,9 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
     /// <summary>Called after segments are rebuilt (items or template change). Base does nothing.</summary>
     protected virtual void OnSegmentsRebuilt() { }
 
+    /// <summary>Called for each freshly built segment container. Base does nothing.</summary>
+    protected virtual void OnSegmentCreated(SegmentButton button) { }
+
     // --- Prepare hook ---------------------------------------------------------------------------
 
     /// <summary>
@@ -206,6 +209,8 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
 
             _panel.Add(button);
 
+            OnSegmentCreated(button);
+
             // Container-level configuration (click, checked, enabled, tooltip) via the prepare hook.
             _prepareContainer?.Invoke(button, item, i);
         }
@@ -272,12 +277,20 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         // Match the snapped inner edge of the container border (same formula as ListBox's clip radius)
         // so the rounded segment ends line up with the border at fractional DPI.
         var dpiScale = GetDpi() / 96.0;
-        double segmentRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - GetBorderVisualInset());
+        double borderInset = GetBorderVisualInset();
+        double segmentRadius = Math.Max(0, LayoutRounding.RoundToPixel(CornerRadius, dpiScale) - borderInset);
+
+        // Inner edges of the container's snapped border. Pin the first/last segment background to these so
+        // the strip fills the frame; only when no container padding separates the strip from the border.
+        double innerLeft = bounds.Left + borderInset + Padding.Left;
+        double innerRight = bounds.Right - borderInset - Padding.Right;
         for (int i = 0; i < _panel.Count; i++)
         {
             if (_panel[i] is SegmentButton btn)
             {
                 btn.Radius = segmentRadius;
+                btn.StripLeft = btn.IsFirst && Padding.Left <= 0 ? innerLeft : null;
+                btn.StripRight = btn.IsLast && Padding.Right <= 0 ? innerRight : null;
             }
         }
 

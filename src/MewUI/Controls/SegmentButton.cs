@@ -60,6 +60,12 @@ public sealed class SegmentButton : ContentControl
     /// <summary>Corner radius (in DIPs) applied to the rounded ends. Set by the owner.</summary>
     internal double Radius { get; set; }
 
+    // Snapped outer edge of the strip, set by the owner on the first/last segment. Aligns the leading
+    // (StripLeft) and trailing (StripRight) background edge to the container's inner border edge, so the
+    // strip fills the frame exactly - independent per-child pixel snapping can otherwise drift 1px.
+    internal double? StripLeft { get; set; }
+    internal double? StripRight { get; set; }
+
     /// <summary>
     /// Single-owner callback raised on click, after <see cref="Click"/>. Used by
     /// <see cref="SegmentedControl"/> to drive exclusive selection by index. Keyboard navigation is
@@ -105,8 +111,13 @@ public sealed class SegmentButton : ContentControl
             _ => new CornerRadius(0),
         };
 
+        var bgBounds = GetSnappedBorderBounds(Bounds);
+        double left = StripLeft ?? bgBounds.Left;
+        double right = StripRight ?? bgBounds.Right;
+        bgBounds = new Rect(left, bgBounds.Y, Math.Max(0, right - left), bgBounds.Height);
+
         // The container owns the border/divider chrome; segments paint background only.
-        DrawBackgroundAndBorder(context, GetSnappedBorderBounds(Bounds), bg, Color.Transparent,
+        DrawBackgroundAndBorder(context, bgBounds, bg, Color.Transparent,
             Thickness.Zero, cornerRadius);
     }
 
@@ -154,17 +165,21 @@ public sealed class SegmentButton : ContentControl
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
             _pressCapture.BeginPress();
-
-            if (IsCheckable)
-            {
-                IsChecked = !IsChecked;
-                CheckedChanged?.Invoke(IsChecked);
-            }
-
-            Click?.Invoke();
-            ClickedCallback?.Invoke(Index);
+            Activate();
             e.Handled = true;
         }
+    }
+
+    private void Activate()
+    {
+        if (IsCheckable)
+        {
+            IsChecked = !IsChecked;
+            CheckedChanged?.Invoke(IsChecked);
+        }
+
+        Click?.Invoke();
+        ClickedCallback?.Invoke(Index);
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
@@ -183,5 +198,31 @@ public sealed class SegmentButton : ContentControl
     {
         base.OnMouseLeave();
         _pressCapture.CancelPress();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if ((e.Key == Key.Space || e.Key == Key.Enter) && IsEffectivelyEnabled)
+        {
+            SetPressed(true);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+
+        if ((e.Key == Key.Space || e.Key == Key.Enter) && IsPressed)
+        {
+            SetPressed(false);
+            if (IsEffectivelyEnabled)
+            {
+                Activate();
+            }
+            e.Handled = true;
+        }
     }
 }

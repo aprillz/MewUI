@@ -135,6 +135,13 @@ public sealed class NumericUpDown : RangeBase
     private ButtonPart _hoverPart;
     private ButtonPart _pressedPart;
 
+    // Controls that accept keyboard input must be focusable. Set the per-type
+    // default from a static constructor so ClearValue restores it, not false.
+    static NumericUpDown()
+    {
+        FocusableProperty.OverrideDefaultValue<NumericUpDown>(true);
+    }
+
     public NumericUpDown()
     {
         // Establish default size rules.
@@ -153,9 +160,6 @@ public sealed class NumericUpDown : RangeBase
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    // Controls that accept keyboard input must be focusable.
-    public override bool Focusable => true;
 
     public string Format
     {
