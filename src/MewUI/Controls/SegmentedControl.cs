@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelector
 {
-    private bool _syncingSelection;
+    private readonly SelectionSync _selection;
 
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<SegmentedControl>(nameof(SelectedIndex), -1,
@@ -29,6 +29,9 @@ public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelecto
     // Segments share an equal width; selection is a mutually exclusive choice.
     public SegmentedControl() : base(SegmentSizing.Uniform)
     {
+        _selection = new SelectionSync(() => Items,
+            value => SetValue(SelectedIndexProperty, value),
+            value => SetValue(SelectedItemProperty, value));
     }
 
     /// <summary>Gets or sets the selected segment index (-1 means no selection).</summary>
@@ -64,7 +67,7 @@ public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelecto
 
     protected override void OnItemsViewSelectionChanged(int index)
     {
-        SyncSelectionProperties();
+        _selection.SyncFromModel();
         UpdateSelectionVisuals();
         SelectionChanged?.Invoke(Items.SelectedItem);
         InvalidateVisual();
@@ -72,13 +75,13 @@ public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelecto
 
     protected override void OnSegmentsRebuilt()
     {
-        SyncSelectionProperties();
+        _selection.SyncFromModel();
         UpdateSelectionVisuals();
     }
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
     {
-        if (_syncingSelection)
+        if (_selection.Syncing)
         {
             return;
         }
@@ -86,36 +89,14 @@ public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelecto
         // Reject selecting a disabled segment: revert to the view's current index.
         if (newIndex >= 0 && newIndex < Items.Count && !IsSegmentEnabled(newIndex))
         {
-            SyncSelectionProperties();
+            _selection.SyncFromModel();
             return;
         }
 
-        _syncingSelection = true;
-        try { Items.SelectedIndex = newIndex; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
+        _selection.PushIndex(newIndex);
     }
 
-    private void OnSelectedItemPropertyChanged(object? item)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { Items.SelectedItem = item; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
-    }
-
-    private void SyncSelectionProperties()
-    {
-        bool wasSyncing = _syncingSelection;
-        _syncingSelection = true;
-        try
-        {
-            SetValue(SelectedIndexProperty, Items.SelectedIndex);
-            SetValue(SelectedItemProperty, Items.SelectedItem);
-        }
-        finally { _syncingSelection = wasSyncing; }
-    }
+    private void OnSelectedItemPropertyChanged(object? item) => _selection.PushItem(item);
 
     private void UpdateSelectionVisuals()
     {

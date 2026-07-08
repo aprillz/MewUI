@@ -45,7 +45,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
-    private bool _syncingSelection;
+    private readonly SelectionSync _selection;
 
     private readonly HeaderRow _header;
     private IItemsPresenter _presenter;
@@ -58,6 +58,11 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     public GridView()
     {
+        _selection = new SelectionSync(() => _core.ItemsSource,
+            value => SetValue(SelectedIndexProperty, value),
+            value => SetValue(SelectedItemProperty, value),
+            value => SetValue(SelectedItemsPropertyKey, value));
+
         CellPadding = Theme.Metrics.ItemPadding;
 
         _scrollViewer.Padding = new Thickness(0);
@@ -82,7 +87,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         _core.SelectionChanged += _ => OnItemsSelectionChanged();
         _core.SelectedIndicesChanged += () =>
         {
-            RefreshSelectedItems();
+            _selection.SyncFromModel();
             SelectedIndicesChanged?.Invoke();
             InvalidateItemBindings();
             InvalidateVisual();
@@ -172,39 +177,22 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         => _core.SelectionMode = mode;
 
     /// <summary>Gets the selected row indices in ascending order.</summary>
-    public IReadOnlyList<int> SelectedIndices => _core.SelectedIndices;
+    public IReadOnlyList<int> SelectedIndices => _selection.SelectedIndices;
 
     /// <summary>Gets the selected items in ascending index order (read-only, bindable).</summary>
     public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
     /// <summary>Returns whether the row at <paramref name="index"/> is selected.</summary>
-    public bool IsSelected(int index) => _core.IsItemSelected(index);
+    public bool IsSelected(int index) => _selection.IsSelected(index);
 
     /// <summary>Selects every row (multi-selection modes only; no-op otherwise).</summary>
-    public void SelectAll()
-    {
-        var view = _core.ItemsSource;
-        var multi = view.AsMultiSelectable();
-        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && view.Count > 0)
-            multi.SelectRange(0, view.Count - 1, clearExisting: true);
-    }
+    public void SelectAll() => _selection.SelectAll();
 
     /// <summary>Clears the entire selection.</summary>
-    public void ClearSelection()
-    {
-        var view = _core.ItemsSource;
-        var multi = view.AsMultiSelectable();
-        if (multi != null)
-            multi.ClearSelection();
-        else
-            view.SelectedIndex = -1;
-    }
+    public void ClearSelection() => _selection.ClearSelection();
 
     /// <summary>Selects the inclusive range [start, end], replacing the current selection (multi only).</summary>
-    public void SelectRange(int start, int end)
-    {
-        _core.ItemsSource.AsMultiSelectable()?.SelectRange(start, end, clearExisting: true);
-    }
+    public void SelectRange(int start, int end) => _selection.SelectRange(start, end);
 
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
@@ -1009,7 +997,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         // A collection change can clear/shift the selection without firing SelectionChanged
         // (e.g. SetItems resetting to -1 on a view already at -1); re-sync so the bindable
         // property never diverges from the core.
-        SyncSelectionFromCore();
+        _selection.SyncFromModel();
         InvalidateMeasure();
         InvalidateArrange();
         InvalidateVisual();
@@ -1066,63 +1054,16 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     private void OnItemsSelectionChanged()
     {
-        SyncSelectionFromCore();
+        _selection.SyncFromModel();
         SelectionChanged?.Invoke(_core.SelectedItem);
         InvalidateItemBindings();
         ScrollSelectedIntoView();
         InvalidateVisual();
     }
 
-    // Mirrors the underlying selection into the bindable properties. Guarded so it does not
-    // re-enter the core selection when the change originated from a property/binding set.
-    private void SyncSelectionFromCore()
-    {
-        // Save/restore (not early-return) so the properties are synced even when called from within
-        // a guarded property->model set, keeping SelectedItem fresh before SelectionChanged fires.
-        bool wasSyncing = _syncingSelection;
-        _syncingSelection = true;
-        try
-        {
-            SetValue(SelectedIndexProperty, _core.SelectedIndex);
-            SetValue(SelectedItemProperty, _core.SelectedItem);
-        }
-        finally { _syncingSelection = wasSyncing; }
-        RefreshSelectedItems();
-    }
+    private void OnSelectedIndexPropertyChanged(int newIndex) => _selection.PushIndex(newIndex);
 
-    // Materializes the current selection into the read-only SelectedItems projection.
-    private void RefreshSelectedItems()
-    {
-        var indices = SelectedIndices;
-        if (indices.Count == 0)
-        {
-            SetValue(SelectedItemsPropertyKey, Array.Empty<object?>());
-            return;
-        }
-        var view = _core.ItemsSource;
-        var items = new object?[indices.Count];
-        for (int i = 0; i < indices.Count; i++)
-            items[i] = view.GetItem(indices[i]);
-        SetValue(SelectedItemsPropertyKey, items);
-    }
-
-    private void OnSelectedIndexPropertyChanged(int newIndex)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _core.SelectedIndex = newIndex; }
-        finally { _syncingSelection = false; }
-        SyncSelectionFromCore();
-    }
-
-    private void OnSelectedItemPropertyChanged(object? item)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _core.ItemsSource.SelectedItem = item; }
-        finally { _syncingSelection = false; }
-        SyncSelectionFromCore();
-    }
+    private void OnSelectedItemPropertyChanged(object? item) => _selection.PushItem(item);
 
     private void ScrollSelectedIntoView()
         => ScrollIntoView(SelectedIndex);
