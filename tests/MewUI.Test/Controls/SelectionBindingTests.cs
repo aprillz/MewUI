@@ -202,6 +202,29 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void ListBox_MultiSelect_OperationsAndProjection()
+    {
+        var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
+        list.SelectionMode = ItemsSelectionMode.Multiple;
+
+        list.SelectAll();
+        Assert.AreEqual(3, list.SelectedIndices.Count);
+        Assert.AreEqual(3, list.SelectedItems.Count);
+        Assert.IsTrue(list.IsSelected(0));
+        Assert.IsTrue(list.IsSelected(2));
+
+        list.ClearSelection();
+        Assert.AreEqual(0, list.SelectedItems.Count);
+        Assert.IsFalse(list.IsSelected(1));
+
+        list.SelectRange(1, 2);
+        Assert.AreEqual(2, list.SelectedItems.Count);
+        Assert.AreEqual("b", list.SelectedItems[0]);
+        Assert.AreEqual("c", list.SelectedItems[1]);
+        Assert.IsFalse(list.IsSelected(0));
+    }
+
+    [TestMethod]
     public void GridView_SelectionMode_SetGetAndPersistsAcrossSourceSwap()
     {
         var grid = new GridView();

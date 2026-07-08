@@ -177,6 +177,35 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     /// <summary>Gets the selected items in ascending index order (read-only, bindable).</summary>
     public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
+    /// <summary>Returns whether the row at <paramref name="index"/> is selected.</summary>
+    public bool IsSelected(int index) => _core.IsItemSelected(index);
+
+    /// <summary>Selects every row (multi-selection modes only; no-op otherwise).</summary>
+    public void SelectAll()
+    {
+        var view = _core.ItemsSource;
+        var multi = view.AsMultiSelectable();
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && view.Count > 0)
+            multi.SelectRange(0, view.Count - 1, clearExisting: true);
+    }
+
+    /// <summary>Clears the entire selection.</summary>
+    public void ClearSelection()
+    {
+        var view = _core.ItemsSource;
+        var multi = view.AsMultiSelectable();
+        if (multi != null)
+            multi.ClearSelection();
+        else
+            view.SelectedIndex = -1;
+    }
+
+    /// <summary>Selects the inclusive range [start, end], replacing the current selection (multi only).</summary>
+    public void SelectRange(int start, int end)
+    {
+        _core.ItemsSource.AsMultiSelectable()?.SelectRange(start, end, clearExisting: true);
+    }
+
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 

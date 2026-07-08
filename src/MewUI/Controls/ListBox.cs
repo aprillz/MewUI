@@ -164,10 +164,35 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// <summary>Gets the selected items in ascending index order (read-only, bindable).</summary>
     public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
+    /// <summary>Selects every item (multi-selection modes only; no-op otherwise).</summary>
+    public void SelectAll()
+    {
+        var multi = _itemsSource.AsMultiSelectable();
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && _itemsSource.Count > 0)
+            multi.SelectRange(0, _itemsSource.Count - 1, clearExisting: true);
+    }
+
+    /// <summary>Clears the entire selection.</summary>
+    public void ClearSelection()
+    {
+        var multi = _itemsSource.AsMultiSelectable();
+        if (multi != null)
+            multi.ClearSelection();
+        else
+            _itemsSource.SelectedIndex = -1;
+    }
+
+    /// <summary>Selects the inclusive range [start, end], replacing the current selection (multi only).</summary>
+    public void SelectRange(int start, int end)
+    {
+        _itemsSource.AsMultiSelectable()?.SelectRange(start, end, clearExisting: true);
+    }
+
     /// <summary>Occurs when the set of selected items changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
-    private bool IsItemSelected(int index) => _itemsSource.IsItemSelected(index);
+    /// <summary>Returns whether the item at <paramref name="index"/> is selected.</summary>
+    public bool IsSelected(int index) => _itemsSource.IsItemSelected(index);
 
     /// <summary>
     /// Gets the currently selected item text.
@@ -657,7 +682,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     {
         double itemRadius = _presenter.ItemRadius;
 
-        bool selected = IsItemSelected(i);
+        bool selected = IsSelected(i);
 
         if (ZebraStriping && (i & 1) == 1 && !selected && i != _hoverIndex)
         {
@@ -731,7 +756,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
                     tb.IsEnabled = enabled;
                 }
 
-                var fg = ResolveItemForeground(IsItemSelected(index));
+                var fg = ResolveItemForeground(IsSelected(index));
 
                 if (tb.Foreground != fg)
                 {
