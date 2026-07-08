@@ -54,7 +54,7 @@ public abstract class MewObject : IPropertyOwner
                     var entry = list[index];
                     if (entry.TryGetTarget(out var target))
                     {
-                        target.PropertyStore.SetTarget(entry.TargetProperty, newValue);
+                        target.PropertyStore.SetLocal(entry.TargetProperty, newValue);
                     }
                     else
                     {
@@ -71,7 +71,7 @@ public abstract class MewObject : IPropertyOwner
                 var entry = (PropertyForwardEntry)forward;
                 if (entry.TryGetTarget(out var target))
                 {
-                    target.PropertyStore.SetTarget(entry.TargetProperty, newValue);
+                    target.PropertyStore.SetLocal(entry.TargetProperty, newValue);
                 }
                 else
                 {

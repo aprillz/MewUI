@@ -239,6 +239,15 @@ internal sealed class PropertyValueStore
     }
 
     /// <summary>
+    /// Sets a pre-boxed value at the local tier. Used by the property-forward path so
+    /// bindings sit above styles/triggers, consistent with the typed <see cref="SetLocal{T}"/>.
+    /// </summary>
+    public void SetLocal(MewProperty property, object? value)
+    {
+        SetValue(property, value, ValueSource.Local);
+    }
+
+    /// <summary>
     /// Typed SetTarget convenience.
     /// </summary>
     public void SetTarget<T>(MewProperty<T> property, T value)

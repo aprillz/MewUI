@@ -5,7 +5,8 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Bridges a <see cref="MewProperty{T}"/> on a target <see cref="MewObject"/>
 /// to a <see cref="MewProperty{T}"/> on a source <see cref="MewObject"/>.
-/// When the source property changes, the target is updated at the style (target) tier.
+/// When the source property changes, the target is updated at the local tier
+/// (consistent with the converting and observable-value bindings).
 /// </summary>
 internal sealed class MewObjectPropertyBinding<T> : IDisposable
 {
@@ -32,7 +33,7 @@ internal sealed class MewObjectPropertyBinding<T> : IDisposable
         _forwardEntry = source.AddPropertyForward(sourceProperty.Id, target, targetProperty);
 
         // Initial sync.
-        target.PropertyStore.SetTarget(targetProperty, source.PropertyStore.GetBoxedValue(sourceProperty));
+        target.PropertyStore.SetLocal(targetProperty, source.PropertyStore.GetBoxedValue(sourceProperty));
     }
 
     public void Dispose()

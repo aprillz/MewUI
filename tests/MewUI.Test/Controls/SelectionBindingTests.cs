@@ -75,6 +75,22 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void GridView_ForwardBinding_FlowsToSelectedIndex()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+
+        // Property-to-property forward binding writes at the local tier, so it drives the
+        // control's selection instead of losing to the selection value the control sets.
+        var source = new IndexSource();
+        grid.SetBinding(GridView.SelectedIndexProperty, source, IndexSource.ValueProperty);
+
+        source.Value = 2;
+        Assert.AreEqual(2, grid.SelectedIndex);
+        Assert.AreEqual("c", grid.SelectedItem);
+    }
+
+    [TestMethod]
     public void TreeView_SelectedItem_SetGet()
     {
         var tree = new TreeView();
@@ -122,6 +138,18 @@ public sealed class SelectionBindingTests
         // control -> source (BindsTwoWayByDefault)
         tree.SelectedItem = nodes[0];
         Assert.AreSame(nodes[0], source.Value);
+    }
+
+    private sealed class IndexSource : MewObject
+    {
+        public static readonly MewProperty<int> ValueProperty =
+            MewProperty<int>.Register<IndexSource>(nameof(Value), 0);
+
+        public int Value
+        {
+            get => GetValue(ValueProperty);
+            set => SetValue(ValueProperty, value);
+        }
     }
 
     private sealed class Node
