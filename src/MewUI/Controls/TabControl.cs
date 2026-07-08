@@ -87,10 +87,10 @@ public sealed class TabControl : Control, ISelector, IIndexedSelector
 
     private void SyncSelectedItemFromIndex()
     {
-        if (_syncingSelection) return;
+        bool wasSyncing = _syncingSelection;
         _syncingSelection = true;
         try { SetValue(SelectedItemProperty, SelectedTab); }
-        finally { _syncingSelection = false; }
+        finally { _syncingSelection = wasSyncing; }
     }
 
     /// <summary>

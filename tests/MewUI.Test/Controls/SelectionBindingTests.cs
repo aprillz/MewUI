@@ -202,6 +202,20 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void SelectedItem_IsFreshInSelectionChangedHandler_OnProgrammaticSet()
+    {
+        // Regression: a consumer that reads the control's SelectedItem getter inside the
+        // SelectionChanged handler (e.g. NavigationView.UpdateContent) must see the new item,
+        // not a stale value, even when selection was set programmatically via SelectedIndex.
+        var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
+        object? observed = "sentinel";
+        list.SelectionChanged += _ => observed = list.SelectedItem;
+
+        list.SelectedIndex = 1;
+        Assert.AreEqual("b", observed);
+    }
+
+    [TestMethod]
     public void Selector_Interfaces_AreSatisfied()
     {
         var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
