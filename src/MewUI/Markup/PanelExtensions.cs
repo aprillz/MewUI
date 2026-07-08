@@ -1,3 +1,4 @@
+using System.Globalization;
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI;
@@ -274,12 +275,26 @@ public static class PanelExtensions
             else if (trimmed.EndsWith('*'))
             {
                 var valueStr = trimmed[..^1];
-                var value = string.IsNullOrEmpty(valueStr) ? 1.0 : double.Parse(valueStr);
-                yield return GridLength.Stars(value);
+                if (valueStr.Length == 0)
+                {
+                    yield return GridLength.Stars(1.0);
+                }
+                else if (double.TryParse(valueStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var stars))
+                {
+                    yield return GridLength.Stars(stars);
+                }
+                else
+                {
+                    throw new FormatException($"Invalid grid length '{trimmed}'.");
+                }
+            }
+            else if (double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var pixels))
+            {
+                yield return GridLength.Pixels(pixels);
             }
             else
             {
-                yield return GridLength.Pixels(double.Parse(trimmed));
+                throw new FormatException($"Invalid grid length '{trimmed}'.");
             }
         }
     }
