@@ -465,7 +465,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Gets the owner window. Set via <see cref="Show(Window?)"/> or <see cref="ShowDialogAsync(Window?)"/>.
+    /// Gets the owner window. Set via <see cref="Show(Window?)"/> or <see cref="ShowDialogAsync(Window?, bool)"/>.
     /// Used for <see cref="WindowStartupLocation.CenterOwner"/> positioning and modal dialog ownership.
     /// </summary>
     public Window? Owner { get; private set; }
@@ -1191,15 +1191,20 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Shows the window as a modal dialog and completes when the dialog is closed.
     /// </summary>
     /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
-    public Task ShowDialogAsync(Window? owner = null)
+    /// <param name="autoResolveOwner">When true (default) and <paramref name="owner"/> is null, the active
+    /// application window is used as owner. Pass false for an ownerless modal (e.g. a dialog that should get
+    /// its own taskbar button instead of floating over an owner).</param>
+    public Task ShowDialogAsync(Window? owner = null, bool autoResolveOwner = true)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
             throw new InvalidOperationException("Cannot show a closed window.");
         }
 
-        // Auto-resolve owner from running application when not specified.
-        owner ??= ResolveDefaultOwner();
+        if (autoResolveOwner)
+        {
+            owner ??= ResolveDefaultOwner();
+        }
 
         if (owner != null && ReferenceEquals(owner, this))
         {
@@ -1237,7 +1242,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// application loop and must be called on the UI thread; otherwise use <see cref="ShowDialogAsync"/>.
     /// </summary>
     /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
-    public void ShowDialog(Window? owner = null)
+    /// <param name="autoResolveOwner">When true (default) and <paramref name="owner"/> is null, the active
+    /// application window is used as owner. Pass false for an ownerless modal (e.g. a dialog that should get
+    /// its own taskbar button instead of floating over an owner).</param>
+    public void ShowDialog(Window? owner = null, bool autoResolveOwner = true)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -1249,8 +1257,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             throw new InvalidOperationException("ShowDialog requires a running application loop. Use Application.Run, or call ShowDialogAsync.");
         }
 
-        // Auto-resolve owner from running application when not specified.
-        owner ??= ResolveDefaultOwner();
+        if (autoResolveOwner)
+        {
+            owner ??= ResolveDefaultOwner();
+        }
 
         if (owner != null && ReferenceEquals(owner, this))
         {
@@ -2470,6 +2480,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal bool TryGetPopupOwner(UIElement popup, out UIElement owner)
         => _popupManager.TryGetPopupOwner(popup, out owner);
+
+    internal bool TryGetEnclosingPopup(UIElement element, out UIElement popupRoot)
+        => _popupManager.TryGetEnclosingPopup(element, out popupRoot);
 
     internal void UpdatePopup(UIElement popup, Rect bounds)
         => _popupManager.UpdatePopup(popup, bounds);
