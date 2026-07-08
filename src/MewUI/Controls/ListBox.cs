@@ -24,6 +24,10 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
 
+    private static readonly MewPropertyKey<IReadOnlyList<object?>> SelectedItemsPropertyKey =
+        MewProperty<IReadOnlyList<object?>>.RegisterReadOnly<ListBox>(nameof(SelectedItems), Array.Empty<object?>());
+    public static readonly MewProperty<IReadOnlyList<object?>> SelectedItemsProperty = SelectedItemsPropertyKey.Property;
+
     public static readonly MewProperty<bool> ZebraStripingProperty =
         MewProperty<bool>.Register<ListBox>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
 
@@ -156,6 +160,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
     /// <summary>Gets the selected item indices in ascending order.</summary>
     public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
+
+    /// <summary>Gets the selected items in ascending index order (read-only, bindable).</summary>
+    public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
     /// <summary>Occurs when the set of selected items changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
@@ -769,14 +776,32 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     // property change callbacks do not re-enter the model.
     private void SyncSelectionProperties()
     {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try
+        if (!_syncingSelection)
         {
-            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
-            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
+            _syncingSelection = true;
+            try
+            {
+                SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
+                SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
+            }
+            finally { _syncingSelection = false; }
         }
-        finally { _syncingSelection = false; }
+        RefreshSelectedItems();
+    }
+
+    // Materializes the current selection into the read-only SelectedItems projection.
+    private void RefreshSelectedItems()
+    {
+        var indices = SelectedIndices;
+        if (indices.Count == 0)
+        {
+            SetValue(SelectedItemsPropertyKey, Array.Empty<object?>());
+            return;
+        }
+        var items = new object?[indices.Count];
+        for (int i = 0; i < indices.Count; i++)
+            items[i] = _itemsSource.GetItem(indices[i]);
+        SetValue(SelectedItemsPropertyKey, items);
     }
 
     private void OnItemsSelectionChanged(int index)
@@ -861,6 +886,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
     private void OnItemsSelectedIndicesChanged()
     {
+        RefreshSelectedItems();
         SelectedIndicesChanged?.Invoke();
         InvalidateItemBindings();
         InvalidateVisual();

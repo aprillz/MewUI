@@ -92,6 +92,9 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     /// <summary>Gets the selected visible-row indices in ascending order.</summary>
     public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
 
+    /// <summary>Gets the selected items in ascending visible-row order (read-only, bindable).</summary>
+    public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
+
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
@@ -112,6 +115,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
 
     private void OnItemsSelectedIndicesChanged()
     {
+        RefreshSelectedItems();
         SelectedIndicesChanged?.Invoke();
         InvalidateItemBindings();
         InvalidateVisual();
@@ -126,6 +130,10 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         MewProperty<object?>.Register<TreeView>(nameof(SelectedItem), null,
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
+
+    private static readonly MewPropertyKey<IReadOnlyList<object?>> SelectedItemsPropertyKey =
+        MewProperty<IReadOnlyList<object?>>.RegisterReadOnly<TreeView>(nameof(SelectedItems), Array.Empty<object?>());
+    public static readonly MewProperty<IReadOnlyList<object?>> SelectedItemsProperty = SelectedItemsPropertyKey.Property;
 
     /// <summary>
     /// Gets or sets the currently selected tree node.
@@ -175,14 +183,32 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     // Guarded so the property change callbacks do not re-enter the model.
     private void SyncSelectionProperties()
     {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try
+        if (!_syncingSelection)
         {
-            SetValue(SelectedNodeProperty, _selectedNode);
-            SetValue(SelectedItemProperty, _selectedItem ?? _selectedNode);
+            _syncingSelection = true;
+            try
+            {
+                SetValue(SelectedNodeProperty, _selectedNode);
+                SetValue(SelectedItemProperty, _selectedItem ?? _selectedNode);
+            }
+            finally { _syncingSelection = false; }
         }
-        finally { _syncingSelection = false; }
+        RefreshSelectedItems();
+    }
+
+    // Materializes the current selection into the read-only SelectedItems projection.
+    private void RefreshSelectedItems()
+    {
+        var indices = SelectedIndices;
+        if (indices.Count == 0)
+        {
+            SetValue(SelectedItemsPropertyKey, Array.Empty<object?>());
+            return;
+        }
+        var items = new object?[indices.Count];
+        for (int i = 0; i < indices.Count; i++)
+            items[i] = _itemsSource.GetItem(indices[i]);
+        SetValue(SelectedItemsPropertyKey, items);
     }
 
     /// <summary>

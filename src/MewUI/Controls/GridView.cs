@@ -39,6 +39,10 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
 
+    private static readonly MewPropertyKey<IReadOnlyList<object?>> SelectedItemsPropertyKey =
+        MewProperty<IReadOnlyList<object?>>.RegisterReadOnly<GridView>(nameof(SelectedItems), Array.Empty<object?>());
+    public static readonly MewProperty<IReadOnlyList<object?>> SelectedItemsProperty = SelectedItemsPropertyKey.Property;
+
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
     private bool _syncingSelection;
@@ -78,6 +82,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         _core.SelectionChanged += _ => OnItemsSelectionChanged();
         _core.SelectedIndicesChanged += () =>
         {
+            RefreshSelectedItems();
             SelectedIndicesChanged?.Invoke();
             InvalidateItemBindings();
             InvalidateVisual();
@@ -153,8 +158,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     }
 
     /// <summary>
-    /// Gets or sets the selection mode. Requires an items source created from a typed list
-    /// (e.g. <see cref="SetItemsSource{TItem}(IReadOnlyList{TItem})"/>); otherwise stays <see cref="ItemsSelectionMode.Single"/>.
+    /// Gets or sets the selection mode. Requires a multi-selection-capable items source
+    /// (e.g. from <see cref="ItemsView.Create{T}(IReadOnlyList{T}, System.Func{T, string}, System.Func{T, object})"/>);
+    /// otherwise stays <see cref="ItemsSelectionMode.Single"/>.
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
@@ -167,6 +173,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     /// <summary>Gets the selected row indices in ascending order.</summary>
     public IReadOnlyList<int> SelectedIndices => _core.SelectedIndices;
+
+    /// <summary>Gets the selected items in ascending index order (read-only, bindable).</summary>
+    public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
@@ -1039,14 +1048,33 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     // re-enter the core selection when the change originated from a property/binding set.
     private void SyncSelectionFromCore()
     {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try
+        if (!_syncingSelection)
         {
-            SetValue(SelectedIndexProperty, _core.SelectedIndex);
-            SetValue(SelectedItemProperty, _core.SelectedItem);
+            _syncingSelection = true;
+            try
+            {
+                SetValue(SelectedIndexProperty, _core.SelectedIndex);
+                SetValue(SelectedItemProperty, _core.SelectedItem);
+            }
+            finally { _syncingSelection = false; }
         }
-        finally { _syncingSelection = false; }
+        RefreshSelectedItems();
+    }
+
+    // Materializes the current selection into the read-only SelectedItems projection.
+    private void RefreshSelectedItems()
+    {
+        var indices = SelectedIndices;
+        if (indices.Count == 0)
+        {
+            SetValue(SelectedItemsPropertyKey, Array.Empty<object?>());
+            return;
+        }
+        var view = _core.ItemsSource;
+        var items = new object?[indices.Count];
+        for (int i = 0; i < indices.Count; i++)
+            items[i] = view.GetItem(indices[i]);
+        SetValue(SelectedItemsPropertyKey, items);
     }
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
