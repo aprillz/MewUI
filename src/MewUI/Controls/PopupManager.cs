@@ -141,9 +141,24 @@ internal sealed class PopupManager
 
     internal void CloseAllPopups()
     {
-        for (int i = _popups.Count - 1; i >= 0; i--)
+        if (_isClosingPopups)
         {
-            CloseAndDetachEntry(i, PopupCloseKind.Lifecycle);
+            return;
+        }
+
+        // Guard against re-entrant closes: detaching a popup can clear focus, which may request another
+        // close sweep. The guard keeps that sweep from mutating _popups while this loop walks it by index.
+        _isClosingPopups = true;
+        try
+        {
+            for (int i = _popups.Count - 1; i >= 0; i--)
+            {
+                CloseAndDetachEntry(i, PopupCloseKind.Lifecycle);
+            }
+        }
+        finally
+        {
+            _isClosingPopups = false;
         }
 
         _window.Invalidate();
@@ -353,9 +368,11 @@ internal sealed class PopupManager
 
     private void CloseAndDetachEntry(int index, PopupCloseKind kind)
     {
+        // Remove from the list before the side-effecting detach: severing the popup's Parent can run
+        // focus/close side effects that re-enter this manager, and a stale index would strand RemoveAt.
         var entry = _popups[index];
-        DetachEntry(entry);
         _popups.RemoveAt(index);
+        DetachEntry(entry);
 
         if (entry.Owner is IPopupOwner owner)
         {
@@ -382,6 +399,38 @@ internal sealed class PopupManager
         }
 
         owner = popup;
+        return false;
+    }
+
+    /// <summary>
+    /// Finds the open popup whose subtree contains <paramref name="element"/>, so tab navigation can be
+    /// scoped to that popup. Returns false when the element is not inside any open popup.
+    /// </summary>
+    internal bool TryGetEnclosingPopup(UIElement element, out UIElement popupRoot)
+    {
+        for (Element? current = element; current != null; current = current.Parent)
+        {
+            if (current is UIElement candidate && IsPopupElement(candidate))
+            {
+                popupRoot = candidate;
+                return true;
+            }
+        }
+
+        popupRoot = element;
+        return false;
+    }
+
+    private bool IsPopupElement(UIElement element)
+    {
+        for (int i = 0; i < _popups.Count; i++)
+        {
+            if (ReferenceEquals(_popups[i].Element, element))
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 

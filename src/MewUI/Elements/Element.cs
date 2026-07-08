@@ -75,6 +75,14 @@ public abstract class Element : MewObject
             if (field != value)
             {
                 var oldRoot = FindVisualRoot();
+
+                // Detaching: release window-scoped state (focus) while the parent chain is still intact,
+                // so focus-within can unwind up to the retained ancestor before the link is severed.
+                if (value == null)
+                {
+                    OnDetaching(oldRoot);
+                }
+
                 field = value;
                 InvalidateVisualRootCacheDeep();
                 ClearDpiCacheDeep();
@@ -328,6 +336,12 @@ public abstract class Element : MewObject
     /// Raised for the entire subtree starting at the element whose Parent changed.
     /// </summary>
     protected virtual void OnVisualRootChanged(Element? oldRoot, Element? newRoot) { }
+
+    /// <summary>
+    /// Called on the element whose <see cref="Parent"/> is being cleared, before the link is severed
+    /// (parent chain still intact). Override to release state that depends on the old ancestor chain.
+    /// </summary>
+    internal virtual void OnDetaching(Element? oldRoot) { }
 
     /// <summary>
     /// Renders the element to the graphics context.

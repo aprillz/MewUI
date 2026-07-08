@@ -81,6 +81,15 @@ public abstract partial class UIElement : Element
 
     /// <summary>
     /// Whether the element can receive keyboard focus. Control authors set the per-type default
+    /// (via <see cref="MewProperty{T}.OverrideDefaultValue{TOwner}"/> in a static constructor);
+    /// apps may override individual instances, for example to drop a composed part from focus.
+    /// Setting this false on the currently focused element does not move focus immediately; the
+    /// next Tab or click resolves it.
+    /// </summary>
+    public static readonly MewProperty<bool> FocusableProperty =
+        MewProperty<bool>.Register<UIElement>(nameof(Focusable), false);
+
+    /// <summary>
     /// When <see langword="true"/>, the viewport-bounds cull check in <see cref="Render"/> is skipped.
     /// Set this on children whose layout bounds do not reflect their actual visible area
     /// (e.g. children rendered under a parent-applied scale/rotation transform).
@@ -779,6 +788,19 @@ public abstract partial class UIElement : Element
     }
 
     #endregion
+
+    internal override void OnDetaching(Element? oldRoot)
+    {
+        base.OnDetaching(oldRoot);
+
+        // Keep the single-focus invariant: a focused element leaving the tree would otherwise strand
+        // FocusManager.FocusedElement on a detached element (stale IsFocused / focus border). Release it
+        // here, while still attached, so focus-within unwinds up the retained ancestor chain.
+        if ((IsFocused || IsFocusWithin) && oldRoot is Window window)
+        {
+            window.FocusManager.ClearFocus();
+        }
+    }
 
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
     {

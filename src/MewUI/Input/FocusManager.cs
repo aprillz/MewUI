@@ -212,6 +212,13 @@ public sealed class FocusManager
             return true;
         }
 
+        // Trap tab navigation inside an open popup (WPF/Avalonia flyout behavior). Falls through when the
+        // popup has no other tab stop, so single-target popups (e.g. combo lists) exit and close instead.
+        if (TryMoveFocusWithinPopup(moveForward: true))
+        {
+            return true;
+        }
+
         var focusable = CollectFocusableElements(_window.Content);
         if (focusable.Count == 0)
         {
@@ -235,6 +242,11 @@ public sealed class FocusManager
             return true;
         }
 
+        if (TryMoveFocusWithinPopup(moveForward: false))
+        {
+            return true;
+        }
+
         var focusable = CollectFocusableElements(_window.Content);
         if (focusable.Count == 0)
         {
@@ -246,6 +258,46 @@ public sealed class FocusManager
         int prevIndex = (currentIndex - 1 + focusable.Count) % focusable.Count;
 
         return SetFocus(focusable[prevIndex]);
+    }
+
+    /// <summary>
+    /// When focus is inside an open popup, cycles tab focus within that popup's own focusable set and
+    /// returns true. Returns false when focus is not in a popup, or the popup has no other tab stop to
+    /// move to - the caller then falls back to window-level navigation, which exits and closes the popup.
+    /// </summary>
+    private bool TryMoveFocusWithinPopup(bool moveForward)
+    {
+        if (FocusedElement == null || !_window.TryGetEnclosingPopup(FocusedElement, out var popupRoot))
+        {
+            return false;
+        }
+
+        var focusable = CollectFocusableElements(popupRoot);
+        if (focusable.Count == 0)
+        {
+            return false;
+        }
+
+        // Anchor to the collected tab stop containing focus (the focused leaf may not itself be a tab
+        // stop, e.g. a NumericUpDown's internal TextBox - its ancestor NumericUpDown is the tab stop).
+        var anchor = ResolveFocusNavigationAnchor(FocusedElement, focusable);
+        int currentIndex = anchor != null ? focusable.IndexOf(anchor) : -1;
+        if (currentIndex < 0)
+        {
+            return false;
+        }
+
+        int targetIndex = moveForward
+            ? (currentIndex + 1) % focusable.Count
+            : (currentIndex - 1 + focusable.Count) % focusable.Count;
+
+        var target = focusable[targetIndex];
+        if (ReferenceEquals(target, anchor))
+        {
+            return false;
+        }
+
+        return SetFocus(target);
     }
 
     private bool TryMoveVirtualizedFocus(UIElement focusedElement, bool moveForward)
