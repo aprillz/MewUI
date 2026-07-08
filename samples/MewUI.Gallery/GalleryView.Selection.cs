@@ -348,6 +348,35 @@ partial class GalleryView
             ),
 
             Card(
+                "TabControl Overflow",
+                new TabControl()
+                    .Width(260)
+                    .Height(140)
+                    .TabItems(
+                        new TabItem()
+                            .Header("Overview")
+                            .Content(new TextBlock().Text("Overview content")),
+                        new TabItem()
+                            .Header("Rendering Pipeline")
+                            .Content(new TextBlock().Text("Rendering Pipeline content")),
+                        new TabItem()
+                            .Header("Input Routing")
+                            .Content(new TextBlock().Text("Input Routing content")),
+                        new TabItem()
+                            .Header("Property Binding")
+                            .Content(new TextBlock().Text("Property Binding content")),
+                        new TabItem()
+                            .Header("Disabled Diagnostics")
+                            .Content(new TextBlock().Text("Disabled Diagnostics content"))
+                            .IsEnabled(false),
+                        new TabItem()
+                            .Header("Final Review")
+                            .Content(new TextBlock().Text("Final Review content")))
+                    .SelectedIndex(5),
+                minWidth: 340
+            ),
+
+            Card(
                 "TabControl + RotationDecorator",
                 new UniformGrid()
                     .Columns(2)
