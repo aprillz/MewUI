@@ -14,6 +14,11 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
 
+    public static readonly MewProperty<ItemsSelectionMode> SelectionModeProperty =
+        MewProperty<ItemsSelectionMode>.Register<ListBox>(nameof(SelectionMode), ItemsSelectionMode.Single,
+            MewPropertyOptions.None,
+            static (self, _, newVal) => self.OnSelectionModePropertyChanged(newVal));
+
     public static readonly MewProperty<bool> ZebraStripingProperty =
         MewProperty<bool>.Register<ListBox>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
 
@@ -70,6 +75,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         {
             newMulti.SelectedIndicesChanged += OnItemsSelectedIndicesChanged;
         }
+
+        // The selection mode is a control-level setting; re-apply it so it survives a source swap.
+        _itemsSource.SetSelectionMode(SelectionMode);
 
         _presenter.ItemsSource = _itemsSource;
 
@@ -132,9 +140,12 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
-        get => _itemsSource.GetSelectionMode();
-        set => _itemsSource.SetSelectionMode(value);
+        get => GetValue(SelectionModeProperty);
+        set => SetValue(SelectionModeProperty, value);
     }
+
+    private void OnSelectionModePropertyChanged(ItemsSelectionMode mode)
+        => _itemsSource.SetSelectionMode(mode);
 
     /// <summary>Gets the selected item indices in ascending order.</summary>
     public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
