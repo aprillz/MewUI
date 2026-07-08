@@ -32,6 +32,8 @@ public static class PanelExtensions
     /// <returns>The panel for chaining.</returns>
     public static T Children<T>(this T panel, params Element[] children) where T : Panel
     {
+        ArgumentNullException.ThrowIfNull(panel);
+        ArgumentNullException.ThrowIfNull(children);
         panel.AddRange(children);
         return panel;
     }
@@ -154,6 +156,8 @@ public static class PanelExtensions
     /// <returns>The grid for chaining.</returns>
     public static Grid Rows(this Grid grid, params GridLength[] rows)
     {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(rows);
         grid.RowDefinitions.Clear();
         foreach (var row in rows)
         {
@@ -171,6 +175,8 @@ public static class PanelExtensions
     /// <returns>The grid for chaining.</returns>
     public static Grid Columns(this Grid grid, params GridLength[] columns)
     {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(columns);
         grid.ColumnDefinitions.Clear();
         foreach (var col in columns)
         {
@@ -188,6 +194,8 @@ public static class PanelExtensions
     /// <returns>The grid for chaining.</returns>
     public static Grid Rows(this Grid grid, string definition)
     {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(definition);
         grid.RowDefinitions.Clear();
         foreach (var length in ParseGridLengths(definition))
         {
@@ -205,6 +213,8 @@ public static class PanelExtensions
     /// <returns>The grid for chaining.</returns>
     public static Grid Columns(this Grid grid, string definition)
     {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(definition);
         grid.ColumnDefinitions.Clear();
         foreach (var length in ParseGridLengths(definition))
         {

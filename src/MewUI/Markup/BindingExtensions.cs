@@ -21,6 +21,7 @@ public static class BindingExtensions
         BindingMode? mode = null)
         where TElement : MewObject
     {
+        ArgumentNullException.ThrowIfNull(element);
         element.SetBinding(property, source, mode);
         return element;
     }
@@ -40,6 +41,7 @@ public static class BindingExtensions
         MewProperty<T> property, MewObject source, MewProperty<T> sourceProperty)
         where TElement : MewObject
     {
+        ArgumentNullException.ThrowIfNull(element);
         element.SetBinding(property, source, sourceProperty);
         return element;
     }
@@ -66,6 +68,7 @@ public static class BindingExtensions
         BindingMode? mode = null)
         where TElement : MewObject
     {
+        ArgumentNullException.ThrowIfNull(element);
         element.SetBinding(property, source, convert, convertBack, mode);
         return element;
     }
@@ -93,6 +96,7 @@ public static class BindingExtensions
         BindingMode? mode = null)
         where TElement : MewObject
     {
+        ArgumentNullException.ThrowIfNull(element);
         element.SetBinding(property, source, sourceProperty, convert, convertBack, mode);
         return element;
     }
