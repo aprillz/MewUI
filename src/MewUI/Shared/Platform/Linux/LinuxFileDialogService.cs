@@ -10,4 +10,7 @@ internal sealed class LinuxFileDialogService : IFileDialogService
 
     public string? SelectFolder(FolderDialogOptions options)
         => LinuxExternalDialogs.SelectFolder(options);
+
+    public bool IsNativeDialogAvailable()
+        => LinuxExternalDialogs.IsToolAvailable();
 }

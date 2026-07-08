@@ -19,4 +19,10 @@ public interface IFileDialogService
     /// Opens a folder selection dialog and returns the chosen path (or null when canceled).
     /// </summary>
     string? SelectFolder(FolderDialogOptions options);
+
+    /// <summary>
+    /// Whether a native OS file dialog can actually be shown on this platform right now. Used by the
+    /// Auto backend to decide between native and the managed in-framework dialog.
+    /// </summary>
+    bool IsNativeDialogAvailable() => true;
 }
