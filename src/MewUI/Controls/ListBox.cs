@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollable list control with item selection.
 /// </summary>
-public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHost
+public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHost, ISelector, IIndexedSelector, IMultiSelector
 {
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<ListBox>(nameof(SelectedIndex), -1,

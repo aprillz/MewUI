@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A hierarchical tree view control with expand/collapse functionality.
 /// </summary>
-public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost
+public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost, ISelector, IMultiSelector
 {
     private readonly TextWidthCache _textWidthCache = new(512);
     private readonly FixedHeightItemsPresenter _presenter;

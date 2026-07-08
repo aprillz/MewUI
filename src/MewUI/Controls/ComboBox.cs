@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A drop-down selection control with text header and popup list.
 /// </summary>
-public sealed partial class ComboBox : DropDownBase
+public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 {
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<ComboBox>(nameof(SelectedIndex), -1,

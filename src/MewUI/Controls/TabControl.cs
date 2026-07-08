@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A tabbed control with header buttons and content display.
 /// </summary>
-public sealed class TabControl : Control
+public sealed class TabControl : Control, ISelector, IIndexedSelector
     , IVisualTreeHost
     , IFocusTraversalScope
 {

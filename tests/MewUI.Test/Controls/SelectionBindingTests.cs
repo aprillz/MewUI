@@ -202,6 +202,34 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void Selector_Interfaces_AreSatisfied()
+    {
+        var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
+
+        ISelector sel = list;
+        sel.SelectedItem = "b";
+        Assert.AreEqual("b", sel.SelectedItem);
+
+        IIndexedSelector indexed = list;
+        indexed.SelectedIndex = 2;
+        Assert.AreEqual(2, indexed.SelectedIndex);
+
+        IMultiSelector multi = list;
+        multi.SelectionMode = ItemsSelectionMode.Multiple;
+        multi.SelectAll();
+        Assert.AreEqual(3, multi.SelectedItems.Count);
+        Assert.IsTrue(multi.IsSelected(0));
+        multi.ClearSelection();
+        Assert.AreEqual(0, multi.SelectedIndices.Count);
+
+        // TreeView is a multi-selector but not an indexed selector (node-based).
+        var tree = new TreeView();
+        Assert.IsInstanceOfType<ISelector>(tree);
+        Assert.IsInstanceOfType<IMultiSelector>(tree);
+        Assert.IsFalse(tree is IIndexedSelector);
+    }
+
+    [TestMethod]
     public void ListBox_MultiSelect_OperationsAndProjection()
     {
         var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };

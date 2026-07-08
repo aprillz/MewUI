@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// Single-selection vertical list for navigation panes. Rows are typed via <see cref="KindSelector"/>
 /// (<see cref="NavigationItemKind"/>); headers and separators are skipped by selection, hover, and keyboard.
 /// </summary>
-public class NavigationList : ScrollableItemsBase
+public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 {
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<NavigationList>(nameof(SelectedIndex), -1,
