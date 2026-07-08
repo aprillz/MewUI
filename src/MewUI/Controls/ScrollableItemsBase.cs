@@ -157,42 +157,6 @@ public abstract class ScrollableItemsBase : Control, ISubtreeInvalidationHost
         }
     }
 
-    /// <summary>Casts to the multi-selection interface, or null when the view is single-selection only.</summary>
-    internal static IMultiSelectableItemsView? AsMultiSelectable(ISelectableItemsView itemsSource)
-        => itemsSource as IMultiSelectableItemsView;
-
-    /// <summary>Gets the selection mode, or <see cref="ItemsSelectionMode.Single"/> when multi-selection is unsupported.</summary>
-    internal static ItemsSelectionMode GetSelectionMode(ISelectableItemsView itemsSource)
-        => AsMultiSelectable(itemsSource)?.SelectionMode ?? ItemsSelectionMode.Single;
-
-    /// <summary>Sets the selection mode; a no-op when multi-selection is unsupported.</summary>
-    internal static void SetSelectionMode(ISelectableItemsView itemsSource, ItemsSelectionMode value)
-    {
-        var multi = AsMultiSelectable(itemsSource);
-        if (multi != null)
-        {
-            multi.SelectionMode = value;
-        }
-    }
-
-    /// <summary>Gets the selected indices, falling back to a single-element array from SelectedIndex.</summary>
-    internal static IReadOnlyList<int> GetSelectedIndices(ISelectableItemsView itemsSource)
-    {
-        var multi = AsMultiSelectable(itemsSource);
-        if (multi != null)
-        {
-            return multi.SelectedIndices;
-        }
-        return itemsSource.SelectedIndex >= 0 ? new[] { itemsSource.SelectedIndex } : Array.Empty<int>();
-    }
-
-    /// <summary>Returns whether the item at <paramref name="index"/> is selected.</summary>
-    internal static bool IsItemSelected(ISelectableItemsView itemsSource, int index)
-    {
-        var multi = AsMultiSelectable(itemsSource);
-        return multi != null ? multi.IsSelected(index) : index == itemsSource.SelectedIndex;
-    }
-
     /// <summary>
     /// Finds the realized index and container whose subtree contains <paramref name="focusedElement"/>.
     /// Shared by TryMoveFocusFromDescendant/OnDescendantFocused across the list controls.
