@@ -29,6 +29,11 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
 
+    public static readonly MewProperty<ItemsSelectionMode> SelectionModeProperty =
+        MewProperty<ItemsSelectionMode>.Register<GridView>(nameof(SelectionMode), ItemsSelectionMode.Single,
+            MewPropertyOptions.None,
+            static (self, _, newVal) => self.OnSelectionModePropertyChanged(newVal));
+
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
     private bool _syncingSelectedIndex;
@@ -144,9 +149,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     /// </summary>
     public ItemsSelectionMode SelectionMode
     {
-        get => _core.SelectionMode;
-        set => _core.SelectionMode = value;
+        get => GetValue(SelectionModeProperty);
+        set => SetValue(SelectionModeProperty, value);
     }
+
+    private void OnSelectionModePropertyChanged(ItemsSelectionMode mode)
+        => _core.SelectionMode = mode;
 
     /// <summary>Gets the selected row indices in ascending order.</summary>
     public IReadOnlyList<int> SelectedIndices => _core.SelectedIndices;
@@ -928,6 +936,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         if (change.Kind == ItemsChangeKind.Reset)
         {
             _presenter.RecycleAll();
+            // A wholesale swap resets the underlying view's mode; re-apply the control-level setting.
+            _core.SelectionMode = SelectionMode;
         }
 
         // Force rebind of visible rows only when the change can shift their indices or

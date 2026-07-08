@@ -140,6 +140,32 @@ public sealed class SelectionBindingTests
         Assert.AreSame(nodes[0], source.Value);
     }
 
+    [TestMethod]
+    public void GridView_SelectionMode_SetGetAndPersistsAcrossSourceSwap()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+        Assert.AreEqual(ItemsSelectionMode.Single, grid.SelectionMode);
+
+        grid.SelectionMode = ItemsSelectionMode.Multiple;
+        Assert.AreEqual(ItemsSelectionMode.Multiple, grid.SelectionMode);
+
+        // Mode is a control-level setting; it survives a wholesale source swap.
+        grid.SetItemsSource(new[] { "x", "y", "z" });
+        Assert.AreEqual(ItemsSelectionMode.Multiple, grid.SelectionMode);
+    }
+
+    [TestMethod]
+    public void ListBox_SelectionMode_SourceBinding()
+    {
+        var list = new ListBox();
+        var source = new ObservableValue<ItemsSelectionMode>(ItemsSelectionMode.Single);
+        list.SetBinding(ListBox.SelectionModeProperty, source);
+
+        source.Value = ItemsSelectionMode.Multiple;
+        Assert.AreEqual(ItemsSelectionMode.Multiple, list.SelectionMode);
+    }
+
     private sealed class IndexSource : MewObject
     {
         public static readonly MewProperty<int> ValueProperty =

@@ -53,6 +53,9 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
                 newMulti.SelectedIndicesChanged += OnItemsSelectedIndicesChanged;
             }
 
+            // The selection mode is a control-level setting; re-apply it so it survives a source swap.
+            _itemsSource.SetSelectionMode(SelectionMode);
+
             // The old source's selection no longer applies; re-sync from the new source
             // rather than leaving stale references to the previous source's item/node.
             _selectedNode = _itemsSource.SelectedItem as TreeViewNode;
@@ -72,11 +75,19 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     /// (e.g. <see cref="TreeItemsView{T}"/>); otherwise stays <see cref="ItemsSelectionMode.Single"/>.
     /// Range selection follows the flattened visible-row order. Parent/child propagation is not applied.
     /// </summary>
+    public static readonly MewProperty<ItemsSelectionMode> SelectionModeProperty =
+        MewProperty<ItemsSelectionMode>.Register<TreeView>(nameof(SelectionMode), ItemsSelectionMode.Single,
+            MewPropertyOptions.None,
+            static (self, _, newVal) => self.OnSelectionModePropertyChanged(newVal));
+
     public ItemsSelectionMode SelectionMode
     {
-        get => _itemsSource.GetSelectionMode();
-        set => _itemsSource.SetSelectionMode(value);
+        get => GetValue(SelectionModeProperty);
+        set => SetValue(SelectionModeProperty, value);
     }
+
+    private void OnSelectionModePropertyChanged(ItemsSelectionMode mode)
+        => _itemsSource.SetSelectionMode(mode);
 
     /// <summary>Gets the selected visible-row indices in ascending order.</summary>
     public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
