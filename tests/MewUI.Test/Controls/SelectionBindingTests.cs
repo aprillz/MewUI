@@ -159,6 +159,20 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void GridView_SelectedItem_SetGetAndSyncsWithIndex()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+
+        grid.SelectedItem = "b";
+        Assert.AreEqual("b", grid.SelectedItem);
+        Assert.AreEqual(1, grid.SelectedIndex);
+
+        grid.SelectedIndex = 2;
+        Assert.AreEqual("c", grid.SelectedItem);
+    }
+
+    [TestMethod]
     public void ListBox_SelectedItem_TwoWayBinding()
     {
         var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
