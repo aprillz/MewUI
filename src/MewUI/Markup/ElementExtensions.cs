@@ -315,7 +315,7 @@ public static class ElementExtensions
 
     /// <summary>
     /// Sets the window to open centered on the owner window.
-    /// The owner is provided when calling <see cref="Window.Show(Window?)"/> or <see cref="Window.ShowDialogAsync(Window?)"/>.
+    /// The owner is provided when calling <see cref="Window.Show(Window?)"/> or <see cref="Window.ShowDialogAsync(Window?, bool)"/>.
     /// </summary>
     /// <param name="window">Target window.</param>
     /// <returns>The window for chaining.</returns>
