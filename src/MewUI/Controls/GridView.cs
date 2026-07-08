@@ -24,8 +24,14 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     public static readonly MewProperty<double> MaxAutoViewportHeightProperty =
         MewProperty<double>.Register<GridView>(nameof(MaxAutoViewportHeight), 320.0, MewPropertyOptions.AffectsLayout);
 
+    public static readonly MewProperty<int> SelectedIndexProperty =
+        MewProperty<int>.Register<GridView>(nameof(SelectedIndex), -1,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
+
     private object? _itemTypeToken;
     private readonly GridViewCore _core = new();
+    private bool _syncingSelectedIndex;
 
     private readonly HeaderRow _header;
     private IItemsPresenter _presenter;
@@ -126,8 +132,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     public int SelectedIndex
     {
-        get => _core.SelectedIndex;
-        set => _core.SelectedIndex = value;
+        get => GetValue(SelectedIndexProperty);
+        set => SetValue(SelectedIndexProperty, value);
     }
 
     public object? SelectedItem => _core.SelectedItem;
@@ -946,6 +952,10 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             InvalidateItemBindings();
         }
+        // A collection change can clear/shift the selection without firing SelectionChanged
+        // (e.g. SetItems resetting to -1 on a view already at -1); re-sync so the bindable
+        // property never diverges from the core.
+        SyncSelectedIndexFromCore();
         InvalidateMeasure();
         InvalidateArrange();
         InvalidateVisual();
@@ -1002,10 +1012,35 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     private void OnItemsSelectionChanged()
     {
+        SyncSelectedIndexFromCore();
         SelectionChanged?.Invoke(SelectedItem);
         InvalidateItemBindings();
         ScrollSelectedIntoView();
         InvalidateVisual();
+    }
+
+    // Mirrors the underlying selection into the bindable property. Guarded so it does not
+    // re-enter the core selection when the change originated from a property/binding set.
+    private void SyncSelectedIndexFromCore()
+    {
+        if (_syncingSelectedIndex) return;
+        _syncingSelectedIndex = true;
+        try { SetValue(SelectedIndexProperty, _core.SelectedIndex); }
+        finally { _syncingSelectedIndex = false; }
+    }
+
+    private void OnSelectedIndexPropertyChanged(int newIndex)
+    {
+        if (_syncingSelectedIndex) return;
+        _syncingSelectedIndex = true;
+        try
+        {
+            _core.SelectedIndex = newIndex;
+            int actual = _core.SelectedIndex;
+            if (actual != newIndex)
+                SetValue(SelectedIndexProperty, actual);
+        }
+        finally { _syncingSelectedIndex = false; }
     }
 
     private void ScrollSelectedIntoView()
