@@ -559,6 +559,18 @@ public static class DefaultStyles
                     Match = VisualStateFlags.Hot,
                     Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground)],
                 },
+                // Keyboard focus marks the focused segment with an accent-tinted face. Only ButtonGroup
+                // makes segments focusable; SegmentedControl segments are non-focusable so this never shows.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonFace, t.Palette.Accent.WithAlpha(72)))],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused | VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonHoverBackground, t.Palette.Accent.WithAlpha(72)))],
+                },
                 new StateTrigger
                 {
                     Match = VisualStateFlags.Pressed,
@@ -610,15 +622,9 @@ public static class DefaultStyles
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
             ],
-            Triggers =
-            [
-                // Focus ring on the container when any segment is focused.
-                new StateTrigger
-                {
-                    Match = VisualStateFlags.Focused,
-                    Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
-                },
-            ],
+            // No container focus trigger: each segment is its own Tab stop and marks its own focus
+            // (accent-tinted face). A container border ring would double-indicate and hide which
+            // segment is focused.
         };
 
     private static Style CreateMenuBarStyle() =>

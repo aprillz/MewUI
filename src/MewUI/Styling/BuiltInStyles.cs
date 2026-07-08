@@ -53,6 +53,23 @@ public static class BuiltInStyles
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground.WithAlpha(128)),
                     ],
                 },
+                // Keyboard focus: a flat button has no chrome, so an accent-tinted face is its focus signal.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty, t => t.Palette.Accent.WithAlpha(56)),
+                    ],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused | VisualStateFlags.Hot,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty, t => t.Palette.Accent.WithAlpha(88)),
+                    ],
+                },
                 new StateTrigger
                 {
                     Match = VisualStateFlags.Pressed,
