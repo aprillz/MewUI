@@ -168,7 +168,7 @@ internal sealed class PropertyValueStore
     /// If the current source has higher priority, the call is ignored.
     /// Stops any running animation on this property.
     /// </summary>
-    public void SetValue(MewProperty property, object value, ValueSource source)
+    public void SetValue(MewProperty property, object? value, ValueSource source)
     {
         ref var entry = ref EnsureEntry(property.Id);
 
@@ -176,8 +176,8 @@ internal sealed class PropertyValueStore
         if (source < entry.Source && entry.Source != ValueSource.Default)
             return;
 
-        // Apply coerce callback
-        if (property.CoerceCallback != null && _ownerRef.TryGetTarget(out var coerceOwner))
+        // Apply coerce callback (skipped for null: coercion callbacks assume a non-null value)
+        if (value != null && property.CoerceCallback != null && _ownerRef.TryGetTarget(out var coerceOwner))
         {
             value = property.CoerceCallback(coerceOwner, value);
         }
@@ -233,7 +233,7 @@ internal sealed class PropertyValueStore
     /// Backward-compatible SetTarget - maps to Trigger source.
     /// Used by existing code (PropertyForward, MewObjectPropertyBinding, etc.)
     /// </summary>
-    public void SetTarget(MewProperty property, object value)
+    public void SetTarget(MewProperty property, object? value)
     {
         SetValue(property, value, ValueSource.Trigger);
     }

@@ -44,7 +44,7 @@ public abstract class MewObject : IPropertyOwner
     // propagation path uses this directly so it doesn't re-trigger inheritance recursion.
     private void NotifyObservers(MewProperty property, object? oldValue, object? newValue)
     {
-        if (_propertyForwards != null && newValue != null &&
+        if (_propertyForwards != null &&
             _propertyForwards.TryGetValue(property.Id, out var forward))
         {
             if (forward is List<PropertyForwardEntry> list)
