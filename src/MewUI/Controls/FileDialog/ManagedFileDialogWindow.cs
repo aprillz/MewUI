@@ -25,7 +25,7 @@ internal sealed class ManagedFileDialogWindow : Window
 
     // Descriptor for a nav-cluster segment (glyph + tooltip + click action).
     private sealed record NavAction(string Id, GlyphKind Glyph, string Tip, Action Run);
-    private readonly Border _pathHost;
+    private readonly ContentControl _pathHost;
     private readonly TextBox _pathBox;
     private readonly ListBox _iconView;
     private readonly Border _viewHost;
@@ -133,6 +133,8 @@ internal sealed class ManagedFileDialogWindow : Window
                 string target = _pathBox.Text ?? string.Empty;
                 ExitPathEdit();
                 _browser.Navigate(target);
+                // Navigation rebuilt the breadcrumb, replacing the crumb ExitPathEdit re-homed onto.
+                LastCrumbButton()?.Focus();
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape)
@@ -147,14 +149,14 @@ internal sealed class ManagedFileDialogWindow : Window
         // Address bar: breadcrumb by default; click the empty area to type a path and jump there.
         // Outer address-bar box stays; the inner editable TextBox is borderless (NullTextBox style).
         // Fixed height so toggling breadcrumb <-> text box does not change the toolbar height.
-        _pathHost = new Border
+        // ContentControl (not Border) so IsFocusWithin drives the border: focusing a breadcrumb button
+        // or the path box lights the box with an accent border, animated via the style's transition.
+        // The base BorderBrush must come from the style so the Focused trigger can override it.
+        _pathHost = new ContentControl
         {
-            Child = _breadcrumb.CenterVertical(),
-            BorderThickness = Theme.Metrics.ControlBorderThickness,
-            BorderBrush = Theme.Palette.ControlBorder,
-            CornerRadius = Theme.Metrics.ControlCornerRadius,
+            Content = _breadcrumb.CenterVertical(),
             Padding = new Thickness(0),
-            Height = Theme.Metrics.BaseControlHeight,
+            StyleName = FileDialogStyles.AddressBar,
         };
         _pathHost.OnMouseDown(_ =>
         {
@@ -398,7 +400,7 @@ internal sealed class ManagedFileDialogWindow : Window
     {
         _editingPath = true;
         _pathBox.Text = _browser.CurrentDirectory;
-        _pathHost.Child = _pathBox;
+        _pathHost.Content = _pathBox;
         _pathBox.Focus();
     }
 
@@ -409,7 +411,30 @@ internal sealed class ManagedFileDialogWindow : Window
             return;
         }
         _editingPath = false;
-        _pathHost.Child = _breadcrumb;
+
+        // Capture intent before the swap: if the path box still holds focus (ESC / programmatic exit,
+        // not a focus-out), re-home focus on the current crumb. The swap itself releases the path box's
+        // focus during detach, so the re-home must be read here and applied after.
+        bool reHome = _pathBox.IsFocused;
+
+        _pathHost.Content = _breadcrumb;
+
+        if (reHome)
+        {
+            LastCrumbButton()?.Focus();
+        }
+    }
+
+    private Button? LastCrumbButton()
+    {
+        for (int i = _breadcrumb.Count - 1; i >= 0; i--)
+        {
+            if (_breadcrumb[i] is Button crumb)
+            {
+                return crumb;
+            }
+        }
+        return null;
     }
 
     // A new navigation started: drop the stale file-list selection right away so an inaccessible or
@@ -482,7 +507,18 @@ internal sealed class ManagedFileDialogWindow : Window
             first = false;
 
             string target = segmentPath;
-            _breadcrumb.Add(new Button().Content(label, false).TabIndex(2).StyleName(BuiltInStyles.FlatButton).OnClick(() => _browser.Navigate(target)));
+            _breadcrumb.Add(new Button().Content(label, false).TabIndex(2).StyleName(BuiltInStyles.FlatButton)
+                .OnClick(() => _browser.Navigate(target))
+                .OnKeyDown(e =>
+                {
+                    // F2 is the Windows/Linux edit-in-place idiom. macOS uses Return, which here navigates,
+                    // so Mac users reach text entry via the global Cmd+Shift+G instead.
+                    if (e.Key == Key.F2 && (OperatingSystem.IsWindows() || OperatingSystem.IsLinux()))
+                    {
+                        EnterPathEdit();
+                        e.Handled = true;
+                    }
+                }));
         }
     }
 
@@ -583,11 +619,36 @@ internal sealed class ManagedFileDialogWindow : Window
     {
         // A focused child consumes Escape first (path edit, open dropdown); an unhandled one cancels.
         base.OnKeyDown(e);
+
+        if (!e.Handled && !_editingPath && IsEditPathShortcut(e))
+        {
+            EnterPathEdit();
+            e.Handled = true;
+            return;
+        }
+
         if (!e.Handled && e.Key == Key.Escape)
         {
             e.Handled = true;
             OnCancel();
         }
+    }
+
+    // Switch the address bar to text entry, using each platform's convention.
+    private static bool IsEditPathShortcut(KeyEventArgs e)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            // Finder "Go to Folder".
+            return e.MetaKey && e.ShiftKey && e.Key == Key.G;
+        }
+
+        // Windows + Linux/GTK location bar: Ctrl+L. Windows also allows Explorer's Alt+D.
+        if (e.ControlKey && e.Key == Key.L)
+        {
+            return true;
+        }
+        return OperatingSystem.IsWindows() && e.AltKey && e.Key == Key.D;
     }
 
     private void OnCancel()
@@ -704,6 +765,7 @@ internal enum FileDialogViewMode
 internal static class FileDialogStyles
 {
     public const string NullTextBox = "null-textbox";
+    public const string AddressBar = "address-bar";
 
     private static bool _registered;
 
@@ -722,6 +784,27 @@ internal static class FileDialogStyles
             [
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
                 Setter.Create(Control.BackgroundProperty,  Color.Transparent),
+            ],
+        });
+
+        Application.Current.StyleSheet.Define(AddressBar, () => new Style(typeof(ContentControl))
+        {
+            Transitions = [Transition.Create(Control.BorderBrushProperty)],
+            Setters =
+            [
+                Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+                Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
+                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+                Setter.Create(Control.BackgroundProperty, Color.Transparent),
+                Setter.Create(FrameworkElement.HeightProperty, t => t.Metrics.BaseControlHeight),
+            ],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Focused,
+                    Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
+                },
             ],
         });
     }
