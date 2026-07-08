@@ -208,16 +208,14 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     // Guarded so the property change callbacks do not re-enter the model.
     private void SyncSelectionProperties()
     {
-        if (!_syncingSelection)
+        bool wasSyncing = _syncingSelection;
+        _syncingSelection = true;
+        try
         {
-            _syncingSelection = true;
-            try
-            {
-                SetValue(SelectedNodeProperty, _selectedNode);
-                SetValue(SelectedItemProperty, _selectedItem ?? _selectedNode);
-            }
-            finally { _syncingSelection = false; }
+            SetValue(SelectedNodeProperty, _selectedNode);
+            SetValue(SelectedItemProperty, _selectedItem ?? _selectedNode);
         }
+        finally { _syncingSelection = wasSyncing; }
         RefreshSelectedItems();
     }
 

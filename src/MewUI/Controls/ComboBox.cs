@@ -215,14 +215,14 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 
     private void SyncSelectionProperties()
     {
-        if (_syncingSelection) return;
+        bool wasSyncing = _syncingSelection;
         _syncingSelection = true;
         try
         {
             SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
             SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
         }
-        finally { _syncingSelection = false; }
+        finally { _syncingSelection = wasSyncing; }
     }
 
     private void OnItemsSelectionChanged(int index)

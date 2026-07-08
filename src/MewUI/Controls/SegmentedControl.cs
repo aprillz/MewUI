@@ -107,14 +107,14 @@ public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelecto
 
     private void SyncSelectionProperties()
     {
-        if (_syncingSelection) return;
+        bool wasSyncing = _syncingSelection;
         _syncingSelection = true;
         try
         {
             SetValue(SelectedIndexProperty, Items.SelectedIndex);
             SetValue(SelectedItemProperty, Items.SelectedItem);
         }
-        finally { _syncingSelection = false; }
+        finally { _syncingSelection = wasSyncing; }
     }
 
     private void UpdateSelectionVisuals()

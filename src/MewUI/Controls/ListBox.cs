@@ -800,16 +800,16 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     // property change callbacks do not re-enter the model.
     private void SyncSelectionProperties()
     {
-        if (!_syncingSelection)
+        // Save/restore (not early-return) so the properties are synced even when called from within
+        // a guarded property->model set, keeping SelectedItem fresh before SelectionChanged fires.
+        bool wasSyncing = _syncingSelection;
+        _syncingSelection = true;
+        try
         {
-            _syncingSelection = true;
-            try
-            {
-                SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
-                SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
-            }
-            finally { _syncingSelection = false; }
+            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
+            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
         }
+        finally { _syncingSelection = wasSyncing; }
         RefreshSelectedItems();
     }
 

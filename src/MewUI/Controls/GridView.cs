@@ -1077,16 +1077,16 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     // re-enter the core selection when the change originated from a property/binding set.
     private void SyncSelectionFromCore()
     {
-        if (!_syncingSelection)
+        // Save/restore (not early-return) so the properties are synced even when called from within
+        // a guarded property->model set, keeping SelectedItem fresh before SelectionChanged fires.
+        bool wasSyncing = _syncingSelection;
+        _syncingSelection = true;
+        try
         {
-            _syncingSelection = true;
-            try
-            {
-                SetValue(SelectedIndexProperty, _core.SelectedIndex);
-                SetValue(SelectedItemProperty, _core.SelectedItem);
-            }
-            finally { _syncingSelection = false; }
+            SetValue(SelectedIndexProperty, _core.SelectedIndex);
+            SetValue(SelectedItemProperty, _core.SelectedItem);
         }
+        finally { _syncingSelection = wasSyncing; }
         RefreshSelectedItems();
     }
 
