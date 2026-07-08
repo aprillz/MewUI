@@ -12,7 +12,7 @@ public abstract class FrameworkElement : UIElement, IDisposable
     private bool _hasArrangedSize;
     private StyleSheet? _styleSheet;
 
-    protected static MewProperty<Theme> ThemeProperty = MewProperty<Theme>.Register<FrameworkElement>(nameof(Theme), null!, MewPropertyOptions.AffectsRender);
+    protected static readonly MewProperty<Theme> ThemeProperty = MewProperty<Theme>.Register<FrameworkElement>(nameof(Theme), null!, MewPropertyOptions.AffectsRender);
 
     /// <summary>
     /// Gets or sets a <see cref="StyleSheet"/> that provides named styles
