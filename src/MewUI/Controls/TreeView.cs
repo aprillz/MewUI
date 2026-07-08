@@ -16,6 +16,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     private ITreeItemsView _itemsSource = TreeItemsView.Empty;
     private TreeViewNode? _selectedNode;
     private object? _selectedItem;
+    private bool _syncingSelection;
     private int _hoverVisibleIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
@@ -56,6 +57,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             // rather than leaving stale references to the previous source's item/node.
             _selectedNode = _itemsSource.SelectedItem as TreeViewNode;
             _selectedItem = _itemsSource.SelectedItem;
+            SyncSelectionProperties();
 
             _presenter.ItemsSource = _itemsSource;
             _presenter.RecycleAll();
@@ -104,21 +106,23 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         InvalidateVisual();
     }
 
+    public static readonly MewProperty<TreeViewNode?> SelectedNodeProperty =
+        MewProperty<TreeViewNode?>.Register<TreeView>(nameof(SelectedNode), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedNodePropertyChanged(newVal));
+
+    public static readonly MewProperty<object?> SelectedItemProperty =
+        MewProperty<object?>.Register<TreeView>(nameof(SelectedItem), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
+
     /// <summary>
     /// Gets or sets the currently selected tree node.
     /// </summary>
     public TreeViewNode? SelectedNode
     {
-        get => _selectedNode;
-        set
-        {
-            if (ReferenceEquals(_selectedNode, value))
-            {
-                return;
-            }
-
-            SetSelectedNodeCore(value);
-        }
+        get => GetValue(SelectedNodeProperty);
+        set => SetValue(SelectedNodeProperty, value);
     }
 
     /// <summary>
@@ -128,18 +132,46 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     /// </summary>
     public object? SelectedItem
     {
-        get => _selectedItem ?? _selectedNode;
-        set
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
+
+    private void OnSelectedNodePropertyChanged(TreeViewNode? node)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { SetSelectedNodeCore(node); }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void OnSelectedItemPropertyChanged(object? item)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try
         {
-            if (value is TreeViewNode node)
-            {
-                SelectedNode = node;
-            }
+            if (item is TreeViewNode node)
+                SetSelectedNodeCore(node);
             else
-            {
-                _itemsSource.SelectedItem = value;
-            }
+                _itemsSource.SelectedItem = item;
         }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    // Mirrors the model selection (_selectedNode/_selectedItem) into the bindable properties.
+    // Guarded so the property change callbacks do not re-enter the model.
+    private void SyncSelectionProperties()
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try
+        {
+            SetValue(SelectedNodeProperty, _selectedNode);
+            SetValue(SelectedItemProperty, _selectedItem ?? _selectedNode);
+        }
+        finally { _syncingSelection = false; }
     }
 
     /// <summary>
@@ -358,6 +390,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
 
         _selectedNode = node;
         _selectedItem = item;
+        SyncSelectionProperties();
         InvalidateItemBindings();
 
         SelectedNodeChanged?.Invoke(node);

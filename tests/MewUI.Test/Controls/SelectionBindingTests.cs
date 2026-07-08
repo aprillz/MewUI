@@ -1,0 +1,133 @@
+using Aprillz.MewUI;
+using Aprillz.MewUI.Controls;
+
+namespace MewUI.Test.Controls;
+
+// GridView.SelectedIndex and TreeView.SelectedNode/SelectedItem are bindable MewProperties
+// kept in sync with the underlying selection model without divergence or reentrancy loops.
+[TestClass]
+public sealed class SelectionBindingTests
+{
+    [TestMethod]
+    public void GridView_SelectedIndex_SetGetAndClamp()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+
+        Assert.AreEqual(-1, grid.SelectedIndex);
+
+        grid.SelectedIndex = 1;
+        Assert.AreEqual(1, grid.SelectedIndex);
+        Assert.AreEqual("b", grid.SelectedItem);
+
+        // Out-of-range is coerced by the core and written back to the property.
+        grid.SelectedIndex = 99;
+        Assert.AreEqual(2, grid.SelectedIndex);
+
+        grid.SelectedIndex = -50;
+        Assert.AreEqual(-1, grid.SelectedIndex);
+    }
+
+    [TestMethod]
+    public void GridView_SelectionChanged_GetterFreshInHandler()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+
+        int observed = -99;
+        grid.SelectionChanged += _ => observed = grid.SelectedIndex;
+
+        grid.SelectedIndex = 2;
+        Assert.AreEqual(2, observed);
+    }
+
+    [TestMethod]
+    public void GridView_SetItemsSource_ResetsSelectionProperty()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.SelectedIndex = 2;
+        Assert.AreEqual(2, grid.SelectedIndex);
+
+        // A wholesale replacement with unrelated items clears selection; the bindable
+        // property must not stay stale at 2.
+        grid.SetItemsSource(new[] { "x", "y", "z" });
+        Assert.AreEqual(-1, grid.SelectedIndex);
+    }
+
+    [TestMethod]
+    public void GridView_TwoWayBinding_SelectedIndex()
+    {
+        var grid = new GridView();
+        grid.SetItemsSource(new[] { "a", "b", "c" });
+
+        var source = new ObservableValue<int>(0);
+        grid.SetBinding(GridView.SelectedIndexProperty, source);
+
+        // source -> control
+        source.Value = 2;
+        Assert.AreEqual(2, grid.SelectedIndex);
+        Assert.AreEqual("c", grid.SelectedItem);
+
+        // control -> source (BindsTwoWayByDefault)
+        grid.SelectedIndex = 1;
+        Assert.AreEqual(1, source.Value);
+    }
+
+    [TestMethod]
+    public void TreeView_SelectedItem_SetGet()
+    {
+        var tree = new TreeView();
+        var nodes = new[] { new Node("n0"), new Node("n1"), new Node("n2") };
+        tree.ItemsSource = TreeItemsView.Create<Node>(
+            nodes, node => node.Children, textSelector: node => node.Name);
+
+        tree.SelectedItem = nodes[1];
+        Assert.AreSame(nodes[1], tree.SelectedItem);
+
+        tree.SelectedItem = null;
+        Assert.IsNull(tree.SelectedItem);
+    }
+
+    [TestMethod]
+    public void TreeView_SelectionChanged_EventAndFreshGetter()
+    {
+        var tree = new TreeView();
+        var nodes = new[] { new Node("n0"), new Node("n1") };
+        tree.ItemsSource = TreeItemsView.Create<Node>(
+            nodes, node => node.Children, textSelector: node => node.Name);
+
+        object? observed = "sentinel";
+        tree.SelectionChanged += _ => observed = tree.SelectedItem;
+
+        tree.SelectedItem = nodes[1];
+        Assert.AreSame(nodes[1], observed);
+    }
+
+    [TestMethod]
+    public void TreeView_TwoWayBinding_SelectedItem()
+    {
+        var tree = new TreeView();
+        var nodes = new[] { new Node("n0"), new Node("n1") };
+        tree.ItemsSource = TreeItemsView.Create<Node>(
+            nodes, node => node.Children, textSelector: node => node.Name);
+
+        var source = new ObservableValue<object?>(null);
+        tree.SetBinding(TreeView.SelectedItemProperty, source);
+
+        // source -> control
+        source.Value = nodes[1];
+        Assert.AreSame(nodes[1], tree.SelectedItem);
+
+        // control -> source (BindsTwoWayByDefault)
+        tree.SelectedItem = nodes[0];
+        Assert.AreSame(nodes[0], source.Value);
+    }
+
+    private sealed class Node
+    {
+        public Node(string name) => Name = name;
+        public string Name { get; }
+        public List<Node> Children { get; } = [];
+    }
+}
