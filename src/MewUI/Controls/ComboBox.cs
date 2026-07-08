@@ -14,6 +14,11 @@ public sealed partial class ComboBox : DropDownBase
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
 
+    public static readonly MewProperty<object?> SelectedItemProperty =
+        MewProperty<object?>.Register<ComboBox>(nameof(SelectedItem), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
+
     public static readonly MewProperty<bool> ZebraStripingProperty =
         MewProperty<bool>.Register<ComboBox>(nameof(ZebraStriping), true, MewPropertyOptions.None,
             static (self, oldValue, newValue) => self.OnZebraStripingChanged(oldValue, newValue));
@@ -23,7 +28,7 @@ public sealed partial class ComboBox : DropDownBase
 
     private readonly TextWidthCache _textWidthCache = new(512);
     private ListBox? _popupList;
-    private bool _syncingSelectedIndex;
+    private bool _syncingSelection;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private WheelNotchAccumulator _wheelAccumulator;
@@ -78,6 +83,7 @@ public sealed partial class ComboBox : DropDownBase
             {
                 OnItemsSelectionChanged(newIndex);
             }
+            SyncSelectionProperties();
 
             InvalidateMeasure();
             InvalidateVisual();
@@ -96,7 +102,11 @@ public sealed partial class ComboBox : DropDownBase
     /// <summary>
     /// Gets the currently selected item object.
     /// </summary>
-    public object? SelectedItem => ItemsSource.SelectedItem;
+    public object? SelectedItem
+    {
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
 
     /// <summary>
     /// Gets the currently selected item text.
@@ -187,18 +197,32 @@ public sealed partial class ComboBox : DropDownBase
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
     {
-        if (_syncingSelectedIndex) return;
-        _syncingSelectedIndex = true;
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { _itemsSource.SelectedIndex = newIndex; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void OnSelectedItemPropertyChanged(object? item)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { _itemsSource.SelectedItem = item; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void SyncSelectionProperties()
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
         try
         {
-            _itemsSource.SelectedIndex = newIndex;
-            int actual = _itemsSource.SelectedIndex;
-            if (actual != newIndex)
-            {
-                SetValue(SelectedIndexProperty, actual);
-            }
+            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
+            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
         }
-        finally { _syncingSelectedIndex = false; }
+        finally { _syncingSelection = false; }
     }
 
     private void OnItemsSelectionChanged(int index)
@@ -208,14 +232,8 @@ public sealed partial class ComboBox : DropDownBase
             return;
         }
 
-        if (!_syncingSelectedIndex)
-        {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, index); }
-            finally { _syncingSelectedIndex = false; }
-        }
-
-        SelectionChanged?.Invoke(SelectedItem);
+        SyncSelectionProperties();
+        SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         InvalidateVisual();
 
         if (_popupList != null)

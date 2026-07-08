@@ -13,6 +13,11 @@ public class NavigationList : ScrollableItemsBase
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
 
+    public static readonly MewProperty<object?> SelectedItemProperty =
+        MewProperty<object?>.Register<NavigationList>(nameof(SelectedItem), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
+
     /// <summary>Gets or sets the padding around each row's content (default from theme).</summary>
     public static readonly MewProperty<Thickness> ItemPaddingProperty =
         MewProperty<Thickness>.Register<NavigationList>(nameof(ItemPadding), default, MewPropertyOptions.AffectsLayout,
@@ -34,7 +39,7 @@ public class NavigationList : ScrollableItemsBase
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _syncingSelectedIndex;
+    private bool _syncingSelection;
 
     public NavigationList()
     {
@@ -123,7 +128,11 @@ public class NavigationList : ScrollableItemsBase
     }
 
     /// <summary>Gets the selected item object, or <see langword="null"/>.</summary>
-    public object? SelectedItem => ItemsSource.SelectedItem;
+    public object? SelectedItem
+    {
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
 
     /// <summary>Occurs when the selection changes.</summary>
     public event Action<object?>? SelectionChanged;
@@ -201,10 +210,7 @@ public class NavigationList : ScrollableItemsBase
         _presenter.ItemsSource = _itemsSource;
 
         _hoverIndex = -1;
-        int newIndex = _itemsSource.SelectedIndex;
-        _syncingSelectedIndex = true;
-        try { SetValue(SelectedIndexProperty, newIndex); }
-        finally { _syncingSelectedIndex = false; }
+        SyncSelectionProperties();
 
         InvalidateItemBindings();
         InvalidateMeasure();
@@ -501,45 +507,50 @@ public class NavigationList : ScrollableItemsBase
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
     {
-        if (_syncingSelectedIndex)
+        if (_syncingSelection)
         {
             return;
         }
 
-        // Reject selecting a non-item row.
+        // Reject selecting a non-item row; revert to the real selection.
         if (newIndex >= 0 && KindAt(newIndex) != NavigationItemKind.Item)
         {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex); }
-            finally { _syncingSelectedIndex = false; }
+            SyncSelectionProperties();
             return;
         }
 
-        _syncingSelectedIndex = true;
+        _syncingSelection = true;
+        try { _itemsSource.SelectedIndex = newIndex; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void OnSelectedItemPropertyChanged(object? item)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { _itemsSource.SelectedItem = item; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void SyncSelectionProperties()
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
         try
         {
-            _itemsSource.SelectedIndex = newIndex;
-            int actual = _itemsSource.SelectedIndex;
-            if (actual != newIndex)
-            {
-                SetValue(SelectedIndexProperty, actual);
-            }
+            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
+            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
         }
-        finally { _syncingSelectedIndex = false; }
+        finally { _syncingSelection = false; }
     }
 
     private void OnItemsSelectionChanged(int index)
     {
         InvalidateItemBindings();
-
-        if (!_syncingSelectedIndex)
-        {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, index); }
-            finally { _syncingSelectedIndex = false; }
-        }
-
-        SelectionChanged?.Invoke(SelectedItem);
+        SyncSelectionProperties();
+        SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         // Bring the selection fully into view (covers click / keyboard / programmatic paths), so selecting
         // a row that sits on the scroll edge is not left clipped.
         ScrollIntoView(index);

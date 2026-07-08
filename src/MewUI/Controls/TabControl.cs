@@ -44,6 +44,13 @@ public sealed class TabControl : Control
             static (self, _, _) => self.OnSelectedIndexChanged(),
             static (self, value) => value < 0 || value >= self._tabs.Count ? -1 : value);
 
+    public static readonly MewProperty<object?> SelectedItemProperty =
+        MewProperty<object?>.Register<TabControl>(nameof(SelectedItem), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
+
+    private bool _syncingSelection;
+
     /// <summary>
     /// Gets or sets the selected tab index.
     /// </summary>
@@ -65,7 +72,25 @@ public sealed class TabControl : Control
     private void OnSelectedIndexChanged()
     {
         UpdateSelection();
-        SelectionChanged?.Invoke(SelectedItem);
+        SyncSelectedItemFromIndex();
+        SelectionChanged?.Invoke(SelectedTab);
+    }
+
+    private void OnSelectedItemPropertyChanged(object? item)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { SelectedIndex = item is TabItem tab ? _tabs.IndexOf(tab) : -1; }
+        finally { _syncingSelection = false; }
+        SyncSelectedItemFromIndex();
+    }
+
+    private void SyncSelectedItemFromIndex()
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { SetValue(SelectedItemProperty, SelectedTab); }
+        finally { _syncingSelection = false; }
     }
 
     /// <summary>
@@ -76,7 +101,11 @@ public sealed class TabControl : Control
     /// <summary>
     /// Gets the currently selected item object for selection consistency.
     /// </summary>
-    public object? SelectedItem => SelectedTab;
+    public object? SelectedItem
+    {
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
 
     /// <summary>
     /// Occurs when the selected tab changes.

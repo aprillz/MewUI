@@ -9,12 +9,17 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class SegmentedControl : SegmentedBase
 {
-    private bool _syncingSelectedIndex;
+    private bool _syncingSelection;
 
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<SegmentedControl>(nameof(SelectedIndex), -1,
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
+
+    public static readonly MewProperty<object?> SelectedItemProperty =
+        MewProperty<object?>.Register<SegmentedControl>(nameof(SelectedItem), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
 
     static SegmentedControl()
     {
@@ -34,7 +39,11 @@ public sealed class SegmentedControl : SegmentedBase
     }
 
     /// <summary>Gets the currently selected item object, or <see langword="null"/> when nothing is selected.</summary>
-    public object? SelectedItem => Items.SelectedItem;
+    public object? SelectedItem
+    {
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
 
     /// <summary>Gets the display text of the selected segment, or <see langword="null"/>.</summary>
     public string? SelectedText =>
@@ -55,34 +64,21 @@ public sealed class SegmentedControl : SegmentedBase
 
     protected override void OnItemsViewSelectionChanged(int index)
     {
-        if (!_syncingSelectedIndex)
-        {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, index); }
-            finally { _syncingSelectedIndex = false; }
-        }
-
+        SyncSelectionProperties();
         UpdateSelectionVisuals();
-        SelectionChanged?.Invoke(SelectedItem);
+        SelectionChanged?.Invoke(Items.SelectedItem);
         InvalidateVisual();
     }
 
     protected override void OnSegmentsRebuilt()
     {
-        int idx = Items.SelectedIndex;
-        if (idx != SelectedIndex)
-        {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, idx); }
-            finally { _syncingSelectedIndex = false; }
-        }
-
+        SyncSelectionProperties();
         UpdateSelectionVisuals();
     }
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
     {
-        if (_syncingSelectedIndex)
+        if (_syncingSelection)
         {
             return;
         }
@@ -90,23 +86,35 @@ public sealed class SegmentedControl : SegmentedBase
         // Reject selecting a disabled segment: revert to the view's current index.
         if (newIndex >= 0 && newIndex < Items.Count && !IsSegmentEnabled(newIndex))
         {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, Items.SelectedIndex); }
-            finally { _syncingSelectedIndex = false; }
+            SyncSelectionProperties();
             return;
         }
 
-        _syncingSelectedIndex = true;
+        _syncingSelection = true;
+        try { Items.SelectedIndex = newIndex; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void OnSelectedItemPropertyChanged(object? item)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { Items.SelectedItem = item; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void SyncSelectionProperties()
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
         try
         {
-            Items.SelectedIndex = newIndex;
-            int actual = Items.SelectedIndex;
-            if (actual != newIndex)
-            {
-                SetValue(SelectedIndexProperty, actual);
-            }
+            SetValue(SelectedIndexProperty, Items.SelectedIndex);
+            SetValue(SelectedItemProperty, Items.SelectedItem);
         }
-        finally { _syncingSelectedIndex = false; }
+        finally { _syncingSelection = false; }
     }
 
     private void UpdateSelectionVisuals()
