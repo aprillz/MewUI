@@ -15,7 +15,16 @@ internal readonly record struct DWriteTextFormatKey(
 
 internal sealed unsafe class DWriteTextFormatCache
 {
+    // Caps unbounded growth (e.g. animated font sizes/DPI churning through many distinct
+    // keys). Native text formats are cheap to recreate, so a full clear-and-rebuild on
+    // overflow is simpler than LRU eviction.
+    private const int MAX_ENTRIES = 128;
+
     private readonly Dictionary<DWriteTextFormatKey, nint> _cache = new();
+
+    // Ellipsis trimming signs keyed by the owning format's native handle. Format handles are
+    // stable while cached, so this stays in sync with _cache and is cleared alongside it.
+    private readonly Dictionary<nint, nint> _trimmingSigns = new();
 
     public nint GetOrCreate(
         nint dwriteFactory,
@@ -37,6 +46,11 @@ internal sealed unsafe class DWriteTextFormatCache
         if (_cache.TryGetValue(key, out nint cached))
         {
             return cached;
+        }
+
+        if (_cache.Count >= MAX_ENTRIES)
+        {
+            ReleaseAll();
         }
 
         var weight = (DWRITE_FONT_WEIGHT)(int)font.Weight;
@@ -68,6 +82,25 @@ internal sealed unsafe class DWriteTextFormatCache
         return textFormat;
     }
 
+    /// <summary>Gets or creates the ellipsis trimming sign for a cached text format. Cheap to
+    /// build but recreated needlessly per draw call if not cached alongside the format.</summary>
+    public nint GetOrCreateTrimmingSign(nint dwriteFactory, nint textFormat)
+    {
+        if (_trimmingSigns.TryGetValue(textFormat, out nint cached))
+        {
+            return cached;
+        }
+
+        int hr = DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)dwriteFactory, textFormat, out nint trimmingSign);
+        if (hr < 0 || trimmingSign == 0)
+        {
+            return 0;
+        }
+
+        _trimmingSigns[textFormat] = trimmingSign;
+        return trimmingSign;
+    }
+
     public void ReleaseAll()
     {
         foreach (var (_, handle) in _cache)
@@ -75,5 +108,11 @@ internal sealed unsafe class DWriteTextFormatCache
             if (handle != 0) ComHelpers.Release(handle);
         }
         _cache.Clear();
+
+        foreach (var (_, handle) in _trimmingSigns)
+        {
+            if (handle != 0) ComHelpers.Release(handle);
+        }
+        _trimmingSigns.Clear();
     }
 }

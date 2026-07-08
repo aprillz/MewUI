@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// </summary>
 /// <remarks>
 /// Apple ships MPS as a system framework (macOS 10.13+, iOS 9+) that auto-tunes the kernel
-/// and tile size per GPU — so we don't have to write or maintain a Metal shader of our own
+/// and tile size per GPU - so we don't have to write or maintain a Metal shader of our own
 /// for this node. The framework is normally auto-loaded once any Metal symbol is touched, but
 /// because we never link against it explicitly, the first lookup of <c>MPSImageGaussianBlur</c>
 /// can return 0; <see cref="EnsureFrameworkLoaded"/> dlopens it on first use.
@@ -21,7 +21,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// MPS's <c>MPSImageGaussianBlur</c> is isotropic (single sigma applied to both axes). For
 /// SVG <c>feGaussianBlur</c> with <c>stdDeviation</c> the X and Y values are typically equal,
 /// which fits MPS perfectly. When the caller-supplied <c>sigmaX != sigmaY</c> we still run
-/// MPS once with the geometric mean — visually identical to running two anisotropic 1-D
+/// MPS once with the geometric mean - visually identical to running two anisotropic 1-D
 /// passes for moderate eccentricity, and avoids paying for a custom convolution path.
 /// </para>
 ///
@@ -114,7 +114,7 @@ internal static unsafe partial class MetalGaussianBlur
             _clsMPSImageGaussianBlur = ObjCRuntime.GetClass("MPSImageGaussianBlur");
             if (_clsMPSImageGaussianBlur == 0) return false;
 
-            // MPSImageBilinearScale — used for downsample/upsample around the blur. Optional:
+            // MPSImageBilinearScale - used for downsample/upsample around the blur. Optional:
             // if missing for some reason (very old macOS), we just skip the trick and run MPS
             // blur at full source resolution (slower but still correct).
             _clsMPSImageBilinearScale = ObjCRuntime.GetClass("MPSImageBilinearScale");
@@ -176,7 +176,7 @@ internal static unsafe partial class MetalGaussianBlur
 
         if (k <= 1)
         {
-            // Direct path — no downsample worthwhile (small σ).
+            // Direct path - no downsample worthwhile (small σ).
             return EncodeBlurDirect(device, commandBuffer, sourceTexture, destinationTexture, sigma);
         }
 
@@ -186,7 +186,7 @@ internal static unsafe partial class MetalGaussianBlur
         nuint srcH = GetTextureHeight(sourceTexture, _selTextureHeight);
         if (srcW < 8 || srcH < 8)
         {
-            // Source too small to benefit from downsample — direct path.
+            // Source too small to benefit from downsample - direct path.
             return EncodeBlurDirect(device, commandBuffer, sourceTexture, destinationTexture, sigma);
         }
 

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Native;
 
 using NativeX11 = Aprillz.MewUI.Native.X11;
@@ -277,7 +278,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
     // GenericEvent (XInput2 etc.) carries its target window inside the cookie payload, not
     // in any XEvent union field. Fetch once, read XIDeviceEvent.event, deliver to that one
-    // backend, then free — backend sees an already-fetched cookie and must NOT re-fetch/free.
+    // backend, then free - backend sees an already-fetched cookie and must NOT re-fetch/free.
     private void DispatchGenericEvent(ref XEvent ev)
     {
         if (!NativeX11.XGetEventData(Display, ref ev.xcookie))
@@ -564,21 +565,70 @@ public sealed class X11PlatformHost : IPlatformHost
         NativeX11.XSetErrorHandler((nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnXError);
     }
 
-    // TODO: returning 0 swallows ALL X protocol errors so Xlib doesn't print-and-exit on a recurring
-    // teardown error burst. Downside: also hides genuine X errors - narrow to specific codes later.
+    private static readonly EnvDebugLogger XErrorLogger = new("MEWUI_X11_DEBUG", "[X11][XError]");
+
+    // Mirrors Xlib's XErrorEvent layout (natural alignment matches the C struct on both 32/64-bit).
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XErrorEventNative
+    {
+        public int type;
+        public nint display;
+        public nuint resourceid;
+        public nuint serial;
+        public byte error_code;
+        public byte request_code;
+        public byte minor_code;
+    }
+
+    // Always returns 0 (continue instead of Xlib's default print-and-exit), but logs the error details.
+    // BadWindow/BadDrawable are demoted to opt-in debug logging: they arrive asynchronously in bursts
+    // during window teardown (requests already in flight against a destroyed XID) and are expected.
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static int OnXError(nint display, nint errorEventPtr) => 0;   // swallow: continue instead of exit()
+    private static unsafe int OnXError(nint display, nint errorEventPtr)
+    {
+        try
+        {
+            const byte BadWindow = 3;
+            const byte BadDrawable = 9;
+
+            var error = *(XErrorEventNative*)errorEventPtr;
+            if (error.error_code is BadWindow or BadDrawable)
+            {
+                XErrorLogger.Write($"code={error.error_code} request={error.request_code}.{error.minor_code} resource=0x{(ulong)error.resourceid:X} serial={(ulong)error.serial}");
+            }
+            else
+            {
+                Console.Error.WriteLine($"[X11][XError] code={error.error_code} request={error.request_code}.{error.minor_code} resource=0x{(ulong)error.resourceid:X} serial={(ulong)error.serial}");
+            }
+        }
+        catch
+        {
+            // Never throw across the native error-handler boundary.
+        }
+
+        return 0;
+    }
 
     internal nint Display
     {
         get; private set;
     }
 
+    private static bool _xInitThreadsDone;
+
     internal void EnsureDisplay()
     {
         if (Display != 0)
         {
             return;
+        }
+
+        // Xlib locking must be enabled before the first XOpenDisplay: accessors (position, cursor, capture)
+        // can touch the shared Display from app threads while the event loop polls it.
+        if (!_xInitThreadsDone)
+        {
+            _xInitThreadsDone = true;
+            _ = NativeX11.XInitThreads();
         }
 
         Display = NativeX11.XOpenDisplay(0);

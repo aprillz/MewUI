@@ -50,6 +50,7 @@ internal static unsafe class MacOSInterop
     private static nint _defaultRunLoopMode;
     private static nint _trackingRunLoopMode;
     private static bool _finishedLaunching;
+    private static int _mainThreadId = -1;
 
     private static nint SelSharedApplication;
     private static nint SelSetActivationPolicy;
@@ -129,6 +130,9 @@ internal static unsafe class MacOSInterop
 
         EnsureFrameworksLoaded();
 
+        // First call always happens on the thread that starts the app; cache it as "the" main thread.
+        _mainThreadId = Environment.CurrentManagedThreadId;
+
         SelSharedApplication = ObjC.Sel("sharedApplication");
         SelSetActivationPolicy = ObjC.Sel("setActivationPolicy:");
         SelActivateIgnoringOtherApps = ObjC.Sel("activateIgnoringOtherApps:");
@@ -206,11 +210,13 @@ internal static unsafe class MacOSInterop
         }
 
         // Build a reusable "wake" event.
-        _wakeEvent = CreateWakeEvent();
-        _defaultRunLoopMode = ObjC.CreateNSString("kCFRunLoopDefaultMode");
-        _trackingRunLoopMode = ObjC.CreateNSString("NSEventTrackingRunLoopMode");
-        _appleInterfaceStyleKey = ObjC.CreateNSString("AppleInterfaceStyle");
-        _pasteboardTypeString = ObjC.CreateNSString("public.utf8-plain-text");
+        // Retain all handles cached here: the factory methods return autoreleased instances and these
+        // static fields outlive every autorelease pool scope (pool drain would leave them dangling).
+        _wakeEvent = ObjC.Retain(CreateWakeEvent());
+        _defaultRunLoopMode = ObjC.Retain(ObjC.CreateNSString("kCFRunLoopDefaultMode"));
+        _trackingRunLoopMode = ObjC.Retain(ObjC.CreateNSString("NSEventTrackingRunLoopMode"));
+        _appleInterfaceStyleKey = ObjC.Retain(ObjC.CreateNSString("AppleInterfaceStyle"));
+        _pasteboardTypeString = ObjC.Retain(ObjC.CreateNSString("public.utf8-plain-text"));
     }
 
     public static bool TryHandleSystemKeyEvent(nint ev)
@@ -744,6 +750,9 @@ internal static unsafe class MacOSInterop
         }
     }
 
+    // True when called from the thread that ran EnsureApplicationInitialized first (the AppKit main thread).
+    private static bool IsOnMainThread => _mainThreadId != -1 && Environment.CurrentManagedThreadId == _mainThreadId;
+
     public static void PostWakeEvent()
     {
         if (_nsApp == 0 || _wakeEvent == 0)
@@ -751,7 +760,48 @@ internal static unsafe class MacOSInterop
             return;
         }
 
-        ObjC.MsgSend_void_nint_nint_bool(_nsApp, SelPostEventAtStart, _wakeEvent, false);
+        if (IsOnMainThread)
+        {
+            // postEvent: is only documented safe on the main thread; call it directly here.
+            PostWakeEventOnMainThread();
+        }
+        else
+        {
+            // Off-thread postEvent: is not documented thread-safe and the event can be silently lost, and
+            // CFRunLoopWakeUp alone only makes a parked nextEventMatchingMask iterate its run loop, which
+            // still needs a real queued event to actually return. Hop onto the main queue via GCD so the
+            // event is posted from the main thread, then wake the run loop so it drains that queue.
+            var callback = (nint)(delegate* unmanaged<nint, void>)&WakeCallback;
+            if (LibDispatchInterop.TryDispatchToMainQueue(0, callback))
+            {
+                CoreFoundationInterop.WakeMainRunLoop();
+            }
+            else
+            {
+                // libdispatch main-queue symbol did not resolve: fall back to the direct off-thread post.
+                PostWakeEventOnMainThread();
+                CoreFoundationInterop.WakeMainRunLoop();
+            }
+        }
+    }
+
+    private static void PostWakeEventOnMainThread()
+        => ObjC.MsgSend_void_nint_nint_bool(_nsApp, SelPostEventAtStart, _wakeEvent, false);
+
+    // Runs on the main thread once the main GCD queue drains; posts the wake event from the thread AppKit expects.
+    [UnmanagedCallersOnly]
+    private static void WakeCallback(nint context)
+    {
+        try
+        {
+            if (_nsApp != 0 && _wakeEvent != 0)
+            {
+                PostWakeEventOnMainThread();
+            }
+        }
+        catch
+        {
+        }
     }
 
     public static bool TrySetThemeChangedCallback(Action? callback)
@@ -985,7 +1035,8 @@ internal static unsafe class MacOSInterop
 
         if (_themeNotificationName == 0)
         {
-            _themeNotificationName = ObjC.CreateNSString("AppleInterfaceThemeChangedNotification");
+            // Retained: cached in a static beyond any autorelease pool scope.
+            _themeNotificationName = ObjC.Retain(ObjC.CreateNSString("AppleInterfaceThemeChangedNotification"));
         }
 
         ObjC.MsgSend_void_nint_nint_nint_nint(center, SelAddObserverSelectorNameObject, observer, SelThemeChanged, _themeNotificationName, 0);
@@ -1039,6 +1090,52 @@ internal static unsafe class MacOSInterop
     }
 }
 
+// Wakes the main run loop from any thread. Needed because postEvent:atStart: alone does not reliably
+// interrupt an nextEventMatchingMask: wait already blocked on the main thread from a worker thread.
+internal static partial class CoreFoundationInterop
+{
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial nint CFRunLoopGetMain();
+
+    [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+    private static partial void CFRunLoopWakeUp(nint runLoop);
+
+    public static void WakeMainRunLoop() => CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+
+// Dispatches work onto the libdispatch main queue so the wake callback runs on the main thread.
+internal static partial class LibDispatchInterop
+{
+    [LibraryImport("/usr/lib/libSystem.B.dylib")]
+    private static partial void dispatch_async_f(nint queue, nint context, nint work);
+
+    private static nint _mainQueue;
+    private static bool _mainQueueResolved;
+
+    // Resolves and caches the main queue on first use. The C global is "_dispatch_main_q"; dlsym strips
+    // only the compiler-added leading underscore, so the exported name keeps its own leading underscore.
+    // The exported symbol IS the dispatch_queue_t value (a data symbol, not a function returning it).
+    public static bool TryDispatchToMainQueue(nint context, nint work)
+    {
+        if (!_mainQueueResolved)
+        {
+            _mainQueueResolved = true;
+            if (NativeLibrary.TryLoad("/usr/lib/libSystem.B.dylib", out var handle))
+            {
+                NativeLibrary.TryGetExport(handle, "_dispatch_main_q", out _mainQueue);
+            }
+        }
+
+        if (_mainQueue == 0)
+        {
+            return false;
+        }
+
+        dispatch_async_f(_mainQueue, context, work);
+        return true;
+    }
+}
+
 internal static unsafe partial class ObjC
 {
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_getClass")]
@@ -1046,6 +1143,15 @@ internal static unsafe partial class ObjC
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "sel_registerName")]
     private static partial nint sel_registerName(byte* name);
+
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "sel_getName")]
+    private static partial nint sel_getName(nint selector);
+
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_retain")]
+    private static partial nint objc_retain(nint obj);
+
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_autorelease")]
+    private static partial nint objc_autorelease(nint obj);
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_allocateClassPair")]
     private static partial nint objc_allocateClassPair(nint superclass, byte* name, nuint extraBytes);
@@ -1103,6 +1209,11 @@ internal static unsafe partial class ObjC
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static partial NSRect objc_msgSend_NSRect(nint receiver, nint selector);
+
+    // Only ever invoked on x86_64; arm64 libobjc does not export this symbol (lazy bind keeps the
+    // declaration safe there).
+    [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend_stret")]
+    private static partial NSRect objc_msgSend_stret_NSRect(nint receiver, nint selector);
 
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static partial nint objc_msgSend_nint_bytePtr(nint receiver, nint selector, byte* a0);
@@ -1189,6 +1300,8 @@ internal static unsafe partial class ObjC
         int data1,
         int data2);
 
+    private static readonly bool _rectReturnNeedsStret = RuntimeInformation.ProcessArchitecture == Architecture.X64;
+
     public static nint GetClass(string name)
     {
         var utf8 = System.Text.Encoding.UTF8.GetBytes(name + "\0");
@@ -1197,6 +1310,18 @@ internal static unsafe partial class ObjC
             return objc_getClass(p);
         }
     }
+
+    // Retains a handle about to be cached beyond the current autorelease pool scope; returns the handle.
+    public static nint Retain(nint obj)
+        => obj != 0 ? objc_retain(obj) : 0;
+
+    // Transfers an owned (+1) handle to the active autorelease pool; returns the handle.
+    // Use when returning alloc/init objects from callbacks whose Cocoa convention expects autoreleased.
+    public static nint Autorelease(nint obj)
+        => obj != 0 ? objc_autorelease(obj) : 0;
+
+    public static string GetSelectorName(nint selector)
+        => selector != 0 ? Marshal.PtrToStringUTF8(sel_getName(selector)) ?? string.Empty : string.Empty;
 
     public static nint Sel(string name)
     {
@@ -1310,9 +1435,18 @@ internal static unsafe partial class ObjC
 
     public static NSRect MsgSend_rect(nint receiver, nint selector)
     {
-        // macOS 12+ environments (including Rosetta/x64 scenarios) may not export objc_msgSend_stret.
-        // Use the regular objc_msgSend signature for NSRect returns across architectures.
-        return objc_msgSend_NSRect(receiver, selector);
+        // SysV x86_64 returns structs larger than 16 bytes via a hidden memory pointer, so the 32-byte
+        // NSRect must go through objc_msgSend_stret there (plain objc_msgSend yields garbage under
+        // Intel/Rosetta). arm64 has no _stret variant; its ABI returns NSRect through the regular entry.
+        // NSPoint/NSSize (16 bytes) fit in registers on both, so only NSRect needs this split.
+        if (_rectReturnNeedsStret)
+        {
+            return objc_msgSend_stret_NSRect(receiver, selector);
+        }
+        else
+        {
+            return objc_msgSend_NSRect(receiver, selector);
+        }
     }
 
     public static void MsgSend_void_nint_point(nint receiver, nint selector, NSPoint point)

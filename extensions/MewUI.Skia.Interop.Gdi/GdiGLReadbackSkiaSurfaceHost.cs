@@ -103,7 +103,7 @@ internal sealed class GdiGLReadbackSkiaSurfaceHost : ISkiaSurfaceHost, IOpaqueAw
         MakeContextCurrent();
 
         // We unbound the FBO at the end of the previous Paint (glReadPixels followed by
-        // BindFramebuffer 0). Skia's GR context still thinks its FBO is bound — reset so
+        // BindFramebuffer 0). Skia's GR context still thinks its FBO is bound - reset so
         // its state tracking re-issues the binding on the next draw.
         _grContext.ResetContext(GRBackendState.All);
 
@@ -184,7 +184,7 @@ internal sealed class GdiGLReadbackSkiaSurfaceHost : ISkiaSurfaceHost, IOpaqueAw
         SkiaGLInterop.GenTextures(1, out _glTexture);
         if (_glTexture == 0) throw new InvalidOperationException("glGenTextures returned 0.");
         SkiaGLInterop.BindTexture(SkiaGLInterop.GL_TEXTURE_2D, _glTexture);
-        // BGRA external format hint — driver-allocated storage matches DIB byte order so
+        // BGRA external format hint - driver-allocated storage matches DIB byte order so
         // glReadPixels(GL_BGRA, ...) takes the fast no-swizzle path. Internal format stays
         // GL_RGBA8 (the standard 32-bit RGBA storage class).
         SkiaGLInterop.TexImage2D(SkiaGLInterop.GL_TEXTURE_2D, 0, (int)SkiaGLInterop.GL_RGBA8,

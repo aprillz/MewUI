@@ -85,7 +85,7 @@ internal sealed class SyncDialogWindow : Window
     {
         if (_confirmedClose)
         {
-            return; // OK/Cancel/Escape already chose a result — no prompt
+            return; // OK/Cancel/Escape already chose a result - no prompt
         }
 
         // Sync MessageBox shown from inside Closing (nested loop via ShowDialog).
@@ -141,7 +141,7 @@ internal sealed class SyncDialogWindow : Window
     private void CloseWith(bool? result)
     {
         Result = result;
-        _confirmedClose = true; // explicit choice — skip the Closing confirm prompt
+        _confirmedClose = true; // explicit choice - skip the Closing confirm prompt
         Close();
     }
 }

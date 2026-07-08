@@ -15,12 +15,12 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// This avoids the per-frame <c>glTexSubImage2D</c> stall of the default sync upload
 /// path for streaming CPU sources (animated controls, video CPU fallback, etc.). Cost
 /// is one extra GL texture + 2 PBO allocations per source; benefit scales with image
-/// size — small UI controls (color picker wheel, etc.) probably break even, large
+/// size - small UI controls (color picker wheel, etc.) probably break even, large
 /// or frequently-updated sources see clear win.
 /// </para>
 /// <para>
 /// All GL calls assume the rendering thread's context is current. Construction is
-/// deferred to first <see cref="Acquire"/> — the factory creates the wrapper on any
+/// deferred to first <see cref="Acquire"/> - the factory creates the wrapper on any
 /// thread, but the actual GL resource alloc happens at first frame use, which is on
 /// the render thread.
 /// </para>
@@ -52,7 +52,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
 
     /// <summary>
     /// CPU bytes are top-down (row 0 = top). NVG expects bottom-up for FBO sources
-    /// and top-down for CPU sources — same convention as the default
+    /// and top-down for CPU sources - same convention as the default
     /// <c>CreateImageBGRA</c> path, so no FlipY needed.
     /// </summary>
     public bool YFlipped => false;
@@ -72,7 +72,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
 
     /// <summary>
     /// Probe whether PBO + fence GL calls are available on the current context.
-    /// Call BEFORE constructing — construction throws if not loadable. Caller
+    /// Call BEFORE constructing - construction throws if not loadable. Caller
     /// should fall back to the default <c>CreateImageBGRA</c> sync upload path on failure.
     /// </summary>
     public static bool IsSupported => OpenGLPboExt.IsAvailable;
@@ -129,7 +129,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
             OpenGLPboExt.GL_BGRA, OpenGLPboExt.GL_UNSIGNED_INT_8_8_8_8_REV, null);
 
         // Double-buffered PBO ring. Frame N writes to PBO[N%2] while frame N-1's
-        // upload is still in flight on PBO[(N-1)%2] — overlaps producer with DMA.
+        // upload is still in flight on PBO[(N-1)%2] - overlaps producer with DMA.
         uint pbo0, pbo1;
         OpenGLPboExt.GenBuffers(1, &pbo0);
         OpenGLPboExt.GenBuffers(1, &pbo1);
@@ -173,11 +173,11 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         }
 
         // Even when no new upload was pushed this frame, an in-flight fence from a
-        // previous upload may still be pending — block until it signals so the
+        // previous upload may still be pending - block until it signals so the
         // sample reads finished pixels.
         if (_pendingFence != 0)
         {
-            // 0 timeout = poll. If not yet signaled, wait up to 1ms — driver-side
+            // 0 timeout = poll. If not yet signaled, wait up to 1ms - driver-side
             // upload of a frame-sized texture should land well under that budget.
             uint status = OpenGLPboExt.ClientWaitSync(_pendingFence, OpenGLPboExt.GL_SYNC_FLUSH_COMMANDS_BIT, 0);
             if (status != OpenGLPboExt.GL_ALREADY_SIGNALED && status != OpenGLPboExt.GL_CONDITION_SATISFIED)
@@ -197,7 +197,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         if (bytes is null || bytes.Length == 0) return;
 
         // Rotate to the next PBO so the previous one (still being DMA'd) isn't
-        // overwritten — driver would otherwise stall waiting for the prior
+        // overwritten - driver would otherwise stall waiting for the prior
         // BufferData to finish.
         _currentPboIndex = (_currentPboIndex + 1) & 1;
         uint pbo = _currentPboIndex == 0 ? _pbo0 : _pbo1;
@@ -207,7 +207,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         nint byteSize = bytes.Length;
 
         // Orphan + refill: BufferData(NULL) discards the old contents (driver
-        // can recycle the storage immediately) — then BufferSubData copies the
+        // can recycle the storage immediately) - then BufferSubData copies the
         // fresh frame in. Equivalent to glBufferData(size, ptr, STREAM_DRAW)
         // but slightly more explicit about intent.
         OpenGLPboExt.BufferData(OpenGLPboExt.GL_PIXEL_UNPACK_BUFFER, byteSize, null, OpenGLPboExt.GL_STREAM_DRAW);
@@ -227,7 +227,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         OpenGLPboExt.BindTexture(OpenGLPboExt.GL_TEXTURE_2D, 0);
         OpenGLPboExt.BindBuffer(OpenGLPboExt.GL_PIXEL_UNPACK_BUFFER, 0);
 
-        // Replace any previous pending fence — it's stale once a newer upload is
+        // Replace any previous pending fence - it's stale once a newer upload is
         // queued. (Double-buffering covers in-flight overlap.)
         if (_pendingFence != 0)
         {

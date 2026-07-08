@@ -119,7 +119,7 @@ public abstract partial class SvgTextBase
             {
                 var newState = new TextDrawingState(state, textNode);
                 textNode.SetPath(newState);
-                // Propagate the cache-validity flag — child's path was built with the
+                // Propagate the cache-validity flag - child's path was built with the
                 // same renderer-kind (measurement vs real) as ours in this pass. Without
                 // this, child.Path(renderer) at child Render time sees its own stale
                 // false, re-triggers SetPath with a child-rootless state, and re-emits
@@ -478,7 +478,7 @@ public abstract partial class SvgTextBase
 
             // location.Y is the SVG baseline y (per SVG spec: <text>'s y is baseline).
             // IGlyphOutlineFont.TryAppendGlyphOutline takes a *baseline* origin per its
-            // interface contract. Pass through unchanged — every backend (GdiFont,
+            // interface contract. Pass through unchanged - every backend (GdiFont,
             // DirectWriteFont, CoreTextFont, FreeTypeFont) interprets baselineOrigin as
             // the actual baseline. Subtracting fontBaselineHeight here would be a top-
             // of-text origin, which only one backend was patched for and shifted glyphs
@@ -557,7 +557,7 @@ public abstract partial class SvgTextBase
                 {
                     var matrix = Matrix3x2.CreateTranslation((float)xOffset, 0f);
                     // EnsurePath puts _currPath into the _anchoredPaths it walks up to.
-                    // Re-sync after transform — TransformPath returns a new instance
+                    // Re-sync after transform - TransformPath returns a new instance
                     // (PathGeometry is immutable here, unlike SVG.NET's mutable GraphicsPath
                     // where in-place .Transform updated both refs). Without this, _finalPath
                     // = _currPath below picks up the un-transformed path and text-anchor

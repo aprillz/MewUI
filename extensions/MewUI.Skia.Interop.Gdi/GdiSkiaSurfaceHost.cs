@@ -9,7 +9,7 @@ namespace Aprillz.MewUI.Skia.Interop.Gdi;
 /// Zero-copy GDI host. Allocates a top-down 32-bpp BGRA DIB section, wraps its bits as an
 /// <see cref="SKSurface"/> for Skia to paint into, and exposes the same DIB as a GDI
 /// <see cref="IImage"/> via <see cref="GdiGraphicsFactory.CreateImageOverDibSection"/>.
-/// The DIB memory is shared — no per-frame copy.
+/// The DIB memory is shared - no per-frame copy.
 /// </summary>
 internal sealed class GdiSkiaSurfaceHost : ISkiaSurfaceHost, IOpaqueAwareSurfaceHost
 {

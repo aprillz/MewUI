@@ -128,7 +128,7 @@ internal static unsafe partial class OpenGLExt
     }
 
     /// <summary>
-    /// True when the shader / VAO / buffer entrypoints are available — required
+    /// True when the shader / VAO / buffer entrypoints are available - required
     /// for GPU effect passes (e.g. <c>OpenGLGaussianBlur</c>). FBO support
     /// (<see cref="IsSupported"/>) is a prerequisite, since shaders without an
     /// FBO render target are not useful.

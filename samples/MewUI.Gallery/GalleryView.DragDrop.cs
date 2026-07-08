@@ -37,6 +37,13 @@ partial class GalleryView
         e.Handled = true;
     }
 
+    private FrameworkElement DragDropPage() =>
+        CardGrid(
+            WindowDragDropCard(),
+            ElementDragDropCard(),
+            CrossWindowDragDropCard()
+        );
+
     private FrameworkElement WindowDragDropCard() =>
         Card(
             "Window Drag and Drop",
@@ -271,7 +278,7 @@ partial class GalleryView
                         .FontSize(11)
                         .TextWrapping(TextWrapping.Wrap)
                         .Text("Open a second window, then drag a chip from here into its slot (and back). "
-                            + "Same-process routing — no OS clipboard, the .NET payload is passed by reference."),
+                            + "Same-process routing - no OS clipboard, the .NET payload is passed by reference."),
                     new Button()
                         .Content("Open second window")
                         .OnClick(OpenCrossWindowTarget),
@@ -300,7 +307,7 @@ partial class GalleryView
                         new TextBlock()
                             .FontSize(11)
                             .TextWrapping(TextWrapping.Wrap)
-                            .Text("Drag chips here from the main window — or drag 'Yellow' back."),
+                            .Text("Drag chips here from the main window - or drag 'Yellow' back."),
                         BuildDragSlot("Drop here", target));
             });
 

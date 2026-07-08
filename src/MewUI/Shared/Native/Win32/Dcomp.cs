@@ -35,7 +35,7 @@ internal static unsafe partial class Dcomp
 
     /// <summary>
     /// Creates a DirectComposition device against a Direct3D device exposed through DXGI.
-    /// The first parameter must be an <c>IDXGIDevice</c> — callers QueryInterface from
+    /// The first parameter must be an <c>IDXGIDevice</c> - callers QueryInterface from
     /// their <c>ID3D11Device</c> first.
     /// </summary>
     [LibraryImport("dcomp.dll")]
@@ -88,7 +88,7 @@ internal static unsafe partial class Dcomp
         return fn(target, visual);
     }
 
-    // IDCompositionVisual (IUnknown 0-2). SetContent is at vtbl[15] — order:
+    // IDCompositionVisual (IUnknown 0-2). SetContent is at vtbl[15] - order:
     //   3  SetOffsetX(float)
     //   4  SetOffsetX(IDCompositionAnimation*)
     //   5  SetOffsetY(float)

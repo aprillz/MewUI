@@ -137,7 +137,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
     private AnimationClock? _fadeClock;
     private double _opacity;
 
-    // Abort UI elements — only created when cancellable
+    // Abort UI elements - only created when cancellable
     private readonly Button? _abortButton;
 
     private readonly TextBlock? _confirmLabel;
@@ -308,7 +308,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
 
         centerStack.Add(_messageLabel);
 
-        // Build grid: *,Auto,* — centers everything vertically
+        // Build grid: *,Auto,* - centers everything vertically
         var grid = new Grid();
         grid.Rows("2*,Auto,*");
 
@@ -395,7 +395,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }

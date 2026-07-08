@@ -129,10 +129,10 @@ internal static unsafe class D2D1VTable
     }
 
     /// <summary>
-    /// ID2D1RenderTarget::Flush — submits all batched drawing commands to the GPU. Required
+    /// ID2D1RenderTarget::Flush - submits all batched drawing commands to the GPU. Required
     /// before <see cref="CopyFromBitmap"/> or <c>MapBitmap</c> on a bitmap that this DC has
     /// pending writes to: without it, the readback may capture pre-flush state. Calls within
-    /// an active BeginDraw block are legal — this is the documented escape hatch for
+    /// an active BeginDraw block are legal - this is the documented escape hatch for
     /// mid-frame readback.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -568,7 +568,7 @@ internal static unsafe class D2D1VTable
     }
 
     // ----------------------------------------------------------------------
-    // ID2D1DeviceContext (extends ID2D1RenderTarget) — for the built-in effect
+    // ID2D1DeviceContext (extends ID2D1RenderTarget) - for the built-in effect
     // pipeline used by the Direct2D image-filter executor.
     // Vtable layout (after IUnknown/Resource/RenderTarget):
     //   [57] CreateBitmap (D2D1_BITMAP_PROPERTIES1)
@@ -647,7 +647,7 @@ internal static unsafe class D2D1VTable
         }
     }
 
-    /// <summary>ID2D1DeviceContext::SetTarget (vtbl 74). Switches the active render target —
+    /// <summary>ID2D1DeviceContext::SetTarget (vtbl 74). Switches the active render target -
     /// effects render into whatever the device context currently targets.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SetTarget(ID2D1DeviceContext* dc, nint imageTarget)
@@ -680,11 +680,11 @@ internal static unsafe class D2D1VTable
         fn(dc, image, null, null, interpolationMode, compositeMode);
     }
 
-    /// <summary>ID2D1DeviceContext::DrawBitmap (vtbl 85). The DC overload — supports
+    /// <summary>ID2D1DeviceContext::DrawBitmap (vtbl 85). The DC overload - supports
     /// <see cref="D2D1_INTERPOLATION_MODE.HIGH_QUALITY_CUBIC"/> and other GPU-side
     /// down-sampling modes that the legacy ID2D1RenderTarget::DrawBitmap (vtbl 26) lacks.
     /// Use this when the active target is a DeviceContext and ImageScaleQuality demands
-    /// better quality than LINEAR — avoids the manual CPU mip pyramid path.</summary>
+    /// better quality than LINEAR - avoids the manual CPU mip pyramid path.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void DrawBitmap(
         ID2D1DeviceContext* dc,
@@ -806,10 +806,10 @@ internal static unsafe class D2D1VTable
     //   [18]   GetOutput
     //
     // (The SetValue/GetValue untyped overloads exposed in C++ are inline helpers, not vtable
-    //  entries — including them in the count is the easy mis-indexing trap.)
+    //  entries - including them in the count is the easy mis-indexing trap.)
     // ----------------------------------------------------------------------
 
-    /// <summary>ID2D1Properties::SetValue (vtbl 9) — by index, typed.</summary>
+    /// <summary>ID2D1Properties::SetValue (vtbl 9) - by index, typed.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int SetEffectValue(nint effect, uint index, D2D1_PROPERTY_TYPE type, ReadOnlySpan<byte> data)
     {
@@ -897,7 +897,7 @@ internal static unsafe class D2D1VTable
         }
     }
 
-    // ID2D1Factory1 vtbl[17]: CreateDevice — builds an ID2D1Device for the GPU pipeline.
+    // ID2D1Factory1 vtbl[17]: CreateDevice - builds an ID2D1Device for the GPU pipeline.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int CreateDevice(ID2D1Factory* factory, nint dxgiDevice, out nint d2dDevice)
     {
@@ -982,7 +982,7 @@ internal static unsafe class D2D1VTable
     }
 
     // ID2D1RenderTarget vtbl[50]: GetPixelFormat. Used by callers that need the bound
-    // surface's alpha mode (e.g. text antialias-mode selection — ClearType requires
+    // surface's alpha mode (e.g. text antialias-mode selection - ClearType requires
     // ALPHA_MODE.IGNORE). Return-by-value struct uses the COM hidden-pointer convention,
     // matching <see cref="GetTransform"/>.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

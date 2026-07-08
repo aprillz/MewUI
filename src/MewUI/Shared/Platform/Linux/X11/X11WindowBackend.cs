@@ -68,7 +68,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _xi2Enabled;
     private int _xi2Opcode;
     private readonly Dictionary<(int deviceId, int valuator), XI2ScrollAxis> _scrollAxes = new();
-    // True when at least one master pointer has a scroll axis cached — only then is XI_Motion
+    // True when at least one master pointer has a scroll axis cached - only then is XI_Motion
     // guaranteed to deliver high-res scroll, so only then should legacy core wheel be suppressed.
     private bool _xi2MasterHasScrollAxis;
 
@@ -120,6 +120,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyResolvedStartupPosition();
 
         _shown = true;
+        if (Window.Owner is { Handle: not 0 } owner)
+        {
+            SetOwner(owner.Handle);
+        }
+
         NativeX11.XMapWindow(Display, Handle);
 
         if (Window.IsOverlayWindow)
@@ -465,12 +470,36 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void CaptureMouse()
     {
-        // TODO: XGrabPointer
+        if (Display == 0 || Handle == 0)
+        {
+            return;
+        }
+
+        // owner_events=true keeps normal in-window delivery; the grab only redirects motion/release
+        // that would otherwise leave the window, so drags keep flowing through HandleMotion/HandleButton.
+        const long ButtonMotionMask = 1L << 13;
+        const int GrabModeAsync = 1;
+        uint grabMask = (uint)(X11EventMask.ButtonReleaseMask | X11EventMask.PointerMotionMask | ButtonMotionMask);
+        _ = NativeX11.XGrabPointer(
+            Display, Handle,
+            ownerEvents: true,
+            grabMask,
+            GrabModeAsync, GrabModeAsync,
+            confineTo: 0,
+            cursor: 0,
+            time: 0); // CurrentTime
+        NativeX11.XFlush(Display);
     }
 
     public void ReleaseMouseCapture()
     {
-        // TODO: XUngrabPointer
+        if (Display == 0)
+        {
+            return;
+        }
+
+        NativeX11.XUngrabPointer(Display, 0); // CurrentTime
+        NativeX11.XFlush(Display);
     }
 
     public Point ClientToScreen(Point clientPointDip)
@@ -658,7 +687,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         ApplyOpacity();
         ApplyResizeMode();
-        ApplyToolWindowHints();
+        ApplyMotifHints();
+        ApplyWindowTypeHints();
 
         _inputMethod = X11InputMethodFactory.Create(Display, Handle);
         if (_inputMethod is XimInputMethod xim && xim.TryGetFilterEvents(out var imeFilterEvents))
@@ -697,7 +727,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     /// <summary>
     /// Initializes XInput2 for high-resolution scroll. Falls back silently when the
-    /// extension is unavailable — legacy button 4–7 wheel events continue to work.
+    /// extension is unavailable - legacy button 4–7 wheel events continue to work.
     /// </summary>
     private void TryInitializeXI2()
     {
@@ -712,7 +742,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             // Subscribe to XI_Motion only. Including XI_ButtonPress in the mask causes some
             // X servers to stop delivering core button events without reliably delivering XI
-            // button events — we lose both. Core buttons 4-7 stay on the legacy path and are
+            // button events - we lose both. Core buttons 4-7 stay on the legacy path and are
             // suppressed in HandleButton when XI2 scroll axes are active to avoid doubling.
             const int evtypeBits = 8;
             int maskBytes = (XI2.XI_Motion / evtypeBits) + 1;
@@ -770,7 +800,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                     if (device.num_classes <= 0 || device.classes == 0)
                         continue;
 
-                    // classes is XIAnyClassInfo** — an array of pointers to per-class headers.
+                    // classes is XIAnyClassInfo** - an array of pointers to per-class headers.
                     nint* classPtrs = (nint*)device.classes;
                     for (int c = 0; c < device.num_classes; c++)
                     {
@@ -799,7 +829,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     }
 
     // Caller (PlatformHost) has already fetched the cookie via XGetEventData and owns the
-    // matching XFreeEventData — do not re-fetch or free here.
+    // matching XFreeEventData - do not re-fetch or free here.
     private void HandleXI2GenericEvent(ref XEvent ev)
     {
         if (ev.xcookie.data == 0) return;
@@ -815,7 +845,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         var dev = Marshal.PtrToStructure<XIDeviceEvent>(dataPtr);
 
-        // XIAllDevices delivers each physical motion twice — once via the slave
+        // XIAllDevices delivers each physical motion twice - once via the slave
         // (deviceid==sourceid) and once via the master mirror. Skip slaves.
         if (dev.deviceid == dev.sourceid)
             return;
@@ -979,7 +1009,9 @@ internal sealed class X11WindowBackend : IWindowBackend
         int smallPx = Math.Max(16, (int)Math.Round(16 * dpiScale));
         int bigPx = Math.Max(32, (int)Math.Round(32 * dpiScale));
 
-        var payload = new List<uint>(capacity: 16);
+        // Xlib expects format-32 client data as one C long per element (8 bytes on LP64), so each
+        // 32-bit CARDINAL rides in its own nint slot; nelements stays the logical 32-bit value count.
+        var payload = new List<nint>(capacity: 16);
         AppendNetWmIconPayload(payload, _icon, smallPx);
         if (bigPx != smallPx)
         {
@@ -994,7 +1026,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         var data = payload.ToArray();
-        fixed (uint* p = data)
+        fixed (nint* dataPtr = data)
         {
             NativeX11.XChangeProperty(
                 display: Display,
@@ -1003,7 +1035,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                 type: cardinalAtom,
                 format: 32,
                 mode: 0, // PropModeReplace
-                data: (nint)p,
+                data: (nint)dataPtr,
                 nelements: data.Length);
         }
 
@@ -1043,7 +1075,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         NativeX11.XFlush(Display);
     }
 
-    private static void AppendNetWmIconPayload(List<uint> dst, IconSource icon, int desiredSizePx)
+    private static void AppendNetWmIconPayload(List<nint> dst, IconSource icon, int desiredSizePx)
     {
         var src = icon.Pick(desiredSizePx);
         if (src == null)
@@ -1058,8 +1090,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         int w = Math.Max(1, bmp.WidthPx);
         int h = Math.Max(1, bmp.HeightPx);
-        dst.Add((uint)w);
-        dst.Add((uint)h);
+        dst.Add(w);
+        dst.Add(h);
 
         var pixels = bmp.Data;
         int idx = 0;
@@ -1070,7 +1102,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             byte g = pixels[idx++];
             byte r = pixels[idx++];
             byte a = pixels[idx++];
-            dst.Add(((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b);
+            dst.Add(unchecked((nint)(((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b)));
         }
     }
 
@@ -1932,7 +1964,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        // Pick a single action atom — Xdnd carries one action at a time.
+        // Pick a single action atom - Xdnd carries one action at a time.
         nint actionAtom = 0;
         if ((effect & DragDropEffects.Move) != 0) actionAtom = _xdndActionMoveAtom;
         else if ((effect & DragDropEffects.Copy) != 0) actionAtom = _xdndActionCopyAtom;
@@ -2427,7 +2459,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             NativeX11.XSetTransientForHint(Display, Handle, ownerHandle);
 
-            // EWMH modal hint — ONLY for true modal dialogs (ShowDialog). A plain owned window (Show(owner))
+            // EWMH modal hint - ONLY for true modal dialogs (ShowDialog). A plain owned window (Show(owner))
             // must not be modal, otherwise the WM/compositor (e.g. XWayland) dims the owner and treats it as a
             // dialog. Setting transient-for alone is enough to keep an owned window above its owner. Best-effort.
             if (Window.IsDialogWindow)
@@ -2443,17 +2475,6 @@ internal sealed class X11WindowBackend : IWindowBackend
                     }
                 }
             }
-
-            // If the owner is kept above others (_NET_WM_STATE_ABOVE, i.e. Topmost), an owned window without it
-            // can be stacked below the owner's "above" layer and hidden behind it. Mirror the owner's ABOVE state
-            // so the owned/dialog window stays above its owner. WM-dependent but never worse than not mirroring.
-            // (Win32 sets HWND_TOPMOST; macOS sets the owned level to ownerLevel + 1 for the same reason.)
-            var wmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
-            var aboveAtom = NativeX11.XInternAtom(Display, "_NET_WM_STATE_ABOVE", false);
-            if (wmState != 0 && aboveAtom != 0 && ReadAtomProperty(ownerHandle, wmState).Contains(aboveAtom))
-            {
-                SendNetWmState(true, "_NET_WM_STATE_ABOVE");
-            }
         }
         catch
         {
@@ -2463,11 +2484,11 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     // Marks the window as a floating tool/utility window: _NET_WM_WINDOW_TYPE_UTILITY (thin WM decoration) +
     // skip-taskbar. Set as properties before the window is mapped (a _NET_WM_STATE ClientMessage only applies
-    // once the WM manages the window). Owner/transient is set separately via SetOwner. Best-effort — WMs vary
+    // once the WM manages the window). Owner/transient is set separately via SetOwner. Best-effort - WMs vary
     // in utility-type support, degrading to a normal (skip-taskbar) window. Mutually exclusive with transparency.
-    private void ApplyToolWindowHints()
+    private void ApplyWindowTypeHints()
     {
-        if (Display == 0 || Handle == 0 || !Window.IsToolWindow || _allowsTransparency)
+        if (Display == 0 || Handle == 0 || _allowsTransparency)
         {
             return;
         }
@@ -2475,30 +2496,37 @@ internal sealed class X11WindowBackend : IWindowBackend
         try
         {
             var windowType = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE", false);
-            var windowTypeUtility = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_UTILITY", false);
-            if (windowType != 0 && windowTypeUtility != 0)
+            var windowTypeValue = Window.IsDialogWindow
+                ? NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_DIALOG", false)
+                : Window.IsToolWindow
+                    ? NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_UTILITY", false)
+                    : 0;
+            if (windowType != 0 && windowTypeValue != 0)
             {
                 unsafe
                 {
-                    nint data = windowTypeUtility;
+                    nint data = windowTypeValue;
                     NativeX11.XChangeProperty(Display, Handle, windowType, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
                 }
             }
 
-            var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
-            var skipTaskbar = NativeX11.XInternAtom(Display, "_NET_WM_STATE_SKIP_TASKBAR", false);
-            if (netWmState != 0 && skipTaskbar != 0)
+            if (Window.IsToolWindow)
             {
-                unsafe
+                var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
+                var skipTaskbar = NativeX11.XInternAtom(Display, "_NET_WM_STATE_SKIP_TASKBAR", false);
+                if (netWmState != 0 && skipTaskbar != 0)
                 {
-                    nint data = skipTaskbar;
-                    NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                    unsafe
+                    {
+                        nint data = skipTaskbar;
+                        NativeX11.XChangeProperty(Display, Handle, netWmState, type: 4 /*ATOM*/, format: 32, mode: 0 /*Replace*/, (nint)(&data), nelements: 1);
+                    }
                 }
             }
         }
         catch
         {
-            // Best-effort — WMs vary in utility-type support.
+            // Best-effort - WMs vary in utility-type support.
         }
     }
 
@@ -2518,7 +2546,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyOpacity();
     }
 
-    // X11 WM removes all decorations (title bar + border + shadow) — not a true
+    // X11 WM removes all decorations (title bar + border + shadow) - not a true
     // "extend client area" like Win32/macOS. Reported as None so NativeCustomWindow
     // keeps the default title bar on X11.
     public WindowChromeCapabilities ChromeCapabilities =>
@@ -2593,7 +2621,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void CancelImeComposition()
     {
-        // Commit rather than reset — Reset() tells IBus to discard preedit,
+        // Commit rather than reset - Reset() tells IBus to discard preedit,
         // which triggers HidePreeditText → EndTextCompositionInternal → text loss.
         // Instead, commit the current composition so text is preserved with undo.
         if (Window.FocusManager.FocusedElement is ITextCompositionClient { IsComposing: true } client)

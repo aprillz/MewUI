@@ -89,7 +89,7 @@ public abstract class MewProperty
 
 /// <summary>
 /// Identifies a visual property with value resolution and animation support.
-/// Static descriptors — one instance per property, shared across all control instances.
+/// Static descriptors - one instance per property, shared across all control instances.
 /// </summary>
 /// <typeparam name="T">The property value type.</typeparam>
 public sealed class MewProperty<T> : MewProperty
@@ -163,7 +163,7 @@ public sealed class MewProperty<T> : MewProperty
     /// <inheritdoc/>
     internal override object GetBoxedDefaultForType(Type ownerType)
     {
-        // Fast path: no overrides — return cached boxed default to avoid re-boxing value types.
+        // Fast path: no overrides - return cached boxed default to avoid re-boxing value types.
         if (_defaultOverrides == null)
             return BoxedDefaultValue;
         return GetDefaultForType(ownerType)!;

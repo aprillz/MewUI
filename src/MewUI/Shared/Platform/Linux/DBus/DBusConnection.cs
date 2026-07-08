@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Text;
 
@@ -13,8 +14,12 @@ internal sealed class DBusConnection : IDisposable
 {
     private static readonly EnvDebugLogger Logger = new("MEWUI_IME_DEBUG", "[DBus]");
 
+    // Grown on demand up to MaxMessageSize when a message's declared size exceeds the current capacity.
+    private const int INITIAL_RECV_BUFFER_SIZE = 8192;
+    private const int MAX_MESSAGE_SIZE = 16 * 1024 * 1024; // sane cap well below the D-Bus spec limit (128 MiB)
+
     private Socket? _socket;
-    private readonly byte[] _recvBuffer = new byte[8192];
+    private byte[] _recvBuffer = new byte[INITIAL_RECV_BUFFER_SIZE];
     private int _recvBufferUsed;
     private uint _nextSerial = 1;
     private bool _disposed;
@@ -192,6 +197,8 @@ internal sealed class DBusConnection : IDisposable
             else
                 _socket.ReceiveTimeout = 1;
 
+            if (!EnsureRecvCapacityForPendingMessage()) return null;
+
             int available = _recvBuffer.Length - _recvBufferUsed;
             if (available <= 0) return null; // buffer full, shouldn't happen
 
@@ -227,6 +234,8 @@ internal sealed class DBusConnection : IDisposable
         {
             if (_socket.Available <= 0) return null;
 
+            if (!EnsureRecvCapacityForPendingMessage()) return null;
+
             int available = _recvBuffer.Length - _recvBufferUsed;
             if (available <= 0) return null;
 
@@ -241,6 +250,44 @@ internal sealed class DBusConnection : IDisposable
         }
 
         return TryParseFromBuffer();
+    }
+
+    /// <summary>
+    /// Grows the receive buffer to the pending message's declared total size (fixed header carries
+    /// body length + header fields length) so messages larger than the buffer cannot stall the read loop.
+    /// Returns false when the pending message is oversized or malformed; the connection is dropped then,
+    /// since the stream cannot be resynchronized without parsing the message.
+    /// </summary>
+    private bool EnsureRecvCapacityForPendingMessage()
+    {
+        // Header not complete yet; the initial buffer always holds a full 16-byte header.
+        if (_recvBufferUsed < 16) return true;
+
+        if (_recvBuffer[0] != DBusConstants.LittleEndian)
+        {
+            Logger.Write("Dropping connection: unsupported endianness in message header");
+            Dispose();
+            return false;
+        }
+
+        uint bodyLength = BinaryPrimitives.ReadUInt32LittleEndian(_recvBuffer.AsSpan(4));
+        uint headerFieldsLength = BinaryPrimitives.ReadUInt32LittleEndian(_recvBuffer.AsSpan(12));
+
+        // Same layout as DBusReader.TryParse: fixed header + fields array padded to 8, then the body.
+        long totalSize = ((12L + 4 + headerFieldsLength + 7) & ~7L) + bodyLength;
+        if (totalSize > MAX_MESSAGE_SIZE)
+        {
+            Logger.Write($"Dropping connection: message size {totalSize} exceeds cap {MAX_MESSAGE_SIZE}");
+            Dispose();
+            return false;
+        }
+
+        if (totalSize > _recvBuffer.Length)
+        {
+            Array.Resize(ref _recvBuffer, (int)totalSize);
+        }
+
+        return true;
     }
 
     private DBusMessage? TryParseFromBuffer()
@@ -274,11 +321,35 @@ internal sealed class DBusConnection : IDisposable
             string authCmd = $"AUTH EXTERNAL {hexUid}\r\n";
             _socket.Send(Encoding.ASCII.GetBytes(authCmd));
 
-            // Read response
+            // Read the full CRLF-terminated response line; it may arrive split across packets.
+            _socket.ReceiveTimeout = 3000;
             byte[] buf = new byte[256];
-            int n = _socket.Receive(buf);
-            string response = Encoding.ASCII.GetString(buf, 0, n);
+            var responseBuilder = new StringBuilder();
+            string response;
+            while (true)
+            {
+                int bytesRead = _socket.Receive(buf);
+                if (bytesRead <= 0)
+                {
+                    Logger.Write("Auth failed: connection closed before response line");
+                    return false;
+                }
 
+                responseBuilder.Append(Encoding.ASCII.GetString(buf, 0, bytesRead));
+                response = responseBuilder.ToString();
+                if (response.Contains("\r\n", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                if (responseBuilder.Length > 4096)
+                {
+                    Logger.Write("Auth failed: response line too long");
+                    return false;
+                }
+            }
+
+            // Anything but OK (typically REJECTED with the supported mechanisms) fails gracefully.
             if (!response.StartsWith("OK ", StringComparison.Ordinal))
             {
                 Logger.Write($"Auth response: {response.TrimEnd()}");

@@ -21,6 +21,20 @@ partial class GalleryView
             fadeView.Content = MakeTransitionBlock(fadeItems[fadeIndex], fadeIndex);
         }
 
+        // --- Fade (Image) --- diagnostic: does an image cross-fade, or snap?
+        int fadeImgIndex = 0;
+        var fadeImageView = new TransitionContentControl
+        {
+            Transition = ContentTransition.CreateFade(durationMs: 300),
+        };
+        fadeImageView.Content = MakeTransitionImage(0);
+
+        void NextFadeImage()
+        {
+            fadeImgIndex = (fadeImgIndex + 1) % _transitionColors.Length;
+            fadeImageView.Content = MakeTransitionImage(fadeImgIndex);
+        }
+
         // --- Slide Left ---
         int slideLeftIndex = 0;
         string[] slideItems = ["Page 1", "Page 2", "Page 3", "Page 4"];
@@ -140,6 +154,21 @@ partial class GalleryView
             ),
 
             Card(
+                "Fade (Image)",
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(8)
+                    .Children(
+                        new Border()
+                            .Height(60)
+                            .Child(fadeImageView),
+                        new Button()
+                            .Content("Next")
+                            .OnClick(NextFadeImage)
+                    )
+            ),
+
+            Card(
                 "Slide Left",
                 new StackPanel()
                     .Vertical()
@@ -223,6 +252,23 @@ partial class GalleryView
         Color.FromArgb(255, 70, 190, 120),
         Color.FromArgb(255, 200, 160, 50),
     ];
+
+    private static FrameworkElement MakeTransitionImage(int colorIndex)
+    {
+        var color = _transitionColors[colorIndex % _transitionColors.Length];
+        const int w = 80, h = 50;
+        var bgra = new byte[w * h * 4];
+        for (int i = 0; i < w * h; i++)
+        {
+            bgra[i * 4] = color.B;
+            bgra[i * 4 + 1] = color.G;
+            bgra[i * 4 + 2] = color.R;
+            bgra[i * 4 + 3] = 255;
+        }
+        return new Image()
+            .Source(ImageSource.FromBgraPixels(w, h, bgra))
+            .StretchMode(Stretch.Fill);
+    }
 
     private static FrameworkElement MakeTransitionBlock(string text, int colorIndex)
     {

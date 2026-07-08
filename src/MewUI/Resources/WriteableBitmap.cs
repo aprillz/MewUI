@@ -17,6 +17,8 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     private int _version;
     private bool _disposed;
     private PixelRegion? _dirtyRegion;
+    // Cached to avoid allocating a capturing lambda on every Lock() call (hot path for per-frame video/animation sources).
+    private readonly Action _releaseLock;
 
     /// <summary>
     /// Gets the bitmap width in pixels.
@@ -34,7 +36,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     public int StrideBytes => PixelWidth * 4;
 
     /// <summary>
-    /// Whether this bitmap is expected to carry alpha. Set at construction time —
+    /// Whether this bitmap is expected to carry alpha. Set at construction time -
     /// callers that know their content is opaque (video frames, photo decoders, etc.)
     /// can pass <c>false</c> so backends pick <c>ALPHA_MODE.IGNORE</c> on the GPU side
     /// and skip per-pixel alpha scans on upload. Default <c>true</c> preserves alpha
@@ -60,7 +62,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
     /// <param name="clear"><see langword="true"/> to clear the buffer to zero; otherwise leaves it uninitialized.</param>
     /// <param name="hasAlpha">
     /// <see langword="false"/> when callers guarantee every pixel is opaque (video frames,
-    /// JPEG-derived content, etc.) — backends use this to pick <c>ALPHA_MODE.IGNORE</c>
+    /// JPEG-derived content, etc.) - backends use this to pick <c>ALPHA_MODE.IGNORE</c>
     /// over <c>PREMULTIPLIED</c> and skip the per-pixel alpha scan on upload. Default
     /// <see langword="true"/> preserves alpha for general-purpose drawing.
     /// </param>
@@ -80,6 +82,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelHeight = heightPx;
         HasAlpha = hasAlpha;
         _bgra = GC.AllocateUninitializedArray<byte>(checked(widthPx * heightPx * 4));
+        _releaseLock = () => Monitor.Exit(_lock);
 
         if (clear)
         {
@@ -103,6 +106,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelHeight = bitmap.HeightPx;
         HasAlpha = bitmap.HasAlpha;
         _bgra = bitmap.Data ?? throw new ArgumentNullException(nameof(bitmap));
+        _releaseLock = () => Monitor.Exit(_lock);
         if (_bgra.Length != PixelWidth * PixelHeight * 4)
         {
             throw new ArgumentException("Invalid pixel buffer length.", nameof(bitmap));
@@ -255,7 +259,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelRegion? dirtyRegion = _dirtyRegion;
         _dirtyRegion = null;
 
-        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, v, dirtyRegion, () => Monitor.Exit(_lock));
+        return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, v, dirtyRegion, _releaseLock);
     }
 
     internal Span<byte> GetPixelsMutableNoLock() => _bgra;

@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
 /// Identifies a backend GPU device for compatibility checks as an opaque
-/// (IdLow, IdHigh, NativeHandle) tuple. Equality is structural — two devices are equal
+/// (IdLow, IdHigh, NativeHandle) tuple. Equality is structural - two devices are equal
 /// when all three fields match, which is enough to gate zero-copy interop without the
 /// Core type carrying any GPU API name. Per-backend packing lives next to the backend.
 /// </summary>

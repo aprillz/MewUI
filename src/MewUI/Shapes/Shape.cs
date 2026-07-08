@@ -111,7 +111,7 @@ public abstract class Shape : FrameworkElement
 
         // Match WPF's Path/Shape semantics: Stretch operates on the geometry (so its baked
         // path coordinates fit the element bounds), while Stroke is applied at the Path
-        // level on top of that — meaning StrokeThickness stays in element-DIP regardless
+        // level on top of that - meaning StrokeThickness stays in element-DIP regardless
         // of the stretch factor. We achieve this by baking the stretch into a transformed
         // geometry instead of pushing a Scale transform onto the context (which, under the
         // Model D scale-with-transform stroke contract, would also scale the stroke).

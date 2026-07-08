@@ -13,7 +13,7 @@ internal sealed class TextBoxView
 
     // Chunk-level: absolute prefix width at each chunk boundary.
     private int _chunkSize;
-    private double[]? _chunkPrefixWidths;   // [chunkCount+1] — _chunkPrefixWidths[i] = width of text[0 .. i*chunkSize)
+    private double[]? _chunkPrefixWidths;   // [chunkCount+1] - _chunkPrefixWidths[i] = width of text[0 .. i*chunkSize)
     private double[]? _chunkKerningAdjust;  // kerning correction at each chunk boundary
     private double _totalWidth;
 
@@ -479,7 +479,7 @@ internal sealed class TextBoxView
         int chunkIndex = Math.Min(_chunkPrefixWidths!.Length - 2, index / cs);
         int chunkStart = chunkIndex * cs;
 
-        // Exact chunk boundary — use prefix width directly.
+        // Exact chunk boundary - use prefix width directly.
         if (index == chunkStart) return _chunkPrefixWidths[chunkIndex];
 
         var positions = EnsureChunkCharPositions(chunkIndex, context, font);
@@ -514,7 +514,7 @@ internal sealed class TextBoxView
         int chunkIndex = loChunk;
         var positions = EnsureChunkCharPositions(chunkIndex, context, font);
 
-        // Binary search within chunk using cached positions — no MeasureText calls.
+        // Binary search within chunk using cached positions - no MeasureText calls.
         int lo = 0, hi = positions.Length - 1;
         while (lo < hi)
         {

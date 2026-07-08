@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 
 using Aprillz.MewUI.Native.FreeType;
-using Aprillz.MewUI.Native.HarfBuzz;
 
 using FT = Aprillz.MewUI.Native.FreeType.FreeType;
 using HB = Aprillz.MewUI.Native.HarfBuzz.HarfBuzz;
@@ -11,6 +10,12 @@ namespace Aprillz.MewUI.Rendering.FreeType;
 internal sealed unsafe class FreeTypeFaceCache
 {
     public static FreeTypeFaceCache Instance => field ??= new FreeTypeFaceCache();
+
+    // Bounds unbounded growth from apps that churn through many distinct font/size/weight
+    // combinations (e.g. DPI changes, size animations). Eviction only fires on insert, and
+    // only for entries idle longer than MinIdleTicksForEviction (see TryEvictOldest).
+    private const int MAX_FACES = 64;
+    private const long MINIDLE_TICKS_FOR_EVICTION = 5 * TimeSpan.TicksPerSecond;
 
     private readonly ConcurrentDictionary<FaceKey, FaceEntry> _faces = new();
 
@@ -31,9 +36,69 @@ internal sealed unsafe class FreeTypeFaceCache
     public FaceEntry Get(string fontPath, int pixelHeight, FontWeight weight = FontWeight.Normal, bool italic = false)
     {
         var key = new FaceKey(fontPath, Math.Max(1, pixelHeight), weight, italic);
+
+        // Fast path: avoids both the eviction scan and the GetOrAdd factory-closure
+        // allocation on the overwhelmingly common cache-hit case.
+        if (_faces.TryGetValue(key, out var existing))
+        {
+            existing.Touch();
+            return existing;
+        }
+
         var entry = _faces.GetOrAdd(key, k => FaceEntry.Create(k.FontPath, k.PixelHeight, k.Weight, k.Italic));
         entry.Touch();
+
+        if (_faces.Count > MAX_FACES)
+        {
+            TryEvictOldest(key);
+        }
+
         return entry;
+    }
+
+    /// <summary>
+    /// Evicts the single least-recently-used face when the cache exceeds <see cref="MAX_FACES"/>.
+    /// <para/>
+    /// Safety argument: callers fetch a <see cref="FaceEntry"/> and use its native FT_Face
+    /// synchronously within that same call (no cross-frame retention of the reference), so a
+    /// disposal race would require another thread to be mid-use of an entry that has not been
+    /// touched in <see cref="MINIDLE_TICKS_FOR_EVICTION"/> - long enough that no realistic
+    /// synchronous rasterization call is still in flight. An entry is only disposed if it is
+    /// still the oldest AND still past the idle threshold at the moment of removal; entries
+    /// that don't clear the bar are left in place (temporary over-cap growth) rather than
+    /// risking a use-after-free of the native face.
+    /// </summary>
+    private void TryEvictOldest(FaceKey excludeKey)
+    {
+        FaceKey victimKey = default;
+        FaceEntry? victimEntry = null;
+        long oldestTicks = long.MaxValue;
+
+        foreach (var pair in _faces)
+        {
+            if (pair.Key.Equals(excludeKey))
+            {
+                continue; // never evict the entry just requested
+            }
+
+            if (pair.Value.LastUsedTicks < oldestTicks)
+            {
+                oldestTicks = pair.Value.LastUsedTicks;
+                victimKey = pair.Key;
+                victimEntry = pair.Value;
+            }
+        }
+
+        if (victimEntry is null || DateTime.UtcNow.Ticks - victimEntry.LastUsedTicks < MINIDLE_TICKS_FOR_EVICTION)
+        {
+            return;
+        }
+
+        // Atomic compare-remove: only evict if the entry at this key is still the one we scanned.
+        if (_faces.TryRemove(new KeyValuePair<FaceKey, FaceEntry>(victimKey, victimEntry)))
+        {
+            victimEntry.Dispose();
+        }
     }
 
     internal readonly record struct FaceKey(string FontPath, int PixelHeight, FontWeight Weight, bool Italic);

@@ -4,14 +4,14 @@ namespace Aprillz.MewUI.Native;
 
 /// <summary>
 /// Minimal XInput2 surface used to receive high-resolution scroll deltas from
-/// trackpads and modern mice. Falls back gracefully — callers must check
+/// trackpads and modern mice. Falls back gracefully - callers must check
 /// <see cref="XIQueryVersion"/> before relying on these APIs.
 /// </summary>
 internal static partial class XI2
 {
     private const string LibraryName = "libXi.so.6";
 
-    // XInput2 event types — used in XGenericEventCookie.evtype.
+    // XInput2 event types - used in XGenericEventCookie.evtype.
     public const int XI_ButtonPress = 4;
     public const int XI_ButtonRelease = 5;
     public const int XI_Motion = 6;
@@ -20,7 +20,7 @@ internal static partial class XI2
     public const int XIAllDevices = 0;
     public const int XIAllMasterDevices = 1;
 
-    // XIDeviceInfo.use values — distinguishes master/slave pointer/keyboard devices.
+    // XIDeviceInfo.use values - distinguishes master/slave pointer/keyboard devices.
     public const int XIMasterPointer = 1;
     public const int XIMasterKeyboard = 2;
     public const int XISlavePointer = 3;
@@ -76,7 +76,7 @@ internal struct XIAnyClassInfo
 }
 
 /// <summary>
-/// Scroll class info — present once per scroll axis (vertical or horizontal).
+/// Scroll class info - present once per scroll axis (vertical or horizontal).
 /// "increment" defines how many raw valuator units equal one wheel notch.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -91,7 +91,7 @@ internal struct XIScrollClassInfo
 }
 
 /// <summary>
-/// Valuator class info — describes one continuous axis (X, Y, scroll value, ...).
+/// Valuator class info - describes one continuous axis (X, Y, scroll value, ...).
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct XIValuatorClassInfo
@@ -108,7 +108,7 @@ internal struct XIValuatorClassInfo
 }
 
 /// <summary>
-/// Device info — has a pointer to an array of class info pointers, one per device class.
+/// Device info - has a pointer to an array of class info pointers, one per device class.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct XIDeviceInfo

@@ -28,7 +28,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// <para>
 /// Caller responsibilities: this class assumes the GL context is current on the
 /// thread that constructs / disposes / Acquire-Releases the instance. The caller
-/// should check <see cref="IsAvailable"/> before constructing — driver support
+/// should check <see cref="IsAvailable"/> before constructing - driver support
 /// for WGL_NV_DX_interop is not universal (typically present on NVIDIA/AMD
 /// desktop drivers; spotty on Intel and remote-desktop sessions).
 /// </para>
@@ -74,7 +74,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
     ];
 
     /// <summary>True when WGL_NV_DX_interop is loaded and usable on the current GL
-    /// context. Call this before constructing — construction throws when the
+    /// context. Call this before constructing - construction throws when the
     /// extension isn't available.</summary>
     public static bool IsAvailable => WglDxInterop.TryLoad();
 
@@ -98,7 +98,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
         // NOTE: Caller MUST validate that the supplied texture is compatible with
         // WGL_NV_DX_interop (single-slice Texture2D, BIND_SHADER_RESOURCE set, GL-sample-able
         // format). Passing an incompatible texture causes the driver's register implementation
-        // to AV (0xC0000005) inside native code — there's no way to recover. The MewVG GL
+        // to AV (0xC0000005) inside native code - there's no way to recover. The MewVG GL
         // backend deliberately knows nothing about D3D11; validation lives at the call site
         // (e.g., the video sample) where D3D11 introspection helpers are available.
         _wglDevice = AcquireSharedDeviceHandle(d3d11Device);
@@ -115,7 +115,7 @@ public sealed unsafe class WglDxInteropTexture : IExternalRasterSource
                 ? new GpuResourceAffinity(Display: null, new GpuDeviceIdentity(lowPart, highPart, 0))
                 : null;
 
-        // Allocate an empty GL texture object — wglDXRegisterObjectNV binds the D3D11
+        // Allocate an empty GL texture object - wglDXRegisterObjectNV binds the D3D11
         // texture to this name. After registration, GL_TEXTURE_2D operations on the
         // name (other than Lock/Unlock + sample) are undefined.
         OpenGL32.glGenTextures(1, out _glTextureId);

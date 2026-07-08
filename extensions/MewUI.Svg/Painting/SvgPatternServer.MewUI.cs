@@ -8,7 +8,7 @@ public partial class SvgPatternServer
     // Per-pattern tile cache. The pattern's rendered bitmap is invariant for a given set
     // of inputs (tile pixel size, viewBox, patternContentUnits, content bounds for OBB).
     // Without this, every frame re-rendered the pattern children into a fresh offscreen
-    // bitmap — for SVGs with embedded image children (Highcharts patterns etc.) the
+    // bitmap - for SVGs with embedded image children (Highcharts patterns etc.) the
     // PNG decode + GPU upload + tile draw was ~80 ms even after caching the decoded
     // image at SvgImage-element level. Cached values live for the SvgPatternServer
     // element's lifetime; the document is otherwise long-lived.
@@ -125,7 +125,7 @@ public partial class SvgPatternServer
                 pixelHeight = Math.Max(1, (int)(pixelHeight * shrink));
             }
 
-            // Cache check — reuse the rendered tile when the inputs that affect its pixels
+            // Cache check - reuse the rendered tile when the inputs that affect its pixels
             // haven't changed. patternUnits / x / y don't affect the tile pixels (only the
             // brush's destinationRect), so they're not part of the key. patternTransform
             // and opacity are applied at brush construction, also not part of the key.
@@ -219,7 +219,7 @@ public partial class SvgPatternServer
             var image = _cachedTileImage!;
             var patternTransform = PatternTransform?.GetMatrix();
 
-            // ownedResources is empty — the cached tile/image are owned by this server
+            // ownedResources is empty - the cached tile/image are owned by this server
             // and shared across brushes. The brush only references them; brush disposal
             // doesn't release them. They live until the document/server is collected.
             return factory.CreateImageBrush(

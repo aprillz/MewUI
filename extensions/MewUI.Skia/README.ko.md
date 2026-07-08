@@ -11,7 +11,7 @@
 dotnet add package Aprillz.MewUI.Skia
 ```
 
-그런 다음 실행 백엔드에 맞는 interop 패키지를 추가합니다(선택 — 없으면 CPU 폴백 사용):
+그런 다음 실행 백엔드에 맞는 interop 패키지를 추가합니다(선택 - 없으면 CPU 폴백 사용):
 
 | Interop 패키지 | 백엔드 | 시작 시 활성화 |
 |---|---|---|
@@ -43,8 +43,8 @@ canvas.PaintSurface += (s, e) =>
 
 ## 패키지 구성
 
-- **`Aprillz.MewUI.Skia`** (이 패키지) — `SkiaCanvasView`, interop 레지스트리, CPU 폴백.
-- **`Aprillz.MewUI.Skia.Interop.*`** — 백엔드별 zero-copy GPU 브리지(위 표).
-- **`Aprillz.MewUI.Skia.{Windows,Linux,MacOS,All}`** — 코어 + 플랫폼별 interop을 묶은 메타패키지.
+- **`Aprillz.MewUI.Skia`** (이 패키지) - `SkiaCanvasView`, interop 레지스트리, CPU 폴백.
+- **`Aprillz.MewUI.Skia.Interop.*`** - 백엔드별 zero-copy GPU 브리지(위 표).
+- **`Aprillz.MewUI.Skia.{Windows,Linux,MacOS,All}`** - 코어 + 플랫폼별 interop을 묶은 메타패키지.
 
 전체 문서: https://github.com/aprillz/MewUI

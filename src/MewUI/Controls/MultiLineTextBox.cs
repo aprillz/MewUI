@@ -12,7 +12,7 @@ public sealed class MultiLineTextBox : TextBase
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<MultiLineTextBox>(nameof(Text), string.Empty,
             MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, newVal) => self.OnTextPropertyChanged(newVal));
+            static (self, _, newVal) => self.ApplyExternalTextPropertyChange(newVal));
 
     private const int WrapSegmentHardLimit = 4096;
     private const int WrapLineCountHardLimit = 4096;
@@ -25,8 +25,8 @@ public sealed class MultiLineTextBox : TextBase
     private readonly ScrollBar _vBar;
     private readonly ScrollBar _hBar;
 
-    private bool _syncingText;
     private double _lineHeight;
+    private double _arrangedWrapWidth = -1;
 
     private int _pendingViewAnchorIndex = -1;
     private double _pendingViewAnchorYOffset;
@@ -35,7 +35,7 @@ public sealed class MultiLineTextBox : TextBase
 
     public MultiLineTextBox()
     {
-        AcceptReturn = false;   
+        AcceptReturn = true;   
 
         _textView = new MultiLineTextView(
             () => DocumentVersion,
@@ -75,13 +75,7 @@ public sealed class MultiLineTextBox : TextBase
     public string Text
     {
         get => GetTextCore();
-        set
-        {
-            var normalized = NormalizeText(value ?? string.Empty);
-            if (GetTextCore() == normalized)
-                return;
-            SetValue(TextProperty, normalized);
-        }
+        set => SetMirroredTextProperty(TextProperty, value);
     }
 
     /// <summary>
@@ -162,15 +156,7 @@ public sealed class MultiLineTextBox : TextBase
 
     protected override void NotifyTextChanged()
     {
-        _syncingText = true;
-        try
-        {
-            SetValue(TextProperty, GetTextCore());
-        }
-        finally
-        {
-            _syncingText = false;
-        }
+        SyncTextPropertyFromDocument(TextProperty);
         base.NotifyTextChanged();
     }
 
@@ -305,7 +291,7 @@ public sealed class MultiLineTextBox : TextBase
         double desiredH = Math.Min(contentH, 2048) + chromeH + 4;
 
         // When a finite size is available (e.g. inside a TabControl, Grid, or WrapPanel),
-        // don't request more than available — the internal scroll handles overflow.
+        // don't request more than available - the internal scroll handles overflow.
         if (!double.IsPositiveInfinity(availableSize.Width) && desiredW > availableSize.Width)
         {
             desiredW = availableSize.Width;
@@ -339,8 +325,17 @@ public sealed class MultiLineTextBox : TextBase
         double finalViewportH = Math.Max(0, finalViewportContent.Height);
         double finalViewportW = Math.Max(0, finalViewportContent.Width);
 
-        double finalExtentH = GetExtentHeight(Math.Max(1, finalViewportW));
+        // Warm the wrap cache for the lines about to be visible so the extent below reflects
+        // this frame's viewport instead of whatever happened to be cached from a previous one.
+        // This settles the extent here instead of discovering drift after OnRender and re-arranging.
+        if (WrapEnabled)
+        {
+            WarmWrapCacheForViewport(measure.Context, measure.Font, finalViewportW, finalViewportH);
+        }
+
+        double finalExtentH = GetExtentHeight(Math.Max(1, finalViewportW), bypassCache: true);
         double finalExtentW = WrapEnabled ? 0 : GetExtentWidthForViewport(measure.Context, measure.Font, finalViewportH);
+        _arrangedWrapWidth = finalViewportW;
 
         bool needV = finalExtentH > finalViewportH + 0.5;
         bool needH = !WrapEnabled && finalExtentW > finalViewportW + 0.5;
@@ -397,19 +392,15 @@ public sealed class MultiLineTextBox : TextBase
 
     protected override void RenderTextContent(IGraphicsContext context, Rect contentBounds, IFont font, Theme theme, in VisualState state)
     {
-        double extentBefore = WrapEnabled ? GetExtentHeight(Math.Max(1, contentBounds.Width)) : 0;
-
         RenderText(context, contentBounds, font, theme);
 
-        // Wrap layouts computed during render may change the extent height.
-        // Bypass cache to pick up newly computed wrap layouts.
-        if (WrapEnabled)
+        // The wrap extent is settled in ArrangeContent (wrap cache warmed for the arranged viewport there),
+        // so steady-state render does not need to recompute or invalidate. Fallback only for the rare case
+        // where the rendered width disagrees with what arrange assumed (e.g. a bounds change without a
+        // matching arrange pass in between), in which case one re-arrange resettles it.
+        if (WrapEnabled && Math.Abs(contentBounds.Width - _arrangedWrapWidth) > 0.5)
         {
-            double extentAfter = GetExtentHeight(Math.Max(1, contentBounds.Width), bypassCache: true);
-            if (Math.Abs(extentAfter - extentBefore) > 0.5)
-            {
-                InvalidateArrange();
-            }
+            InvalidateArrange();
         }
     }
 
@@ -531,13 +522,6 @@ public sealed class MultiLineTextBox : TextBase
         context.DrawLine(new Point(x, top), new Point(x, bottom), theme.Palette.WindowText, 1, pixelSnap: true);
     }
 
-    private void OnTextPropertyChanged(string newValue)
-    {
-        if (_syncingText) return;
-        _syncingText = true;
-        try { ApplyExternalTextChange(newValue); }
-        finally { _syncingText = false; }
-    }
     private bool CanComputeExtentWidth() => !WrapEnabled && _lineStarts.Count <= ExtentWidthLineCountHardLimit;
     private void RenderText(IGraphicsContext context, Rect contentBounds, IFont font, Theme theme)
     {
@@ -621,14 +605,15 @@ public sealed class MultiLineTextBox : TextBase
             return;
         }
 
-        using var measure = BeginTextMeasurement();
+        // Reuse the live render context/font passed in - it already implements IGraphicsContext
+        // measurement (MeasureText etc.), so a separate offscreen measurement context is unnecessary here.
         double wrapWidth = Math.Max(1, contentBounds.Width);
 
         int firstRow = lineHeight <= 0 ? 0 : Math.Max(0, (int)Math.Floor(VerticalOffset / lineHeight));
         double offsetInRow = lineHeight <= 0 ? 0 : VerticalOffset - firstRow * lineHeight;
         double yRow = contentBounds.Y - offsetInRow;
 
-        _wrapVirtualizer.MapVisualRowToLine(firstRow, wrapWidth, measure.Context, measure.Font, out int lineIndex, out int rowInLine);
+        _wrapVirtualizer.MapVisualRowToLine(firstRow, wrapWidth, context, font, out int lineIndex, out int rowInLine);
 
         double yWrap = yRow;
         int maxRows = lineHeight <= 0 ? 1 : (int)Math.Ceiling((contentBounds.Height + offsetInRow) / lineHeight) + 1;
@@ -646,13 +631,13 @@ public sealed class MultiLineTextBox : TextBase
         {
             GetLineSpan(lineIndex, out int lineStart, out int lineEnd);
             string fullLine = _textView.GetLineText(lineIndex, lineStart, lineEnd);
-            var layout = _wrapVirtualizer.GetWrapLayout(lineIndex, fullLine, wrapWidth, measure.Context, measure.Font);
+            var layout = _wrapVirtualizer.GetWrapLayout(lineIndex, fullLine, wrapWidth, context, font);
 
             MultiLineTextView.CachedLineMeasure? lineMeasure = null;
             if ((canDrawCaret && CaretPosition >= lineStart && CaretPosition <= lineEnd) ||
                 (canDrawSelection && selection.start < lineEnd && selection.end > lineStart))
             {
-                lineMeasure = _textView.EnsureLineMeasureCache(lineIndex, lineStart, lineEnd, measure.Context, measure.Font);
+                lineMeasure = _textView.EnsureLineMeasureCache(lineIndex, lineStart, lineEnd, context, font);
             }
 
             for (int row = rowInLine; row < layout.SegmentStarts.Length && rendered < maxRows; row++)
@@ -674,12 +659,12 @@ public sealed class MultiLineTextBox : TextBase
                     int ce = Math.Min(compEnd - lineStart, segEnd);
                     if (cs < ce)
                     {
-                        lineMeasure ??= _textView.EnsureLineMeasureCache(lineIndex, lineStart, lineEnd, measure.Context, measure.Font);
+                        lineMeasure ??= _textView.EnsureLineMeasureCache(lineIndex, lineStart, lineEnd, context, font);
                         double ulY = yWrap + lineHeight;
                         int attrOffset = (cs + lineStart) - compStart;
-                        double segPrefixW = MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, measure.Context, measure.Font);
+                        double segPrefixW = MultiLineTextView.GetPrefixWidthCached(lineMeasure, segStart, context, font);
                         TextBoxView.DrawSegmentedCompositionUnderline(
-                            lineMeasure, measure.Context, measure.Font, ulY, textColor,
+                            lineMeasure, context, font, ulY, textColor,
                             CompositionAttributes, attrOffset, ce - cs,
                             cs, contentBounds.X - segPrefixW);
                     }
@@ -892,6 +877,36 @@ public sealed class MultiLineTextBox : TextBase
         }
 
         return _wrapVirtualizer.GetExtentHeight(wrapWidth, GetLineHeight(), FontSize, bypassCache);
+    }
+
+    // Computes wrap layouts for the lines about to be visible, mirroring the row walk in RenderText
+    // (without drawing), so GetExtentHeight reflects the current viewport instead of whatever lines
+    // happened to be cached from a previous frame or scroll position.
+    private void WarmWrapCacheForViewport(IGraphicsContext context, IFont font, double viewportWidth, double viewportHeight)
+    {
+        double lineHeight = GetLineHeight();
+        if (lineHeight <= 0)
+        {
+            return;
+        }
+
+        double wrapWidth = Math.Max(1, viewportWidth);
+        int lineCount = Math.Max(1, _lineStarts.Count);
+
+        int firstRow = Math.Max(0, (int)Math.Floor(VerticalOffset / lineHeight));
+        _wrapVirtualizer.MapVisualRowToLine(firstRow, wrapWidth, context, font, out int lineIndex, out _);
+
+        int rowsNeeded = (int)Math.Ceiling(viewportHeight / lineHeight) + 1;
+        int rowsSeen = 0;
+
+        while (rowsSeen < rowsNeeded && lineIndex < lineCount)
+        {
+            GetLineSpan(lineIndex, out int lineStart, out int lineEnd);
+            string fullLine = _textView.GetLineText(lineIndex, lineStart, lineEnd);
+            var layout = _wrapVirtualizer.GetWrapLayout(lineIndex, fullLine, wrapWidth, context, font);
+            rowsSeen += Math.Max(1, layout.SegmentStarts.Length);
+            lineIndex++;
+        }
     }
 
     private double GetExtentWidth()

@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Rendering;
+
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -1392,7 +1394,6 @@ public static class ControlExtensions
         return textBox;
     }
 
-
     /// <summary>
     /// Sets the caret position.
     /// </summary>
@@ -2359,6 +2360,401 @@ public static class ControlExtensions
     {
         listBox.ItemActivated += handler;
         return listBox;
+    }
+
+    #endregion
+
+    #region SegmentedControl
+
+    /// <summary>
+    /// Sets the segments from a string array.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="items">Segment labels.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf Items<TSelf>(this TSelf control, params string[] items) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = ItemsView.Create(items ?? Array.Empty<string>());
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segments with a display-text selector.
+    /// </summary>
+    /// <typeparam name="TSelf">Control type.</typeparam>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="items">Items collection.</param>
+    /// <param name="textSelector">Text selector function.</param>
+    /// <param name="keySelector">Optional key selector to stabilize selection when items change.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf Items<TSelf, T>(this TSelf control, IReadOnlyList<T> items, Func<T, string> textSelector, Func<T, object?>? keySelector = null) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = items == null ? ItemsView.EmptySelectable : ItemsView.Create(items, textSelector, keySelector);
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the items source.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="itemsSource">Items source.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf ItemsSource<TSelf>(this TSelf control, ISelectableItemsView itemsSource) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = itemsSource ?? ItemsView.EmptySelectable;
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segment template.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="template">Segment template.</param>
+    /// <returns>The control for chaining.</returns>
+    public static TSelf ItemTemplate<TSelf>(this TSelf control, IDataTemplate template) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(template);
+
+        control.ItemTemplate = template;
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segment template using delegate-based templating.
+    /// </summary>
+    /// <typeparam name="TItem">Item type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="build">Template build callback.</param>
+    /// <param name="bind">Template bind callback.</param>
+    /// <param name="unbind">Optional template cleanup callback.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl ItemTemplate<TItem>(
+        this SegmentedControl control,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+        => ItemTemplate(control, new DelegateTemplate<TItem>(build, bind, unbind));
+
+    /// <summary>
+    /// Sets the selected segment index.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="selectedIndex">Selected index.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl SelectedIndex(this SegmentedControl control, int selectedIndex)
+    {
+        control.SelectedIndex = selectedIndex;
+        return control;
+    }
+
+    /// <summary>
+    /// Configures each segment container after its content is bound. The callback receives the
+    /// container, the item, and its index; use it to set or bind any container property (enabled
+    /// state, tooltip, etc.). Applied on every rebuild.
+    /// </summary>
+    /// <typeparam name="T">Item type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="prepare">Container configuration callback.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl PrepareContainer<T>(this SegmentedControl control, Action<SegmentButton, T, int> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        control.SetPrepareContainer((container, item, index) => prepare(container, (T)item!, index));
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the segment template for a <see cref="ButtonGroup"/> using delegate-based templating.
+    /// </summary>
+    public static ButtonGroup ItemTemplate<TItem>(
+        this ButtonGroup control,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
+    {
+        control.ItemTemplate = new DelegateTemplate<TItem>(build, bind, unbind);
+        return control;
+    }
+
+    /// <summary>
+    /// Configures each <see cref="ButtonGroup"/> segment container after its content is bound. Use it
+    /// to wire the segment's <see cref="SegmentButton.Click"/> (command), <see cref="SegmentButton.IsCheckable"/>
+    /// / <see cref="SegmentButton.IsChecked"/> (independent toggle), enabled state, or tooltip.
+    /// </summary>
+    public static ButtonGroup PrepareContainer<T>(this ButtonGroup control, Action<SegmentButton, T, int> prepare)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(prepare);
+
+        control.SetPrepareContainer((container, item, index) => prepare(container, (T)item!, index));
+        return control;
+    }
+
+    /// <summary>Sets how a segmented control sizes its segments along the horizontal axis.</summary>
+    public static TSelf Sizing<TSelf>(this TSelf control, SegmentSizing sizing) where TSelf : SegmentedBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.Sizing = sizing;
+        return control;
+    }
+
+    /// <summary>
+    /// Sets the per-segment padding (mirrors ListBox.ItemPadding). Use a small value for compact,
+    /// icon-only strips; the strip height follows the control.
+    /// </summary>
+    public static TSelf ItemPadding<TSelf>(this TSelf control, Thickness padding) where TSelf : SegmentedBase
+    {
+        control.ItemPadding = padding;
+        return control;
+    }
+
+    /// <summary>
+    /// Adds a selection changed event handler.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="handler">Event handler.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl OnSelectionChanged(this SegmentedControl control, Action<object?> handler)
+    {
+        control.SelectionChanged += handler;
+        return control;
+    }
+
+    /// <summary>
+    /// Binds the selected index to an observable value.
+    /// </summary>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="source">Observable source.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl BindSelectedIndex(this SegmentedControl control, ObservableValue<int> source)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(source);
+
+        control.SetBinding(SegmentedControl.SelectedIndexProperty, source);
+        return control;
+    }
+
+    /// <summary>
+    /// Binds the selected index to a converted observable value (e.g. an enum).
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="control">Target segmented control.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Source-to-index converter.</param>
+    /// <param name="convertBack">Optional index-to-source converter.</param>
+    /// <returns>The control for chaining.</returns>
+    public static SegmentedControl BindSelectedIndex<TSource>(
+        this SegmentedControl control,
+        ObservableValue<TSource> source,
+        Func<TSource, int> convert,
+        Func<int, TSource>? convertBack = null)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        control.SetBinding(SegmentedControl.SelectedIndexProperty, source, convert, convertBack);
+        return control;
+    }
+
+    #endregion
+
+    #region NavigationList
+
+    /// <summary>
+    /// Binds items with a custom template. Generics are inferred once from <paramref name="items"/>;
+    /// kind and key are selectors, not chained generic calls.
+    /// </summary>
+    public static NavigationList Items<T>(
+        this NavigationList control,
+        IReadOnlyList<T> items,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, T, int, TemplateContext> bind,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = ItemsView.Create(items, textSelector: null, keySelector);
+        control.ItemTemplate = new DelegateTemplate<T>(build, bind);
+        control.KindSelector = kind == null ? null : o => kind((T)o!);
+        return control;
+    }
+
+    /// <summary>Binds items using the default text template.</summary>
+    public static NavigationList Items<T>(
+        this NavigationList control,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ItemsSource = ItemsView.Create(items, textSelector, keySelector);
+        control.KindSelector = kind == null ? null : o => kind((T)o!);
+        return control;
+    }
+
+    public static NavigationList OnSelectionChanged(this NavigationList control, Action<object?> handler)
+    {
+        control.SelectionChanged += handler;
+        return control;
+    }
+
+    public static NavigationList OnItemInvoked(this NavigationList control, Action<object?> handler)
+    {
+        control.ItemInvoked += handler;
+        return control;
+    }
+
+    public static NavigationList BindSelectedIndex(this NavigationList control, ObservableValue<int> source)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(source);
+        control.SetBinding(NavigationList.SelectedIndexProperty, source);
+        return control;
+    }
+
+    #endregion
+
+    #region NavigationView
+
+    /// <summary>Sets the navigation pane width.</summary>
+    public static NavigationView PaneWidth(this NavigationView view, double width)
+    {
+        view.PaneWidth = width;
+        return view;
+    }
+
+    /// <summary>Adds a selection changed handler.</summary>
+    public static NavigationView OnSelectionChanged(this NavigationView view, Action<object?> handler)
+    {
+        view.SelectionChanged += handler;
+        return view;
+    }
+
+    /// <summary>
+    /// Configures the navigation pane items, their icons, and the selected-item-to-content mapping in one
+    /// typed call. Rows show an icon (when provided) plus text; <see cref="NavigationItemKind.Header"/> rows
+    /// are bold group titles, items are indented, and text is hidden when the pane is compact.
+    /// </summary>
+    public static NavigationView Items<T>(
+        this NavigationView view,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, PathGeometry?>? icon = null,
+        Func<T, Element?>? content = null,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(textSelector);
+
+        ApplyNavItems(view, view.Pane, items, textSelector, icon, kind, keySelector);
+        if (content != null)
+        {
+            view.ContentSelector = o => o is T t ? content(t) : null;
+        }
+        return view;
+    }
+
+    /// <summary>
+    /// Configures the bottom-pinned footer items (e.g. a Settings entry) with the same shape as the main
+    /// <c>Items</c> call. Selection is shared with the main items, so only one entry is selected across the
+    /// whole pane and its content shows in the content region.
+    /// </summary>
+    public static NavigationView FooterItems<T>(
+        this NavigationView view,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, PathGeometry?>? icon = null,
+        Func<T, Element?>? content = null,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(textSelector);
+
+        ApplyNavItems(view, view.FooterPane, items, textSelector, icon, kind, keySelector);
+        if (content != null)
+        {
+            view.FooterContentSelector = o => o is T t ? content(t) : null;
+        }
+        return view;
+    }
+
+    // Shared row template used by both the main and footer lists; both read the same pane mode from the view.
+    private static void ApplyNavItems<T>(
+        NavigationView view,
+        NavigationList pane,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, PathGeometry?>? icon,
+        Func<T, NavigationItemKind>? kind,
+        Func<T, object?>? keySelector)
+    {
+        pane.ItemsSource = ItemsView.Create(items, textSelector, keySelector);
+        pane.KindSelector = kind == null ? null : o => kind((T)o!);
+        pane.ItemTemplate = new DelegateTemplate<T>(
+            build: _ =>
+            {
+                var iconShape = new PathShape()
+                    .Stretch(Stretch.Uniform).Size(16).CenterVertical();
+                // Icon fill follows the inherited foreground, so it tracks theme, app overrides, and disabled
+                // dimming exactly like the text label.
+                var factory = Application.DefaultGraphicsFactory;
+                iconShape.Bind(Shape.FillProperty, iconShape, Control.ForegroundProperty,
+                    (Color color) => (IBrush)factory.CreateSolidColorBrush(color));
+                var label = new TextBlock().CenterVertical();
+                return new StackPanel().Horizontal().Spacing(10).CenterVertical().Children(iconShape, label);
+            },
+            bind: (element, item, index, ctx) =>
+            {
+                var row = (StackPanel)element;
+                var iconShape = (PathShape)row.Children[0];
+                var label = (TextBlock)row.Children[1];
+                bool isHeader = (kind == null ? NavigationItemKind.Item : kind(item)) == NavigationItemKind.Header;
+                bool rail = view.PaneIsRail;
+                bool showText = view.PaneShowsText;
+
+                iconShape.Data = icon?.Invoke(item);
+
+                if (isHeader)
+                {
+                    // Group headers: small uppercase with space above, no icon. In the compact rail they collapse to a spacer.
+                    iconShape.IsVisible = false;
+                    label.IsVisible = !rail && showText;
+                    label.Text = textSelector(item).ToUpperInvariant();
+                    label.FontSize = 11;
+                    label.FontWeight = MewUI.FontWeight.SemiBold;
+                    row.Margin = new Thickness(0, 12, 0, 2);
+                    row.HorizontalAlignment = MewUI.HorizontalAlignment.Left;
+                }
+                else
+                {
+                    // Items: larger text, indented under their group header; icon-only and centered in the rail.
+                    iconShape.IsVisible = iconShape.Data != null;
+                    label.IsVisible = showText;
+                    label.Text = textSelector(item);
+                    label.FontSize = 13;
+                    label.FontWeight = MewUI.FontWeight.Normal;
+                    row.Margin = showText && !rail ? new Thickness(12, 0, 0, 0) : default;
+                    row.HorizontalAlignment = rail ? MewUI.HorizontalAlignment.Center : MewUI.HorizontalAlignment.Left;
+                }
+
+                // Compact rail hides the label; surface it as a tooltip on the host so icons stay identifiable.
+                if (element.Parent is Border host)
+                {
+                    host.ToolTip(rail && !isHeader ? textSelector(item) : null);
+                }
+            });
     }
 
     #endregion

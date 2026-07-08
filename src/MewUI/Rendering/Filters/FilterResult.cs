@@ -8,10 +8,10 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// <remarks>
 /// Three concrete shapes:
 /// <list type="bullet">
-/// <item><see cref="BorrowedFilterResult"/> — points at a layer the caller owns. <see cref="Dispose"/> is no-op.</item>
-/// <item><see cref="ScratchFilterResult"/> — backed by a rented render surface
+/// <item><see cref="BorrowedFilterResult"/> - points at a layer the caller owns. <see cref="Dispose"/> is no-op.</item>
+/// <item><see cref="ScratchFilterResult"/> - backed by a rented render surface
 /// from the executor's scratch pool; <see cref="Dispose"/> returns it.</item>
-/// <item>Backend-specific subclasses — wrap native handles, optionally with lazy CPU
+/// <item>Backend-specific subclasses - wrap native handles, optionally with lazy CPU
 /// readback for cross-backend chain-of-responsibility fallback.</item>
 /// </list>
 /// All subclasses must support both <see cref="AsImage"/> (for backend-native draw operations)
@@ -63,7 +63,7 @@ public abstract class FilterResult : IDisposable
 
 /// <summary>
 /// A <see cref="FilterResult"/> that aliases an externally-owned image (typically the
-/// executor's source layer). <see cref="Dispose"/> is intentionally a no-op — the caller
+/// executor's source layer). <see cref="Dispose"/> is intentionally a no-op - the caller
 /// must not release the underlying resource through this wrapper.
 /// </summary>
 public sealed class BorrowedFilterResult : FilterResult

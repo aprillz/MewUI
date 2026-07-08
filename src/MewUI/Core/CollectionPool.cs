@@ -19,7 +19,7 @@ internal static class CollectionPool<T> where T : class, new()
         return new T();
     }
 
-    private static void Return(T item)
+    internal static void Return(T item)
     {
         _pool ??= new Stack<T>();
         if (_pool.Count < MaxPoolSize)
@@ -27,7 +27,15 @@ internal static class CollectionPool<T> where T : class, new()
             _pool.Push(item);
         }
     }
+}
 
+/// <summary>
+/// Convenience Return overloads for <see cref="CollectionPool{T}"/>. Kept on this non-generic class
+/// so the pooled element type is always inferred from the argument, never from an outer type
+/// parameter the caller could get wrong (e.g. specifying List&lt;A&gt; while passing a List&lt;B&gt;).
+/// </summary>
+internal static class CollectionPool
+{
     public static void Return<TKey, TValue>(Dictionary<TKey, TValue> map) where TKey : notnull
     {
         map.Clear();

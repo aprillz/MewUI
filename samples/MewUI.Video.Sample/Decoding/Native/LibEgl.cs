@@ -11,7 +11,7 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 /// EGL coexists with GLX in this build: the X11 backend creates its window/context
 /// via GLX, but Mesa lets us obtain an EGL display on the same X11 Display* and
 /// import dma_buf images that the GLX context can sample (the underlying DRI driver
-/// state is shared across both APIs). NVIDIA proprietary doesn't share state — on
+/// state is shared across both APIs). NVIDIA proprietary doesn't share state - on
 /// that driver this path will fail and the caller falls back to CPU upload.
 /// </remarks>
 internal static unsafe partial class LibEgl
@@ -62,7 +62,7 @@ internal static unsafe partial class LibEgl
 
     /// <summary>
     /// Create an EGLImage from a list of EGL_LINUX_DMA_BUF_EXT attributes. Pass
-    /// <c>EGL_NO_CONTEXT</c> as <paramref name="context"/> — dma_buf import is
+    /// <c>EGL_NO_CONTEXT</c> as <paramref name="context"/> - dma_buf import is
     /// detached from any GL context and the returned image can be bound to textures
     /// in any context whose underlying driver shares state with EGL.
     /// </summary>

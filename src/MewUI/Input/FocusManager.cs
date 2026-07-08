@@ -9,6 +9,15 @@ public sealed class FocusManager
 {
     private readonly Window _window;
 
+    // Reused across Tab presses/focus changes to avoid rebuilding a List/HashSet every time.
+    // Each is cleared before use and never retained past the call that filled it.
+    private readonly List<UIElement> _focusableScratch = new();
+    private readonly HashSet<UIElement> _navigationVisitedScratch = new();
+    private readonly List<UIElement> _oldFocusChainScratch = new();
+    private readonly List<UIElement> _newFocusChainScratch = new();
+    private readonly HashSet<UIElement> _focusChainVisitedScratch = new();
+    private readonly HashSet<UIElement> _newFocusSetScratch = new();
+
     internal FocusManager(Window window)
     {
         _window = window;
@@ -31,7 +40,7 @@ public sealed class FocusManager
     /// <param name="resolveDefault">
     /// When true, applies <see cref="UIElement.GetDefaultFocusTarget"/> redirection (e.g. a container
     /// forwards focus to its first focusable child). Programmatic and keyboard-driven focus should use
-    /// this path. Mouse-click-driven focus should pass false — the click already expresses a precise
+    /// this path. Mouse-click-driven focus should pass false - the click already expresses a precise
     /// location, so silently redirecting focus elsewhere (possibly off-screen) violates user intent
     /// and can trigger unwanted scroll-into-view.
     /// </param>
@@ -89,7 +98,7 @@ public sealed class FocusManager
         // Walk up the visual tree, notifying every host along the way. Scroll-into-view must bubble so
         // that nested scrollable containers (e.g. inner ScrollViewer inside outer ScrollViewer, or a
         // TabControl nested in another TabControl) can each adjust their own viewport to make the
-        // focused element visible. The return value is informational only — a host signaling `true`
+        // focused element visible. The return value is informational only - a host signaling `true`
         // (e.g. TreeView/GridView claiming selection) does not block outer hosts from also running
         // their scroll-into-view logic.
         for (Element? current = focusedElement; current != null; current = current.Parent)
@@ -124,20 +133,15 @@ public sealed class FocusManager
             return null;
         }
 
-        if (root is TabControl tabControl)
+        if (root is IFocusTraversalScope scope)
         {
-            var fromContent = FindFirstFocusable(tabControl.SelectedTab?.Content);
+            var fromContent = FindFirstFocusable(scope.ActiveTraversalRoot);
             if (fromContent != null)
             {
                 return fromContent;
             }
 
-            if (IsFocusable(tabControl))
-            {
-                return tabControl;
-            }
-
-            return null;
+            return root is UIElement scopeElement && IsFocusable(scopeElement) ? scopeElement : null;
         }
 
         if (root is UIElement uiElement && IsFocusable(uiElement))
@@ -271,7 +275,8 @@ public sealed class FocusManager
 
         // Focus may be inside a popup. For tab navigation, anchor to the popup owner
         // so we move to the next element after the owning control (WPF-like behavior).
-        var visited = new HashSet<UIElement>();
+        var visited = _navigationVisitedScratch;
+        visited.Clear();
 
         Element? current = focusedElement;
         for (int i = 0; i < 32 && current != null; i++)
@@ -301,7 +306,8 @@ public sealed class FocusManager
 
     private List<UIElement> CollectFocusableElements(Element? root)
     {
-        var result = new List<UIElement>();
+        var result = _focusableScratch;
+        result.Clear();
         CollectFocusableElementsCore(root, result);
         return result;
     }
@@ -313,9 +319,19 @@ public sealed class FocusManager
             return;
         }
 
-        var oldChain = CollectFocusWithinChain(oldElement);
-        var newChain = CollectFocusWithinChain(newElement);
-        var newSet = new HashSet<UIElement>(newChain);
+        var oldChain = _oldFocusChainScratch;
+        var newChain = _newFocusChainScratch;
+        oldChain.Clear();
+        newChain.Clear();
+        CollectFocusWithinChain(oldElement, oldChain);
+        CollectFocusWithinChain(newElement, newChain);
+
+        var newSet = _newFocusSetScratch;
+        newSet.Clear();
+        foreach (var element in newChain)
+        {
+            newSet.Add(element);
+        }
 
         for (int i = 0; i < oldChain.Count; i++)
         {
@@ -332,10 +348,10 @@ public sealed class FocusManager
         }
     }
 
-    private List<UIElement> CollectFocusWithinChain(UIElement? element)
+    private void CollectFocusWithinChain(UIElement? element, List<UIElement> chain)
     {
-        var chain = new List<UIElement>();
-        var visited = new HashSet<UIElement>();
+        var visited = _focusChainVisitedScratch;
+        visited.Clear();
 
         Element? current = element;
         while (current != null)
@@ -361,7 +377,6 @@ public sealed class FocusManager
                 current = current.Parent;
             }
         }
-        return chain;
     }
 
     private void CollectFocusableElementsCore(Element? element, List<UIElement> result)
@@ -371,16 +386,16 @@ public sealed class FocusManager
             return;
         }
 
-        if (element is TabControl tabControl)
+        if (element is IFocusTraversalScope scope)
         {
             int before = result.Count;
-            CollectFocusableElementsCore(tabControl.SelectedTab?.Content, result);
+            CollectFocusableElementsCore(scope.ActiveTraversalRoot, result);
 
-            // WinForms-style: Tab navigation enters the selected tab page's content.
-            // If there are no focusable descendants, allow the TabControl itself to be focused.
-            if (result.Count == before)
+            // WinForms-style: Tab navigation enters the selected tab's content.
+            // If there are no focusable descendants, allow the scope element itself to be focused.
+            if (result.Count == before && element is UIElement scopeElement)
             {
-                AddIfFocusable(tabControl, result);
+                AddIfFocusable(scopeElement, result);
             }
 
             return;

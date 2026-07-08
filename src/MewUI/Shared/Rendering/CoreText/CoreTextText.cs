@@ -62,8 +62,8 @@ internal static unsafe partial class CoreTextText
     /// <c>destBuffer</c> receives BGRA premultiplied pixels and must be at least
     /// <c>(widthPx + aaExtra) * heightPx * 4</c> bytes, where <c>aaExtra = ceil(dpi / 96 * 2)</c>;
     /// bytes beyond the rasterized region are not modified. <c>actualWidthPx</c> receives the
-    /// AA-extended bitmap width — the same value <see cref="TextBitmap.WidthPx"/> would have on
-    /// the equivalent <see cref="Rasterize"/> call — used for both the GPU upload extent and the
+    /// AA-extended bitmap width - the same value <see cref="TextBitmap.WidthPx"/> would have on
+    /// the equivalent <see cref="Rasterize"/> call - used for both the GPU upload extent and the
     /// image-pattern UV math. Returns false on any failure (bad font, empty text, buffer too
     /// small, CG init fail).
     /// </remarks>
@@ -517,7 +517,7 @@ internal static unsafe partial class CoreTextText
         // Always go through CTLine. The previous fast path summed per-glyph advances from
         // CTFontGetAdvancesForGlyphs, which ignores kerning pairs (and any other
         // OpenType GPOS positioning). Visible mismatch: prefix MeasureText with kerning
-        // applied vs glyph extent without — produced extra inter-glyph gaps after kerned
+        // applied vs glyph extent without - produced extra inter-glyph gaps after kerned
         // pairs (e.g. Arial 'Te' on macOS rendered T+e ~5 px apart at 48 px instead of
         // the kerned 0 px). CTLine respects kerning + ligatures + GSUB/GPOS the same way
         // GDI's GetTextExtentPoint32 / DirectWrite's IDWriteTextLayout do. The single-

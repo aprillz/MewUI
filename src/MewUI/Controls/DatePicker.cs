@@ -87,7 +87,7 @@ public sealed class DatePicker : DropDownBase
     protected override void SyncPopupContent(UIElement popup)
     {
         // Only sync lightweight properties that the owner may change while open.
-        // Avoid overwriting DisplayDate/DisplayMode/SelectedDate — the Calendar
+        // Avoid overwriting DisplayDate/DisplayMode/SelectedDate - the Calendar
         // manages those internally (nav buttons, mode drill-down, etc.) and
         // SyncPopupContent is called every render frame via UpdatePopupBoundsCore.
         if (_calendar == null) return;
@@ -125,7 +125,7 @@ public sealed class DatePicker : DropDownBase
 
     private void OnCalendarDateActivated(DateTime date)
     {
-        // Commit action (mouse click or Enter key) — close popup.
+        // Commit action (mouse click or Enter key) - close popup.
         SelectedDate = date;
         IsDropDownOpen = false;
     }
@@ -186,32 +186,17 @@ public sealed class DatePicker : DropDownBase
         var bounds = Bounds;
         var client = window.ClientSize;
 
-        // Calendar measures itself — use its desired size
+        // Calendar measures itself - use its desired size
         popup.Measure(new Size(client.Width, client.Height));
         double popupW = Math.Max(popup.DesiredSize.Width, bounds.Width);
         double popupH = popup.DesiredSize.Height;
 
-        double x = bounds.X;
-        if (x + popupW > client.Width)
-            x = Math.Max(0, client.Width - popupW);
+        double x = PopupPlacement.ClampHorizontal(bounds.X, popupW, client.Width, floorToZero: false);
 
         double belowY = bounds.Y + ResolveHeaderHeight();
-        double availableBelow = Math.Max(0, client.Height - belowY);
-        double availableAbove = Math.Max(0, bounds.Y);
+        var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, client.Height, popupH);
 
-        double y;
-        if (availableBelow >= popupH || availableBelow >= availableAbove)
-        {
-            y = belowY;
-            popupH = Math.Min(popupH, availableBelow);
-        }
-        else
-        {
-            popupH = Math.Min(popupH, availableAbove);
-            y = bounds.Y - popupH;
-        }
-
-        return new Rect(x, y, popupW, popupH);
+        return new Rect(x, y, popupW, height);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

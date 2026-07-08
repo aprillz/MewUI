@@ -24,7 +24,7 @@ public enum ItemsPresenterMode
 
     /// <summary>
     /// Items are arranged in a wrapping grid with fixed item width and height.
-    /// Virtualizes by row — only visible rows are realized.
+    /// Virtualizes by row - only visible rows are realized.
     /// </summary>
     Wrap = 3,
 }

@@ -100,6 +100,27 @@ internal class FlexBorderBar : Control, IVisualTreeHost
         InvalidateMeasure();
     }
 
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        if (newRoot is null)
+        {
+            ReleaseContent();
+        }
+    }
+
+    private void ReleaseContent()
+    {
+        if (_content is null)
+        {
+            return;
+        }
+
+        DetachChild(_content);
+        _content = null;
+    }
+
     /// <summary>Re-syncs the panel + button highlights and re-arranges (panel size may have changed) on selection.</summary>
     internal virtual void SyncSelection()
     {

@@ -271,6 +271,27 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         InvalidateMeasure();
     }
 
+    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    {
+        base.OnVisualRootChanged(oldRoot, newRoot);
+
+        if (newRoot is null)
+        {
+            ReleaseContent();
+        }
+    }
+
+    private void ReleaseContent()
+    {
+        if (_content is null)
+        {
+            return;
+        }
+
+        DetachChild(_content);
+        _content = null;
+    }
+
     /// <summary>Re-syncs the hosted content and tab/frame highlights after a selection or active-tabset change,
     /// without recreating controls (so an in-flight drag source survives).</summary>
     internal void SyncSelection()

@@ -22,10 +22,10 @@ public static class BuiltInStyles
 
     internal static void Register(StyleSheet sheet)
     {
-        sheet.Define(FlatButton, CreateFlatButtonStyle());
-        sheet.Define(AccentButton, CreateAccentButtonStyle());
-        sheet.Define(ComboBoxPopup, CreateComboBoxPopupStyle());
-        sheet.Define(DatePickerPopup, CreateDatePickerPopupStyle());
+        sheet.Define(FlatButton, CreateFlatButtonStyle);
+        sheet.Define(AccentButton, CreateAccentButtonStyle);
+        sheet.Define(ComboBoxPopup, CreateComboBoxPopupStyle);
+        sheet.Define(DatePickerPopup, CreateDatePickerPopupStyle);
     }
 
     private static Style CreateFlatButtonStyle()
@@ -79,7 +79,7 @@ public static class BuiltInStyles
     {
         return new Style(typeof(ListBox))
         {
-            BasedOn = Style.ForType<VirtualizedItemsBase>(),
+            BasedOn = Style.ForType<ScrollableItemsBase>(),
             Setters =
             [
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),

@@ -213,7 +213,7 @@ internal static class GdiConstants
     // Glyph outline
     public const uint GGO_NATIVE = 2;
     public const uint GGO_BEZIER = 3;
-    public const uint GGO_UNHINTED = 0x100; // OR with format — disables grid-fit hinting
+    public const uint GGO_UNHINTED = 0x100; // OR with format - disables grid-fit hinting
     public const ushort TT_PRIM_LINE = 1;
     public const ushort TT_PRIM_QSPLINE = 2;
     public const ushort TT_PRIM_CSPLINE = 3;

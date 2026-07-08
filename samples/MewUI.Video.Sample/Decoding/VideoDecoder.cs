@@ -180,7 +180,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         {
             if (_hardwareDeviceContext is null) return 0;
             // AVVAAPIDeviceContext layout: { VADisplay display; ... }. The VADisplay
-            // is the first pointer-sized field of hwctx — same memory pattern as the
+            // is the first pointer-sized field of hwctx - same memory pattern as the
             // D3D11 device above, just a different opaque type.
             var hwDeviceContext = (AVHWDeviceContext*)_hardwareDeviceContext->data;
             if (hwDeviceContext is null || hwDeviceContext->hwctx is null) return 0;
@@ -264,7 +264,7 @@ public sealed unsafe class VideoDecoder : IDisposable
                     if (!forceCpuReadback && _activeHardwareDeviceType == AVHWDeviceType.AV_HWDEVICE_TYPE_D3D11VA)
                     {
                         // D3D11VA-only: data[0] is an ID3D11Texture2D* (COM). For CUDA/
-                        // VAAPI/VideoToolbox it's a device pointer or opaque handle —
+                        // VAAPI/VideoToolbox it's a device pointer or opaque handle -
                         // calling Marshal.AddRef on those segfaults.
                         CaptureHardwareFrameMetadata(hwFrameForExport, out nint rawHandle, out int rawSubresource, out bool rawHardwareDecoded);
                         if (rawHardwareDecoded && rawHandle != 0)
@@ -524,7 +524,7 @@ public sealed unsafe class VideoDecoder : IDisposable
     /// real video without depending on driver-specific zero-copy availability.
     /// </summary>
     /// <remarks>
-    /// Toggle is observed at the next decoded frame — no need to recreate the
+    /// Toggle is observed at the next decoded frame - no need to recreate the
     /// decoder. Hardware decode itself stays active (the HW frame is just
     /// transferred to system memory via <c>av_hwframe_transfer_data</c>); only
     /// the GPU-side wrap is skipped.
@@ -545,7 +545,7 @@ public sealed unsafe class VideoDecoder : IDisposable
     /// On VideoToolbox-decoded frames FFmpeg stores the <c>CVPixelBufferRef</c> in
     /// <c>frame->data[3]</c>. The bridge is created lazily on the first wrap so the
     /// system Metal device is only touched when there's actually a frame to display.
-    /// Returns null when the bridge / cache could not be initialised — caller then falls
+    /// Returns null when the bridge / cache could not be initialised - caller then falls
     /// back to the CPU readback path.
     /// </remarks>
     private VideoToolboxFrameTexture? TryWrapVideoToolboxFrame(AVFrame* frame)
@@ -693,7 +693,7 @@ public sealed unsafe class VideoDecoder : IDisposable
 
     /// <summary>
     /// macOS HW decode path. VideoToolbox is the system framework Apple ships for
-    /// hardware-accelerated H.264/HEVC/etc. decode — FFmpeg wraps it as
+    /// hardware-accelerated H.264/HEVC/etc. decode - FFmpeg wraps it as
     /// <c>AV_HWDEVICE_TYPE_VIDEOTOOLBOX</c>, which decodes into a CVPixelBuffer
     /// (NV12 by default, IOSurface-backed). Display-side zero-copy then wraps the
     /// IOSurface as an MTLTexture without touching CPU memory.
@@ -740,7 +740,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         // conversion pass. With BGRA we get an IOSurface-backed CVPixelBuffer that wraps
         // straight into a single MTLTexture for zero-copy display.
         bool framesCtxOk = TryConfigureBgraHwFramesContext(codecPar: _codec);
-        SampleLog.Write($"VideoToolbox hw_frames_ctx pre-config (sw_format=BGRA): {(framesCtxOk ? "ok" : "failed — VT will use default NV12")}");
+        SampleLog.Write($"VideoToolbox hw_frames_ctx pre-config (sw_format=BGRA): {(framesCtxOk ? "ok" : "failed - VT will use default NV12")}");
 
         SampleLog.Write($"VideoToolbox configured. hw_pix_fmt={_hardwarePixelFormat}");
     }
@@ -769,7 +769,7 @@ public sealed unsafe class VideoDecoder : IDisposable
 
         _hardwarePixelFormat = hardwareConfig->pix_fmt;
 
-        // Pass null device — FFmpeg picks the default DRM render node (/dev/dri/renderD128).
+        // Pass null device - FFmpeg picks the default DRM render node (/dev/dri/renderD128).
         // Apps that need a specific GPU can extend this to honor an env var.
         int createResult = ffmpeg.av_hwdevice_ctx_create(
             &_codec->hw_device_ctx,
@@ -843,7 +843,7 @@ public sealed unsafe class VideoDecoder : IDisposable
     /// <see cref="_vaapiFilterGraph"/> stays null and <see cref="ProcessVaapiFilter"/>
     /// short-circuits, leaving the decoder on the existing NV12 surface path. The
     /// VideoView Linux branch then either still attempts the dma_buf import (and
-    /// shows wrong colors — useful for debugging) or falls back to CPU upload.
+    /// shows wrong colors - useful for debugging) or falls back to CPU upload.
     /// </remarks>
     private void TryInitVaapiFilterGraph()
     {
@@ -855,7 +855,7 @@ public sealed unsafe class VideoDecoder : IDisposable
             // The decoder hasn't allocated a hw_frames_ctx yet. avcodec_open2 only
             // creates one when the first packet is decoded for some codecs. We'll
             // retry on the first frame in TryDecodeNext.
-            SampleLog.Write("VAAPI filter init deferred — codec has no hw_frames_ctx yet.");
+            SampleLog.Write("VAAPI filter init deferred - codec has no hw_frames_ctx yet.");
             return;
         }
 
@@ -868,7 +868,7 @@ public sealed unsafe class VideoDecoder : IDisposable
 
         try
         {
-            // buffer source filter — feeds decoded VAAPI frames into the graph.
+            // buffer source filter - feeds decoded VAAPI frames into the graph.
             var bufferFilter = ffmpeg.avfilter_get_by_name("buffer");
             var bufferSinkFilter = ffmpeg.avfilter_get_by_name("buffersink");
             if (bufferFilter is null || bufferSinkFilter is null)
@@ -902,7 +902,7 @@ public sealed unsafe class VideoDecoder : IDisposable
                 return;
             }
 
-            // Propagate hw_frames_ctx from the codec to the buffer source — this
+            // Propagate hw_frames_ctx from the codec to the buffer source - this
             // tells the graph that the input surfaces are VAAPI-backed and which
             // VADisplay / surface format they live on.
             AVBufferSrcParameters* parms = ffmpeg.av_buffersrc_parameters_alloc();
@@ -997,7 +997,7 @@ public sealed unsafe class VideoDecoder : IDisposable
     /// <summary>
     /// Push <paramref name="hwFrame"/> through the scale_vaapi filter and pull the
     /// converted BGRA frame out. Returns the filter output frame on success
-    /// (caller takes ownership of the ref — pair with <c>av_frame_unref</c> after
+    /// (caller takes ownership of the ref - pair with <c>av_frame_unref</c> after
     /// use), or <see langword="null"/> if the filter isn't initialized or any
     /// step fails.
     /// </summary>
@@ -1005,7 +1005,7 @@ public sealed unsafe class VideoDecoder : IDisposable
     {
         if (_vaapiFilterGraph is null)
         {
-            // Try to init lazily — codec may have allocated hw_frames_ctx by now.
+            // Try to init lazily - codec may have allocated hw_frames_ctx by now.
             TryInitVaapiFilterGraph();
             if (_vaapiFilterGraph is null) return null;
         }
@@ -1025,7 +1025,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         rc = ffmpeg.av_buffersink_get_frame(_vaapiFilterSink, _vaapiFilteredFrame);
         if (rc < 0)
         {
-            // EAGAIN here means "filter needs more input" — would happen for
+            // EAGAIN here means "filter needs more input" - would happen for
             // filters that buffer (delay), but scale_vaapi is 1:1 so this is rare.
             SampleLog.Write($"VAAPI filter: buffersink_get_frame failed: {FormatError(rc)}");
             return null;
@@ -1081,7 +1081,7 @@ public sealed unsafe class VideoDecoder : IDisposable
     /// <summary>
     /// Builds a D3D11 device with both BGRA_SUPPORT and VIDEO_SUPPORT, wraps it in an
     /// FFmpeg AVHWDeviceContext, and assigns it as the codec's hw_device_ctx. Returns
-    /// false on any failure — caller falls back to FFmpeg's built-in device creation.
+    /// false on any failure - caller falls back to FFmpeg's built-in device creation.
     /// </summary>
     private bool TryCreateInteropReadyD3D11Device()
     {
@@ -1120,7 +1120,7 @@ public sealed unsafe class VideoDecoder : IDisposable
         {
             SampleLog.Write("Enabled ID3D11Multithread protection on the BGRA+VIDEO device context.");
         }
-        // We don't use the immediate context ourselves — FFmpeg will GetImmediateContext
+        // We don't use the immediate context ourselves - FFmpeg will GetImmediateContext
         // on the device during av_hwdevice_ctx_init, which AddRef's its own copy.
         if (d3dCtx != 0) Marshal.Release(d3dCtx);
 

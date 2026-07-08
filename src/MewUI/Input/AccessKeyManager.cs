@@ -113,7 +113,7 @@ internal sealed class AccessKeyManager
     {
         if (!IsAltOnlyUp(e)) return;
 
-        // Alt released — just clear the pending flag.
+        // Alt released - just clear the pending flag.
         // Access keys remain visible until Escape, mouse click, or another action dismisses them.
         _altPressed = false;
     }

@@ -20,7 +20,7 @@ partial class Window
     internal long ProfilerSourceId => _profilerSourceId;
 
     /// <summary>
-    /// When true the window opts out of profiler frame collection — used by the profiler's
+    /// When true the window opts out of profiler frame collection - used by the profiler's
     /// own DevTools windows so they don't recursively profile themselves.
     /// </summary>
     internal bool ExcludeFromProfiler

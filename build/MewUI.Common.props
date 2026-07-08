@@ -13,7 +13,7 @@
     <MewVGVersion>0.5.5</MewVGVersion>
   </PropertyGroup>
 
-  <!-- Local development override (gitignored) — MewVGProjectPath, etc. -->
+  <!-- Local development override (gitignored) - MewVGProjectPath, etc. -->
   <Import Project="MewUI.Local.props" Condition="Exists('MewUI.Local.props')" />
 
   <PropertyGroup>
@@ -28,7 +28,7 @@
     <Copyright>Copyright (c) $(MewUIAuthor)</Copyright>
     <PackageIcon>logo_c-256.png</PackageIcon>
 
-    <LangVersion>latest</LangVersion>
+    <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

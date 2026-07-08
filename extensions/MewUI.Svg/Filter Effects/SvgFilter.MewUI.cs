@@ -14,13 +14,13 @@ public partial class SvgFilter
     // The earlier "ReadPixels + CPU memcpy into DIB cache RT" version blew memory under
     // zoom because every cache miss allocated a fresh managed byte[] for GPU readback,
     // creating GC pressure as the working set grew. This version uses GPU→GPU copy via
-    // IGraphicsContext.DrawImage(result.AsImage()) into a GPU-backed cache RT — no CPU
+    // IGraphicsContext.DrawImage(result.AsImage()) into a GPU-backed cache RT - no CPU
     // readback, no managed buffer allocation, just a single GPU draw op per snapshot.
     private const bool CacheEnabled = true;
 
     // Toggle for the [SvgFilter*] / [SvgFilterCache] / [SvgFilterTime] diagnostic spam.
     private readonly Dictionary<SvgVisualElement, FilterCacheEntry> _resultCache = new();
-    // Guards _resultCache and _pendingDisposal — same SvgFilter instance is shared by the
+    // Guards _resultCache and _pendingDisposal - same SvgFilter instance is shared by the
     // SVG document and accessed concurrently from UI and worker render threads (SvgView
     // background cache build). Without a lock, Dictionary mutation races with TryGetValue,
     // and entry disposal can race with another thread's DrawFilterResult recording.
@@ -29,7 +29,7 @@ public partial class SvgFilter
     // the MewVG per-NVG image disposal queue: D2D's DrawImage records a reference to the
     // IImage that the device context retains internally until EndDraw. Disposing the entry
     // mid-frame (cache cap flush, replacement on miss) frees its underlying ID2D1Bitmap
-    // wrapper while the recorded DrawImage call still expects to commit it — visible as
+    // wrapper while the recorded DrawImage call still expects to commit it - visible as
     // specific filtered elements going invisible at certain zooms (the missing element is
     // whichever's cache entry happened to be evicted between its DrawFilterResult and the
     // outer EndDraw). Drain at the start of the next ApplyFilter call: by that point the
@@ -81,7 +81,7 @@ public partial class SvgFilter
         // offscreen ctx, no scratch surface, no filter graph eval) and just render the element
         // straight into the outer renderer. If the cross-frame corruption disappears with
         // this on, the bug lives somewhere in the filter pipeline (texture wrap lifetime,
-        // pool reuse, NVG-state interleave) — not in generic SVG concurrent rendering.
+        // pool reuse, NVG-state interleave) - not in generic SVG concurrent rendering.
         if (Environment.GetEnvironmentVariable("MEWUI_SVG_DISABLE_FILTER") == "1")
         {
             renderMethod(renderer);
@@ -113,7 +113,7 @@ public partial class SvgFilter
 
         // Element's own transform scale. SVG primitiveUnits="userSpaceOnUse" (the default)
         // is interpreted by browsers as units in the user space *after* the filtered
-        // element's transforms are applied — so for a heavily-shrunk element like
+        // element's transforms are applied - so for a heavily-shrunk element like
         // <g transform="matrix(0.069,…)"> the σ=14 in feGaussianBlur means 14 *local*
         // units which display as 14 × 0.069 ≈ 1 parent-unit (visually ~1px blur). Using
         // ancestor-only scale here treats σ=14 as 14 parent-units and produces the
@@ -131,7 +131,7 @@ public partial class SvgFilter
             if (sy > 0) selfScaleY = sy;
         }
 
-        // Find max σ across this filter's primitives — needed both for halo region
+        // Find max σ across this filter's primitives - needed both for halo region
         // inflation (so the SVG-specified region isn't tighter than 3σ) AND for the
         // visibility-clip below (so the halo can fade naturally past the visible cull).
         // σ is scaled by selfScale so the inflation is in the same parent-space units
@@ -153,7 +153,7 @@ public partial class SvgFilter
         // so a region narrower than 3σ produces a visibly hard rectangular boundary where
         // the blur halo cuts off (e.g. path3716 + filter4264 with σ=27.77 user units but
         // only ~10% bbox padding). Browsers extend the working region by ~3σ so the halo
-        // fades naturally past the author's region — match that here.
+        // fades naturally past the author's region - match that here.
         if (sigmaPad > 0)
         {
             filterRegion = new Rect(
@@ -164,11 +164,11 @@ public partial class SvgFilter
         }
 
         // Clamp filter region to element-visibility-bounds. Outside (element bounds + 3σ
-        // halo), the filter has zero contribution — the element doesn't render there and
+        // halo), the filter has zero contribution - the element doesn't render there and
         // the blur halo can't extend past 3σ from any rendered pixel. SVG-spec filter
         // regions wildly exceeding this (e.g. unitless `width="200"` in objectBoundingBox
         // = 200× bbox = 18000 user-units for a 90-unit element) waste source bitmap on
-        // empty space — multi-hundred-MB allocations for nothing visible. Clamping
+        // empty space - multi-hundred-MB allocations for nothing visible. Clamping
         // matches author intent and keeps memory in check.
         var elementHaloBounds = sigmaPad > 0
             ? new Rect(bounds.X - sigmaPad, bounds.Y - sigmaPad,
@@ -177,7 +177,7 @@ public partial class SvgFilter
         var visibilityClip = elementHaloBounds;
 
         // If the active context exposes a finite cull (visible viewport in user-space),
-        // tighten the visibility clip further — at high zoom only a sub-rect of the
+        // tighten the visibility clip further - at high zoom only a sub-rect of the
         // element + halo may actually be on-screen.
         var clipLocal = renderer.GraphicsContext.GetClipBoundsLocal();
         if (clipLocal is { Width: > 0, Height: > 0 } cl)
@@ -190,7 +190,7 @@ public partial class SvgFilter
         }
 
         var clipped = filterRegion.Intersect(visibilityClip);
-        // Guarantee the element bounds (without halo) are always inside the surface — when
+        // Guarantee the element bounds (without halo) are always inside the surface - when
         // GetElementBounds reports the union of children, those children must be drawable.
         // Without this, an element's own contents can fall outside `clipped` (which is a
         // visibility approximation, not a strict bounding box) and get cropped on the source
@@ -207,7 +207,7 @@ public partial class SvgFilter
         {
             return; // The element + halo is fully off-screen / outside the SVG-specified region.
         }
-        // Don't shrink filterRegion to `clipped` — the SVG.NET reference uses a simple
+        // Don't shrink filterRegion to `clipped` - the SVG.NET reference uses a simple
         // bounds × 1.5 inflate as the source rasterization rectangle; cropping it down to
         // the visibility intersection truncates content the moment the visible viewport
         // doesn't cover the full element + halo. Keep the SVG-spec filterRegion as-is so
@@ -216,7 +216,7 @@ public partial class SvgFilter
         // Compute the effective rendering scale and source pixel dimensions BEFORE the cache
         // lookup. Two requests with different raw scales can clamp to the same effective scale
         // (executor MaxInputScale cap, then maxOffscreenExtent shrink). Keying the cache by
-        // post-cap values lets those collide on the same entry — without this, CPU executor
+        // post-cap values lets those collide on the same entry - without this, CPU executor
         // calls (MaxInputScale=1.0) miss the cache on every zoom step despite the rasterized
         // output being identical.
         var offscreenFactory = renderer.GraphicsFactory;
@@ -255,7 +255,7 @@ public partial class SvgFilter
             }
             if (hit is not null)
             {
-                // Draw outside the lock — DrawFilterResult records into the renderer's
+                // Draw outside the lock - DrawFilterResult records into the renderer's
                 // device context; doing it under _cacheLock would serialize all SvgFilter
                 // ApplyFilter calls across threads. The local 'hit' reference keeps the
                 // entry observable until DrawFilterResult returns; eviction by another
@@ -317,7 +317,7 @@ public partial class SvgFilter
 
         if (graph is null)
         {
-            // No primitives — draw the source layer as-is.
+            // No primitives - draw the source layer as-is.
             outputImage = renderDevice.CreateImageView(sourceSurface);
             outputSourceRect = new Rect(0, 0, sourceSurface.PixelWidth, sourceSurface.PixelHeight);
             try
@@ -337,7 +337,7 @@ public partial class SvgFilter
         // units must be multiplied by the same scale to land in source-pixel space.
         // Self-transform scale is folded in here (only) so per-primitive σ/dx/dy convert
         // to source-pixel units at the same rate the geometry was shrunk by the element's
-        // own transform — matches browser behavior on heavily-scaled filtered elements.
+        // own transform - matches browser behavior on heavily-scaled filtered elements.
         // The source-layer pixelWidth/Height above intentionally exclude selfScale: the
         // bitmap covers filterRegion (in parent units) at the parent display rate, so the
         // shrunk geometry rasterizes correctly inside it via renderMethod's PushTransforms.
@@ -371,7 +371,7 @@ public partial class SvgFilter
 
     /// <summary>Draws the filter output onto the main render context using the fast
     /// hardware stretch path (NEAREST / GDI COLORONCOLOR / D2D NEAREST_NEIGHBOR). Filter
-    /// outputs are blur/composite results — low-frequency content where the linear/cubic
+    /// outputs are blur/composite results - low-frequency content where the linear/cubic
     /// resamplers' extra quality is invisible but their cost (per-frame cached scaled
     /// bitmaps on GDI, mip generation on D2D HighQuality) is significant.</summary>
     private static void DrawFilterResult(ISvgRenderer renderer, IImage image, Rect destRect, Rect sourceRect)
@@ -417,7 +417,7 @@ public partial class SvgFilter
         int ph = result.PixelHeight;
         if (pw <= 0 || ph <= 0) return;
 
-        // Skip cache for huge outputs — caching a 4096×4096 result costs 64 MB; under
+        // Skip cache for huge outputs - caching a 4096×4096 result costs 64 MB; under
         // continuous-zoom miss patterns that turns into hundreds of MB across elements.
         // Big filters re-render full-pipeline; the cache helps small/medium elements
         // where the win is largest (per-call setup overhead dominates).
@@ -426,7 +426,7 @@ public partial class SvgFilter
         // Zero-copy: detach the result's underlying scratch surface (and matching IImage) and
         // hand them to the cache. The pool release is suppressed inside Detach so the RT
         // stays alive across frames; cache eviction disposes the RT explicitly. Pixels are
-        // not copied — cache hits re-use the exact buffer the filter wrote into. Only
+        // not copied - cache hits re-use the exact buffer the filter wrote into. Only
         // ScratchFilterResult supports detach (it's the only shape that owns a fresh RT).
         if (result is not ScratchFilterResult scratch)
         {
@@ -456,12 +456,12 @@ public partial class SvgFilter
 
         lock (_cacheLock)
         {
-            // If the dict is at cap, queue everything for deferred disposal — DO NOT
+            // If the dict is at cap, queue everything for deferred disposal - DO NOT
             // dispose mid-render because the current renderer's BeginDraw...EndDraw
             // bracket may still hold recorded DrawImage references to the entries that
             // earlier cache HITs in this same frame issued. Their underlying ID2D1Bitmap
             // wrappers must survive until that EndDraw flushes. Drain at the next
-            // ApplyFilter call (DrainPendingCacheDisposal) — by then the prior render's
+            // ApplyFilter call (DrainPendingCacheDisposal) - by then the prior render's
             // EndDraw has fired.
             if (_resultCache.Count >= MaxCacheEntries)
             {
@@ -487,7 +487,7 @@ public partial class SvgFilter
 
     /// <summary>
     /// Releases cache entries queued during a previous render. Called at the start of
-    /// every <see cref="ApplyFilter"/> — by that point any prior renderer's EndDraw has
+    /// every <see cref="ApplyFilter"/> - by that point any prior renderer's EndDraw has
     /// flushed, so the entries' ID2D1Bitmap wrappers are no longer held by any D2D
     /// command list and can safely be released.
     /// </summary>
@@ -517,7 +517,7 @@ public partial class SvgFilter
         // with the element's transform applied inside renderMethod, and filterRegion must
         // be in that same parent space. The earlier SvgGroup-only branch returned
         // Path(renderer).GetBounds() which is in element-local space (GetPaths does not
-        // bake child transforms either) — that mismatch let glyphs fall outside the
+        // bake child transforms either) - that mismatch let glyphs fall outside the
         // source bitmap on the right/bottom (e.g. issue-084-02 "CHEMISTRY" → "CHEMISTR").
         return element.Bounds;
     }

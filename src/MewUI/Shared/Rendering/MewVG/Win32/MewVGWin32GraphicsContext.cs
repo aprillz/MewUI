@@ -220,12 +220,12 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)horizontalAlignment, (int)verticalAlignment,
             (int)wrapping, (int)trimming), needsLinear);
 
-        if (!_textCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, text, out var entry))
         {
             var bmp = OpenGLTextRasterizer.Rasterize(
                 _frameSession.Hdc, gdiFont, text, widthPx, heightPx, color,
                 horizontalAlignment, verticalAlignment, wrapping, trimming);
-            entry = _textCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, text, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -391,7 +391,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming), needsLinear);
 
-        if (!_textCache.TryGet(key, out var entry))
+        if (!_textCache.TryGet(key, text, out var entry))
         {
             var bmp = OpenGLTextRasterizer.Rasterize(
                 _frameSession.Hdc,
@@ -404,7 +404,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 format.VerticalAlignment,
                 format.Wrapping,
                 format.Trimming);
-            entry = _textCache.CreateImage(key, ref bmp);
+            entry = _textCache.CreateImage(key, text, ref bmp);
         }
 
         if (entry.ImageId == 0) return;
@@ -495,7 +495,7 @@ internal sealed partial class MewVGWin32GraphicsContext
     private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
     {
         // No-opinion bail-outs: nothing to compare against. The share-group equality check below
-        // is the real signal — cross-API pointer collisions (a Metal device pointer matching a
+        // is the real signal - cross-API pointer collisions (a Metal device pointer matching a
         // WGL HGLRC) don't happen in practice, so a typed-backend discriminator isn't needed.
         if (lease is not IGpuResourceAffinityProvider affinityProvider ||
             affinityProvider.Affinity?.Device is not { } sourceDevice ||
@@ -612,11 +612,12 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         public void EndFrame()
         {
-            // Per-NVG drain only — we mustn't touch image-ids that belong to other NVG
+            // Per-NVG drain only - we mustn't touch image-ids that belong to other NVG
             // instances (e.g. worker offscreen NVGs currently mid-frame). Each NVG drains
             // its own pending bucket from its own EndFrame on the thread that owns it.
             _offscreenProvider.ReleasePendingImagesForVg(_resources.Vg);
             TextCache.ReleasePendingDeletes();
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
             _resources.SetSwapInterval(GetSwapInterval());
             _resources.SwapBuffers(_hdc, _hwnd);
         }
@@ -662,11 +663,11 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         public void EndFrame()
         {
-            // Eager readback — the layered-window present path consumes pixels via
+            // Eager readback - the layered-window present path consumes pixels via
             // GetPixelSpan() **after** EndFrame returns, by which time ReleaseCurrent()
             // has dropped the GL context. A deferred RequestDeferredReadback flag would
-            // then trigger glReadPixels with no current context — silently a no-op on
-            // most drivers — leaving the staging DIB zero-filled and the layered window
+            // then trigger glReadPixels with no current context - silently a no-op on
+            // most drivers - leaving the staging DIB zero-filled and the layered window
             // fully transparent. The offscreen frame session can stay deferred (its
             // consumer reads back under the same active context).
             _pixelSurface.ReadbackFromFbo();
@@ -678,6 +679,7 @@ internal sealed partial class MewVGWin32GraphicsContext
                 _offscreenProvider.ReleasePendingTargetsUnderCurrentContext();
             }
             TextCache.ReleasePendingDeletes();
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
             _resources.ReleaseCurrent();
         }
 
@@ -727,16 +729,17 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         public void EndFrame()
         {
-            // Deferred — Lock/CopyPixels/GetPixelSpan flush lazily. Avoids 100s of sync
+            // Deferred - Lock/CopyPixels/GetPixelSpan flush lazily. Avoids 100s of sync
             // barriers per frame when many filtered elements each create their own
             // source layer (each EndFrame here was a glReadPixels + flip + RGBA→BGRA pass).
             _pixelSurface.RequestDeferredReadback();
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
             // Drain pending image deletions queued against this offscreen NVG. We're inside
-            // its EndFrame on the thread that owns it — only safe time to call DeleteImage
+            // its EndFrame on the thread that owns it - only safe time to call DeleteImage
             // on this NVG instance without racing a concurrent BeginFrame...EndFrame on the
             // window thread.
             _offscreenProvider.ReleasePendingImagesForVg(_offscreen.Vg);
+            NvgStrokeHelper.ReleasePendingGradientLutDeletes(_offscreen.Vg);
             bool outermost = _offscreenProvider.ExitSession();
             if (outermost)
             {
@@ -774,7 +777,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         // Record the HGLRC that owns the FBO/RB handles so deferred disposal can
         // route the glDeleteFramebuffers / glDeleteRenderbuffers calls back to this
         // same context (worker FBOs must not be released under the UI window context
-        // — different namespaces, silent no-op + leak).
+        // - different namespaces, silent no-op + leak).
         pixelSurface.RecordCreationContext(OpenGL32.wglGetCurrentContext());
 
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, pixelSurface.Fbo);
@@ -782,7 +785,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         // Explicit colormask + stencil mask BEFORE clear: NanoVG_GL3's flush may have
         // left these in a stencil-only-pass state (alpha or stencil writes disabled).
         // glClear honors masks, so a sticky mask leaves alpha undefined / stencil
-        // untouched on a freshly allocated FBO — rendering as opaque-black filter
+        // untouched on a freshly allocated FBO - rendering as opaque-black filter
         // results downstream when the alpha channel reads as 1 instead of 0. Setting
         // (true,true,true,true) is cheap and a hard guarantee.
         GL.ColorMask(true, true, true, true);

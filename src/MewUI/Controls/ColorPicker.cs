@@ -153,26 +153,11 @@ public sealed class ColorPicker : DropDownBase
         double popupW = Math.Min(popup.DesiredSize.Width, client.Width);
         double popupH = popup.DesiredSize.Height;
 
-        double x = bounds.X;
-        if (x + popupW > client.Width)
-            x = Math.Max(0, client.Width - popupW);
+        double x = PopupPlacement.ClampHorizontal(bounds.X, popupW, client.Width, floorToZero: false);
 
         double belowY = bounds.Y + ResolveHeaderHeight();
-        double availableBelow = Math.Max(0, client.Height - belowY);
-        double availableAbove = Math.Max(0, bounds.Y);
+        var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, client.Height, popupH);
 
-        double y;
-        if (availableBelow >= popupH || availableBelow >= availableAbove)
-        {
-            y = belowY;
-            popupH = Math.Min(popupH, availableBelow);
-        }
-        else
-        {
-            popupH = Math.Min(popupH, availableAbove);
-            y = bounds.Y - popupH;
-        }
-
-        return new Rect(x, y, popupW, popupH);
+        return new Rect(x, y, popupW, height);
     }
 }

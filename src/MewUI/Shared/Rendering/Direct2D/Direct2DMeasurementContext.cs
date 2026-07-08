@@ -32,7 +32,7 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         nint textLayout = 0;
         try
         {
-            // Measurement: Left/Top only — alignment applied in render layout.
+            // Measurement: Left/Top only - alignment applied in render layout.
             if (_textFormatCache != null)
             {
                 textFormat = _textFormatCache.GetOrCreate(_dwriteFactory, dwFont,
@@ -73,7 +73,7 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
                 ComHelpers.Release(trimmingSign);
             }
 
-            // Measurement only — native layout released immediately. No BackendHandle.
+            // Measurement only - native layout released immediately. No BackendHandle.
             return new TextLayout
             {
                 MeasuredSize = measured,

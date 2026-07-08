@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.15.1
+#:package Aprillz.MewUI@0.18.1
 
 using System.Collections.ObjectModel;
 using System.Net.Http;
@@ -2245,7 +2245,7 @@ internal static class NativeCustomWindowExtensions
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// ConfettiOverlay (from Gallery — port of WpfConfetti by caefale)
+// ConfettiOverlay (from Gallery - port of WpfConfetti by caefale)
 // ═══════════════════════════════════════════════════════════════════════
 
 sealed class ConfettiOverlay : FrameworkElement

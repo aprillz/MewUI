@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 /// <summary>
 /// Minimal libva (VA-API) P/Invoke surface needed to export a decoded VA surface as
 /// a DRM PRIME dma_buf for EGL/GL zero-copy import. Only the calls used by the
-/// VAAPI → EGL → GL path are wrapped — extending to other VA-API features (encode,
+/// VAAPI → EGL → GL path are wrapped - extending to other VA-API features (encode,
 /// post-processing) is out of scope.
 /// </summary>
 internal static unsafe partial class LibVa
@@ -106,7 +106,7 @@ internal static unsafe partial class LibVa
 
     /// <summary>
     /// Block until the GPU has finished decoding into <paramref name="surfaceId"/>.
-    /// Required before exporting via <see cref="vaExportSurfaceHandle"/> — without
+    /// Required before exporting via <see cref="vaExportSurfaceHandle"/> - without
     /// this, the consumer can sample partially-decoded pixels.
     /// </summary>
     [LibraryImport(LibraryName, EntryPoint = "vaSyncSurface")]

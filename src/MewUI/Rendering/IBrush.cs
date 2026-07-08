@@ -79,7 +79,7 @@ public interface IRadialGradientBrush : IGradientBrush
 /// </summary>
 public enum TileMode
 {
-    /// <summary>Do not tile — fill outside the image's destination rect is transparent.</summary>
+    /// <summary>Do not tile - fill outside the image's destination rect is transparent.</summary>
     None,
 
     /// <summary>Repeat the tile on both axes.</summary>

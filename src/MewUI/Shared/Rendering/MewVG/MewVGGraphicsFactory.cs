@@ -52,7 +52,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// jitter measurement on representative workloads.
     /// </summary>
     /// <remarks>
-    /// Internal — exposed only to MewUI.dll callers (<c>MewVGImage</c>) and test surface.
+    /// Internal - exposed only to MewUI.dll callers (<c>MewVGImage</c>) and test surface.
     /// Public callers should not depend on this knob; if a stable opt-in is needed it
     /// will go through <c>IGraphicsFactory</c> as a versioned option.
     /// </remarks>
@@ -96,7 +96,7 @@ public sealed partial class MewVGWin32GraphicsFactory
     /// (Win32, X11) wrap the source as a <c>PboFenceUploader</c>-backed external
     /// texture; Metal builds leave the parameter unset and the caller falls back
     /// to the default sync upload path. Failure is silent (no exception bubbles
-    /// out) — async is a performance opt-in, never required for correctness.
+    /// out) - async is a performance opt-in, never required for correctness.
     /// </summary>
     partial void TryCreateAsyncUploadImage(IPixelBufferSource source, ref IImage? image);
 
@@ -238,19 +238,19 @@ public sealed partial class MewVGWin32GraphicsFactory
         DisposePlatformResources();
     }
 
-    public void ReleaseWindowResources(nint hwnd)
+    public void ReleaseWindowResources(nint windowHandle)
     {
-        if (hwnd == 0)
+        if (windowHandle == 0)
         {
             return;
         }
 
-        if (_windows.TryRemove(hwnd, out var resources))
+        if (_windows.TryRemove(windowHandle, out var resources))
         {
             resources.Dispose();
         }
 
-        TryReleaseWindowResources(hwnd);
+        TryReleaseWindowResources(windowHandle);
     }
 
     private partial IDisposable CreateWindowResources(IWindowSurface surface);

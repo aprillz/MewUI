@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Controls.Text;
 
 internal sealed class TextEditorCore
 {
+    private const int MAX_UNDO_ENTRIES = 1000;
+
     private readonly Func<int> _getLength;
     private readonly Func<int, char> _getChar;
     private readonly Func<int, int, string> _getSubstring;
@@ -11,11 +13,11 @@ internal sealed class TextEditorCore
     private readonly Action<int, int> _applyRemove;
     private readonly Action _onEditCommitted;
 
-    private int _selectionStart;
-    private int _selectionLength;
-
     private readonly List<Edit> _undo = new();
     private readonly List<Edit> _redo = new();
+
+    private int _selectionStart;
+    private int _selectionLength;
     private bool _suppressUndoRecording;
 
     public TextEditorCore(
@@ -582,7 +584,7 @@ internal sealed class TextEditorCore
         // With merging, each replace-at-same-index collapses to a single Insert.
         //
         // Rule: if a Delete at index N exactly cancels the previous Insert at index N
-        // (same index, same text), remove both — the next Insert will take the slot.
+        // (same index, same text), remove both - the next Insert will take the slot.
         if (edit.Kind == EditKind.Delete && _undo.Count >= 1)
         {
             var prev = _undo[^1];
@@ -590,7 +592,7 @@ internal sealed class TextEditorCore
                 && prev.Index == edit.Index
                 && prev.Text == edit.Text)
             {
-                // Delete cancels previous Insert at same position — remove the Insert,
+                // Delete cancels previous Insert at same position - remove the Insert,
                 // skip recording this Delete. Net effect: slot is empty for next Insert.
                 _undo.RemoveAt(_undo.Count - 1);
                 _redo.Clear();
@@ -599,6 +601,11 @@ internal sealed class TextEditorCore
         }
 
         _undo.Add(edit);
+        if (_undo.Count > MAX_UNDO_ENTRIES)
+        {
+            _undo.RemoveAt(0);
+        }
+
         _redo.Clear();
     }
 

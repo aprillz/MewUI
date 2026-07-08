@@ -22,12 +22,12 @@ namespace Aprillz.MewUI.Native;
 /// </remarks>
 internal static unsafe class WglDxInterop
 {
-    /// <summary>WGL_ACCESS_READ_ONLY_NV — the GL side only samples, never writes.</summary>
+    /// <summary>WGL_ACCESS_READ_ONLY_NV - the GL side only samples, never writes.</summary>
     public const uint WGL_ACCESS_READ_ONLY_NV = 0x00000000;
     public const uint WGL_ACCESS_READ_WRITE_NV = 0x00000001;
     public const uint WGL_ACCESS_WRITE_DISCARD_NV = 0x00000002;
 
-    /// <summary>GL_TEXTURE_2D — pass to <see cref="RegisterObject"/> as <c>type</c>.</summary>
+    /// <summary>GL_TEXTURE_2D - pass to <see cref="RegisterObject"/> as <c>type</c>.</summary>
     public const uint GL_TEXTURE_2D = 0x0DE1;
 
     private static delegate* unmanaged[Stdcall]<nint, nint> _wglDXOpenDeviceNV;
@@ -41,7 +41,7 @@ internal static unsafe class WglDxInterop
 
     /// <summary>
     /// Resolves the WGL_NV_DX_interop function pointers via <c>wglGetProcAddress</c>.
-    /// Idempotent — safe to call multiple times. The current GL context must be
+    /// Idempotent - safe to call multiple times. The current GL context must be
     /// active when this is invoked; <c>wglGetProcAddress</c> returns 0 with no
     /// active context.
     /// </summary>
@@ -78,7 +78,7 @@ internal static unsafe class WglDxInterop
     public static bool IsAvailable => _available;
 
     /// <summary>Opens a handle to the supplied D3D device for GL interop. The returned
-    /// handle is opaque — pass it to <see cref="RegisterObject"/> /
+    /// handle is opaque - pass it to <see cref="RegisterObject"/> /
     /// <see cref="CloseDevice"/>. Returns 0 on failure (driver mismatch, device
     /// not D3D9/10/11 device, etc.).</summary>
     public static nint OpenDevice(nint d3dDevice) =>
@@ -90,7 +90,7 @@ internal static unsafe class WglDxInterop
 
     /// <summary>Registers a D3D texture with the GL side. <paramref name="glName"/>
     /// must be a previously-allocated GL texture object name (not yet bound to any
-    /// data — register binds it). <paramref name="type"/> is typically
+    /// data - register binds it). <paramref name="type"/> is typically
     /// <see cref="GL_TEXTURE_2D"/>. Returns an opaque handle for
     /// Lock/Unlock/Unregister calls; 0 on failure.</summary>
     public static nint RegisterObject(nint deviceHandle, nint dxObject, uint glName, uint type, uint access) =>

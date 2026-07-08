@@ -9,7 +9,7 @@ partial class GalleryView
     private ObservableValue<double> doubleBinding = new ObservableValue<double>(42.5);
 
     // Multi-line text box demo that shows the live selection (start / length) bound to the read-only
-    // SelectionStart/SelectionLength MewProperties — used to inspect selection geometry.
+    // SelectionStart/SelectionLength MewProperties - used to inspect selection geometry.
     private FrameworkElement MultiLineTextBoxDemo()
     {
         var box = new MultiLineTextBox()
@@ -175,12 +175,6 @@ partial class GalleryView
                                         .Item("Disabled", isEnabled: false)
                                 )
                          )
-                 ),
-
-                WindowDragDropCard(),
-
-                ElementDragDropCard(),
-
-                CrossWindowDragDropCard()
+                 )
              );
 }

@@ -21,7 +21,7 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
     private int _version;
     private bool _disposed;
 
-    // The DC render target paired with our HDC + DIB. Lifetime is tied to this object —
+    // The DC render target paired with our HDC + DIB. Lifetime is tied to this object -
     // RAII: we create lazily on first request, hold for as long as the bitmap is alive,
     // and release in Dispose. No factory-side cache (which previously leaked one DC RT
     // per transient filter source layer because each RT has a unique HDC, growing the
@@ -240,7 +240,7 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
 
         if (_dcRenderTarget != 0)
         {
-            // BindDC must be called per BeginDraw cycle — the existing pattern. Only the
+            // BindDC must be called per BeginDraw cycle - the existing pattern. Only the
             // first BindDC binds the surface; subsequent calls simply confirm the binding
             // and clear any prior draw state. Cheap.
             var rebindRect = new RECT(0, 0, PixelWidth, PixelHeight);
@@ -249,7 +249,7 @@ internal sealed unsafe class Direct2DPixelRenderSurface : IPixelBufferSource, IC
             {
                 return (_dcRenderTarget, _dcRenderTargetGeneration);
             }
-            // BindDC failed — release and recreate below.
+            // BindDC failed - release and recreate below.
             ComHelpers.Release(_dcRenderTarget);
             _dcRenderTarget = 0;
         }

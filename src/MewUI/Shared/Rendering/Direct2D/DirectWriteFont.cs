@@ -17,7 +17,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
     /// </summary>
     internal nint PrivateFontCollection { get; private set; }
 
-    // Cache raw metrics per (family, weight, italic, isPrivate) — size-independent.
+    // Cache raw metrics per (family, weight, italic, isPrivate) - size-independent.
     // Avoids repeated COM calls (FindFamilyName → GetFontFamily → GetFirstMatchingFont → GetMetrics).
     private static readonly ConcurrentDictionary<(string family, FontWeight weight, bool italic, bool isPrivate), DWRITE_FONT_METRICS?> _metricsCache = new();
 
@@ -52,7 +52,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
             return;
         }
 
-        // Not cached — do the full COM lookup
+        // Not cached - do the full COM lookup
         var factory = (IDWriteFactory*)dwriteFactory;
         DWRITE_FONT_METRICS? metrics = null;
 
@@ -233,13 +233,13 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         try
         {
             // emSize = font size in DIPs. DWrite emits outline coords directly in DIPs
-            // (no DPI scaling, no hinting grid-fit) — sink handles the Y-flip into SVG
+            // (no DPI scaling, no hinting grid-fit) - sink handles the Y-flip into SVG
             // top-down screen coords against the supplied baseline origin.
             hr = DWriteVTable.GetGlyphRunOutline(
                 face,
                 (float)Size,
                 &glyphIndex,
-                null,    // glyphAdvances — null = use natural advances (we don't need them since we pass advance back manually)
+                null,    // glyphAdvances - null = use natural advances (we don't need them since we pass advance back manually)
                 null,    // glyphOffsets
                 1,
                 isSideways: 0,
@@ -280,7 +280,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         }
         if (face == 0)
         {
-            // Family not installed — fall back to sans-serif so glyphs still render
+            // Family not installed - fall back to sans-serif so glyphs still render
             // instead of dropping the whole text element. Refresh metrics so callers
             // (cursor advance, baseline) match the substituted face.
             face = TryCreateFontFace(factory, 0, "Segoe UI");
@@ -409,7 +409,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
             try
             {
                 // CreateCompatibleDC(0) returns a memory DC compatible with whatever the
-                // calling thread's "default" device is — on a worker thread without a UI
+                // calling thread's "default" device is - on a worker thread without a UI
                 // context this can produce a DC whose RASTERCAPS lack outline support, and
                 // GetGlyphOutlineW returns ERROR_INVALID_DATATYPE (1003). Anchoring on the
                 // desktop DC guarantees a screen-compatible memory DC.
@@ -562,7 +562,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
 
         private static double ReadFixed(ReadOnlySpan<byte> data, int offset)
         {
-            // FIXED layout in the GDI outline buffer is { WORD fract; SHORT value; } —
+            // FIXED layout in the GDI outline buffer is { WORD fract; SHORT value; } -
             // fract first (matches the corrected struct definition above).
             ushort fraction = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
             short value = BinaryPrimitives.ReadInt16LittleEndian(data.Slice(offset + 2, 2));
@@ -572,7 +572,7 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         [StructLayout(LayoutKind.Sequential)]
         private struct FIXED
         {
-            // Per MS docs the on-wire layout is { WORD fract; SHORT value; } — fract FIRST.
+            // Per MS docs the on-wire layout is { WORD fract; SHORT value; } - fract FIRST.
             // Reversing this makes MAT2.Identity decode as ~0 in GDI's eyes and
             // GetGlyphOutlineW returns ERROR_INVALID_DATATYPE (1003).
             public ushort fract;

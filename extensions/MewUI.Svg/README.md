@@ -14,7 +14,7 @@ Targets `net8.0` and `net10.0`.
 
 ## Quick start
 
-`SvgImageSource` plugs into the standard `Image` control, so an SVG renders like any other image — and stays crisp at any size (it re-renders at the laid-out size instead of stretching a bitmap):
+`SvgImageSource` plugs into the standard `Image` control, so an SVG renders like any other image - and stays crisp at any size (it re-renders at the laid-out size instead of stretching a bitmap):
 
 ```csharp
 using Aprillz.MewUI.Controls;
@@ -48,8 +48,8 @@ source.Tint = theme.Foreground;
 new Image { Source = source };
 ```
 
-- `IntrinsicSize` — the SVG viewBox size (used by `Image` for measuring).
-- `RasterWidth` / `RasterHeight` — only affect the `CreateImage` raster fallback (e.g. when something asks the source for pixels); the vector `Image` path ignores them.
+- `IntrinsicSize` - the SVG viewBox size (used by `Image` for measuring).
+- `RasterWidth` / `RasterHeight` - only affect the `CreateImage` raster fallback (e.g. when something asks the source for pixels); the vector `Image` path ignores them.
 
 ## Advanced: SvgDocument
 

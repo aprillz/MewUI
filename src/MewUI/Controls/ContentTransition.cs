@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public enum ContentTransitionKind
 {
-    /// <summary>No animation — content swaps immediately.</summary>
+    /// <summary>No animation - content swaps immediately.</summary>
     None,
 
     /// <summary>Cross-fade between old and new content.</summary>

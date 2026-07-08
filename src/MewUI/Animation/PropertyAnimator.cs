@@ -27,7 +27,7 @@ internal sealed class PropertyAnimator
     {
         int id = property.Id;
 
-        // First time this property is set — snap (no animation from default value)
+        // First time this property is set - snap (no animation from default value)
         if (!_store.HasTargetValue(id))
         {
             _store.SetValue(property, value, source);
@@ -43,6 +43,7 @@ internal sealed class PropertyAnimator
             if (_states != null && _states.TryGetValue(id, out var existing))
             {
                 existing.Clock?.Stop();
+                _states.Remove(id);
             }
             _store.ClearAnimatedValue(id);
             return;
@@ -51,7 +52,7 @@ internal sealed class PropertyAnimator
         // Capture the "from" value (current visual state)
         object from = currentVisual!;
 
-        // Type cannot lerp — snap immediately
+        // Type cannot lerp - snap immediately
         if (!TypeLerp.CanLerp(property.ValueType))
         {
             _store.SetValue(property, value, source);
@@ -65,6 +66,9 @@ internal sealed class PropertyAnimator
             _states[id] = state;
             state.Clock = new AnimationClock(duration, easing);
             state.Clock.TickCallback = progress => OnTick(id, progress);
+            // Drop the state once the clock finishes on its own so a property that animated
+            // once doesn't keep its (boxed) from/target values alive for the element's lifetime.
+            state.Clock.CompletedCallback = () => _states?.Remove(id);
         }
         else
         {
@@ -76,6 +80,9 @@ internal sealed class PropertyAnimator
         state.FromValue = from;
         state.TargetValue = value;
         state.PropertyType = property.ValueType;
+        // Resolved once per animation start instead of per tick, so OnTick never touches
+        // TypeLerp's Dictionary<Type> for the fallback (non-fast-pathed) types.
+        state.LerpDelegate = TypeLerp.GetDelegate(state.PropertyType);
 
         // Set animated overlay first (so the store shows "from" value),
         // then update the underlying target silently.
@@ -97,6 +104,7 @@ internal sealed class PropertyAnimator
             kv.Value.Clock?.Stop();
             _store.ClearAnimatedValue(kv.Key);
         }
+        _states.Clear();
     }
 
     private void StopAnimation(int propertyId)
@@ -106,6 +114,7 @@ internal sealed class PropertyAnimator
 
         state.Clock?.Stop();
         // Animated value clearing is handled by the caller (PropertyValueStore.SetTarget)
+        _states.Remove(propertyId);
     }
 
     private void OnTick(int propertyId, double progress)
@@ -116,11 +125,11 @@ internal sealed class PropertyAnimator
         if (state.FromValue == null || state.TargetValue == null || state.PropertyType == null)
             return;
 
-        var interpolated = TypeLerp.Interpolate(state.PropertyType, state.FromValue, state.TargetValue, progress);
+        var interpolated = Interpolate(state, progress);
 
         if (progress >= 1.0)
         {
-            // Animation complete — clear animated overlay, target value takes effect
+            // Animation complete - clear animated overlay, target value takes effect
             _store.ClearAnimatedValue(propertyId);
         }
         else
@@ -129,11 +138,39 @@ internal sealed class PropertyAnimator
         }
     }
 
+    /// <summary>
+    /// Interpolates the animation's current value. The common visual types are computed
+    /// directly (no dictionary lookup, no delegate call); anything else registered via
+    /// <see cref="TypeLerp.Register{T}"/> falls back to the delegate cached at animation start.
+    /// The result still has to be boxed once here since <see cref="PropertyValueStore"/> stores
+    /// the animated overlay as <c>object</c>.
+    /// </summary>
+    private static object Interpolate(AnimState state, double progress)
+    {
+        var propertyType = state.PropertyType!;
+        var from = state.FromValue!;
+        var to = state.TargetValue!;
+
+        if (propertyType == typeof(double))
+            return Lerp.Double((double)from, (double)to, progress);
+        if (propertyType == typeof(Color))
+            return Lerp.Color((Color)from, (Color)to, progress);
+        if (propertyType == typeof(Thickness))
+            return Lerp.Thickness((Thickness)from, (Thickness)to, progress);
+        if (propertyType == typeof(Point))
+            return Lerp.Point((Point)from, (Point)to, progress);
+        if (propertyType == typeof(float))
+            return Lerp.Float((float)from, (float)to, progress);
+
+        return state.LerpDelegate!(from, to, progress);
+    }
+
     private sealed class AnimState
     {
         public AnimationClock? Clock;
         public object? FromValue;
         public object? TargetValue;
         public Type? PropertyType;
+        public Func<object, object, double, object>? LerpDelegate;
     }
 }

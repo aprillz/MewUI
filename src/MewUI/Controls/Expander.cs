@@ -153,22 +153,26 @@ public class Expander : HeaderedContentControl
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }
 
-        // Check content if expanded (content may contain interactive elements)
-        if (IsExpanded && Content is UIElement contentUi)
+        // Probe the header element so its own children (label/glyph/interactive) get the hit
+        // for tooltip/cursor/hover, instead of collapsing the whole header row to self.
+        if (Header is UIElement headerUi && headerUi.HitTest(point) is UIElement headerHit)
         {
-            var hit = contentUi.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
+            return headerHit;
         }
 
-        // Header area (including glyph) → return self so OnMouseDown can toggle
+        // Content participates only when expanded: collapsed content is not arranged and keeps
+        // stale bounds, so an unconditional probe would phantom-hit it.
+        if (IsExpanded && Content is UIElement contentUi && contentUi.HitTest(point) is UIElement contentHit)
+        {
+            return contentHit;
+        }
+
+        // Glyph strip or bare header area with no child hit: self, so OnMouseDown can toggle.
         if (Bounds.Contains(point))
         {
             return this;

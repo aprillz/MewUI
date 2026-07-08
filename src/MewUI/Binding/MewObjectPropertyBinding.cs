@@ -13,6 +13,7 @@ internal sealed class MewObjectPropertyBinding<T> : IDisposable
     private readonly MewProperty<T> _targetProperty;
     private readonly MewObject _source;
     private readonly MewProperty<T> _sourceProperty;
+    private readonly PropertyForwardEntry _forwardEntry;
 
     public MewObjectPropertyBinding(
         MewObject target,
@@ -26,7 +27,9 @@ internal sealed class MewObjectPropertyBinding<T> : IDisposable
         _sourceProperty = sourceProperty;
 
         // Register forward on source: when source property changes, propagate to target.
-        source.AddPropertyForward(sourceProperty.Id, target, targetProperty);
+        // Keep the returned entry so Dispose removes exactly this forward, not whatever
+        // forward currently occupies the source property id (another binding may share it).
+        _forwardEntry = source.AddPropertyForward(sourceProperty.Id, target, targetProperty);
 
         // Initial sync.
         target.PropertyStore.SetTarget(targetProperty, source.PropertyStore.GetBoxedValue(sourceProperty));
@@ -34,6 +37,6 @@ internal sealed class MewObjectPropertyBinding<T> : IDisposable
 
     public void Dispose()
     {
-        _source.RemovePropertyForward(_sourceProperty.Id);
+        _source.RemovePropertyForward(_sourceProperty.Id, _forwardEntry);
     }
 }

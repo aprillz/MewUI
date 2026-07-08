@@ -238,7 +238,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
 
     private static double ReadFixed(ReadOnlySpan<byte> data, int offset)
     {
-        // FIXED layout in the GDI outline buffer is { WORD fract; SHORT value; } —
+        // FIXED layout in the GDI outline buffer is { WORD fract; SHORT value; } -
         // fract first (matches the corrected struct definition below).
         ushort fraction = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
         short value = BinaryPrimitives.ReadInt16LittleEndian(data.Slice(offset + 2, 2));
@@ -368,7 +368,7 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
     [StructLayout(LayoutKind.Sequential)]
     private struct FIXED
     {
-        // Per MS docs the on-wire layout is { WORD fract; SHORT value; } — fract FIRST.
+        // Per MS docs the on-wire layout is { WORD fract; SHORT value; } - fract FIRST.
         // Reversing this makes MAT2.Identity decode as ~0 in GDI's eyes and
         // GetGlyphOutlineW returns ERROR_INVALID_DATATYPE (1003).
         public ushort fract;

@@ -238,27 +238,27 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, IRenderDevice, IWindo
         GdiPlusGraphicsContext.ReleaseAllBackBuffers();
     }
 
-    public void ReleaseWindowResources(nint hwnd)
+    public void ReleaseWindowResources(nint windowHandle)
     {
-        if (hwnd == 0)
+        if (windowHandle == 0)
         {
             return;
         }
 
         lock (_layeredLock)
         {
-            if (_layeredTargets.Remove(hwnd, out var layered))
+            if (_layeredTargets.Remove(windowHandle, out var layered))
             {
                 layered.Dispose();
             }
 
-            if (_layeredStagingTargets.Remove(hwnd, out var staging))
+            if (_layeredStagingTargets.Remove(windowHandle, out var staging))
             {
                 staging.Dispose();
             }
         }
 
-        GdiPlusGraphicsContext.ReleaseForWindow(hwnd);
+        GdiPlusGraphicsContext.ReleaseForWindow(windowHandle);
     }
 
     private readonly object _layeredLock = new();

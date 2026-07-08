@@ -15,13 +15,13 @@ public sealed class VideoView : FrameworkElement
     private string _presentationPathText = "idle";
     private readonly Dictionary<nint, CachedGlInteropEntry> _glInteropCache = [];
     // Live WGL_NV_DX_interop wrapper for hardware-decoded frames on GL Win32. Lifetime
-    // is tied to the IImage we hand to MewVG — recreated when the frame's underlying
+    // is tied to the IImage we hand to MewVG - recreated when the frame's underlying
     // D3D11 texture changes. Null when the path isn't taken (software-decoded frames,
     // non-GL-Win32 backend, driver missing the extension, OS != Windows).
     private WglDxInteropTexture? _interopTexture;
     private CachedGlInteropEntry? _activeGLInteropEntry;
     private IGpuInteropInvalidationSource? _gpuInteropInvalidationSource;
-    private bool _interopProbeFailed;   // sticky flag — don't retry per frame after a failed probe
+    private bool _interopProbeFailed;   // sticky flag - don't retry per frame after a failed probe
     private VideoFrame? _lastUploadedFrame;
     private long _lastGeneration = -1;
     private bool _firstPresentedFrameLogged;
@@ -64,11 +64,11 @@ public sealed class VideoView : FrameworkElement
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 
     /// <summary>
-    /// Diagnostic counter — increments each time <see cref="OnRender"/> runs. Externally
+    /// Diagnostic counter - increments each time <see cref="OnRender"/> runs. Externally
     /// readable so the host (Program.cs) can periodically log "OnRender invocations per
     /// second" alongside the platform render-loop fps to distinguish "render loop ticks
     /// without VideoView redraw" (cheap stats overlay update) from "render loop ticks
-    /// with full visual-tree redraw" (expensive — 4K texture sample per tick). Reset
+    /// with full visual-tree redraw" (expensive - 4K texture sample per tick). Reset
     /// externally via <see cref="ResetOnRenderCallCount"/>.
     /// </summary>
     public int OnRenderCallCount => _onRenderCallCount;
@@ -118,7 +118,7 @@ public sealed class VideoView : FrameworkElement
         // turns the render loop into a CPU spin that re-samples the same texture
         // ~5x per displayed frame (e.g. ~285 fps render for a 60 fps source). The
         // playback's FrameReady event drives invalidation at the actual decode rate
-        // — see VideoPlayback.RunDecodeLoop, which now fires FrameReady on every
+        // - see VideoPlayback.RunDecodeLoop, which now fires FrameReady on every
         // queued frame regardless of play state.
     }
 
@@ -223,7 +223,7 @@ public sealed class VideoView : FrameworkElement
             // CPU-readback fallback: BgraData → MewVGImage / Direct2DImage upload.
             // Hits when the frame is software-decoded, the backend isn't GL-Win32-with-
             // WGL_NV_DX_interop, or registration failed (FFmpeg may output texture arrays
-            // that the basic GL_TEXTURE_2D wrap path can't address — a known limitation
+            // that the basic GL_TEXTURE_2D wrap path can't address - a known limitation
             // we accept while the zero-copy path matures).
             image = factory.CreateImageView(frame);
             _interopTexture = null;
@@ -256,11 +256,11 @@ public sealed class VideoView : FrameworkElement
     /// <summary>
     /// Attempts the zero-copy GPU path for a hardware-decoded frame. Returns null when
     /// any precondition fails (caller falls back to CPU upload). On success, the
-    /// returned IImage shares the D3D11 texture via WGL_NV_DX_interop — sampling from
+    /// returned IImage shares the D3D11 texture via WGL_NV_DX_interop - sampling from
     /// NVG happens directly against the decoder output, no readback.
     /// </summary>
     /// <remarks>
-    /// Path eligibility is gated by OS (Windows-only — macOS/X11 don't have D3D11),
+    /// Path eligibility is gated by OS (Windows-only - macOS/X11 don't have D3D11),
     /// frame metadata (must be hardware-decoded with a D3D11 texture and device), and
     /// driver capability (WGL_NV_DX_interop must load on the active GL context). If
     /// the backend doesn't support external sample image views (D2D, GDI),
@@ -280,12 +280,12 @@ public sealed class VideoView : FrameworkElement
     /// <summary>
     /// Linux VAAPI zero-copy attempt: export the VA surface as a DRM PRIME dma_buf
     /// and import it as a GL texture via EGLImage. Requires Mesa-style GLX/EGL
-    /// state sharing — NVIDIA proprietary fails here and falls back to CPU upload.
+    /// state sharing - NVIDIA proprietary fails here and falls back to CPU upload.
     /// </summary>
     /// <remarks>
     /// Wrapper is constructed per frame. Caching by VASurfaceID would amortize the
     /// dma_buf import cost across frames (FFmpeg rotates a small surface pool), but
-    /// is left as a follow-up — first cut focuses on functional correctness.
+    /// is left as a follow-up - first cut focuses on functional correctness.
     /// </remarks>
     private IImage? TryCreateVaapiImage(IGraphicsFactory factory, VideoFrame frame, VaapiGpuResource vaapi)
     {
@@ -363,7 +363,7 @@ public sealed class VideoView : FrameworkElement
 
         if (!WglDxInteropTexture.IsAvailable)
         {
-            SampleLog.Write("WGL_NV_DX_interop unavailable on this driver — using CPU readback path.");
+            SampleLog.Write("WGL_NV_DX_interop unavailable on this driver - using CPU readback path.");
             _interopProbeFailed = true;
             return null;
         }

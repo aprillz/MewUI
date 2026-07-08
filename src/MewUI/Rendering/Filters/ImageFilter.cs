@@ -17,14 +17,14 @@ public abstract class ImageFilter
 {
     /// <summary>
     /// Input filters this node consumes. A <see langword="null"/> entry means "use the
-    /// executor's current source layer" — leaves of the graph that read the rendered content.
+    /// executor's current source layer" - leaves of the graph that read the rendered content.
     /// </summary>
     public abstract IReadOnlyList<ImageFilter?> Inputs { get; }
 }
 
 /// <summary>
 /// Reads the executor's current source layer (the rendered content the filter applies to).
-/// Equivalent to a <see langword="null"/> input slot — provided as a named leaf so SVG
+/// Equivalent to a <see langword="null"/> input slot - provided as a named leaf so SVG
 /// <c>SourceGraphic</c> / <c>SourceAlpha</c> references can be expressed explicitly.
 /// </summary>
 public sealed class SourceFilter : ImageFilter
@@ -134,7 +134,7 @@ public sealed class ComposeFilter(ImageFilter outer, ImageFilter inner) : ImageF
 /// <summary>
 /// Combines N inputs by source-over composition in order: each subsequent input is drawn
 /// over the previous accumulated result. Maps to SVG <c>feMerge</c> (each <c>feMergeNode</c>
-/// becomes one input). NOT additive — overlapping semi-transparent inputs blend, they don't
+/// becomes one input). NOT additive - overlapping semi-transparent inputs blend, they don't
 /// brighten beyond their individual contribution.
 /// </summary>
 /// <remarks>

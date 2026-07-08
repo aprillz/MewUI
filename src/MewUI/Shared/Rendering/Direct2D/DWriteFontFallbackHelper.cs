@@ -41,7 +41,7 @@ internal static unsafe class DWriteFontFallbackHelper
         var chain = FontFallback.GetChainSnapshot();
         if (chain.Length == 0)
         {
-            // No user chain — use system default (return 0 to signal "use default").
+            // No user chain - use system default (return 0 to signal "use default").
             ReleaseCached();
             return 0;
         }
@@ -61,12 +61,12 @@ internal static unsafe class DWriteFontFallbackHelper
         return newFallback;
     }
 
-    // IDWriteFactory2 IID — required for CreateFontFallbackBuilder.
+    // IDWriteFactory2 IID - required for CreateFontFallbackBuilder.
     private static readonly Guid IID_IDWriteFactory2 = new("0439FC60-CA44-4994-8DEE-3A9AF7B732EC");
 
     private static nint Build(IDWriteFactory* factory, string[] chain)
     {
-        // QI for IDWriteFactory2 — CreateFontFallbackBuilder is not available on IDWriteFactory.
+        // QI for IDWriteFactory2 - CreateFontFallbackBuilder is not available on IDWriteFactory.
         int hr = ComHelpers.QueryInterface((nint)factory, in IID_IDWriteFactory2, out nint factory2);
         if (hr < 0 || factory2 == 0) return 0;
 
@@ -83,7 +83,7 @@ internal static unsafe class DWriteFontFallbackHelper
 
                 string locale = FontFallback.ResolvedLocale;
 
-                // Add user chain entries — each family maps to full Unicode range
+                // Add user chain entries - each family maps to full Unicode range
                 fixed (DWRITE_UNICODE_RANGE* pRanges = FullRange)
                 fixed (char* pLocale = locale)
                 {
@@ -92,7 +92,7 @@ internal static unsafe class DWriteFontFallbackHelper
                         fixed (char* pFamily = family)
                         {
                             char** familyNames = &pFamily;
-                            // Errors on individual mappings are non-fatal — skip.
+                            // Errors on individual mappings are non-fatal - skip.
                             _ = DWriteFontFallbackBuilderVTable.AddMapping(
                                 builder, pRanges, (uint)FullRange.Length,
                                 familyNames, 1, collection, pLocale, null, 1.0f);

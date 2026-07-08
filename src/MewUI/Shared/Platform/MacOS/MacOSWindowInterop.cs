@@ -1,11 +1,15 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Input;
 
 namespace Aprillz.MewUI.Platform.MacOS;
 
 internal static unsafe class MacOSWindowInterop
 {
+    // Registration failures (class/method) are silent breakage otherwise; opt-in diagnostics.
+    private static readonly EnvDebugLogger _registrationLogger = new("MEWUI_MACOS_DEBUG", "[MacOS]");
+
     // Titled | Closable | Miniaturizable | Resizable | FullSizeContentView
     // Visually borderless via titlebarAppearsTransparent + hidden buttons,
     // but retains miniaturize/zoom functionality and render surface stability.
@@ -628,7 +632,7 @@ internal static unsafe class MacOSWindowInterop
         else if (isToolWindow)
         {
             // Floating tool/utility window: an NSPanel with the utility-window mask (thin title bar, floats
-            // above the app). Close button only — no miniaturizable. MewUIPanel subclass so the panel can
+            // above the app). Close button only - no miniaturizable. MewUIPanel subclass so the panel can
             // become key for text input. (UtilityWindow=1<<4 only takes effect on NSPanel, not NSWindow.)
             EnsureMewUIPanelClass();
             windowClass = ClsMewUIPanel != 0 ? ClsMewUIPanel : (ClsNSPanel != 0 ? ClsNSPanel : ClsNSWindow);
@@ -867,19 +871,23 @@ internal static unsafe class MacOSWindowInterop
 
         // CALayer/CAMetalLayer does not implement setNeedsDisplay:(BOOL). It implements setNeedsDisplay (no args)
         // and display/displayIfNeeded (no args).
-        if (SelSetNeedsDisplayNoArgs != 0)
-        {
-            ObjC.MsgSend_void(layer, SelSetNeedsDisplayNoArgs);
-        }
-
+        // Intentionally do NOT send setNeedsDisplay before the synchronous display: -[CALayer display] invokes
+        // displayLayer: exactly once by itself. A preceding setNeedsDisplay leaves the layer dirty, so Core
+        // Animation's commit cycle would fire a redundant second displayLayer: (a double frame) on its own cadence.
         if (SelDisplay != 0)
         {
             ObjC.MsgSend_void(layer, SelDisplay);
             return;
         }
 
+        // Fallback only: displayIfNeeded is a no-op unless the layer is marked dirty, so set the flag first here.
         if (SelDisplayIfNeeded != 0)
         {
+            if (SelSetNeedsDisplayNoArgs != 0)
+            {
+                ObjC.MsgSend_void(layer, SelSetNeedsDisplayNoArgs);
+            }
+
             ObjC.MsgSend_void(layer, SelDisplayIfNeeded);
         }
     }
@@ -936,6 +944,9 @@ internal static unsafe class MacOSWindowInterop
         layer = layer != 0 ? ObjC.MsgSend_nint(layer, SelInit) : 0;
         if (layer == 0)
         {
+            // Still attach the view so the window owns it; drop our alloc/init +1.
+            ObjC.MsgSend_void_nint_nint(window, SelSetContentView, view);
+            ObjC.MsgSend_void(view, SelRelease);
             return (view, 0);
         }
 
@@ -974,9 +985,13 @@ internal static unsafe class MacOSWindowInterop
         if (SelSetLayer != 0)
         {
             ObjC.MsgSend_void_nint_nint(view, SelSetLayer, layer);
+            // setLayer: retains; drop our alloc/init +1 so the view is the sole owner.
+            ObjC.MsgSend_void(layer, SelRelease);
         }
 
         ObjC.MsgSend_void_nint_nint(window, SelSetContentView, view);
+        // setContentView: retains; drop our alloc/init +1 so the window is the sole owner.
+        ObjC.MsgSend_void(view, SelRelease);
         return (view, layer);
     }
 
@@ -1023,6 +1038,7 @@ internal static unsafe class MacOSWindowInterop
 
         lock (_windowCloseTargets)
         {
+            PruneDeadTargets(_windowCloseTargets);
             _windowCloseTargets[window] = new WeakReference<MacOSWindowBackend>(backend);
         }
     }
@@ -1129,8 +1145,9 @@ internal static unsafe class MacOSWindowInterop
         SelUTF8String = ObjC.Sel("UTF8String");
 
         SelAppearanceNamed = ObjC.Sel("appearanceNamed:");
-        _appearanceNameAqua = ObjC.CreateNSString("NSAppearanceNameAqua");
-        _appearanceNameDarkAqua = ObjC.CreateNSString("NSAppearanceNameDarkAqua");
+        // Retained: cached in statics beyond any autorelease pool scope.
+        _appearanceNameAqua = ObjC.Retain(ObjC.CreateNSString("NSAppearanceNameAqua"));
+        _appearanceNameDarkAqua = ObjC.Retain(ObjC.CreateNSString("NSAppearanceNameDarkAqua"));
 
         ClsNSView = ObjC.GetClass("NSView");
         ClsCAMetalLayer = ObjC.GetClass("CAMetalLayer");
@@ -1150,7 +1167,47 @@ internal static unsafe class MacOSWindowInterop
 
         EnsureMetalLayerDelegate();
 
-        _initialized = true;
+        // Latch only when the critical pieces resolved; otherwise retry on the next call instead of
+        // freezing a partially initialized state (selector re-registration is idempotent and cheap).
+        if (ClsNSWindow != 0 && ClsNSView != 0 && ClsCAMetalLayer != 0 && _sharedMetalLayerDelegate != 0)
+        {
+            _initialized = true;
+        }
+        else
+        {
+            _registrationLogger.Write($"initialization incomplete: NSWindow=0x{ClsNSWindow:x} NSView=0x{ClsNSView:x} CAMetalLayer=0x{ClsCAMetalLayer:x} layerDelegate=0x{_sharedMetalLayerDelegate:x}");
+        }
+    }
+
+    // class_addMethod failure means the selector silently never fires (IME/close/render breakage);
+    // surface it through the opt-in debug log instead of throwing.
+    private static void AddMethodLogged(nint cls, nint selector, nint imp, string types)
+    {
+        if (!ObjC.AddMethod(cls, selector, imp, types))
+        {
+            _registrationLogger.Write($"class_addMethod failed: {ObjC.GetSelectorName(selector)} on class 0x{cls:x}");
+        }
+    }
+
+    // Removes entries whose backend has been collected (windows torn down without Unregister).
+    private static void PruneDeadTargets(Dictionary<nint, WeakReference<MacOSWindowBackend>> targets)
+    {
+        List<nint>? deadKeys = null;
+        foreach (var pair in targets)
+        {
+            if (!pair.Value.TryGetTarget(out _))
+            {
+                (deadKeys ??= new List<nint>()).Add(pair.Key);
+            }
+        }
+
+        if (deadKeys != null)
+        {
+            foreach (var key in deadKeys)
+            {
+                targets.Remove(key);
+            }
+        }
     }
 
     private static bool TryGetTextInputTarget(nint view, out MacOSWindowBackend backend)
@@ -1185,7 +1242,7 @@ internal static unsafe class MacOSWindowInterop
 
             MacOSWindowBackend.ImeNativeLogger.Write($"objc insertText:replacementRange: view=0x{self:x} textObj=0x{text:x} repl=({replacementRange.location},{replacementRange.length}) imeHasMarked={backend.ImeHasMarkedText}");
             var s = MacOSInterop.GetUtf8TextFromNSStringOrAttributedString(text);
-            MacOSWindowBackend.ImeNativeLogger.Write($"  -> text len={(s?.Length ?? -1)} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
+            MacOSWindowBackend.ImeNativeLogger.Write($" -> text len={(s?.Length ?? -1)} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
             backend.ImeInsertText(s, replacementRange);
         }
         catch
@@ -1205,7 +1262,7 @@ internal static unsafe class MacOSWindowInterop
 
             MacOSWindowBackend.ImeNativeLogger.Write($"objc insertText: (legacy) view=0x{self:x} textObj=0x{text:x} imeHasMarked={backend.ImeHasMarkedText}");
             var s = MacOSInterop.GetUtf8TextFromNSStringOrAttributedString(text);
-            MacOSWindowBackend.ImeNativeLogger.Write($"  -> text len={(s?.Length ?? -1)} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
+            MacOSWindowBackend.ImeNativeLogger.Write($" -> text len={(s?.Length ?? -1)} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
             backend.ImeInsertText(s);
         }
         catch
@@ -1225,7 +1282,7 @@ internal static unsafe class MacOSWindowInterop
 
             MacOSWindowBackend.ImeNativeLogger.Write($"objc setMarkedText:selectedRange:replacementRange: view=0x{self:x} textObj=0x{text:x} sel=({selectedRange.location},{selectedRange.length}) repl=({replacementRange.location},{replacementRange.length}) imeHasMarked={backend.ImeHasMarkedText}");
             var s = MacOSInterop.GetUtf8TextFromNSStringOrAttributedString(text) ?? string.Empty;
-            MacOSWindowBackend.ImeNativeLogger.Write($"  -> marked len={s.Length} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
+            MacOSWindowBackend.ImeNativeLogger.Write($" -> marked len={s.Length} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
             backend.ImeSetMarkedText(s, replacementRange);
         }
         catch
@@ -1245,7 +1302,7 @@ internal static unsafe class MacOSWindowInterop
 
             MacOSWindowBackend.ImeNativeLogger.Write($"objc setMarkedText:selectedRange: (legacy) view=0x{self:x} textObj=0x{text:x} sel=({selectedRange.location},{selectedRange.length}) imeHasMarked={backend.ImeHasMarkedText}");
             var s = MacOSInterop.GetUtf8TextFromNSStringOrAttributedString(text) ?? string.Empty;
-            MacOSWindowBackend.ImeNativeLogger.Write($"  -> marked len={s.Length} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
+            MacOSWindowBackend.ImeNativeLogger.Write($" -> marked len={s.Length} '{MacOSWindowBackend.TruncateForImeLog(s)}'");
             backend.ImeSetMarkedText(s);
         }
         catch
@@ -1444,7 +1501,7 @@ internal static unsafe class MacOSWindowInterop
             }
 
             string slice = len == 0 ? string.Empty : text.Substring((int)start, (int)len);
-            MacOSWindowBackend.ImeNativeLogger.Write($"  -> sliceStart={start} sliceLen={len} '{MacOSWindowBackend.TruncateForImeLog(slice)}'");
+            MacOSWindowBackend.ImeNativeLogger.Write($" -> sliceStart={start} sliceLen={len} '{MacOSWindowBackend.TruncateForImeLog(slice)}'");
             nint nsString = ObjC.CreateNSString(slice);
             if (nsString == 0)
             {
@@ -1462,8 +1519,10 @@ internal static unsafe class MacOSWindowInterop
 
             nint attr = ObjC.MsgSend_nint(clsAttr, selAlloc);
             attr = attr != 0 ? ObjC.MsgSend_nint_nint(attr, selInitWithString, nsString) : 0;
-            MacOSWindowBackend.ImeNativeLogger.Write($"  -> returning NSAttributedString 0x{attr:x}");
-            return attr;
+            MacOSWindowBackend.ImeNativeLogger.Write($" -> returning NSAttributedString 0x{attr:x}");
+            // Cocoa convention: this callback returns an autoreleased object; hand our alloc/init +1
+            // to the pool so each IME query does not leak one NSAttributedString.
+            return ObjC.Autorelease(attr);
         }
         catch
         {
@@ -1683,25 +1742,25 @@ internal static unsafe class MacOSWindowInterop
         if (selDraggingEntered != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, ulong>)&MewUIDragDestination_draggingEntered;
-            _ = ObjC.AddMethod(cls, selDraggingEntered, imp, "Q@:@");
+            AddMethodLogged(cls, selDraggingEntered, imp, "Q@:@");
         }
 
         if (selDraggingUpdated != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, ulong>)&MewUIDragDestination_draggingUpdated;
-            _ = ObjC.AddMethod(cls, selDraggingUpdated, imp, "Q@:@");
+            AddMethodLogged(cls, selDraggingUpdated, imp, "Q@:@");
         }
 
         if (selDraggingExited != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIDragDestination_draggingExited;
-            _ = ObjC.AddMethod(cls, selDraggingExited, imp, "v@:@");
+            AddMethodLogged(cls, selDraggingExited, imp, "v@:@");
         }
 
         if (selPerformDragOperation != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, byte>)&MewUIDragDestination_performDragOperation;
-            _ = ObjC.AddMethod(cls, selPerformDragOperation, imp, "B@:@");
+            AddMethodLogged(cls, selPerformDragOperation, imp, "B@:@");
         }
 
         _ = ObjC.AddProtocol(cls, "NSDraggingDestination");
@@ -1736,97 +1795,97 @@ internal static unsafe class MacOSWindowInterop
         if (selInsertLegacy != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUITextInputView_insertTextLegacy;
-            _ = ObjC.AddMethod(cls, selInsertLegacy, imp, "v@:@");
+            AddMethodLogged(cls, selInsertLegacy, imp, "v@:@");
         }
 
         if (selInsert != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, NSRange, void>)&MewUITextInputView_insertText;
-            _ = ObjC.AddMethod(cls, selInsert, imp, "v@:@{_NSRange=QQ}");
+            AddMethodLogged(cls, selInsert, imp, "v@:@{_NSRange=QQ}");
         }
 
         if (selSetMarkedLegacy != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, NSRange, void>)&MewUITextInputView_setMarkedTextLegacy;
-            _ = ObjC.AddMethod(cls, selSetMarkedLegacy, imp, "v@:@{_NSRange=QQ}");
+            AddMethodLogged(cls, selSetMarkedLegacy, imp, "v@:@{_NSRange=QQ}");
         }
 
         if (selSetMarked != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, NSRange, NSRange, void>)&MewUITextInputView_setMarkedText;
-            _ = ObjC.AddMethod(cls, selSetMarked, imp, "v@:@{_NSRange=QQ}{_NSRange=QQ}");
+            AddMethodLogged(cls, selSetMarked, imp, "v@:@{_NSRange=QQ}{_NSRange=QQ}");
         }
 
         if (selUnmark != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, void>)&MewUITextInputView_unmarkText;
-            _ = ObjC.AddMethod(cls, selUnmark, imp, "v@:");
+            AddMethodLogged(cls, selUnmark, imp, "v@:");
         }
 
         if (selHasMarked != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUITextInputView_hasMarkedText;
-            _ = ObjC.AddMethod(cls, selHasMarked, imp, "B@:");
+            AddMethodLogged(cls, selHasMarked, imp, "B@:");
         }
 
         if (selMarkedRange != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, NSRange>)&MewUITextInputView_markedRange;
-            _ = ObjC.AddMethod(cls, selMarkedRange, imp, "{_NSRange=QQ}@:");
+            AddMethodLogged(cls, selMarkedRange, imp, "{_NSRange=QQ}@:");
         }
 
         if (selSelectedRange != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, NSRange>)&MewUITextInputView_selectedRange;
-            _ = ObjC.AddMethod(cls, selSelectedRange, imp, "{_NSRange=QQ}@:");
+            AddMethodLogged(cls, selSelectedRange, imp, "{_NSRange=QQ}@:");
         }
 
         if (selValidAttrs != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint>)&MewUITextInputView_validAttributesForMarkedText;
-            _ = ObjC.AddMethod(cls, selValidAttrs, imp, "@@:");
+            AddMethodLogged(cls, selValidAttrs, imp, "@@:");
         }
 
         if (selConversationId != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, long>)&MewUITextInputView_conversationIdentifier;
-            _ = ObjC.AddMethod(cls, selConversationId, imp, "q@:");
+            AddMethodLogged(cls, selConversationId, imp, "q@:");
         }
 
         if (selUpdateTextAttrs != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUITextInputView_updateTextAttributes;
-            _ = ObjC.AddMethod(cls, selUpdateTextAttrs, imp, "v@:@");
+            AddMethodLogged(cls, selUpdateTextAttrs, imp, "v@:@");
         }
 
         if (selAttrSub != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, NSRange, nint, nint>)&MewUITextInputView_attributedSubstringForProposedRange;
-            _ = ObjC.AddMethod(cls, selAttrSub, imp, "@@:{_NSRange=QQ}^{_NSRange=QQ}");
+            AddMethodLogged(cls, selAttrSub, imp, "@@:{_NSRange=QQ}^{_NSRange=QQ}");
         }
 
         if (selCharIndex != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, NSPoint, ulong>)&MewUITextInputView_characterIndexForPoint;
-            _ = ObjC.AddMethod(cls, selCharIndex, imp, "Q@:{CGPoint=dd}");
+            AddMethodLogged(cls, selCharIndex, imp, "Q@:{CGPoint=dd}");
         }
 
         if (selFirstRect != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, NSRange, nint, NSRect>)&MewUITextInputView_firstRectForCharacterRange;
-            _ = ObjC.AddMethod(cls, selFirstRect, imp, "{CGRect={CGPoint=dd}{CGSize=dd}}@:{_NSRange=QQ}^{_NSRange=QQ}");
+            AddMethodLogged(cls, selFirstRect, imp, "{CGRect={CGPoint=dd}{CGSize=dd}}@:{_NSRange=QQ}^{_NSRange=QQ}");
         }
 
         if (selDoCommand != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUITextInputView_doCommandBySelector;
-            _ = ObjC.AddMethod(cls, selDoCommand, imp, "v@::");
+            AddMethodLogged(cls, selDoCommand, imp, "v@::");
         }
 
         if (selAcceptsFirstResponder != 0)
         {
             var imp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUITextInputView_acceptsFirstResponder;
-            _ = ObjC.AddMethod(cls, selAcceptsFirstResponder, imp, "B@:");
+            AddMethodLogged(cls, selAcceptsFirstResponder, imp, "B@:");
         }
     }
 
@@ -1844,6 +1903,10 @@ internal static unsafe class MacOSWindowInterop
         {
             cls = ObjC.AllocateClassPair(ClsNSView, className);
             needsRegister = cls != 0;
+            if (cls == 0)
+            {
+                _registrationLogger.Write($"objc_allocateClassPair failed: {className}");
+            }
         }
 
         if (cls != 0)
@@ -1918,11 +1981,15 @@ internal static unsafe class MacOSWindowInterop
         if (cls == 0)
         {
             cls = ObjC.AllocateClassPair(ClsNSObject, className);
-            if (cls != 0)
+            if (cls == 0)
+            {
+                _registrationLogger.Write($"objc_allocateClassPair failed: {className}");
+            }
+            else
             {
                 var sel = ObjC.Sel("displayLayer:");
                 var imp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIMetalLayerDelegate_displayLayer;
-                _ = ObjC.AddMethod(cls, sel, imp, "v@:@");
+                AddMethodLogged(cls, sel, imp, "v@:@");
                 ObjC.RegisterClassPair(cls);
             }
         }
@@ -2156,13 +2223,17 @@ internal static unsafe class MacOSWindowInterop
         if (cls == 0)
         {
             cls = ObjC.AllocateClassPair(ClsNSWindow, className);
-            if (cls != 0)
+            if (cls == 0)
+            {
+                _registrationLogger.Write($"objc_allocateClassPair failed: {className}");
+            }
+            else
             {
                 var imp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUIWindow_canBecomeKeyWindow;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("canBecomeKeyWindow"), imp, "c@:");
+                AddMethodLogged(cls, ObjC.Sel("canBecomeKeyWindow"), imp, "c@:");
 
                 var mainImp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUIWindow_canBecomeMainWindow;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("canBecomeMainWindow"), mainImp, "c@:");
+                AddMethodLogged(cls, ObjC.Sel("canBecomeMainWindow"), mainImp, "c@:");
 
                 ObjC.RegisterClassPair(cls);
             }
@@ -2195,13 +2266,17 @@ internal static unsafe class MacOSWindowInterop
         if (cls == 0)
         {
             cls = ObjC.AllocateClassPair(ClsNSPanel, className);
-            if (cls != 0)
+            if (cls == 0)
+            {
+                _registrationLogger.Write($"objc_allocateClassPair failed: {className}");
+            }
+            else
             {
                 var imp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUIWindow_canBecomeKeyWindow;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("canBecomeKeyWindow"), imp, "c@:");
+                AddMethodLogged(cls, ObjC.Sel("canBecomeKeyWindow"), imp, "c@:");
 
                 var mainImp = (nint)(delegate* unmanaged<nint, nint, byte>)&MewUIWindow_canBecomeMainWindow;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("canBecomeMainWindow"), mainImp, "c@:");
+                AddMethodLogged(cls, ObjC.Sel("canBecomeMainWindow"), mainImp, "c@:");
 
                 ObjC.RegisterClassPair(cls);
             }
@@ -2232,31 +2307,35 @@ internal static unsafe class MacOSWindowInterop
         if (cls == 0)
         {
             cls = ObjC.AllocateClassPair(ClsNSObject, className);
-            if (cls != 0)
+            if (cls == 0)
+            {
+                _registrationLogger.Write($"objc_allocateClassPair failed: {className}");
+            }
+            else
             {
                 var shouldCloseImp = (nint)(delegate* unmanaged<nint, nint, nint, byte>)&MewUIWindowDelegate_windowShouldClose;
-                _ = ObjC.AddMethod(cls, SelWindowShouldClose, shouldCloseImp, "c@:@");
+                AddMethodLogged(cls, SelWindowShouldClose, shouldCloseImp, "c@:@");
 
                 var willCloseImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowWillClose;
-                _ = ObjC.AddMethod(cls, SelWindowWillClose, willCloseImp, "v@:@");
+                AddMethodLogged(cls, SelWindowWillClose, willCloseImp, "v@:@");
 
                 var becomeKeyImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidBecomeKey;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidBecomeKey:"), becomeKeyImp, "v@:@");
+                AddMethodLogged(cls, ObjC.Sel("windowDidBecomeKey:"), becomeKeyImp, "v@:@");
 
                 var resignKeyImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidResignKey;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidResignKey:"), resignKeyImp, "v@:@");
+                AddMethodLogged(cls, ObjC.Sel("windowDidResignKey:"), resignKeyImp, "v@:@");
 
                 var miniaturizeImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidMiniaturize;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidMiniaturize:"), miniaturizeImp, "v@:@");
+                AddMethodLogged(cls, ObjC.Sel("windowDidMiniaturize:"), miniaturizeImp, "v@:@");
 
                 var deminiaturizeImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidDeminiaturize;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidDeminiaturize:"), deminiaturizeImp, "v@:@");
+                AddMethodLogged(cls, ObjC.Sel("windowDidDeminiaturize:"), deminiaturizeImp, "v@:@");
 
                 var enterFullScreenImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidEnterFullScreen;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidEnterFullScreen:"), enterFullScreenImp, "v@:@");
+                AddMethodLogged(cls, ObjC.Sel("windowDidEnterFullScreen:"), enterFullScreenImp, "v@:@");
 
                 var exitFullScreenImp = (nint)(delegate* unmanaged<nint, nint, nint, void>)&MewUIWindowDelegate_windowDidExitFullScreen;
-                _ = ObjC.AddMethod(cls, ObjC.Sel("windowDidExitFullScreen:"), exitFullScreenImp, "v@:@");
+                AddMethodLogged(cls, ObjC.Sel("windowDidExitFullScreen:"), exitFullScreenImp, "v@:@");
 
                 ObjC.RegisterClassPair(cls);
             }
@@ -2284,6 +2363,8 @@ internal static unsafe class MacOSWindowInterop
                     backend = target;
                     return true;
                 }
+
+                _windowCloseTargets.Remove(window);
             }
         }
 

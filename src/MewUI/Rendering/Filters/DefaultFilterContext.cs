@@ -56,7 +56,7 @@ public sealed class DefaultFilterContext : IImageFilterContext, IDisposable
         {
             // Defer the pool return until the image's backend-side GPU/NVG handles are
             // actually released. Backends that wrap a scratch surface zero-copy have an
-            // in-flight draw queue that must flush before the RT can be recycled —
+            // in-flight draw queue that must flush before the RT can be recycled -
             // otherwise the next AcquireScratch in the same eval hands back the same RT
             // and the next filter node's GPU write overwrites the texture while a queued
             // draw still references it (cross-filter content bleed when UI invalidate

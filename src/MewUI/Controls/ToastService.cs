@@ -19,12 +19,24 @@ public sealed class ToastService : IOverlayService
     /// </summary>
     public void Show(string text)
     {
-        _presenter ??= new ToastPresenter();
+        if (_presenter == null)
+        {
+            _presenter = new ToastPresenter();
+            _presenter.BecameIdle += OnPresenterBecameIdle;
+        }
 
         if (!_layer.Contains(_presenter))
             _layer.Add(_presenter);
 
-        var t = text ?? string.Empty;
-        _presenter.Show(t, ToastPresenter.ComputeDuration(t));
+        var displayText = text ?? string.Empty;
+        _presenter.Show(displayText, ToastPresenter.ComputeDuration(displayText));
+    }
+
+    // The presenter stays measured/arranged/rendered every frame while it remains in the
+    // overlay layer, so remove it once it has no content instead of leaving it there forever.
+    private void OnPresenterBecameIdle()
+    {
+        if (_presenter != null)
+            _layer.Remove(_presenter);
     }
 }

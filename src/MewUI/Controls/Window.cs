@@ -154,7 +154,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             // When layout/scroll offsets change without an actual mouse move, the element under the cursor can change.
             // Re-run hit testing at the last known mouse position to keep IsMouseOver state accurate.
-            var leaf = WindowInputRouter.HitTest(this, _lastMousePositionDip);
+            // Use a real hit test: mouse-over must track the pointer's actual target even during capture.
+            var leaf = HitTest(_lastMousePositionDip);
             WindowInputRouter.UpdateMouseOver(this, leaf);
         });
     }
@@ -1150,7 +1151,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     /// <summary>
     /// Raises the <see cref="Closing"/> event and returns true if close is allowed, false if cancelled.
-    /// Does not call <see cref="RaiseClosed"/> — the caller is responsible for proceeding with close.
+    /// Does not call <see cref="RaiseClosed"/> - the caller is responsible for proceeding with close.
     /// </summary>
     internal bool RequestClose()
     {
@@ -1572,7 +1573,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             UpdateVisualStates();
         }
 
-        // Window is the visual root — it has no Parent, so OnVisualRootChanged never fires.
+        // Window is the visual root - it has no Parent, so OnVisualRootChanged never fires.
         // Resolve its style here before reading layout-affecting properties like Padding.
         using (profiling ? ProfilerMarkers.StyleResolve.Auto() : default)
         {
@@ -1781,6 +1782,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _popupManager.LayoutDirtyPopups();
     }
 
+    // Full tree walks on purpose: an O(1) root-flag check is unsound here because layout passes
+    // may legitimately clear a container's flag while skipping still-dirty descendants (virtualization).
     private static bool HasMeasureDirty(Element root)
         => VisualTree.Find(root, static e => e.IsMeasureDirty) != null;
 
@@ -1946,7 +1949,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         DisposeVectorSurfaceReclaimer();
 
         // Dispose the cached render context BEFORE the factory tears down its window
-        // resources — backends may still hold references that the factory is about to free.
+        // resources - backends may still hold references that the factory is about to free.
         _renderContext?.Dispose();
         _renderContext = null;
         _cachedRenderTarget = null;
@@ -2085,7 +2088,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         var target = _cachedRenderTarget;
         if (target == null || !target.Matches(surface))
         {
-            // Surface or pixel size changed — cached context references stale handles.
+            // Surface or pixel size changed - cached context references stale handles.
             _renderContext?.Dispose();
             _renderContext = null;
             target = new WindowRenderTarget(surface);

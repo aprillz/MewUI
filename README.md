@@ -2,6 +2,7 @@
 
 ![Aprillz.MewUI](https://raw.githubusercontent.com/aprillz/MewUI/main/assets/logo/logo_h-1280.png)
 
+
 ![.NET](https://img.shields.io/badge/.NET-8%2B-512BD4?logo=dotnet&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D4?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-X11-FCC624?logo=linux&logoColor=black)
@@ -33,20 +34,21 @@
   We will surely meet again. My treasure, April.
 </p>
 
----
 </div>
 
-**😺 MewUI** is a cross-platform and lightweight, code-first .NET GUI framework aimed at NativeAOT.
+---
+
+**😺 MewUI** is a cross-platform, lightweight, code-first .NET GUI framework for building and shipping NativeAOT/Trim-friendly desktop apps without requiring a separate .NET runtime installation.
 
 > [!NOTE]
 > The official pronunciation of **MewUI** is **/mjuː aɪ/** (“myoo-eye”).
 
 
-### 🧪 Experimental Prototype
-  > [!IMPORTANT]  
-  > This project is a **proof-of-concept prototype** for validating ideas and exploring design directions.  
-  > As it evolves toward **v1.0**, **APIs, internal architecture, and runtime behavior may change significantly**.  
-  > Backward compatibility is **not guaranteed** at this stage.
+### Project Status: Active Development
+  > [!IMPORTANT]
+  > MewUI is an actively developed framework with published NuGet packages, cross-platform hosts, multiple rendering backends, and optional extension packages.
+  >
+  > The public API surface is still being stabilized, so breaking changes can happen between minor releases. For production apps, pin package versions and review release notes before upgrading.
 
 ### 🤖 AI-Assisted Development
   > [!NOTE]
@@ -101,12 +103,13 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
     #:property OutputType=Exe
     #:property TargetFramework=net10.0
 
-    #:package Aprillz.MewUI@0.10.3
+    #:package Aprillz.MewUI
 
     // ...
     ```
 
 - Run: `dotnet run your_app.cs`
+
 ---
 ## 🧪 C# Markup at a Glance
 
@@ -137,17 +140,22 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
 ---
 ## 🎯 Concept
 
-### MewUI is a code-first GUI framework with four priorities:
+MewUI is a code-first GUI framework with a small, explicit core and platform-specific hosts/backends.
+
 - **NativeAOT + trimming friendliness**
 - **Small footprint, fast startup, low memory usage**
 - **Fluent C# markup** for building UI trees (no XAML)
-- **AOT-friendly binding**
+- **AOT-friendly explicit binding**
+- **Thin core, optional extensions** for larger features
 
 ### Non-goals (by design):
-- WPF-style **animations**, **visual effects**, or heavy composition pipelines
-- A large, “kitchen-sink” control catalog (keep the surface area small and predictable)
+- Full XAML/WPF compatibility
+- A drop-in replacement for WPF or Avalonia with identical APIs and behavior
+- Designer-first development workflows
 - Complex path-based data binding
-- Full XAML/WPF compatibility or designer-first workflows
+- An exhaustive, all-in-one control catalog
+
+The core covers common desktop UI patterns; specialized features such as charts and docking ship as extension packages.
 
 ---
 ## ✂️ NativeAOT / Trim
@@ -157,14 +165,26 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
 - On Linux, building with NativeAOT requires the AOT workload in addition to the regular .NET SDK (e.g. install `dotnet-sdk-aot-10.0`).
 - If you introduce new interop or dynamic features, verify with the trimmed publish profile above.
 
-To check output size locally:
-- Publish: `dotnet publish .\samples\MewUI.Gallery\MewUI.Gallery.csproj -c Release -p:PublishProfile=win-x64-trimmed`
-- Inspect: `.artifacts\publish\MewUI.Gallery\win-x64-trimmed\`
+NativeAOT executable size depends on the platform host, rendering backend, resources, and publish options. The table below measures the **main executable only**; ZIP is the same executable compressed with the default measurement settings. Sizes use binary units: **1 MB = 1024 KB**.
 
-Reference (`Aprillz.MewUI.Gallery.exe` @v0.10.0)
-- win-x64:  ~3,545 KB
-- osx-arm64: ~2,664 KB
-- linux-arm64: ~3939 KB
+| Sample | Platform / backend | Executable | ZIP |
+|---|---|---:|---:|
+| Hello World | Windows x64 / GDI | 2.907 MB | 1.324 MB |
+| Hello World | Windows x64 / Direct2D | 3.046 MB | 1.381 MB |
+| Hello World | Windows x64 / MewVG | 3.211 MB | 1.458 MB |
+| Hello World | Linux x64 / X11 + MewVG | 4.414 MB | 2.126 MB |
+| Hello World | macOS arm64 / MewVG | 2.635 MB | 1.186 MB |
+| Gallery | Windows x64 / GDI | 5.838 MB | 2.564 MB |
+| Gallery | Windows x64 / Direct2D | 5.959 MB | 2.612 MB |
+| Gallery | Windows x64 / MewVG | 6.176 MB | 2.707 MB |
+| Gallery | Linux x64 / X11 + MewVG | 7.420 MB | 3.518 MB |
+| Gallery | macOS arm64 / MewVG | 5.625 MB | 2.555 MB |
+
+<img src="https://github.com/user-attachments/assets/92dae0e7-6ecb-46f8-b405-2fcab629375b" />
+
+
+The Gallery is a full-featured showcase sample. Use the Hello World rows as the minimum deployment-size baseline.
+
 ---
 ## 🔗 State & Binding (AOT-friendly)
 
@@ -269,6 +289,7 @@ Backends are registered by the referenced backend packages (Trim/AOT-friendly). 
 - use the builder chain: `Application.Create().Use...().Run(...)`
 
 When using a metapackage (e.g., `Aprillz.MewUI.Windows`), you can select a single backend at publish time with `-p:MewUIBackend=Direct2D`. See [Installation & Packages](docs/Installation.md) for details.
+
 ---
 ## 🪟 Platform Abstraction
 
@@ -308,10 +329,11 @@ If neither is available in `PATH`, MewUI throws:
 - [Code of Conduct](.github/CODE_OF_CONDUCT.md)
 
 ---
-## 🧭 Roadmap (TODO)
+## 🧭 Roadmap
 
 **Platforms**
 - [ ] Linux/Wayland
+- [ ] Linux framebuffer
 
 **Tooling**
 - [x] Hot Reload (experimental)

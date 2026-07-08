@@ -71,13 +71,13 @@ public sealed class AnimationClock
 
     /// <summary>
     /// Called each frame with the eased progress value.
-    /// Single-owner callback — no multicast, no cleanup needed.
+    /// Single-owner callback - no multicast, no cleanup needed.
     /// </summary>
     public Action<double>? TickCallback { get; set; }
 
     /// <summary>
     /// Called when the animation completes (after all repeats).
-    /// Single-owner callback — no multicast, no cleanup needed.
+    /// Single-owner callback - no multicast, no cleanup needed.
     /// </summary>
     public Action? CompletedCallback { get; set; }
 

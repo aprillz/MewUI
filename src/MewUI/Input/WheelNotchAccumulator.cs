@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Input;
 /// event while preserving the natural "one notch = one step" intent.
 /// </summary>
 /// <remarks>
-/// Sign convention matches <see cref="MouseWheelEventArgs.Delta"/> — positive
+/// Sign convention matches <see cref="MouseWheelEventArgs.Delta"/> - positive
 /// values represent "toward earlier content" (up / left).
 /// </remarks>
 internal struct WheelNotchAccumulator

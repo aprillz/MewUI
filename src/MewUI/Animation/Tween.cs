@@ -138,4 +138,14 @@ public static class TypeLerp
             return lerp(from, to, t);
         return to;
     }
+
+    /// <summary>
+    /// Returns the registered lerp delegate for a type, or null if none is registered.
+    /// Lets callers (e.g. PropertyAnimator) resolve the delegate once per animation instead
+    /// of doing a dictionary lookup on every tick.
+    /// </summary>
+    internal static Func<object, object, double, object>? GetDelegate(Type type)
+    {
+        return _registry.TryGetValue(type, out var lerp) ? lerp : null;
+    }
 }

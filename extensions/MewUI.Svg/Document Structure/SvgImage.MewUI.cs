@@ -18,7 +18,7 @@ public partial class SvgImage
     // Per-element decoded-image cache. Without this, every frame re-decodes the data URI
     // / file bytes and rebuilds an IImage (incl. GPU upload), then disposes it at the end
     // of Render. For SVG with many image references (patterns, repeated icons), the
-    // decode+upload+dispose churn dominates the frame — observed ~60 ms for issue 015-01
+    // decode+upload+dispose churn dominates the frame - observed ~60 ms for issue 015-01
     // (a single tiny pattern-embedded PNG that should render in <1 ms).
     // Keyed by Href; on Href change the previous entry is dropped.
     private string? _cachedHref;
@@ -145,7 +145,7 @@ public partial class SvgImage
         finally
         {
             PopTransforms(renderer);
-            // Don't dispose — owned by the per-element cache and reused on the next frame.
+            // Don't dispose - owned by the per-element cache and reused on the next frame.
         }
     }
 
@@ -158,7 +158,7 @@ public partial class SvgImage
             return _cachedImage;
         }
 
-        // Href changed — drop previous decode.
+        // Href changed - drop previous decode.
         _cachedImage?.Dispose();
         _cachedImage = null;
 
@@ -194,7 +194,7 @@ public partial class SvgImage
             {
                 // OwnerDocument.BaseUri is set by SvgDocument.Open(path); but Parse(string)
                 // doesn't know the source path so it stays null. NullReferenceException
-                // here would crash the whole render — gracefully skip the image instead.
+                // here would crash the whole render - gracefully skip the image instead.
                 if (OwnerDocument?.BaseUri is null)
                 {
                     Trace.TraceWarning("Cannot resolve relative image href '{0}': OwnerDocument.BaseUri is null. Set it via SvgDocument.BaseUri or load via Open(path).", uriString);

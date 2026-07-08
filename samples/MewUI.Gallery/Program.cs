@@ -36,16 +36,23 @@ var cullText = new ObservableValue<string>("Cull: -");
 var fpsStopwatch = new Stopwatch();
 var fpsFrames = 0;
 var maxFpsEnabled = new ObservableValue<bool>(false);
-var lastStat = (0,0,0.0);
 
 var currentAccent = ThemeManager.DefaultAccent;
 
 var logo = ImageSource.FromFile(GalleryView.CombineBaseDirectory("Resources", "logo_h-1280.png"));
 
-var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() => CheckFPS(ref fpsFrames));
+var timer = new DispatcherTimer()
+    .Interval(TimeSpan.FromSeconds(1))
+    .OnTick(() => CheckFPS(ref fpsFrames));
+
+Application.DispatcherUnhandledException += e =>
+{
+    Console.WriteLine(e.Exception.ToString());
+    e.Handled = true;
+};
+
 Application
     .Create()
-    //.UseMetrics(ThemeMetrics.Default with { ControlCornerRadius = 10, ControlBorderThickness = 2 })
     .UseAccent(Accent.Purple)
     .BuildMainWindow(() =>
     new Window()
@@ -54,27 +61,34 @@ Application
         .OnBuild(x => x
             .Ref(out window)
             .Icon(icon)
+            .Padding(0)
             .Title("Aprillz.MewUI Controls Gallery")
             .Content(
                 new DockPanel()
-                    .Margin(8)
+                    .Margin(0)
                     .Children(
                         TopBar()
                             .DockTop(),
 
                         new GalleryView(window)
                             .Ref(out gallery)
-                )
-        )
+                    )
+            )
             .OnLoaded(() =>
             {
                 window.Icon = icon;
                 Application.Current.ThemeModeChanged += () => themeMode.Value = Application.Current.ThemeMode;
-                UpdateTopBar(); 
+                gallery.SettingsContent = SettingsControls();   // creates themeText; must precede UpdateTopBar
+                UpdateTopBar();
                 timer.Start();
+                Debug.WriteLine($"Loaded: {stopwatch.Elapsed.TotalSeconds:0.00}s");
             })
             .OnClosed(() => maxFpsEnabled.Value = false)
-            .OnFirstFrameRendered(() => stopwatch.Stop())
+            .OnFirstFrameRendered(() =>
+            {
+                stopwatch.Stop();
+                Debug.WriteLine($"First: {stopwatch.Elapsed.TotalSeconds:0.00}s");
+            })
             .OnFrameRendered(() =>
             {
                 if (!fpsStopwatch.IsRunning)
@@ -84,15 +98,11 @@ Application
                     return;
                 }
 
-            fpsFrames++;
-            CheckFPS(ref fpsFrames);
-
-                var stats = window.LastFrameStats;
-                var counts = (stats.DrawCalls, stats.CullCount, stats.CullRatio);
-                if (lastStat != counts)
+                fpsFrames++;
+                if (CheckFPS(ref fpsFrames))
                 {
+                    var stats = window.LastFrameStats;
                     cullText.Value = $"Draw: {stats.DrawCalls} | Cull: {stats.CullCount} ({stats.CullRatio:P0})";
-                    lastStat = counts;
                 }
             })
         )
@@ -100,14 +110,21 @@ Application
     .Run();
 
 
-void CheckFPS(ref int fpsFrames)
+bool CheckFPS(ref int fpsFrames)
 {
     double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
     if (elapsed >= 1.0)
     {
-        fpsText.Value = $"FPS: {(fpsFrames <= 1 ? 0 : fpsFrames) / elapsed:0.0}";
+        var fps = $"FPS: {(fpsFrames <= 1 ? 0 : fpsFrames) / elapsed:0.0}";
+        fpsText.Value = fps;
         fpsFrames = 0;
         fpsStopwatch.Restart();
+
+        return true;
+    }
+    else
+    {
+        return false;
     }
 }
 
@@ -121,16 +138,17 @@ FrameworkElement TopBar() => new Border()
                 new StackPanel()
                     .Horizontal()
                     .Spacing(8)
+                    .DockLeft()
                     .Children(
                         new Image()
                             .Source(logo)
                             .ImageScaleQuality(ImageScaleQuality.HighQuality)
-                            .Width(300)
-                            .Height(80)
+                            .Width(200)
                             .CenterVertical(),
 
                         new StackPanel()
                             .Vertical()
+                            .CenterVertical()
                             .Spacing(2)
                             .Children(
                                 new TextBlock()
@@ -142,52 +160,52 @@ FrameworkElement TopBar() => new Border()
                                 new TextBlock()
                                     .Ref(out backendText)
                             )
-                    )
-                    .DockLeft(),
+                    ),
+
+                // Live diagnostics + the enable toggle stay outside the gallery (always visible, and the
+                // toggle can never disable itself).
                 new StackPanel()
-                    .DockRight()
-                    .Spacing(8)
+                    .Horizontal()
+                    .CenterVertical()
+                    .Spacing(12)
                     .Children(
-                        new StackPanel()
-                            .Horizontal()
-                            .CenterVertical()
-                            .Spacing(12)
-                            .Children(
-                                ThemeModePicker(),
 
-                                new TextBlock()
-                                    .Ref(out themeText)
-                                    .CenterVertical(),
-
-                                AccentPicker()
-                            ),
-
-                        new StackPanel()
-                            .Horizontal()
-                            .Spacing(8)
-                            .Children(
-                                new CheckBox()
-                                    .Content("Cached")
-                                    .IsChecked(true)
-                                    .OnCheckedChanged(v => gallery.SetCardsCached(v == true))
-                                    .CenterVertical(),
-
-                                new CheckBox()
-                                    .Content("Max FPS")
-                                    .BindIsChecked(maxFpsEnabled)
-                                    .OnCheckedChanged(_ => EnsureMaxFpsLoop())
-                                    .CenterVertical(),
-
-                                new TextBlock()
-                                    .BindText(fpsText)
-                                    .CenterVertical(),
-
-                                new TextBlock()
-                                    .BindText(cullText)
-                                    .CenterVertical()
-                            )
-                    )
+                        new CheckBox()
+                            .Content("Max FPS")
+                            .BindIsChecked(maxFpsEnabled)
+                            .OnCheckedChanged(_ => EnsureMaxFpsLoop())
+                            .CenterVertical(),
+                        new TextBlock().BindText(fpsText).CenterVertical(),
+                        new TextBlock().BindText(cullText).CenterVertical())
             ));
+
+// Theme / rendering controls moved out of the top bar into the pane-footer Settings page.
+FrameworkElement SettingsControls() => new StackPanel()
+    .Vertical()
+    .Margin(16)
+    .Spacing(16)
+    .Children(
+        new TextBlock().Text("Settings").FontSize(22).Bold(),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Theme").FontSize(14).Bold(),
+            new StackPanel().Horizontal().Spacing(12).CenterVertical().Children(
+                ThemeModePicker(),
+                new TextBlock().Ref(out themeText).CenterVertical())),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Accent").FontSize(14).Bold(),
+            AccentPicker()),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Rendering").FontSize(14).Bold(),
+            new WrapPanel().Spacing(12).Children(
+                new CheckBox()
+                    .Content("Cached")
+                    .IsChecked(true)
+                    .OnCheckedChanged(v => gallery.SetCardsCached(v == true))
+                    .CenterVertical()))
+    );
 
 FrameworkElement ThemeModePicker() => new StackPanel()
     .Horizontal()
@@ -263,6 +281,13 @@ static void Startup()
 #pragma warning disable CA1416
     Win32Platform.Register();
 
+#if MEWUI_GALLERY_BACKEND_GDI
+    GdiBackend.Register();
+#elif MEWUI_GALLERY_BACKEND_MEWVG
+    MewVGWin32Backend.Register();
+#elif MEWUI_GALLERY_BACKEND_DIRECT2D
+    Direct2DBackend.Register();
+#else
     if (args.Any(a => a is "--gdi"))
     {
         GdiBackend.Register();
@@ -275,6 +300,7 @@ static void Startup()
     {
         Direct2DBackend.Register();
     }
+#endif
 #pragma warning restore CA1416
 #elif MEWUI_GALLERY_OSX
     MacOSPlatform.Register();

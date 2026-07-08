@@ -10,11 +10,13 @@ public abstract class MewObject : IPropertyOwner
     private PropertyValueStore? _propertyStore;
     private Dictionary<int, IDisposable>? _propertyBindings;
     private Dictionary<int, Action>? _propertyBindingCallbacks;
-    private Dictionary<int, PropertyForwardEntry>? _propertyForwards;
+    // Value is a PropertyForwardEntry for the common single-forward case, or a
+    // List<PropertyForwardEntry> once a second forward is registered for the same source property.
+    private Dictionary<int, object>? _propertyForwards;
 
     /// <summary>
     /// Per-instance value storage and animation management.
-    /// Lazy — objects that don't use MewProperty have no allocation.
+    /// Lazy - objects that don't use MewProperty have no allocation.
     /// </summary>
     internal PropertyValueStore PropertyStore
         => _propertyStore ??= new PropertyValueStore(this);
@@ -26,10 +28,10 @@ public abstract class MewObject : IPropertyOwner
     internal bool HasPropertyStore => _propertyStore != null;
 
     /// <summary>
-    /// IPropertyOwner — notification pipeline:
-    /// 1. OnMewPropertyChanged (virtual) — cross-cutting: layout/render invalidation, font cache, inheritance
-    /// 2. ChangedCallback — per-property side effects registered at MewProperty.Register time
-    /// 3. Binding callbacks — propagate final value to bound ObservableValues
+    /// IPropertyOwner - notification pipeline:
+    /// 1. OnMewPropertyChanged (virtual) - cross-cutting: layout/render invalidation, font cache, inheritance
+    /// 2. ChangedCallback - per-property side effects registered at MewProperty.Register time
+    /// 3. Binding callbacks - propagate final value to bound ObservableValues
     /// </summary>
     void IPropertyOwner.OnPropertyChanged(MewProperty property, object? oldValue, object? newValue)
     {
@@ -43,15 +45,38 @@ public abstract class MewObject : IPropertyOwner
     private void NotifyObservers(MewProperty property, object? oldValue, object? newValue)
     {
         if (_propertyForwards != null && newValue != null &&
-            _propertyForwards.TryGetValue(property.Id, out var fwd))
+            _propertyForwards.TryGetValue(property.Id, out var forward))
         {
-            if (fwd.TryGetTarget(out var target))
+            if (forward is List<PropertyForwardEntry> list)
             {
-                target.PropertyStore.SetTarget(fwd.TargetProperty, newValue);
+                for (var index = 0; index < list.Count; index++)
+                {
+                    var entry = list[index];
+                    if (entry.TryGetTarget(out var target))
+                    {
+                        target.PropertyStore.SetTarget(entry.TargetProperty, newValue);
+                    }
+                    else
+                    {
+                        list.RemoveAt(index);
+                        index--;
+                    }
+                }
+
+                if (list.Count == 0)
+                    _propertyForwards.Remove(property.Id);
             }
             else
             {
-                _propertyForwards.Remove(property.Id);
+                var entry = (PropertyForwardEntry)forward;
+                if (entry.TryGetTarget(out var target))
+                {
+                    target.PropertyStore.SetTarget(entry.TargetProperty, newValue);
+                }
+                else
+                {
+                    _propertyForwards.Remove(property.Id);
+                }
             }
         }
 
@@ -260,15 +285,46 @@ public abstract class MewObject : IPropertyOwner
         }
     }
 
-    internal void AddPropertyForward(int sourcePropertyId, MewObject target, MewProperty targetProperty)
+    // Returns the created entry so the caller can remove exactly this forward later,
+    // even if another forward is later added for the same source property.
+    internal PropertyForwardEntry AddPropertyForward(int sourcePropertyId, MewObject target, MewProperty targetProperty)
     {
         _propertyForwards ??= new(capacity: 2);
-        _propertyForwards[sourcePropertyId] = new PropertyForwardEntry(target, targetProperty);
+        var entry = new PropertyForwardEntry(target, targetProperty);
+        if (_propertyForwards.TryGetValue(sourcePropertyId, out var existing))
+        {
+            if (existing is List<PropertyForwardEntry> list)
+                list.Add(entry);
+            else
+                _propertyForwards[sourcePropertyId] = new List<PropertyForwardEntry> { (PropertyForwardEntry)existing, entry };
+        }
+        else
+        {
+            _propertyForwards[sourcePropertyId] = entry;
+        }
+
+        return entry;
     }
 
-    internal void RemovePropertyForward(int sourcePropertyId)
+    // Removes only the given entry, leaving any other forward registered for the same
+    // source property id intact.
+    internal void RemovePropertyForward(int sourcePropertyId, PropertyForwardEntry entry)
     {
-        _propertyForwards?.Remove(sourcePropertyId);
+        if (_propertyForwards == null || !_propertyForwards.TryGetValue(sourcePropertyId, out var existing))
+            return;
+
+        if (existing is List<PropertyForwardEntry> list)
+        {
+            list.Remove(entry);
+            if (list.Count == 0)
+                _propertyForwards.Remove(sourcePropertyId);
+            else if (list.Count == 1)
+                _propertyForwards[sourcePropertyId] = list[0];
+        }
+        else if (ReferenceEquals(existing, entry))
+        {
+            _propertyForwards.Remove(sourcePropertyId);
+        }
     }
 
     /// <summary>

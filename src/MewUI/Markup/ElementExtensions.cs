@@ -305,7 +305,7 @@ public static class ElementExtensions
     /// <param name="window">Target window.</param>
     /// <returns>The window for chaining.</returns>
     /// <remarks>
-    /// Do not call inside <c>OnBuild</c> — setting startup position after the window is shown throws an exception.
+    /// Do not call inside <c>OnBuild</c> - setting startup position after the window is shown throws an exception.
     /// </remarks>
     public static TWindow StartCenterScreen<TWindow>(this TWindow window) where TWindow : Window
     {
@@ -320,7 +320,7 @@ public static class ElementExtensions
     /// <param name="window">Target window.</param>
     /// <returns>The window for chaining.</returns>
     /// <remarks>
-    /// Do not call inside <c>OnBuild</c> — setting startup position after the window is shown throws an exception.
+    /// Do not call inside <c>OnBuild</c> - setting startup position after the window is shown throws an exception.
     /// </remarks>
     public static Window StartCenterOwner(this Window window)
     {
@@ -337,7 +337,7 @@ public static class ElementExtensions
     /// <param name="topDip">Top position in DIPs.</param>
     /// <returns>The window for chaining.</returns>
     /// <remarks>
-    /// Do not call inside <c>OnBuild</c> — setting startup position after the window is shown throws an exception.
+    /// Do not call inside <c>OnBuild</c> - setting startup position after the window is shown throws an exception.
     /// </remarks>
     public static Window StartManualPosition(this Window window, double leftDip, double topDip)
     {

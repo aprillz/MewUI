@@ -261,6 +261,9 @@ public class Grid : Panel
 {
     private static readonly ConditionalWeakTable<Element, GridAttachedProperties> _attachedProperties = new();
 
+    private static readonly Comparison<KeyValuePair<SpanKey, double>> _spanRequestComparison =
+        static (left, right) => left.Key.Span.CompareTo(right.Key.Span);
+
     private sealed class GridAttachedProperties
     {
         public int Row;
@@ -281,8 +284,14 @@ public class Grid : Panel
     public static void SetRow(Element element, int row)
     {
         var props = GetOrCreate(element);
+        if (props.HasRow && props.Row == row)
+        {
+            return;
+        }
+
         props.Row = row;
         props.HasRow = true;
+        element.InvalidateMeasure();
     }
 
     /// <summary>
@@ -302,8 +311,14 @@ public class Grid : Panel
     public static void SetColumn(Element element, int column)
     {
         var props = GetOrCreate(element);
+        if (props.HasColumn && props.Column == column)
+        {
+            return;
+        }
+
         props.Column = column;
         props.HasColumn = true;
+        element.InvalidateMeasure();
     }
 
     /// <summary>
@@ -320,7 +335,17 @@ public class Grid : Panel
     /// </summary>
     /// <param name="element">Target element.</param>
     /// <param name="span">Number of rows to span.</param>
-    public static void SetRowSpan(Element element, int span) => GetOrCreate(element).RowSpan = span;
+    public static void SetRowSpan(Element element, int span)
+    {
+        var props = GetOrCreate(element);
+        if (props.RowSpan == span)
+        {
+            return;
+        }
+
+        props.RowSpan = span;
+        element.InvalidateMeasure();
+    }
 
     /// <summary>
     /// Gets the row span of an element.
@@ -334,7 +359,17 @@ public class Grid : Panel
     /// </summary>
     /// <param name="element">Target element.</param>
     /// <param name="span">Number of columns to span.</param>
-    public static void SetColumnSpan(Element element, int span) => GetOrCreate(element).ColumnSpan = span;
+    public static void SetColumnSpan(Element element, int span)
+    {
+        var props = GetOrCreate(element);
+        if (props.ColumnSpan == span)
+        {
+            return;
+        }
+
+        props.ColumnSpan = span;
+        element.InvalidateMeasure();
+    }
 
     /// <summary>
     /// Gets the column span of an element.
@@ -347,6 +382,11 @@ public class Grid : Panel
 
     private static bool TryGet(Element element, [NotNullWhen(true)] out GridAttachedProperties? properties)
         => _attachedProperties.TryGetValue(element, out properties!);
+
+    // Single CWT probe for the whole attached-property set, used by the hot BuildPlacements path
+    // instead of the six separate HasRow/GetRow/HasColumn/GetColumn/GetRowSpan/GetColumnSpan calls.
+    private static GridAttachedProperties? GetProperties(Element element)
+        => _attachedProperties.TryGetValue(element, out var properties) ? properties : null;
 
     #endregion
 
@@ -368,6 +408,22 @@ public class Grid : Panel
     private readonly ColumnDefinition _implicitColumn = new();
     private readonly IReadOnlyList<RowDefinition> _implicitRows;
     private readonly IReadOnlyList<ColumnDefinition> _implicitColumns;
+
+    // Per-instance scratch buffers reused across measure/arrange passes to avoid per-frame
+    // allocations. Safe because a Grid instance's own MeasureContent/ArrangeContent never
+    // re-enters itself mid-pass: InvalidateMeasure/InvalidateArrange only set dirty flags and
+    // bubble upward, they never synchronously call back into this instance's own layout, and the
+    // only Measure/Arrange calls made from within these methods target child elements (separate
+    // instances with their own scratch fields).
+    private bool[] _occupancyScratch = [];
+    private double[] _beforeColumnSizeScratch = [];
+    private double[] _beforeRowSizeScratch = [];
+    private double[] _columnConstraintScratch = [];
+    private double[] _rowConstraintScratch = [];
+    private double[] _finalColumnSizeScratch = [];
+    private double[] _finalRowSizeScratch = [];
+    private readonly Dictionary<SpanKey, double> _spanRequestScratch = new();
+    private readonly List<KeyValuePair<SpanKey, double>> _spanRequestOrderScratch = new();
 
     public Grid()
     {
@@ -411,6 +467,12 @@ public class Grid : Panel
         set => SetValue(ShareStarSizeProperty, value);
     }
 
+    protected override void OnChildRemoved(Element child)
+    {
+        // Clean up attached properties
+        _attachedProperties.Remove(child);
+    }
+
     protected override Size MeasureContent(Size availableSize)
     {
         var rows = GetEffectiveRows();
@@ -429,7 +491,7 @@ public class Grid : Panel
 
         CommitActualSizes(columns, rows, useFinal: false);
 
-        CollectionPool<List<Placement>>.Return(placements);
+        CollectionPool.Return(placements);
 
         double totalWidth = SumMeasureSizes(columns, spacing);
         double totalHeight = SumMeasureSizes(rows, spacing);
@@ -446,8 +508,8 @@ public class Grid : Panel
         var contentBounds = bounds.Deflate(Padding);
         double spacing = Math.Max(0, Spacing);
 
-        var finalColumnSizes = CreateFinalSizes(columns, contentBounds.Width, spacing);
-        var finalRowSizes = CreateFinalSizes(rows, contentBounds.Height, spacing);
+        var finalColumnSizes = CreateFinalSizes(columns, contentBounds.Width, spacing, ref _finalColumnSizeScratch);
+        var finalRowSizes = CreateFinalSizes(rows, contentBounds.Height, spacing, ref _finalRowSizeScratch);
 
         ApplyFinalSizes(columns, finalColumnSizes);
         ApplyFinalSizes(rows, finalRowSizes);
@@ -464,7 +526,7 @@ public class Grid : Panel
             placement.Child.Arrange(new Rect(x, y, width, height));
         }
 
-        CollectionPool<List<Placement>>.Return(placements);
+        CollectionPool.Return(placements);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -533,7 +595,23 @@ public class Grid : Panel
     private List<Placement> BuildPlacements(int rowCount, int columnCount)
     {
         var placements = CollectionPool<List<Placement>>.Rent();
-        var occupied = new bool[rowCount, columnCount];
+
+        int cellCount = rowCount * columnCount;
+        if (_occupancyScratch.Length < cellCount)
+        {
+            _occupancyScratch = new bool[cellCount];
+        }
+        else
+        {
+            Array.Clear(_occupancyScratch, 0, cellCount);
+        }
+        var occupied = new OccupancyGrid(_occupancyScratch, rowCount, columnCount);
+
+        // One CWT probe per visible child, split into explicit (row+column both set) and auto
+        // groups so explicit children can be placed and marked occupied before auto-placement runs,
+        // matching the original two-pass ordering without re-reading the attached properties.
+        var explicitChildren = CollectionPool<List<ChildPlacementInfo>>.Rent();
+        var autoChildren = CollectionPool<List<ChildPlacementInfo>>.Rent();
 
         foreach (var child in ChildrenList)
         {
@@ -542,43 +620,42 @@ public class Grid : Panel
                 continue;
             }
 
-            bool hasRow = HasRow(child);
-            bool hasColumn = HasColumn(child);
-            if (!hasRow || !hasColumn)
-            {
-                continue;
-            }
+            var properties = GetProperties(child);
+            bool hasRow = properties != null && properties.HasRow;
+            bool hasColumn = properties != null && properties.HasColumn;
+            var info = new ChildPlacementInfo(child, properties);
 
-            var placement = CreateClampedPlacement(child, rowCount, columnCount, GetRow(child), GetColumn(child));
+            if (hasRow && hasColumn)
+            {
+                explicitChildren.Add(info);
+            }
+            else
+            {
+                autoChildren.Add(info);
+            }
+        }
+
+        foreach (var info in explicitChildren)
+        {
+            var properties = info.Properties!;
+            int rowSpan = Math.Max(1, properties.RowSpan);
+            int columnSpan = Math.Max(1, properties.ColumnSpan);
+            var placement = CreateClampedPlacement(info.Child, rowCount, columnCount, properties.Row, properties.Column, rowSpan, columnSpan);
             placements.Add(placement);
             MarkOccupied(occupied, placement);
         }
 
-        foreach (var child in ChildrenList)
+        foreach (var info in autoChildren)
         {
-            if (!IsVisibleChild(child))
-            {
-                continue;
-            }
+            var properties = info.Properties;
+            bool hasRow = properties != null && properties.HasRow;
+            bool hasColumn = properties != null && properties.HasColumn;
+            int row = hasRow ? properties!.Row : 0;
+            int column = hasColumn ? properties!.Column : 0;
+            int rowSpan = Math.Max(1, properties?.RowSpan ?? 1);
+            int columnSpan = Math.Max(1, properties?.ColumnSpan ?? 1);
 
-            bool hasRow = HasRow(child);
-            bool hasColumn = HasColumn(child);
-            if (hasRow && hasColumn)
-            {
-                continue;
-            }
-
-            int row = hasRow ? GetRow(child) : 0;
-            int column = hasColumn ? GetColumn(child) : 0;
-            int rowSpan = Math.Max(1, GetRowSpan(child));
-            int columnSpan = Math.Max(1, GetColumnSpan(child));
-
-            var placement = CreateClampedPlacement(child, rowCount, columnCount, row, column);
-            placement = placement with
-            {
-                RowSpan = Math.Clamp(rowSpan, 1, rowCount - placement.Row),
-                ColumnSpan = Math.Clamp(columnSpan, 1, columnCount - placement.Column),
-            };
+            var placement = CreateClampedPlacement(info.Child, rowCount, columnCount, row, column, rowSpan, columnSpan);
 
             if (AutoIndexing)
             {
@@ -589,11 +666,14 @@ public class Grid : Panel
             MarkOccupied(occupied, placement);
         }
 
+        CollectionPool.Return(explicitChildren);
+        CollectionPool.Return(autoChildren);
+
         return placements;
     }
 
     private static Placement AutoPlace(
-        bool[,] occupied,
+        OccupancyGrid occupied,
         Placement placement,
         int rowCount,
         int columnCount,
@@ -625,13 +705,13 @@ public class Grid : Panel
         return placement;
     }
 
-    private static Placement CreateClampedPlacement(Element child, int rowCount, int columnCount, int row, int column)
+    private static Placement CreateClampedPlacement(Element child, int rowCount, int columnCount, int row, int column, int rowSpan, int columnSpan)
     {
         row = Math.Clamp(row, 0, rowCount - 1);
         column = Math.Clamp(column, 0, columnCount - 1);
 
-        int rowSpan = Math.Clamp(Math.Max(1, GetRowSpan(child)), 1, rowCount - row);
-        int columnSpan = Math.Clamp(Math.Max(1, GetColumnSpan(child)), 1, columnCount - column);
+        rowSpan = Math.Clamp(Math.Max(1, rowSpan), 1, rowCount - row);
+        columnSpan = Math.Clamp(Math.Max(1, columnSpan), 1, columnCount - column);
 
         return new Placement(child, row, column, rowSpan, columnSpan);
     }
@@ -656,11 +736,11 @@ public class Grid : Panel
         int maxPasses = hasCyclicGroups ? 4 : 1;
         for (int pass = 0; pass < maxPasses; pass++)
         {
-            var beforeColumns = CaptureMeasureSizes(columns);
-            var beforeRows = CaptureMeasureSizes(rows);
+            var beforeColumns = CaptureMeasureSizesInto(columns, ref _beforeColumnSizeScratch);
+            var beforeRows = CaptureMeasureSizesInto(rows, ref _beforeRowSizeScratch);
 
-            var columnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing);
-            var rowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing);
+            var columnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, ref _columnConstraintScratch);
+            var rowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, ref _rowConstraintScratch);
 
             MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group2, columnConstraints, rowConstraints, finiteWidth, finiteHeight);
             MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group3, columnConstraints, rowConstraints, finiteWidth, finiteHeight);
@@ -672,15 +752,15 @@ public class Grid : Panel
             }
         }
 
-        var finalColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing);
-        var finalRowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing);
+        var finalColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, ref _columnConstraintScratch);
+        var finalRowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, ref _rowConstraintScratch);
 
         MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group2, finalColumnConstraints, finalRowConstraints, finiteWidth, finiteHeight);
         MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group3, finalColumnConstraints, finalRowConstraints, finiteWidth, finiteHeight);
         RecomputeMeasureSizes(columns, rows, placements);
 
-        var group4ColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing);
-        var group4RowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing);
+        var group4ColumnConstraints = CreateMeasureConstraints(columns, paddedSize.Width, spacing, ref _columnConstraintScratch);
+        var group4RowConstraints = CreateMeasureConstraints(rows, paddedSize.Height, spacing, ref _rowConstraintScratch);
         MeasurePlacements(placements, rows, columns, spacing, mode: MeasureMode.Constrained, targetGroup: CellGroup.Group4, group4ColumnConstraints, group4RowConstraints, finiteWidth, finiteHeight);
 
         RecomputeMeasureSizes(columns, rows, placements);
@@ -738,14 +818,25 @@ public class Grid : Panel
         return false;
     }
 
-    private static double[] CaptureMeasureSizes<T>(IReadOnlyList<T> definitions) where T : GridDefinitionBase
+    // Grows the scratch buffer only when it is too small, then fills the first definitions.Count
+    // entries. The buffer may be larger than definitions.Count afterward; callers only ever index
+    // up to definitions.Count, so the leftover capacity is harmless.
+    private static double[] CaptureMeasureSizesInto<T>(IReadOnlyList<T> definitions, ref double[] scratch) where T : GridDefinitionBase
     {
-        var sizes = new double[definitions.Count];
-        for (int i = 0; i < sizes.Length; i++)
+        EnsureCapacity(ref scratch, definitions.Count);
+        for (int i = 0; i < definitions.Count; i++)
         {
-            sizes[i] = definitions[i].MeasureSize;
+            scratch[i] = definitions[i].MeasureSize;
         }
-        return sizes;
+        return scratch;
+    }
+
+    private static void EnsureCapacity(ref double[] scratch, int count)
+    {
+        if (scratch.Length < count)
+        {
+            scratch = new double[count];
+        }
     }
 
     private static void EqualizeStarMeasureSizes<T>(IReadOnlyList<T> definitions) where T : GridDefinitionBase
@@ -771,12 +862,14 @@ public class Grid : Panel
 
     private static bool IsStable<T>(double[] before, IReadOnlyList<T> definitions) where T : GridDefinitionBase
     {
-        if (before.Length != definitions.Count)
+        // before is a reused scratch buffer that may be larger than definitions.Count; only the
+        // first definitions.Count entries were filled for this call.
+        if (before.Length < definitions.Count)
         {
             return false;
         }
 
-        for (int i = 0; i < before.Length; i++)
+        for (int i = 0; i < definitions.Count; i++)
         {
             if (Math.Abs(before[i] - definitions[i].MeasureSize) > 0.1)
             {
@@ -948,7 +1041,7 @@ public class Grid : Panel
         where T : GridDefinitionBase
     {
         InitializeMeasureSizes(definitions);
-        var spanRequests = new Dictionary<SpanKey, double>();
+        _spanRequestScratch.Clear();
 
         foreach (var placement in placements)
         {
@@ -970,10 +1063,18 @@ public class Grid : Panel
                 continue;
             }
 
-            RegisterSpanRequest(spanRequests, start, span, desired);
+            RegisterSpanRequest(_spanRequestScratch, start, span, desired);
         }
 
-        foreach (var spanRequest in spanRequests.OrderBy(item => item.Key.Span))
+        // Sort span requests by span width (shortest first) without LINQ's OrderBy allocation.
+        _spanRequestOrderScratch.Clear();
+        foreach (var spanRequest in _spanRequestScratch)
+        {
+            _spanRequestOrderScratch.Add(spanRequest);
+        }
+        _spanRequestOrderScratch.Sort(_spanRequestComparison);
+
+        foreach (var spanRequest in _spanRequestOrderScratch)
         {
             EnsureMinSizeInDefinitionRange(definitions, spanRequest.Key.Start, spanRequest.Key.Span, spanRequest.Value);
         }
@@ -1062,10 +1163,10 @@ public class Grid : Panel
             DistributeExtra(otherDefinitions, extra, useStarWeights: false);
         }
 
-        CollectionPool<List<T>>.Return(preferredDefinitions);
-        CollectionPool<List<T>>.Return(autoDefinitions);
-        CollectionPool<List<T>>.Return(starDefinitions);
-        CollectionPool<List<T>>.Return(otherDefinitions);
+        CollectionPool.Return(preferredDefinitions);
+        CollectionPool.Return(autoDefinitions);
+        CollectionPool.Return(starDefinitions);
+        CollectionPool.Return(otherDefinitions);
     }
 
     private static void DistributeExtra<T>(IReadOnlyList<T> definitions, double extra, bool useStarWeights)
@@ -1111,50 +1212,54 @@ public class Grid : Panel
             remaining -= applied;
         }
 
-        CollectionPool<List<T>>.Return(pending);
+        CollectionPool.Return(pending);
     }
 
-    private static double[] CreateMeasureConstraints<T>(IReadOnlyList<T> definitions, double available, double spacing)
+    private static double[] CreateMeasureConstraints<T>(IReadOnlyList<T> definitions, double available, double spacing, ref double[] scratch)
         where T : GridDefinitionBase
     {
         if (double.IsPositiveInfinity(available))
         {
-            return CaptureMeasureSizes(definitions);
+            return CaptureMeasureSizesInto(definitions, ref scratch);
         }
 
-        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false);
+        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, ref scratch);
     }
 
-    private static double[] CreateFinalSizes<T>(IReadOnlyList<T> definitions, double available, double spacing)
+    private static double[] CreateFinalSizes<T>(IReadOnlyList<T> definitions, double available, double spacing, ref double[] scratch)
         where T : GridDefinitionBase
     {
         if (double.IsPositiveInfinity(available))
         {
-            return CaptureMeasureSizes(definitions);
+            return CaptureMeasureSizesInto(definitions, ref scratch);
         }
 
-        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false);
+        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, ref scratch);
     }
 
     private static double[] CreateDistributedSizes<T>(
         IReadOnlyList<T> definitions,
         double available,
         double spacing,
-        bool useMeasuredForStarWhenInfinite)
+        bool useMeasuredForStarWhenInfinite,
+        ref double[] scratch)
         where T : GridDefinitionBase
     {
-        var sizes = new double[definitions.Count];
+        EnsureCapacity(ref scratch, definitions.Count);
+        var sizes = scratch;
         double gaps = definitions.Count > 1 ? (definitions.Count - 1) * spacing : 0;
         double usable = Math.Max(0, available - gaps);
         double occupied = 0;
-        var starDefinitions = CollectionPool<List<T>>.Rent();
+        // Star definitions are tracked by index (not by reference), so the distribution loop below
+        // writes straight into sizes[index] instead of doing an O(n) reference search per item.
+        var starIndices = CollectionPool<List<int>>.Rent();
 
         for (int i = 0; i < definitions.Count; i++)
         {
             var definition = definitions[i];
             if (definition.UserSize.IsStar)
             {
-                starDefinitions.Add(definition);
+                starIndices.Add(i);
                 sizes[i] = ClampDefinitionSize(definition, definition.UserMinSize);
             }
             else
@@ -1164,9 +1269,9 @@ public class Grid : Panel
             }
         }
 
-        if (starDefinitions.Count == 0)
+        if (starIndices.Count == 0)
         {
-            CollectionPool<List<T>>.Return(starDefinitions);
+            CollectionPool.Return(starIndices);
             return sizes;
         }
 
@@ -1179,17 +1284,17 @@ public class Grid : Panel
                     sizes[i] = definitions[i].MeasureSize;
                 }
             }
-            CollectionPool<List<T>>.Return(starDefinitions);
+            CollectionPool.Return(starIndices);
             return sizes;
         }
 
         double remaining = Math.Max(0, usable - occupied);
-        var unresolved = CollectionPool<List<T>>.Rent();
-        unresolved.AddRange(starDefinitions);
+        var unresolved = CollectionPool<List<int>>.Rent();
+        unresolved.AddRange(starIndices);
         double remainingWeight = 0;
         for (int i = 0; i < unresolved.Count; i++)
         {
-            remainingWeight += Math.Max(0, unresolved[i].UserSize.Value);
+            remainingWeight += Math.Max(0, definitions[unresolved[i]].UserSize.Value);
         }
 
         while (unresolved.Count > 0 && remainingWeight > 0)
@@ -1197,8 +1302,8 @@ public class Grid : Panel
             bool constrained = false;
             for (int i = unresolved.Count - 1; i >= 0; i--)
             {
-                var definition = unresolved[i];
-                int index = IndexOfDefinition(definitions, definition);
+                int index = unresolved[i];
+                var definition = definitions[index];
                 double proposed = remaining * definition.UserSize.Value / remainingWeight;
                 double clamped = ClampDefinitionSize(definition, proposed);
 
@@ -1220,31 +1325,18 @@ public class Grid : Panel
 
         if (remainingWeight > 0)
         {
-            foreach (var definition in unresolved)
+            foreach (var index in unresolved)
             {
-                int index = IndexOfDefinition(definitions, definition);
+                var definition = definitions[index];
                 double proposed = remaining * definition.UserSize.Value / remainingWeight;
                 sizes[index] = ClampDefinitionSize(definition, proposed);
             }
         }
 
-        CollectionPool<List<T>>.Return(unresolved);
-        CollectionPool<List<T>>.Return(starDefinitions);
+        CollectionPool.Return(unresolved);
+        CollectionPool.Return(starIndices);
 
         return sizes;
-    }
-
-    private static int IndexOfDefinition<T>(IReadOnlyList<T> definitions, T definition)
-    {
-        for (int i = 0; i < definitions.Count; i++)
-        {
-            if (ReferenceEquals(definitions[i], definition))
-            {
-                return i;
-            }
-        }
-
-        return -1;
     }
 
     private static void ApplyFinalSizes<T>(IReadOnlyList<T> definitions, double[] sizes) where T : GridDefinitionBase
@@ -1316,7 +1408,11 @@ public class Grid : Panel
 
     private static double SumMeasureSizes<T>(IReadOnlyList<T> definitions, double spacing) where T : GridDefinitionBase
     {
-        double total = definitions.Sum(def => def.MeasureSize);
+        double total = 0;
+        for (int i = 0; i < definitions.Count; i++)
+        {
+            total += definitions[i].MeasureSize;
+        }
         if (definitions.Count > 1)
         {
             total += (definitions.Count - 1) * spacing;
@@ -1343,7 +1439,7 @@ public class Grid : Panel
         return 1;
     }
 
-    private static void MarkOccupied(bool[,] occupied, Placement placement)
+    private static void MarkOccupied(OccupancyGrid occupied, Placement placement)
     {
         for (int row = placement.Row; row < placement.Row + placement.RowSpan; row++)
         {
@@ -1354,14 +1450,14 @@ public class Grid : Panel
         }
     }
 
-    private static bool TryFindFirstFit(bool[,] occupied, int rowSpan, int columnSpan, out int row, out int column)
+    private static bool TryFindFirstFit(OccupancyGrid occupied, int rowSpan, int columnSpan, out int row, out int column)
     {
         row = 0;
         column = 0;
 
-        for (int r = 0; r < occupied.GetLength(0); r++)
+        for (int r = 0; r < occupied.RowCount; r++)
         {
-            for (int c = 0; c < occupied.GetLength(1); c++)
+            for (int c = 0; c < occupied.ColumnCount; c++)
             {
                 if (CanPlace(occupied, r, c, rowSpan, columnSpan))
                 {
@@ -1375,10 +1471,10 @@ public class Grid : Panel
         return false;
     }
 
-    private static bool TryFindInRow(bool[,] occupied, int row, int rowSpan, int columnSpan, out int column)
+    private static bool TryFindInRow(OccupancyGrid occupied, int row, int rowSpan, int columnSpan, out int column)
     {
         column = 0;
-        for (int c = 0; c < occupied.GetLength(1); c++)
+        for (int c = 0; c < occupied.ColumnCount; c++)
         {
             if (CanPlace(occupied, row, c, rowSpan, columnSpan))
             {
@@ -1390,10 +1486,10 @@ public class Grid : Panel
         return false;
     }
 
-    private static bool TryFindInColumn(bool[,] occupied, int column, int rowSpan, int columnSpan, out int row)
+    private static bool TryFindInColumn(OccupancyGrid occupied, int column, int rowSpan, int columnSpan, out int row)
     {
         row = 0;
-        for (int r = 0; r < occupied.GetLength(0); r++)
+        for (int r = 0; r < occupied.RowCount; r++)
         {
             if (CanPlace(occupied, r, column, rowSpan, columnSpan))
             {
@@ -1405,14 +1501,14 @@ public class Grid : Panel
         return false;
     }
 
-    private static bool CanPlace(bool[,] occupied, int row, int column, int rowSpan, int columnSpan)
+    private static bool CanPlace(OccupancyGrid occupied, int row, int column, int rowSpan, int columnSpan)
     {
         if (row < 0 || column < 0)
         {
             return false;
         }
 
-        if (row + rowSpan > occupied.GetLength(0) || column + columnSpan > occupied.GetLength(1))
+        if (row + rowSpan > occupied.RowCount || column + columnSpan > occupied.ColumnCount)
         {
             return false;
         }
@@ -1482,6 +1578,34 @@ public class Grid : Panel
         int Column,
         int RowSpan,
         int ColumnSpan);
+
+    // Child plus its attached-property lookup result, captured once per child so BuildPlacements
+    // never probes the ConditionalWeakTable more than once for the same child.
+    private readonly record struct ChildPlacementInfo(Element Child, GridAttachedProperties? Properties);
+
+    // Wraps the reused 1D occupancy scratch buffer with row/column indexing, so the placement
+    // helpers below read the same as when they took a bool[,].
+    private readonly struct OccupancyGrid
+    {
+        private readonly bool[] _cells;
+
+        public OccupancyGrid(bool[] cells, int rowCount, int columnCount)
+        {
+            _cells = cells;
+            RowCount = rowCount;
+            ColumnCount = columnCount;
+        }
+
+        public int RowCount { get; }
+
+        public int ColumnCount { get; }
+
+        public bool this[int row, int column]
+        {
+            get => _cells[row * ColumnCount + column];
+            set => _cells[row * ColumnCount + column] = value;
+        }
+    }
 
     private enum CellGroup
     {

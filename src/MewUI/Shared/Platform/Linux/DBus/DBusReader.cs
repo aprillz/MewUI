@@ -156,7 +156,7 @@ internal ref struct DBusReader
             // Read a{sv} properties dict
             Align(4);
             uint dictLen = ReadUInt32();
-            // Dict entries have alignment 8 — padding is always present, even for empty arrays
+            // Dict entries have alignment 8 - padding is always present, even for empty arrays
             Align(8);
             _pos += (int)dictLen;
 

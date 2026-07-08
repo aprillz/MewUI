@@ -135,11 +135,11 @@ internal sealed class SkiaWglInteropHost : ISkiaSurfaceHost
             throw new InvalidOperationException("wglMakeCurrent failed for hidden Skia WGL context.");
 
         if (!WglD2DInterop.LoadWglNvDxInterop())
-            throw new InvalidOperationException("WGL_NV_DX_interop entry points are not exposed on this GL driver — D3D11 sharing not available.");
+            throw new InvalidOperationException("WGL_NV_DX_interop entry points are not exposed on this GL driver - D3D11 sharing not available.");
 
         nint d3d11Device = _d2dFactory.NativeD3D11Device;
         if (d3d11Device == 0)
-            throw new InvalidOperationException("Direct2DGraphicsFactory.NativeD3D11Device is 0 — D2D GPU pipeline not initialised.");
+            throw new InvalidOperationException("Direct2DGraphicsFactory.NativeD3D11Device is 0 - D2D GPU pipeline not initialised.");
 
         _wglDevice = WglD2DInterop.DXOpenDevice(d3d11Device);
         if (_wglDevice == 0) throw new InvalidOperationException("wglDXOpenDeviceNV failed on D2D's D3D11 device.");

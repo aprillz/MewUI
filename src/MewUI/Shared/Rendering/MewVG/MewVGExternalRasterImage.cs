@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// <remarks>
 /// <para>
 /// Created from an external raster source. The wrapping caller owns the lifetime of the
-/// underlying <see cref="IExternalRasterSource"/> — disposing this image releases the
+/// underlying <see cref="IExternalRasterSource"/> - disposing this image releases the
 /// NVG bookkeeping but does NOT dispose the external resource.
 /// </para>
 /// <para>
@@ -92,7 +92,7 @@ internal sealed class MewVGExternalRasterImage : IImage
         if (_disposed) return;
         _disposed = true;
         // Release NVG bookkeeping. NoDelete means the underlying texture is owned by the
-        // external raster source — we must NOT call glDeleteTextures on it ourselves.
+        // external raster source - we must NOT call glDeleteTextures on it ourselves.
         foreach (var ((vg, _), imageId) in _images)
         {
             if (imageId != 0)

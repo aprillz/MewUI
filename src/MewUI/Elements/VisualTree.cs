@@ -12,7 +12,7 @@ public static class VisualTree
     [ThreadStatic]
     private static List<Element>? _stack;
 
-    // Single static delegate — no per-call allocation.
+    // Single static delegate - no per-call allocation.
     // Pushes children onto the ThreadStatic stack for iterative processing.
     private static readonly Func<Element, bool> _collector = static child =>
     {

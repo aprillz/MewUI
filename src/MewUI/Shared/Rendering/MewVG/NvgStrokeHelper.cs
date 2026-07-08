@@ -1,5 +1,4 @@
 using Aprillz.MewVG;
-using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -13,8 +12,10 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 /// </summary>
 internal static class NvgStrokeHelper
 {
-    private const int GradientLutSize = 512;
-    private static readonly ConditionalWeakTable<NanoVG, ConcurrentDictionary<string, int>> GradientLutCache = new();
+    private const int GRADIENT_LUT_SIZE = 512;
+    private const int MAX_GRADIENT_LUT_ENTRIES = 128;
+
+    private static readonly ConditionalWeakTable<NanoVG, GradientLutCache> GradientLutCaches = new();
 
     public static void ApplyPenStyle(NanoVG vg, IPen pen)
     {
@@ -463,32 +464,190 @@ internal static class NvgStrokeHelper
 
     private static int GetOrCreateGradientLut(NanoVG vg, IReadOnlyList<GradientStop> stops)
     {
-        var cache = GradientLutCache.GetOrCreateValue(vg);
-        var key = BuildGradientStopsKey(stops, GradientLutSize);
-        return cache.GetOrAdd(key, _ =>
+        var cache = GradientLutCaches.GetOrCreateValue(vg);
+        var key = new GradientLutKey(stops);
+        if (cache.TryGet(key, out int existingImage))
         {
-            var pixels = BuildGradientLutPixels(stops, GradientLutSize);
-            return vg.CreateOwnedImageRGBA(GradientLutSize, 1, NVGimageFlags.Premultiplied, pixels);
-        });
-    }
-
-    private static string BuildGradientStopsKey(IReadOnlyList<GradientStop> stops, int lutSize)
-    {
-        var builder = new System.Text.StringBuilder();
-        builder.Append(lutSize).Append('|').Append(stops.Count);
-        for (var i = 0; i < stops.Count; i++)
-        {
-            var stop = stops[i];
-            builder.Append('|')
-                .Append(stop.Offset.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
-                .Append(':')
-                .Append(stop.Color.A).Append(',')
-                .Append(stop.Color.R).Append(',')
-                .Append(stop.Color.G).Append(',')
-                .Append(stop.Color.B);
+            return existingImage;
         }
 
-        return builder.ToString();
+        var pixels = BuildGradientLutPixels(stops, GRADIENT_LUT_SIZE);
+        int imageId = vg.CreateOwnedImageRGBA(GRADIENT_LUT_SIZE, 1, NVGimageFlags.Premultiplied, pixels);
+        if (imageId != 0)
+        {
+            cache.Add(key, imageId);
+        }
+
+        return imageId;
+    }
+
+    /// <summary>
+    /// Value-equality key for a gradient's stop set, used instead of a formatted string so
+    /// repeated (even animated) gradients with identical stops hit the LUT cache without a
+    /// StringBuilder/culture-format allocation per call.
+    /// </summary>
+    private readonly struct GradientLutKey : IEquatable<GradientLutKey>
+    {
+        private readonly StopFingerprint[] _stops;
+        private readonly int _hashCode;
+
+        public GradientLutKey(IReadOnlyList<GradientStop> stops)
+        {
+            var fingerprints = new StopFingerprint[stops.Count];
+            var hash = new HashCode();
+            for (var i = 0; i < stops.Count; i++)
+            {
+                var stop = stops[i];
+                long offsetBits = BitConverter.DoubleToInt64Bits(stop.Offset);
+                uint argb = ((uint)stop.Color.A << 24) | ((uint)stop.Color.R << 16) | ((uint)stop.Color.G << 8) | stop.Color.B;
+                fingerprints[i] = new StopFingerprint(offsetBits, argb);
+                hash.Add(offsetBits);
+                hash.Add(argb);
+            }
+
+            _stops = fingerprints;
+            _hashCode = hash.ToHashCode();
+        }
+
+        public bool Equals(GradientLutKey other)
+        {
+            if (_hashCode != other._hashCode || _stops.Length != other._stops.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < _stops.Length; i++)
+            {
+                if (!_stops[i].Equals(other._stops[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public override bool Equals(object? obj) => obj is GradientLutKey other && Equals(other);
+
+        public override int GetHashCode() => _hashCode;
+
+        private readonly struct StopFingerprint(long offsetBits, uint argb) : IEquatable<StopFingerprint>
+        {
+            private readonly long _offsetBits = offsetBits;
+            private readonly uint _argb = argb;
+
+            public bool Equals(StopFingerprint other) => _offsetBits == other._offsetBits && _argb == other._argb;
+
+            public override bool Equals(object? obj) => obj is StopFingerprint other && Equals(other);
+
+            public override int GetHashCode() => HashCode.Combine(_offsetBits, _argb);
+        }
+    }
+
+    /// <summary>
+    /// Per-NanoVG bounded cache of gradient LUT textures. Without a cap, an animated
+    /// gradient (color changing every frame) mints a fresh stop set - and thus a fresh
+    /// 512x1 GL texture - every frame forever.
+    /// </summary>
+    /// <remarks>
+    /// Guarded by <see cref="_syncRoot"/>: unlike <c>MewVGMetalTextCache</c> (owned
+    /// exclusively by the frame session that created it), a gradient brush can be painted
+    /// from more than one thread against the same NanoVG instance (e.g. a nested/offscreen
+    /// pass sharing the outer pass's NVG). The sibling per-NVG cache in
+    /// <c>MewVGMetalOffscreenSurfaceProvider._pendingImageDisposal</c> takes the same lock
+    /// for the same reason. Previously this cache was a <c>ConcurrentDictionary</c>, which
+    /// gave the same safety implicitly.
+    /// </remarks>
+    private sealed class GradientLutCache
+    {
+        private readonly object _syncRoot = new();
+        private readonly Dictionary<GradientLutKey, LinkedListNode<Entry>> _map = new();
+        private readonly LinkedList<Entry> _lru = new();
+        private readonly Queue<int> _pendingDeletes = new();
+
+        public bool TryGet(GradientLutKey key, out int imageId)
+        {
+            lock (_syncRoot)
+            {
+                if (_map.TryGetValue(key, out var node))
+                {
+                    _lru.Remove(node);
+                    _lru.AddFirst(node);
+                    imageId = node.Value.ImageId;
+                    return true;
+                }
+
+                imageId = 0;
+                return false;
+            }
+        }
+
+        public void Add(GradientLutKey key, int imageId)
+        {
+            lock (_syncRoot)
+            {
+                var node = new LinkedListNode<Entry>(new Entry(key, imageId));
+                _lru.AddFirst(node);
+                _map[key] = node;
+
+                // Evicted textures are NOT deleted here: the frame's buffered draw calls may
+                // still reference them until the owning NanoVG flushes. They queue up and are
+                // released by the context's post-Flush drain (ReleasePendingGradientLutDeletes),
+                // mirroring MewVGTextCache's pending-delete pattern.
+                while (_map.Count > MAX_GRADIENT_LUT_ENTRIES && _lru.Last is LinkedListNode<Entry> last)
+                {
+                    _lru.RemoveLast();
+                    _map.Remove(last.Value.Key);
+                    if (last.Value.ImageId != 0)
+                    {
+                        _pendingDeletes.Enqueue(last.Value.ImageId);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Deletes textures queued by a prior eviction. Only safe after the owning NanoVG's
+        /// EndFrame/Flush, when no buffered draw call still references the queued image ids.
+        /// Called via <see cref="ReleasePendingGradientLutDeletes"/> from each frame session's
+        /// post-Flush drain point (alongside its text cache's <c>ReleasePendingDeletes</c>).
+        /// </summary>
+        public void DrainPendingDeletes(NanoVG vg)
+        {
+            while (true)
+            {
+                int imageId;
+                lock (_syncRoot)
+                {
+                    if (_pendingDeletes.Count == 0)
+                    {
+                        return;
+                    }
+
+                    imageId = _pendingDeletes.Dequeue();
+                }
+
+                if (imageId != 0)
+                {
+                    vg.DeleteImage(imageId);
+                }
+            }
+        }
+
+        private readonly record struct Entry(GradientLutKey Key, int ImageId);
+    }
+
+    /// <summary>
+    /// Releases gradient LUT textures queued for deletion by LRU eviction. Intended to be
+    /// called from a NanoVG instance's post-Flush drain point, mirroring
+    /// <c>MewVGTextCache.ReleasePendingDeletes</c>.
+    /// </summary>
+    internal static void ReleasePendingGradientLutDeletes(NanoVG vg)
+    {
+        if (GradientLutCaches.TryGetValue(vg, out var cache))
+        {
+            cache.DrainPendingDeletes(vg);
+        }
     }
 
     private static byte[] BuildGradientLutPixels(IReadOnlyList<GradientStop> stops, int lutSize)

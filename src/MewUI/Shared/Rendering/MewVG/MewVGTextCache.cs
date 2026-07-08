@@ -37,14 +37,16 @@ internal sealed class MewVGTextCache : IDisposable
         _vg = vg;
     }
 
-    public bool TryGet(MewVGTextCacheKey key, out MewVGTextEntry entry)
+    public bool TryGet(MewVGTextCacheKey key, ReadOnlySpan<char> text, out MewVGTextEntry entry)
     {
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(MewVGTextCache));
         }
 
-        if (_map.TryGetValue(key, out var node))
+        // Key.Core.TextHash only narrows the dictionary bucket; two different strings can share
+        // a hash, so the actual text is checked here and a mismatch is treated as a miss.
+        if (_map.TryGetValue(key, out var node) && text.SequenceEqual(node.Value.Text))
         {
             _lru.Remove(node);
             _lru.AddFirst(node);
@@ -56,7 +58,7 @@ internal sealed class MewVGTextCache : IDisposable
         return false;
     }
 
-    public MewVGTextEntry CreateImage(MewVGTextCacheKey key, ref TextBitmap bmp)
+    public MewVGTextEntry CreateImage(MewVGTextCacheKey key, ReadOnlySpan<char> text, ref TextBitmap bmp)
     {
         if (_disposed)
         {
@@ -68,7 +70,7 @@ internal sealed class MewVGTextCache : IDisposable
             return default;
         }
 
-        // Source bitmap is BGRA — feed straight to NVG; GL backend uses GL_BGRA upload, no
+        // Source bitmap is BGRA - feed straight to NVG; GL backend uses GL_BGRA upload, no
         // CPU swap. Backends without native BGRA fall back to a one-time conversion in
         // NanoVG.CreateImageBGRA's default implementation.
         // Nearest keeps pixel-snapped axis-aligned text crisp; rotated text asks for linear so it interpolates
@@ -82,7 +84,7 @@ internal sealed class MewVGTextCache : IDisposable
 
         var entry = new MewVGTextEntry(imageId, bmp.WidthPx, bmp.HeightPx, 0, 0, bmp.WidthPx, bmp.HeightPx);
         long bytes = EstimateBytes(bmp.WidthPx, bmp.HeightPx);
-        var newNode = new LinkedListNode<CacheEntry>(new CacheEntry(key, entry, bytes));
+        var newNode = new LinkedListNode<CacheEntry>(new CacheEntry(key, text.ToString(), entry, bytes));
         _lru.AddFirst(newNode);
         _map[key] = newNode;
         _currentBytes += bytes;
@@ -121,7 +123,7 @@ internal sealed class MewVGTextCache : IDisposable
                 // mid-frame text rendering (CreateImage), but the main NVG has
                 // already buffered draw calls referencing this imageId. Deleting
                 // the GL texture before NVG.Flush leaves those draws sampling a
-                // freed texture name — they render as opaque black, with a
+                // freed texture name - they render as opaque black, with a
                 // different set of text boxes affected each frame as the LRU
                 // boundary moves. The graphics context drains this queue right
                 // after Flush, when no draw call still references the IDs.
@@ -185,9 +187,12 @@ internal sealed class MewVGTextCache : IDisposable
             return;
         }
 
-        _disposed = true;
+        // Clear() and ReleasePendingDeletes() both early-return once _disposed is set,
+        // so both must run before the flag flips or their releases would be dropped.
         Clear();
+        ReleasePendingDeletes();
+        _disposed = true;
     }
 
-    private readonly record struct CacheEntry(MewVGTextCacheKey Key, MewVGTextEntry Entry, long Bytes);
+    private readonly record struct CacheEntry(MewVGTextCacheKey Key, string Text, MewVGTextEntry Entry, long Bytes);
 }

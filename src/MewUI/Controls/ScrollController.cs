@@ -77,7 +77,7 @@ internal sealed class ScrollController
     public void SetMetricsDip(int axis, double extentDip, double viewportDip)
     {
         // Infinity viewport means unconstrained measurement (e.g. SplitPanel 1st pass).
-        // Skip metrics update entirely — the constrained pass will set the real values.
+        // Skip metrics update entirely - the constrained pass will set the real values.
         // Updating with Infinity would convert to int.MaxValue, causing overflow in
         // extent-viewport arithmetic and resetting the scroll offset to 0.
         if (double.IsInfinity(viewportDip))

@@ -578,7 +578,7 @@ public sealed class SplitPanel : Panel
 
         protected override void OnRender(IGraphicsContext context)
         {
-            // Skip base.OnRender — SplitterThumb draws its own visuals.
+            // Skip base.OnRender - SplitterThumb draws its own visuals.
             var bounds = Bounds;
 
             var bgColor = GetValue(BackgroundProperty);

@@ -9,9 +9,9 @@ namespace Aprillz.MewUI.Rendering;
 /// <remarks>
 /// Handle slot conventions:
 /// <list type="bullet">
-///   <item>GL — NativeHandle = texture id, NativeAlternateHandle = framebuffer id, NativeDeviceHandle = 0</item>
-///   <item>Metal — NativeHandle = MTLTexture*, NativeAlternateHandle = MTLCommandQueue*, NativeDeviceHandle = MTLDevice*</item>
-///   <item>D3D11 — NativeHandle = ID3D11Texture2D*, NativeAlternateHandle = IDXGISurface*, NativeDeviceHandle = ID3D11Device*</item>
+///   <item>GL - NativeHandle = texture id, NativeAlternateHandle = framebuffer id, NativeDeviceHandle = 0</item>
+///   <item>Metal - NativeHandle = MTLTexture*, NativeAlternateHandle = MTLCommandQueue*, NativeDeviceHandle = MTLDevice*</item>
+///   <item>D3D11 - NativeHandle = ID3D11Texture2D*, NativeAlternateHandle = IDXGISurface*, NativeDeviceHandle = ID3D11Device*</item>
 /// </list>
 /// </remarks>
 public interface IExternalGpuWriteScope : IDisposable

@@ -289,7 +289,7 @@ internal sealed class GdiImage : IImage
             return true;
         }
 
-        // Cache miss — render to offscreen DIB.
+        // Cache miss - render to offscreen DIB.
 
         // Compute AABB of the transformed dest rect centered at origin.
         float hw = destWPx * 0.5f;
@@ -850,7 +850,7 @@ internal sealed class GdiImage : IImage
         }
 
         // GDI AlphaBlend expects the source to be premultiplied alpha (AC_SRC_ALPHA).
-        // Only premultiply if the source isn't already in that form — otherwise we'd
+        // Only premultiply if the source isn't already in that form - otherwise we'd
         // double-multiply RGB by alpha, dimming every semi-transparent pixel.
         bool needsPremultiply = false;
         if (!sourceIsPremultiplied)

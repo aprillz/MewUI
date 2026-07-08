@@ -83,7 +83,7 @@ internal static class FreeTypeLoad
     public const int FT_LOAD_TARGET_LIGHT = 0x1 << 16;
     public const int FT_LOAD_TARGET_LCD = 0x3 << 16;
     public const int FT_LOAD_FORCE_AUTOHINT = 0x20;
-    public const int FT_LOAD_COLOR = 1 << 20; // FT_LOAD_COLOR — load color bitmaps (CBDT/CBLC, COLR)
+    public const int FT_LOAD_COLOR = 1 << 20; // FT_LOAD_COLOR - load color bitmaps (CBDT/CBLC, COLR)
 }
 
 internal static class FreeTypeKerning
@@ -169,7 +169,7 @@ internal unsafe struct FT_GlyphSlotRec
     public FT_Outline outline;
 }
 
-/// <summary>FT_Bitmap_Size — metrics for a fixed-size bitmap strike.</summary>
+/// <summary>FT_Bitmap_Size - metrics for a fixed-size bitmap strike.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct FT_Bitmap_Size
 {
@@ -240,7 +240,7 @@ internal unsafe struct FT_Outline_Funcs
     public nint delta;
 }
 
-/// <summary>FT_Size_Metrics — scaled font metrics from FT_Size.</summary>
+/// <summary>FT_Size_Metrics - scaled font metrics from FT_Size.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct FT_Size_Metrics
 {
@@ -256,7 +256,7 @@ internal struct FT_Size_Metrics
     public nint max_advance; // FT_Pos 26.6
 }
 
-/// <summary>FT_SizeRec — represents a font size object.</summary>
+/// <summary>FT_SizeRec - represents a font size object.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct FT_SizeRec
 {
@@ -266,7 +266,7 @@ internal struct FT_SizeRec
     public FT_Size_Metrics metrics;
 }
 
-/// <summary>FT_Var_Axis — describes one variation axis of a variable font.</summary>
+/// <summary>FT_Var_Axis - describes one variation axis of a variable font.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct FT_Var_Axis
 {
@@ -274,11 +274,11 @@ internal struct FT_Var_Axis
     public nint minimum;    // FT_Fixed 16.16
     public nint def;        // FT_Fixed 16.16
     public nint maximum;    // FT_Fixed 16.16
-    public uint tag;        // FT_ULong — axis tag, e.g. 'wght'
-    public uint strid;      // FT_UInt  — name string ID
+    public uint tag;        // FT_ULong - axis tag, e.g. 'wght'
+    public uint strid;      // FT_UInt  - name string ID
 }
 
-/// <summary>FT_MM_Var — describes variable font axes and named styles.</summary>
+/// <summary>FT_MM_Var - describes variable font axes and named styles.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct FT_MM_Var
 {

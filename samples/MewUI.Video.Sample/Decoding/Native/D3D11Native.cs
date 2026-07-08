@@ -18,7 +18,7 @@ internal static unsafe class D3D11Native
     public const uint D3D11_BIND_RENDER_TARGET = 0x20;
     public const uint D3D11_BIND_DECODER = 0x200;
 
-    // DXGI_FORMAT subset — opaque/non-RGB formats that GL interop typically can't sample
+    // DXGI_FORMAT subset - opaque/non-RGB formats that GL interop typically can't sample
     public const uint DXGI_FORMAT_NV12 = 103;
 
     public const uint DXGI_FORMAT_P010 = 104;
@@ -89,7 +89,7 @@ internal static unsafe class D3D11Native
     /// Validates that a texture is sample-able by cross-API interop wrappers
     /// (WGL_NV_DX_interop, D2D::CreateBitmapFromDxgiSurface). Returns null when OK,
     /// otherwise a short reason string suitable for logging. Caller must perform this
-    /// check BEFORE passing the texture to interop wrappers — those wrappers AV inside
+    /// check BEFORE passing the texture to interop wrappers - those wrappers AV inside
     /// the driver when given an incompatible texture.
     /// </summary>
     public static string? ValidateForInterop(nint texture)
@@ -295,7 +295,7 @@ internal static unsafe class D3D11Native
         public ulong CurrentReservation;
     }
 
-    /// <summary>D3D11_TEXTURE2D_DESC layout — matches the C struct exactly.</summary>
+    /// <summary>D3D11_TEXTURE2D_DESC layout - matches the C struct exactly.</summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct D3D11_TEXTURE2D_DESC
     {

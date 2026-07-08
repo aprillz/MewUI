@@ -13,6 +13,10 @@ internal static partial class X11
     [LibraryImport(LibraryName)]
     public static partial nint XGetVisualInfo(nint display, long vinfoMask, ref XVisualInfo vinfoTemplate, out int nitems);
 
+    // Must be the first Xlib call in the process to make the shared Display safe for multi-thread access.
+    [LibraryImport(LibraryName)]
+    public static partial int XInitThreads();
+
     [LibraryImport(LibraryName)]
     public static partial nint XOpenDisplay(nint displayName);
 
@@ -65,6 +69,18 @@ internal static partial class X11
     public static partial int XRaiseWindow(nint display, nint window);
 
     [LibraryImport(LibraryName)]
+    public static partial int XGrabPointer(
+        nint display,
+        nint grabWindow,
+        [MarshalAs(UnmanagedType.Bool)] bool ownerEvents,
+        uint eventMask,
+        int pointerMode,
+        int keyboardMode,
+        nint confineTo,
+        nint cursor,
+        nint time);
+
+    [LibraryImport(LibraryName)]
     public static partial int XUngrabPointer(nint display, nint time);
 
     [LibraryImport(LibraryName)]
@@ -113,7 +129,7 @@ internal static partial class X11
         out int firstEventReturn,
         out int firstErrorReturn);
 
-    // GenericEvent (XEvent.type == 35) cookies — used by XInput2 and other modern extensions.
+    // GenericEvent (XEvent.type == 35) cookies - used by XInput2 and other modern extensions.
     // These belong to core libX11; the extension-specific payload referenced through
     // XGenericEventCookie.data is interpreted by the receiving extension.
     [LibraryImport(LibraryName)]

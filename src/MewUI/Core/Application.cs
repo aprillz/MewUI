@@ -175,7 +175,7 @@ public sealed class Application
     /// </summary>
     /// <summary>
     /// Gets the default graphics factory (the pre-<see cref="Current"/> reference). Rendering code that may run
-    /// before <see cref="Run"/> uses this as a fallback. The setter is internal — backends register the factory.
+    /// before <see cref="Run"/> uses this as a fallback. The setter is internal - backends register the factory.
     /// </summary>
     public static IGraphicsFactory DefaultGraphicsFactory
     {

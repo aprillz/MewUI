@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 /// <summary>
 /// P/Invoke surface for the CoreVideo / IOSurface / Metal interop calls used by the
 /// VideoToolbox zero-copy display path. CoreVideo's <c>CVMetalTextureCache</c> wraps
-/// IOSurface-backed CVPixelBuffers as <c>MTLTexture</c> handles without a CPU copy —
+/// IOSurface-backed CVPixelBuffers as <c>MTLTexture</c> handles without a CPU copy -
 /// the GPU samples directly from the decoder's output surface.
 /// </summary>
 /// <remarks>
@@ -66,7 +66,7 @@ internal static partial class CoreVideoInterop
 
     /// <summary>
     /// Generic CFDictionary creation for the small attribute dicts we hand to
-    /// CVPixelBufferCreate. Exposed via two-key helper below — keeping the raw
+    /// CVPixelBufferCreate. Exposed via two-key helper below - keeping the raw
     /// CF API surface minimal.
     /// </summary>
     [LibraryImport(CoreFoundation)]
@@ -93,7 +93,7 @@ internal static partial class CoreVideoInterop
     /// <c>const CFBooleanRef *</c>) and the type-aware dictionary callbacks structs
     /// <c>kCFTypeDictionaryKeyCallBacks</c> / <c>kCFTypeDictionaryValueCallBacks</c>
     /// (passed by address to CFDictionaryCreate so the resulting dict actually retains
-    /// the keys/values it stores — passing NULL there silently creates a non-retaining
+    /// the keys/values it stores - passing NULL there silently creates a non-retaining
     /// dict whose values dangle the moment we release them, which CV reads back as
     /// nonsense and produces buffers that fail Metal-compat checks later with -6660).
     /// </summary>
@@ -109,12 +109,12 @@ internal static partial class CoreVideoInterop
             CFBooleanTrue = booleanTrueSymbol == 0 ? 0 : *(nint*)booleanTrueSymbol;
         }
 
-        // These are struct-typed exports — we want the address of the struct, not its
+        // These are struct-typed exports - we want the address of the struct, not its
         // dereferenced contents. Pass the address straight to CFDictionaryCreate.
         CFTypeDictionaryKeyCallBacks = NativeLibrary.GetExport(lib, "kCFTypeDictionaryKeyCallBacks");
         CFTypeDictionaryValueCallBacks = NativeLibrary.GetExport(lib, "kCFTypeDictionaryValueCallBacks");
 
-        // We intentionally don't NativeLibrary.Free — the addresses we just captured
+        // We intentionally don't NativeLibrary.Free - the addresses we just captured
         // must stay valid for the life of the process, and CoreFoundation is always
         // resident in any macOS app anyway.
 
@@ -124,14 +124,14 @@ internal static partial class CoreVideoInterop
     /// <summary>
     /// CFNumberCreate. Used to encode the Boolean / Int values CV attribute dictionaries
     /// expect (e.g. kCVPixelBufferMetalCompatibilityKey = 1). CV accepts either CFBoolean
-    /// or non-zero CFNumber for boolean-typed attributes — CFNumber is easier to construct
+    /// or non-zero CFNumber for boolean-typed attributes - CFNumber is easier to construct
     /// without loading the global kCFBooleanTrue symbol.
     /// </summary>
     [LibraryImport(CoreFoundation)]
     public static partial nint CFNumberCreate(nint allocator, nint theType, in int valuePtr);
 
     /// <summary>
-    /// Returns the system-default Metal device. CoreFoundation refcounted — the device is
+    /// Returns the system-default Metal device. CoreFoundation refcounted - the device is
     /// shared across the process; identical handle on every call (so safe to compare with
     /// the backend's device for sanity checks). Caller releases via <see cref="CFRelease"/>.
     /// </summary>

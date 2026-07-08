@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// scratch render-target pool, and graph factory for backend resource creation.
 /// </summary>
 /// <remarks>
-/// <see cref="WithSource"/> creates a sub-context whose <see cref="Source"/> is replaced —
+/// <see cref="WithSource"/> creates a sub-context whose <see cref="Source"/> is replaced -
 /// used by <see cref="ComposeFilter"/> evaluation: the inner filter runs against the original
 /// source, and the outer filter runs against the inner's result. The sub-context shares the
 /// same scratch pool / factory.
@@ -65,7 +65,7 @@ public interface IImageFilterContext
 /// <summary>
 /// Backend-agnostic graph evaluator. Each backend implements its own concrete executor
 /// that handles the node types it can render natively. Unsupported nodes delegate to a
-/// fallback executor (typically the CPU one) — see plan.md for the chain-of-responsibility
+/// fallback executor (typically the CPU one) - see plan.md for the chain-of-responsibility
 /// model.
 /// </summary>
 public interface IImageFilterExecutor
@@ -80,7 +80,7 @@ public interface IImageFilterExecutor
     /// <summary>
     /// Upper bound on the LogicalToPixel scale at which the executor wants the source layer
     /// rasterized. GPU executors return <see cref="double.PositiveInfinity"/> (render at full
-    /// requested scale for crisp source). CPU executors should return <c>1.0</c> — running
+    /// requested scale for crisp source). CPU executors should return <c>1.0</c> - running
     /// Gaussian blur on a 12× upscaled buffer is orders of magnitude slower than rendering
     /// the source at 1× and letting the backend's hardware bilinear stretch the small filter
     /// result up to the final display rect during <c>DrawImage</c>. The visual difference is

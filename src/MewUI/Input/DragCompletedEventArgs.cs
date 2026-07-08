@@ -18,7 +18,7 @@ public sealed class DragCompletedEventArgs
     public bool WasCanceled { get; }
 
     /// <summary>The cursor's screen position (pixels) when the drag ended. Lets a source react to a release
-    /// over empty space (no drop target) — e.g. spawn a window there. Default when canceled.</summary>
+    /// over empty space (no drop target) - e.g. spawn a window there. Default when canceled.</summary>
     public Point ScreenPosition { get; }
 
     public DragCompletedEventArgs(DragDropEffects finalEffect, bool wasCanceled, Point screenPosition = default)

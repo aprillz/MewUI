@@ -8,7 +8,6 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract partial class UIElement : Element
 {
-
     private bool _suggestedIsEnabled = true;
     private bool _suggestedIsEnabledInitialized;
     private bool _visualStateDirty;
@@ -433,7 +432,7 @@ public abstract partial class UIElement : Element
     public void InvalidateVisualState()
     {
         // Reentrance: ApplyStyleValues may set properties that fire AffectsVisualState,
-        // which would re-enter this method. Skip — the in-progress resolve picks up the
+        // which would re-enter this method. Skip - the in-progress resolve picks up the
         // new state when it reads ComputeVisualState's inputs.
         if (_resolvingVisualState)
         {
@@ -754,7 +753,7 @@ public abstract partial class UIElement : Element
 
         if (newRoot != null)
         {
-            // Re-evaluate enabled state — parent may already be disabled.
+            // Re-evaluate enabled state - parent may already be disabled.
             ReevaluateSuggestedIsEnabled();
         }
         else

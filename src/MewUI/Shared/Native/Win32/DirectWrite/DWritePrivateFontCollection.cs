@@ -66,7 +66,7 @@ internal static unsafe class DWritePrivateFontCollection
         }
         finally
         {
-            // Keep the key registered — DWrite may query it during the collection's lifetime
+            // Keep the key registered - DWrite may query it during the collection's lifetime
         }
     }
 
@@ -139,7 +139,7 @@ internal static unsafe class DWritePrivateFontCollection
     }
 
     /// <summary>
-    /// Managed IDWriteFontFileEnumerator — iterates over a list of font file paths.
+    /// Managed IDWriteFontFileEnumerator - iterates over a list of font file paths.
     /// </summary>
     private static class FontFileEnumerator
     {

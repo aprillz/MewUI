@@ -10,7 +10,7 @@ namespace Aprillz.MewUI.Video.Sample.Controls;
 
 /// <summary>
 /// Owns the playback engine (<see cref="VideoPlayback"/>) and its visual surface
-/// (<see cref="VideoView"/>) together with the surrounding lifecycle — file loading,
+/// (<see cref="VideoView"/>) together with the surrounding lifecycle - file loading,
 /// play/pause / seek / drag-preview seeking, GPU interop reload on device/display
 /// change. Originally inlined into Program.cs; pulled out so the sample host code
 /// only deals with UI element wiring and stats/overlay concerns.
@@ -31,7 +31,7 @@ public sealed class VideoPlayer : IDisposable
 
     /// <summary>
     /// The visible video surface. Passed in by the host (typically already present in the
-    /// window's content tree) — the player subscribes to its GPU-interop events and pushes
+    /// window's content tree) - the player subscribes to its GPU-interop events and pushes
     /// playback updates to it but does not own the element's layout/visibility.
     /// </summary>
     public VideoView View { get; }
@@ -47,7 +47,7 @@ public sealed class VideoPlayer : IDisposable
 
     /// <summary>
     /// When true, a GPU-interop invalidation that involves both a render-target device change
-    /// AND a display change triggers an automatic playback recreate. Off by default — the host
+    /// AND a display change triggers an automatic playback recreate. Off by default - the host
     /// can opt in if it wants seamless display-move support.
     /// </summary>
     public bool EnableGpuInteropAutoReload { get; set; }
@@ -193,7 +193,7 @@ public sealed class VideoPlayer : IDisposable
                 StatusChanged?.Invoke("Loading video...");
                 return;
             }
-            // No playback and not loading — caller should kick off LoadAsync from its text box.
+            // No playback and not loading - caller should kick off LoadAsync from its text box.
             return;
         }
 
@@ -217,7 +217,7 @@ public sealed class VideoPlayer : IDisposable
 
     /// <summary>
     /// Called by the host's seek slider on every value change. Splits into "live seek" (when
-    /// not dragging or playback is running) versus "drag preview seek" (paused + dragging —
+    /// not dragging or playback is running) versus "drag preview seek" (paused + dragging -
     /// rapid seeks coalesced through <see cref="TryStartDragPreviewSeek"/>).
     /// </summary>
     public void OnSeekValueChanged(double seconds)

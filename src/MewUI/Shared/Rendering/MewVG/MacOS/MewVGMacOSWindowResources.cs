@@ -25,8 +25,17 @@ internal sealed class MewVGMetalWindowResources : IDisposable
     private const ulong MTLTextureUsageRenderTarget = 1ul << 2;
     private const ulong MTLStorageModePrivate = 2;
 
+    // Depth/stencil pool depth matches the color drawable's triple buffering (CAMetalLayer
+    // default maximumDrawableCount = 3), so the stencil attachment pipelines the same way the
+    // color texture does. A single shared stencil texture forces Metal's hazard tracker to
+    // serialize frame N+1 behind frame N's stencil access; N independent slots let up to N
+    // frames stay in flight. Kept <= MNVG_INIT_BUFFER_COUNT (4, the vertex/uniform ring depth)
+    // since there is no benefit pooling stencil deeper than the color drawable pool.
+    private const int STENCIL_POOL_SIZE = 3;
+
     private bool _disposed;
-    private nint _stencilTexture;
+    private readonly nint[] _stencilTextures = new nint[STENCIL_POOL_SIZE];
+    private int _stencilSlotIndex = -1;
     private int _stencilWidthPx;
     private int _stencilHeightPx;
 
@@ -134,6 +143,13 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         return new MewVGMetalWindowResources(hwnd, metalLayer, device, commandQueue, vg);
     }
 
+    /// <summary>
+    /// Advances to the next pooled stencil slot and returns its texture, creating or resizing
+    /// it as needed. Must be called exactly once per frame, at the frame boundary (from
+    /// <c>TryBeginFrame</c>) - the render pass bound in that same frame keeps this slot for its
+    /// single render encoder, so slot rotation here never splits a frame's clip stack across
+    /// two textures.
+    /// </summary>
     public nint EnsureStencilTexture(int widthPx, int heightPx)
     {
         if (_disposed)
@@ -144,21 +160,28 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
 
-        if (_stencilTexture != 0 &&
-            _stencilWidthPx == widthPx &&
-            _stencilHeightPx == heightPx)
+        if (_stencilWidthPx != widthPx || _stencilHeightPx != heightPx)
         {
-            return _stencilTexture;
+            using var pool = new AutoReleasePool();
+
+            for (int i = 0; i < _stencilTextures.Length; i++)
+            {
+                ReleaseIfNotNull(ref _stencilTextures[i]);
+            }
+
+            _stencilWidthPx = widthPx;
+            _stencilHeightPx = heightPx;
         }
 
-        using var pool = new AutoReleasePool();
+        _stencilSlotIndex = (_stencilSlotIndex + 1) % STENCIL_POOL_SIZE;
 
-        ReleaseIfNotNull(ref _stencilTexture);
-        _stencilWidthPx = widthPx;
-        _stencilHeightPx = heightPx;
+        if (_stencilTextures[_stencilSlotIndex] == 0)
+        {
+            using var pool = new AutoReleasePool();
+            _stencilTextures[_stencilSlotIndex] = CreateTexture(MTLPixelFormat.Depth32Float_Stencil8, widthPx, heightPx);
+        }
 
-        _stencilTexture = CreateTexture(MTLPixelFormat.Depth32Float_Stencil8, widthPx, heightPx);
-        return _stencilTexture;
+        return _stencilTextures[_stencilSlotIndex];
     }
 
     private nint CreateTexture(MTLPixelFormat format, int widthPx, int heightPx)
@@ -213,7 +236,10 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         _cachedContext?.Dispose();
         _cachedContext = null;
 
-        ReleaseIfNotNull(ref _stencilTexture);
+        for (int i = 0; i < _stencilTextures.Length; i++)
+        {
+            ReleaseIfNotNull(ref _stencilTextures[i]);
+        }
 
         TextCache.Dispose();
 

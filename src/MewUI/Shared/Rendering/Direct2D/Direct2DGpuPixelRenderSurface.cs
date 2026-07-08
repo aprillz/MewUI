@@ -5,7 +5,7 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
 /// <summary>
-/// GPU-only D2D pixel surface — wraps an <c>ID2D1Bitmap1</c> created with
+/// GPU-only D2D pixel surface - wraps an <c>ID2D1Bitmap1</c> created with
 /// <c>D2D1_BITMAP_OPTIONS.TARGET</c>. No GDI DIB section is allocated; pixels live
 /// exclusively in GPU memory and are sampled by effects / drawn directly via the
 /// shared device context. Counterpart of MewVG's <c>OpenGLPixelRenderSurface</c>.
@@ -102,7 +102,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     /// <summary>D2D effects expect premultiplied alpha; the bitmap is created PREMULTIPLIED.</summary>
     public bool IsPremultiplied => true;
 
-    /// <summary>GPU bitmap — <see cref="Lock"/> stages a CPU-readable copy via
+    /// <summary>GPU bitmap - <see cref="Lock"/> stages a CPU-readable copy via
     /// CopyFromBitmap and maps the staging texture, blocking on GPU completion.</summary>
     public LockMode LockMode => LockMode.Readback;
 
@@ -149,7 +149,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
 
     bool IReusableScratchSurface.CanReturnToPool => IsDeviceCurrent;
 
-    // ID2DTextureSource — exposes the GPU bitmap via the backend marker so D2D consumers
+    // ID2DTextureSource - exposes the GPU bitmap via the backend marker so D2D consumers
     // can short-circuit the CPU readback path when source and consumer share a device.
     nint ID2DTextureSource.NativeBitmap => IsDeviceCurrent ? _bitmap : 0;
     nint ID2DTextureSource.OwningDeviceContext => IsDeviceCurrent ? _factory.SharedFilterDeviceContext : 0;
@@ -207,7 +207,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     /// bumps the version. Intended for the rare CPU executor path that mutates pixels
     /// through <see cref="Lock"/>'s buffer (or <see cref="GetPixelSpan"/>) and needs
     /// the changes visible to subsequent GPU draws. Default <see cref="Lock"/> release
-    /// does NOT call this — it's read-only.</summary>
+    /// does NOT call this - it's read-only.</summary>
     public void CommitWritesFromBuffer()
     {
         lock (_gate)
@@ -219,7 +219,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
         }
     }
 
-    /// <summary>Public-API readback wrapper — locks, copies, releases.</summary>
+    /// <summary>Public-API readback wrapper - locks, copies, releases.</summary>
     private byte[] ReadbackToBuffer()
     {
         lock (_gate)
@@ -246,7 +246,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
 
         if (_readbackBitmap == 0)
         {
-            // Staging: CANNOT_DRAW | CPU_READ — usable as a CopyFromBitmap destination and
+            // Staging: CANNOT_DRAW | CPU_READ - usable as a CopyFromBitmap destination and
             // mappable for CPU read. Alpha mode mirrors the source so the staging copy stays
             // straight bytes-through (D2D refuses CopyFromBitmap across mismatched modes).
             var stagingAlphaMode = HasAlpha ? D2D1_ALPHA_MODE.PREMULTIPLIED : D2D1_ALPHA_MODE.IGNORE;

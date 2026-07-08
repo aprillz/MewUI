@@ -106,7 +106,7 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
             }
 
             cinfo.jpeg_finish_decompress();
-            // JPEG has no alpha channel — output is opaque by construction.
+            // JPEG has no alpha channel - output is opaque by construction.
             bitmap = new Bgra32PixelBuffer(width, height, dst, HasAlpha: false);
             return true;
         }
@@ -151,7 +151,10 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder
                 var alphaMask = Vector128.Create(0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF,
                                                   0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF).AsByte();
 
-                int simdWidth = width - 3; // Leave room for last partial iteration
+                // rgb1 reads s+12..s+27 (28 bytes from s); with s at pixel x (byte offset x*3),
+                // the read stays in bounds while x*3+28 <= width*3, i.e. x <= width-10.
+                // simdWidth = width-9 keeps the loop condition x < simdWidth within that margin.
+                int simdWidth = width - 9;
                 while (x < simdWidth)
                 {
                     // Load 16 bytes (covers 5+ pixels worth of RGB data)

@@ -113,7 +113,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         // threads can call into the same factory / device / RTs. Required for background
         // rendering (offscreen RT created on a worker thread, presented on the UI thread).
         // SINGLE_THREADED is faster (no locks) but caller must guarantee single-threaded
-        // access across the entire D2D resource graph — incompatible with our worker-
+        // access across the entire D2D resource graph - incompatible with our worker-
         // rendered pattern tile.
         // Try ID2D1Factory1 (Windows 8+) for D2D1_STROKE_TRANSFORM_TYPE_FIXED support.
         int hr = D2D1.D2D1CreateFactory(D2D1_FACTORY_TYPE.MULTI_THREADED, D2D1.IID_ID2D1Factory1, 0, out _d2dFactory);
@@ -467,6 +467,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             onRecreateTarget: null,
             onPresentTarget: () => { target.IncrementVersion(); return 0; },
             ownsRenderTarget: false,
+            textFormatCache: TextFormatCache,
             resolveRenderTarget: t => ((Direct2DPixelRenderSurface)t).GetOrCreateDcRenderTarget(d2dFactory));
         return ctx;
     }
@@ -474,13 +475,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     /// <summary>Builds a graphics context for a GPU-resident pixel surface. The context's
     /// <c>OnBeginFrame</c> branches into <c>BeginGpuPixelSurfaceFrame</c> when the target is a
     /// <see cref="Direct2DGpuPixelRenderSurface"/>, using the shared filter device context
-    /// + <c>SetTarget</c> instead of a DC render target — keeps the filter pipeline on-GPU
+    /// + <c>SetTarget</c> instead of a DC render target - keeps the filter pipeline on-GPU
     /// end-to-end.</summary>
     private IGraphicsContext CreateGpuPixelSurfaceContext(Direct2DGpuPixelRenderSurface target)
     {
         EnsureInitialized();
 
-        // resolveRenderTarget is unused for GPU targets — the GPU branch in OnBeginFrame
+        // resolveRenderTarget is unused for GPU targets - the GPU branch in OnBeginFrame
         // wires _renderTarget directly from the shared DC.
         var ctx = new Direct2DGraphicsContext(
             this,
@@ -491,6 +492,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             onRecreateTarget: null,
             onPresentTarget: () => { target.IncrementVersion(); return 0; },
             ownsRenderTarget: false,
+            textFormatCache: TextFormatCache,
             resolveRenderTarget: null);
         return ctx;
     }
@@ -527,7 +529,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             catch
             {
                 // GPU init failed (out of GPU memory, requested size > device limit, etc.).
-                // Fall through to DIB so the filter pipeline continues to render — slowly,
+                // Fall through to DIB so the filter pipeline continues to render - slowly,
                 // but it renders.
             }
         }
@@ -641,17 +643,17 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     public Filters.IImageFilterExecutor CreateImageFilterExecutor()
         => new Direct2DImageFilterExecutor(this);
 
-    public void ReleaseWindowResources(nint hwnd)
+    public void ReleaseWindowResources(nint windowHandle)
     {
         lock (_rtLock)
         {
             // The context is owned by the Window and disposed there. Here we only
             // release factory-owned native handles (COM render targets).
-            _externalDxgiDeviceContextWindowTargets.Remove(hwnd);
-            InvalidateCachedWindowTargetLocked(hwnd);
+            _externalDxgiDeviceContextWindowTargets.Remove(windowHandle);
+            InvalidateCachedWindowTargetLocked(windowHandle);
         }
 
-        ReleaseLayeredTarget(hwnd);
+        ReleaseLayeredTarget(windowHandle);
     }
 
     private void InvalidateAllFactoryRenderTargetsForDeviceLost()
@@ -738,7 +740,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 }
             }
 
-            // HWND render targets always use IGNORE — the DWM redirection surface
+            // HWND render targets always use IGNORE - the DWM redirection surface
             // does not preserve per-pixel alpha from D2D Present.
             // For system backdrop, DWM extended frame treats opaque black (0,0,0) as glass.
             var requiredAlpha = D2D1_ALPHA_MODE.IGNORE;
@@ -824,7 +826,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     {
         target = default;
 
-        // Alpha mode is part of the cache key — switching between transparent and opaque
+        // Alpha mode is part of the cache key - switching between transparent and opaque
         // requires a new swap-chain (different DXGI_ALPHA_MODE) and a fresh window (the
         // WS_EX_NOREDIRECTIONBITMAP bit is fixed at CreateWindow time anyway, but if the
         // window survives a recreate we still need the cached target reissued).
@@ -911,7 +913,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
             // CreateSwapChainForHwnd cannot be used on a WS_EX_NOREDIRECTIONBITMAP window
             // (no redirection surface to bind to). Transparent windows therefore go through
-            // CreateSwapChainForComposition + a DirectComposition visual — DWM composes the
+            // CreateSwapChainForComposition + a DirectComposition visual - DWM composes the
             // visual's swap-chain content with per-pixel alpha, no readback.
             var swapChainDesc = new DXGI_SWAP_CHAIN_DESC1(
                 width,
@@ -922,7 +924,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 bufferUsage: Dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 bufferCount: 2,
                 // STRETCH for both: composition swap-chains reject DXGI_SCALING_NONE
-                // (DXGI_ERROR_INVALID_CALL — flip-hwnd only), and BitBlt needs STRETCH too.
+                // (DXGI_ERROR_INVALID_CALL - flip-hwnd only), and BitBlt needs STRETCH too.
                 scaling: DXGI_SCALING.STRETCH,
                 // Composition (transparent) requires the flip model. Opaque CreateSwapChainForHwnd
                 // windows use the BitBlt model (DISCARD) instead: the flip model composes the
@@ -949,7 +951,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                     return false;
                 }
 
-                // Need an IDXGIDevice for DCompositionCreateDevice — the D3D11 device
+                // Need an IDXGIDevice for DCompositionCreateDevice - the D3D11 device
                 // implements it.
                 if (ComHelpers.QueryInterface(windowD3DDevice, Dcomp.IID_IDXGIDevice, out var dxgiDevice) < 0 || dxgiDevice == 0)
                 {
@@ -1349,7 +1351,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 SwapChain = 0;
             }
 
-            // DComp handles released last — Visual references the swap-chain (already cleared
+            // DComp handles released last - Visual references the swap-chain (already cleared
             // above) and Target references the Visual; reverse-order release matches DComp's
             // ownership graph without leaving dangling internal references.
             if (DcompVisual != 0)

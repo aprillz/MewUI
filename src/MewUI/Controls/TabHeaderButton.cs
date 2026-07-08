@@ -48,12 +48,15 @@ internal sealed class TabHeaderButton : ContentControl
 
     /// <summary>
     /// Called when the header is clicked (tab selection request).
-    /// Single-owner callback — no multicast, no cleanup needed.
+    /// Single-owner callback - no multicast, no cleanup needed.
     /// </summary>
     internal Action<int>? ClickedCallback { get; set; }
 
+    private readonly PressCaptureHelper _pressCapture;
+
     public TabHeaderButton()
     {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
 
     private void RefreshVisualState()
@@ -105,25 +108,7 @@ internal sealed class TabHeaderButton : ContentControl
         {
             return null;
         }
-
-        // If the click landed on (or inside) any focusable descendant — close button, checkbox,
-        // slider, etc. — let that control own the click. Non-focusable hits (Label, Glyph, empty
-        // space) fall through to the header itself as the tab-select surface.
-        var hit = base.OnHitTest(point);
-        if (hit == null)
-        {
-            return null;
-        }
-
-        for (var cur = hit; cur != null && cur != this; cur = cur.Parent as UIElement)
-        {
-            if (cur.Focusable)
-            {
-                return cur;
-            }
-        }
-
-        return this;
+        return base.OnHitTest(point); 
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -198,13 +183,7 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
-            SetPressed(true);
-
-            var root = FindVisualRoot();
-            if (root is Window window)
-            {
-                window.CaptureMouse(this);
-            }
+            _pressCapture.BeginPress();
 
             ClickedCallback?.Invoke(Index);
             e.Handled = true;
@@ -217,13 +196,7 @@ internal sealed class TabHeaderButton : ContentControl
 
         if (e.Button == MouseButton.Left && IsPressed)
         {
-            SetPressed(false);
-
-            var root = FindVisualRoot();
-            if (root is Window window)
-            {
-                window.ReleaseMouseCapture();
-            }
+            _pressCapture.EndPress();
 
             e.Handled = true;
         }
@@ -232,7 +205,7 @@ internal sealed class TabHeaderButton : ContentControl
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        SetPressed(false);
+        _pressCapture.CancelPress();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

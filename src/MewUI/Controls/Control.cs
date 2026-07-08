@@ -260,7 +260,7 @@ public abstract class Control : FrameworkElement
 
     /// <summary>
     /// Called when the visual state changes.
-    /// Most controls do NOT need to override this — Style + StateTrigger handles state-based values automatically.
+    /// Most controls do NOT need to override this - Style + StateTrigger handles state-based values automatically.
     /// </summary>
     protected virtual void OnVisualStateChanged(VisualState oldState, VisualState newState)
     { }
@@ -306,7 +306,7 @@ public abstract class Control : FrameworkElement
         // Apply the full style chain (base setters + matching triggers) immediately so
         // layout-affecting properties and current-state visuals are correct before the
         // next Measure/Arrange/Render. Using ApplyStyleValues (not a lightweight pre-apply)
-        // is required so _activeTriggerPropertyIds and _visualState stay in sync —
+        // is required so _activeTriggerPropertyIds and _visualState stay in sync -
         // otherwise a later state transition while offscreen (render culled) fails to
         // restore trigger-stamped values because bookkeeping was skipped here.
         var flags = ComputeVisualState().Flags;
@@ -333,7 +333,7 @@ public abstract class Control : FrameworkElement
             resolved = FindNamedStyle(_styleName);
             if (resolved == null && !Application.IsRunning)
             {
-                // StyleSheet not available yet (Application not running) — retry later
+                // StyleSheet not available yet (Application not running) - retry later
                 _styleNameResolved = false;
                 return;
             }
@@ -391,7 +391,7 @@ public abstract class Control : FrameworkElement
         if (newState != oldState || _forceApplyStyle)
         {
             // _forceApplyStyle (style just set/changed, re-attachment, theme change) always snaps:
-            // these are hard resets, not interactive transitions. Otherwise the caller chooses —
+            // these are hard resets, not interactive transitions. Otherwise the caller chooses -
             // the visual-state drain snaps for offscreen elements, animates for on-screen.
             bool effectiveSnap = snap || _forceApplyStyle;
             _forceApplyStyle = false;
@@ -501,7 +501,7 @@ public abstract class Control : FrameworkElement
     {
         if (style == null) return;
 
-        // BasedOn first (lower priority — will be overwritten by derived)
+        // BasedOn first (lower priority - will be overwritten by derived)
         CollectResolvedValues(style.BasedOn, flags, result);
 
         // Base setters
@@ -542,7 +542,7 @@ public abstract class Control : FrameworkElement
             {
                 if (!snap && _style?.FindTransition(propertyId) is Transition transition)
                 {
-                    // Animate directly — Animator bypasses source priority and
+                    // Animate directly - Animator bypasses source priority and
                     // SetTargetDirect updates BaseSource to Style.
                     // No ClearSource needed; avoids intermediate null/default flash.
                     Animator.Animate(property, setterValue, transition.Duration, transition.Easing, ValueSource.Style);
@@ -557,7 +557,7 @@ public abstract class Control : FrameworkElement
         }
         else
         {
-            // No style setter — clear trigger to let inherited/default take effect
+            // No style setter - clear trigger to let inherited/default take effect
             PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
         }
     }
@@ -617,13 +617,13 @@ public abstract class Control : FrameworkElement
 
         if (newRoot == null)
         {
-            // Detached from visual tree — release style and parts references.
+            // Detached from visual tree - release style and parts references.
             _style = null;
             _parts?.Clear();
         }
         else
         {
-            // Attached to visual tree — resolve style.
+            // Attached to visual tree - resolve style.
             ResolveAndApplyStyle();
         }
     }
@@ -917,7 +917,7 @@ public abstract class Control : FrameworkElement
         Color borderBrush)
     {
         // Border first: fill entire outer contour with border color.
-        // Background then overwrites the inner area — no seam at the boundary.
+        // Background then overwrites the inner area - no seam at the boundary.
         // Gate on HasAnyBorder, not UniformThickness (= Left only): a non-uniform border may have Left == 0 while
         // its other sides are non-zero (e.g. a tab/border-tab open on one side), which must still draw a border.
         if (borderBrush.A > 0 && metrics.HasAnyBorder)
@@ -1041,10 +1041,7 @@ public abstract class Control : FrameworkElement
         double w = Math.Max(0, desired.Width);
         double h = Math.Max(0, desired.Height);
 
-        if (x + w > client.Width)
-        {
-            x = Math.Max(0, client.Width - w);
-        }
+        x = PopupPlacement.ClampHorizontal(x, w, client.Width, floorToZero: false);
 
         if (y + h > client.Height)
         {

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -30,12 +32,42 @@ internal sealed class AnimatedEntry
 /// </summary>
 internal sealed class PropertyValueStore
 {
+    private const int SPARSE_CAPACITY = 8;
+    private const int MAX_JUSTIFIED_DENSE_ID = 256;
+    
+    // Small ints and the two most common doubles (Opacity/scale endpoints) are cached to avoid
+    // a fresh box on every SetLocal/SetTarget/SetInherited call in the hot style/trigger path.
+    private const int CACHED_INT_MIN = -1;
+    private const int CACHED_INT_MAX = 8;
+
     private static readonly object _boxedTrue = true;
     private static readonly object _boxedFalse = false;
+
+    private static readonly object[] _boxedInts = CreateBoxedInts();
+    private static readonly object _boxedDoubleZero = 0.0;
+    private static readonly object _boxedDoubleOne = 1.0;
+
+    private static object[] CreateBoxedInts()
+    {
+        var boxedInts = new object[CACHED_INT_MAX - CACHED_INT_MIN + 1];
+        for (int value = CACHED_INT_MIN; value <= CACHED_INT_MAX; value++)
+            boxedInts[value - CACHED_INT_MIN] = value;
+        return boxedInts;
+    }
 
     private readonly WeakReference<IPropertyOwner> _ownerRef;
     private readonly Type _ownerType;
     private Entry[]? _entries;
+
+    // Property ids are global and sequential across the whole app (framework + user-registered),
+    // so a dense Entry[] sized by the highest touched id can waste a lot of space when an element
+    // only ever touches a couple of late-registered properties. Below SparseCapacity distinct
+    // properties we use a small linear-scan array keyed by property id (below); once an element
+    // genuinely touches many properties we promote to the dense array above (as long as the id
+    // range is small enough to make that worthwhile), which keeps GetValue/SetValue O(1) for the
+    // common, heavily-styled controls that this store exists to serve.
+    private SparseEntry[]? _sparseEntries;
+    private int _sparseCount;
 
     internal Type OwnerType => _ownerType;
 
@@ -112,7 +144,7 @@ internal sealed class PropertyValueStore
             EqualityComparer<T>.Default.Equals(existing, value))
             return;
 
-        SetValue(property, value!, ValueSource.Local);
+        SetValue(property, BoxCached(value), ValueSource.Local);
     }
 
     /// <summary>
@@ -150,7 +182,7 @@ internal sealed class PropertyValueStore
             value = property.CoerceCallback(coerceOwner, value);
         }
 
-        // No change — skip to avoid infinite invalidation loops
+        // No change - skip to avoid infinite invalidation loops
         if (entry.Source == source && entry.Value is not AnimatedEntry && Equals(entry.Value, value))
             return;
 
@@ -198,7 +230,7 @@ internal sealed class PropertyValueStore
     }
 
     /// <summary>
-    /// Backward-compatible SetTarget — maps to Trigger source.
+    /// Backward-compatible SetTarget - maps to Trigger source.
     /// Used by existing code (PropertyForward, MewObjectPropertyBinding, etc.)
     /// </summary>
     public void SetTarget(MewProperty property, object value)
@@ -211,12 +243,12 @@ internal sealed class PropertyValueStore
     /// </summary>
     public void SetTarget<T>(MewProperty<T> property, T value)
     {
-        SetTarget(property, (object)value!);
+        SetTarget(property, BoxCached(value));
     }
 
     /// <summary>
     /// Caches an inherited property value. Does not fire change notifications
-    /// because the effective value hasn't actually changed — it was already
+    /// because the effective value hasn't actually changed - it was already
     /// resolved via parent chain traversal; we're just caching the result.
     /// </summary>
     internal void SetInherited<T>(MewProperty<T> property, T value)
@@ -225,7 +257,7 @@ internal sealed class PropertyValueStore
         // Don't overwrite a higher-priority source
         if (entry.Source > ValueSource.Inherited)
             return;
-        entry.Value = value;
+        entry.Value = BoxCached(value);
         entry.Source = ValueSource.Inherited;
     }
 
@@ -261,13 +293,26 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void ClearAllInherited()
     {
-        if (_entries == null) return;
-        for (int i = 0; i < _entries.Length; i++)
+        if (_entries != null)
         {
-            if (_entries[i].Source == ValueSource.Inherited)
+            for (int i = 0; i < _entries.Length; i++)
             {
-                _entries[i].Value = null;
-                _entries[i].Source = ValueSource.Default;
+                if (_entries[i].Source == ValueSource.Inherited)
+                {
+                    _entries[i].Value = null;
+                    _entries[i].Source = ValueSource.Default;
+                }
+            }
+            return;
+        }
+
+        if (_sparseEntries == null) return;
+        for (int i = 0; i < _sparseCount; i++)
+        {
+            if (_sparseEntries[i].Entry.Source == ValueSource.Inherited)
+            {
+                _sparseEntries[i].Entry.Value = null;
+                _sparseEntries[i].Entry.Source = ValueSource.Default;
             }
         }
     }
@@ -329,7 +374,7 @@ internal sealed class PropertyValueStore
                 // during the animation see the post-animation source. Without this,
                 // a Style-source restoration animation leaves entry.Source at the
                 // prior Trigger value, and a later SetStyle is rejected as lower
-                // priority — pinning the stale animated target.
+                // priority - pinning the stale animated target.
                 entry.Source = source.Value;
             }
         }
@@ -408,6 +453,12 @@ internal sealed class PropertyValueStore
 
         if (_entries != null)
             Array.Clear(_entries);
+
+        if (_sparseEntries != null)
+        {
+            Array.Clear(_sparseEntries, 0, _sparseCount);
+            _sparseCount = 0;
+        }
     }
 
     private void NotifyChanged(MewProperty property, object? oldValue, object? newValue)
@@ -417,6 +468,32 @@ internal sealed class PropertyValueStore
     }
 
     private static object Box(bool value) => value ? _boxedTrue : _boxedFalse;
+
+    /// <summary>
+    /// Boxes a value, reusing a cached box for small ints and 0.0/1.0 doubles instead of
+    /// allocating. <c>typeof(T)</c> comparisons are resolved per generic instantiation by the
+    /// JIT, so the branch not matching T costs nothing; <see cref="Unsafe.As{TFrom, TTo}"/> reads
+    /// the value without boxing it first just to inspect it.
+    /// </summary>
+    private static object BoxCached<T>(T value)
+    {
+        if (typeof(T) == typeof(int))
+        {
+            int intValue = Unsafe.As<T, int>(ref value);
+            if (intValue >= CACHED_INT_MIN && intValue <= CACHED_INT_MAX)
+                return _boxedInts[intValue - CACHED_INT_MIN];
+        }
+        else if (typeof(T) == typeof(double))
+        {
+            double doubleValue = Unsafe.As<T, double>(ref value);
+            if (doubleValue == 0.0)
+                return _boxedDoubleZero;
+            if (doubleValue == 1.0)
+                return _boxedDoubleOne;
+        }
+
+        return value!;
+    }
 
     /// <summary>
     /// Captures the current effective value before a mutation.
@@ -437,24 +514,75 @@ internal sealed class PropertyValueStore
 
     private ref Entry GetEntry(int id)
     {
-        if (_entries == null || id >= _entries.Length)
+        if (_entries != null)
+        {
+            if (id < _entries.Length)
+                return ref _entries[id];
             return ref Entry.Empty;
+        }
 
-        return ref _entries[id];
+        if (_sparseEntries != null)
+        {
+            for (int i = 0; i < _sparseCount; i++)
+            {
+                if (_sparseEntries[i].PropertyId == id)
+                    return ref _sparseEntries[i].Entry;
+            }
+        }
+
+        return ref Entry.Empty;
     }
 
     private ref Entry EnsureEntry(int id)
     {
-        if (_entries == null)
+        if (_entries != null)
         {
-            _entries = new Entry[Math.Max(id + 1, 8)];
-        }
-        else if (id >= _entries.Length)
-        {
-            Array.Resize(ref _entries, Math.Max(id + 1, _entries.Length * 2));
+            if (id >= _entries.Length)
+                Array.Resize(ref _entries, Math.Max(id + 1, _entries.Length * 2));
+
+            return ref _entries[id];
         }
 
-        return ref _entries[id];
+        _sparseEntries ??= new SparseEntry[SPARSE_CAPACITY];
+
+        for (int i = 0; i < _sparseCount; i++)
+        {
+            if (_sparseEntries[i].PropertyId == id)
+                return ref _sparseEntries[i].Entry;
+        }
+
+        if (_sparseCount < _sparseEntries.Length)
+        {
+            _sparseEntries[_sparseCount].PropertyId = id;
+            return ref _sparseEntries[_sparseCount++].Entry;
+        }
+
+        int maxTouchedId = id;
+        for (int i = 0; i < _sparseCount; i++)
+            maxTouchedId = Math.Max(maxTouchedId, _sparseEntries[i].PropertyId);
+
+        if (maxTouchedId < MAX_JUSTIFIED_DENSE_ID)
+        {
+            // Promote: the id range is small enough that a dense array pays for itself.
+            var dense = new Entry[Math.Max(maxTouchedId + 1, SPARSE_CAPACITY)];
+            for (int i = 0; i < _sparseCount; i++)
+                dense[_sparseEntries[i].PropertyId] = _sparseEntries[i].Entry;
+
+            _entries = dense;
+            _sparseEntries = null;
+            _sparseCount = 0;
+
+            if (id >= _entries.Length)
+                Array.Resize(ref _entries, Math.Max(id + 1, _entries.Length * 2));
+
+            return ref _entries[id];
+        }
+
+        // Id range too spread out to justify a dense array of that size; keep growing sparse
+        // instead so a single high-numbered property never forces a giant allocation.
+        Array.Resize(ref _sparseEntries, _sparseEntries.Length * 2);
+        _sparseEntries[_sparseCount].PropertyId = id;
+        return ref _sparseEntries[_sparseCount++].Entry;
     }
 
     private struct Entry
@@ -463,6 +591,12 @@ internal sealed class PropertyValueStore
 
         public object? Value;       // plain value, or AnimatedEntry when animating
         public ValueSource Source;  // who set this value
+    }
+
+    private struct SparseEntry
+    {
+        public int PropertyId;
+        public Entry Entry;
     }
 }
 

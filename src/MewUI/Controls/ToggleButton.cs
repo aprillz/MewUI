@@ -5,8 +5,15 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A button-like toggle control. When checked, its background is tinted with the theme accent (50%).
 /// </summary>
-public sealed partial class ToggleButton : ToggleBase
+public partial class ToggleButton : ToggleBase
 {
+    private readonly PressCaptureHelper _pressCapture;
+
+    public ToggleButton()
+    {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
+    }
+
     protected override Size MeasureContent(Size availableSize)
     {
         var borderInset = GetBorderVisualInset();
@@ -56,13 +63,7 @@ public sealed partial class ToggleButton : ToggleBase
             return;
         }
 
-        SetPressed(true);
-        Focus();
-
-        if (FindVisualRoot() is Window window)
-        {
-            window.CaptureMouse(this);
-        }
+        _pressCapture.BeginPress(() => Focus());
 
         e.Handled = true;
     }
@@ -76,12 +77,7 @@ public sealed partial class ToggleButton : ToggleBase
             return;
         }
 
-        SetPressed(false);
-
-        if (FindVisualRoot() is Window window)
-        {
-            window.ReleaseMouseCapture();
-        }
+        _pressCapture.EndPress();
 
         if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
@@ -94,7 +90,7 @@ public sealed partial class ToggleButton : ToggleBase
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        SetPressed(false);
+        _pressCapture.CancelPress();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -136,7 +132,7 @@ public sealed partial class ToggleButton : ToggleBase
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }

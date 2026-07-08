@@ -20,7 +20,7 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
 
     protected override void Render(ISvgRenderer renderer)
     {
-        // Match SVG.NET exactly — the `||` short-circuit MATTERS: SvgGroup/SvgUse/etc
+        // Match SVG.NET exactly - the `||` short-circuit MATTERS: SvgGroup/SvgUse/etc
         // are non-Renderable, so Path(renderer) must NOT be called for them. Calling
         // it triggered SvgGroup.GetPaths → child SvgText.Path under the *parent's*
         // boundable, baking percent coords like x="50%" against the wrong viewport.

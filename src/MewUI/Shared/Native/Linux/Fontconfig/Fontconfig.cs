@@ -9,7 +9,7 @@ internal static partial class Fontconfig
 {
     private const string LibraryName = "libfontconfig.so.1";
 
-    // FcInit — initialize fontconfig (idempotent).
+    // FcInit - initialize fontconfig (idempotent).
     [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool FcInit();

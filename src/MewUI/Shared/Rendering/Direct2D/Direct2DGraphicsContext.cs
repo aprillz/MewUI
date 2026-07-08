@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
@@ -43,6 +44,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private nint _deviceContext; // ID2D1DeviceContext* (0 if D2D 1.1 unavailable)
 
     private int _renderTargetGeneration;
+    // Solid brushes are valid for the render target's lifetime (not just one frame). These
+    // track which (target, generation) the cache was built against so it flushes only when
+    // the render target is actually recreated, mirroring the (renderTarget, generation) key
+    // pattern used by GetOrCreateBitmap on IImage.
+    private nint _solidBrushRenderTarget;
+    private int _solidBrushGeneration;
     private readonly Dictionary<uint, nint> _solidBrushes;
     private readonly Stack<(Matrix3x2 transform, float globalAlpha, int clipCount, Rect? clipBoundsWorld, bool textPixelSnap)> _states;
     private readonly Stack<ClipEntry> _clipStack;
@@ -89,7 +96,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     // GPU pixel-surface mode: when the active target is a Direct2DGpuPixelRenderSurface,
     // we render via the factory's shared filter device context (no DC RT, no DIB), with the
     // GPU bitmap set as the device target via dc.SetTarget. Subsequent draws and any effect
-    // pass land directly on GPU memory — full zero-copy parity with MewVG's FBO path.
+    // pass land directly on GPU memory - full zero-copy parity with MewVG's FBO path.
     private nint _gpuPixelSurfaceBitmap; // ID2D1Bitmap1* currently set as target (0 = DIB/normal mode)
     private nint _previousDeviceTarget; // saved for SetTarget restore at EndFrame
     private float _previousDcDpiX; // saved DC dpi for restore at EndFrame (GPU pixel-surface path)
@@ -113,6 +120,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             _renderTarget = rt;
             _renderTargetGeneration = generation;
         }
+
+        EnsureSolidBrushCacheValid();
 
         // Re-QI device context if render target changed.
         if (_deviceContext != 0)
@@ -180,7 +189,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private void BeginGpuPixelSurfaceFrame(Direct2DGpuPixelRenderSurface gpuTarget)
     {
         // Release any device context held from a previous BeginFrame on this same context
-        // instance — keeps refcounting balanced when the context is reused across frames.
+        // instance - keeps refcounting balanced when the context is reused across frames.
         if (_deviceContext != 0)
         {
             ComHelpers.Release(_deviceContext);
@@ -188,7 +197,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         // Use the factory's shared filter device context (NOT a DC RT). The bitmap was
-        // created on this DC — they MUST stay paired (cross-DC bitmap usage is undefined).
+        // created on this DC - they MUST stay paired (cross-DC bitmap usage is undefined).
         nint sharedDc = _ownerFactory.SharedFilterDeviceContext;
         if (sharedDc == 0 || !gpuTarget.IsDeviceCurrent || gpuTarget.Bitmap == 0)
         {
@@ -199,25 +208,26 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         // _renderTarget and _deviceContext point at the SAME COM object (DeviceContext IS-A
-        // RenderTarget) — existing draw methods that take ID2D1RenderTarget* operate on it
+        // RenderTarget) - existing draw methods that take ID2D1RenderTarget* operate on it
         // transparently. _renderTarget is borrowed (matches _ownsRenderTarget=false set at
-        // ctor — no Release in OnDispose). _deviceContext is AddRef'd because the existing
+        // ctor - no Release in OnDispose). _deviceContext is AddRef'd because the existing
         // OnDispose unconditionally Releases it; the AddRef balances that release so the
         // factory-owned shared DC isn't accidentally disposed.
         ComHelpers.AddRef(sharedDc);
         _renderTarget = sharedDc;
         _deviceContext = sharedDc;
         _renderTargetGeneration = 0;
+        EnsureSolidBrushCacheValid();
 
         // Save the DC's previous target so we can restore it on EndFrame. Multiple nested
-        // GPU passes (filter source then scratch) chain through the same DC — preserving
+        // GPU passes (filter source then scratch) chain through the same DC - preserving
         // the parent's target lets nesting work without a per-context push/pop stack.
         D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out _previousDeviceTarget);
         D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, gpuTarget.Bitmap);
         _gpuPixelSurfaceBitmap = gpuTarget.Bitmap;
 
         // Sync the DC's DPI to the bound bitmap's DPI. SetTarget does NOT auto-adopt the
-        // bitmap's DPI — the DC keeps whatever DPI was last set on it (default 96). If the
+        // bitmap's DPI - the DC keeps whatever DPI was last set on it (default 96). If the
         // bitmap's effective scale is e.g. 6× but the DC stays at 96 DPI, user-space
         // drawing coords map 1:1 to pixels, only filling the upper-left 1/6 of the bitmap.
         // We push the bitmap's DPI here so user-space coords scale correctly into pixel
@@ -232,7 +242,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, bitmapDpi, bitmapDpi);
 
         // Save the parent's transform on the DC so we can restore it on EndFrame. This pass
-        // is about to push Identity onto the DC for its own clear/draws — without restore,
+        // is about to push Identity onto the DC for its own clear/draws - without restore,
         // the parent pass continues with our Identity instead of its own translate/scale,
         // and any subsequent draws (cache hits, post-filter content) end up at the wrong
         // pixel positions.
@@ -244,7 +254,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _transform = Matrix3x2.Identity;
         _clipBoundsWorld = null;
 
-        // Only the outermost BeginGpuPixelSurfaceFrame issues BeginDraw — D2D rejects nested
+        // Only the outermost BeginGpuPixelSurfaceFrame issues BeginDraw - D2D rejects nested
         // BeginDraw on the same DC with WRONG_STATE. Inner filter/source passes rendered
         // while the outer pass is still drawing into its own GPU pixel surface on the same
         // shared DC just swap the DC's target via SetTarget;
@@ -254,7 +264,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         {
             D2D1VTable.BeginDraw((ID2D1RenderTarget*)_renderTarget);
         }
-        // Reset DC transform — the shared DC carries state across BeginDraw cycles AND
+        // Reset DC transform - the shared DC carries state across BeginDraw cycles AND
         // across nested SetTarget swaps. Push Identity now so the upcoming Clear / first
         // draw can't accidentally inherit a stale matrix from a parent pass.
         D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, D2D1_MATRIX_3X2_F.Identity);
@@ -357,7 +367,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             if (_gpuPixelSurfaceBitmap != 0 && _renderTarget != 0)
             {
                 // Restore parent's target so the next draw on the shared DC isn't writing into
-                // our scratch bitmap. _previousDeviceTarget may be 0 (no parent target) — that
+                // our scratch bitmap. _previousDeviceTarget may be 0 (no parent target) - that
                 // also restores cleanly because SetTarget(NULL) resets to "no target".
                 D2D1VTable.SetTarget((ID2D1DeviceContext*)_renderTarget, _previousDeviceTarget);
                 if (_previousDeviceTarget != 0)
@@ -389,22 +399,64 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            foreach (var (_, brush) in _solidBrushes)
-            {
-                ComHelpers.Release(brush);
-            }
-
-            _solidBrushes.Clear();
+            // Solid brushes are NOT flushed here - they remain valid for the render target's
+            // lifetime and are only released by EnsureSolidBrushCacheValid when the target is
+            // actually recreated (see OnBeginFrame/BeginGpuPixelSurfaceFrame), or in OnDispose.
             _states.Clear();
             _clipStack.Clear();
         }
     }
 
+    /// <summary>Releases and clears the solid-brush cache. Called when the render target the
+    /// cache was built against changes, and once more from <see cref="OnDispose"/>.</summary>
+    private void FlushSolidBrushes()
+    {
+        foreach (var (_, brush) in _solidBrushes)
+        {
+            ComHelpers.Release(brush);
+        }
+
+        _solidBrushes.Clear();
+    }
+
+    /// <summary>Flushes <see cref="_solidBrushes"/> only when the (render target, generation)
+    /// pair it was built against no longer matches the current one - solid brushes stay valid
+    /// for as long as the render target itself is alive, so clearing every frame (the previous
+    /// behavior) was unnecessary churn.</summary>
+    private void EnsureSolidBrushCacheValid()
+    {
+        if (_renderTarget == 0)
+        {
+            return;
+        }
+
+        if (_solidBrushRenderTarget == _renderTarget && _solidBrushGeneration == _renderTargetGeneration)
+        {
+            return;
+        }
+
+        FlushSolidBrushes();
+        _solidBrushRenderTarget = _renderTarget;
+        _solidBrushGeneration = _renderTargetGeneration;
+    }
+
     protected override void OnDispose()
     {
-        CollectionPool<Dictionary<uint, nint>>.Return(_solidBrushes);
-        CollectionPool<Stack<(Matrix3x2, float, int, Rect?, bool)>>.Return(_states);
-        CollectionPool<Stack<ClipEntry>>.Return(_clipStack);
+        FlushSolidBrushes();
+        CollectionPool.Return(_solidBrushes);
+        CollectionPool.Return(_states);
+        CollectionPool.Return(_clipStack);
+
+        // Release cached geometries eagerly rather than waiting on GC to run each entry's
+        // finalizer - this context (and the table) may not be collected for a while after
+        // Dispose.
+        foreach (var pair in _geometryCache)
+        {
+            var entry = pair.Value;
+            if (entry.NonZeroHandle != 0) { ComHelpers.Release(entry.NonZeroHandle); entry.NonZeroHandle = 0; }
+            if (entry.EvenOddHandle != 0) { ComHelpers.Release(entry.EvenOddHandle); entry.EvenOddHandle = 0; }
+        }
+        _geometryCache.Clear();
 
         if (_deviceContext != 0)
         {
@@ -438,7 +490,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        nint geometry = BuildD2DPathGeometry(path);
+        nint geometry = BuildD2DPathGeometry(path, FillRule.NonZero, out bool ownsGeometry);
         if (geometry == 0)
         {
             return;
@@ -452,7 +504,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            ComHelpers.Release(geometry);
+            if (ownsGeometry)
+            {
+                ComHelpers.Release(geometry);
+            }
         }
     }
 
@@ -469,7 +524,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        nint geometry = BuildD2DPathGeometry(path, fillRule);
+        nint geometry = BuildD2DPathGeometry(path, fillRule, out bool ownsGeometry);
         if (geometry == 0)
         {
             return;
@@ -482,7 +537,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            ComHelpers.Release(geometry);
+            if (ownsGeometry)
+            {
+                ComHelpers.Release(geometry);
+            }
         }
     }
 
@@ -507,7 +565,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         if (brush is IGradientBrush gradient)
         {
-            nint geometry = BuildD2DPathGeometry(path, fillRule);
+            nint geometry = BuildD2DPathGeometry(path, fillRule, out bool ownsGeometry);
             if (geometry == 0)
             {
                 return;
@@ -524,12 +582,16 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.FillGeometry((ID2D1RenderTarget*)_renderTarget, geometry, gradBrush);
                 }
             }
-            finally { ComHelpers.Release(geometry); ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally
+            {
+                if (ownsGeometry) { ComHelpers.Release(geometry); }
+                ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol);
+            }
             return;
         }
         if (brush is IImageBrush imageBrush)
         {
-            nint geometry = BuildD2DPathGeometry(path, fillRule);
+            nint geometry = BuildD2DPathGeometry(path, fillRule, out bool ownsGeometry);
             if (geometry == 0)
             {
                 return;
@@ -543,7 +605,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.FillGeometry((ID2D1RenderTarget*)_renderTarget, geometry, bmpBrush);
                 }
             }
-            finally { ComHelpers.Release(geometry); ComHelpers.Release(bmpBrush); }
+            finally
+            {
+                if (ownsGeometry) { ComHelpers.Release(geometry); }
+                ComHelpers.Release(bmpBrush);
+            }
         }
     }
 
@@ -673,7 +739,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
         nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
 
-        nint geometry = BuildD2DPathGeometry(path, FillRule.NonZero);
+        nint geometry = BuildD2DPathGeometry(path, FillRule.NonZero, out bool ownsGeometry);
         if (geometry == 0)
         {
             return;
@@ -710,7 +776,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            ComHelpers.Release(geometry);
+            if (ownsGeometry)
+            {
+                ComHelpers.Release(geometry);
+            }
         }
     }
 
@@ -1136,7 +1205,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         var bounds = path.GetBounds();
         _clipBoundsWorld = IntersectClipBounds(_clipBoundsWorld, TransformRect(bounds));
 
-        nint geometry = BuildD2DPathGeometry(path, path.FillRule);
+        nint geometry = BuildD2DPathGeometry(path, path.FillRule, out bool ownsGeometry);
         if (geometry == 0)
         {
             SetClip(bounds);
@@ -1146,7 +1215,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         int hr = D2D1VTable.CreateLayer((ID2D1RenderTarget*)_renderTarget, out var layer);
         if (hr < 0 || layer == 0)
         {
-            ComHelpers.Release(geometry);
+            if (ownsGeometry)
+            {
+                ComHelpers.Release(geometry);
+            }
             SetClip(bounds);
             return;
         }
@@ -1178,7 +1250,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             D2D1VTable.PushLayer((ID2D1RenderTarget*)_renderTarget, parameters, layer);
         }
 
-        _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry));
+        _clipStack.Push(new ClipEntry(ClipKind.Layer, layer, geometry, ownsGeometry));
     }
 
     protected override void ResetClipCore()
@@ -1352,7 +1424,19 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             throw new ArgumentException("Font must be a DirectWriteFont", nameof(font));
         }
 
-        nint textFormat = CreateDWriteTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
+        // Use cached native format when available, fall back to temporary (mirrors CreateTextLayout).
+        nint textFormat;
+        bool ownFormat;
+        if (_textFormatCache != null)
+        {
+            textFormat = _textFormatCache.GetOrCreate(_dwriteFactory, dwFont, horizontalAlignment, verticalAlignment, wrapping);
+            ownFormat = false;
+        }
+        else
+        {
+            textFormat = CreateDWriteTextFormat(dwFont, horizontalAlignment, verticalAlignment, wrapping);
+            ownFormat = true;
+        }
         if (textFormat == 0)
         {
             return;
@@ -1367,7 +1451,6 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         var layoutRect = new D2D1_RECT_F(left, top, left + w, top + h);
 
         nint textLayout = 0;
-        nint trimmingSign = 0;
         try
         {
             nint brush = GetSolidBrush(color);
@@ -1382,25 +1465,49 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 if (hr >= 0 && textLayout != 0)
                 {
                     ApplyCustomFontFallback(textLayout);
-                    DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, textFormat, out trimmingSign);
-                    var dwriteTrimming = new DWRITE_TRIMMING { granularity = DWRITE_TRIMMING_GRANULARITY.CHARACTER };
-                    DWriteVTable.SetTrimming(textLayout, dwriteTrimming, trimmingSign);
-                    var rtLayout = _deviceContext != 0 ? _deviceContext : _renderTarget;
-                    D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)rtLayout,
-                        new D2D1_POINT_2F(left, top), textLayout, brush, options);
+                    // Trimming sign depends only on the format, so it is cached alongside it
+                    // when the format cache is available; otherwise built and released per call.
+                    nint trimmingSign = 0;
+                    bool ownTrimmingSign = false;
+                    if (_textFormatCache != null)
+                    {
+                        trimmingSign = _textFormatCache.GetOrCreateTrimmingSign(_dwriteFactory, textFormat);
+                    }
+                    else
+                    {
+                        DWriteVTable.CreateEllipsisTrimmingSign((IDWriteFactory*)_dwriteFactory, textFormat, out trimmingSign);
+                        ownTrimmingSign = true;
+                    }
+                    try
+                    {
+                        var dwriteTrimming = new DWRITE_TRIMMING { granularity = DWRITE_TRIMMING_GRANULARITY.CHARACTER };
+                        DWriteVTable.SetTrimming(textLayout, dwriteTrimming, trimmingSign);
+                        var rtLayout = _deviceContext != 0 ? _deviceContext : _renderTarget;
+                        D2D1VTable.DrawTextLayout((ID2D1RenderTarget*)rtLayout,
+                            new D2D1_POINT_2F(left, top), textLayout, brush, options);
+                    }
+                    finally
+                    {
+                        if (ownTrimmingSign)
+                        {
+                            ComHelpers.Release(trimmingSign);
+                        }
+                    }
                     return;
                 }
             }
 
-            // Use ID2D1DeviceContext (D2D 1.1) when available — required for ENABLE_COLOR_FONT.
+            // Use ID2D1DeviceContext (D2D 1.1) when available - required for ENABLE_COLOR_FONT.
             var rt = _deviceContext != 0 ? _deviceContext : _renderTarget;
             D2D1VTable.DrawText((ID2D1RenderTarget*)rt, text, textFormat, layoutRect, brush, options);
         }
         finally
         {
-            ComHelpers.Release(trimmingSign);
             ComHelpers.Release(textLayout);
-            ComHelpers.Release(textFormat);
+            if (ownFormat)
+            {
+                ComHelpers.Release(textFormat);
+            }
         }
     }
 
@@ -1486,7 +1593,73 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, m);
     }
 
-    private nint BuildD2DPathGeometry(PathGeometry path, FillRule fillRule = FillRule.NonZero)
+    // PathGeometry re-tessellation cache (report-shared-rendering.md #8, rendering-abstraction
+    // #4): PathGeometry is mutable and neutral-layer generic (unlike TextLayout, which is an
+    // immutable, backend-created result with a single BackendHandle slot), and the same
+    // instance is drawn with either fill rule depending on call site. Route chosen: a
+    // conservative keyed cache local to this backend context (ConditionalWeakTable<PathGeometry,
+    // GeometryCacheEntry>), leaving the neutral PathGeometry.cs untouched, rather than adding a
+    // backend cache slot there. Only frozen paths are cached - Freeze() is one-way
+    // (FreezableHelper.ThrowIfFrozen guards every mutator), so a frozen instance's commands can
+    // never change again and no separate "version" counter is needed; non-frozen paths bypass
+    // the cache and rebuild every call exactly as before. Entries are per fill rule (NonZero and
+    // EvenOdd need separate ID2D1Geometry sink fill modes) and are released by the entry's own
+    // finalizer once the PathGeometry - or this context, which owns the table - becomes
+    // unreachable, so no explicit per-frame sweep is required. Finalizer-thread Release is safe
+    // here: the factory is created MULTI_THREADED, and the image wrappers (Direct2DImage et al)
+    // already release their D2D bitmaps from finalizers the same way.
+    private sealed class GeometryCacheEntry
+    {
+        public nint NonZeroHandle;
+        public nint EvenOddHandle;
+
+        ~GeometryCacheEntry()
+        {
+            if (NonZeroHandle != 0) ComHelpers.Release(NonZeroHandle);
+            if (EvenOddHandle != 0) ComHelpers.Release(EvenOddHandle);
+        }
+    }
+
+    private readonly ConditionalWeakTable<PathGeometry, GeometryCacheEntry> _geometryCache = new();
+
+    /// <summary>Builds (or reuses, for frozen paths) the native geometry for <paramref name="path"/>.
+    /// <paramref name="ownsGeometry"/> is <see langword="true"/> when the caller is responsible
+    /// for releasing the returned handle; when <see langword="false"/> the handle is owned by
+    /// the cache and must NOT be released by the caller (e.g. via <c>ComHelpers.Release</c> or by
+    /// stashing it somewhere that later releases it unconditionally).</summary>
+    private nint BuildD2DPathGeometry(PathGeometry path, FillRule fillRule, out bool ownsGeometry)
+    {
+        if (path.IsFrozen)
+        {
+            ownsGeometry = false;
+            return GetOrBuildCachedGeometry(path, fillRule);
+        }
+
+        ownsGeometry = true;
+        return BuildD2DPathGeometryCore(path, fillRule);
+    }
+
+    private nint GetOrBuildCachedGeometry(PathGeometry path, FillRule fillRule)
+    {
+        var entry = _geometryCache.GetValue(path, static _ => new GeometryCacheEntry());
+
+        if (fillRule == FillRule.EvenOdd)
+        {
+            if (entry.EvenOddHandle == 0)
+            {
+                entry.EvenOddHandle = BuildD2DPathGeometryCore(path, fillRule);
+            }
+            return entry.EvenOddHandle;
+        }
+
+        if (entry.NonZeroHandle == 0)
+        {
+            entry.NonZeroHandle = BuildD2DPathGeometryCore(path, fillRule);
+        }
+        return entry.NonZeroHandle;
+    }
+
+    private nint BuildD2DPathGeometryCore(PathGeometry path, FillRule fillRule = FillRule.NonZero)
     {
         int hr = D2D1VTable.CreatePathGeometry((ID2D1Factory*)_d2dFactory, out nint geometry);
         if (hr < 0 || geometry == 0)
@@ -1664,7 +1837,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     /// Applies the user-configured font fallback chain to a text layout (if any).
     /// Uses IDWriteTextLayout2::SetFontFallback with a custom IDWriteFontFallback
     /// built from <see cref="FontFallback.FallbackChain"/>.
-    /// Safe to call on any layout — silently no-ops if IDWriteFactory2 is unavailable.
+    /// Safe to call on any layout - silently no-ops if IDWriteFactory2 is unavailable.
     /// </summary>
     private void ApplyCustomFontFallback(nint textLayout)
     {
@@ -1679,7 +1852,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        // This may fail if the layout doesn't support IDWriteTextLayout2 — that's fine.
+        // This may fail if the layout doesn't support IDWriteTextLayout2 - that's fine.
         _ = DWriteTextLayout2VTable.SetFontFallback(textLayout, fallback);
     }
 
@@ -1924,6 +2097,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         return hr >= 0 ? bitmapBrush : 0;
     }
 
+    // Cap for the now-cross-frame solid-brush cache: a themed UI only ever uses a small,
+    // finite palette, but per-frame alpha-fade animations multiply GetSolidBrush's ARGB key
+    // by up to 256 distinct alpha levels per base color. Clearing on overflow bounds native
+    // brush count without needing LRU bookkeeping for what is normally a tiny cache.
+    private const int MaxSolidBrushes = 256;
+
     private nint GetSolidBrush(Color color)
     {
         // Apply global alpha multiplier before looking up or creating the brush.
@@ -1936,6 +2115,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (_solidBrushes.TryGetValue(key, out var brush) && brush != 0)
         {
             return brush;
+        }
+
+        if (_solidBrushes.Count >= MaxSolidBrushes)
+        {
+            FlushSolidBrushes();
         }
 
         int hr = D2D1VTable.CreateSolidColorBrush((ID2D1RenderTarget*)_renderTarget, ToColorF(color), out brush);
@@ -2007,15 +2191,22 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         D2D1VTable.PopLayer((ID2D1RenderTarget*)_renderTarget);
-        ComHelpers.Release(entry.Geometry);
+        if (entry.OwnsGeometry)
+        {
+            ComHelpers.Release(entry.Geometry);
+        }
         ComHelpers.Release(entry.Layer);
     }
 
-    private readonly struct ClipEntry(ClipKind kind, nint layer, nint geometry)
+    private readonly struct ClipEntry(ClipKind kind, nint layer, nint geometry, bool ownsGeometry = true)
     {
         public ClipKind Kind { get; } = kind;
 
         public nint Layer { get; } = layer;
+
+        /// <summary>Whether this entry owns <see cref="Geometry"/> and must release it on pop.
+        /// False for geometries borrowed from the per-context path-geometry cache.</summary>
+        public bool OwnsGeometry { get; } = ownsGeometry;
 
         public nint Geometry { get; } = geometry;
     }

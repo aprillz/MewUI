@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Aprillz.MewUI.Video.Sample.Decoding;
 
 /// <summary>
-/// <c>GL_OES_EGL_image</c> extension entry point — binds an EGLImage to a GL texture
+/// <c>GL_OES_EGL_image</c> extension entry point - binds an EGLImage to a GL texture
 /// so subsequent draws sample from it directly. Looked up via <c>glXGetProcAddress</c>
 /// because it's an extension function, not part of the GL ABI.
 /// </summary>
@@ -30,7 +30,7 @@ internal static unsafe class GlEglImageExt
     /// <summary>
     /// Bind <paramref name="image"/> as the storage of the currently-bound texture.
     /// <paramref name="target"/> is typically <c>GL_TEXTURE_2D</c> (0x0DE1) or
-    /// <c>GL_TEXTURE_EXTERNAL_OES</c> (0x8D65) depending on the dma_buf format —
+    /// <c>GL_TEXTURE_EXTERNAL_OES</c> (0x8D65) depending on the dma_buf format -
     /// YUV planar formats imported as a single image use the EXTERNAL_OES target,
     /// while RGB/RGBA can use TEXTURE_2D.
     /// </summary>

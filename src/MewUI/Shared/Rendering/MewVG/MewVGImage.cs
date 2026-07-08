@@ -9,7 +9,7 @@ internal sealed class MewVGImage : IImage
     // Cached GPU-tier view of _source. Non-null iff source exposes a live GPU texture
     // (FBO color attachment, MTLTexture, etc.). The GPU contract (GetTextureHandle,
     // RetainGpuHandle/ReleaseGpuHandle, ConfigureGpuTextureWrap) lives on
-    // IGpuTextureSource — IPixelBufferSource is CPU-only, so we resolve once at
+    // IGpuTextureSource - IPixelBufferSource is CPU-only, so we resolve once at
     // construction instead of pattern-matching on every frame.
     private readonly IGpuTextureSource? _gpuSource;
     private readonly Action<MewVGImage>? _disposeRequested;
@@ -27,7 +27,7 @@ internal sealed class MewVGImage : IImage
     // Optional callback invoked by ReleaseImagesImmediate after all NVG image-ids and the
     // retained GPU handle have been released. Used by zero-copy scratch paths to defer
     // returning a pooled render surface until the in-flight NVG draws referencing it
-    // have flushed — without this the pool can hand the same RT to the next filter node in
+    // have flushed - without this the pool can hand the same RT to the next filter node in
     // the same eval, which then MPS-overwrites the ColorTexture while a queued draw still
     // points at it via NoDelete (visible as cross-filter / cross-frame content bleed).
     private Action? _postReleaseCallback;
@@ -80,7 +80,7 @@ internal sealed class MewVGImage : IImage
             return 0;
         }
 
-        // Tell NVG the texels are already premultiplied — without this, the shader would
+        // Tell NVG the texels are already premultiplied - without this, the shader would
         // multiply RGB by alpha a second time at sample, dimming every semi-transparent
         // pixel (visible as a black halo on alpha-blended edges).
         if (_sourceIsPremultiplied)
@@ -129,7 +129,7 @@ internal sealed class MewVGImage : IImage
         // attachment for GL, MTLTexture for Metal), wrap it directly. Skips the
         // readback + RGBA conversion + re-upload round-trip that's the dominant cost
         // when a scene has many filtered elements (each blur would otherwise hit
-        // a glReadPixels / getBytes sync barrier per filter — 100 filters ≈ 1 s of stalls).
+        // a glReadPixels / getBytes sync barrier per filter - 100 filters ≈ 1 s of stalls).
         // NoDelete tells NVG the texture is externally owned (we keep it alive in the
         // pixel surface), so DeleteImage only drops NVG's bookkeeping record.
         nint mtlTex = _gpuSource?.GetTextureHandle() ?? 0;
@@ -137,7 +137,7 @@ internal sealed class MewVGImage : IImage
         {
             // Take an explicit retain on the source's GPU texture before NVG starts referencing
             // it via NoDelete. The source (typically a scratch render surface) may be
-            // disposed before the consumer's command buffer commits — the retain keeps the
+            // disposed before the consumer's command buffer commits - the retain keeps the
             // texture alive until ReleaseImagesImmediate runs, which the offscreen provider
             // drains AFTER the frame's command buffer has been submitted.
             //
@@ -175,7 +175,7 @@ internal sealed class MewVGImage : IImage
         nint glHandle = _gpuSource?.GetTextureHandle() ?? 0;
         if (glHandle != 0)
         {
-            // Same retain discipline as the Metal path — extend the texture's lifetime past
+            // Same retain discipline as the Metal path - extend the texture's lifetime past
             // _source.Dispose so the consumer's NVG flush still finds the FBO color
             // attachment alive. OpenGLPixelRenderSurface tracks an explicit refcount and
             // defers actual glDeleteTextures until the last release.
@@ -202,7 +202,7 @@ internal sealed class MewVGImage : IImage
             // touch the external texture's wrap state (NoDelete = "don't mutate"). At sample
             // time the shader uses texture2D() which honors the texture's own
             // GL_TEXTURE_WRAP_S/T. Backends whose RT texture defaults to CLAMP_TO_EDGE need
-            // to upgrade the wrap mode based on the requested flags here — the source
+            // to upgrade the wrap mode based on the requested flags here - the source
             // exposes this via ConfigureGpuTextureWrap (no-op on backends that don't need it).
             bool repeatX = (flags & NVGimageFlags.RepeatX) != 0;
             bool repeatY = (flags & NVGimageFlags.RepeatY) != 0;
@@ -215,12 +215,12 @@ internal sealed class MewVGImage : IImage
                 _images[imageKey] = new ImageEntry(handleId, version);
                 return handleId;
             }
-            // CreateImageFromHandle failed (e.g. backend mismatch) — fall through to CPU
+            // CreateImageFromHandle failed (e.g. backend mismatch) - fall through to CPU
             // upload path below.
         }
 
         // Source pixels are BGRA (the MewUI-wide convention). Hand them straight to NVG via
-        // the BGRA upload path — GL uses GL_BGRA + UnsignedInt_8_8_8_8_Rev, Metal uses
+        // the BGRA upload path - GL uses GL_BGRA + UnsignedInt_8_8_8_8_Rev, Metal uses
         // BGRA8Unorm. Backends without native BGRA support inherit the base class fallback
         // that does a one-time CPU swap. The previous code unconditionally swapped into a
         // managed _rgbaCache buffer (8MB+ alloc per image, full memory pass per upload).
@@ -255,7 +255,7 @@ internal sealed class MewVGImage : IImage
     /// <summary>
     /// Snapshot of (vg, flags) pairs currently in <see cref="_images"/>. Used by the
     /// offscreen provider's deferred-disposal queue to split this image's pending NVG
-    /// handle deletions into per-NVG buckets — each NVG drains its own bucket from its
+    /// handle deletions into per-NVG buckets - each NVG drains its own bucket from its
     /// own EndFrame on the thread that owns it, avoiding the cross-thread NVG-instance
     /// state mutation that corrupts NanoVG's image-id table when an unrelated thread
     /// calls <c>vg.DeleteImage</c> while the NVG is mid-frame elsewhere.
@@ -272,7 +272,7 @@ internal sealed class MewVGImage : IImage
     }
 
     /// <summary>
-    /// Releases the NVG image-id for a single (vg, flags) entry — invoked by the per-NVG
+    /// Releases the NVG image-id for a single (vg, flags) entry - invoked by the per-NVG
     /// drain on the thread that owns <paramref name="vg"/> at <c>EndFrame</c> time. Once
     /// every entry has been released the image's GPU retain (if any) is dropped and the
     /// post-release callback fires.
@@ -299,7 +299,7 @@ internal sealed class MewVGImage : IImage
 
     /// <summary>
     /// Whole-image release used for inline disposal (no NVG entries to drain) and for
-    /// shutdown flush. Calls <c>vg.DeleteImage</c> for every entry — caller is responsible
+    /// shutdown flush. Calls <c>vg.DeleteImage</c> for every entry - caller is responsible
     /// for ensuring NVG instances aren't being used concurrently.
     /// </summary>
     internal void ReleaseImagesImmediate()

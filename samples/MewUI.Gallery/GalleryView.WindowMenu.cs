@@ -5,7 +5,13 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private FrameworkElement WindowsMenuPage()
+    private FrameworkElement MenuPage() =>
+        CardGrid(
+            MenusCard(),
+            AccessKeyCard()
+        );
+
+    private FrameworkElement WindowPage()
     {
         var dialogStatus = new ObservableValue<string>("Dialog: -");
         var transparentStatus = new ObservableValue<string>("Transparent: -");
@@ -134,10 +140,13 @@ partial class GalleryView
             manualPositionStatus.Value = $"Manual: opening at ({left}, {top})";
 
             Window manual = null!;
+            var cancelClose = new ObservableValue<bool>(false);
 
             new Window()
                 .Ref(out manual)
                 .Resizable(360, 180)
+                .OnClosed(() => Console.WriteLine("Window closed"))
+                .OnClosing(e => { e.Cancel = cancelClose.Value; Console.WriteLine($"Window closing"); })
                 .StartManualPosition(left, top)
                 .OnBuild(x => x
                     .Title("StartupManualPosition sample")
@@ -152,6 +161,9 @@ partial class GalleryView
                                 new TextBlock()
                                     .FontSize(11)
                                     .Text("Use this sample to verify startup manual placement against the requested DIP coordinates."),
+                                new CheckBox()
+                                    .BindIsChecked(cancelClose)
+                                    .Content("Cancel Close"),
                                 new Button()
                                     .Content("Close")
                                     .OnClick(() => x.Close())
@@ -171,8 +183,6 @@ partial class GalleryView
         }
 
         return CardGrid(
-            MenusCard(),
-
             Card(
                 "Native Custom Chrome",
                 new StackPanel()
@@ -343,8 +353,6 @@ partial class GalleryView
             PromptDialogCard(),
 
             NativeMessageHookCard(),
-
-            AccessKeyCard(),
 
             DevToolsCard()
         );
@@ -635,17 +643,23 @@ partial class GalleryView
             messageCount++;
             switch (args)
             {
+#if MEWUI_GALLERY_WIN || (!MEWUI_GALLERY_LINUX && !MEWUI_GALLERY_OSX)
                 case Win32NativeMessageEventArgs win32:
                     hookLog.Value = $"Win32 #{messageCount}: msg=0x{win32.Msg:X4} wParam=0x{win32.WParam:X} lParam=0x{win32.LParam:X}";
                     break;
+#endif
 
+#if MEWUI_GALLERY_LINUX || (!MEWUI_GALLERY_WIN && !MEWUI_GALLERY_OSX)
                 case X11NativeMessageEventArgs x11:
                     hookLog.Value = $"X11 #{messageCount}: type={x11.EventType}";
                     break;
+#endif
 
+#if MEWUI_GALLERY_OSX || (!MEWUI_GALLERY_WIN && !MEWUI_GALLERY_LINUX)
                 case MacOSNativeMessageEventArgs macos:
                     hookLog.Value = $"macOS #{messageCount}: type={macos.EventType}";
                     break;
+#endif
             }
         }
 

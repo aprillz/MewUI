@@ -16,7 +16,7 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 /// <para>
 /// <b>Format note</b>: VAAPI typically decodes to NV12 (two planes: Y as R8, UV as
 /// GR88). The export below requests <c>VA_EXPORT_SURFACE_COMPOSED_LAYERS</c> so a
-/// single EGLImage represents the whole surface — but the resulting texture is a
+/// single EGLImage represents the whole surface - but the resulting texture is a
 /// YUV image that NVG's <c>sampler2D</c> shader can't render directly. To make the
 /// pixels usable, the upstream pipeline must either:
 /// <list type="bullet">
@@ -25,12 +25,12 @@ namespace Aprillz.MewUI.Video.Sample.Decoding;
 ///         handing it to NVG.</item>
 /// </list>
 /// This file does the GPU memory plumbing only; the YUV→RGB step is left to the
-/// caller. As a first integration point it's still useful — it replaces the
+/// caller. As a first integration point it's still useful - it replaces the
 /// per-frame CPU readback + texture upload with a one-time dma_buf import.
 /// </para>
 /// <para>
 /// <b>Driver support</b>: requires Mesa's GLX/EGL state sharing. NVIDIA proprietary
-/// driver doesn't share state between GLX and EGL — the EGLImage created here will
+/// driver doesn't share state between GLX and EGL - the EGLImage created here will
 /// fail to bind in the GLX context. Caller should fall back to the CPU path on
 /// failure.
 /// </para>
@@ -62,7 +62,7 @@ internal sealed unsafe class VaapiDmaBufTexture : IExternalRasterSource
 
     /// <summary>
     /// Imports <paramref name="vaSurfaceId"/> from <paramref name="vaDisplay"/> as a
-    /// GL texture via dma_buf + EGLImage. Throws if any step fails — callers wanting
+    /// GL texture via dma_buf + EGLImage. Throws if any step fails - callers wanting
     /// graceful fallback should catch and use the CPU upload path.
     /// </summary>
     public VaapiDmaBufTexture(nint vaDisplay, uint vaSurfaceId, int pixelWidth, int pixelHeight)
@@ -73,7 +73,7 @@ internal sealed unsafe class VaapiDmaBufTexture : IExternalRasterSource
 
         if (!GlEglImageExt.TryLoad())
         {
-            throw new InvalidOperationException("glEGLImageTargetTexture2DOES not available — GL_OES_EGL_image extension missing.");
+            throw new InvalidOperationException("glEGLImageTargetTexture2DOES not available - GL_OES_EGL_image extension missing.");
         }
 
         _vaDisplay = vaDisplay;
@@ -89,7 +89,7 @@ internal sealed unsafe class VaapiDmaBufTexture : IExternalRasterSource
         }
 
         // COMPOSED_LAYERS asks libva to give us a single layer that covers all
-        // planes — easier to import as one EGLImage. The downside is the importer
+        // planes - easier to import as one EGLImage. The downside is the importer
         // gets an opaque YUV blob; see class doc for the YUV→RGB story.
         int exportStatus = LibVa.vaExportSurfaceHandle(
             _vaDisplay,
@@ -130,7 +130,7 @@ internal sealed unsafe class VaapiDmaBufTexture : IExternalRasterSource
             _eglImage = CreateImageForLayer(_eglDisplay, descriptor, layer0);
 
             // Allocate a GL texture name and bind the EGLImage to it. The texture
-            // target is GL_TEXTURE_2D — for COMPOSED YUV layers the driver
+            // target is GL_TEXTURE_2D - for COMPOSED YUV layers the driver
             // typically still requires GL_TEXTURE_EXTERNAL_OES, but desktop NVG
             // doesn't bind that target. This call may fail at runtime on YUV
             // surfaces; callers can catch and fall back.
@@ -159,7 +159,7 @@ internal sealed unsafe class VaapiDmaBufTexture : IExternalRasterSource
         // Build the EGL_LINUX_DMA_BUF_EXT attribute list. Each plane needs (fd,
         // offset, pitch) and optionally a 64-bit DRM modifier (lo, hi). Here we
         // pass per-plane modifier from the corresponding object's
-        // drm_format_modifier — required for tiled formats (Intel/AMD drivers
+        // drm_format_modifier - required for tiled formats (Intel/AMD drivers
         // produce tiled surfaces by default).
         var attrs = new List<long>(64);
         attrs.Add(LibEgl.EGL_WIDTH); attrs.Add(descriptor.Width);

@@ -7,7 +7,7 @@ auto-hide edges, maximize, and cross-window popouts. It is a C#-idiomatic port o
 - Namespace: `Aprillz.MewUI.MewDock`
 - Targets: `net8.0`, `net10.0`
 - NativeAOT-friendly (source-generated, reflection-free JSON).
-- Part of [MewUI](https://github.com/aprillz/MewUI). A C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT — see `THIRD_PARTY_NOTICES.md`).
+- Part of [MewUI](https://github.com/aprillz/MewUI). A C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT - see `THIRD_PARTY_NOTICES.md`).
 
 ## Concepts
 

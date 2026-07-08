@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A decorator that draws a drop shadow behind its child element.
-/// The shadow is rendered within the decorator's own layout bounds —
+/// The shadow is rendered within the decorator's own layout bounds -
 /// use <see cref="ShadowPadding"/> to reserve space around the child.
 /// </summary>
 public sealed class ShadowDecorator : FrameworkElement, IVisualTreeHost
@@ -125,7 +125,7 @@ public sealed class ShadowDecorator : FrameworkElement, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible) return null;
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled) return null;
         return Child?.HitTest(point);
     }
 

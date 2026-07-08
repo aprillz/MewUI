@@ -85,12 +85,19 @@ public abstract class Panel : FrameworkElement
     /// </summary>
     public void Clear()
     {
-        foreach (var child in _children)
+        // Snapshot before notifying: an OnChildRemoved override that mutates this panel (e.g. re-adds
+        // a child) would otherwise corrupt the live _children list mid-foreach, same as Remove().
+        var removed = CollectionPool<List<Element>>.Rent();
+        removed.AddRange(_children);
+        _children.Clear();
+
+        foreach (var child in removed)
         {
             child.Parent = null;
             OnChildRemoved(child);
         }
-        _children.Clear();
+
+        CollectionPool.Return(removed);
         InvalidateMeasure();
     }
 
@@ -189,7 +196,7 @@ public abstract class Panel : FrameworkElement
             }
         }
 
-        // Self-hit (point is in Bounds — verified above).
+        // Self-hit (point is in Bounds - verified above).
         return this;
     }
 

@@ -50,7 +50,7 @@ public interface IGpuTextureSource : IRasterSource
     /// accessor used when the consumer doesn't need to disambiguate.
     /// </summary>
     /// <remarks>
-    /// The handle remains owned by the source — wrapping consumers must use no-delete-style
+    /// The handle remains owned by the source - wrapping consumers must use no-delete-style
     /// flags to avoid double-free.
     /// </remarks>
     nint GetTextureHandle() => 0;
@@ -74,13 +74,13 @@ public interface IGpuTextureSource : IRasterSource
 
     /// <summary>
     /// Configures the underlying GPU texture's wrap mode for tiled / clamped sampling.
-    /// Called by zero-copy image consumers before binding the texture for drawing — without
+    /// Called by zero-copy image consumers before binding the texture for drawing - without
     /// this, tile-mode brush requests silently clamp because the source originally created
     /// the texture with edge-clamp (right for filter sampling, wrong for tiled fills) and
     /// no-delete-style wrapping doesn't touch external texture state.
     /// </summary>
     /// <remarks>
-    /// Default no-op — only sources whose backing GPU texture's wrap mode actually matters
+    /// Default no-op - only sources whose backing GPU texture's wrap mode actually matters
     /// at the consumer's tile-mode draw site override.
     /// </remarks>
     void ConfigureGpuTextureWrap(nint handle, bool repeatX, bool repeatY) { }

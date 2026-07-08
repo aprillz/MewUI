@@ -16,7 +16,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
     // (TextBlock instance, etc). Reused across renders even when the text content mutates,
     // so frequently-changing dynamic text (stats overlays, counters) doesn't allocate per
     // frame. ConditionalWeakTable lets the entry drop when the owner is GC'd; the stale
-    // image-id is then leaked until the NVG context itself disposes — acceptable since
+    // image-id is then leaked until the NVG context itself disposes - acceptable since
     // it's bounded by "ever-created TextBlock instances", not by render rate.
     private readonly ConditionalWeakTable<object, OwnerEntry> _ownerCache = new();
     private bool _disposed;
@@ -132,7 +132,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         }
 
         // CoreText produces BGRA premultiplied. Hand it straight to NVG via the BGRA upload
-        // path — Metal's BGRA8Unorm texture takes the bytes as-is. Premultiplied flag stays
+        // path - Metal's BGRA8Unorm texture takes the bytes as-is. Premultiplied flag stays
         // so the shader doesn't double-multiply at sample.
         imageId = _vg.CreateImageBGRA(bmp.WidthPx, bmp.HeightPx, NVGimageFlags.Premultiplied, bmp.Data);
         if (imageId == 0)
@@ -203,14 +203,14 @@ internal sealed class MewVGMetalTextCache : IDisposable
     /// Owner-keyed text rasterization: caches one (buffer, MTLTexture) pair per logical
     /// owner (typically the TextBlock instance) and reuses both even when the text content
     /// mutates. When the rasterized bitmap dimensions match the existing texture, the
-    /// pixels are uploaded via <see cref="NanoVG.UpdateImageBGRA"/> — no new GPU allocation
+    /// pixels are uploaded via <see cref="NanoVG.UpdateImageBGRA"/> - no new GPU allocation
     /// and no managed-heap byte[] allocation. When dimensions change, the old texture is
     /// queued for deferred deletion (same path as content-cache eviction) and a new one is
     /// created from the same (possibly grown) buffer.
     /// </summary>
     /// <remarks>
     /// Differs from the content-keyed <see cref="TryGetOrCreate"/> in that it never adds
-    /// to <see cref="_cache"/> / <see cref="_lru"/> — owner entries are tracked exclusively
+    /// to <see cref="_cache"/> / <see cref="_lru"/> - owner entries are tracked exclusively
     /// in <see cref="_ownerCache"/>. This means stats overlays and other rapidly-mutating
     /// text never push the LRU into eviction churn.
     /// </remarks>
@@ -252,7 +252,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         var entry = _ownerCache.GetValue(owner, static _ => new OwnerEntry());
 
-        // Grow buffer if needed. No shrink — rare large rasterization shouldn't force
+        // Grow buffer if needed. No shrink - rare large rasterization shouldn't force
         // reallocation on every subsequent small one.
         if (entry.Buffer == null || entry.Buffer.Length < requiredBytes)
         {
@@ -280,7 +280,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         else
         {
             // SLOW PATH: first frame for this owner OR bitmap size changed.
-            // Defer old image deletion the same way EvictIfNeeded does — queued draws may still reference it.
+            // Defer old image deletion the same way EvictIfNeeded does - queued draws may still reference it.
             if (entry.ImageId != 0)
             {
                 _pendingDeletes.Enqueue(entry.ImageId);

@@ -21,7 +21,7 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 ///   <see cref="Direct2DPixelRenderSurface"/>, source pixels are CPU-premultiplied,
 ///   uploaded to a transient <c>ID2D1Bitmap1</c>, run through the effect, and the output
 ///   is rendered into the scratch DC RT (which commits to its DIB). Two CPU passes per
-///   filter, but the GPU still does the kernel — orders of magnitude faster than running
+///   filter, but the GPU still does the kernel - orders of magnitude faster than running
 ///   the full Gaussian on CPU.</item>
 /// </list>
 /// Other filter nodes (ColorMatrix / Composite / Merge / DropShadow) fall through to the
@@ -42,11 +42,11 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     /// <inheritdoc />
     /// <remarks>
-    /// GPU path — raster source at the renderer's full logical-to-pixel scale (no cap).
+    /// GPU path - raster source at the renderer's full logical-to-pixel scale (no cap).
     /// Capping at 1× was a CPU-era policy: bilinear-stretching a small filter result up
     /// to screen DPI lost text and small-feature detail (e.g. 11px Tahoma in a card with
     /// drop shadow rendered crisp inside the 1× source bitmap but sub-pixel-aliased
-    /// after the stretch — visible as missing characters). On GPU the per-pixel cost is
+    /// after the stretch - visible as missing characters). On GPU the per-pixel cost is
     /// negligible relative to the kernel work, and the result cache absorbs the larger
     /// bitmap memory across pan frames.
     /// </remarks>
@@ -67,15 +67,15 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     {
         D2D1VTable.SetEffectValueFloat(effect, (uint)D2D1_GAUSSIANBLUR_PROP.STANDARD_DEVIATION, sigma);
         // SOFT border mode matches Metal MPS's default edge mode (Clamp) and OpenGL's
-        // GL_CLAMP_TO_EDGE wrap mode used by OpenGLGaussianBlur — sample-position-outside
+        // GL_CLAMP_TO_EDGE wrap mode used by OpenGLGaussianBlur - sample-position-outside
         // -input clamps to the nearest source pixel, fading the halo smoothly off the
         // source rect. HARD treated outside-input as transparent black, so the halo
-        // dropped abruptly to alpha=0 at the source bitmap edge — visible as a hard
+        // dropped abruptly to alpha=0 at the source bitmap edge - visible as a hard
         // rectangular boundary that shifts with zoom (because the source bitmap pixel
         // grid changes resolution). SOFT keeps the visual result invariant under zoom
         // and matches the Metal/GL backends.
         D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.BORDER_MODE, (uint)D2D1_BORDER_MODE.SOFT);
-        // QUALITY uses a higher-precision kernel sampling than SPEED — smoother gradient,
+        // QUALITY uses a higher-precision kernel sampling than SPEED - smoother gradient,
         // less visible stair-stepping at the halo. Cost is moderate (single-digit ms on
         // the source sizes we hit), and the result cache amortizes it across pan frames.
         D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_GAUSSIANBLUR_PROP.OPTIMIZATION, (uint)D2D1_GAUSSIANBLUR_OPTIMIZATION.QUALITY);
@@ -104,20 +104,20 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
         FilterResult input = b.Input is null ? ctx.Source : Execute(b.Input, ctx);
 
-        // D2D1GaussianBlur StandardDeviation is in DIPs — D2D scales by the source bitmap's
+        // D2D1GaussianBlur StandardDeviation is in DIPs - D2D scales by the source bitmap's
         // own DpiScale internally to land in pixel space. The bitmap's DpiScale is set by
         // filter source layer (clamped to >= 1.0); when LogicalToPixelScale < 1.0 (zoom < 1x), the
         // bitmap's DpiScale is clamped to 1.0 while the actual pixel raster is sub-DIP, so
         // passing raw σ_DIP makes D2D over-blur. Pre-divide by the bitmap's reported DPI and
         // pre-multiply by ctx.LogicalToPixelScale so D2D's internal × DpiScale lands at the
-        // true pixel σ — matching Metal's `σ × LogicalToPixelScale` formulation regardless
+        // true pixel σ - matching Metal's `σ × LogicalToPixelScale` formulation regardless
         // of the clamp.
         double bitmapDpiScaleX = input.UnderlyingSurface?.DpiScale ?? 1.0;
         double bitmapDpiScaleY = bitmapDpiScaleX;
         double sigmaXDip = BlurKernel.RadiusToSigma(b.RadiusX) * (ctx.LogicalToPixelScaleX / Math.Max(1e-9, bitmapDpiScaleX));
         double sigmaYDip = BlurKernel.RadiusToSigma(b.RadiusY) * (ctx.LogicalToPixelScaleY / Math.Max(1e-9, bitmapDpiScaleY));
 
-        // D2D1GaussianBlur is isotropic — collapse anisotropic σ via geometric mean to
+        // D2D1GaussianBlur is isotropic - collapse anisotropic σ via geometric mean to
         // match Metal MPS (which does sqrt(σx·σy) inside MetalGaussianBlur.TryEncode).
         // The previous Math.Max picked the stronger axis and consistently over-blurred
         // when σx ≠ σy; geometric mean gives the same effective area as a true anisotropic
@@ -160,7 +160,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 return scratch;
             }
 
-            // Mixed / unknown — bail to fallback.
+            // Mixed / unknown - bail to fallback.
             return null;
         }
         finally
@@ -193,11 +193,11 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             if (effectImage == 0) return false;
             try
             {
-                // Effect-local state — independent of the shared DC, no cross-thread race.
+                // Effect-local state - independent of the shared DC, no cross-thread race.
                 D2D1VTable.SetEffectInput(effect, 0, srcGpu.Bitmap);
 
                 // EnterSharedDcDraw bumps the nested-depth counter and returns true on the
-                // outermost entry — used below to gate BeginDraw/EndDraw (D2D rejects nested
+                // outermost entry - used below to gate BeginDraw/EndDraw (D2D rejects nested
                 // BeginDraw on the same DC).
                 bool issuedBeginDraw = _factory.EnterSharedDcDraw();
                 try
@@ -205,7 +205,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     // Flush before the effect samples its input. The source bitmap was drawn
                     // in a prior nested pass whose inner OnEndFrame skipped EndDraw (outer
                     // pass owns the BeginDraw cycle), so the source's DrawImage commands
-                    // are still queued in the DC command buffer — uncommitted to GPU. The
+                    // are still queued in the DC command buffer - uncommitted to GPU. The
                     // upcoming DrawImage(effect) triggers the effect's GPU sampling of that
                     // bitmap; without an explicit submit, the effect samples the source's
                     // pre-write state (post-Clear empty) and produces empty output. Flush
@@ -314,7 +314,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     ConfigureBlur(effect, sigma);
 
                     var rt = (ID2D1RenderTarget*)dcRt;
-                    // Reset DC transform — Direct2DGraphicsContext.BeginFrame doesn't push
+                    // Reset DC transform - Direct2DGraphicsContext.BeginFrame doesn't push
                     // identity to the native DC at frame start (only resets the C# field),
                     // so any transform left over from previous use of this DC RT (e.g.,
                     // source content rendered before our filter pass) would shift the effect
@@ -362,7 +362,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     }
 
     // ----------------------------------------------------------------------------
-    // ColorMatrix / Offset / Composite / Merge — additional D2D native effects.
+    // ColorMatrix / Offset / Composite / Merge - additional D2D native effects.
     // All four follow the same GPU-only pattern as TryGpuBlur: resolve inputs to
     // GPU bitmaps, acquire scratch, apply effect via shared DC. DIB fallback would
     // require ReadAndPremultiply per input which we leave to CpuImageFilterExecutor.
@@ -385,7 +385,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 // D2D D2D1_MATRIX_5X4_F is 5 rows × 4 cols (output channel = column,
                 // input source/offset = row), but ColorMatrixFilter.Matrix is the source
                 // convention: 4 rows × 5 cols (output channel = row, input source = col).
-                // Transpose into a stackalloc'd Span — 80 bytes, no per-call heap alloc.
+                // Transpose into a stackalloc'd Span - 80 bytes, no per-call heap alloc.
                 float[] svgMatrix = cm.Matrix;
                 if (!RunGpuSingleInputEffect(sharedDc, D2D1.CLSID_D2D1ColorMatrix, srcGpu, dstGpu, effect =>
                     {
@@ -425,7 +425,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 dstGpu.IsDeviceCurrent &&
                 _factory.SharedFilterDeviceContext is var sharedDc and not 0)
             {
-                // dx/dy as user-space DIPs — same as Blur's σ. D2D AffineTransform2D's
+                // dx/dy as user-space DIPs - same as Blur's σ. D2D AffineTransform2D's
                 // matrix translation is in DIPs (scaled by source bitmap dpi internally),
                 // so pre-multiplying by LogicalToPixel double-applies the dpi factor.
                 float dxDip = (float)o.Dx;
@@ -562,12 +562,12 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     /// with SOURCE_OVER. All inputs assumed to share the source coordinate frame.</summary>
     private bool CompositeBitmapsIntoTarget(nint sharedDc, IReadOnlyList<FilterResult> inputs, Direct2DGpuPixelRenderSurface dstGpu)
     {
-        // EnterSharedDcDraw — see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
+        // EnterSharedDcDraw - see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
         bool issuedBeginDraw = _factory.EnterSharedDcDraw();
         bool ok = true;
         try
         {
-            // Flush before sampling inputs — see RunGpuOnlyBlur for rationale.
+            // Flush before sampling inputs - see RunGpuOnlyBlur for rationale.
             D2D1VTable.Flush((ID2D1RenderTarget*)sharedDc);
 
             D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out nint prevTarget);
@@ -662,12 +662,12 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         if (effectImage == 0) return false;
         try
         {
-            // EnterSharedDcDraw — see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
+            // EnterSharedDcDraw - see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
             bool issuedBeginDraw = _factory.EnterSharedDcDraw();
             bool ok = true;
             try
             {
-                // Flush before sampling inputs — see RunGpuOnlyBlur for rationale.
+                // Flush before sampling inputs - see RunGpuOnlyBlur for rationale.
                 D2D1VTable.Flush((ID2D1RenderTarget*)sharedDc);
 
                 D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out nint prevTarget);

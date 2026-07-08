@@ -8,7 +8,7 @@ namespace Aprillz.MewUI.Gallery;
 
 /// <summary>
 /// A container that applies a zoom (scale) transform to a single child.
-/// Designed to be placed inside a ScrollViewer — measures at childSize * zoom
+/// Designed to be placed inside a ScrollViewer - measures at childSize * zoom
 /// so the ScrollViewer provides scrollbars automatically.
 /// Wheel zooms anchored to the cursor position.
 /// </summary>

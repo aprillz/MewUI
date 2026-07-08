@@ -245,13 +245,16 @@ public static class ItemsView
 /// A strongly-typed <see cref="IItemsView"/> that wraps an <see cref="IReadOnlyList{T}"/>.
 /// </summary>
 /// <typeparam name="T">Item type.</typeparam>
-public sealed class ItemsView<T> : ISelectableItemsView
+public sealed class ItemsView<T> : IMultiSelectableItemsView
 {
     private readonly Func<T, string>? _textSelector;
     private readonly Func<T, object?>? _keySelector;
     private readonly Func<object?, object?>? _keySelectorObject;
     private int _selectedIndex = -1;
     private object? _selectedKey;
+    private readonly SortedSet<int> _selectedSet = new();
+    private int _anchorIndex = -1;
+    private ItemsSelectionMode _selectionMode = ItemsSelectionMode.Single;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemsView{T}"/> class.
@@ -314,7 +317,278 @@ public sealed class ItemsView<T> : ISelectableItemsView
             _selectedKey = _selectedIndex >= 0 && _selectedIndex < Count && _keySelector != null
                 ? _keySelector(Items[_selectedIndex])
                 : null;
+
+            // Keep the multi-selection set consistent with single-selection usage.
+            _selectedSet.Clear();
+            if (clamped >= 0)
+            {
+                _selectedSet.Add(clamped);
+            }
+            _anchorIndex = clamped;
+
             SelectionChanged?.Invoke(_selectedIndex);
+            SelectedIndicesChanged?.Invoke();
+        }
+    }
+
+    /// <inheritdoc />
+    public ItemsSelectionMode SelectionMode
+    {
+        get => _selectionMode;
+        set
+        {
+            if (_selectionMode == value)
+            {
+                return;
+            }
+
+            _selectionMode = value;
+            if (_selectionMode == ItemsSelectionMode.Single)
+            {
+                CollapseToPrimary();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<int> SelectedIndices
+    {
+        get
+        {
+            if (_selectedSet.Count == 0)
+            {
+                return Array.Empty<int>();
+            }
+
+            var result = new int[_selectedSet.Count];
+            _selectedSet.CopyTo(result);
+            return result;
+        }
+    }
+
+    /// <inheritdoc />
+    public int AnchorIndex => _anchorIndex;
+
+    /// <inheritdoc />
+    public event Action? SelectedIndicesChanged;
+
+    /// <inheritdoc />
+    public bool IsSelected(int index) => _selectedSet.Contains(index);
+
+    /// <inheritdoc />
+    public void SelectSingle(int index)
+    {
+        index = ItemsView.ClampIndex(index, Count);
+        _selectedSet.Clear();
+        if (index >= 0)
+        {
+            _selectedSet.Add(index);
+        }
+        _anchorIndex = index;
+        SetPrimary(index);
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void ToggleSelected(int index)
+    {
+        if (index < 0 || index >= Count)
+        {
+            return;
+        }
+
+        if (!_selectedSet.Remove(index))
+        {
+            _selectedSet.Add(index);
+        }
+        _anchorIndex = index;
+        SetPrimary(ResolvePrimaryAfterChange(index));
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void SetSelected(int index, bool selected)
+    {
+        if (index < 0 || index >= Count)
+        {
+            return;
+        }
+
+        bool changed = selected ? _selectedSet.Add(index) : _selectedSet.Remove(index);
+        if (!changed)
+        {
+            return;
+        }
+
+        SetPrimary(ResolvePrimaryAfterChange(index));
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void SelectRange(int anchorIndex, int targetIndex, bool clearExisting)
+    {
+        if (Count == 0)
+        {
+            return;
+        }
+
+        anchorIndex = ItemsView.ClampIndex(anchorIndex, Count);
+        targetIndex = ItemsView.ClampIndex(targetIndex, Count);
+        if (targetIndex < 0)
+        {
+            return;
+        }
+
+        if (clearExisting)
+        {
+            _selectedSet.Clear();
+        }
+
+        if (anchorIndex < 0)
+        {
+            anchorIndex = targetIndex;
+        }
+
+        int low = Math.Min(anchorIndex, targetIndex);
+        int high = Math.Max(anchorIndex, targetIndex);
+        for (int index = low; index <= high; index++)
+        {
+            _selectedSet.Add(index);
+        }
+
+        SetPrimary(targetIndex);
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public void ClearSelection()
+    {
+        if (_selectedSet.Count == 0 && _selectedIndex < 0)
+        {
+            return;
+        }
+
+        _selectedSet.Clear();
+        _anchorIndex = -1;
+        SetPrimary(-1);
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    // Sets the primary index (and its preservation key) without touching the set, firing SelectionChanged on change.
+    private void SetPrimary(int index)
+    {
+        if (_selectedIndex == index)
+        {
+            return;
+        }
+
+        _selectedIndex = index;
+        _selectedKey = index >= 0 && index < Count && _keySelector != null ? _keySelector(Items[index]) : null;
+        SelectionChanged?.Invoke(index);
+    }
+
+    private int ResolvePrimaryAfterChange(int preferred)
+    {
+        if (_selectedSet.Contains(preferred))
+        {
+            return preferred;
+        }
+        return _selectedSet.Count > 0 ? _selectedSet.Min : -1;
+    }
+
+    private void CollapseToPrimary()
+    {
+        _selectedSet.Clear();
+        if (_selectedIndex >= 0 && _selectedIndex < Count)
+        {
+            _selectedSet.Add(_selectedIndex);
+            _anchorIndex = _selectedIndex;
+        }
+        else
+        {
+            _anchorIndex = -1;
+        }
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    // Remaps the multi-selection set after a collection change (v1: index-shift Add/Remove; clear otherwise).
+    private void RemapSelectedSet(NotifyCollectionChangedAction action, int start, int count)
+    {
+        if (_selectedSet.Count == 0)
+        {
+            return;
+        }
+
+        var snapshot = SelectedIndices;
+        _selectedSet.Clear();
+
+        switch (action)
+        {
+            case NotifyCollectionChangedAction.Add:
+                foreach (int index in snapshot)
+                {
+                    _selectedSet.Add(index >= start ? index + count : index);
+                }
+                if (_anchorIndex >= start)
+                {
+                    _anchorIndex += count;
+                }
+                break;
+
+            case NotifyCollectionChangedAction.Remove:
+                int end = start + count;
+                foreach (int index in snapshot)
+                {
+                    if (index < start)
+                    {
+                        _selectedSet.Add(index);
+                    }
+                    else if (index >= end)
+                    {
+                        _selectedSet.Add(index - count);
+                    }
+                }
+                if (_anchorIndex >= end)
+                {
+                    _anchorIndex -= count;
+                }
+                else if (_anchorIndex >= start)
+                {
+                    _anchorIndex = Math.Max(0, start - 1);
+                }
+                break;
+
+            default:
+                // Move/Replace/Reset: best-effort preserve by index, dropping any now out of range.
+                foreach (int index in snapshot)
+                {
+                    if (index < Count)
+                    {
+                        _selectedSet.Add(index);
+                    }
+                }
+                _anchorIndex = ItemsView.ClampIndex(_anchorIndex, Count);
+                break;
+        }
+
+        SelectedIndicesChanged?.Invoke();
+    }
+
+    private void RemapSelectedSetForChange(NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case NotifyCollectionChangedAction.Add when e.NewStartingIndex >= 0:
+                RemapSelectedSet(NotifyCollectionChangedAction.Add, e.NewStartingIndex, e.NewItems?.Count ?? 1);
+                break;
+            case NotifyCollectionChangedAction.Remove when e.OldStartingIndex >= 0:
+                RemapSelectedSet(NotifyCollectionChangedAction.Remove, e.OldStartingIndex, e.OldItems?.Count ?? 1);
+                break;
+            case NotifyCollectionChangedAction.Replace:
+                break; // indices and membership unchanged
+            default:
+                RemapSelectedSet(NotifyCollectionChangedAction.Reset, 0, 0);
+                break;
         }
     }
 
@@ -407,13 +681,37 @@ public sealed class ItemsView<T> : ISelectableItemsView
     public void Invalidate()
     {
         ApplyResetSelectionPolicy();
+        RemapSelectedSet(NotifyCollectionChangedAction.Reset, 0, 0);
+        ReconcilePrimaryAndSet();
         Changed?.Invoke(new ItemsChange(ItemsChangeKind.Reset, 0, 0));
     }
 
     private void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
     {
         ApplySelectionChange(e);
+        RemapSelectedSetForChange(e);
+        ReconcilePrimaryAndSet();
         Changed?.Invoke(ToItemsChange(e));
+    }
+
+    // Keeps the primary and the selection set consistent after a collection change:
+    // the primary (when valid) is always a member of the set, and an empty set means no primary.
+    private void ReconcilePrimaryAndSet()
+    {
+        if (_selectedSet.Count == 0)
+        {
+            if (_selectedIndex >= 0 && _selectedIndex < Count)
+            {
+                _selectedSet.Add(_selectedIndex);
+                SelectedIndicesChanged?.Invoke();
+            }
+            return;
+        }
+
+        if (_selectedIndex < 0 || _selectedIndex >= Count || !_selectedSet.Contains(_selectedIndex))
+        {
+            SetPrimary(_selectedSet.Min);
+        }
     }
 
     private ItemsChange ToItemsChange(NotifyCollectionChangedEventArgs e)
@@ -438,7 +736,7 @@ public sealed class ItemsView<T> : ISelectableItemsView
         if (_keySelector != null && _selectedKey != null)
         {
             int found = FindIndexByKey(_selectedKey);
-            SelectedIndex = found >= 0 ? found : ItemsView.ClampIndex(_selectedIndex, Count);
+            SetPrimary(found >= 0 ? found : ItemsView.ClampIndex(_selectedIndex, Count));
             return;
         }
 
@@ -449,7 +747,7 @@ public sealed class ItemsView<T> : ISelectableItemsView
                 count = e.NewItems?.Count ?? 1;
                 if (_selectedIndex >= e.NewStartingIndex && e.NewStartingIndex >= 0)
                 {
-                    SelectedIndex = _selectedIndex + count;
+                    SetPrimary(_selectedIndex + count);
                 }
                 break;
 
@@ -459,11 +757,11 @@ public sealed class ItemsView<T> : ISelectableItemsView
                 {
                     if (_selectedIndex >= e.OldStartingIndex && _selectedIndex < e.OldStartingIndex + count)
                     {
-                        SelectedIndex = ItemsView.ClampIndex(e.OldStartingIndex, Count);
+                        SetPrimary(ItemsView.ClampIndex(e.OldStartingIndex, Count));
                     }
                     else if (_selectedIndex >= e.OldStartingIndex + count)
                     {
-                        SelectedIndex = _selectedIndex - count;
+                        SetPrimary(_selectedIndex - count);
                     }
                 }
                 break;
@@ -476,15 +774,15 @@ public sealed class ItemsView<T> : ISelectableItemsView
                     int newIndex = e.NewStartingIndex;
                     if (_selectedIndex == oldIndex)
                     {
-                        SelectedIndex = newIndex;
+                        SetPrimary(newIndex);
                     }
                     else if (oldIndex < _selectedIndex && _selectedIndex <= newIndex)
                     {
-                        SelectedIndex = _selectedIndex - 1;
+                        SetPrimary(_selectedIndex - 1);
                     }
                     else if (newIndex <= _selectedIndex && _selectedIndex < oldIndex)
                     {
-                        SelectedIndex = _selectedIndex + 1;
+                        SetPrimary(_selectedIndex + 1);
                     }
                 }
                 else
@@ -494,7 +792,7 @@ public sealed class ItemsView<T> : ISelectableItemsView
                 break;
 
             case NotifyCollectionChangedAction.Replace:
-                SelectedIndex = ItemsView.ClampIndex(_selectedIndex, Count);
+                SetPrimary(ItemsView.ClampIndex(_selectedIndex, Count));
                 break;
 
             default:
@@ -513,11 +811,11 @@ public sealed class ItemsView<T> : ISelectableItemsView
         if (_keySelector != null && _selectedKey != null)
         {
             int found = FindIndexByKey(_selectedKey);
-            SelectedIndex = found >= 0 ? found : ItemsView.ClampIndex(_selectedIndex, Count);
+            SetPrimary(found >= 0 ? found : ItemsView.ClampIndex(_selectedIndex, Count));
             return;
         }
 
-        SelectedIndex = ItemsView.ClampIndex(_selectedIndex, Count);
+        SetPrimary(ItemsView.ClampIndex(_selectedIndex, Count));
     }
 
     private int FindIndexByKey(object key)

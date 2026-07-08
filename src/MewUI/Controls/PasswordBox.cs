@@ -5,22 +5,22 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed class PasswordBox : SingleLineTextBase
 {
-    private bool _syncingText;
-
-    static PasswordBox()
-    {
-        MaxLengthProperty.OverrideDefaultValue<PasswordBox>(32);
-    }
-
     public static readonly MewProperty<string> PasswordProperty =
         MewProperty<string>.Register<PasswordBox>(nameof(Password), string.Empty,
             MewPropertyOptions.BindsTwoWayByDefault,
-            static (self, _, newVal) => self.OnPasswordPropertyChanged(newVal));
+            static (self, _, newVal) => self.ApplyExternalTextPropertyChange(newVal));
+
+    public static readonly MewProperty<char> PasswordCharProperty =
+        MewProperty<char>.Register<PasswordBox>(nameof(PasswordChar), '●', MewPropertyOptions.AffectsRender);
 
     /// <summary>
     /// Gets or sets the character used to mask the password.
     /// </summary>
-    public char PasswordChar { get; set; } = '●';
+    public char PasswordChar
+    {
+        get => GetValue(PasswordCharProperty);
+        set => SetValue(PasswordCharProperty, value);
+    }
 
     /// <summary>
     /// Gets or sets the password text.
@@ -32,15 +32,23 @@ public sealed class PasswordBox : SingleLineTextBase
     public string Password
     {
         get => GetTextCore();
-        set
-        {
-            var normalized = NormalizeText(value ?? string.Empty);
-            if (GetTextCore() == normalized)
-            {
-                return;
-            }
+        set => SetMirroredTextProperty(PasswordProperty, value);
+    }
 
-            SetValue(PasswordProperty, normalized);
+    /// <summary>
+    /// Occurs when the password text changes. Carries no value so the password is never exposed
+    /// through this notification channel; read <see cref="Password"/> directly if the value is needed.
+    /// </summary>
+    public event Action? PasswordChanged;
+
+    /// <summary>The currently selected text, masked to its length (never the real characters).</summary>
+    public override string SelectedText
+    {
+        get
+        {
+            var (start, end) = SelectionRange;
+            int length = end - start;
+            return length > 0 ? new string(PasswordChar, length) : string.Empty;
         }
     }
 
@@ -61,33 +69,13 @@ public sealed class PasswordBox : SingleLineTextBase
 
     protected override void NotifyTextChanged()
     {
-        _syncingText = true;
-        try
-        {
-            SetValue(PasswordProperty, GetTextCore());
-        }
-        finally
-        {
-            _syncingText = false;
-        }
+        SyncTextPropertyFromDocument(PasswordProperty);
         base.NotifyTextChanged();
     }
 
-    private void OnPasswordPropertyChanged(string newValue)
+    protected override void RaiseTextChanged()
     {
-        if (_syncingText)
-        {
-            return;
-        }
-
-        _syncingText = true;
-        try
-        {
-            ApplyExternalTextChange(newValue);
-        }
-        finally
-        {
-            _syncingText = false;
-        }
+        // Suppress the plaintext-carrying TextChanged event for passwords; notify without a value instead.
+        PasswordChanged?.Invoke();
     }
 }

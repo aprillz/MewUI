@@ -19,7 +19,7 @@ public partial struct SvgUnit
 
         const float cmInInch = 2.54f;
         // SVG spec: absolute units (mm/cm/in/pt/pc) and font/percentage calculations
-        // must use 96 CSS pixels per inch — NOT the system DPI. The legacy GDI+ path
+        // must use 96 CSS pixels per inch - NOT the system DPI. The legacy GDI+ path
         // (SvgUnit.Drawing.cs) uses SvgDocument.PointsPerInch which falls back to
         // GetSystemDpi(), so on a 144-dpi (1.5×) display `148mm` resolved to 839 px
         // instead of the spec-correct 559 px, causing viewBox transforms to be 1.5×

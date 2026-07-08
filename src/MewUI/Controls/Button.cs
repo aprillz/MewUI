@@ -29,6 +29,13 @@ public partial class Button : Control, IVisualTreeHost
 
     internal override void OnAccessKey() { Focus(); RaiseClick(); }
 
+    private readonly PressCaptureHelper _pressCapture;
+
+    public Button()
+    {
+        _pressCapture = new PressCaptureHelper(this, SetPressed);
+    }
+
     /// <summary>
     /// Click event handler (AOT-compatible).
     /// </summary>
@@ -99,15 +106,7 @@ public partial class Button : Control, IVisualTreeHost
 
         if (e.Button == MouseButton.Left && IsEffectivelyEnabled)
         {
-            SetPressed(true);
-            Focus();
-
-            // Capture mouse
-            var root = FindVisualRoot();
-            if (root is Window window)
-            {
-                window.CaptureMouse(this);
-            }
+            _pressCapture.BeginPress(() => Focus());
 
             e.Handled = true;
         }
@@ -119,14 +118,7 @@ public partial class Button : Control, IVisualTreeHost
 
         if (e.Button == MouseButton.Left && IsPressed)
         {
-            SetPressed(false);
-
-            // Release capture
-            var root = FindVisualRoot();
-            if (root is Window window)
-            {
-                window.ReleaseMouseCapture();
-            }
+            _pressCapture.EndPress();
 
             // Fire click if still over button
             if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
@@ -141,7 +133,7 @@ public partial class Button : Control, IVisualTreeHost
     protected override void OnMouseLeave()
     {
         base.OnMouseLeave();
-        SetPressed(false);
+        _pressCapture.CancelPress();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -174,7 +166,7 @@ public partial class Button : Control, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible)
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
         }
