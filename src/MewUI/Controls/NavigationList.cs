@@ -39,10 +39,14 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _syncingSelection;
+    private readonly SelectionSync _selection;
 
     public NavigationList()
     {
+        _selection = new SelectionSync(() => _itemsSource,
+            value => SetValue(SelectedIndexProperty, value),
+            value => SetValue(SelectedItemProperty, value));
+
         _itemTemplate = CreateDefaultItemTemplate();
 
         _presenter = new StackItemsPresenter();
@@ -210,7 +214,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         _presenter.ItemsSource = _itemsSource;
 
         _hoverIndex = -1;
-        SyncSelectionProperties();
+        _selection.SyncFromModel();
 
         InvalidateItemBindings();
         InvalidateMeasure();
@@ -507,7 +511,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
     {
-        if (_syncingSelection)
+        if (_selection.Syncing)
         {
             return;
         }
@@ -515,41 +519,19 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         // Reject selecting a non-item row; revert to the real selection.
         if (newIndex >= 0 && KindAt(newIndex) != NavigationItemKind.Item)
         {
-            SyncSelectionProperties();
+            _selection.SyncFromModel();
             return;
         }
 
-        _syncingSelection = true;
-        try { _itemsSource.SelectedIndex = newIndex; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
+        _selection.PushIndex(newIndex);
     }
 
-    private void OnSelectedItemPropertyChanged(object? item)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _itemsSource.SelectedItem = item; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
-    }
-
-    private void SyncSelectionProperties()
-    {
-        bool wasSyncing = _syncingSelection;
-        _syncingSelection = true;
-        try
-        {
-            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
-            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
-        }
-        finally { _syncingSelection = wasSyncing; }
-    }
+    private void OnSelectedItemPropertyChanged(object? item) => _selection.PushItem(item);
 
     private void OnItemsSelectionChanged(int index)
     {
         InvalidateItemBindings();
-        SyncSelectionProperties();
+        _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         // Bring the selection fully into view (covers click / keyboard / programmatic paths), so selecting
         // a row that sits on the scroll edge is not left clipped.

@@ -38,7 +38,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _syncingSelection;
+    private readonly SelectionSync _selection;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
 
@@ -114,7 +114,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         else
         {
             int newIndex = _itemsSource.SelectedIndex;
-            SyncSelectionProperties();
+            _selection.SyncFromModel();
             if (newIndex >= 0)
             {
                 ScrollIntoView(newIndex);
@@ -159,40 +159,25 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         => _itemsSource.SetSelectionMode(mode);
 
     /// <summary>Gets the selected item indices in ascending order.</summary>
-    public IReadOnlyList<int> SelectedIndices => _itemsSource.GetSelectedIndices();
+    public IReadOnlyList<int> SelectedIndices => _selection.SelectedIndices;
 
     /// <summary>Gets the selected items in ascending index order (read-only, bindable).</summary>
     public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
     /// <summary>Selects every item (multi-selection modes only; no-op otherwise).</summary>
-    public void SelectAll()
-    {
-        var multi = _itemsSource.AsMultiSelectable();
-        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && _itemsSource.Count > 0)
-            multi.SelectRange(0, _itemsSource.Count - 1, clearExisting: true);
-    }
+    public void SelectAll() => _selection.SelectAll();
 
     /// <summary>Clears the entire selection.</summary>
-    public void ClearSelection()
-    {
-        var multi = _itemsSource.AsMultiSelectable();
-        if (multi != null)
-            multi.ClearSelection();
-        else
-            _itemsSource.SelectedIndex = -1;
-    }
+    public void ClearSelection() => _selection.ClearSelection();
 
     /// <summary>Selects the inclusive range [start, end], replacing the current selection (multi only).</summary>
-    public void SelectRange(int start, int end)
-    {
-        _itemsSource.AsMultiSelectable()?.SelectRange(start, end, clearExisting: true);
-    }
+    public void SelectRange(int start, int end) => _selection.SelectRange(start, end);
 
     /// <summary>Occurs when the set of selected items changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
     /// <summary>Returns whether the item at <paramref name="index"/> is selected.</summary>
-    public bool IsSelected(int index) => _itemsSource.IsItemSelected(index);
+    public bool IsSelected(int index) => _selection.IsSelected(index);
 
     /// <summary>
     /// Gets the currently selected item text.
@@ -278,6 +263,11 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// </summary>
     public ListBox()
     {
+        _selection = new SelectionSync(() => _itemsSource,
+            value => SetValue(SelectedIndexProperty, value),
+            value => SetValue(SelectedItemProperty, value),
+            value => SetValue(SelectedItemsPropertyKey, value));
+
         _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
 
         ItemPadding = Theme.Metrics.ItemPadding;
@@ -778,55 +768,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         InvalidateVisual();
     }
 
-    private void OnSelectedIndexPropertyChanged(int newIndex)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _itemsSource.SelectedIndex = newIndex; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
-    }
+    private void OnSelectedIndexPropertyChanged(int newIndex) => _selection.PushIndex(newIndex);
 
-    private void OnSelectedItemPropertyChanged(object? item)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _itemsSource.SelectedItem = item; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
-    }
-
-    // Mirrors the model selection into the bindable index/item properties. Guarded so the
-    // property change callbacks do not re-enter the model.
-    private void SyncSelectionProperties()
-    {
-        // Save/restore (not early-return) so the properties are synced even when called from within
-        // a guarded property->model set, keeping SelectedItem fresh before SelectionChanged fires.
-        bool wasSyncing = _syncingSelection;
-        _syncingSelection = true;
-        try
-        {
-            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
-            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
-        }
-        finally { _syncingSelection = wasSyncing; }
-        RefreshSelectedItems();
-    }
-
-    // Materializes the current selection into the read-only SelectedItems projection.
-    private void RefreshSelectedItems()
-    {
-        var indices = SelectedIndices;
-        if (indices.Count == 0)
-        {
-            SetValue(SelectedItemsPropertyKey, Array.Empty<object?>());
-            return;
-        }
-        var items = new object?[indices.Count];
-        for (int i = 0; i < indices.Count; i++)
-            items[i] = _itemsSource.GetItem(indices[i]);
-        SetValue(SelectedItemsPropertyKey, items);
-    }
+    private void OnSelectedItemPropertyChanged(object? item) => _selection.PushItem(item);
 
     private void OnItemsSelectionChanged(int index)
     {
@@ -836,7 +780,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         }
 
         InvalidateItemBindings();
-        SyncSelectionProperties();
+        _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         ScrollIntoView(index);
         InvalidateVisual();
@@ -910,7 +854,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
     private void OnItemsSelectedIndicesChanged()
     {
-        RefreshSelectedItems();
+        _selection.SyncFromModel();
         SelectedIndicesChanged?.Invoke();
         InvalidateItemBindings();
         InvalidateVisual();

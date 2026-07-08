@@ -28,7 +28,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 
     private readonly TextWidthCache _textWidthCache = new(512);
     private ListBox? _popupList;
-    private bool _syncingSelection;
+    private readonly SelectionSync _selection;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
     private WheelNotchAccumulator _wheelAccumulator;
@@ -83,7 +83,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             {
                 OnItemsSelectionChanged(newIndex);
             }
-            SyncSelectionProperties();
+            _selection.SyncFromModel();
 
             InvalidateMeasure();
             InvalidateVisual();
@@ -174,6 +174,10 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
     /// </summary>
     public ComboBox()
     {
+        _selection = new SelectionSync(() => _itemsSource,
+            value => SetValue(SelectedIndexProperty, value),
+            value => SetValue(SelectedItemProperty, value));
+
         _itemsSource.SelectionChanged += OnItemsSelectionChanged;
         _itemsSource.Changed += OnItemsChanged;
     }
@@ -195,35 +199,9 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
         InvalidateVisual();
     }
 
-    private void OnSelectedIndexPropertyChanged(int newIndex)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _itemsSource.SelectedIndex = newIndex; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
-    }
+    private void OnSelectedIndexPropertyChanged(int newIndex) => _selection.PushIndex(newIndex);
 
-    private void OnSelectedItemPropertyChanged(object? item)
-    {
-        if (_syncingSelection) return;
-        _syncingSelection = true;
-        try { _itemsSource.SelectedItem = item; }
-        finally { _syncingSelection = false; }
-        SyncSelectionProperties();
-    }
-
-    private void SyncSelectionProperties()
-    {
-        bool wasSyncing = _syncingSelection;
-        _syncingSelection = true;
-        try
-        {
-            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
-            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
-        }
-        finally { _syncingSelection = wasSyncing; }
-    }
+    private void OnSelectedItemPropertyChanged(object? item) => _selection.PushItem(item);
 
     private void OnItemsSelectionChanged(int index)
     {
@@ -232,7 +210,7 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             return;
         }
 
-        SyncSelectionProperties();
+        _selection.SyncFromModel();
         SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         InvalidateVisual();
 
