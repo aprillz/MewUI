@@ -12,7 +12,7 @@ public sealed class SelectionBindingTests
     public void GridView_SelectedIndex_SetGetAndClamp()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
 
         Assert.AreEqual(-1, grid.SelectedIndex);
 
@@ -32,7 +32,7 @@ public sealed class SelectionBindingTests
     public void GridView_SelectionChanged_GetterFreshInHandler()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
 
         int observed = -99;
         grid.SelectionChanged += _ => observed = grid.SelectedIndex;
@@ -42,16 +42,16 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
-    public void GridView_SetItemsSource_ResetsSelectionProperty()
+    public void GridView_ItemsSource_ResetsSelectionProperty()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
         grid.SelectedIndex = 2;
         Assert.AreEqual(2, grid.SelectedIndex);
 
         // A wholesale replacement with unrelated items clears selection; the bindable
         // property must not stay stale at 2.
-        grid.SetItemsSource(new[] { "x", "y", "z" });
+        grid.ItemsSource = ItemsView.Create(new[] { "x", "y", "z" });
         Assert.AreEqual(-1, grid.SelectedIndex);
     }
 
@@ -59,7 +59,7 @@ public sealed class SelectionBindingTests
     public void GridView_TwoWayBinding_SelectedIndex()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
 
         var source = new ObservableValue<int>(0);
         grid.SetBinding(GridView.SelectedIndexProperty, source);
@@ -78,7 +78,7 @@ public sealed class SelectionBindingTests
     public void GridView_ForwardBinding_FlowsToSelectedIndex()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
 
         // Property-to-property forward binding writes at the local tier, so it drives the
         // control's selection instead of losing to the selection value the control sets.
@@ -162,7 +162,7 @@ public sealed class SelectionBindingTests
     public void GridView_SelectedItem_SetGetAndSyncsWithIndex()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
 
         grid.SelectedItem = "b";
         Assert.AreEqual("b", grid.SelectedItem);
@@ -191,14 +191,14 @@ public sealed class SelectionBindingTests
     public void GridView_SelectionMode_SetGetAndPersistsAcrossSourceSwap()
     {
         var grid = new GridView();
-        grid.SetItemsSource(new[] { "a", "b", "c" });
+        grid.ItemsSource = ItemsView.Create(new[] { "a", "b", "c" });
         Assert.AreEqual(ItemsSelectionMode.Single, grid.SelectionMode);
 
         grid.SelectionMode = ItemsSelectionMode.Multiple;
         Assert.AreEqual(ItemsSelectionMode.Multiple, grid.SelectionMode);
 
         // Mode is a control-level setting; it survives a wholesale source swap.
-        grid.SetItemsSource(new[] { "x", "y", "z" });
+        grid.ItemsSource = ItemsView.Create(new[] { "x", "y", "z" });
         Assert.AreEqual(ItemsSelectionMode.Multiple, grid.SelectionMode);
     }
 

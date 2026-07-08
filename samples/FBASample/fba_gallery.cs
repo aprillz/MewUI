@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.15.0
+#:package Aprillz.MewUI
 
 using System.Collections.ObjectModel;
 using System.Net.Http;
@@ -75,6 +75,8 @@ var fpsStopwatch = new System.Diagnostics.Stopwatch();
 var fpsFrames = 0;
 var backendText = new TextBlock();
 var themeText = new TextBlock();
+var maxFpsEnabled = new ObservableValue<bool>(false);
+var cardBorders = new List<Border>();
 
 var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() =>
 {
@@ -84,6 +86,7 @@ var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() =>
 
 Application
     .Create()
+    .UseTheme(ThemeVariant.Dark)
     .UseAccent(Accent.Purple)
     .Run(new Window()
         .Ref(out window)
@@ -106,6 +109,7 @@ Application
             UpdateTopBar();
             timer.Start();
         })
+        .OnClosed(() => maxFpsEnabled.Value = false)
         .OnFrameRendered(() =>
         {
             if (!fpsStopwatch.IsRunning) { fpsStopwatch.Restart(); fpsFrames = 0; return; }
@@ -149,9 +153,12 @@ FrameworkElement TopBar()
                     .Children(BuiltInAccent.Accents.Select(a => new Button().CornerRadius(14).BorderThickness(0).Content("")
                         .WithTheme((t, c) => c.Background(a.GetAccentColor(t.IsDark))).ToolTip(a.ToString())
                         .OnClick(() => { currentAccent = a; Application.Current.SetAccent(a); UpdateTopBar(); })).ToArray())),
-            new StackPanel().Horizontal().Spacing(8).Children(
+            new StackPanel().Horizontal().Spacing(12).Children(
+                new CheckBox().Content("Cached").IsChecked(true).OnCheckedChanged(v => SetCardsCached(v == true)).CenterVertical(),
+                new CheckBox().Content("Max FPS").BindIsChecked(maxFpsEnabled).OnCheckedChanged(_ => EnsureMaxFpsLoop()).CenterVertical(),
                 new TextBlock().BindText(fpsText).CenterVertical(),
-                new TextBlock().BindText(cullText).CenterVertical()))));
+                new TextBlock().BindText(cullText).CenterVertical()))
+        ));
 }
 
 FrameworkElement BuildGallery() => new StackPanel()
@@ -180,6 +187,27 @@ void UpdateTopBar()
 {
     backendText.Text($"Backend: {Application.Current.GraphicsFactory.Backend}");
     themeText.WithTheme((t, c) => c.Text($"Theme: {t.Name}"));
+}
+
+void SetCardsCached(bool cached)
+{
+    foreach (var border in cardBorders)
+    {
+        border.CacheMode = cached ? new BitmapCache() : null;
+    }
+}
+
+void EnsureMaxFpsLoop()
+{
+    if (!Application.IsRunning)
+    {
+        return;
+    }
+
+    var scheduler = Application.Current.RenderLoopSettings;
+    scheduler.TargetFps = 0;
+    scheduler.VSyncEnabled = !maxFpsEnabled.Value;
+    scheduler.SetContinuous(maxFpsEnabled.Value);
 }
 
 async Task LoadResourcesAsync()
@@ -292,11 +320,13 @@ FrameworkElement Section(string title, FrameworkElement content) =>
             new TextBlock().Text(title).FontSize(18).Bold(),
             content);
 
-FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320) =>
-    new Border()
+FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320)
+{
+    var border = new Border()
         .MinWidth(minWidth)
         .Padding(14)
         .CornerRadius(10)
+        .Cached()
         .Child(
             new StackPanel()
                 .Vertical()
@@ -307,6 +337,9 @@ FrameworkElement Card(string title, FrameworkElement content, double minWidth = 
                         .Text(title)
                         .Bold(),
                     content));
+    cardBorders.Add(border);
+    return border;
+}
 
 FrameworkElement CardGrid(params FrameworkElement[] cards) =>
     new WrapPanel()
@@ -919,7 +952,7 @@ FrameworkElement IconsPage()
         }
 
         var view = filtered.ToList();
-        grid.SetItemsSource(view);
+        grid.ItemsSource = ItemsView.Create(view);
         countText.Value = allIcons.Length == 0
             ? "0 icons (resource pending or failed)"
             : $"{view.Count} / {allIcons.Length} icons";
@@ -1188,7 +1221,7 @@ FrameworkElement GridViewPage()
         if (q.Length > 0) rows = rows.Where(r => r.Id.ToString().Contains(q, StringComparison.OrdinalIgnoreCase) || r.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
         if (onlyErrors.Value) rows = rows.Where(r => r.HasError.Value); rows = rows.Where(r => r.Amount.Value >= minAmt.Value);
         rows = sKey.Value switch { 1 => sDesc.Value ? rows.OrderByDescending(r => r.Name) : rows.OrderBy(r => r.Name), 2 => sDesc.Value ? rows.OrderByDescending(r => r.Amount.Value) : rows.OrderBy(r => r.Amount.Value), _ => sDesc.Value ? rows.OrderByDescending(r => r.Id) : rows.OrderBy(r => r.Id) };
-        var v = rows.ToList(); cg.SetItemsSource(v); sumText.Value = $"Rows:{v.Count}/{allRows.Count} Err:{v.Count(r => r.HasError.Value)} Sum:{v.Sum(r => r.Amount.Value):0.##}";
+        var v = rows.ToList(); cg.ItemsSource = ItemsView.Create(v); sumText.Value = $"Rows:{v.Count}/{allRows.Count} Err:{v.Count(r => r.HasError.Value)} Sum:{v.Sum(r => r.Amount.Value):0.##}";
     }
     query.Changed += AV; onlyErrors.Changed += AV; minAmt.Changed += AV; sKey.Changed += AV; sDesc.Changed += AV;
     cg = new GridView().Height(190).ItemsSource(allRows).Apply(g => g.SelectionChanged += o => selText.Value = o is ComplexGridRow r ? $"Selected:#{r.Id} {r.Name}" : "Selected:(none)")
@@ -1441,18 +1474,18 @@ FrameworkElement FileDialogsCard()
         new WrapPanel().Spacing(6).Children(
             new Button().Content("Open Files...").OnClick(() =>
             {
-                var files = FileDialog.OpenFiles(new OpenFileDialogOptions { Owner = window.Handle, Filter = "All Files (*.*)|*.*" });
+                var files = FileDialog.OpenFiles(new OpenFileDialogOptions { Owner = window, Filters = FileFilter.Parse("All Files (*.*)|*.*") });
                 openStatus.Value = files is null || files.Length == 0 ? "Open Files: canceled"
                     : files.Length == 1 ? $"Open Files: {files[0]}" : $"Open Files: {files.Length} files";
             }),
             new Button().Content("Save File...").OnClick(() =>
             {
-                var file = FileDialog.SaveFile(new SaveFileDialogOptions { Owner = window.Handle, Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*", FileName = "demo.txt" });
+                var file = FileDialog.SaveFile(new SaveFileDialogOptions { Owner = window, Filters = FileFilter.Parse("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"), FileName = "demo.txt" });
                 saveStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
             }),
             new Button().Content("Select Folder...").OnClick(() =>
             {
-                var folder = FileDialog.SelectFolder(new FolderDialogOptions { Owner = window.Handle });
+                var folder = FileDialog.SelectFolder(new FolderDialogOptions { Owner = window });
                 folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
             })),
         new TextBlock().BindText(openStatus).FontSize(11).TextWrapping(TextWrapping.Wrap),
@@ -1603,13 +1636,9 @@ void EnableWindowDrag(Window dragWindow, UIElement element)
 
     static Point GetScreenDip(Window dragWindow, MouseEventArgs e)
     {
+        // ClientToScreen now returns top-left, Y-down pixels on every platform.
         var screen = dragWindow.ClientToScreen(e.GetPosition(dragWindow));
         var scale = Math.Max(1.0, dragWindow.DpiScale);
-        if (OperatingSystem.IsMacOS())
-        {
-            return new Point(screen.X / scale, -screen.Y / scale);
-        }
-
         return new Point(screen.X / scale, screen.Y / scale);
     }
 }
@@ -2309,7 +2338,7 @@ sealed class ConfettiOverlay : FrameworkElement
 
     public void StopRain() => _isRaining = false;
     public void StopCannons() { _cq.Clear(); _cannonAcc = 0; }
-    public new void Clear() { _isRaining = false; _cq.Clear(); _cannonAcc = 0; _p.Clear(); StopTimer(); InvalidateVisual(); }
+    public void Clear() { _isRaining = false; _cq.Clear(); _cannonAcc = 0; _p.Clear(); StopTimer(); InvalidateVisual(); }
 
     protected override void OnRender(IGraphicsContext ctx)
     {

@@ -24,7 +24,7 @@ partial class GalleryView
                 filtered = filtered.Where(i => i.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
 
             var view = filtered.ToList();
-            grid.SetItemsSource(view);
+            grid.ItemsSource = ItemsView.Create(view);
             countText.Value = $"{view.Count} / {allIcons.Length} icons";
         }
 

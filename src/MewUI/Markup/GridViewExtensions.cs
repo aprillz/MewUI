@@ -132,7 +132,7 @@ public static class GridViewExtensions
     {
         ArgumentNullException.ThrowIfNull(gridView);
         ArgumentNullException.ThrowIfNull(items);
-        gridView.SetItemsSource(items);
+        gridView.ItemsSource = ItemsView.Create(items);
         return gridView;
     }
 
@@ -147,7 +147,7 @@ public static class GridViewExtensions
     {
         ArgumentNullException.ThrowIfNull(gridView);
         ArgumentNullException.ThrowIfNull(itemsView);
-        gridView.SetItemsSource(itemsView);
+        gridView.ItemsSource = itemsView;
         return gridView;
     }
 

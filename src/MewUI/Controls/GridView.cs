@@ -456,18 +456,15 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         }
     }
 
-    public void SetItemsSource<TItem>(IReadOnlyList<TItem> items)
+    /// <summary>
+    /// Gets or sets the data source. Assign an <see cref="ItemsView{T}"/> (e.g. from
+    /// <see cref="ItemsView.Create{T}(IReadOnlyList{T}, System.Func{T, string}, System.Func{T, object})"/>)
+    /// to display typed rows alongside typed columns.
+    /// </summary>
+    public ISelectableItemsView ItemsSource
     {
-        ArgumentNullException.ThrowIfNull(items);
-        EnsureConfiguredFor<TItem>();
-        _core.SetItems(ItemsView.Create(items));
-    }
-
-    public void SetItemsSource<TItem>(ItemsView<TItem> itemsView)
-    {
-        ArgumentNullException.ThrowIfNull(itemsView);
-        EnsureConfiguredFor<TItem>();
-        _core.SetItems(itemsView);
+        get => _core.ItemsSource;
+        set => _core.SetItems(value ?? ItemsView.EmptySelectable);
     }
 
     public void SetColumns<TItem>(IReadOnlyList<GridViewColumn<TItem>> columns)
