@@ -141,6 +141,39 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void ListBox_SelectedItem_SetGetAndSyncsWithIndex()
+    {
+        var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
+
+        list.SelectedItem = "b";
+        Assert.AreEqual("b", list.SelectedItem);
+        Assert.AreEqual(1, list.SelectedIndex);
+
+        list.SelectedIndex = 2;
+        Assert.AreEqual("c", list.SelectedItem);
+
+        // An item not in the source is rejected; SelectedItem self-corrects to the real selection.
+        list.SelectedItem = "zzz";
+        Assert.AreEqual(2, list.SelectedIndex);
+        Assert.AreEqual("c", list.SelectedItem);
+    }
+
+    [TestMethod]
+    public void ListBox_SelectedItem_TwoWayBinding()
+    {
+        var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
+        var source = new ObservableValue<object?>(null);
+        list.SetBinding(ListBox.SelectedItemProperty, source);
+
+        source.Value = "c";
+        Assert.AreEqual("c", list.SelectedItem);
+        Assert.AreEqual(2, list.SelectedIndex);
+
+        list.SelectedIndex = 0;
+        Assert.AreEqual("a", source.Value);
+    }
+
+    [TestMethod]
     public void GridView_SelectionMode_SetGetAndPersistsAcrossSourceSwap()
     {
         var grid = new GridView();

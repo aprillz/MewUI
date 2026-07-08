@@ -19,6 +19,11 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             MewPropertyOptions.None,
             static (self, _, newVal) => self.OnSelectionModePropertyChanged(newVal));
 
+    public static readonly MewProperty<object?> SelectedItemProperty =
+        MewProperty<object?>.Register<ListBox>(nameof(SelectedItem), null,
+            MewPropertyOptions.BindsTwoWayByDefault,
+            static (self, _, newVal) => self.OnSelectedItemPropertyChanged(newVal));
+
     public static readonly MewProperty<bool> ZebraStripingProperty =
         MewProperty<bool>.Register<ListBox>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
 
@@ -29,7 +34,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     private int _hoverIndex = -1;
     private bool _hasLastMousePosition;
     private Point _lastMousePosition;
-    private bool _syncingSelectedIndex;
+    private bool _syncingSelection;
     private bool _suppressItemsSelectionChanged;
     private ISelectableItemsView _itemsSource = ItemsView.EmptySelectable;
 
@@ -105,9 +110,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         else
         {
             int newIndex = _itemsSource.SelectedIndex;
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, newIndex); }
-            finally { _syncingSelectedIndex = false; }
+            SyncSelectionProperties();
             if (newIndex >= 0)
             {
                 ScrollIntoView(newIndex);
@@ -130,7 +133,11 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// <summary>
     /// Gets the currently selected item object.
     /// </summary>
-    public object? SelectedItem => ItemsSource.SelectedItem;
+    public object? SelectedItem
+    {
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
+    }
 
     private IMultiSelectableItemsView? MultiView => _itemsSource.AsMultiSelectable();
 
@@ -742,18 +749,34 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
     private void OnSelectedIndexPropertyChanged(int newIndex)
     {
-        if (_syncingSelectedIndex) return;
-        _syncingSelectedIndex = true;
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { _itemsSource.SelectedIndex = newIndex; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    private void OnSelectedItemPropertyChanged(object? item)
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
+        try { _itemsSource.SelectedItem = item; }
+        finally { _syncingSelection = false; }
+        SyncSelectionProperties();
+    }
+
+    // Mirrors the model selection into the bindable index/item properties. Guarded so the
+    // property change callbacks do not re-enter the model.
+    private void SyncSelectionProperties()
+    {
+        if (_syncingSelection) return;
+        _syncingSelection = true;
         try
         {
-            _itemsSource.SelectedIndex = newIndex;
-            int actual = _itemsSource.SelectedIndex;
-            if (actual != newIndex)
-            {
-                SetValue(SelectedIndexProperty, actual);
-            }
+            SetValue(SelectedIndexProperty, _itemsSource.SelectedIndex);
+            SetValue(SelectedItemProperty, _itemsSource.SelectedItem);
         }
-        finally { _syncingSelectedIndex = false; }
+        finally { _syncingSelection = false; }
     }
 
     private void OnItemsSelectionChanged(int index)
@@ -764,15 +787,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         }
 
         InvalidateItemBindings();
-
-        if (!_syncingSelectedIndex)
-        {
-            _syncingSelectedIndex = true;
-            try { SetValue(SelectedIndexProperty, index); }
-            finally { _syncingSelectedIndex = false; }
-        }
-
-        SelectionChanged?.Invoke(SelectedItem);
+        SyncSelectionProperties();
+        SelectionChanged?.Invoke(_itemsSource.SelectedItem);
         ScrollIntoView(index);
         InvalidateVisual();
     }
