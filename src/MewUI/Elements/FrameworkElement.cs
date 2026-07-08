@@ -105,7 +105,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double MinWidth
     {
         get => GetValue(MinWidthProperty);
-        set => SetValue(MinWidthProperty, value);
+        set
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), "MinWidth must be 0 or greater.");
+            SetValue(MinWidthProperty, value);
+        }
     }
 
     /// <summary>
@@ -128,7 +133,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double MaxWidth
     {
         get => GetValue(MaxWidthProperty);
-        set => SetValue(MaxWidthProperty, value);
+        set
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), "MaxWidth must be 0 or greater.");
+            SetValue(MaxWidthProperty, value);
+        }
     }
 
     /// <summary>
@@ -137,7 +147,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
     public double MaxHeight
     {
         get => GetValue(MaxHeightProperty);
-        set => SetValue(MaxHeightProperty, value);
+        set
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), "MaxHeight must be 0 or greater.");
+            SetValue(MaxHeightProperty, value);
+        }
     }
 
     /// <summary>
