@@ -548,14 +548,15 @@ public sealed class PathGeometry : IFreezable
     }
 
     /// <summary>
-    /// Parses an SVG path data string into a <see cref="PathGeometry"/>.
+    /// Parses SVG path data into a frozen <see cref="PathGeometry"/>. A string argument
+    /// binds here via implicit conversion to <see cref="ReadOnlySpan{T}"/>.
     /// </summary>
-    public static PathGeometry Parse(ReadOnlySpan<char> pathData) => SvgPathParser.Parse(pathData);
-
-    /// <summary>
-    /// Parses an SVG path data string into a <see cref="PathGeometry"/>.
-    /// </summary>
-    public static PathGeometry Parse(string pathData) => SvgPathParser.Parse(pathData).Apply(x=>x.Freeze());
+    public static PathGeometry Parse(ReadOnlySpan<char> pathData)
+    {
+        var geometry = SvgPathParser.Parse(pathData);
+        geometry.Freeze();
+        return geometry;
+    }
 
     /// <summary>Creates a closed rectangular path.</summary>
     public static PathGeometry FromRect(Rect rect)
