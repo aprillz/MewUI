@@ -51,8 +51,11 @@ public sealed partial class WebView2 : FrameworkElement
 
     private delegate nint WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
 
-    // Treat WebView2 as a focusable element so keyboard navigation can enter the embedded browser.
-    public override bool Focusable => true;
+    static WebView2()
+    {
+        // Treat WebView2 as a focusable element so keyboard navigation can enter the embedded browser.
+        FocusableProperty.OverrideDefaultValue<WebView2>(true);
+    }
 
     /// <summary>
     /// Occurs when navigation has completed.

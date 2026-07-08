@@ -16,6 +16,11 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     public static readonly MewProperty<ImeMode> ImeModeProperty =
         MewProperty<ImeMode>.Register<TextBase>(nameof(ImeMode), ImeMode.Auto, MewPropertyOptions.None);
 
+    static TextBase()
+    {
+        FocusableProperty.OverrideDefaultValue<TextBase>(true);
+    }
+
     /// <summary>
     /// Gets or sets the IME mode for this text control.
     /// </summary>
@@ -311,8 +316,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     public bool CanUndo => _editor.CanUndo;
 
     public bool CanRedo => _editor.CanRedo;
-
-    public override bool Focusable => true;
 
     internal override void OnAccessKey()
     {

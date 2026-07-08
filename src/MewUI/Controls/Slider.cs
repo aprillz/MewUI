@@ -24,6 +24,7 @@ public sealed class Slider : RangeBase
         HeightProperty.OverrideDefaultValue<Slider>(24.0);
         SmallChangeProperty.OverrideDefaultValue<Slider>(1.0);
         LargeChangeProperty.OverrideDefaultValue<Slider>(10.0);
+        FocusableProperty.OverrideDefaultValue<Slider>(true);
     }
 
     public bool ChangeOnWheel
@@ -43,11 +44,6 @@ public sealed class Slider : RangeBase
         get => GetValue(ThumbBorderBrushProperty);
         set => SetValue(ThumbBorderBrushProperty, value);
     }
-
-    /// <summary>
-    /// Gets whether the slider can receive keyboard focus.
-    /// </summary>
-    public override bool Focusable => true;
 
     private double ThumbSize => 14;
 

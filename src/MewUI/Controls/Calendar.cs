@@ -86,6 +86,11 @@ public sealed class Calendar : Control, IVisualTreeHost
         MewProperty<bool>.Register<Calendar>(nameof(IsTodayHighlighted), true,
             MewPropertyOptions.AffectsRender);
 
+    static Calendar()
+    {
+        FocusableProperty.OverrideDefaultValue<Calendar>(true);
+    }
+
     public Calendar()
     {
         _prevButton = new Button
@@ -159,8 +164,6 @@ public sealed class Calendar : Control, IVisualTreeHost
         get => GetValue(IsTodayHighlightedProperty);
         set => SetValue(IsTodayHighlightedProperty, value);
     }
-
-    public override bool Focusable => true;
 
     /// <summary>Raised when <see cref="SelectedDate"/> changes (keyboard navigation or click).</summary>
     public event Action<DateTime?>? SelectedDateChanged;

@@ -70,10 +70,10 @@ public sealed class ContextMenu : Control, IPopupOwner
         set => SetValue(MaxMenuHeightProperty, value);
     }
 
-    /// <summary>
-    /// Gets whether the context menu can receive keyboard focus.
-    /// </summary>
-    public override bool Focusable => true;
+    static ContextMenu()
+    {
+        FocusableProperty.OverrideDefaultValue<ContextMenu>(true);
+    }
 
     /// <summary>
     /// Initializes a new instance of the ContextMenu class.

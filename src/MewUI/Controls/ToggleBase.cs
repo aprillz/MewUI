@@ -24,10 +24,10 @@ public abstract partial class ToggleBase : ContentControl
     /// </summary>
     public event Action<bool>? CheckedChanged;
 
-    /// <summary>
-    /// Gets whether the control can receive keyboard focus.
-    /// </summary>
-    public override bool Focusable => true;
+    static ToggleBase()
+    {
+        FocusableProperty.OverrideDefaultValue<ToggleBase>(true);
+    }
 
     /// <summary>
     /// Initializes a new instance of the ToggleBase class.

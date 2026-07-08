@@ -17,12 +17,15 @@ public class CheckBox : ContentControl
 
     private readonly PressCaptureHelper _pressCapture;
 
+    static CheckBox()
+    {
+        FocusableProperty.OverrideDefaultValue<CheckBox>(true);
+    }
+
     public CheckBox()
     {
         _pressCapture = new PressCaptureHelper(this, SetPressed);
     }
-
-    public override bool Focusable => true;
 
     protected override VisualState ComputeVisualState()
     {

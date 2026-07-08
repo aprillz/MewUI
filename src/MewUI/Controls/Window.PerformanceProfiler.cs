@@ -151,8 +151,6 @@ partial class Window
             Background = Color.Transparent;
         }
 
-        public override bool Focusable => false;
-
         protected override void OnRender(IGraphicsContext context)
         {
             base.OnRender(context);
@@ -161,7 +159,7 @@ partial class Window
             var latest = profiler.GetLatestFrame(_window.ProfilerSourceId);
             var rolling = profiler.GetRollingStats(_window.ProfilerSourceId);
             var loop = Application.IsRunning ? Application.Current.RenderLoopSettings : null;
-
+                
             Span<char> textBuffer = stackalloc char[768];
             var text = new StackTextFormatter(textBuffer);
             text.Append("FPS ");

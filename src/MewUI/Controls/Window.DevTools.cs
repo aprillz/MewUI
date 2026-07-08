@@ -193,8 +193,6 @@ public partial class Window
             Background = Color.Transparent;
         }
 
-        public override bool Focusable => false;
-
         public bool ShouldAvoidMouse(Point mousePosition)
             => IsPointNearTopLeftInfoPanel(mousePosition);
 

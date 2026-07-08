@@ -216,6 +216,11 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         MewProperty<TreeViewExpandTrigger>.Register<TreeView>(nameof(ExpandTrigger),
             TreeViewExpandTrigger.ClickChevron, MewPropertyOptions.None);
 
+    static TreeView()
+    {
+        FocusableProperty.OverrideDefaultValue<TreeView>(true);
+    }
+
     /// <summary>
     /// Gets or sets the horizontal indentation per tree level.
     /// </summary>
@@ -404,11 +409,6 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         _scrollViewer.SetScrollOffsets(_scrollViewer.HorizontalOffset, newOffset);
         InvalidateVisual();
     }
-
-    /// <summary>
-    /// Gets whether the tree view can receive keyboard focus.
-    /// </summary>
-    public override bool Focusable => true;
 
     /// <summary>
     /// Attempts to find the item (row) index at the specified position in this control's coordinates.

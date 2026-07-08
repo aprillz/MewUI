@@ -72,6 +72,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         return state;
     }
 
+    static NumericUpDown()
+    {
+        FocusableProperty.OverrideDefaultValue<NumericUpDown>(true);
+    }
+
     public NumericUpDown()
     {
         _textBox = new TextBox
@@ -101,8 +106,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         get => GetValue(ChangeOnWheelProperty);
         set => SetValue(ChangeOnWheelProperty, value);
     }
-
-    public override bool Focusable => true;
 
     internal override void OnAccessKey() => Focus();
 

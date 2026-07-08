@@ -71,8 +71,6 @@ internal sealed class DockCaption : ContentControl, IToolHeader
         Refresh();
     }
 
-    public override bool Focusable => false;
-
     public void Refresh() => _label.Text = _title() ?? MewUIDockString.TitleUnnamedTab.Value;
 
     private static TextBlock ToolTipLabel(ObservableValue<string> source) => new TextBlock().BindText(source);

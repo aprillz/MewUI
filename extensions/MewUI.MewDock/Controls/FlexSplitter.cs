@@ -21,8 +21,6 @@ internal sealed class FlexSplitter : Control
 
     public double BarThickness { get; init; }
 
-    public override bool Focusable => false;
-
     // Report Pressed while dragging so the style's Pressed trigger highlights the bar.
     protected override VisualState ComputeVisualState()
     {

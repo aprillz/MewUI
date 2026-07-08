@@ -79,8 +79,6 @@ internal sealed class FlexTabSetView : Control, IVisualTreeHost
         CanDrag = tabSet.IsEnableDrag;
     }
 
-    public override bool Focusable => false;
-
     // A pane tabset puts its tab strip at the bottom; document tabsets keep it on top.
     private bool HeaderAtBottom => !_tabSet.IsDocument;
 

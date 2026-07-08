@@ -80,6 +80,7 @@ public abstract partial class UIElement : Element
         MewProperty<bool>.Register<UIElement>(nameof(IsTabStop), true);
 
     /// <summary>
+    /// Whether the element can receive keyboard focus. Control authors set the per-type default
     /// When <see langword="true"/>, the viewport-bounds cull check in <see cref="Render"/> is skipped.
     /// Set this on children whose layout bounds do not reflect their actual visible area
     /// (e.g. children rendered under a parent-applied scale/rotation transform).
@@ -322,9 +323,13 @@ public abstract partial class UIElement : Element
     public bool IsMouseCaptured => GetValue(IsMouseCapturedProperty);
 
     /// <summary>
-    /// Gets whether this element can receive focus.
+    /// Gets or sets whether this element can receive keyboard focus.
     /// </summary>
-    public virtual bool Focusable => false;
+    public bool Focusable
+    {
+        get => GetValue(FocusableProperty);
+        set => SetValue(FocusableProperty, value);
+    }
 
     #region Events (using Action delegates for AOT compatibility)
 

@@ -226,6 +226,20 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets whether the element can receive keyboard focus.
+    /// </summary>
+    /// <typeparam name="T">Visual type.</typeparam>
+    /// <param name="element">Target element.</param>
+    /// <param name="focusable">Whether the element can receive focus.</param>
+    /// <returns>The element for chaining.</returns>
+    public static T Focusable<T>(this T element, bool focusable = true) where T : UIElement
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.Focusable = focusable;
+        return element;
+    }
+
+    /// <summary>
     /// Enables the element.
     /// </summary>
     /// <typeparam name="T">Visual type.</typeparam>

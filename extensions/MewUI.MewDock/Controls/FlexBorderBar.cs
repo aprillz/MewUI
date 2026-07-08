@@ -39,8 +39,6 @@ internal class FlexBorderBar : Control, IVisualTreeHost
         AttachChild(_splitter);
     }
 
-    public override bool Focusable => false;
-
     internal BorderNode Border => _border;
 
     public DockLocation Location => _border.Location;

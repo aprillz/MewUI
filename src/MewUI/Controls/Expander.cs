@@ -16,6 +16,11 @@ public class Expander : HeaderedContentControl
     public static readonly MewProperty<double> GlyphSizeProperty =
         MewProperty<double>.Register<Expander>(nameof(GlyphSize), 4.0, MewPropertyOptions.AffectsRender);
 
+    static Expander()
+    {
+        FocusableProperty.OverrideDefaultValue<Expander>(true);
+    }
+
     /// <summary>
     /// Gets or sets whether the content is expanded.
     /// </summary>
@@ -49,8 +54,6 @@ public class Expander : HeaderedContentControl
     /// Occurs when the expanded state changes.
     /// </summary>
     public event Action<bool>? ExpandedChanged;
-
-    public override bool Focusable => true;
 
     private const double GlyphAreaWidth = 20;
 

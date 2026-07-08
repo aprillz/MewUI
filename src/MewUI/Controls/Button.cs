@@ -31,6 +31,11 @@ public partial class Button : Control, IVisualTreeHost
 
     private readonly PressCaptureHelper _pressCapture;
 
+    static Button()
+    {
+        FocusableProperty.OverrideDefaultValue<Button>(true);
+    }
+
     public Button()
     {
         _pressCapture = new PressCaptureHelper(this, SetPressed);
@@ -53,8 +58,6 @@ public partial class Button : Control, IVisualTreeHost
             }
         }
     }
-
-    public override bool Focusable => true;
 
     protected override bool ComputeIsEnabledSuggestion() => CanClick?.Invoke() ?? true;
 

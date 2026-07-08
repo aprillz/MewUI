@@ -17,6 +17,11 @@ public abstract class ScrollableItemsBase : Control, ISubtreeInvalidationHost
     private protected uint _itemBindingGeneration;
     private ScrollIntoViewRequest _scrollIntoViewRequest;
 
+    static ScrollableItemsBase()
+    {
+        FocusableProperty.OverrideDefaultValue<ScrollableItemsBase>(true);
+    }
+
     protected ScrollableItemsBase()
     {
         _scrollViewer = new ScrollViewer
@@ -28,8 +33,6 @@ public abstract class ScrollableItemsBase : Control, ISubtreeInvalidationHost
         };
         _scrollViewer.Parent = this;
     }
-
-    public override bool Focusable => true;
 
     protected override void OnEnabledChanged()
     {

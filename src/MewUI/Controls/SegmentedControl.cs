@@ -16,12 +16,15 @@ public sealed class SegmentedControl : SegmentedBase
             MewPropertyOptions.BindsTwoWayByDefault,
             static (self, _, newVal) => self.OnSelectedIndexPropertyChanged(newVal));
 
+    static SegmentedControl()
+    {
+        FocusableProperty.OverrideDefaultValue<SegmentedControl>(true);
+    }
+
     // Segments share an equal width; selection is a mutually exclusive choice.
     public SegmentedControl() : base(SegmentSizing.Uniform)
     {
     }
-
-    public override bool Focusable => true;
 
     /// <summary>Gets or sets the selected segment index (-1 means no selection).</summary>
     public int SelectedIndex

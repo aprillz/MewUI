@@ -76,7 +76,10 @@ public sealed class TabControl : Control
     /// </summary>
     public event Action<object?>? SelectionChanged;
 
-    public override bool Focusable => true;
+    static TabControl()
+    {
+        FocusableProperty.OverrideDefaultValue<TabControl>(true);
+    }
 
     public TabControl()
     {

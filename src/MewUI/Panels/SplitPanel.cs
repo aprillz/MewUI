@@ -527,8 +527,6 @@ public sealed class SplitPanel : Panel
             _owner = owner;
         }
 
-        public override bool Focusable => false;
-
         internal bool IsDragging
         {
             get => GetValue(IsDraggingProperty);

@@ -259,6 +259,11 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         private Point _cachedGradientStart;
         private Point _cachedGradientEnd;
 
+        static AlphaSlider()
+        {
+            FocusableProperty.OverrideDefaultValue<AlphaSlider>(true);
+        }
+
         public AlphaSlider(State state)
         {
             _state = state;
@@ -284,8 +289,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         internal void Detach() => _state.Changed -= OnStateChanged;
 
         private void OnStateChanged(object? source) => InvalidateVisual();
-
-        public override bool Focusable => true;
 
         protected override void OnDispose()
         {

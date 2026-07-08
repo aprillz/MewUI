@@ -96,10 +96,6 @@ internal sealed class TabHeaderButton : ContentControl
 
     internal override void OnAccessKey() => ClickedCallback?.Invoke(Index);
 
-    // Keep header buttons out of the default Tab focus order.
-    // Keyboard navigation is handled by TabControl itself (arrows / Ctrl+PgUp/PgDn).
-    public override bool Focusable => false;
-
     protected override UIElement? OnHitTest(Point point)
     {
         // Match WPF semantics: disabled tabs should not participate in hit testing,

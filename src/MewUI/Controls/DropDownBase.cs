@@ -25,6 +25,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         MewProperty<double>.Register<DropDownBase>(nameof(MaxDropDownHeight), 240.0, MewPropertyOptions.AffectsLayout,
             static (self, oldValue, newValue) => self.OnMaxDropDownHeightChanged(oldValue, newValue));
 
+    static DropDownBase()
     /// <summary>
     /// Gets or sets whether the popup is open.
     /// </summary>

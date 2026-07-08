@@ -25,11 +25,6 @@ public sealed class GroupBox : HeaderedContentControl
         HeaderSpacingProperty.OverrideDefaultValue<GroupBox>(4.0);
     }
 
-    /// <summary>
-    /// Gets whether the groupbox can receive keyboard focus.
-    /// </summary>
-    public override bool Focusable => false;
-
     internal override void OnAccessKey()
     {
         if (Content is UIElement content)

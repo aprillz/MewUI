@@ -30,6 +30,11 @@ public sealed class MenuBar : Control, IPopupOwner
     public static readonly MewProperty<bool> DrawBottomSeparatorProperty =
         MewProperty<bool>.Register<MenuBar>(nameof(DrawBottomSeparator), true, MewPropertyOptions.AffectsRender);
 
+    static MenuBar()
+    {
+        FocusableProperty.OverrideDefaultValue<MenuBar>(true);
+    }
+
     /// <summary>
     /// Gets or sets a value indicating whether to draw a bottom separator line below the menu bar. 
     /// </summary>
@@ -213,8 +218,6 @@ public sealed class MenuBar : Control, IPopupOwner
             first = false;
         }
     }
-
-    public override bool Focusable => true;
 
     protected override void OnMouseLeave()
     {
