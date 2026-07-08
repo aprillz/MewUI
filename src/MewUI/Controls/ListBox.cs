@@ -254,10 +254,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     /// </summary>
     public event Action<object?>? SelectionChanged;
 
-    /// <summary>
-    /// Occurs when an item is activated by click or Enter key.
-    /// </summary>
-    public event Action<int>? ItemActivated;
+    // Internal commit signal for the ComboBox popup ("user picked a row, close"); not a public
+    // feature. The public item-invoke concept lives on NavigationList.ItemInvoked.
+    internal event Action<int>? ItemActivated;
 
     /// <summary>
     /// Attempts to find the item index at the specified position in this control's coordinates.

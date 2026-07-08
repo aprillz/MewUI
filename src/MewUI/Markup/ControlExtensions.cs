@@ -2392,18 +2392,6 @@ public static class ControlExtensions
         return listBox;
     }
 
-    /// <summary>
-    /// Adds an item activation handler.
-    /// </summary>
-    /// <param name="listBox">Target list box.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The list box for chaining.</returns>
-    public static ListBox OnItemActivated(this ListBox listBox, Action<int> handler)
-    {
-        listBox.ItemActivated += handler;
-        return listBox;
-    }
-
     #endregion
 
     #region SegmentedControl
@@ -4652,18 +4640,6 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(convert);
 
         calendar.SetBinding(Calendar.SelectedDateProperty, source, convert, convertBack);
-        return calendar;
-    }
-
-    /// <summary>
-    /// Adds a date activation handler.
-    /// </summary>
-    /// <param name="calendar">Target calendar.</param>
-    /// <param name="handler">Event handler.</param>
-    /// <returns>The calendar for chaining.</returns>
-    public static Calendar OnDateActivated(this Calendar calendar, Action<DateTime> handler)
-    {
-        calendar.DateActivated += handler;
         return calendar;
     }
 

@@ -168,8 +168,9 @@ public sealed class Calendar : Control, IVisualTreeHost
     /// <summary>Raised when <see cref="SelectedDate"/> changes (keyboard navigation or click).</summary>
     public event Action<DateTime?>? SelectedDateChanged;
 
-    /// <summary>Raised when a date is activated by mouse click or Enter key (commit action).</summary>
-    public event Action<DateTime>? DateActivated;
+    // Internal commit signal for the DatePicker popup ("user picked a date, close"); not a public
+    // feature (mirrors ListBox.ItemActivated).
+    internal event Action<DateTime>? DateActivated;
 
     /// <summary>Raised when <see cref="DisplayMode"/> changes.</summary>
     public event Action<CalendarMode>? DisplayModeChanged;
