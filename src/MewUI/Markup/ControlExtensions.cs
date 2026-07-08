@@ -3642,16 +3642,18 @@ public static class ControlExtensions
     public static TabItem Header(this TabItem tab, string text, bool accessKey = true)
     {
         ArgumentNullException.ThrowIfNull(tab);
+        text ??= string.Empty;
         if (accessKey)
         {
             var at = new AccessText();
-            at.SetRawText(text ?? string.Empty);
+            at.SetRawText(text);
             tab.Header = at;
         }
         else
         {
-            tab.Header = new TextBlock { Text = text ?? string.Empty };
+            tab.Header = new TextBlock { Text = text };
         }
+        tab.HeaderText = text;
         return tab;
     }
 
@@ -3666,6 +3668,35 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(tab);
         ArgumentNullException.ThrowIfNull(header);
         tab.Header = header;
+        return tab;
+    }
+
+    /// <summary>
+    /// Sets the header element and semantic header text.
+    /// </summary>
+    /// <param name="tab">Target tab item.</param>
+    /// <param name="header">Header element.</param>
+    /// <param name="text">Semantic header text.</param>
+    /// <returns>The tab item for chaining.</returns>
+    public static TabItem Header(this TabItem tab, Element header, string text)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        ArgumentNullException.ThrowIfNull(header);
+        tab.Header = header;
+        tab.HeaderText = text ?? string.Empty;
+        return tab;
+    }
+
+    /// <summary>
+    /// Sets the semantic header text.
+    /// </summary>
+    /// <param name="tab">Target tab item.</param>
+    /// <param name="text">Semantic header text.</param>
+    /// <returns>The tab item for chaining.</returns>
+    public static TabItem HeaderText(this TabItem tab, string? text)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        tab.HeaderText = text;
         return tab;
     }
 

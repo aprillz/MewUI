@@ -10,10 +10,17 @@ public sealed class TabControl : Control
     , IVisualTreeHost
     , IFocusTraversalScope
 {
+    private const double HeaderSpacing = 2.0;
+
     private readonly List<TabItem> _tabs = new();
-    private readonly StackPanel _headerStrip;
+    private readonly List<TabHeaderButton> _headers = new();
+    private readonly HashSet<TabHeaderButton> _hiddenHeaders = new();
+    private readonly Button _overflowButton;
     private TabItem? _lastTab;
+    private Element? _lastContent;
     private int _cachedFocusedHeaderIndex = -1;
+    private Size _headerDesiredSize;
+    private bool _overflowActive;
 
     internal override UIElement GetDefaultFocusTarget()
     {
@@ -83,12 +90,18 @@ public sealed class TabControl : Control
 
     public TabControl()
     {
-        _headerStrip = new StackPanel
+        _overflowButton = new Button
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 2,
+            Content = new GlyphElement { Kind = GlyphKind.ChevronDown },
+            StyleName = BuiltInStyles.FlatButton,
+            Padding = new Thickness(0),
+            MinWidth = 18,
+            MinHeight = 18,
+            Focusable = false,
+            IsTabStop = false,
         };
-        _headerStrip.Parent = this;
+        _overflowButton.Click += ShowOverflowMenu;
+        _overflowButton.Parent = this;
     }
 
     private bool IsHorizontalPlacement =>
@@ -96,17 +109,13 @@ public sealed class TabControl : Control
 
     private void OnTabPlacementChanged()
     {
-        _headerStrip.Orientation = IsHorizontalPlacement
-            ? Orientation.Horizontal
-            : Orientation.Vertical;
-
-        for (int i = 0; i < _headerStrip.Count; i++)
+        for (int i = 0; i < _headers.Count; i++)
         {
-            if (_headerStrip[i] is TabHeaderButton button)
-            {
-                button.Placement = TabPlacement;
-            }
+            _headers[i].Placement = TabPlacement;
         }
+
+        InvalidateMeasure();
+        InvalidateVisual();
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -224,6 +233,7 @@ public sealed class TabControl : Control
         }
 
         _tabs.Add(tab);
+        AttachTab(tab);
         RebuildHeaders();
         EnsureValidSelection();
         InvalidateMeasure();
@@ -232,7 +242,15 @@ public sealed class TabControl : Control
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        if (!visitor(_headerStrip))
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            if (!visitor(_headers[i]))
+            {
+                return false;
+            }
+        }
+
+        if (!visitor(_overflowButton))
         {
             return false;
         }
@@ -256,9 +274,14 @@ public sealed class TabControl : Control
     public void ClearTabs()
     {
         DetachCurrentContent();
+        for (int i = 0; i < _tabs.Count; i++)
+        {
+            DetachTab(_tabs[i]);
+        }
         _tabs.Clear();
-        _headerStrip.Clear();
+        ClearHeaders();
         _lastTab = null;
+        _lastContent = null;
         SelectedIndex = -1;
         InvalidateMeasure();
         InvalidateVisual();
@@ -279,6 +302,7 @@ public sealed class TabControl : Control
         }
 
         int oldSelected = SelectedIndex;
+        DetachTab(removedTab);
         _tabs.RemoveAt(index);
 
         // Closing the active tab falls back to the previous tab; closing a tab before
@@ -307,13 +331,11 @@ public sealed class TabControl : Control
 
         var inner = availableSize.Deflate(border);
 
-        _headerStrip.Measure(IsHorizontalPlacement
-            ? new Size(inner.Width, double.PositiveInfinity)
-            : new Size(double.PositiveInfinity, inner.Height));
+        MeasureHeaders(inner);
 
         double headerSize = IsHorizontalPlacement
-            ? _headerStrip.DesiredSize.Height
-            : _headerStrip.DesiredSize.Width;
+            ? _headerDesiredSize.Height
+            : _headerDesiredSize.Width;
 
         double contentW = IsHorizontalPlacement
             ? inner.Width
@@ -332,11 +354,11 @@ public sealed class TabControl : Control
         }
 
         double desiredW = IsHorizontalPlacement
-            ? Math.Max(_headerStrip.DesiredSize.Width, contentDesired.Width)
-            : _headerStrip.DesiredSize.Width + contentDesired.Width;
+            ? Math.Max(_headerDesiredSize.Width, contentDesired.Width)
+            : _headerDesiredSize.Width + contentDesired.Width;
         double desiredH = IsHorizontalPlacement
-            ? _headerStrip.DesiredSize.Height + contentDesired.Height
-            : Math.Max(_headerStrip.DesiredSize.Height, contentDesired.Height);
+            ? _headerDesiredSize.Height + contentDesired.Height
+            : Math.Max(_headerDesiredSize.Height, contentDesired.Height);
 
         return new Size(desiredW, desiredH).Inflate(border);
     }
@@ -349,7 +371,7 @@ public sealed class TabControl : Control
         var inner = bounds.Deflate(border);
 
         var (headerBounds, contentBounds) = GetLayoutRects(inner);
-        _headerStrip.Arrange(headerBounds);
+        ArrangeHeaders(headerBounds);
         SelectedTab?.Content?.Arrange(contentBounds.Deflate(Padding));
     }
 
@@ -358,7 +380,7 @@ public sealed class TabControl : Control
         // Header must render BEFORE content background so the background
         // paints over the header's bottom edge, visually connecting the
         // selected tab to the content area.
-        _headerStrip.Render(context);
+        RenderHeaders(context);
 
         var bounds = GetSnappedBorderBounds(Bounds);
         var borderInset = GetBorderVisualInset();
@@ -402,10 +424,24 @@ public sealed class TabControl : Control
             return null;
         }
 
-        var headerHit = _headerStrip.HitTest(point);
-        if (headerHit != null)
+        if (_overflowActive && _overflowButton.HitTest(point) is UIElement overflowHit)
         {
-            return headerHit;
+            return overflowHit;
+        }
+
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            var header = _headers[i];
+            if (_hiddenHeaders.Contains(header))
+            {
+                continue;
+            }
+
+            var headerHit = header.HitTest(point);
+            if (headerHit != null)
+            {
+                return headerHit;
+            }
         }
 
         if (SelectedTab?.Content is UIElement uiContent)
@@ -422,7 +458,7 @@ public sealed class TabControl : Control
 
     private void RebuildHeaders()
     {
-        _headerStrip.Clear();
+        ClearHeaders();
 
         for (int i = 0; i < _tabs.Count; i++)
         {
@@ -434,19 +470,326 @@ public sealed class TabControl : Control
                 IsEnabled = tab.IsEnabled,
                 Content = tab.Header!,
                 Placement = TabPlacement,
+                Parent = this,
             };
             header.ClickedCallback = idx =>
             {
-                SelectedIndex = idx;
-                var root = FindVisualRoot();
-                if (root is Window window)
-                {
-                    window.FocusManager.SetFocus(this, resolveDefault: false);
-                }
+                SelectTabFromHeader(idx);
             };
 
-            _headerStrip.Add(header);
+            _headers.Add(header);
         }
+    }
+
+    private void AttachTab(TabItem tab)
+    {
+        tab.Changed += OnTabItemChanged;
+    }
+
+    private void DetachTab(TabItem tab)
+    {
+        tab.Changed -= OnTabItemChanged;
+    }
+
+    private void ClearHeaders()
+    {
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            _headers[i].Content = null;
+            _headers[i].Parent = null;
+        }
+
+        _headers.Clear();
+        _hiddenHeaders.Clear();
+        _overflowActive = false;
+    }
+
+    private void OnTabItemChanged(TabItem tab, TabItemChange change)
+    {
+        int index = _tabs.IndexOf(tab);
+        if (index < 0)
+        {
+            return;
+        }
+
+        switch (change)
+        {
+            case TabItemChange.Header:
+                if (index < _headers.Count)
+                {
+                    _headers[index].Content = tab.Header;
+                }
+                InvalidateMeasure();
+                InvalidateVisual();
+                break;
+
+            case TabItemChange.Content:
+                if (ReferenceEquals(tab, SelectedTab))
+                {
+                    UpdateSelection();
+                }
+                else
+                {
+                    InvalidateMeasure();
+                    InvalidateVisual();
+                }
+                break;
+
+            case TabItemChange.IsEnabled:
+                if (index < _headers.Count)
+                {
+                    _headers[index].IsEnabled = tab.IsEnabled;
+                    _headers[index].InvalidateVisual();
+                }
+                break;
+
+            case TabItemChange.HeaderText:
+                break;
+        }
+    }
+
+    private void SelectTabFromHeader(int index)
+    {
+        SelectedIndex = index;
+        var root = FindVisualRoot();
+        if (root is Window window)
+        {
+            window.FocusManager.SetFocus(this, resolveDefault: false);
+        }
+    }
+
+    private void MeasureHeaders(Size inner)
+    {
+        if (_headers.Count == 0)
+        {
+            _headerDesiredSize = Size.Empty;
+            _hiddenHeaders.Clear();
+            _overflowActive = false;
+            _overflowButton.Measure(Size.Empty);
+            return;
+        }
+
+        double width = 0;
+        double height = 0;
+
+        if (IsHorizontalPlacement)
+        {
+            for (int i = 0; i < _headers.Count; i++)
+            {
+                var header = _headers[i];
+                header.Measure(new Size(double.PositiveInfinity, inner.Height));
+                width += header.DesiredSize.Width + (i > 0 ? HeaderSpacing : 0);
+                height = Math.Max(height, header.DesiredSize.Height);
+            }
+
+            _overflowButton.Measure(new Size(double.PositiveInfinity, inner.Height));
+            if (_headers.Count > 1)
+            {
+                height = Math.Max(height, _overflowButton.DesiredSize.Height);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < _headers.Count; i++)
+            {
+                var header = _headers[i];
+                header.Measure(new Size(inner.Width, double.PositiveInfinity));
+                width = Math.Max(width, header.DesiredSize.Width);
+                height += header.DesiredSize.Height + (i > 0 ? HeaderSpacing : 0);
+            }
+
+            _overflowButton.Measure(Size.Empty);
+            _hiddenHeaders.Clear();
+            _overflowActive = false;
+        }
+
+        _headerDesiredSize = new Size(width, height);
+    }
+
+    private void ArrangeHeaders(Rect headerBounds)
+    {
+        if (_headers.Count == 0)
+        {
+            _hiddenHeaders.Clear();
+            _overflowActive = false;
+            _overflowButton.Arrange(Rect.Empty);
+            return;
+        }
+
+        if (!IsHorizontalPlacement)
+        {
+            _hiddenHeaders.Clear();
+            _overflowActive = false;
+            _overflowButton.Arrange(Rect.Empty);
+
+            double y = headerBounds.Y;
+            for (int i = 0; i < _headers.Count; i++)
+            {
+                var header = _headers[i];
+                double height = header.DesiredSize.Height;
+                header.Arrange(new Rect(headerBounds.X, y, headerBounds.Width, height));
+                y += height + HeaderSpacing;
+            }
+            return;
+        }
+
+        var visible = ResolveVisibleHeaders(headerBounds.Width);
+        double x = headerBounds.X;
+        for (int i = 0; i < visible.Count; i++)
+        {
+            var header = visible[i];
+            double width = header.DesiredSize.Width;
+            header.Arrange(new Rect(x, headerBounds.Y, width, headerBounds.Height));
+            x += width + HeaderSpacing;
+        }
+
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            var header = _headers[i];
+            if (_hiddenHeaders.Contains(header))
+            {
+                header.Arrange(new Rect(headerBounds.X, headerBounds.Y, 0, 0));
+            }
+        }
+
+        if (_overflowActive)
+        {
+            double width = Math.Min(_overflowButton.DesiredSize.Width, headerBounds.Width);
+            double height = Math.Min(_overflowButton.DesiredSize.Height, headerBounds.Height);
+            double buttonX = Math.Max(headerBounds.X, headerBounds.Right - width);
+            double buttonY = headerBounds.Y + Math.Max(0, (headerBounds.Height - height) / 2);
+            _overflowButton.Arrange(new Rect(buttonX, buttonY, width, height));
+        }
+        else
+        {
+            _overflowButton.Arrange(Rect.Empty);
+        }
+    }
+
+    private List<TabHeaderButton> ResolveVisibleHeaders(double availableForHeaders)
+    {
+        _hiddenHeaders.Clear();
+
+        var visible = new List<TabHeaderButton>();
+        if (_headers.Count == 0)
+        {
+            _overflowActive = false;
+            return visible;
+        }
+
+        double total = 0;
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            total += _headers[i].DesiredSize.Width + (i > 0 ? HeaderSpacing : 0);
+        }
+
+        if (_headers.Count <= 1 || total <= availableForHeaders)
+        {
+            _overflowActive = false;
+            visible.AddRange(_headers);
+            return visible;
+        }
+
+        double availableForTabs = Math.Max(0, availableForHeaders - _overflowButton.DesiredSize.Width - HeaderSpacing);
+
+        int fitCount = 0;
+        double accumulated = 0;
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            double step = _headers[i].DesiredSize.Width + (i > 0 ? HeaderSpacing : 0);
+            if (accumulated + step > availableForTabs)
+            {
+                break;
+            }
+
+            accumulated += step;
+            fitCount++;
+        }
+
+        int selectedIndex = SelectedIndex >= 0 && SelectedIndex < _headers.Count ? SelectedIndex : -1;
+        int leadCount = fitCount;
+        if (selectedIndex >= leadCount && leadCount > 0)
+        {
+            leadCount--;
+        }
+
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            if (i < leadCount || i == selectedIndex)
+            {
+                visible.Add(_headers[i]);
+            }
+            else
+            {
+                _hiddenHeaders.Add(_headers[i]);
+            }
+        }
+
+        if (visible.Count == 0)
+        {
+            var fallback = selectedIndex >= 0 ? _headers[selectedIndex] : _headers[0];
+            visible.Add(fallback);
+            _hiddenHeaders.Remove(fallback);
+        }
+
+        _overflowActive = _hiddenHeaders.Count > 0;
+        return visible;
+    }
+
+    private void RenderHeaders(IGraphicsContext context)
+    {
+        for (int i = 0; i < _headers.Count; i++)
+        {
+            var header = _headers[i];
+            if (!_hiddenHeaders.Contains(header))
+            {
+                header.Render(context);
+            }
+        }
+
+        if (_overflowActive)
+        {
+            _overflowButton.Render(context);
+        }
+    }
+
+    private void ShowOverflowMenu()
+    {
+        if (_hiddenHeaders.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu();
+        for (int i = 0; i < _tabs.Count && i < _headers.Count; i++)
+        {
+            if (!_hiddenHeaders.Contains(_headers[i]))
+            {
+                continue;
+            }
+
+            int index = i;
+            var tab = _tabs[i];
+            menu.AddItem(GetOverflowMenuText(tab, i), () => SelectedIndex = index, tab.IsEnabled);
+        }
+
+        var buttonBounds = _overflowButton.Bounds;
+        menu.ShowAt(_overflowButton, new Point(buttonBounds.X, buttonBounds.Bottom));
+    }
+
+    private static string GetOverflowMenuText(TabItem tab, int index)
+    {
+        if (!string.IsNullOrEmpty(tab.HeaderText))
+        {
+            return tab.HeaderText;
+        }
+
+        if (tab.Header is TextBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
+        {
+            return textBlock.Text;
+        }
+
+        return $"Tab {index + 1}";
     }
 
     private void EnsureValidSelection()
@@ -469,9 +812,10 @@ public sealed class TabControl : Control
 
     private void DetachCurrentContent()
     {
-        if (_lastTab?.Content != null)
+        if (_lastContent != null)
         {
-            _lastTab.Content.Parent = null;
+            _lastContent.Parent = null;
+            _lastContent = null;
         }
     }
 
@@ -479,7 +823,7 @@ public sealed class TabControl : Control
     {
         var root = FindVisualRoot();
         var window = root as Window;
-        var oldContent = _lastTab?.Content;
+        var oldContent = _lastContent;
         bool focusWasInOldContent = false;
 
         if (window != null && oldContent != null)
@@ -496,28 +840,28 @@ public sealed class TabControl : Control
         }
 
         RefreshFocusCache();
-        for (int i = 0; i < _headerStrip.Count; i++)
+        for (int i = 0; i < _headers.Count; i++)
         {
-            if (_headerStrip[i] is TabHeaderButton btn)
-            {
-                btn.IsSelected = i == SelectedIndex;
-                btn.IsEnabled = i >= 0 && i < _tabs.Count && _tabs[i].IsEnabled;
-                btn.InvalidateVisual();
-            }
+            var btn = _headers[i];
+            btn.IsSelected = i == SelectedIndex;
+            btn.IsEnabled = i >= 0 && i < _tabs.Count && _tabs[i].IsEnabled;
+            btn.InvalidateVisual();
         }
 
         var selected = SelectedTab;
-        if (!ReferenceEquals(_lastTab, selected))
+        var selectedContent = selected?.Content;
+        if (!ReferenceEquals(_lastTab, selected) || !ReferenceEquals(_lastContent, selectedContent))
         {
             if (oldContent != null)
             {
                 oldContent.Parent = null;
             }
-            if (selected?.Content != null)
+            if (selectedContent != null)
             {
-                selected.Content.Parent = this;
+                selectedContent.Parent = this;
             }
             _lastTab = selected;
+            _lastContent = selectedContent;
         }
 
         InvalidateMeasure();
@@ -582,9 +926,9 @@ public sealed class TabControl : Control
     private void RefreshFocusCache()
     {
         _cachedFocusedHeaderIndex = -1;
-        for (int i = 0; i < _headerStrip.Count; i++)
+        for (int i = 0; i < _headers.Count; i++)
         {
-            if (_headerStrip[i] is TabHeaderButton btn && btn.IsFocused)
+            if (_headers[i].IsFocused)
             {
                 _cachedFocusedHeaderIndex = i;
                 break;
@@ -602,12 +946,9 @@ public sealed class TabControl : Control
             return;
         }
 
-        for (int i = 0; i < _headerStrip.Count; i++)
+        for (int i = 0; i < _headers.Count; i++)
         {
-            if (_headerStrip[i] is TabHeaderButton btn)
-            {
-                btn.RefreshOwnerState();
-            }
+            _headers[i].RefreshOwnerState();
         }
     }
 
@@ -616,8 +957,8 @@ public sealed class TabControl : Control
 
     private (Rect Header, Rect Content) GetLayoutRects(Rect inner)
     {
-        double headerWidth = Math.Clamp(_headerStrip.DesiredSize.Width, 0, inner.Width);
-        double headerHeight = Math.Clamp(_headerStrip.DesiredSize.Height, 0, inner.Height);
+        double headerWidth = Math.Clamp(_headerDesiredSize.Width, 0, inner.Width);
+        double headerHeight = Math.Clamp(_headerDesiredSize.Height, 0, inner.Height);
 
         return TabPlacement switch
         {
@@ -644,9 +985,9 @@ public sealed class TabControl : Control
         }
 
         if (SelectedIndex >= 0 &&
-            SelectedIndex < _headerStrip.Count &&
-            _headerStrip[SelectedIndex] is TabHeaderButton btn)
+            SelectedIndex < _headers.Count)
         {
+            var btn = _headers[SelectedIndex];
             Rect rect;
             if (IsHorizontalPlacement)
             {
