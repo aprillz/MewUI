@@ -188,6 +188,20 @@ public sealed class SelectionBindingTests
     }
 
     [TestMethod]
+    public void ListBox_SelectedItems_ReflectsSelection()
+    {
+        var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
+        Assert.AreEqual(0, list.SelectedItems.Count);
+
+        list.SelectedIndex = 1;
+        Assert.AreEqual(1, list.SelectedItems.Count);
+        Assert.AreEqual("b", list.SelectedItems[0]);
+
+        list.SelectedIndex = -1;
+        Assert.AreEqual(0, list.SelectedItems.Count);
+    }
+
+    [TestMethod]
     public void GridView_SelectionMode_SetGetAndPersistsAcrossSourceSwap()
     {
         var grid = new GridView();
