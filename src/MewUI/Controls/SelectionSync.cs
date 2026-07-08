@@ -88,9 +88,16 @@ internal sealed class SelectionSync
             _setSelectedItems(Array.Empty<object?>());
             return;
         }
-        var items = new object?[indices.Count];
-        for (int i = 0; i < indices.Count; i++)
-            items[i] = view.GetItem(indices[i]);
+        // Skip indices that are transiently out of range: a collection change fires SelectionChanged
+        // before the selected set is remapped, so the set can briefly reference a removed position.
+        // A later SelectedIndicesChanged re-runs this with the remapped set.
+        int count = view.Count;
+        var items = new List<object?>(indices.Count);
+        foreach (int index in indices)
+        {
+            if ((uint)index < (uint)count)
+                items.Add(view.GetItem(index));
+        }
         _setSelectedItems(items);
     }
 

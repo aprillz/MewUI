@@ -228,9 +228,14 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
             SetValue(SelectedItemsPropertyKey, Array.Empty<object?>());
             return;
         }
-        var items = new object?[indices.Count];
-        for (int i = 0; i < indices.Count; i++)
-            items[i] = _itemsSource.GetItem(indices[i]);
+        // Skip indices that are transiently out of range mid collection-change (see SelectionSync).
+        int count = _itemsSource.Count;
+        var items = new List<object?>(indices.Count);
+        foreach (int index in indices)
+        {
+            if ((uint)index < (uint)count)
+                items.Add(_itemsSource.GetItem(index));
+        }
         SetValue(SelectedItemsPropertyKey, items);
     }
 

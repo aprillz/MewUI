@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
@@ -213,6 +215,44 @@ public sealed class SelectionBindingTests
 
         list.SelectedIndex = 1;
         Assert.AreEqual("b", observed);
+    }
+
+    [TestMethod]
+    public void RemovingSelectedLastItem_DoesNotThrow()
+    {
+        // Regression: removing the selected last item fires SelectionChanged before the view has
+        // remapped its selected set, so the SelectedItems projection briefly saw an out-of-range
+        // index and threw from GetItem.
+        var data = new ObservableCollection<string> { "a", "b", "c" };
+        var list = new ListBox { ItemsSource = ItemsView.Create(data) };
+        list.SelectedIndex = 2;
+
+        data.RemoveAt(2);
+
+        Assert.IsTrue(list.SelectedIndex < 2);
+        foreach (var item in list.SelectedItems)
+            Assert.IsTrue(data.Contains(item));
+    }
+
+    [TestMethod]
+    public void MultiSelect_CollectionMutations_StayConsistent()
+    {
+        var data = new ObservableCollection<string> { "a", "b", "c", "d" };
+        var list = new ListBox { ItemsSource = ItemsView.Create(data) };
+        list.SelectionMode = ItemsSelectionMode.Multiple;
+        list.SelectRange(1, 3);
+
+        data.RemoveAt(3);
+        foreach (var item in list.SelectedItems)
+            Assert.IsTrue(data.Contains(item));
+
+        data.Insert(0, "z");
+        foreach (var item in list.SelectedItems)
+            Assert.IsTrue(data.Contains(item));
+
+        data.Clear();
+        Assert.AreEqual(0, list.SelectedItems.Count);
+        Assert.AreEqual(-1, list.SelectedIndex);
     }
 
     [TestMethod]
