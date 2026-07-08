@@ -95,10 +95,35 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     /// <summary>Gets the selected items in ascending visible-row order (read-only, bindable).</summary>
     public IReadOnlyList<object?> SelectedItems => GetValue(SelectedItemsProperty);
 
+    /// <summary>Selects every visible item (multi-selection modes only; no-op otherwise).</summary>
+    public void SelectAll()
+    {
+        var multi = _itemsSource.AsMultiSelectable();
+        if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single && _itemsSource.Count > 0)
+            multi.SelectRange(0, _itemsSource.Count - 1, clearExisting: true);
+    }
+
+    /// <summary>Clears the entire selection.</summary>
+    public void ClearSelection()
+    {
+        var multi = _itemsSource.AsMultiSelectable();
+        if (multi != null)
+            multi.ClearSelection();
+        else
+            _itemsSource.SelectedIndex = -1;
+    }
+
+    /// <summary>Selects the inclusive visible-row range [start, end], replacing the selection (multi only).</summary>
+    public void SelectRange(int start, int end)
+    {
+        _itemsSource.AsMultiSelectable()?.SelectRange(start, end, clearExisting: true);
+    }
+
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
-    private bool IsItemSelected(int index) => _itemsSource.IsItemSelected(index);
+    /// <summary>Returns whether the item at the given visible-row <paramref name="index"/> is selected.</summary>
+    public bool IsSelected(int index) => _itemsSource.IsItemSelected(index);
 
     private void ApplyKeyboardSelect(int target, ModifierKeys modifiers)
     {
@@ -369,7 +394,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     {
         double itemRadius = _presenter.ItemRadius;
 
-        bool selected = IsItemSelected(i);
+        bool selected = IsSelected(i);
         if (selected)
         {
             var selectionBg = Theme.Palette.SelectionBackground;
@@ -810,7 +835,7 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
                     tb.IsEnabled = enabled;
                 }
 
-                bool selected = IsItemSelected(index);
+                bool selected = IsSelected(index);
                 var fg = !enabled
                     ? Theme.Palette.DisabledText
                     : selected ? Theme.Palette.SelectionText : Theme.Palette.WindowText;
