@@ -5,6 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// control's bindable SelectedIndex / SelectedItem / SelectedItems properties. Centralizes the
 /// reentrancy guard, the "sync properties before the owner raises events" ordering, the SelectedItems
 /// projection, and the multi-selection operations that the view-backed selectors otherwise duplicate.
+/// The setSelectedItems setter is null for single-selection controls that do not expose SelectedItems.
 /// </summary>
 internal sealed class SelectionSync
 {
@@ -14,10 +15,6 @@ internal sealed class SelectionSync
     private readonly Action<IReadOnlyList<object?>>? _setSelectedItems;
     private bool _syncing;
 
-    /// <param name="setSelectedItems">
-    /// Setter for the read-only SelectedItems projection. Pass null for single-selection controls
-    /// that do not expose SelectedItems.
-    /// </param>
     public SelectionSync(
         Func<ISelectableItemsView> view,
         Action<int> setSelectedIndex,
