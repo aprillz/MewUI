@@ -127,6 +127,13 @@ public abstract class DropDownBase : Control, IPopupOwner
     protected virtual bool IsToggleHit(in Rect headerRect, Point positionInControl) => headerRect.Contains(positionInControl);
 
     /// <summary>
+    /// When true, the popup width comes from the popup's own content rather than this control's width,
+    /// so the popup manager re-derives that width once the popup is connected and its inherited font
+    /// applies. Fixed-width dropdowns (sized to the control) leave this false.
+    /// </summary>
+    protected virtual bool PopupSizesToContent => false;
+
+    /// <summary>
     /// Calculates the popup bounds. Override for specialized controls (e.g. ComboBox list sizing).
     /// </summary>
     protected virtual Rect CalculatePopupBounds(Window window, UIElement popup)
@@ -374,7 +381,7 @@ public abstract class DropDownBase : Control, IPopupOwner
         SyncPopupContent(popup);
 
         var popupBounds = CalculatePopupBounds(window, popup);
-        window.ShowPopup(this, popup, popupBounds);
+        window.ShowPopup(this, popup, popupBounds, PopupSizesToContent);
         _lastPopupBounds = popupBounds;
         _popupBoundsDirty = false;
 

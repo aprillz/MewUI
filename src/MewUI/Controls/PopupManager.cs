@@ -164,7 +164,7 @@ internal sealed class PopupManager
         _window.Invalidate();
     }
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool staysOpen = false)
+    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(popup);
@@ -201,6 +201,14 @@ internal sealed class PopupManager
         // are resolvable. Force style re-resolution and measure invalidation so that any
         // measurement done before attachment (e.g. MeasureToolTip) is corrected.
         ForceStyleAndMeasureRefresh(popup);
+
+        // The caller sized a content-sized popup from a measurement taken before attachment, where the
+        // fallback font differs from the inherited one; re-derive the width from the connected measure
+        // so the content is not clipped by a stale pre-attach size.
+        if (sizeToContent)
+        {
+            bounds = ResizeToContentWidth(popup, bounds);
+        }
 
         var entry = new PopupEntry { Owner = owner, Element = popup, Chrome = chrome, Bounds = bounds, StaysOpen = staysOpen };
         _popups.Add(entry);
@@ -584,6 +592,25 @@ internal sealed class PopupManager
                 fe.NotifyDpiChanged(oldDpi, newDpi);
             }
         });
+    }
+
+    private Rect ResizeToContentWidth(UIElement popup, Rect bounds)
+    {
+        var client = _window.ClientSize;
+        // Measure unconstrained in width so the now-inherited font drives the natural content width;
+        // keep the caller's height constraint so its vertical placement decision is preserved.
+        popup.Measure(new Size(double.PositiveInfinity, bounds.Height));
+        double width = Math.Min(popup.DesiredSize.Width, client.Width);
+        if (width.Equals(bounds.Width))
+        {
+            return bounds;
+        }
+        double x = bounds.X;
+        if (x + width > client.Width)
+        {
+            x = Math.Max(0, client.Width - width);
+        }
+        return new Rect(x, bounds.Y, width, bounds.Height);
     }
 
     private static void ForceStyleAndMeasureRefresh(UIElement popup)

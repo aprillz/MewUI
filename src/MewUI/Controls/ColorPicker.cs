@@ -142,6 +142,8 @@ public sealed class ColorPicker : DropDownBase
         //context.DrawRoundedRectangle(swatchRect, 2, 2, Theme.Palette.ControlBorder, 1, strokeInset: true);
     }
 
+    protected override bool PopupSizesToContent => true;
+
     protected override Rect CalculatePopupBounds(Window window, UIElement popup)
     {
         var bounds = Bounds;

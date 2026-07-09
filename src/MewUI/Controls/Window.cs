@@ -2463,8 +2463,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal void CloseAllPopups()
         => _popupManager.CloseAllPopups();
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool staysOpen = false)
-        => _popupManager.ShowPopup(owner, popup, bounds, staysOpen);
+    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+        => _popupManager.ShowPopup(owner, popup, bounds, sizeToContent, staysOpen);
 
     internal void RequestClosePopups(PopupCloseRequest request)
         => _popupManager.RequestClosePopups(request);
