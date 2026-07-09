@@ -90,9 +90,23 @@ internal sealed class ManagedFileDialogWindow : Window
             bottom.IsVisible(false);
         }
 
-        var buttons = new StackPanel().Horizontal().Spacing(8).Right().Children(
-            new Button().Content(AcceptText(mode)).Width(80).TabIndex(8).OnClick(OnAccept),
-            new Button().Content("Cancel").Width(80).TabIndex(9).OnClick(OnCancel));
+        var acceptButton = new Button().Content(AcceptText(mode)).Width(80).OnClick(OnAccept);
+        var cancelButton = new Button().Content("Cancel").Width(80).OnClick(OnCancel);
+
+        var buttons = new StackPanel().Horizontal().Spacing(8).Right();
+        if (PlatformConventions.Current.ReverseButtonOrder)
+        {
+            // Trailing-primary platforms place the accept action last, with tab order following the layout.
+            cancelButton.TabIndex(8);
+            acceptButton.TabIndex(9);
+            buttons.Children(cancelButton, acceptButton);
+        }
+        else
+        {
+            acceptButton.TabIndex(8);
+            cancelButton.TabIndex(9);
+            buttons.Children(acceptButton, cancelButton);
+        }
 
         // Joined nav cluster (back / forward / up): independent command segments wired via
         // PrepareContainer. Back/forward segments are captured so their enabled state can track history.
