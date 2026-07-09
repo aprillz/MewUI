@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" PrivateAssets="none" />
   </ItemGroup>
 
   <!-- Shared GL hosting source is compiled into each consuming Interop assembly. -->
