@@ -732,6 +732,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
             case WindowMessages.WM_DPICHANGED:
                 return HandleDpiChanged(wParam, lParam);
 
+            case WindowMessages.WM_DPICHANGED_AFTERPARENT:
+                return HandleDpiChangedAfterParent();
+
             case WindowMessages.WM_ACTIVATE:
                 return HandleActivate(wParam);
 
@@ -1885,6 +1888,37 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         // During modal move/size loop, the normal render pass doesn't run.
         // Force an immediate render so the layered window updates at the new DPI.
+        if (_allowsTransparency)
+            RenderIfNeeded();
+
+        return 0;
+    }
+
+    private nint HandleDpiChangedAfterParent()
+    {
+        // Sent to a child window after its parent's DPI changed (e.g. a window hosted inside another
+        // process's window that moved to a different-DPI monitor). Unlike WM_DPICHANGED it carries no
+        // DPI or suggested rect, and the parent owns position/size, so re-query and keep the placement.
+        uint newDpi = GetDpiForWindow(Handle);
+        uint oldDpi = Window.Dpi;
+        if (newDpi == 0 || newDpi == oldDpi)
+        {
+            return 0;
+        }
+
+        Window.SetDpi(newDpi);
+
+        User32.GetClientRect(Handle, out var clientRect);
+        Window.SetClientSizeDip(clientRect.Width / Window.DpiScale, clientRect.Height / Window.DpiScale);
+
+        Window.RaiseDpiChanged(oldDpi, newDpi);
+
+        if (_extendTitleBarHeight > 0)
+            SetExtendClientAreaToTitleBar(_extendTitleBarHeight);
+
+        Window.PerformLayout();
+        Window.Invalidate();
+
         if (_allowsTransparency)
             RenderIfNeeded();
 
