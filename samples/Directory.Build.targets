@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- Analyzer wiring for every sample that source-references MewUI: ProjectReference does not
+       flow analyzer assets, so inject the analyzer project reference here once. Guarded off under
+       AOT publish (netstandard2.0 analyzer in the publish graph breaks publish) and opt-out via
+       MewUIAnalyzers=false. -->
+  <ItemGroup Condition="'$(MewUIAnalyzers)' != 'false' and '$(PublishAot)' != 'true'
+                        and '@(ProjectReference->WithMetadataValue('Filename', 'MewUI'))' != ''">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\MewUI.Analyzers\MewUI.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

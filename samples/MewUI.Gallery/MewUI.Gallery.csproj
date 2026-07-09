@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <RootNamespace>Aprillz.MewUI.Gallery</RootNamespace>
@@ -17,9 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
-    <ProjectReference Include="..\..\src\MewUI.Analyzers\MewUI.Analyzers.csproj"
-                      OutputItemType="Analyzer" Condition="'$(PublishAot)' != 'true'"
-                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">

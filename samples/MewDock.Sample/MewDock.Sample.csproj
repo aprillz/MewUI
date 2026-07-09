@@ -26,9 +26,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\extensions\MewUI.MewDock\MewUI.MewDock.csproj" />
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
-    <ProjectReference Include="..\..\src\MewUI.Analyzers\MewUI.Analyzers.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
     <ProjectReference Include="..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
