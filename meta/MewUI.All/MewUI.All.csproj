@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <!-- core -->
-    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" PrivateAssets="none" />
 
     <!-- platforms -->
     <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />

@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\extensions\MewUI.Skia\MewUI.Skia.csproj" />
+    <ProjectReference Include="..\..\extensions\MewUI.Skia\MewUI.Skia.csproj" PrivateAssets="none" />
     <ProjectReference Include="..\..\extensions\MewUI.Skia.Interop.MewVG.MacOS\MewUI.Skia.Interop.MewVG.MacOS.csproj" />
   </ItemGroup>
 
