@@ -18,6 +18,15 @@
           Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
+  <!-- Build-order only: keeps the packed analyzer DLL above fresh even when packing outside
+       pack_mewui.cmd. Not loaded into this compilation (no OutputItemType) and not a package
+       dependency (PrivateAssets=all). Skipped under AOT publish (known publish bug with
+       netstandard2.0 analyzer projects in the publish graph). -->
+  <ItemGroup Condition="'$(PublishAot)' != 'true'">
+    <ProjectReference Include="..\MewUI.Analyzers\MewUI.Analyzers.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
   <!-- Split platform hosts and rendering backends into separate assemblies -->
   <ItemGroup>
     <Compile Remove="Shared\**" />
