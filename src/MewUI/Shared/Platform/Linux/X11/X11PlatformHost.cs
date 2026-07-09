@@ -151,6 +151,15 @@ public sealed class X11PlatformHost : IPlatformHost
 
         PumpLoop(null);
 
+        // Application.Quit exits the loop with windows still alive; their GL and input-method
+        // teardown talks to the X server, so it must run BEFORE XCloseDisplay frees the Display.
+        // Backends cache the display pointer, making a later teardown a use-after-free.
+        foreach (var backend in _windows.Values.ToArray())
+        {
+            try { backend.Dispose(); } catch { }
+        }
+        _windows.Clear();
+
         if (Display != 0)
         {
             FreeCursorCache();   // release shared cursors before the display goes away
