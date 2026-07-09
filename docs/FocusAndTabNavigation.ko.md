@@ -17,8 +17,9 @@ window.FocusManager.ClearFocus();    // 포커스 해제
 
 요소가 포커스를 받으려면 다음을 모두 만족해야 한다.
 
-- `Focusable == true` : 컨트롤 타입이 결정한다 (`Button`, `TextBox`, `ListBox` 등).
-  Label, TextBlock, Panel 등 비대화형 요소는 포커스를 받지 않는다.
+- `Focusable == true` : 컨트롤 타입이 기본값을 정한다 (`Button`, `TextBox`, `ListBox`
+  등은 true, Label/TextBlock/Panel 등 비대화형 요소는 false). 필요하면 인스턴스별로
+  덮어쓸 수 있다 (아래 참고).
 - `IsEffectivelyEnabled == true` : 자신과 조상이 모두 활성 상태.
 - `IsVisible == true`
 
@@ -82,6 +83,19 @@ new Button().IsTabStop(false);   // Tab 순회에서만 제외
 - 용도 구분: 컨트롤 내부 파트 제외는 컨트롤 작성자가(생성자/스타일),
   개별 인스턴스 제외는 앱이 결정한다.
 
+### Focusable (bool)
+
+```csharp
+new Button().Focusable(false);   // 이 인스턴스는 포커스 자체를 못 받게
+```
+
+- 컨트롤 타입이 기본값을 정하지만(대화형 컨트롤은 true), 인스턴스별로 덮어쓸 수 있다.
+  주로 조합 컨트롤에서 내부 파트를 포커스 대상에서 빼는 데 쓴다.
+- `IsTabStop`과의 차이: `Focusable = false`는 클릭·`Focus()`를 포함해 **모든** 포커스를
+  막는다. `IsTabStop = false`는 Tab 순회에서만 뺀다.
+- 이미 포커스를 가진 요소에 `Focusable = false`를 지정해도 포커스가 즉시 옮겨가지는
+  않는다. 다음 Tab 이동이나 클릭에서 자연스럽게 해소된다.
+
 ### 순회 스코프
 
 - `TabControl`은 **활성 탭의 컨텐츠만** 순회에 포함한다. 비활성 탭은 건너뛴다.
@@ -98,5 +112,5 @@ new Button().IsTabStop(false);   // Tab 순회에서만 제외
 | 탭 순서 지정 | `TabIndex(1)`, `TabIndex(2)` ... |
 | 두 요소 사이에 끼워넣기 | `TabIndex(1.5)` |
 | Tab에서만 제외 (클릭 포커스는 유지) | `IsTabStop(false)` |
-| 포커스 자체를 막기 | 컨트롤 타입의 `Focusable`이 결정 (인스턴스 단위 지정은 불가) |
+| 포커스 자체를 막기 (클릭 포함) | `Focusable(false)` |
 | 자동 순서로 복귀 | `TabIndex = double.NaN` |

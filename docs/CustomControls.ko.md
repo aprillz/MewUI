@@ -135,6 +135,13 @@ public sealed class NumericUpDown : RangeBase
     private ButtonPart _hoverPart;
     private ButtonPart _pressedPart;
 
+    // 키보드 입력을 수용하는 컨트롤은 포커스를 받을 수 있어야 한다. 타입별 기본값을
+    // static 생성자에서 지정하면 ClearValue 시 false가 아니라 이 값으로 복원된다.
+    static NumericUpDown()
+    {
+        FocusableProperty.OverrideDefaultValue<NumericUpDown>(true);
+    }
+
     public NumericUpDown()
     {
         // 컨트롤의 기본 크기 규칙을 확정한다.
@@ -153,9 +160,6 @@ public sealed class NumericUpDown : RangeBase
     protected override Color DefaultBackground => Theme.Palette.ControlBackground;
     protected override Color DefaultBorderBrush => Theme.Palette.ControlBorder;
     protected override double DefaultMinHeight => Theme.Metrics.BaseControlHeight;
-
-    // 키보드 입력을 수용하는 컨트롤임을 명시한다.
-    public override bool Focusable => true;
 
     public string Format
     {
