@@ -18,8 +18,8 @@ public class LinearGradientPaint : MewPaint
     private readonly GradientStop[] _stops;
     private readonly Point _start;
     private readonly Point _end;
-    private IBrush? _brush;
-    private IPen? _pen;
+    private Brush? _brush;
+    private Pen? _pen;
 
     public LinearGradientPaint(GradientStop[] stops, Point start, Point end)
     {
@@ -60,8 +60,7 @@ public class LinearGradientPaint : MewPaint
         var start = new Point(area.X + _start.X * area.Width, area.Y + _start.Y * area.Height);
         var end = new Point(area.X + _end.X * area.Width, area.Y + _end.Y * area.Height);
 
-        _brush?.Dispose();
-        _brush = context.Factory.CreateLinearGradientBrush(start, end, _stops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null);
+        _brush = new LinearGradientBrush(start, end, _stops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null);
 
         var thickness = drawnElement?.StrokeThickness ?? StrokeThickness;
         context.ActiveColor = _stops[_stops.Length / 2].Color;
@@ -70,8 +69,7 @@ public class LinearGradientPaint : MewPaint
 
         if (PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            _pen?.Dispose();
-            _pen = context.Factory.CreatePen(_brush, thickness);
+            _pen = new Pen(_brush, thickness);
             context.ActivePen = _pen;
             context.ActiveBrush = null;
         }
@@ -86,10 +84,6 @@ public class LinearGradientPaint : MewPaint
 
     internal override void DisposeTask()
     {
-        _pen?.Dispose();
-        _pen = null;
-        _brush?.Dispose();
-        _brush = null;
         base.DisposeTask();
     }
 }

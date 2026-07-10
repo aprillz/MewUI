@@ -15,8 +15,8 @@ public class RadialGradientPaint : MewPaint
     private readonly GradientStop[] _stops;
     private readonly Point _center;
     private readonly double _radius;
-    private IBrush? _brush;
-    private IPen? _pen;
+    private Brush? _brush;
+    private Pen? _pen;
 
     public RadialGradientPaint(GradientStop[] stops, Point center, double radius)
     {
@@ -57,8 +57,7 @@ public class RadialGradientPaint : MewPaint
         var center = new Point(area.X + _center.X * area.Width, area.Y + _center.Y * area.Height);
         var radius = _radius * Math.Min(area.Width, area.Height);
 
-        _brush?.Dispose();
-        _brush = context.Factory.CreateRadialGradientBrush(center, center, radius, radius, _stops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null);
+        _brush = new RadialGradientBrush(center, center, radius, radius, _stops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null);
 
         var thickness = drawnElement?.StrokeThickness ?? StrokeThickness;
         context.ActiveColor = _stops[_stops.Length / 2].Color;
@@ -67,8 +66,7 @@ public class RadialGradientPaint : MewPaint
 
         if (PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            _pen?.Dispose();
-            _pen = context.Factory.CreatePen(_brush, thickness);
+            _pen = new Pen(_brush, thickness);
             context.ActivePen = _pen;
             context.ActiveBrush = null;
         }
@@ -83,10 +81,6 @@ public class RadialGradientPaint : MewPaint
 
     internal override void DisposeTask()
     {
-        _pen?.Dispose();
-        _pen = null;
-        _brush?.Dispose();
-        _brush = null;
         base.DisposeTask();
     }
 }
