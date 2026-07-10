@@ -60,7 +60,12 @@ public class LinearGradientPaint : MewPaint
         var start = new Point(area.X + _start.X * area.Width, area.Y + _start.Y * area.Height);
         var end = new Point(area.X + _end.X * area.Width, area.Y + _end.Y * area.Height);
 
-        _brush = new LinearGradientBrush(start, end, _stops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null);
+        // Descriptors are immutable, so reuse them across frames and rebuild only when the
+        // resolved geometry changes (draw area is stable between resizes).
+        if (_brush is not LinearGradientBrush cached || cached.StartPoint != start || cached.EndPoint != end)
+        {
+            _brush = new LinearGradientBrush(start, end, _stops, SpreadMethod.Pad, GradientUnits.UserSpaceOnUse, null);
+        }
 
         var thickness = drawnElement?.StrokeThickness ?? StrokeThickness;
         context.ActiveColor = _stops[_stops.Length / 2].Color;
@@ -69,7 +74,10 @@ public class LinearGradientPaint : MewPaint
 
         if (PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            _pen = new Pen(_brush, thickness);
+            if (_pen is null || !ReferenceEquals(_pen.Brush, _brush) || _pen.Thickness != thickness)
+            {
+                _pen = new Pen(_brush, thickness);
+            }
             context.ActivePen = _pen;
             context.ActiveBrush = null;
         }

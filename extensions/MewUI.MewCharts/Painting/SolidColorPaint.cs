@@ -56,7 +56,13 @@ public class SolidColorPaint : MewPaint
 
         if (DashArray is { Length: > 0 } && PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            _pen = new Pen(Color, thickness, new StrokeStyle { DashArray = DashArray, DashOffset = DashOffset });
+            var strokeStyle = new StrokeStyle { DashArray = DashArray, DashOffset = DashOffset };
+            // Descriptors are immutable, so reuse the pen across frames and rebuild only when inputs change.
+            if (_pen is null || _pen.Thickness != thickness || _pen.StrokeStyle != strokeStyle ||
+                _pen.Brush is not SolidColorBrush solid || solid.Color != Color)
+            {
+                _pen = new Pen(Color, thickness, strokeStyle);
+            }
             context.ActivePen = _pen;
         }
         else
