@@ -9,8 +9,11 @@ namespace MewUI.Test.Rendering;
 /// remains visible after premultiplied compositing (the CacheMode "invisible text" bug). These
 /// tests measure the actual per-pixel alpha produced by the GDI backend; they fail while the bug
 /// is present and should pass once the offscreen text-alpha fix lands.
+/// Not parallelizable: reassigns the process-wide Application.DefaultGraphicsFactory mid-run,
+/// which races text measurement in concurrently running tests (flaky TabControl arrange).
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class OffscreenTextAlphaTests
 {
     private const int Width = 96;
