@@ -806,7 +806,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_SETFOCUS:
-                User32.CreateCaret(Handle, 0, 1, 20);
+                // The system caret exists only so caret-following IMEs and accessibility
+                // tools can track the input position; the visible caret is drawn by MewUI.
+                // HandleImeStartComposition creates it late for mid-window focus moves.
+                if (Window.FocusManager.FocusedElement is ITextInputClient)
+                {
+                    CreateInvisibleSystemCaret();
+                }
                 return 0;
 
             case WindowMessages.WM_KILLFOCUS:
@@ -1455,6 +1461,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         _host.UnregisterWindow(Handle);
         Window.DisposeVisualTree();
+
+        if (_invisibleCaretBitmap != 0)
+        {
+            Gdi32.DeleteObject(_invisibleCaretBitmap);
+            _invisibleCaretBitmap = 0;
+        }
+
         Handle = 0;
     }
 
@@ -1767,6 +1780,32 @@ internal sealed class Win32WindowBackend : IWindowBackend
             PixelWidth = pixelWidth;
             PixelHeight = pixelHeight;
             DpiScale = dpiScale;
+        }
+    }
+
+    // All-zero monochrome caret bitmap: the system renders a bitmap caret by XOR-ing it,
+    // so zero bits draw nothing even when an IME calls ShowCaret on the focused window.
+    private nint _invisibleCaretBitmap;
+
+    /// <summary>Creates the window's system caret with an invisible bitmap so caret-following
+    /// IMEs and accessibility tools get a position anchor without anything blinking on screen.</summary>
+    private unsafe void CreateInvisibleSystemCaret()
+    {
+        if (_invisibleCaretBitmap == 0)
+        {
+            // 1bpp 1x20: scanlines are WORD aligned, so 20 rows take 2 bytes each, all zero.
+            byte* bits = stackalloc byte[40];
+            new Span<byte>(bits, 40).Clear();
+            _invisibleCaretBitmap = Gdi32.CreateBitmap(1, 20, 1, 1, (nint)bits);
+        }
+
+        if (_invisibleCaretBitmap != 0)
+        {
+            User32.CreateCaret(Handle, _invisibleCaretBitmap, 0, 0);
+        }
+        else
+        {
+            User32.CreateCaret(Handle, 0, 1, 20);
         }
     }
 
@@ -2270,6 +2309,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
         {
             if (Window.FocusManager.FocusedElement is ITextCompositionClient client)
             {
+                // WM_SETFOCUS creates the caret only when a text input already had focus;
+                // focus may have moved to one afterwards, so ensure it exists before the
+                // IME starts tracking it. CreateCaret replaces any existing caret.
+                CreateInvisibleSystemCaret();
                 client.HandleTextCompositionStart(args);
                 PositionImeWindow(client);
             }
