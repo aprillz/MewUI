@@ -1141,10 +1141,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _backend!.EnsureTheme(Theme.IsDark);
         _lifetimeState = WindowLifetimeState.Shown;
 
-        // Establish the OS-level owner relationship so the window stays above its owner in z-order and shares
-        // its lifetime (it was previously set only at the framework level, used for positioning, which left the
-        // native window independent and able to fall behind its owner). Modal ShowDialog does this separately.
-        if (owner != null && Handle != 0)
+        // Native ownership suppresses the child's own taskbar button on Windows. Keep the
+        // framework owner for positioning/lifetime, but only native-own auxiliary windows
+        // that opted out of the taskbar.
+        if (owner != null && !ShowInTaskbar && owner.Handle != 0 && Handle != 0)
         {
             _backend!.SetOwner(owner.Handle);
         }
@@ -1430,16 +1430,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (owner != null && Icon == null && owner.Icon != null)
             Icon = owner.Icon;
 
-        // Native ownership suppresses the dialog's own taskbar button. When the owner has no
-        // taskbar presence either (ShowInTaskbar false, e.g. a window hosted inside the
-        // taskbar), the modal would become impossible to bring back once it loses focus.
-        // Keep the modal disable in that case but present the dialog as a standalone window.
-        bool ownNatively = owner != null && owner.ShowInTaskbar;
-        Show(ownNatively ? owner : null);
-        if (ownNatively && _backend != null && Handle != 0)
-        {
-            _backend.SetOwner(owner!.Handle);
-        }
+        Show(owner);
         Activate();
     }
 
