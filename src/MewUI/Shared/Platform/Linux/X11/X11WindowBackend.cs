@@ -1550,7 +1550,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void HandleKey(XKeyEvent e, bool isDown, bool imeHandled)
     {
-        if (Window.Content == null)
+        if (Window.EffectiveVisualRoot == null)
         {
             return;
         }

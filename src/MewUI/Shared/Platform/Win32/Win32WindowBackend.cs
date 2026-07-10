@@ -478,12 +478,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
         {
             double dipX = pt.x / dpiScale;
             double dipY = pt.y / dpiScale;
-            var hit = (Window.Content as Controls.UIElement)?.HitTest(new Point(
+            var visualRoot = Window.EffectiveVisualRoot as Controls.UIElement;
+            var hit = visualRoot?.HitTest(new Point(
                 dipX + Window.Padding.Left,
                 dipY + Window.Padding.Top));
 
             // Interactive control - let it handle the click.
-            if (hit != null && hit != Window.Content && (hit.Focusable || hit is not Controls.Panel))
+            if (hit != null && hit != visualRoot && (hit.Focusable || hit is not Controls.Panel))
                 return HTCLIENT;
 
             return HTCAPTION;
