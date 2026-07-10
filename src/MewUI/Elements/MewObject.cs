@@ -115,11 +115,22 @@ public abstract class MewObject : IPropertyOwner
     /// </summary>
     protected T GetValue<T>(MewProperty<T> property)
     {
-        if (PropertyStore.HasOwnValue(property.Id) || !property.Inherits)
+        if (!property.Inherits)
+            return PropertyStore.GetValue(property);
+
+        var source = PropertyStore.GetSource(property.Id);
+        if (source > ValueSource.Inherited)
+            return PropertyStore.GetValue(property);
+
+        if (source == ValueSource.Inherited && IsInheritedCacheCurrent())
             return PropertyStore.GetValue(property);
 
         return ResolveInheritedValue(property);
     }
+
+    // Whether cached inherited values still match the current ancestor chain.
+    // Elements override this with a context-version check so a reparent invalidates lazily.
+    private protected virtual bool IsInheritedCacheCurrent() => true;
 
     /// <summary>
     /// Resolves an inherited property value by walking the parent chain.

@@ -84,6 +84,36 @@ public sealed class PopupContextTests
             $"expected wider text under the 30pt owner (small={small}, large={large})");
     }
 
+    // Re-showing an open popup with a different owner (the replace path) must re-divert
+    // its context to the new owner without closing it first.
+    [TestMethod]
+    public void ShowPopup_OwnerSwitchWhileOpenFollowsNewOwner()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var window = HeadlessWindow.Create();
+        var stack = new StackPanel();
+        var firstOwner = new Border { FontSize = 30 };
+        var secondOwner = new Border { FontSize = 11 };
+        stack.Add(firstOwner);
+        stack.Add(secondOwner);
+        window.Content = stack;
+        window.PerformLayout();
+
+        var popup = new Border();
+        window.ShowPopup(firstOwner, popup, new Rect(0, 0, 100, 40));
+        Assert.AreEqual(30, popup.FontSize);
+
+        window.ShowPopup(secondOwner, popup, new Rect(0, 0, 100, 40));
+        Assert.AreEqual(11, popup.FontSize, "open popup re-diverted to the new owner");
+
+        window.ClosePopup(popup);
+    }
+
     // Closing a popup must clear the owner diversion so a reused popup element does not
     // keep resolving through a previous owner.
     [TestMethod]

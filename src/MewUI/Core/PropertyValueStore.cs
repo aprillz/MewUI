@@ -327,6 +327,34 @@ internal sealed class PropertyValueStore
     }
 
     /// <summary>
+    /// Appends the ids of properties currently holding a cached inherited value.
+    /// Used by reparent propagation to diff them against the new context chain.
+    /// </summary>
+    internal void GetInheritedPropertyIds(List<int> result)
+    {
+        if (_entries != null)
+        {
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                if (_entries[i].Source == ValueSource.Inherited)
+                {
+                    result.Add(i);
+                }
+            }
+            return;
+        }
+
+        if (_sparseEntries == null) return;
+        for (int i = 0; i < _sparseCount; i++)
+        {
+            if (_sparseEntries[i].Entry.Source == ValueSource.Inherited)
+            {
+                result.Add(_sparseEntries[i].PropertyId);
+            }
+        }
+    }
+
+    /// <summary>
     /// Returns true if this store has any non-default value for the property.
     /// Used by inheritance resolution to determine when to stop walking the parent chain.
     /// </summary>

@@ -20,9 +20,27 @@ public abstract class Element : MewObject
     // parent chain changes; caches resolved through that chain stamp it and re-resolve on mismatch.
     private int _contextVersion;
 
+    // _contextVersion at the time inherited values were last cached. A mismatch means the
+    // cached entries came from a previous chain and must be flushed before the next resolve.
+    private int _inheritedCacheVersion = -1;
+
     internal int ContextVersion => _contextVersion;
     private Size _lastMeasureConstraint;
     private bool _hasMeasureConstraint;
+
+    private protected override bool IsInheritedCacheCurrent() => _inheritedCacheVersion == _contextVersion;
+
+    private void EnsureInheritedEpoch()
+    {
+        if (_inheritedCacheVersion != _contextVersion)
+        {
+            if (HasPropertyStore)
+            {
+                PropertyStore.ClearAllInherited();
+            }
+            _inheritedCacheVersion = _contextVersion;
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected static bool Set<T>(ref T field, T value)
@@ -143,14 +161,11 @@ public abstract class Element : MewObject
             {
                 _contextParentOverride = value;
 
-                // Cached inherited values and context-stamped caches may have been
-                // resolved through the old chain.
-                VisualTree.Visit(this, static element =>
-                {
-                    element._contextVersion++;
-                    if (element is UIElement ui && ui.HasPropertyStore)
-                        ui.PropertyStore.ClearAllInherited();
-                });
+                // Invalidate context-stamped caches resolved through the old chain, then
+                // eagerly diff cached inherited values so layout/observers react even when
+                // the override changes while the element stays attached (owner switch).
+                BumpContextVersionDeep();
+                RefreshInheritedSubtree();
             }
         }
     }
@@ -601,6 +616,8 @@ public abstract class Element : MewObject
     /// <inheritdoc/>
     protected override T ResolveInheritedValue<T>(MewProperty<T> property)
     {
+        EnsureInheritedEpoch();
+
         for (var ancestor = ContextParent; ancestor != null; ancestor = ancestor.ContextParent)
         {
             if (ancestor.HasPropertyStore && ancestor.PropertyStore.HasOwnValue(property.Id))
@@ -621,6 +638,8 @@ public abstract class Element : MewObject
     /// </summary>
     internal object? ResolveInheritedValueBoxed(MewProperty property)
     {
+        EnsureInheritedEpoch();
+
         for (var ancestor = ContextParent; ancestor != null; ancestor = ancestor.ContextParent)
         {
             if (ancestor.HasPropertyStore && ancestor.PropertyStore.HasOwnValue(property.Id))
@@ -632,6 +651,76 @@ public abstract class Element : MewObject
         }
 
         return property.GetBoxedDefaultForType(PropertyStore.OwnerType);
+    }
+
+    /// <summary>
+    /// Re-resolves cached inherited values for this subtree against the current context chain,
+    /// invalidating layout/render and notifying observers for values that actually changed.
+    /// The lazy epoch flush alone cannot do that: nothing re-reads a property whose change
+    /// must wake layout (Measure short-circuits on same constraints) or a binding.
+    /// </summary>
+    internal void RefreshInheritedSubtree()
+    {
+        List<int> inheritedIds = new();
+        List<object?> oldValues = new();
+
+        VisualTree.Visit(this, element =>
+        {
+            if (!element.HasPropertyStore)
+            {
+                return;
+            }
+
+            inheritedIds.Clear();
+            element.PropertyStore.GetInheritedPropertyIds(inheritedIds);
+            if (inheritedIds.Count == 0)
+            {
+                return;
+            }
+
+            // Capture all old values first: the first re-resolve flushes the element's
+            // whole inherited epoch, which would destroy the remaining old entries.
+            oldValues.Clear();
+            for (int i = 0; i < inheritedIds.Count; i++)
+            {
+                var property = MewPropertyRegistry.GetProperty(inheritedIds[i]);
+                oldValues.Add(property != null ? element.PropertyStore.GetBoxedValue(property) : null);
+            }
+
+            for (int i = 0; i < inheritedIds.Count; i++)
+            {
+                var property = MewPropertyRegistry.GetProperty(inheritedIds[i]);
+                if (property == null)
+                {
+                    continue;
+                }
+
+                object? newValue = element.ResolveInheritedValueBoxed(property);
+                if (Equals(oldValues[i], newValue))
+                {
+                    continue;
+                }
+
+                if (property.AffectsLayout)
+                {
+                    element.InvalidateMeasure();
+                }
+                else if (property.AffectsRender)
+                {
+                    element.InvalidateVisual();
+                }
+
+                if (element is Controls.Control control)
+                {
+                    control.InvalidateFontCache(property);
+                }
+
+                if (element.HasChangeObservers(property.Id))
+                {
+                    element.NotifyObserversBoxed(property, oldValues[i], newValue);
+                }
+            }
+        });
     }
 
     private Size ApplyLayoutRounding(Size size)

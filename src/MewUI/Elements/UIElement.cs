@@ -115,19 +115,18 @@ public abstract partial class UIElement : Element
             MewPropertyOptions.None);
 
     /// <summary>
-    /// Clears cached inherited property values when the parent changes,
-    /// so they will be re-resolved from the new parent chain.
-    /// Cascades to descendants because their parent chain also effectively changed
-    /// (they hang off this element) and their caches may be stale.
+    /// Re-resolves cached inherited values for the subtree when it is attached to a new parent,
+    /// so layout and observers react to values that changed with the chain. Detach keeps the
+    /// caches; the context-version epoch flushes them lazily on the next read.
     /// </summary>
     protected override void OnParentChanged()
     {
         base.OnParentChanged();
-        VisualTree.Visit(this, static e =>
+
+        if (Parent != null)
         {
-            if (e is UIElement u && u.HasPropertyStore)
-                u.PropertyStore.ClearAllInherited();
-        });
+            RefreshInheritedSubtree();
+        }
     }
 
     /// <summary>

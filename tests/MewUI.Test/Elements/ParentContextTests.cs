@@ -123,6 +123,62 @@ public sealed class ParentContextTests
         Assert.AreEqual(colorB, child.Background, "context-version mismatch forces re-resolution");
     }
 
+    // A clean (already measured) element moved under a parent with a different inherited font
+    // must re-measure even when the constraints are identical: the reparent propagation has to
+    // invalidate measure, or the same-constraint short-circuit keeps the stale DesiredSize.
+    [TestMethod]
+    public void DirectReparent_RemeasuresTextWithNewInheritedFont()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var window = Infrastructure.HeadlessWindow.Create();
+        var stack = new StackPanel();
+        var smallHost = new Border { FontSize = 10 };
+        var largeHost = new Border { FontSize = 30 };
+        stack.Add(smallHost);
+        stack.Add(largeHost);
+        window.Content = stack;
+
+        var text = new TextBlock { Text = "measure me" };
+        smallHost.Child = text;
+        window.PerformLayout();
+        var smallSize = text.DesiredSize;
+
+        largeHost.Child = text;
+        window.PerformLayout();
+        var largeSize = text.DesiredSize;
+
+        Assert.IsTrue(largeSize.Height > smallSize.Height,
+            $"expected re-measure with the 30pt font (small={smallSize}, large={largeSize})");
+    }
+
+    // A binding observing an inherited property must update when the element moves under a
+    // parent providing a different value (the reparent path must notify observers, not just
+    // clear caches lazily).
+    [TestMethod]
+    public void DirectReparent_NotifiesBindingOnInheritedValueChange()
+    {
+        var colorA = Color.FromRgb(15, 25, 35);
+        var colorB = Color.FromRgb(45, 55, 65);
+
+        var parentA = new Border { Foreground = colorA };
+        var parentB = new Border { Foreground = colorB };
+
+        var child = new Border();
+        parentA.Child = child;
+        _ = child.Foreground; // force inherited resolution + cache
+
+        child.Bind(Control.BorderBrushProperty, child, Control.ForegroundProperty, (Color c) => c);
+        Assert.AreEqual(colorA, child.BorderBrush, "initial sync");
+
+        parentB.Child = child;
+        Assert.AreEqual(colorB, child.BorderBrush, "binding follows the inherited change across reparent");
+    }
+
     // Inherited values must re-resolve from the new parent chain after a direct move.
     [TestMethod]
     public void DirectReparent_ReResolvesInheritedValues()
