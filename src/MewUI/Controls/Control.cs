@@ -412,7 +412,7 @@ public abstract class Control : FrameworkElement
         {
             // _forceApplyStyle (virtualization rebind via ForceStyleSnap) always snaps: a recycled
             // container must re-apply even with equal flags and must not animate from the previous
-            // item's visuals. Otherwise the caller chooses - the visual-state drain snaps for
+            // item's visuals. Otherwise the caller chooses - the visual-state update snaps for
             // offscreen elements, animates for on-screen.
             bool effectiveSnap = snap || _forceApplyStyle;
             _forceApplyStyle = false;

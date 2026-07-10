@@ -453,11 +453,11 @@ public abstract partial class UIElement : Element
 
     /// <summary>
     /// Resolves visual state (style triggers, state transitions). Called from the visual-state
-    /// drain (<see cref="Window.UpdateVisualStates"/>) before layout reads state-dependent values.
+    /// update (<see cref="Window.UpdateVisualStates"/>) before layout reads state-dependent values.
     /// </summary>
     /// <param name="snap">
     /// When true, target values are applied immediately (no animation). Used when the element is
-    /// offscreen at drain time (animating invisible pixels is wasteful) or when a hard state
+    /// offscreen at update time (animating invisible pixels is wasteful) or when a hard state
     /// change must take effect before the next frame (style/theme reset).
     /// </param>
     protected virtual void ResolveVisualState(bool snap) { }
@@ -483,8 +483,8 @@ public abstract partial class UIElement : Element
         _visualStateDirty = true;
         window.RegisterVisualStateDirty(this);
 
-        // The drain is the first step of the update pass; a render-only request would
-        // never run it and the queued state change would starve.
+        // The visual-state update is the first step of the update pass; a render-only request
+        // would never run it and the queued state change would starve.
         window.RequestUpdatePass();
     }
 
@@ -492,7 +492,7 @@ public abstract partial class UIElement : Element
 
     internal void ClearVisualStateDirty() => _visualStateDirty = false;
 
-    internal void ResolveVisualStateFromDrain(bool snap) => ResolveVisualState(snap);
+    internal void ResolveVisualStateInternal(bool snap) => ResolveVisualState(snap);
 
     /// <summary>
     /// Renders the element's own visuals (background, border, text, etc.).
