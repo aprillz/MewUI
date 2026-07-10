@@ -214,7 +214,13 @@ public abstract class Control : FrameworkElement
             if (_styleName != value)
             {
                 _styleName = value;
-                _styleNameResolved = false; // force re-resolve on next Measure
+                _styleNameResolved = false;
+
+                // Attached: apply now (with transitions). Detached controls resolve on attach or first Measure.
+                if (FindVisualRoot() is Window)
+                {
+                    ResolveAndApplyStyle(animate: true);
+                }
             }
         }
     }
@@ -285,9 +291,6 @@ public abstract class Control : FrameworkElement
     }
 
     /// <summary>
-    /// Sets the style for this control.
-    /// </summary>
-    /// <summary>
     /// Forces the next <see cref="OnRender"/> pass to snap style values immediately
     /// instead of animating from the cached <see cref="_visualState"/>.
     /// Used when a virtualization-pinned container re-enters the visible range
@@ -299,9 +302,17 @@ public abstract class Control : FrameworkElement
         _forceApplyStyle = true;
     }
 
-    internal void SetStyle(Style? style)
+    internal void SetStyle(Style? style, bool snap = true)
     {
+        var oldStyle = _style;
         _style = style;
+
+        // Values the old style set but the new one does not would otherwise linger
+        // with Source=Style after the swap.
+        if (oldStyle != null && !ReferenceEquals(oldStyle, style))
+        {
+            ClearStaleStyleValues(oldStyle, style);
+        }
 
         // Apply the full style chain (base setters + matching triggers) immediately so
         // layout-affecting properties and current-state visuals are correct before the
@@ -311,7 +322,7 @@ public abstract class Control : FrameworkElement
         // restore trigger-stamped values because bookkeeping was skipped here.
         var flags = ComputeVisualState().Flags;
         _visualState = new VisualState { Flags = flags };
-        ApplyStyleValues(flags, snap: true);
+        ApplyStyleValues(flags, snap || _forceApplyStyle);
         _forceApplyStyle = false;
 
         InvalidateVisual();
@@ -323,7 +334,8 @@ public abstract class Control : FrameworkElement
     /// 2. StyleSheet type rule (nearest container's type-matched rule)
     /// 3. Theme (type-based default)
     /// </summary>
-    internal void ResolveAndApplyStyle()
+    /// <param name="animate">When true, a runtime style swap applies with the new style's transitions.</param>
+    internal void ResolveAndApplyStyle(bool animate = false)
     {
         Style? resolved = null;
 
@@ -367,7 +379,10 @@ public abstract class Control : FrameworkElement
             }
         }
 
-        SetStyle(resolved);
+        // Transitions only make sense for a runtime swap on an attached, already-styled
+        // control; initial attach, theme change, and detached resolution snap.
+        bool snap = !animate || _style == null || FindVisualRoot() is not Window;
+        SetStyle(resolved, snap);
     }
 
     private Style? FindNamedStyle(string name)
@@ -574,6 +589,38 @@ public abstract class Control : FrameworkElement
             style = style.BasedOn;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Clears Style-sourced values that the old style chain set but the new chain no longer
+    /// sets, so they fall back to default/inherited instead of lingering after a style swap.
+    /// </summary>
+    private void ClearStaleStyleValues(Style oldStyle, Style? newStyle)
+    {
+        for (Style? current = oldStyle; current != null; current = current.BasedOn)
+        {
+            for (int i = 0; i < current.Setters.Count; i++)
+            {
+                if (current.Setters[i] is Setter setter && !StyleChainSetsProperty(newStyle, setter.Property.Id))
+                {
+                    PropertyStore.ClearSource(setter.Property.Id, ValueSource.Style);
+                }
+            }
+        }
+    }
+
+    private static bool StyleChainSetsProperty(Style? style, int propertyId)
+    {
+        while (style != null)
+        {
+            for (int i = 0; i < style.Setters.Count; i++)
+            {
+                if (style.Setters[i] is Setter s && s.Property.Id == propertyId)
+                    return true;
+            }
+            style = style.BasedOn;
+        }
+        return false;
     }
 
     private void ApplySetter(SetterBase setter, ValueSource source, bool snap)
