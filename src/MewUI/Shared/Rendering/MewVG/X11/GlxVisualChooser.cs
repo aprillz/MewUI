@@ -124,36 +124,8 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
 
         if (!usedFbConfig)
         {
-            int[] attribs =
-            {
-                4,  // GLX_RGBA
-                5,  // GLX_DOUBLEBUFFER
-                8,  // GLX_RED_SIZE
-                8,
-                9,  // GLX_GREEN_SIZE
-                8,
-                10, // GLX_BLUE_SIZE
-                8,
-                GLX_ALPHA_SIZE,
-                8,
-                GLX_DEPTH_SIZE,
-                24,
-                GLX_STENCIL_SIZE,
-                8,
-                0
-            };
-
-            nint visualInfoPtr;
-            fixed (int* p = attribs)
-            {
-                visualInfoPtr = LibGL.glXChooseVisual(display, screen, (nint)p);
-            }
-
-            if (visualInfoPtr == 0)
-            {
-                // Last resort: allow a visual without stencil (rounded clip may not work).
-                int[] attribsNoStencil =
-                {
+            int[] attribs = allowsTransparency
+                ? [
                     4,  // GLX_RGBA
                     5,  // GLX_DOUBLEBUFFER
                     8,  // GLX_RED_SIZE
@@ -163,6 +135,49 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                     10, // GLX_BLUE_SIZE
                     8,
                     GLX_ALPHA_SIZE,
+                    8,
+                    GLX_DEPTH_SIZE,
+                    24,
+                    GLX_STENCIL_SIZE,
+                    8,
+                    0
+                ]
+                : [
+                    4,  // GLX_RGBA
+                    5,  // GLX_DOUBLEBUFFER
+                    8,  // GLX_RED_SIZE
+                    8,
+                    9,  // GLX_GREEN_SIZE
+                    8,
+                    10, // GLX_BLUE_SIZE
+                    8,
+                    GLX_DEPTH_SIZE,
+                    24,
+                    GLX_STENCIL_SIZE,
+                    8,
+                    0
+                ];
+
+            nint visualInfoPtr;
+            fixed (int* p = attribs)
+            {
+                visualInfoPtr = LibGL.glXChooseVisual(display, screen, (nint)p);
+            }
+
+            if (visualInfoPtr == 0)
+            {
+                // Last resort: no stencil (rounded clip may not work) and no alpha even when
+                // transparency was requested, so the window still comes up (opaque) on servers
+                // without ARGB GL visuals.
+                int[] attribsNoStencil =
+                {
+                    4,  // GLX_RGBA
+                    5,  // GLX_DOUBLEBUFFER
+                    8,  // GLX_RED_SIZE
+                    8,
+                    9,  // GLX_GREEN_SIZE
+                    8,
+                    10, // GLX_BLUE_SIZE
                     8,
                     GLX_DEPTH_SIZE,
                     24,
