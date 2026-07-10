@@ -592,9 +592,12 @@ public partial class Window
             var roots = new List<VisualTreeNodeModel>(4);
             bool logical = _logicalMode.IsChecked == true;
 
-            if (_target.Content is Element content)
+            // Logical mode starts from the user content; visual mode from the effective root
+            // (the template root when the window is templated).
+            var rootElement = logical ? _target.Content : _target.EffectiveVisualRoot;
+            if (rootElement != null)
             {
-                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: [BuildModel(content, parentKey: "root:content", logical)]);
+                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: rootElement, children: [BuildModel(rootElement, parentKey: "root:content", logical)]);
                 roots.Add(contentRoot);
             }
             else
@@ -656,7 +659,11 @@ public partial class Window
                 });
             }
 
-            string text = element.GetType().Name;
+            // Visual mode marks elements without a logical owner as [Type]: template parts,
+            // presenters, and other machinery stand out from user-owned structure.
+            string text = !logical && element.LogicalParent == null
+                ? $"[{element.GetType().Name}]"
+                : element.GetType().Name;
 
             _parentByKey[element] = parentKey;
             return new VisualTreeNodeModel(key: element, text: text, element: element, children: children);

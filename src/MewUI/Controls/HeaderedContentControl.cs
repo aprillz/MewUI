@@ -66,6 +66,16 @@ public class HeaderedContentControl : ContentControl
         }
     }
 
+    protected override void OnLogicalChildTaken(Element child)
+    {
+        base.OnLogicalChildTaken(child);
+
+        if (ReferenceEquals(Header, child))
+        {
+            Header = null;
+        }
+    }
+
     private protected override void OnTemplateInstanceAttached()
     {
         base.OnTemplateInstanceAttached();

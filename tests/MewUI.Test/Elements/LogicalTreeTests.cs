@@ -140,8 +140,8 @@ public sealed class LogicalTreeTests
     [TestMethod]
     public void AttachLogicalChild_DoesNotTouchVisualParent()
     {
-        // Border.Child is a visual-only relationship (Border is not a ContentControl).
-        var visualParent = new Border();
+        // ShadowDecorator.Child is a visual-only relationship (not a logical host).
+        var visualParent = new ShadowDecorator();
         var owner = new LogicalHost();
         var child = new TextBlock();
         visualParent.Child = child;
@@ -205,7 +205,7 @@ public sealed class LogicalTreeTests
     {
         var root = new LogicalHost();
         var child = new LogicalHost();
-        var visualHost = new Border();
+        var visualHost = new ShadowDecorator();
         var visualOnly = new TextBlock();
         root.Attach(child);
         child.Content = visualHost;

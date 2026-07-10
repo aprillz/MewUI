@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// WPF-like decorator that draws background/border and hosts a single child element.
 /// </summary>
-public sealed class Border : Control, IVisualTreeHost
+public sealed class Border : Control, IVisualTreeHost, ILogicalTreeHost
 {
     private PathGeometry? _cachedOuterPath;
     private PathGeometry? _cachedBgPath;
@@ -23,7 +23,8 @@ public sealed class Border : Control, IVisualTreeHost
     public static readonly MewProperty<UIElement?> ChildProperty =
         MewProperty<UIElement?>.Register<Border>(nameof(Child), null,
             MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) => self.OnChildChanged(oldValue, newValue));
+            static (self, oldValue, newValue) => self.OnChildChanged(oldValue, newValue),
+            validate: static (self, value) => self.ValidateLogicalChild(value, allowTransfer: true));
 
     protected override UIElement? OnHitTest(Point point)
     {
@@ -51,15 +52,15 @@ public sealed class Border : Control, IVisualTreeHost
     }
 
     private void OnChildChanged(UIElement? oldValue, UIElement? newValue)
-    {
-        if (oldValue != null)
-        {
-            oldValue.Parent = null;
-        }
+        => ChangeLogicalChild(oldValue, newValue);
 
-        if (newValue != null)
+    protected override void OnLogicalChildTaken(Element child)
+    {
+        base.OnLogicalChildTaken(child);
+
+        if (ReferenceEquals(Child, child))
         {
-            newValue.Parent = this;
+            Child = null;
         }
     }
 
@@ -267,5 +268,8 @@ public sealed class Border : Control, IVisualTreeHost
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => Child == null || visitor(Child);
+
+    bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor)
         => Child == null || visitor(Child);
 }
