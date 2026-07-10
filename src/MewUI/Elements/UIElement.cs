@@ -11,7 +11,6 @@ public abstract partial class UIElement : Element
     private bool _suggestedIsEnabled = true;
     private bool _suggestedIsEnabledInitialized;
     private bool _visualStateDirty;
-    private bool _resolvingVisualState;
 
     /// <summary>
     /// Controls visibility. When false, the element is not rendered and does not participate in layout.
@@ -440,9 +439,6 @@ public abstract partial class UIElement : Element
 
         using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this))
         {
-            ResolveVisualState(snap: false);
-            ClearVisualStateDirty();
-
             if (_hasBitmapCache)
             {
                 RenderCached(context);
@@ -456,7 +452,8 @@ public abstract partial class UIElement : Element
     }
 
     /// <summary>
-    /// Called before <see cref="OnRender"/> to resolve visual state (e.g. style triggers, state transitions).
+    /// Resolves visual state (style triggers, state transitions). Called from the visual-state
+    /// drain (<see cref="Window.UpdateVisualStates"/>) before layout reads state-dependent values.
     /// </summary>
     /// <param name="snap">
     /// When true, target values are applied immediately (no animation). Used when the element is
@@ -466,30 +463,29 @@ public abstract partial class UIElement : Element
     protected virtual void ResolveVisualState(bool snap) { }
 
     /// <summary>
-    /// Queues this element for visual-state reconciliation at the start of the next layout/render pass.
+    /// Queues this element for visual-state reconciliation at the start of the next layout pass.
     /// Dedup'd via an internal dirty flag; safe to call repeatedly. Call when a property that feeds
-    /// into <see cref="Controls.Control.ComputeVisualState"/> changes outside the normal render path.
+    /// into <see cref="Controls.Control.ComputeVisualState"/> changes.
     /// </summary>
     public void InvalidateVisualState()
     {
-        // Reentrance: ApplyStyleValues may set properties that fire AffectsVisualState,
-        // which would re-enter this method. Skip - the in-progress resolve picks up the
-        // new state when it reads ComputeVisualState's inputs.
-        if (_resolvingVisualState)
+        if (_visualStateDirty)
         {
             return;
         }
 
-        _resolvingVisualState = true;
-        try
+        // Detached elements skip the queue: attach-time style resolution recomputes the state.
+        if (FindVisualRoot() is not Window window)
         {
-            ResolveVisualState(snap: false);
-            ClearVisualStateDirty();
+            return;
         }
-        finally
-        {
-            _resolvingVisualState = false;
-        }
+
+        _visualStateDirty = true;
+        window.RegisterVisualStateDirty(this);
+
+        // The drain runs at the start of the next layout pass; schedule a frame so the
+        // reconciliation happens even when nothing else invalidated.
+        window.Invalidate();
     }
 
     internal bool IsVisualStateDirty => _visualStateDirty;

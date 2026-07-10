@@ -62,7 +62,7 @@ internal sealed class TabHeaderButton : ContentControl
     private void RefreshVisualState()
     {
         EnsureStyleResolved();
-        ResolveVisualState(snap: false);
+        InvalidateVisualState();
         InvalidateVisual();
     }
 

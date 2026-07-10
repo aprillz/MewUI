@@ -111,7 +111,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private readonly List<UIElement> _mouseOverOldPath = new(capacity: 16);
     private readonly List<UIElement> _mouseOverNewPath = new(capacity: 16);
     private readonly List<UIElement> _visualStateDirtyList = new();
-    private bool _updatingVisualStates;
     private UIElement? _mouseOverElement;
     private UIElement? _capturedElement;
     private Point _lastMousePositionDip;
@@ -1622,13 +1621,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     internal void RegisterVisualStateDirty(UIElement element)
     {
-        // Ignore re-entrant registrations made during a drain: those elements are being
-        // processed in the current pass already, and re-adding would grow the list mid-iteration.
-        if (_updatingVisualStates)
-        {
-            return;
-        }
-
+        // Registrations during a drain are allowed: the indexed loop in UpdateVisualStates
+        // re-reads Count, so entries appended mid-pass (e.g. a resolve dirtying a named part)
+        // are reconciled in the same pass.
         _visualStateDirtyList.Add(element);
     }
 
@@ -1643,35 +1638,27 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        _updatingVisualStates = true;
-        try
+        var viewport = new Rect(ClientSize);
+
+        for (int i = 0; i < _visualStateDirtyList.Count; i++)
         {
-            var viewport = new Rect(ClientSize);
+            var element = _visualStateDirtyList[i];
+            element.ClearVisualStateDirty();
 
-            for (int i = 0; i < _visualStateDirtyList.Count; i++)
+            // Skip elements that got detached before the drain (visual root no longer this window).
+            if (element.FindVisualRoot() != this)
             {
-                var element = _visualStateDirtyList[i];
-                element.ClearVisualStateDirty();
-
-                // Skip elements that got detached before the drain (visual root no longer this window).
-                if (element.FindVisualRoot() != this)
-                {
-                    continue;
-                }
-
-                // Offscreen: snap to avoid wasting animations on invisible pixels.
-                // SkipViewportCull elements (e.g. transformed subtrees) always animate since their
-                // bounds don't reflect true visibility.
-                bool onscreen = element.SkipViewportCull || viewport.IntersectsWith(element.Bounds);
-                element.ResolveVisualStateFromDrain(snap: !onscreen);
+                continue;
             }
 
-            _visualStateDirtyList.Clear();
+            // Offscreen: snap to avoid wasting animations on invisible pixels.
+            // SkipViewportCull elements (e.g. transformed subtrees) always animate since their
+            // bounds don't reflect true visibility.
+            bool onscreen = element.SkipViewportCull || viewport.IntersectsWith(element.Bounds);
+            element.ResolveVisualStateFromDrain(snap: !onscreen);
         }
-        finally
-        {
-            _updatingVisualStates = false;
-        }
+
+        _visualStateDirtyList.Clear();
     }
 
     /// <summary>

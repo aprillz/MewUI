@@ -64,11 +64,38 @@ public sealed class HeadlessInputTests
 
         window.SendMouseMove(target.CenterOf());
         Assert.IsTrue(target.IsMouseOver, "hit test routed mouse-over to the target");
-        Assert.AreEqual(HOT_COLOR, target.Background, "Hot trigger applied on hover");
+        window.PerformLayout(); // state reconciliation happens in the pre-layout drain
+        Assert.AreEqual(HOT_COLOR, target.Background, "Hot trigger applied at the next drain");
 
         window.SendMouseMove(new Point(1, 1));
         Assert.IsFalse(target.IsMouseOver);
+        window.PerformLayout();
         Assert.AreEqual(NORMAL_COLOR, target.Background, "base setter restored after hover ends");
+    }
+
+    // Multiple state changes inside one frame resolve once, to the final state, at the drain.
+    [TestMethod]
+    public void SameFrameEnterLeave_ResolvesToFinalStateOnly()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var window = HeadlessWindow.Create();
+        var container = new Border { StyleSheet = HotSheet() };
+        var target = new Border { StyleName = "hot" };
+        container.Child = target;
+        window.Content = container;
+        window.PerformLayout();
+
+        window.SendMouseMove(target.CenterOf());
+        window.SendMouseMove(new Point(1, 1));
+        window.PerformLayout();
+
+        Assert.IsFalse(target.IsMouseOver);
+        Assert.AreEqual(NORMAL_COLOR, target.Background, "enter+leave within one frame nets out to the base state");
     }
 
     [TestMethod]
@@ -119,6 +146,58 @@ public sealed class HeadlessInputTests
 
         Assert.AreEqual(1, clicks, "click routed through hit test and raised Click");
         Assert.IsTrue(button.IsFocused, "pointer down focused the button");
+    }
+
+    private sealed class PressableControl : ContentControl
+    {
+        public void Press(bool pressed) => SetPressed(pressed);
+    }
+
+    // On-screen elements animate their state transition; off-screen elements snap at the drain
+    // so no animation runs on invisible pixels.
+    [TestMethod]
+    public void Drain_AnimatesOnScreenAndSnapsOffScreen()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var normal = Color.FromRgb(10, 10, 10);
+        var pressed = Color.FromRgb(220, 30, 30);
+        var sheet = new StyleSheet();
+        sheet.Define("pressable", () => new Style(typeof(ContentControl))
+        {
+            Transitions = [Transition.Create(Control.BackgroundProperty, durationMs: 500)],
+            Setters = [Setter.Create(Control.BackgroundProperty, normal)],
+            Triggers =
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [Setter.Create(Control.BackgroundProperty, pressed)],
+                },
+            ],
+        });
+
+        var window = HeadlessWindow.Create();
+        var stack = new StackPanel { StyleSheet = sheet };
+        var onScreen = new PressableControl { StyleName = "pressable", Height = 40 };
+        var spacer = new Border { Height = 2000 };
+        var offScreen = new PressableControl { StyleName = "pressable", Height = 40 };
+        stack.Add(onScreen);
+        stack.Add(spacer);
+        stack.Add(offScreen);
+        window.Content = stack;
+        window.PerformLayout();
+
+        onScreen.Press(true);
+        offScreen.Press(true);
+        window.PerformLayout();
+
+        Assert.AreEqual(pressed, offScreen.Background, "off-screen element snapped to the target value");
+        Assert.AreNotEqual(pressed, onScreen.Background, "on-screen element is animating from the base value");
     }
 
     [TestMethod]

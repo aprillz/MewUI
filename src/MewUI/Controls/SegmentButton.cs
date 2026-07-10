@@ -76,7 +76,7 @@ public sealed class SegmentButton : ContentControl
     private void RefreshVisualState()
     {
         EnsureStyleResolved();
-        ResolveVisualState(snap: false);
+        InvalidateVisualState();
         InvalidateVisual();
     }
 
