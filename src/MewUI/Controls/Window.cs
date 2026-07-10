@@ -518,7 +518,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Gets the owner window. Set via <see cref="Show(Window?)"/> or <see cref="ShowDialogAsync(Window?, bool)"/>.
+    /// Gets the owner window. Set via <see cref="Show(Window?)"/> or <see cref="ShowDialogAsync(Window?)"/>.
     /// Used for <see cref="WindowStartupLocation.CenterOwner"/> positioning and modal dialog ownership.
     /// </summary>
     public Window? Owner { get; private set; }
@@ -1315,10 +1315,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Shows the window as a modal dialog and completes when the dialog is closed.
     /// </summary>
     /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
-    /// <param name="autoResolveOwner">When true (default) and <paramref name="owner"/> is null, the active
-    /// application window is used as owner. Pass false for an ownerless modal (e.g. a dialog that should get
-    /// its own taskbar button instead of floating over an owner).</param>
-    public Task ShowDialogAsync(Window? owner = null, bool autoResolveOwner = true)
+    public Task ShowDialogAsync(Window? owner = null)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -1345,7 +1342,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            BeginModal(owner, autoResolveOwner);
+            BeginModal(owner);
         }
         catch (Exception ex)
         {
@@ -1363,10 +1360,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// application loop and must be called on the UI thread; otherwise use <see cref="ShowDialogAsync"/>.
     /// </summary>
     /// <param name="owner">Optional owner window to disable while the dialog is open.</param>
-    /// <param name="autoResolveOwner">When true (default) and <paramref name="owner"/> is null, the active
-    /// application window is used as owner. Pass false for an ownerless modal (e.g. a dialog that should get
-    /// its own taskbar button instead of floating over an owner).</param>
-    public void ShowDialog(Window? owner = null, bool autoResolveOwner = true)
+    public void ShowDialog(Window? owner = null)
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
         {
@@ -1406,7 +1400,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            BeginModal(owner, autoResolveOwner);
+            BeginModal(owner);
             Application.Current.PlatformHost.RunNestedLoop(() => _lifetimeState != WindowLifetimeState.Closed);
         }
         finally
@@ -1419,7 +1413,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Applies modal state and shows the window: marks it as a dialog, disables and parents to the owner,
     /// inherits the owner icon, then shows and activates. Shared by <see cref="ShowDialog"/> and <see cref="ShowDialogAsync"/>.
     /// </summary>
-    private void BeginModal(Window? owner, bool makeChild)
+    private void BeginModal(Window? owner)
     {
         _isDialogWindow = true;
         if (owner != null)
@@ -1431,10 +1425,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (owner != null && Icon == null && owner.Icon != null)
             Icon = owner.Icon;
 
-        Show(makeChild ? owner : null);
-        if (owner != null && _backend != null && Handle != 0)
+        // Native ownership suppresses the dialog's own taskbar button. When the owner has no
+        // taskbar presence either (ShowInTaskbar false, e.g. a window hosted inside the
+        // taskbar), the modal would become impossible to bring back once it loses focus.
+        // Keep the modal disable in that case but present the dialog as a standalone window.
+        bool ownNatively = owner != null && owner.ShowInTaskbar;
+        Show(ownNatively ? owner : null);
+        if (ownNatively && _backend != null && Handle != 0)
         {
-            _backend.SetOwner(owner.Handle);
+            _backend.SetOwner(owner!.Handle);
         }
         Activate();
     }
