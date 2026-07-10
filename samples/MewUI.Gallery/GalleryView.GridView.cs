@@ -104,6 +104,7 @@ partial class GalleryView
             .ToList();
 
         GridView grid = null!;
+        List<ComplexGridRow> currentView = new();
 
         void ApplyView()
         {
@@ -141,11 +142,16 @@ partial class GalleryView
             };
 
             var view = rows.ToList();
+            currentView = view;
             grid.ItemsSource = ItemsView.Create(view);
+            UpdateSummary();
+        }
 
-            int errorCount = view.Count(r => r.HasError.Value);
-            double sum = view.Sum(r => r.Amount.Value);
-            summaryText.Value = $"Rows: {view.Count}/{all.Count}   Errors: {errorCount}   Sum: {sum:0.##}";
+        void UpdateSummary()
+        {
+            int errorCount = currentView.Count(r => r.HasError.Value);
+            double sum = currentView.Sum(r => r.Amount.Value);
+            summaryText.Value = $"Rows: {currentView.Count}/{all.Count}   Errors: {errorCount}   Sum: {sum:0.##}";
         }
 
         void TriggerApply() => ApplyView();
@@ -158,7 +164,9 @@ partial class GalleryView
 
         foreach (var r in all)
         {
-            r.Amount.Changed += TriggerApply;
+            // Value edits refresh the summary only: rebuilding the ItemsSource per keystroke
+            // would tear down the editor being typed in (focus/edit-mode loss).
+            r.Amount.Changed += UpdateSummary;
             r.HasError.Changed += TriggerApply;
             r.IsActive.Changed += TriggerApply;
         }
