@@ -1618,7 +1618,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     internal void RegisterVisualStateDirty(UIElement element)
     {
-        // Registrations during a drain are allowed: the indexed loop in UpdateVisualStates
+        // Registrations while UpdateVisualStates is running are allowed: its indexed loop
         // re-reads Count, so entries appended mid-pass (e.g. a resolve dirtying a named part)
         // are reconciled in the same pass.
         _visualStateDirtyList.Add(element);
@@ -1626,7 +1626,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     /// <summary>
     /// Reconciles visual states for all elements that called <see cref="UIElement.InvalidateVisualState"/>
-    /// since the last drain. Offscreen elements snap (no animation); onscreen elements animate.
+    /// since the last update. Offscreen elements snap (no animation); onscreen elements animate.
     /// </summary>
     public void UpdateVisualStates()
     {
@@ -1642,7 +1642,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             var element = _visualStateDirtyList[i];
             element.ClearVisualStateDirty();
 
-            // Skip elements that got detached before the drain (visual root no longer this window).
+            // Skip elements that got detached before the update (visual root no longer this window).
             if (element.FindVisualRoot() != this)
             {
                 continue;
@@ -1652,15 +1652,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // SkipViewportCull elements (e.g. transformed subtrees) always animate since their
             // bounds don't reflect true visibility.
             bool onscreen = element.SkipViewportCull || viewport.IntersectsWith(element.Bounds);
-            element.ResolveVisualStateFromDrain(snap: !onscreen);
+            element.ResolveVisualStateInternal(snap: !onscreen);
         }
 
         _visualStateDirtyList.Clear();
     }
 
     /// <summary>
-    /// Runs the update pass for the window content: drains queued visual-state
-    /// reconciliations, then performs measure/arrange when layout is dirty.
+    /// Runs the update pass for the window content: reconciles queued visual-state
+    /// invalidations, then performs measure/arrange when layout is dirty.
     /// </summary>
     public void PerformLayout()
     {
@@ -1678,8 +1678,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        // Drain queued visual-state invalidations before layout reads state-dependent properties
-        // (e.g. a style trigger may adjust size/padding based on IsEnabled).
+        // Reconcile queued visual-state invalidations before layout reads state-dependent
+        // properties (e.g. a style trigger may adjust size/padding based on IsEnabled).
         using (profiling ? ProfilerMarkers.VisualStateUpdate.Auto() : default)
         {
             UpdateVisualStates();
@@ -1944,9 +1944,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Schedules the pre-render update pass: visual-state drain, then measure/arrange when
+    /// Schedules the pre-render update pass: visual-state update, then measure/arrange when
     /// layout is dirty, then a render. Both layout invalidation and visual-state invalidation
-    /// funnel here - the drain is the first step of the pass, not a separate pipeline stage.
+    /// funnel here - the visual-state update is the first step of the pass, not a separate
+    /// pipeline stage.
     /// </summary>
     internal void RequestUpdatePass()
     {

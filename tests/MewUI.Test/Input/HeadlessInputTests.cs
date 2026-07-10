@@ -64,8 +64,8 @@ public sealed class HeadlessInputTests
 
         window.SendMouseMove(target.CenterOf());
         Assert.IsTrue(target.IsMouseOver, "hit test routed mouse-over to the target");
-        window.PerformLayout(); // state reconciliation happens in the pre-layout drain
-        Assert.AreEqual(HOT_COLOR, target.Background, "Hot trigger applied at the next drain");
+        window.PerformLayout(); // state reconciliation happens in the pre-layout visual-state update
+        Assert.AreEqual(HOT_COLOR, target.Background, "Hot trigger applied at the next update pass");
 
         window.SendMouseMove(new Point(1, 1));
         Assert.IsFalse(target.IsMouseOver);
@@ -73,7 +73,8 @@ public sealed class HeadlessInputTests
         Assert.AreEqual(NORMAL_COLOR, target.Background, "base setter restored after hover ends");
     }
 
-    // Multiple state changes inside one frame resolve once, to the final state, at the drain.
+    // Multiple state changes inside one frame resolve once, to the final state, at the
+    // visual-state update.
     [TestMethod]
     public void SameFrameEnterLeave_ResolvesToFinalStateOnly()
     {
@@ -153,10 +154,10 @@ public sealed class HeadlessInputTests
         public void Press(bool pressed) => SetPressed(pressed);
     }
 
-    // On-screen elements animate their state transition; off-screen elements snap at the drain
-    // so no animation runs on invisible pixels.
+    // On-screen elements animate their state transition; off-screen elements snap at the
+    // visual-state update so no animation runs on invisible pixels.
     [TestMethod]
-    public void Drain_AnimatesOnScreenAndSnapsOffScreen()
+    public void VisualStateUpdate_AnimatesOnScreenAndSnapsOffScreen()
     {
         if (!OperatingSystem.IsWindows())
         {
