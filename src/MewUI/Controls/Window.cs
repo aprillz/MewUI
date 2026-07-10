@@ -94,6 +94,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private IWindowBackend? _backend;
     private WindowRenderTarget? _cachedRenderTarget;
     private IGraphicsContext? _renderContext;
+    // True while RenderFrame is inside RenderFrameCore; guards against reentrant paints.
+    private bool _renderFrameActive;
     private Action? _cachedInvalidateBackend;
     private Action? _cachedLayoutAndRender;
     private LayoutPerformanceStats _lastLayoutPerformanceStats;
@@ -2205,6 +2207,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void RenderFrame(IWindowSurface surface)
     {
+        // Reentrant paint (e.g. a cross-thread sent WM_PAINT dispatched while this frame is
+        // still open, as with a window hosted in another process's tree) would nest
+        // BeginFrame on the cached context and corrupt the backend's begin/end pairing.
+        // Skip and repaint on the next dispatcher cycle instead.
+        if (_renderFrameActive)
+        {
+            RequestRender();
+            return;
+        }
+
         // Some platforms can render before Loaded is raised due to Run/Show/Dispatcher ordering.
         // Ensure Loaded is raised as soon as the dispatcher is available, and always before FirstFrameRendered.
         if (!_loadedRaised && Application.IsRunning && Application.Current.Dispatcher != null)
@@ -2224,7 +2236,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _cachedRenderTarget = target;
         }
 
-        RenderFrameCore(target, clientSize);
+        _renderFrameActive = true;
+        try
+        {
+            RenderFrameCore(target, clientSize);
+        }
+        finally
+        {
+            _renderFrameActive = false;
+        }
     }
 
     internal void RenderFrameToSurface(IRenderSurface surface)
