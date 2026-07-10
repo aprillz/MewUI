@@ -1,6 +1,6 @@
 # Application 및 Window 수명 주기
 
-이 문서는 **시작(Startup) 중심**으로 MewUI의 Application/Window 라이프사이클과 DX를 정리한 가이드이다.
+이 문서는 시작부터 종료까지 MewUI의 Application/Window 라이프사이클과 DX를 정리한 가이드이다.
 결정된 사항을 기준으로 작성하며, “Run 전 설정”과 “Run 이후 동작”의 경계를 명확히 한다.
 
 ---
@@ -207,9 +207,125 @@ Application.Current.RenderLoopSettings.TargetFps = 0; // unlimited
 
 ## 5. 종료 흐름
 
-- `Window.Close()` → Backend 파괴 → Application 등록 해제
-- 마지막 창이 닫히면 플랫폼 루프 종료로 이어질 수 있음(플랫폼 정책에 따름)
-- `Application.Quit()`는 명시적으로 루프를 종료
+### 5.1 창 닫기
+`Window.Close()`(및 플랫폼의 닫기 버튼)는 전체 닫기 라이프사이클을 수행한다:
+
+1) `Closing` 발생. `args.Cancel = true`로 닫기를 취소할 수 있다
+2) 네이티브 창 파괴
+3) `Closed` 발생, Application에서 등록 해제
+
+owner와 함께 표시한 창(`Show(owner)` / `ShowDialogAsync(owner)`)은 owner가 닫힐 때 함께 닫힌다.
+
+#### 예제: 닫기 전 확인
+```csharp
+window.Closing += args =>
+{
+    if (hasUnsavedChanges && !ConfirmDiscard())
+        args.Cancel = true;
+};
+
+window.Closed += () => SaveWindowPlacement();
+```
+
+### 5.2 애플리케이션이 종료되는 시점
+메시지 루프는 **마지막 창**이 닫힐 때 종료되고, 이어서 `Application.Run(...)`이 반환된다.
+다른 창이 열려 있는 동안에는 메인 창만 닫아도 앱이 종료되지 않는다.
+
+메인 창을 닫으면 앱이 종료되게 하려면, 보조 창을 메인 창을 owner로 하여 표시(`tools.Show(main)`)해 함께 닫히게 하거나, 메인 창의 `Closed` 핸들러에서 보조 창을 닫는다.
+
+### 5.3 Application.Quit
+`Application.Quit()`는 메시지 루프를 즉시 종료한다:
+
+- 열린 창에는 `Closing` 콜백이 전달되지 **않으므로** 종료를 취소할 방법이 없다
+- 이 경로에서는 창별 닫기 라이프사이클이 보장되지 않는다. 저장 확인이나 상태 보존을 `Closing`/`Closed` 핸들러에 의존하지 말 것
+- 플랫폼 리소스가 정리되고 `Application.Run(...)`이 반환된다
+
+### 5.4 권장 패턴
+- 기본: 사용자가 창을 닫게 두면 마지막 창과 함께 앱이 종료된다.
+- 확인 절차를 존중해야 하는 "종료" 메뉴/버튼: `mainWindow.Close()`를 호출해 `Closing` 핸들러가 확인/취소를 결정하게 한다.
+- 메인 창이 곧 앱 수명인 경우: 메인 창의 `Closed`에 `Application.Quit`를 구독한다.
+- 확인 없이 즉시 종료(이미 저장된 상태, 워치독 재시작 등): `Application.Quit()`.
+
+#### 예제: 메인 창 닫힘 = 앱 종료
+앱 수명을 메인 창에 묶는 표준 레시피다. 모든 종료가 `main.Close()`를 거치므로 확인 절차가 한 곳에 모이고 취소가 그대로 존중된다. Quit은 닫기가 실제로 완료된 뒤에만 실행되므로, 도구/백그라운드 창이 남아 있어도 종료가 보장된다.
+
+```csharp
+// 1) 확인(선택): Closing 핸들러 하나가 모든 종료 경로를 지킨다.
+main.Closing += args =>
+{
+    if (hasUnsavedChanges && !ConfirmDiscard())
+        args.Cancel = true;
+};
+
+// 2) 상태 저장: 닫기가 허용됐을 때만 실행된다.
+main.Closed += SaveSession;
+
+// 3) 메인 창 = 앱 수명.
+main.Closed += Application.Quit;
+
+// 4) 모든 종료 명령은 Quit이 아니라 Close를 거친다.
+new Button().Content("Exit").OnClick(() => main.Close());
+```
+
+조건 없는 즉시 종료(이미 저장된 상태, 워치독 재시작 등)만 `Application.Quit()`를 직접 호출한다. 이때 `Closing`/`Closed` 핸들러는 실행되지 않는다.
+
+#### Close와 Quit의 순차 호출
+```csharp
+main.Close();
+Application.Quit();
+```
+
+이 시퀀스는 "허용되면 곱게 닫되, 어쨌든 종료한다"는 의미다. 로그아웃, 치명 오류 후 종료, 업데이트 후 재시작 같은 흐름에 적합하다. 모든 플랫폼에서 `Close()`의 닫기 라이프사이클이 `Quit()`보다 먼저 실행된다(X11/macOS는 동기 실행, Win32는 post된 `WM_CLOSE`가 루프 종료 전에 드레인됨).
+
+- `Closing`이 취소하지 않으면: `Closed` 정리가 실행된 뒤 앱이 종료된다.
+- `Closing`이 취소하면: 종료는 그대로 진행되고, 그 창은 `Closed` 정리를 건너뛴 채 Quit 경로로 폐기된다.
+
+동기 시퀀스는 어떤 `Closing` 핸들러도 deferral을 잡지 않을 때만 안전하다. deferral([5.5](#55-비동기-종료-closeasync와-closing-deferral) 참고)이 잡히면 `Close()`는 결정이 미해결인 채 반환되고, `Quit()`이 결정 전에 루프를 끝내버린다. `CloseAsync`는 같은 의도를 표현하면서 결정까지 기다린다:
+
+```csharp
+await main.CloseAsync();   // deferral 포함, 닫기 라이프사이클 완주
+Application.Quit();        // 결과와 무관하게 종료
+```
+
+"무조건 종료" 흐름에는 이 형태를 우선한다.
+
+의도에 따라 고른다: 확인 절차가 앱을 계속 살릴 수 있어야 하면 `main.Closed += Application.Quit` + `main.Close()`를, 무조건 종료해야 하면 이 시퀀스를 쓴다.
+
+### 5.5 비동기 종료: CloseAsync와 Closing deferral
+`Window.CloseAsync()`는 닫기를 요청하고 결과를 알려준다:
+
+```csharp
+bool closed = await window.CloseAsync();   // true = 닫힘, false = Closing이 취소
+```
+
+- 이미 닫힌 창은 즉시 `true`로 완료된다(멱등).
+- 동시에 들어온 닫기 요청은 하나의 pending 결정에 합류하고, `Closing`은 한 번만 실행된다.
+
+닫기 결정 자체가 비동기인 경우(확인 다이얼로그, 비동기 저장)에는 "Cancel 후 재-Close" 대신 `Closing`에서 deferral을 잡는다:
+
+```csharp
+window.Closing += async args =>
+{
+    using (args.GetDeferral())        // 첫 await 전에 잡을 것
+    {
+        if (!await ConfirmDiscardAsync())
+            args.Cancel = true;
+    }                                 // 여기서 deferral이 완료된다 - 결정이 제출되는 시점
+};
+```
+
+- 모든 deferral이 완료될 때까지 창은 열린 채 유지되고, 이후 `Cancel`을 종합해 판정한다(하나라도 취소면 취소).
+- 허용으로 판정되면 `Closing`을 다시 발생시키지 않고 닫기를 진행한다.
+- `CloseAsync`는 deferral 해소 이후에 완료되므로, 비동기 핸들러가 있어도 결과가 항상 진실이다.
+- 결정 대기 중 들어온 닫기 요청은 pending에 합류한다. 확인 프롬프트가 중복 표시되지 않는다.
+
+다중 창 종료 오케스트레이션도 가능해진다:
+
+```csharp
+foreach (var w in openWindows)
+    if (!await w.CloseAsync()) return;   // 하나라도 취소하면 종료 중단
+// 전부 닫힘 - 마지막 창 규칙으로 앱 종료
+```
 
 ---
 
@@ -241,3 +357,4 @@ Application.DispatcherUnhandledException += e =>
 - **Run 전 설정 → Run → 메시지 루프**가 핵심 흐름
 - Theme/RenderLoop은 Run 전에 결정
 - Window는 Show 시점에만 실제 플랫폼 리소스를 갖는다
+- 앱은 마지막 창이 닫힐 때 종료된다. `Window.Close()`가 정상(취소 가능) 경로, `Application.Quit()`는 즉시 종료 경로

@@ -1,6 +1,6 @@
 # Application and Window Lifecycle
 
-This document summarizes the **startup-focused** Application/Window lifecycle and DX in MewUI.
+This document summarizes the Application/Window lifecycle and DX in MewUI, from startup to shutdown.
 It clarifies the boundary between “before Run” and “after Run”.
 
 ---
@@ -208,9 +208,125 @@ Application.Current.RenderLoopSettings.TargetFps = 0; // unlimited
 
 ## 5. Shutdown Flow
 
-- `Window.Close()` → destroy backend → unregister from Application
-- When the last window closes, the platform loop may exit (platform policy)
-- `Application.Quit()` explicitly terminates the loop
+### 5.1 Closing a window
+`Window.Close()` (and the platform close button) runs the full close lifecycle:
+
+1) `Closing` is raised; set `args.Cancel = true` to keep the window open
+2) The native window is destroyed
+3) `Closed` is raised and the window is unregistered from the Application
+
+Windows shown with an owner (`Show(owner)` / `ShowDialogAsync(owner)`) close together when their owner closes.
+
+#### Example: Confirm before closing
+```csharp
+window.Closing += args =>
+{
+    if (hasUnsavedChanges && !ConfirmDiscard())
+        args.Cancel = true;
+};
+
+window.Closed += () => SaveWindowPlacement();
+```
+
+### 5.2 When the application exits
+The message loop exits when the **last window** closes; `Application.Run(...)` then returns.
+Closing the main window alone does not exit the app while other windows are still open.
+
+If closing the main window should quit the app, show secondary windows with the main window as their owner (`tools.Show(main)`) so they close together, or close them from the main window's `Closed` handler.
+
+### 5.3 Application.Quit
+`Application.Quit()` terminates the message loop immediately:
+
+- Open windows do **not** get a `Closing` callback, so nothing can cancel the exit
+- The per-window close lifecycle is not guaranteed on this path; do not rely on `Closing`/`Closed` handlers for save prompts or persistence when quitting
+- Platform resources are torn down and `Application.Run(...)` returns
+
+### 5.4 Recommended patterns
+- Default: let the user close windows; the app exits with the last one.
+- An "Exit" menu/button that should honor confirmation: call `mainWindow.Close()` so the `Closing` handler can prompt and cancel.
+- Main window ends the application: subscribe `Application.Quit` to the main window's `Closed`.
+- Immediate exit with no prompts (state already saved, watchdog restart, etc.): `Application.Quit()`.
+
+#### Example: Main window ends the application
+The canonical recipe ties the app lifetime to the main window. Everything routes through `main.Close()`, so the confirmation stays in one place and keeps its veto; Quit only runs after the close actually went through, ending the app even if tool/background windows are still open.
+
+```csharp
+// 1) Confirmation (optional): one Closing handler guards every exit path.
+main.Closing += args =>
+{
+    if (hasUnsavedChanges && !ConfirmDiscard())
+        args.Cancel = true;
+};
+
+// 2) Persistence: runs only when the close was allowed.
+main.Closed += SaveSession;
+
+// 3) Main window = app lifetime.
+main.Closed += Application.Quit;
+
+// 4) Every exit command goes through Close, never straight to Quit.
+new Button().Content("Exit").OnClick(() => main.Close());
+```
+
+For an unconditional exit (state already saved, watchdog restart), call `Application.Quit()` directly - no `Closing`/`Closed` handlers run.
+
+#### Sequencing Close and Quit
+```csharp
+main.Close();
+Application.Quit();
+```
+
+This sequence means "close gracefully if allowed, but exit regardless" - useful for logout, fatal-error exit, or restart-after-update flows. `Close()` runs the close lifecycle before `Quit()` takes effect on every platform (synchronously on X11/macOS; on Win32 the posted `WM_CLOSE` is drained before the loop exits).
+
+- If `Closing` does not cancel: `Closed` cleanup runs, then the app exits.
+- If `Closing` cancels: the exit still happens, and that window skips its `Closed` cleanup (it is torn down by the Quit path).
+
+The synchronous sequence is only safe while no `Closing` handler defers. With a deferral (see [5.5](#55-async-close-closeasync-and-closing-deferrals)), `Close()` returns with the decision still pending and `Quit()` ends the loop before it resolves. `CloseAsync` expresses the same intent and waits for the decision either way:
+
+```csharp
+await main.CloseAsync();   // full close lifecycle, deferrals included
+Application.Quit();        // exit regardless of the outcome
+```
+
+Prefer this form for the "exit regardless" flows.
+
+Pick by intent: when a confirmation should be able to keep the app running, use `main.Closed += Application.Quit` with `main.Close()`; use the sequence only when the exit must happen regardless.
+
+### 5.5 Async close: CloseAsync and Closing deferrals
+`Window.CloseAsync()` requests a close and reports the outcome:
+
+```csharp
+bool closed = await window.CloseAsync();   // true = closed, false = cancelled by Closing
+```
+
+- An already-closed window completes with `true` (idempotent).
+- Concurrent close requests join one pending decision; `Closing` runs once.
+
+When the close decision itself is asynchronous (a confirmation dialog, an async save), take a deferral inside `Closing` instead of cancelling and re-closing:
+
+```csharp
+window.Closing += async args =>
+{
+    using (args.GetDeferral())        // take it before the first await
+    {
+        if (!await ConfirmDiscardAsync())
+            args.Cancel = true;
+    }                                 // the deferral completes here - the decision is submitted
+};
+```
+
+- The window stays open until every deferral completes; the aggregated `Cancel` then decides (any cancel wins).
+- Once allowed, the close proceeds without raising `Closing` again.
+- `CloseAsync` completes only after the deferrals resolve, so its result stays truthful with async handlers.
+- Close requests arriving while a decision is pending join it - the confirmation is not shown twice.
+
+This also enables multi-window exit orchestration:
+
+```csharp
+foreach (var w in openWindows)
+    if (!await w.CloseAsync()) return;   // one cancel aborts the exit
+// all closed - the app exits by the last-window rule
+```
 
 ---
 
@@ -242,3 +358,4 @@ Application.DispatcherUnhandledException += e =>
 - The core flow is: **pre-run configuration → Run → message loop**
 - Theme/RenderLoop should be decided before Run
 - A Window only acquires native resources at Show time
+- The app exits when the last window closes; `Window.Close()` is the graceful (cancellable) path, `Application.Quit()` is the immediate one
