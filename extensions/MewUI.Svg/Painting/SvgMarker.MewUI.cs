@@ -78,7 +78,7 @@ public partial class SvgMarker
         }
 
         var transformed = MewSvgPathUtilities.TransformPath(markerPath, matrix);
-        using var pen = CreatePen(owner, renderer);
+        var pen = CreatePen(owner, renderer);
         if (pen is not null)
         {
             renderer.DrawPath(pen, transformed);
@@ -87,7 +87,7 @@ public partial class SvgMarker
         var fill = Children.Count > 0 ? Children[0].Fill : Fill;
         if (fill is not null && fill != SvgPaintServer.None)
         {
-            using var brush = fill.GetBrush(this, renderer, FixOpacityValue(FillOpacity));
+            var brush = fill.GetBrush(this, renderer, FixOpacityValue(FillOpacity));
             if (brush is not null)
             {
                 renderer.FillPath(brush, transformed);
@@ -95,7 +95,7 @@ public partial class SvgMarker
         }
     }
 
-    private IPen? CreatePen(SvgVisualElement path, ISvgRenderer renderer)
+    private Pen? CreatePen(SvgVisualElement path, ISvgRenderer renderer)
     {
         if (Stroke is null || Stroke == SvgPaintServer.None)
         {
@@ -110,14 +110,14 @@ public partial class SvgMarker
             return null;
         }
 
-        using var brush = Stroke.GetBrush(this, renderer, FixOpacityValue(Opacity), true);
+        var brush = Stroke.GetBrush(this, renderer, FixOpacityValue(Opacity), true);
         if (brush is null)
         {
             return null;
         }
 
         var strokeStyle = MewSvgPathUtilities.CreateStrokeStyle(this, renderer, Math.Max(width, 1f));
-        return renderer.GraphicsFactory.CreatePen(brush, width, strokeStyle);
+        return new Pen(brush, width, strokeStyle);
     }
 
     private PathGeometry? GetClone(SvgVisualElement path, ISvgRenderer renderer)

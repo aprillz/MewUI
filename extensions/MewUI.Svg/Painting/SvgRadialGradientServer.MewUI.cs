@@ -8,7 +8,7 @@ namespace Svg;
 
 public partial class SvgRadialGradientServer
 {
-    protected override IBrush? CreateBrush(SvgVisualElement renderingElement, ISvgRenderer renderer, float opacity, bool forStroke)
+    protected override Brush? CreateBrush(SvgVisualElement renderingElement, ISvgRenderer renderer, float opacity, bool forStroke)
     {
         try
         {
@@ -38,7 +38,7 @@ public partial class SvgRadialGradientServer
             var scale = CalcScale(scaleBounds, center, specifiedRadius, effectiveTransform);
             var blend = CalculateColorBlend(renderer, opacity, scale, out scale);
 
-            return renderer.GraphicsFactory.CreateRadialGradientBrush(
+            return new RadialGradientBrush(
                 center,
                 focalPoint,
                 specifiedRadius * scale,

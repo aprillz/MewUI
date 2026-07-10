@@ -27,12 +27,12 @@ public partial class SvgPatternServer
 
     /// <summary>
     /// Creates a tiling image brush by rendering this pattern's children to an offscreen
-    /// bitmap at the computed tile size, then returning an <see cref="IImageBrush"/> that
+    /// bitmap at the computed tile size, then returning an <see cref="ImageBrush"/> that
     /// repeats the tile across the fill region. Ported from SvgPatternServer.Drawing.cs:
     /// same chain inheritance and coordinate-system handling (ObjectBoundingBox vs
     /// UserSpaceOnUse), but produces a MewUI brush instead of a GDI+ TextureBrush.
     /// </summary>
-    public override IBrush? GetBrush(SvgVisualElement renderingElement, ISvgRenderer renderer, float opacity, bool forStroke = false)
+    public override Brush? GetBrush(SvgVisualElement renderingElement, ISvgRenderer renderer, float opacity, bool forStroke = false)
     {
         // Walk the href chain to inherit attributes from an upstream pattern.
         var chain = new List<SvgPatternServer>();
@@ -219,17 +219,16 @@ public partial class SvgPatternServer
             var image = _cachedTileImage!;
             var patternTransform = PatternTransform?.GetMatrix();
 
-            // ownedResources is empty - the cached tile/image are owned by this server
-            // and shared across brushes. The brush only references them; brush disposal
-            // doesn't release them. They live until the document/server is collected.
-            return factory.CreateImageBrush(
+            // The cached tile/image are owned by this server and shared across brushes.
+            // ImageBrush only references the image; it lives until the document/server
+            // is collected.
+            return new ImageBrush(
                 image,
                 sourceRect: new Rect(0, 0, image.PixelWidth, image.PixelHeight),
                 destinationRect: new Rect(x, y, width, height),
                 tileMode: TileMode.Tile,
                 opacity: opacity,
-                transform: patternTransform,
-                ownedResources: null);
+                transform: patternTransform);
         }
         finally
         {

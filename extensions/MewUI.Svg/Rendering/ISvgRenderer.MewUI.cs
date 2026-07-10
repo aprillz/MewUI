@@ -17,9 +17,9 @@ public interface ISvgRenderer : IDisposable
 
     void DrawImageUnscaled(IImage image, Point location, float opacity = 1f);
 
-    void DrawPath(IPen pen, PathGeometry path);
+    void DrawPath(Pen pen, PathGeometry path);
 
-    void FillPath(IBrush brush, PathGeometry path);
+    void FillPath(Brush brush, PathGeometry path);
 
     ISvgBoundable GetBoundable();
 

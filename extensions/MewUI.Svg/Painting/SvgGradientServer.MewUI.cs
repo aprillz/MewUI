@@ -7,7 +7,7 @@ namespace Svg;
 
 public abstract partial class SvgGradientServer
 {
-    public override IBrush? GetBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke = false)
+    public override Brush? GetBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke = false)
     {
         LoadStops(styleOwner);
 
@@ -20,13 +20,13 @@ public abstract partial class SvgGradientServer
         {
             var stopColor = Stops[0].GetColor(styleOwner);
             byte alpha = (byte)Math.Clamp(Math.Round(opacity * (stopColor.A / 255f) * 255), 0, 255);
-            return renderer.GraphicsFactory.CreateSolidColorBrush(new Color(alpha, stopColor.R, stopColor.G, stopColor.B));
+            return new SolidColorBrush(new Color(alpha, stopColor.R, stopColor.G, stopColor.B));
         }
 
         return CreateBrush(styleOwner, renderer, opacity, forStroke);
     }
 
-    protected abstract IBrush? CreateBrush(SvgVisualElement renderingElement, ISvgRenderer renderer, float opacity, bool forStroke);
+    protected abstract Brush? CreateBrush(SvgVisualElement renderingElement, ISvgRenderer renderer, float opacity, bool forStroke);
 
     protected Matrix3x2 EffectiveGradientTransform
         => GradientTransform?.GetMatrix() ?? Matrix3x2.Identity;

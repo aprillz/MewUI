@@ -4,7 +4,7 @@ namespace Svg;
 
 public partial class SvgDeferredPaintServer
 {
-    public override IBrush GetBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke = false)
+    public override Brush GetBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke = false)
     {
         EnsureServer(styleOwner);
         return (_concreteServer ?? _fallbackServer ?? NotSet)?.GetBrush(styleOwner, renderer, opacity, forStroke);

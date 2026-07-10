@@ -109,7 +109,7 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
             return;
         }
 
-        using var brush = Fill.GetBrush(this, renderer, FixOpacityValue(FillOpacity));
+        var brush = Fill.GetBrush(this, renderer, FixOpacityValue(FillOpacity));
         if (brush is null)
         {
             return;
@@ -136,7 +136,7 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
             return false;
         }
 
-        using var brush = Stroke.GetBrush(this, renderer, FixOpacityValue(StrokeOpacity), true);
+        var brush = Stroke.GetBrush(this, renderer, FixOpacityValue(StrokeOpacity), true);
         if (brush is null)
         {
             return false;
@@ -213,7 +213,7 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
         // SVG stroke-width is in user space, which maps 1:1 to MewUI logical (DIP) units
         // here. MewUI backends now scale stroke with transform by default (Skia/WPF/SVG
         // semantics), so we pass the user-space width through unchanged.
-        using var pen = renderer.GraphicsFactory.CreatePen(brush, strokeWidth, strokeStyle);
+        var pen = new Pen(brush, strokeWidth, strokeStyle);
         renderer.GraphicsContext.DrawPath(path, pen);
         return true;
     }
