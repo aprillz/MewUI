@@ -2100,7 +2100,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         double dpiScale = GetDpiForWindow(Handle) / 96.0;
         int grip = Math.Max(1, (int)(12 * dpiScale)); // shadow extent area
 
-        if (Window.WindowState != Controls.WindowState.Maximized)
+        if (Window.WindowState != Controls.WindowState.Maximized && Window.WindowSize.IsResizable)
         {
             bool left = pt.x < grip;
             bool right = pt.x >= w - grip;
