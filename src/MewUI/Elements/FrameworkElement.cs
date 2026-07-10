@@ -33,10 +33,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
 
     private void InvalidateDescendantStyles()
     {
-        VisualTree.Visit(this, e =>
+        // Includes self: a control hosting its own StyleSheet may resolve its
+        // StyleName from it (FindNamedStyle walks from the control itself).
+        VisualTree.Visit(this, element =>
         {
-            if (!ReferenceEquals(e, this) && e is Control c)
-                c.ResolveAndApplyStyle();
+            if (element is Control control)
+                control.ResolveAndApplyStyle(animate: true);
         });
     }
 
