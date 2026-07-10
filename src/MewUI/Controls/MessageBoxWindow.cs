@@ -72,6 +72,7 @@ public sealed class MessageBoxWindow : Window
         Padding = new Thickness(16);
         StartupLocation = WindowStartupLocation.CenterOwner;
         IsAlertWindow = true;
+        ShowInTaskbar = false;
 
         Closed += OnDialogClosed;
         PreviewKeyDown += OnPreviewKeyDown;
