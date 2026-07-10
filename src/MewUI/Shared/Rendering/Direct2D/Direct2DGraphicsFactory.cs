@@ -733,6 +733,12 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 }
             }
 
+            if (mode != WindowTargetMode.HwndRenderTarget)
+            {
+                DiagLog.Write($"[D2D] window target fallback to HwndRT hwnd=0x{hwnd:X} mode={mode} " +
+                    $"eligible={swapChainEligible} sharedDc={SharedFilterDeviceContext != 0} d2d={_d2dDevice != 0} d3d={_d3dDevice != 0}");
+            }
+
             // HWND render targets always use IGNORE - the DWM redirection surface
             // does not preserve per-pixel alpha from D2D Present.
             // For system backdrop, DWM extended frame treats opaque black (0,0,0) as glass.
@@ -800,18 +806,21 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
         lock (_rtLock)
         {
-            if (!_externalDxgiDeviceContextWindowTargets.Add(hwnd))
-            {
-                return false;
-            }
+            _externalDxgiDeviceContextWindowTargets.Add(hwnd);
 
+            // Only an HwndRenderTarget needs the upgrade: it lives on its own D2D device and
+            // cannot bind shared-device DXGI bitmaps. Swap-chain device-context targets
+            // (opaque or transparent composition) draw them as-is; invalidating those here
+            // would detach the live target mid-frame (DisposeNativeHandles calls SetTarget(0))
+            // and poison every remaining draw of the open frame with WRONG_STATE.
             if (_windowTargets.TryGetValue(hwnd, out var entry) && entry.Mode == WindowTargetMode.HwndRenderTarget)
             {
                 entry.DisposeNativeHandles();
                 _windowTargets.Remove(hwnd);
+                return true;
             }
 
-            return true;
+            return false;
         }
     }
 
@@ -862,11 +871,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
         if (!TryCreateSwapChainWindowTarget(hwnd, width, height, dpi, presentOptions, generation, mode, monitor, out var created))
         {
+            DiagLog.Write($"[D2D] swapchain window target create failed hwnd=0x{hwnd:X} mode={mode} {width}x{height}");
             return false;
         }
 
         _windowTargets[hwnd] = created;
         target = (created.RenderTarget, created.Generation);
+        DiagLog.Write($"[D2D] swapchain window target created rt=0x{created.RenderTarget:X} hwnd=0x{hwnd:X} mode={mode} {width}x{height} gen={created.Generation}");
         return true;
     }
 
@@ -941,6 +952,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 hr = Dxgi.CreateSwapChainForComposition(dxgiFactory, windowD3DDevice, swapChainDesc, out swapChain);
                 if (hr < 0 || swapChain == 0)
                 {
+                    DiagLog.Write($"[D2D] CreateSwapChainForComposition failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
@@ -962,36 +974,42 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
                 if (hr < 0 || dcompDevice == 0)
                 {
+                    DiagLog.Write($"[D2D] DCompositionCreateDevice failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
                 hr = Dcomp.CreateTargetForHwnd(dcompDevice, hwnd, topmost: true, out dcompTarget);
                 if (hr < 0 || dcompTarget == 0)
                 {
+                    DiagLog.Write($"[D2D] DComp CreateTargetForHwnd failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
                 hr = Dcomp.CreateVisual(dcompDevice, out dcompVisual);
                 if (hr < 0 || dcompVisual == 0)
                 {
+                    DiagLog.Write($"[D2D] DComp CreateVisual failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
                 hr = Dcomp.SetContent(dcompVisual, swapChain);
                 if (hr < 0)
                 {
+                    DiagLog.Write($"[D2D] DComp SetContent failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
                 hr = Dcomp.SetRoot(dcompTarget, dcompVisual);
                 if (hr < 0)
                 {
+                    DiagLog.Write($"[D2D] DComp SetRoot failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
                 hr = Dcomp.Commit(dcompDevice);
                 if (hr < 0)
                 {
+                    DiagLog.Write($"[D2D] DComp Commit failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
             }
@@ -1000,6 +1018,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 hr = Dxgi.CreateSwapChainForHwnd(dxgiFactory, windowD3DDevice, hwnd, swapChainDesc, out swapChain);
                 if (hr < 0 || swapChain == 0)
                 {
+                    DiagLog.Write($"[D2D] CreateSwapChainForHwnd failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                     return false;
                 }
 
@@ -1009,12 +1028,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             hr = Dxgi.GetBuffer(swapChain, 0, D2D1.IID_IDXGISurface, out dxgiSurface);
             if (hr < 0 || dxgiSurface == 0)
             {
+                DiagLog.Write($"[D2D] swapchain GetBuffer failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                 return false;
             }
 
             hr = D2D1VTable.CreateDeviceContext(windowD2DDevice, options: 0, out deviceContext);
             if (hr < 0 || deviceContext == 0)
             {
+                DiagLog.Write($"[D2D] swapchain CreateDeviceContext failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                 return false;
             }
 
@@ -1028,6 +1049,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             hr = D2D1VTable.CreateBitmapFromDxgiSurface((ID2D1DeviceContext*)deviceContext, dxgiSurface, bitmapProps, out targetBitmap);
             if (hr < 0 || targetBitmap == 0)
             {
+                DiagLog.Write($"[D2D] swapchain CreateBitmapFromDxgiSurface failed hr=0x{hr:X8} hwnd=0x{hwnd:X}");
                 return false;
             }
 
@@ -1136,12 +1158,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 flags: 0);
             if (hr < 0)
             {
+                DiagLog.Write($"[D2D] swapchain resize ResizeBuffers failed hr=0x{hr:X8} {width}x{height}");
                 return false;
             }
 
             hr = Dxgi.GetBuffer(entry.SwapChain, 0, D2D1.IID_IDXGISurface, out dxgiSurface);
             if (hr < 0 || dxgiSurface == 0)
             {
+                DiagLog.Write($"[D2D] swapchain resize GetBuffer failed hr=0x{hr:X8}");
                 return false;
             }
 
@@ -1155,6 +1179,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             hr = D2D1VTable.CreateBitmapFromDxgiSurface((ID2D1DeviceContext*)entry.RenderTarget, dxgiSurface, bitmapProps, out targetBitmap);
             if (hr < 0 || targetBitmap == 0)
             {
+                DiagLog.Write($"[D2D] swapchain resize CreateBitmapFromDxgiSurface failed hr=0x{hr:X8}");
                 return false;
             }
 
@@ -1168,6 +1193,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             entry.DpiX = dpi;
             entry.Monitor = monitor;
             entry.Generation++;
+            DiagLog.Write($"[D2D] swapchain resized rt=0x{entry.RenderTarget:X} {width}x{height} dpi={dpi} gen={entry.Generation}");
             return true;
         }
         finally
