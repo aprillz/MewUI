@@ -1,151 +1,56 @@
-using Aprillz.MewUI.Rendering;
-
 namespace Aprillz.MewUI.Controls;
 
-public class ControlTemplate : Control, IVisualTreeHost
+/// <summary>
+/// A reusable definition of a control's visual tree. One definition can be applied to any
+/// number of controls; each application builds an independent tree.
+/// </summary>
+public abstract class ControlTemplate
 {
-    private Element? _content;
-    private Element? _root;
-    private Element? _attachedVisualRoot;
+    /// <summary>
+    /// Builds the visual tree for one control instance, registering named parts into
+    /// <paramref name="context"/>, and returns the visual root.
+    /// </summary>
+    /// <param name="owner">The control the tree is being built for.</param>
+    /// <param name="context">The per-instance part registry.</param>
+    public abstract Element Build(Control owner, ControlTemplateContext context);
+}
 
-    public Element? Child
+/// <summary>
+/// A <see cref="ControlTemplate"/> defined by a build delegate.
+/// </summary>
+/// <typeparam name="TControl">The control type the template targets.</typeparam>
+public sealed class DelegateControlTemplate<TControl> : ControlTemplate where TControl : Control
+{
+    private readonly Func<TControl, ControlTemplateContext, Element> _build;
+
+    public DelegateControlTemplate(Func<TControl, ControlTemplateContext, Element> build)
     {
-        get => Content;
-        set => Content = value;
+        ArgumentNullException.ThrowIfNull(build);
+        _build = build;
     }
 
-    public Element? Content
+    /// <inheritdoc/>
+    public override Element Build(Control owner, ControlTemplateContext context)
     {
-        get => _content;
-        set
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (owner is not TControl typedOwner)
         {
-            if (ReferenceEquals(_content, value))
-            {
-                return;
-            }
-
-            if (ReferenceEquals(value, this))
-            {
-                throw new InvalidOperationException("Cannot set Content to self.");
-            }
-
-            var oldValue = _content;
-            _content = value;
-            OnContentChanged(oldValue, value);
+            throw new InvalidOperationException(
+                $"The template targets {typeof(TControl).Name} but was applied to {owner.GetType().Name}.");
         }
+
+        return _build(typedOwner, context);
     }
+}
 
-    protected Element? Root
-    {
-        get => _root;
-        set
-        {
-            if (ReferenceEquals(_root, value))
-            {
-                return;
-            }
-
-            if (ReferenceEquals(value, this))
-            {
-                throw new InvalidOperationException("Cannot set Root to self.");
-            }
-
-            if (_root != null && _root.Parent == this)
-            {
-                _root.Parent = null;
-            }
-
-            _root = value;
-            EnsureVisualRootAttached();
-        }
-    }
-
-    protected virtual void OnContentChanged(Element? oldValue, Element? newValue)
-    {
-        if (Root != null)
-        {
-            return;
-        }
-
-        if (oldValue != null && oldValue.Parent == this)
-        {
-            oldValue.Parent = null;
-        }
-
-        if (newValue != null)
-        {
-            newValue.Parent = this;
-        }
-    }
-
-    protected virtual Element? GetVisualRoot() => Root ?? Content;
-
-    protected Element? EnsureVisualRootAttached()
-    {
-        var root = GetVisualRoot();
-        if (ReferenceEquals(_attachedVisualRoot, root))
-        {
-            return root;
-        }
-
-        if (_attachedVisualRoot != null && _attachedVisualRoot.Parent == this)
-        {
-            _attachedVisualRoot.Parent = null;
-        }
-
-        _attachedVisualRoot = root;
-        if (root != null && root.Parent == null)
-        {
-            root.Parent = this;
-        }
-
-        return root;
-    }
-
-    protected override Size MeasureContent(Size availableSize)
-    {
-        var root = EnsureVisualRootAttached();
-        if (root == null)
-        {
-            return Size.Empty;
-        }
-
-        root.Measure(availableSize);
-        return root.DesiredSize;
-    }
-
-    protected override void ArrangeContent(Rect bounds)
-    {
-        EnsureVisualRootAttached()?.Arrange(bounds);
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        EnsureVisualRootAttached()?.Render(context);
-    }
-
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (EnsureVisualRootAttached() is UIElement uiRoot)
-        {
-            var hit = uiRoot.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return Bounds.Contains(point) ? this : null;
-    }
-
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-    {
-        var root = EnsureVisualRootAttached();
-        return root == null || visitor(root);
-    }
+/// <summary>
+/// Per-control state of an applied template: the built visual root and its part registry.
+/// Owned by the control; discarded when the template is replaced or cleared.
+/// </summary>
+internal sealed class ControlTemplateInstance
+{
+    public required Element VisualRoot { get; init; }
+    public required ControlTemplateContext Context { get; init; }
 }
