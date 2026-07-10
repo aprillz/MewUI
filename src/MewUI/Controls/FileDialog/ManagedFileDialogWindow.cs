@@ -162,17 +162,33 @@ internal sealed class ManagedFileDialogWindow : Window
         _pathBox.OnLostFocus(() => ExitPathEdit());
 
         // Address bar: breadcrumb by default; click the empty area to type a path and jump there.
-        // Outer address-bar box stays; the inner editable TextBox is borderless (NullTextBox style).
-        // Fixed height so toggling breadcrumb <-> text box does not change the toolbar height.
+        // Both presentation states are template parts of the host: the breadcrumb and the
+        // borderless path box (NullTextBox style) overlay in one slot and _editingPath toggles
+        // visibility, so switching modes never detaches either part (text/caret survive).
         // ContentControl (not Border) so IsFocusWithin drives the border: focusing a breadcrumb button
         // or the path box lights the box with an accent border, animated via the style's transition.
         // The base BorderBrush must come from the style so the Focused trigger can override it.
+        _pathBox.IsVisible = false;
         _pathHost = new ContentControl
         {
-            Content = _breadcrumb.CenterVertical(),
             Padding = new Thickness(0),
             StyleName = FileDialogStyles.AddressBar,
         };
+        // A template suppresses the host's own chrome, so the border becomes a bound template
+        // part: the style's Focused trigger keeps writing the host's BorderBrush and the bind
+        // forwards it (including transition ticks) into the chrome Border.
+        _pathHost.Template = new DelegateControlTemplate<ContentControl>((host, ctx) =>
+        {
+            var chrome = new Border
+            {
+                Child = new Grid().Children(_breadcrumb.CenterVertical(), _pathBox),
+            };
+            ctx.Bind(chrome, Control.BackgroundProperty, Control.BackgroundProperty);
+            ctx.Bind(chrome, Control.BorderBrushProperty, Control.BorderBrushProperty);
+            ctx.Bind(chrome, Control.BorderThicknessProperty, Control.BorderThicknessProperty);
+            ctx.Bind(chrome, Control.CornerRadiusProperty, Control.CornerRadiusProperty);
+            return chrome;
+        });
         _pathHost.OnMouseDown(_ =>
         {
             if (!_editingPath)
@@ -415,7 +431,8 @@ internal sealed class ManagedFileDialogWindow : Window
     {
         _editingPath = true;
         _pathBox.Text = _browser.CurrentDirectory;
-        _pathHost.Content = _pathBox;
+        _breadcrumb.IsVisible = false;
+        _pathBox.IsVisible = true;
         _pathBox.Focus();
     }
 
@@ -427,16 +444,25 @@ internal sealed class ManagedFileDialogWindow : Window
         }
         _editingPath = false;
 
-        // Capture intent before the swap: if the path box still holds focus (ESC / programmatic exit,
-        // not a focus-out), re-home focus on the current crumb. The swap itself releases the path box's
-        // focus during detach, so the re-home must be read here and applied after.
+        // Capture intent before the toggle: if the path box still holds focus (ESC / programmatic
+        // exit, not a focus-out), re-home focus on the current crumb. Hiding a part does not
+        // release focus by itself, so the hidden box must never stay focused.
         bool reHome = _pathBox.IsFocused;
 
-        _pathHost.Content = _breadcrumb;
+        _pathBox.IsVisible = false;
+        _breadcrumb.IsVisible = true;
 
         if (reHome)
         {
-            LastCrumbButton()?.Focus();
+            var crumb = LastCrumbButton();
+            if (crumb != null)
+            {
+                crumb.Focus();
+            }
+            else
+            {
+                FocusManager.ClearFocus();
+            }
         }
     }
 
