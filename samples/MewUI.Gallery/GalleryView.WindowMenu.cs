@@ -274,6 +274,8 @@ partial class GalleryView
                     )
             ),
 
+            AsyncCloseCard(),
+
             PromptDialogCard(),
 
             NativeMessageHookCard(),
@@ -396,6 +398,94 @@ partial class GalleryView
                                 new MenuItem("_View").Menu(viewMenu)
                             );
         return menu;
+    }
+
+    private FrameworkElement AsyncCloseCard()
+    {
+        var status = new ObservableValue<string>("CloseAsync: -");
+        Window? sample = null;
+
+        void OpenSample()
+        {
+            if (sample != null)
+            {
+                sample.Activate();
+                return;
+            }
+
+            var count = new ObservableValue<int>(3);
+            var sampleWindow = new Window()
+                .Title("Async close sample")
+                .FitContentHeight(340, 300)
+                .Padding(12)
+                .Content(
+                    new StackPanel()
+                        .Vertical()
+                        .Spacing(8)
+                        .Children(
+                            new TextBlock()
+                                .TextWrapping(TextWrapping.Wrap)
+                                .Text("Closing takes a deferral and asks for confirmation asynchronously. " +
+                                      "Try the title-bar close button too - close requests made while the " +
+                                      "confirmation is open join the pending decision."),
+                            new TextBlock().BindText(count, x => $"Countdown: {x}")));
+
+            sampleWindow.Closing += async args =>
+            {
+                using (args.GetDeferral())
+                {
+                    if (!await MessageBox.ConfirmAsync("Close this window?", owner: sampleWindow))
+                    {
+                        args.Cancel = true;
+                    }
+                    else
+                    {
+                        while (count.Value > 0)
+                        {
+                            await Task.Delay(1000);
+                            count.Value--;
+                        }
+
+                    }
+                }
+            };
+            sampleWindow.Closed += () => sample = null;
+
+            sample = sampleWindow;
+            sampleWindow.Show(window);
+        }
+
+        return Card(
+            "Async Close (CloseAsync + Closing deferral)",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new TextBlock()
+                        .FontSize(11)
+                        .Text("The sample window defers its Closing decision to an async confirmation.\nCloseAsync reports whether it actually closed."),
+                    new WrapPanel()
+                        .Spacing(6)
+                        .Children(
+                            new Button()
+                                .Content("Open sample window")
+                                .OnClick(OpenSample),
+                            new Button()
+                                .Content("CloseAsync")
+                                .OnClick(async () =>
+                                {
+                                    if (sample == null)
+                                    {
+                                        status.Value = "CloseAsync: no sample window";
+                                        return;
+                                    }
+
+                                    bool closed = await sample.CloseAsync();
+                                    status.Value = closed ? "CloseAsync: closed" : "CloseAsync: cancelled";
+                                })),
+                    new TextBlock()
+                        .BindText(status)
+                        .FontSize(11)));
     }
 
     private FrameworkElement PromptDialogCard()
