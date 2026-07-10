@@ -341,6 +341,7 @@ public partial class Window
         private readonly TextBlock _modeLabel;
         private readonly CheckBox _followFocus;
         private readonly CheckBox _autoExpandFocus;
+        private readonly CheckBox _logicalMode;
         private Button? _goFocusButton;
 
         private readonly Dictionary<object, object?> _parentByKey = new();
@@ -365,14 +366,20 @@ public partial class Window
 
             _followFocus = new CheckBox { Content = new TextBlock { Text = "Follow Focus", VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
             _autoExpandFocus = new CheckBox { Content = new TextBlock { Text = "Auto Expand Focus", VerticalTextAlignment = TextAlignment.Center }, IsChecked = true };
+            _logicalMode = new CheckBox { Content = new TextBlock { Text = "Logical Tree", VerticalTextAlignment = TextAlignment.Center }, IsChecked = false };
             _followFocus.CheckedChanged += _ => UpdateFollowUi();
+            _logicalMode.CheckedChanged += _ =>
+            {
+                Title = _logicalMode.IsChecked == true ? "Live Logical Tree" : "Live Visual Tree";
+                Refresh(preserveExpansion: false, preserveSelection: true);
+            };
 
             _tree = new TreeView()
                 .ItemHeight(24)
                 .ExpandTrigger(TreeViewExpandTrigger.ClickNode);
 
             _tree.ItemTemplate<VisualTreeNodeModel>(
-                build: ctx => new TextBlock().CenterVertical().Margin(8, 0),
+                build: ctx => new TextBlock().CenterVertical(),
                 bind: (view, item, _, ctx) =>
                 {
                     ((TextBlock)view).Text(item.DisplayText).WithTheme((t, c) => c.FontWeight(item.Element is FrameworkElement fe && fe.Focusable ? FontWeight.SemiBold : FontWeight.Normal));
@@ -417,7 +424,7 @@ public partial class Window
                         .DockTop()
                         .Horizontal()
                         .Spacing(12)
-                        .Children(_followFocus, _autoExpandFocus),
+                        .Children(_followFocus, _autoExpandFocus, _logicalMode),
                     new Border()
                         .DockTop()
                         .Padding(8, 4)
@@ -583,10 +590,11 @@ public partial class Window
             _parentByKey.Clear();
 
             var roots = new List<VisualTreeNodeModel>(4);
+            bool logical = _logicalMode.IsChecked == true;
 
             if (_target.Content is Element content)
             {
-                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: [BuildModel(content, parentKey: "root:content")]);
+                var contentRoot = new VisualTreeNodeModel(key: "root:content", text: "Content", element: content, children: [BuildModel(content, parentKey: "root:content", logical)]);
                 roots.Add(contentRoot);
             }
             else
@@ -594,12 +602,18 @@ public partial class Window
                 roots.Add(new VisualTreeNodeModel(key: "root:content", text: "Content (null)", element: null, children: Array.Empty<VisualTreeNodeModel>()));
             }
 
+            // Popups/adorners are window-level visual layers; the logical tree shows user ownership only.
+            if (logical)
+            {
+                return roots;
+            }
+
             if (_target._popupManager.Count > 0)
             {
                 var popupModels = new List<VisualTreeNodeModel>(_target._popupManager.Count);
                 for (int i = 0; i < _target._popupManager.Count; i++)
                 {
-                    popupModels.Add(BuildModel(_target._popupManager.ElementAt(i), parentKey: "root:popups"));
+                    popupModels.Add(BuildModel(_target._popupManager.ElementAt(i), parentKey: "root:popups", logical: false));
                 }
 
                 roots.Add(new VisualTreeNodeModel(key: "root:popups", text: "Popups", element: null, children: popupModels));
@@ -610,7 +624,7 @@ public partial class Window
                 var adornerModels = new List<VisualTreeNodeModel>(_target._adorners.Count);
                 for (int i = 0; i < _target._adorners.Count; i++)
                 {
-                    adornerModels.Add(BuildModel(_target._adorners[i].Element, parentKey: "root:adorners"));
+                    adornerModels.Add(BuildModel(_target._adorners[i].Element, parentKey: "root:adorners", logical: false));
                 }
 
                 roots.Add(new VisualTreeNodeModel(key: "root:adorners", text: "Adorners", element: null, children: adornerModels));
@@ -619,14 +633,25 @@ public partial class Window
             return roots;
         }
 
-        private VisualTreeNodeModel BuildModel(Element element, object parentKey)
+        private VisualTreeNodeModel BuildModel(Element element, object parentKey, bool logical)
         {
             var children = new List<VisualTreeNodeModel>();
-            if (element is IVisualTreeHost host)
+            if (logical)
+            {
+                if (element is ILogicalTreeHost logicalHost)
+                {
+                    logicalHost.VisitLogicalChildren(child =>
+                    {
+                        children.Add(BuildModel(child, parentKey: element, logical));
+                        return true;
+                    });
+                }
+            }
+            else if (element is IVisualTreeHost host)
             {
                 host.VisitChildren(child =>
                 {
-                    children.Add(BuildModel(child, parentKey: element));
+                    children.Add(BuildModel(child, parentKey: element, logical));
                     return true;
                 });
             }
@@ -728,9 +753,18 @@ public partial class Window
                 _target.RequestRender();
             }
 
-            _selectedLabel.Text = element == null
-                ? "Selected: (none)"
-                : $"Selected: {element.GetType().Name} {FormatRect(GetElementRectInWindow(element))}";
+            if (element == null)
+            {
+                _selectedLabel.Text = "Selected: (none)";
+            }
+            else
+            {
+                var logicalRoot = element.FindLogicalRoot();
+                _selectedLabel.Text =
+                    $"Selected: {element.GetType().Name} {FormatRect(GetElementRectInWindow(element))}\n" +
+                    $"Visual: parent={element.Parent?.GetType().Name ?? "(none)"}  root={element.FindVisualRoot()?.GetType().Name ?? "(none)"}\n" +
+                    $"Logical: parent={element.LogicalParent?.GetType().Name ?? "(none)"}  root={(ReferenceEquals(logicalRoot, element) ? "(self)" : logicalRoot.GetType().Name)}";
+            }
 
             _tree.ScrollIntoView(index);
             _tree.InvalidateVisual();
