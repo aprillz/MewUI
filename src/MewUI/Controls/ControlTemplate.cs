@@ -53,4 +53,5 @@ internal sealed class ControlTemplateInstance
 {
     public required Element VisualRoot { get; init; }
     public required ControlTemplateContext Context { get; init; }
+    public List<ContentPresenter> Presenters { get; } = new();
 }

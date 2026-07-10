@@ -47,7 +47,46 @@ public class HeaderedContentControl : ContentControl
     }
 
     protected virtual void OnHeaderChanged(Element? oldValue, Element? newValue)
-        => ChangeLogicalChild(oldValue, newValue);
+    {
+        if (HasTemplateInstance)
+        {
+            if (oldValue != null)
+            {
+                DetachLogicalChild(oldValue);
+            }
+            if (newValue != null)
+            {
+                AttachLogicalChild(newValue);
+            }
+            RefreshTemplatePresenters(HeaderProperty);
+        }
+        else
+        {
+            ChangeLogicalChild(oldValue, newValue);
+        }
+    }
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        var header = Header;
+        if (header != null && header.Parent == this)
+        {
+            header.Parent = null;
+        }
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        var header = Header;
+        if (header != null && header.Parent == null)
+        {
+            header.Parent = this;
+        }
+    }
 
     public static readonly MewProperty<double> HeaderSpacingProperty =
         MewProperty<double>.Register<HeaderedContentControl>(nameof(HeaderSpacing), 0.0,
@@ -64,6 +103,11 @@ public class HeaderedContentControl : ContentControl
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var inner = availableSize.Deflate(Padding);
 
         double headerHeight = 0;
@@ -94,6 +138,12 @@ public class HeaderedContentControl : ContentControl
 
     protected override void ArrangeContent(Rect bounds)
     {
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
         var inner = bounds.Deflate(Padding);
 
         double y = inner.Y;
@@ -119,11 +169,19 @@ public class HeaderedContentControl : ContentControl
     protected override void RenderSubtree(IGraphicsContext context)
     {
         base.RenderSubtree(context);
-        Header?.Render(context);
+        if (!HasTemplateInstance)
+        {
+            Header?.Render(context);
+        }
     }
 
     protected override UIElement? OnHitTest(Point point)
     {
+        if (HasTemplateInstance)
+        {
+            return base.OnHitTest(point);
+        }
+
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
@@ -143,6 +201,12 @@ public class HeaderedContentControl : ContentControl
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
+        var templateRoot = TemplateVisualRoot;
+        if (templateRoot != null)
+        {
+            return visitor(templateRoot);
+        }
+
         if (Header != null && !visitor(Header)) return false;
         if (Content != null && !visitor(Content)) return false;
         return true;

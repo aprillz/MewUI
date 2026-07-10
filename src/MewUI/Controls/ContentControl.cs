@@ -33,10 +33,59 @@ public class ContentControl : Control
         => ValidateLogicalChild(candidate);
 
     protected virtual void OnContentChanged(Element? oldValue, Element? newValue)
-        => ChangeLogicalChild(oldValue, newValue);
+    {
+        if (HasTemplateInstance)
+        {
+            // Templated: the control keeps logical ownership only; a ContentPresenter
+            // in the template owns the visual attach.
+            if (oldValue != null)
+            {
+                DetachLogicalChild(oldValue);
+            }
+            if (newValue != null)
+            {
+                AttachLogicalChild(newValue);
+            }
+            RefreshTemplatePresenters(ContentProperty);
+        }
+        else
+        {
+            ChangeLogicalChild(oldValue, newValue);
+        }
+    }
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        // Release the compat visual link when no presenter took the content over;
+        // the logical child stays owned without a visual position (invariant).
+        var content = Content;
+        if (content != null && content.Parent == this)
+        {
+            content.Parent = null;
+        }
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        // Back on the non-template path: the control hosts its content visually again.
+        var content = Content;
+        if (content != null && content.Parent == null)
+        {
+            content.Parent = this;
+        }
+    }
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         if (Content == null)
         {
             return Size.Empty;
@@ -51,6 +100,12 @@ public class ContentControl : Control
 
     protected override void ArrangeContent(Rect bounds)
     {
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
         if (Content == null)
         {
             return;
@@ -63,11 +118,22 @@ public class ContentControl : Control
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
+        if (HasTemplateInstance)
+        {
+            base.RenderSubtree(context);
+            return;
+        }
+
         Content?.Render(context);
     }
 
     protected override UIElement? OnHitTest(Point point)
     {
+        if (HasTemplateInstance)
+        {
+            return base.OnHitTest(point);
+        }
+
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
@@ -93,7 +159,15 @@ public class ContentControl : Control
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => Content == null || visitor(Content);
+    {
+        var templateRoot = TemplateVisualRoot;
+        if (templateRoot != null)
+        {
+            return visitor(templateRoot);
+        }
+
+        return Content == null || visitor(Content);
+    }
 
     bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor)
         => Content == null || visitor(Content);

@@ -7,6 +7,7 @@ namespace Aprillz.MewUI.Controls;
 public sealed class ControlTemplateContext
 {
     private readonly Dictionary<string, Element> _parts = new();
+    private List<(int SourcePropertyId, PropertyForwardEntry Entry)>? _bindings;
 
     /// <summary>Gets the control this template application belongs to.</summary>
     public Control Owner { get; }
@@ -14,6 +15,40 @@ public sealed class ControlTemplateContext
     internal ControlTemplateContext(Control owner)
     {
         Owner = owner;
+    }
+
+    /// <summary>
+    /// Keeps a target part property in sync with a property of <see cref="Owner"/>:
+    /// applies the current value now and forwards subsequent changes. Released when
+    /// the template instance is discarded.
+    /// </summary>
+    /// <param name="target">The template part to update.</param>
+    /// <param name="targetProperty">The part property to write.</param>
+    /// <param name="sourceProperty">The owner property to follow.</param>
+    public void Bind<T>(Element target, MewProperty<T> targetProperty, MewProperty<T> sourceProperty)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(targetProperty);
+        ArgumentNullException.ThrowIfNull(sourceProperty);
+
+        target.PropertyStore.SetLocal(targetProperty, Owner.PropertyStore.GetValue(sourceProperty));
+        var entry = Owner.AddPropertyForward(sourceProperty.Id, target, targetProperty);
+        (_bindings ??= new()).Add((sourceProperty.Id, entry));
+    }
+
+    internal void ReleaseBindings()
+    {
+        if (_bindings == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _bindings.Count; i++)
+        {
+            Owner.RemovePropertyForward(_bindings[i].SourcePropertyId, _bindings[i].Entry);
+        }
+
+        _bindings = null;
     }
 
     /// <summary>
