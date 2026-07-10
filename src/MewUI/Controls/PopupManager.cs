@@ -175,6 +175,10 @@ internal sealed class PopupManager
             if (_popups[i].Element == popup)
             {
                 _popups[i].Owner = owner;
+                if (_popups[i].Chrome is PopupChrome existingChrome)
+                {
+                    existingChrome.LogicalContextParent = owner;
+                }
                 UpdatePopup(popup, bounds);
                 return;
             }
@@ -191,6 +195,9 @@ internal sealed class PopupManager
         // Wrap in PopupChrome so the drop shadow renders within the chrome's layout bounds,
         // avoiding clipping by ancestor clip regions.
         var chrome = new PopupChrome(popup);
+
+        // Before attach so attach-time style/inherited resolution already sees the owner context.
+        chrome.LogicalContextParent = owner;
         chrome.Parent = _window;
         chrome.AttachChild();
 
@@ -508,6 +515,7 @@ internal sealed class PopupManager
         {
             entry.Chrome.DetachChild();
             entry.Chrome.Parent = null;
+            entry.Chrome.LogicalContextParent = null;
         }
         else
         {

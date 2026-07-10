@@ -357,7 +357,7 @@ public abstract class Control : FrameworkElement
         if (resolved == null)
         {
             var controlType = GetType();
-            for (Element? current = Parent; current != null; current = current.Parent)
+            for (Element? current = ContextParent; current != null; current = current.ContextParent)
             {
                 if (current is FrameworkElement fe)
                 {
@@ -387,7 +387,7 @@ public abstract class Control : FrameworkElement
 
     private Style? FindNamedStyle(string name)
     {
-        for (Element? current = this; current != null; current = current.Parent)
+        for (Element? current = this; current != null; current = current.ContextParent)
         {
             if (current is FrameworkElement fe && fe.StyleSheet != null)
             {
