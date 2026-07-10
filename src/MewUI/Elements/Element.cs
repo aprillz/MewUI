@@ -277,12 +277,44 @@ public abstract class Element : MewObject
     }
 
     /// <summary>
+    /// Transfers this element out of its current logical owner: the owner is asked to clear
+    /// its record first (<see cref="OnLogicalChildTaken"/>), so no stale slot or child-list
+    /// entry keeps pointing at a child that moved elsewhere.
+    /// </summary>
+    internal void DetachFromCurrentLogicalOwner()
+    {
+        var owner = LogicalParent;
+        if (owner == null)
+        {
+            return;
+        }
+
+        owner.OnLogicalChildTaken(this);
+
+        // The owner's cleanup normally detaches us (e.g. clearing its slot). Force it if not.
+        if (LogicalParent == owner)
+        {
+            owner.DetachLogicalChild(this);
+        }
+    }
+
+    /// <summary>
+    /// Called on the current logical owner when another host takes this owner's child.
+    /// Owners clear the record that referenced the child (slot property, children list)
+    /// so ownership transfer never leaves a stale entry behind.
+    /// </summary>
+    /// <param name="child">The child being taken over.</param>
+    protected virtual void OnLogicalChildTaken(Element child) { }
+
+    /// <summary>
     /// Rejects a proposed logical child before it is committed: self, an element owned by a
-    /// different logical parent, or a logical ancestor of this element (cycle). Intended for
-    /// use in a property validate callback so a rejecting throw leaves no store/tree mismatch.
+    /// different logical parent (unless the caller transfers ownership), or a logical ancestor
+    /// of this element (cycle). Intended for use in a property validate callback so a rejecting
+    /// throw leaves no store/tree mismatch.
     /// </summary>
     /// <param name="candidate">The proposed logical child; null is always valid.</param>
-    protected void ValidateLogicalChild(Element? candidate)
+    /// <param name="allowTransfer">True when the caller adopts owned elements via <see cref="DetachFromCurrentLogicalOwner"/>.</param>
+    protected void ValidateLogicalChild(Element? candidate, bool allowTransfer = false)
     {
         if (candidate == null)
         {
@@ -294,7 +326,7 @@ public abstract class Element : MewObject
             throw new InvalidOperationException("An element cannot be its own logical child.");
         }
 
-        if (candidate.LogicalParent != null && candidate.LogicalParent != this)
+        if (!allowTransfer && candidate.LogicalParent != null && candidate.LogicalParent != this)
         {
             throw new InvalidOperationException("The element already has a logical parent.");
         }
@@ -311,7 +343,9 @@ public abstract class Element : MewObject
     /// <summary>
     /// Replaces a logical child slot: detaches the old child logically and visually, then
     /// attaches the new one the same way. All failure causes must have been rejected up front
-    /// (see <see cref="ValidateLogicalChild"/>); the mutation itself does not fail.
+    /// (see <see cref="ValidateLogicalChild"/>); the mutation itself does not fail. When the
+    /// slot validated with transfer allowed, an owned incoming child is transferred out of its
+    /// previous owner first.
     /// </summary>
     /// <param name="oldChild">The child leaving the slot.</param>
     /// <param name="newChild">The child entering the slot.</param>
@@ -328,6 +362,11 @@ public abstract class Element : MewObject
 
         if (newChild != null)
         {
+            // No-op for strict slots (their validation already rejected foreign owners).
+            if (newChild.LogicalParent != this)
+            {
+                newChild.DetachFromCurrentLogicalOwner();
+            }
             AttachLogicalChild(newChild);
             newChild.Parent = this;
         }

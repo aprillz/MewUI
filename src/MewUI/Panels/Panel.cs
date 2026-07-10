@@ -7,6 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public abstract class Panel : FrameworkElement
     , IVisualTreeHost
+    , ILogicalTreeHost
 {
     private readonly List<Element> _children = new();
 
@@ -48,8 +49,14 @@ public abstract class Panel : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(child);
 
+        // Reject self/cycles up front; a child owned elsewhere is transferred (the previous
+        // owner clears its record), matching the visual tree's fluid reparenting.
+        ValidateLogicalChild(child, allowTransfer: true);
+        child.DetachFromCurrentLogicalOwner();
+
         child.Parent = this;
         _children.Add(child);
+        AttachLogicalChild(child);
         OnChildAdded(child);
         InvalidateMeasure();
     }
@@ -72,6 +79,7 @@ public abstract class Panel : FrameworkElement
     {
         if (_children.Remove(child))
         {
+            DetachLogicalChild(child);
             child.Parent = null;
             OnChildRemoved(child);
             InvalidateMeasure();
@@ -93,6 +101,7 @@ public abstract class Panel : FrameworkElement
 
         foreach (var child in removed)
         {
+            DetachLogicalChild(child);
             child.Parent = null;
             OnChildRemoved(child);
         }
@@ -118,8 +127,12 @@ public abstract class Panel : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(child);
 
+        ValidateLogicalChild(child, allowTransfer: true);
+        child.DetachFromCurrentLogicalOwner();
+
         child.Parent = this;
         _children.Insert(index, child);
+        AttachLogicalChild(child);
         OnChildAdded(child);
         InvalidateMeasure();
     }
@@ -131,6 +144,7 @@ public abstract class Panel : FrameworkElement
     {
         var child = _children[index];
         _children.RemoveAt(index);
+        DetachLogicalChild(child);
         child.Parent = null;
         OnChildRemoved(child);
         InvalidateMeasure();
@@ -140,6 +154,20 @@ public abstract class Panel : FrameworkElement
     /// Called when a child is added.
     /// </summary>
     protected virtual void OnChildAdded(Element child) { }
+
+    protected override void OnLogicalChildTaken(Element child)
+    {
+        base.OnLogicalChildTaken(child);
+
+        // Another host adopted the child: drop it from this panel so no stale entry
+        // keeps it measured/visited by two parents.
+        if (_children.Remove(child))
+        {
+            DetachLogicalChild(child);
+            OnChildRemoved(child);
+            InvalidateMeasure();
+        }
+    }
 
     /// <summary>
     /// Called when a child is removed.
@@ -201,6 +229,15 @@ public abstract class Panel : FrameworkElement
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        for (int i = 0; i < _children.Count; i++)
+        {
+            if (!visitor(_children[i])) return false;
+        }
+        return true;
+    }
+
+    bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor)
     {
         for (int i = 0; i < _children.Count; i++)
         {

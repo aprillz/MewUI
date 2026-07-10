@@ -54,6 +54,18 @@ public class ContentControl : Control
         }
     }
 
+    protected override void OnLogicalChildTaken(Element child)
+    {
+        base.OnLogicalChildTaken(child);
+
+        // A transfer-permitting host adopted our content: clear the slot so the record
+        // does not keep pointing at a child that lives elsewhere now.
+        if (ReferenceEquals(Content, child))
+        {
+            Content = null;
+        }
+    }
+
     private protected override void OnTemplateInstanceAttached()
     {
         base.OnTemplateInstanceAttached();
