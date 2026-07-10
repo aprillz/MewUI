@@ -107,6 +107,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     protected override void OnBeginFrame(IRenderTarget target)
     {
         _dpiScale = target.DpiScale;
+        _issuedBeginDraw = false;
 
         if (target is Direct2DGpuPixelRenderSurface gpuTarget)
         {
@@ -144,6 +145,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (_renderTarget != 0)
         {
             D2D1VTable.BeginDraw((ID2D1RenderTarget*)_renderTarget);
+            _issuedBeginDraw = true;
             ConfigureRenderTargetForFrame();
 
             if (target is Direct2DPixelRenderSurface)
@@ -185,6 +187,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     // DC's target, leaving the outer BeginDraw
     // active to cover all draws.
     private bool _calledBeginDrawOnSharedDc;
+
+    // True while a BeginDraw issued by this frame's OnBeginFrame is open. If OnBeginFrame
+    // throws before BeginDraw (e.g. render target recreation fails), EndFrame still runs
+    // from the render loop's finally; EndDraw must be skipped then or D2D reports
+    // WRONG_STATE and masks the original exception.
+    private bool _issuedBeginDraw;
 
     private void BeginGpuPixelSurfaceFrame(Direct2DGpuPixelRenderSurface gpuTarget)
     {
@@ -263,6 +271,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (_calledBeginDrawOnSharedDc)
         {
             D2D1VTable.BeginDraw((ID2D1RenderTarget*)_renderTarget);
+            _issuedBeginDraw = true;
         }
         // Reset DC transform - the shared DC carries state across BeginDraw cycles AND
         // across nested SetTarget swaps. Push Identity now so the upcoming Clear / first
@@ -333,7 +342,8 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 // so only that one calls EndDraw. Nested inner passes leave EndDraw to the
                 // parent. For non-GPU paths (DC RT etc.), each BeginFrame paired its own
                 // BeginDraw and must EndDraw here.
-                bool shouldEndDraw = true;
+                bool shouldEndDraw = _issuedBeginDraw;
+                _issuedBeginDraw = false;
                 if (_gpuPixelSurfaceBitmap != 0)
                 {
                     _ownerFactory.ExitSharedDcDraw();
@@ -1547,8 +1557,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         string msg = $"Direct2D: {op} failed: 0x{hr:X8}";
-        Debug.Fail(msg);
+        // Log before Debug.Fail: FailFast would otherwise drop the message from the log.
         DiagLog.Write(msg);
+        Debug.Fail(msg);
     }
 
     private static D2D1_MATRIX_3X2_F ToMatrix3x2F(Matrix3x2 m)
