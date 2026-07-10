@@ -48,6 +48,7 @@ internal sealed class ManagedFileDialogWindow : Window
         }
 
         Title = ModeTitle(mode);
+        ShowInTaskbar = false;
         this.Resizable(780, 560);
 
         _breadcrumb = new StackPanel().Horizontal().Spacing(2);

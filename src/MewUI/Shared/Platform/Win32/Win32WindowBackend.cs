@@ -15,6 +15,9 @@ namespace Aprillz.MewUI.Platform.Win32;
 internal sealed class Win32WindowBackend : IWindowBackend
 {
     private static readonly EnvDebugLogger ImeLogger = new("MEWUI_IME_DEBUG", "[Win32][IME]");
+    private const int GwlHwndParent = -8;
+    private static readonly object HiddenTaskbarOwnerLock = new();
+    private static nint s_hiddenTaskbarOwner;
 
     private readonly Win32PlatformHost _host;
 
@@ -28,6 +31,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private double _opacity = 1.0;
     private bool _allowsTransparency;
     private nint _dropTargetCom;
+    private nint _nativeOwnerHandle;
 
     private readonly TextInputSuppression _textInputSuppression = new();
     private nint _savedImeContext;
@@ -294,14 +298,24 @@ internal sealed class Win32WindowBackend : IWindowBackend
         if (value)
         {
             exStyle |= WS_EX_APPWINDOW;
-            exStyle &= ~WS_EX_TOOLWINDOW;
         }
         else
+        {
+            exStyle &= ~WS_EX_APPWINDOW;
+        }
+
+        if (Window.IsToolWindow && !Window.AllowsTransparency)
         {
             exStyle |= WS_EX_TOOLWINDOW;
             exStyle &= ~WS_EX_APPWINDOW;
         }
+        else
+        {
+            exStyle &= ~WS_EX_TOOLWINDOW;
+        }
+
         User32.SetWindowLongPtr(Handle, GWL_EXSTYLE, (nint)exStyle);
+        ApplyOwnerHandle();
         User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
     }
 
@@ -905,6 +919,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         // AttachBackend calls SetAllowDrop(true) automatically if Window.AllowDrop was already set,
         // so we don't need to register the drop target here.
 
+        ApplyOwnerHandle();
         ApplyResizeMode();
         EnsureLayeredStyleIfNeeded();
         ValidateTransparencySupport();
@@ -1404,11 +1419,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
             exStyle |= WindowStylesEx.WS_EX_LAYERED;
         }
 
-        // Tool/utility window: thin caption + excluded from the taskbar (it floats above its owner). Distinct
-        // from AllowsTransparency (frameless); the two are mutually exclusive so guard on the else path above.
+        if (Window.ShowInTaskbar)
+        {
+            exStyle |= WindowStylesEx.WS_EX_APPWINDOW;
+        }
+
+        // Tool/utility window: thin caption + excluded from the taskbar. ShowInTaskbar=false
+        // is handled separately by an owner HWND so normal dialog chrome stays unchanged.
         if (Window.IsToolWindow && !Window.AllowsTransparency)
         {
             exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW;
+            exStyle &= ~WindowStylesEx.WS_EX_APPWINDOW;
         }
 
         // Input-transparent overlay (drag preview): clicks pass through (WS_EX_TRANSPARENT) and the window
@@ -2640,13 +2661,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     public void SetOwner(nint ownerHandle)
     {
+        _nativeOwnerHandle = ownerHandle;
         if (Handle == 0)
         {
             return;
         }
 
-        const int GWL_HWNDPARENT = -8;
-        User32.SetWindowLongPtr(Handle, GWL_HWNDPARENT, ownerHandle);
+        ApplyOwnerHandle();
 
         // If the owner is topmost, an owned (non-topmost) window sits in the normal z-order band, which is
         // entirely below the topmost band, so it would be hidden behind the owner. Match the owner's topmost
@@ -2666,6 +2687,47 @@ internal sealed class Win32WindowBackend : IWindowBackend
             {
                 User32.SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
+        }
+    }
+
+    private void ApplyOwnerHandle()
+    {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        nint effectiveOwner = Window.ShowInTaskbar
+            ? 0
+            : (_nativeOwnerHandle != 0 ? _nativeOwnerHandle : EnsureHiddenTaskbarOwner());
+
+        User32.SetWindowLongPtr(Handle, GwlHwndParent, effectiveOwner);
+    }
+
+    private static nint EnsureHiddenTaskbarOwner()
+    {
+        lock (HiddenTaskbarOwnerLock)
+        {
+            if (s_hiddenTaskbarOwner != 0 && User32.IsWindow(s_hiddenTaskbarOwner))
+            {
+                return s_hiddenTaskbarOwner;
+            }
+
+            s_hiddenTaskbarOwner = User32.CreateWindowEx(
+                0,
+                Win32PlatformHost.WindowClassName,
+                "AprillzMewUI_TaskbarOwner",
+                WindowStyles.WS_OVERLAPPED | WindowStyles.WS_DISABLED,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                Kernel32.GetModuleHandle(null),
+                0);
+
+            return s_hiddenTaskbarOwner;
         }
     }
 
