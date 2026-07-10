@@ -38,28 +38,28 @@ public sealed class PromptIcon : FrameworkElement
     // Static shared resources (factory-lifetime, never disposed).
     private static bool _isInitialized;
 
-    private static IPen? _penQuestionStroke;
-    private static IPen? _penInfoStroke;
-    private static IPen? _penWarningStroke;
-    private static IPen? _penErrorStroke;
-    private static IPen? _penSuccessStroke;
-    private static IPen? _penShieldOutline;
-    private static IPen? _penCrashHorn;
-    private static IPen? _penCrashBody;
-    private static IBrush? _brushQuestionGlyph;
-    private static IBrush? _brushInfoGlyph;
-    private static IBrush? _brushWarningGlyph;
-    private static IBrush? _brushErrorGlyph;
-    private static IBrush? _brushSuccessGlyph;
-    private static IBrush? _brushCrashGlyph;
-    private static IBrush? _brushShieldLeft;
-    private static IBrush? _brushShieldRight;
-    private static IBrush? _brushCrashHorn;
-    private static IBrush? _brushCrashBody;
+    private static Pen? _penQuestionStroke;
+    private static Pen? _penInfoStroke;
+    private static Pen? _penWarningStroke;
+    private static Pen? _penErrorStroke;
+    private static Pen? _penSuccessStroke;
+    private static Pen? _penShieldOutline;
+    private static Pen? _penCrashHorn;
+    private static Pen? _penCrashBody;
+    private static Brush? _brushQuestionGlyph;
+    private static Brush? _brushInfoGlyph;
+    private static Brush? _brushWarningGlyph;
+    private static Brush? _brushErrorGlyph;
+    private static Brush? _brushSuccessGlyph;
+    private static Brush? _brushCrashGlyph;
+    private static Brush? _brushShieldLeft;
+    private static Brush? _brushShieldRight;
+    private static Brush? _brushCrashHorn;
+    private static Brush? _brushCrashBody;
 
     private PromptIconKind _cachedKind;
     private Rect _cachedBounds;
-    private IBrush? _fill;
+    private Brush? _fill;
 
     public PromptIcon()
     { }
@@ -80,9 +80,8 @@ public sealed class PromptIcon : FrameworkElement
             return;
         }
 
-        var factory = GetGraphicsFactory();
-        EnsureStaticResources(factory);
-        EnsureFillGradient(factory, bounds);
+        EnsureStaticResources();
+        EnsureFillGradient(bounds);
 
         switch (Kind)
         {
@@ -117,7 +116,7 @@ public sealed class PromptIcon : FrameworkElement
         }
     }
 
-    private static void EnsureStaticResources(IGraphicsFactory f)
+    private static void EnsureStaticResources()
     {
         if (_isInitialized)
         {
@@ -126,37 +125,37 @@ public sealed class PromptIcon : FrameworkElement
 
         _isInitialized = true;
 
-        _penQuestionStroke = f.CreatePen(Color.FromRgb(138, 144, 155), StrokeThickness, RoundedStroke);
-        _penInfoStroke = f.CreatePen(Color.FromRgb(21, 101, 191), StrokeThickness, RoundedStroke);
-        _penWarningStroke = f.CreatePen(Color.FromRgb(200, 138, 10), StrokeThickness, RoundedStroke);
-        _penErrorStroke = f.CreatePen(Color.FromRgb(195, 46, 22), StrokeThickness, RoundedStroke);
-        _penSuccessStroke = f.CreatePen(Color.FromRgb(24, 149, 86), StrokeThickness, RoundedStroke);
-        _penShieldOutline = f.CreatePen(Color.FromRgb(43, 111, 182), StrokeThickness, RoundedStroke);
-        _penCrashHorn = f.CreatePen(Color.FromRgb(94, 50, 174), StrokeThickness, CrashHornStroke);
-        _penCrashBody = f.CreatePen(Color.FromRgb(94, 50, 174), StrokeThickness);
+        _penQuestionStroke = new Pen(Color.FromRgb(138, 144, 155), StrokeThickness, RoundedStroke);
+        _penInfoStroke = new Pen(Color.FromRgb(21, 101, 191), StrokeThickness, RoundedStroke);
+        _penWarningStroke = new Pen(Color.FromRgb(200, 138, 10), StrokeThickness, RoundedStroke);
+        _penErrorStroke = new Pen(Color.FromRgb(195, 46, 22), StrokeThickness, RoundedStroke);
+        _penSuccessStroke = new Pen(Color.FromRgb(24, 149, 86), StrokeThickness, RoundedStroke);
+        _penShieldOutline = new Pen(Color.FromRgb(43, 111, 182), StrokeThickness, RoundedStroke);
+        _penCrashHorn = new Pen(Color.FromRgb(94, 50, 174), StrokeThickness, CrashHornStroke);
+        _penCrashBody = new Pen(Color.FromRgb(94, 50, 174), StrokeThickness);
 
-        _brushQuestionGlyph = f.CreateSolidColorBrush(Color.FromRgb(106, 111, 120));
-        _brushInfoGlyph = f.CreateSolidColorBrush(Color.FromRgb(247, 251, 255));
-        _brushWarningGlyph = f.CreateSolidColorBrush(Color.FromRgb(63, 67, 75));
-        _brushErrorGlyph = f.CreateSolidColorBrush(Color.FromRgb(255, 248, 246));
-        _brushSuccessGlyph = f.CreateSolidColorBrush(Color.FromRgb(243, 255, 249));
-        _brushCrashGlyph = f.CreateSolidColorBrush(Color.FromRgb(251, 247, 255));
+        _brushQuestionGlyph = new SolidColorBrush(Color.FromRgb(106, 111, 120));
+        _brushInfoGlyph = new SolidColorBrush(Color.FromRgb(247, 251, 255));
+        _brushWarningGlyph = new SolidColorBrush(Color.FromRgb(63, 67, 75));
+        _brushErrorGlyph = new SolidColorBrush(Color.FromRgb(255, 248, 246));
+        _brushSuccessGlyph = new SolidColorBrush(Color.FromRgb(243, 255, 249));
+        _brushCrashGlyph = new SolidColorBrush(Color.FromRgb(251, 247, 255));
 
-        _brushShieldLeft = f.CreateLinearGradientBrush(
+        _brushShieldLeft = new LinearGradientBrush(
             new Point(76.763, 38.334), new Point(120.762, 212.133),
             [new(0, Color.FromRgb(81, 175, 255)), new(1, Color.FromRgb(25, 118, 232))]);
-        _brushShieldRight = f.CreateLinearGradientBrush(
+        _brushShieldRight = new LinearGradientBrush(
             new Point(179.238, 38.335), new Point(135.238, 212.135),
             [new(0, Color.FromRgb(155, 227, 156)), new(1, Color.FromRgb(94, 199, 141))]);
-        _brushCrashHorn = f.CreateLinearGradientBrush(
+        _brushCrashHorn = new LinearGradientBrush(
             new Point(128, 104.3564), new Point(128, -92.5697),
             [new(0, Color.FromRgb(178, 117, 240)), new(1, Color.FromRgb(122, 69, 212))]);
-        _brushCrashBody = f.CreateLinearGradientBrush(
+        _brushCrashBody = new LinearGradientBrush(
             new Point(128, 30), new Point(128, 226),
             [new(0, Color.FromRgb(178, 117, 240)), new(1, Color.FromRgb(122, 69, 212))]);
     }
 
-    private void EnsureFillGradient(IGraphicsFactory f, Rect bounds)
+    private void EnsureFillGradient(Rect bounds)
     {
         var kind = Kind;
         if (kind == _cachedKind && _cachedBounds == bounds && _fill != null)
@@ -164,23 +163,21 @@ public sealed class PromptIcon : FrameworkElement
             return;
         }
 
-        (_fill as IDisposable)?.Dispose();
-        _fill = null;
         _cachedKind = kind;
         _cachedBounds = bounds;
 
         _fill = kind switch
         {
-            PromptIconKind.Question => VertGrad(f, bounds, Color.FromRgb(245, 246, 249), Color.FromRgb(228, 231, 238)),
-            PromptIconKind.Info => VertGrad(f, bounds, Color.FromRgb(65, 162, 244), Color.FromRgb(31, 127, 224)),
-            PromptIconKind.Warning => VertGrad(f, bounds, Color.FromRgb(255, 216, 74), Color.FromRgb(243, 188, 30)),
-            PromptIconKind.Error => VertGrad(f, bounds, Color.FromRgb(255, 114, 79), Color.FromRgb(235, 75, 46)),
-            PromptIconKind.Success => VertGrad(f, bounds, Color.FromRgb(131, 216, 177), Color.FromRgb(50, 181, 111)),
+            PromptIconKind.Question => VertGrad(bounds, Color.FromRgb(245, 246, 249), Color.FromRgb(228, 231, 238)),
+            PromptIconKind.Info => VertGrad(bounds, Color.FromRgb(65, 162, 244), Color.FromRgb(31, 127, 224)),
+            PromptIconKind.Warning => VertGrad(bounds, Color.FromRgb(255, 216, 74), Color.FromRgb(243, 188, 30)),
+            PromptIconKind.Error => VertGrad(bounds, Color.FromRgb(255, 114, 79), Color.FromRgb(235, 75, 46)),
+            PromptIconKind.Success => VertGrad(bounds, Color.FromRgb(131, 216, 177), Color.FromRgb(50, 181, 111)),
             _ => null,
         };
     }
 
-    private static void DrawCircleIcon(IGraphicsContext context, Rect bounds, IBrush fill, IPen stroke, PathGeometry glyph, IBrush glyphBrush, double glyphScale)
+    private static void DrawCircleIcon(IGraphicsContext context, Rect bounds, Brush fill, Pen stroke, PathGeometry glyph, Brush glyphBrush, double glyphScale)
     {
         context.FillEllipse(bounds, fill);
         context.DrawEllipse(bounds, stroke);
@@ -244,7 +241,7 @@ public sealed class PromptIcon : FrameworkElement
         context.Translate(-sourceBounds.X, -sourceBounds.Y);
     }
 
-    private static void DrawGeometry(IGraphicsContext context, PathGeometry geometry, Rect bounds, IBrush? brush, IPen? pen, double scale, Stretch stretch, System.Numerics.Matrix3x2? parentBake = null)
+    private static void DrawGeometry(IGraphicsContext context, PathGeometry geometry, Rect bounds, Brush? brush, Pen? pen, double scale, Stretch stretch, System.Numerics.Matrix3x2? parentBake = null)
     {
         var geoBounds = geometry.GetBounds();
         if (geoBounds.Width <= 0 || geoBounds.Height <= 0)
@@ -294,8 +291,8 @@ public sealed class PromptIcon : FrameworkElement
             System.Numerics.Matrix3x2.CreateTranslation((float)tx, (float)ty);
     }
 
-    private static ILinearGradientBrush VertGrad(IGraphicsFactory factory, Rect bounds, Color start, Color end)
-        => factory.CreateLinearGradientBrush(
+    private static LinearGradientBrush VertGrad(Rect bounds, Color start, Color end)
+        => new(
             new Point(bounds.Left, bounds.Top),
             new Point(bounds.Left, bounds.Bottom),
             [new(0, start), new(1, end)]);

@@ -400,16 +400,15 @@ partial class GalleryView
 
     // Binds the icon fill to the inherited Foreground, so it follows selection, theme, and disabled
     // dimming exactly like the text label. Inherited-value changes now notify property bindings, so
-    // this stays in sync; the factory returns a lightweight color holder on every backend.
+    // this stays in sync; SolidColorBrush is a lightweight, non-disposable value descriptor.
     private static PathShape SegmentIconShape(double size)
     {
         var shape = new PathShape()
             .Stretch(Stretch.Uniform)
             .Width(size).Height(size);
 
-        var factory = Application.DefaultGraphicsFactory;
         shape.Bind(Shape.FillProperty, shape, Control.ForegroundProperty,
-            (Color color) => (IBrush)factory.CreateSolidColorBrush(color));
+            (Color color) => new SolidColorBrush(color));
         return shape;
     }
 

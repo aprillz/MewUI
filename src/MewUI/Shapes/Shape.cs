@@ -10,11 +10,11 @@ namespace Aprillz.MewUI;
 /// </summary>
 public abstract class Shape : FrameworkElement
 {
-    public static readonly MewProperty<IBrush?> FillProperty =
-        MewProperty<IBrush?>.Register<Shape>(nameof(Fill), null, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<Brush?> FillProperty =
+        MewProperty<Brush?>.Register<Shape>(nameof(Fill), null, MewPropertyOptions.AffectsRender);
 
-    public static readonly MewProperty<IBrush?> StrokeProperty =
-        MewProperty<IBrush?>.Register<Shape>(nameof(Stroke), null, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<Brush?> StrokeProperty =
+        MewProperty<Brush?>.Register<Shape>(nameof(Stroke), null, MewPropertyOptions.AffectsRender);
 
     public static readonly MewProperty<double> StrokeThicknessProperty =
         MewProperty<double>.Register<Shape>(nameof(StrokeThickness), 0.0, MewPropertyOptions.AffectsLayout);
@@ -28,7 +28,7 @@ public abstract class Shape : FrameworkElement
     /// <summary>
     /// Gets or sets the brush used to fill the shape interior.
     /// </summary>
-    public IBrush? Fill
+    public Brush? Fill
     {
         get => GetValue(FillProperty);
         set => SetValue(FillProperty, value);
@@ -37,7 +37,7 @@ public abstract class Shape : FrameworkElement
     /// <summary>
     /// Gets or sets the brush used to stroke the shape outline.
     /// </summary>
-    public IBrush? Stroke
+    public Brush? Stroke
     {
         get => GetValue(StrokeProperty);
         set => SetValue(StrokeProperty, value);
@@ -70,8 +70,8 @@ public abstract class Shape : FrameworkElement
         set => SetValue(StretchProperty, value);
     }
 
-    private IPen? _cachedPen;
-    private IBrush? _cachedPenBrush;
+    private Pen? _cachedPen;
+    private Brush? _cachedPenBrush;
     private double _cachedPenThickness;
     private StrokeStyle _cachedPenStyle;
 
@@ -148,8 +148,7 @@ public abstract class Shape : FrameworkElement
                 _cachedPenThickness != thickness ||
                 _cachedPenStyle != style)
             {
-                _cachedPen?.Dispose();
-                _cachedPen = GetGraphicsFactory().CreatePen(stroke, thickness, style);
+                _cachedPen = new Pen(stroke, thickness, style);
                 _cachedPenBrush = stroke;
                 _cachedPenThickness = thickness;
                 _cachedPenStyle = style;

@@ -487,79 +487,79 @@ public abstract class GraphicsContextBase : IGraphicsContext
 
     #endregion
 
-    #region IPen / IBrush overloads
+    #region Pen / Brush overloads
 
-    public virtual void DrawLine(Point start, Point end, IPen pen)
+    public virtual void DrawLine(Point start, Point end, Pen pen)
     {
         _drawLineCount++;
-        if (pen.Brush is ISolidColorBrush solidBrush) DrawLineCore(start, end, solidBrush.Color, pen.Thickness);
-        else if (pen.Brush is IGradientBrush gradientBrush) DrawLineCore(start, end, gradientBrush.GetRepresentativeColor(), pen.Thickness);
+        if (pen.Brush is SolidColorBrush solidBrush) DrawLineCore(start, end, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is GradientBrush gradientBrush) DrawLineCore(start, end, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
-    public virtual void DrawRectangle(Rect rect, IPen pen)
+    public virtual void DrawRectangle(Rect rect, Pen pen)
     {
         _drawRectangleCount++;
         if (IsCulled(rect)) return;
-        if (pen.Brush is ISolidColorBrush solidBrush) DrawRectangleCore(rect, solidBrush.Color, pen.Thickness, false);
-        else if (pen.Brush is IGradientBrush gradientBrush) DrawRectangleCore(rect, gradientBrush.GetRepresentativeColor(), pen.Thickness, false);
+        if (pen.Brush is SolidColorBrush solidBrush) DrawRectangleCore(rect, solidBrush.Color, pen.Thickness, false);
+        else if (pen.Brush is GradientBrush gradientBrush) DrawRectangleCore(rect, gradientBrush.GetRepresentativeColor(), pen.Thickness, false);
     }
 
-    public virtual void FillRectangle(Rect rect, IBrush brush)
+    public virtual void FillRectangle(Rect rect, Brush brush)
     {
         _fillRectangleCount++;
         if (IsCulled(rect)) return;
-        if (brush is ISolidColorBrush s) FillRectangleCore(rect, s.Color);
-        else if (brush is IGradientBrush g) FillRectangleCore(rect, g.GetRepresentativeColor());
+        if (brush is SolidColorBrush s) FillRectangleCore(rect, s.Color);
+        else if (brush is GradientBrush g) FillRectangleCore(rect, g.GetRepresentativeColor());
     }
 
-    public virtual void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public virtual void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
     {
         _drawRoundedRectangleCount++;
         if (IsCulled(rect)) return;
-        if (pen.Brush is ISolidColorBrush solidBrush) DrawRoundedRectangleCore(rect, radiusX, radiusY, solidBrush.Color, pen.Thickness);
-        else if (pen.Brush is IGradientBrush gradientBrush) DrawRoundedRectangleCore(rect, radiusX, radiusY, gradientBrush.GetRepresentativeColor(), pen.Thickness);
+        if (pen.Brush is SolidColorBrush solidBrush) DrawRoundedRectangleCore(rect, radiusX, radiusY, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is GradientBrush gradientBrush) DrawRoundedRectangleCore(rect, radiusX, radiusY, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
-    public virtual void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public virtual void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush)
     {
         _fillRoundedRectangleCount++;
         if (IsCulled(rect)) return;
-        if (brush is ISolidColorBrush s) FillRoundedRectangleCore(rect, radiusX, radiusY, s.Color);
-        else if (brush is IGradientBrush g) FillRoundedRectangleCore(rect, radiusX, radiusY, g.GetRepresentativeColor());
+        if (brush is SolidColorBrush s) FillRoundedRectangleCore(rect, radiusX, radiusY, s.Color);
+        else if (brush is GradientBrush g) FillRoundedRectangleCore(rect, radiusX, radiusY, g.GetRepresentativeColor());
     }
 
-    public virtual void DrawEllipse(Rect bounds, IPen pen)
+    public virtual void DrawEllipse(Rect bounds, Pen pen)
     {
         _drawEllipseCount++;
         if (IsCulled(bounds)) return;
-        if (pen.Brush is ISolidColorBrush solidBrush) DrawEllipseCore(bounds, solidBrush.Color, pen.Thickness);
-        else if (pen.Brush is IGradientBrush gradientBrush) DrawEllipseCore(bounds, gradientBrush.GetRepresentativeColor(), pen.Thickness);
+        if (pen.Brush is SolidColorBrush solidBrush) DrawEllipseCore(bounds, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is GradientBrush gradientBrush) DrawEllipseCore(bounds, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
-    public virtual void FillEllipse(Rect bounds, IBrush brush)
+    public virtual void FillEllipse(Rect bounds, Brush brush)
     {
         _fillEllipseCount++;
         if (IsCulled(bounds)) return;
-        if (brush is ISolidColorBrush s) FillEllipseCore(bounds, s.Color);
-        else if (brush is IGradientBrush g) FillEllipseCore(bounds, g.GetRepresentativeColor());
+        if (brush is SolidColorBrush s) FillEllipseCore(bounds, s.Color);
+        else if (brush is GradientBrush g) FillEllipseCore(bounds, g.GetRepresentativeColor());
     }
 
-    public virtual void DrawPath(PathGeometry path, IPen pen)
+    public virtual void DrawPath(PathGeometry path, Pen pen)
     {
-        if (pen.Brush is ISolidColorBrush solidBrush) DrawPath(path, solidBrush.Color, pen.Thickness);
-        else if (pen.Brush is IGradientBrush gradientBrush) DrawPath(path, gradientBrush.GetRepresentativeColor(), pen.Thickness);
+        if (pen.Brush is SolidColorBrush solidBrush) DrawPath(path, solidBrush.Color, pen.Thickness);
+        else if (pen.Brush is GradientBrush gradientBrush) DrawPath(path, gradientBrush.GetRepresentativeColor(), pen.Thickness);
     }
 
-    public virtual void FillPath(PathGeometry path, IBrush brush)
+    public virtual void FillPath(PathGeometry path, Brush brush)
     {
-        if (brush is ISolidColorBrush s) FillPath(path, s.Color, path.FillRule);
-        else if (brush is IGradientBrush g) FillPath(path, g.GetRepresentativeColor(), path.FillRule);
+        if (brush is SolidColorBrush s) FillPath(path, s.Color, path.FillRule);
+        else if (brush is GradientBrush g) FillPath(path, g.GetRepresentativeColor(), path.FillRule);
     }
 
-    public virtual void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public virtual void FillPath(PathGeometry path, Brush brush, FillRule fillRule)
     {
-        if (brush is ISolidColorBrush s) FillPath(path, s.Color, fillRule);
-        else if (brush is IGradientBrush g) FillPath(path, g.GetRepresentativeColor(), fillRule);
+        if (brush is SolidColorBrush s) FillPath(path, s.Color, fillRule);
+        else if (brush is GradientBrush g) FillPath(path, g.GetRepresentativeColor(), fillRule);
     }
 
     #endregion

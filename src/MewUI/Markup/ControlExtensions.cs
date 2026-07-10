@@ -2739,9 +2739,8 @@ public static class ControlExtensions
                     .Stretch(Stretch.Uniform).Size(16).CenterVertical();
                 // Icon fill follows the inherited foreground, so it tracks theme, app overrides, and disabled
                 // dimming exactly like the text label.
-                var factory = Application.DefaultGraphicsFactory;
                 iconShape.Bind(Shape.FillProperty, iconShape, Control.ForegroundProperty,
-                    (Color color) => (IBrush)factory.CreateSolidColorBrush(color));
+                    (Color color) => (Brush)new SolidColorBrush(color));
                 var label = new TextBlock().CenterVertical();
                 return new StackPanel().Horizontal().Spacing(10).CenterVertical().Children(iconShape, label);
             },

@@ -741,13 +741,13 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillRectangle(Rect rect, IBrush brush)
+    public override void FillRectangle(Rect rect, Brush brush)
     {
-        if (brush is ISolidColorBrush solid)
+        if (brush is SolidColorBrush solid)
         {
             FillRectangle(rect, solid.Color); return;
         }
-        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        if (brush is ImageBrush imageBrush && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
             float w = (float)(rect.Width * _dpiScale);
@@ -767,7 +767,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             finally { GdiPlusInterop.GdipDeletePath(path); }
             return;
         }
-        if (brush is IGradientBrush gradient && EnsureGraphics())
+        if (brush is GradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
             float w = (float)(rect.Width * _dpiScale);
@@ -784,13 +784,13 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush)
     {
-        if (brush is ISolidColorBrush solid)
+        if (brush is SolidColorBrush solid)
         {
             FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return;
         }
-        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        if (brush is ImageBrush imageBrush && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
             float w = (float)(rect.Width * _dpiScale);
@@ -813,7 +813,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             finally { GdiPlusInterop.GdipDeletePath(path); }
             return;
         }
-        if (brush is IGradientBrush gradient && EnsureGraphics())
+        if (brush is GradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(rect.X, rect.Y);
             float w = (float)(rect.Width * _dpiScale);
@@ -832,13 +832,13 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillEllipse(Rect bounds, IBrush brush)
+    public override void FillEllipse(Rect bounds, Brush brush)
     {
-        if (brush is ISolidColorBrush solid)
+        if (brush is SolidColorBrush solid)
         {
             FillEllipse(bounds, solid.Color); return;
         }
-        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        if (brush is ImageBrush imageBrush && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(bounds.X, bounds.Y);
             float w = (float)(bounds.Width * _dpiScale);
@@ -858,7 +858,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             finally { GdiPlusInterop.GdipDeletePath(path); }
             return;
         }
-        if (brush is IGradientBrush gradient && EnsureGraphics())
+        if (brush is GradientBrush gradient && EnsureGraphics())
         {
             var (x, y) = ToDeviceCoords(bounds.X, bounds.Y);
             float w = (float)(bounds.Width * _dpiScale);
@@ -875,21 +875,21 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillPath(PathGeometry path, IBrush brush)
+    public override void FillPath(PathGeometry path, Brush brush)
         => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
 
-    public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public override void FillPath(PathGeometry path, Brush brush, FillRule fillRule)
     {
-        if (brush is not ISolidColorBrush)
+        if (brush is not SolidColorBrush)
         {
             RecordFillPath();
         }
         if (path == null) return;
-        if (brush is ISolidColorBrush solid)
+        if (brush is SolidColorBrush solid)
         {
             FillPath(path, solid.Color, fillRule); return;
         }
-        if (brush is IImageBrush imageBrush && EnsureGraphics())
+        if (brush is ImageBrush imageBrush && EnsureGraphics())
         {
             var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
             if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0) return;
@@ -906,7 +906,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             finally { GdiPlusInterop.GdipDeletePath(gdipPath); }
             return;
         }
-        if (brush is IGradientBrush gradient && EnsureGraphics())
+        if (brush is GradientBrush gradient && EnsureGraphics())
         {
             var fillMode = fillRule == FillRule.EvenOdd ? GdiPlusInterop.FillMode.Alternate : GdiPlusInterop.FillMode.Winding;
             if (GdiPlusInterop.GdipCreatePath(fillMode, out var gdipPath) != 0 || gdipPath == 0) return;
@@ -925,7 +925,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawLine(Point start, Point end, IPen pen)
+    public override void DrawLine(Point start, Point end, Pen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
@@ -943,7 +943,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
     }
 
-    public override void DrawRectangle(Rect rect, IPen pen)
+    public override void DrawRectangle(Rect rect, Pen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
@@ -959,7 +959,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
     }
 
-    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
@@ -991,7 +991,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawEllipse(Rect bounds, IPen pen)
+    public override void DrawEllipse(Rect bounds, Pen pen)
     {
         if (pen.Thickness <= 0 || !EnsureGraphics()) return;
 
@@ -1008,7 +1008,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         finally { GdiPlusInterop.GdipDeletePen(gdipPen); }
     }
 
-    public override void DrawPath(PathGeometry path, IPen pen)
+    public override void DrawPath(PathGeometry path, Pen pen)
     {
         RecordDrawPath();
         if (path == null || pen.Thickness <= 0 || !EnsureGraphics()) return;
@@ -1035,7 +1035,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     }
 
     // Rents a solid-ARGB pen from the per-window cache when one is available (windowed contexts), otherwise
-    // creates a throwaway pen the caller must delete via ReleasePen. Only used for the plain Color/IBrush
+    // creates a throwaway pen the caller must delete via ReleasePen. Only used for the plain Color/Brush
     // draw calls above; TryCreateStyledPen below has its own per-call gradient/dash-array state and is not
     // cached (see its remarks).
     private bool TryRentPen(uint argb, float widthPx, out nint pen, out bool ownsPen)
@@ -1083,11 +1083,11 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     // Not cached: pens here may wrap a per-call gradient brush (arbitrary stops) or an arbitrary-length
     // dash array, neither of which is a cheap cache key. Caching would need to hash the dash array and
     // gradient stops on every call, which costs about as much as just creating the pen.
-    private bool TryCreateStyledPen(IPen pen, float widthPx, out nint gdipPen)
+    private bool TryCreateStyledPen(Pen pen, float widthPx, out nint gdipPen)
     {
         gdipPen = 0;
 
-        if (pen.Brush is IGradientBrush gradient)
+        if (pen.Brush is GradientBrush gradient)
         {
             // Create a temporary GDI+ gradient brush, then create pen from it.
             // GDI+ pen copies the brush state, so we can release the brush immediately.
@@ -1101,7 +1101,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         else
         {
-            uint argb = pen.Brush is ISolidColorBrush solid ? ToArgb(BlendGlobalAlpha(solid.Color)) : 0xFF000000;
+            uint argb = pen.Brush is SolidColorBrush solid ? ToArgb(BlendGlobalAlpha(solid.Color)) : 0xFF000000;
             if (GdiPlusInterop.GdipCreatePen1(argb, widthPx, GdiPlusInterop.Unit.Pixel, out gdipPen) != 0 || gdipPen == 0)
                 return false;
         }
@@ -2308,7 +2308,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         return matrix;
     }
 
-    private nint CreateGdipGradientBrush(IGradientBrush brush, Rect objectBounds)
+    private nint CreateGdipGradientBrush(GradientBrush brush, Rect objectBounds)
     {
         var stops = brush.Stops;
         if (stops == null || stops.Count == 0) return 0;
@@ -2331,7 +2331,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             _ => GdiPlusInterop.WrapMode.TileFlipXY,
         };
 
-        if (brush is ILinearGradientBrush linear)
+        if (brush is LinearGradientBrush linear)
         {
             var p1 = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
             var p2 = ResolveGradientPoint(linear.EndPoint, brush.GradientUnits, objectBounds);
@@ -2352,7 +2352,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             return gradBrush;
         }
 
-        if (brush is IRadialGradientBrush radial)
+        if (brush is RadialGradientBrush radial)
         {
             var center = ResolveGradientPoint(radial.Center, brush.GradientUnits, objectBounds);
             var (cx, cy) = ToDeviceCoords(center.X, center.Y);
@@ -2401,13 +2401,13 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
     }
 
     /// <summary>
-    /// Creates a GDI+ TextureBrush from an <see cref="IImageBrush"/>. The brush transform is
+    /// Creates a GDI+ TextureBrush from an <see cref="ImageBrush"/>. The brush transform is
     /// composed so that one tile appears at <c>DestinationRect</c> in logical coords, honoring
     /// any SVG <c>patternTransform</c> and the context's DPI scale. Returns 0 when the image
     /// is not a <see cref="GdiImage"/> (other backends' images are not renderable here).
     /// Caller owns the returned brush handle and must delete it via <see cref="GdiPlusInterop.GdipDeleteBrush"/>.
     /// </summary>
-    private nint CreateGdipTextureBrush(IImageBrush imageBrush)
+    private nint CreateGdipTextureBrush(ImageBrush imageBrush)
     {
         if (imageBrush.Image is not GdiImage gdiImage) return 0;
         gdiImage.EnsureUpToDate();
@@ -2422,7 +2422,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             _ => GdiPlusInterop.WrapMode.Tile,
         };
 
-        // Use the full image as the tile. sourceRect semantics on the IImageBrush are in the
+        // Use the full image as the tile. sourceRect semantics on the ImageBrush are in the
         // image's DIP space (which for offscreen-rendered pattern tiles equals pixel space).
         if (GdiPlusInterop.GdipCreateTexture2(
                 gpBitmap, wrapMode,
@@ -2471,7 +2471,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         return texBrush;
     }
 
-    private void FillWithGradient(IGradientBrush brush, Rect objectBounds, Action<nint> fillAction, Rect fillBounds = default)
+    private void FillWithGradient(GradientBrush brush, Rect objectBounds, Action<nint> fillAction, Rect fillBounds = default)
     {
         var stops = brush.Stops;
         if (stops == null || stops.Count == 0) return;
@@ -2497,7 +2497,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             _ => GdiPlusInterop.WrapMode.TileFlipXY,
         };
 
-        if (brush is ILinearGradientBrush linear)
+        if (brush is LinearGradientBrush linear)
         {
             var p1 = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
             var p2 = ResolveGradientPoint(linear.EndPoint, brush.GradientUnits, objectBounds);
@@ -2521,7 +2521,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             }
             finally { GdiPlusInterop.GdipDeleteBrush(gradBrush); }
         }
-        else if (brush is IRadialGradientBrush radial)
+        else if (brush is RadialGradientBrush radial)
         {
             var center = ResolveGradientPoint(radial.Center, brush.GradientUnits, objectBounds);
             var (cx, cy) = ToDeviceCoords(center.X, center.Y);

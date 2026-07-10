@@ -15,7 +15,7 @@ public static class ShapeExtensions
     /// <param name="shape">Target shape.</param>
     /// <param name="brush">Fill brush.</param>
     /// <returns>The shape for chaining.</returns>
-    public static T Fill<T>(this T shape, IBrush brush) where T : Shape
+    public static T Fill<T>(this T shape, Brush brush) where T : Shape
     {
         shape.Fill = brush;
         return shape;
@@ -38,7 +38,7 @@ public static class ShapeExtensions
     /// <param name="brush">Stroke brush.</param>
     /// <param name="thickness">Stroke thickness.</param>
     /// <returns>The shape for chaining.</returns>
-    public static T Stroke<T>(this T shape, IBrush brush, double thickness = 1) where T : Shape
+    public static T Stroke<T>(this T shape, Brush brush, double thickness = 1) where T : Shape
     {
         shape.Stroke = brush;
         shape.StrokeThickness = thickness;

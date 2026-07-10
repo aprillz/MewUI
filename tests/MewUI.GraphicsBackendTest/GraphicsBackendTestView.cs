@@ -492,7 +492,6 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         _tests.Add(new TestCase("StrokeStyle: LineCap", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
             var caps = new[] { StrokeLineCap.Flat, StrokeLineCap.Round, StrokeLineCap.Square };
             var labels = new[] { "Flat", "Round", "Square" };
 
@@ -502,7 +501,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             for (int i = 0; i < 3; i++)
             {
                 double y = r.Y + 15 + i * 45;
-                using var pen = factory.CreatePen(Theme.Palette.Accent, 8, new StrokeStyle { LineCap = caps[i] });
+                var pen = new Pen(Theme.Palette.Accent, 8, new StrokeStyle { LineCap = caps[i] });
                 g.DrawLine(new Point(r.X + 60, y), new Point(r.X + r.Width - 20, y), pen);
                 // Reference line showing exact endpoints
                 g.DrawLine(new Point(r.X + 60, y), new Point(r.X + 60, y), Theme.Palette.ControlBorder, 1);
@@ -513,7 +512,6 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         _tests.Add(new TestCase("StrokeStyle: LineJoin", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
             var joins = new[] { StrokeLineJoin.Miter, StrokeLineJoin.Round, StrokeLineJoin.Bevel };
             var labels = new[] { "Miter", "Round", "Bevel" };
 
@@ -524,7 +522,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             for (int i = 0; i < 3; i++)
             {
                 double cx = r.X + 5 + i * colW + colW / 2;
-                using var pen = factory.CreatePen(Theme.Palette.Accent, 6, new StrokeStyle { LineJoin = joins[i], MiterLimit = 10 });
+                var pen = new Pen(Theme.Palette.Accent, 6, new StrokeStyle { LineJoin = joins[i], MiterLimit = 10 });
                 var zigzag = new PathGeometry();
                 zigzag.MoveTo(cx - 25, r.Y + 100);
                 zigzag.LineTo(cx, r.Y + 20);
@@ -538,8 +536,6 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         _tests.Add(new TestCase("StrokeStyle: DashArray", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
-
             using var measure = BeginTextMeasurement();
             var font = measure.Font;
 
@@ -554,7 +550,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             for (int i = 0; i < patterns.Length; i++)
             {
                 double y = r.Y + 15 + i * 35;
-                using var pen = factory.CreatePen(Theme.Palette.Accent, 2, new StrokeStyle
+                var pen = new Pen(Theme.Palette.Accent, 2, new StrokeStyle
                 {
                     DashArray = patterns[i].Dashes,
                     LineCap = StrokeLineCap.Flat,
@@ -565,16 +561,15 @@ internal sealed class GraphicsBackendTestCanvas : Control
             }
         }));
 
-        _tests.Add(new TestCase("IPen: Rect/RoundRect/Ellipse", (g, r) =>
+        _tests.Add(new TestCase("Pen: Rect/RoundRect/Ellipse", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
-            using var dashPen = factory.CreatePen(Theme.Palette.Accent, 2, new StrokeStyle
+            var dashPen = new Pen(Theme.Palette.Accent, 2, new StrokeStyle
             {
                 DashArray = new double[] { 6, 3 },
                 LineCap = StrokeLineCap.Round,
                 LineJoin = StrokeLineJoin.Round,
             });
-            using var thickPen = factory.CreatePen(Theme.Palette.ControlBorder, 3, new StrokeStyle
+            var thickPen = new Pen(Theme.Palette.ControlBorder, 3, new StrokeStyle
             {
                 LineCap = StrokeLineCap.Square,
                 LineJoin = StrokeLineJoin.Bevel,
@@ -584,7 +579,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             g.DrawRoundedRectangle(new Rect(r.X + 100, r.Y + 10, 80, 50), 10, 10, dashPen);
             g.DrawEllipse(new Rect(r.X + 10, r.Y + 75, 70, 60), thickPen);
 
-            // IPen path
+            // Pen path
             var path = new PathGeometry();
             path.MoveTo(r.X + 110, r.Y + 80);
             path.LineTo(r.X + 150, r.Y + 75);
@@ -596,25 +591,23 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         _tests.Add(new TestCase("LinearGradientBrush", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
-
             // Horizontal gradient fill rect
             var rect1 = new Rect(r.X + 10, r.Y + 10, r.Width - 20, 35);
-            using var hBrush = factory.CreateLinearGradientBrush(
+            var hBrush = new LinearGradientBrush(
                 new Point(rect1.X, rect1.Y), new Point(rect1.Right, rect1.Y),
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0x00, 0x80, 0xFF)), new(1, Color.FromArgb(0xFF, 0xFF, 0x40, 0x80)) });
             g.FillRectangle(rect1, hBrush);
 
             // Vertical gradient rounded rect
             var rect2 = new Rect(r.X + 10, r.Y + 55, r.Width - 20, 35);
-            using var vBrush = factory.CreateLinearGradientBrush(
+            var vBrush = new LinearGradientBrush(
                 new Point(rect2.X, rect2.Y), new Point(rect2.X, rect2.Bottom),
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0x40, 0xC0, 0x40)), new(1, Color.FromArgb(0xFF, 0x00, 0x40, 0x80)) });
             g.FillRoundedRectangle(rect2, 8, 8, vBrush);
 
             // Diagonal gradient ellipse
             var rect3 = new Rect(r.X + 10, r.Y + 100, r.Width - 20, 45);
-            using var dBrush = factory.CreateLinearGradientBrush(
+            var dBrush = new LinearGradientBrush(
                 new Point(rect3.X, rect3.Y), new Point(rect3.Right, rect3.Bottom),
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0xFF, 0xA0, 0x00)), new(0.5, Color.FromArgb(0xFF, 0xFF, 0x20, 0x20)), new(1, Color.FromArgb(0xFF, 0x80, 0x00, 0xFF)) });
             g.FillEllipse(rect3, dBrush);
@@ -622,18 +615,16 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         _tests.Add(new TestCase("RadialGradientBrush", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
-
             // Centered radial gradient circle
             double cx1 = r.X + 55, cy1 = r.Y + 55, rad1 = 45;
-            using var rBrush1 = factory.CreateRadialGradientBrush(
+            var rBrush1 = new RadialGradientBrush(
                 new Point(cx1, cy1), new Point(cx1, cy1), rad1, rad1,
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0xFF, 0xFF, 0x80)), new(1, Color.FromArgb(0xFF, 0xFF, 0x40, 0x00)) });
             g.FillEllipse(new Rect(cx1 - rad1, cy1 - rad1, rad1 * 2, rad1 * 2), rBrush1);
 
             // Off-center radial gradient
             double cx2 = r.X + 160, cy2 = r.Y + 55, rad2 = 40;
-            using var rBrush2 = factory.CreateRadialGradientBrush(
+            var rBrush2 = new RadialGradientBrush(
                 new Point(cx2, cy2), new Point(cx2 - 15, cy2 - 15), rad2, rad2,
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)), new(1, Color.FromArgb(0xFF, 0x00, 0x40, 0xC0)) });
             g.FillEllipse(new Rect(cx2 - rad2, cy2 - rad2, rad2 * 2, rad2 * 2), rBrush2);
@@ -641,7 +632,7 @@ internal sealed class GraphicsBackendTestCanvas : Control
             // Gradient filled path
             var path = PathGeometry.FromRoundedRect(new Rect(r.X + 10, r.Y + 108, r.Width - 20, 38), 8);
             double pcx = r.X + r.Width / 2, pcy = r.Y + 127;
-            using var rBrush3 = factory.CreateRadialGradientBrush(
+            var rBrush3 = new RadialGradientBrush(
                 new Point(pcx, pcy), new Point(pcx, pcy), r.Width / 2, 25,
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0x80, 0xFF, 0x80)), new(1, Color.FromArgb(0xFF, 0x00, 0x60, 0x00)) });
             g.FillPath(path, rBrush3);
@@ -842,13 +833,11 @@ internal sealed class GraphicsBackendTestCanvas : Control
 
         _tests.Add(new TestCase("Gradient Pen + DashPath", (g, r) =>
         {
-            var factory = Application.Current.GraphicsFactory;
-
             // Linear gradient brush on a pen with dashes
-            using var gradBrush = factory.CreateLinearGradientBrush(
+            var gradBrush = new LinearGradientBrush(
                 new Point(r.X, r.Y + 20), new Point(r.X + r.Width, r.Y + 20),
                 new GradientStop[] { new(0, Color.FromArgb(0xFF, 0xFF, 0x00, 0x00)), new(1, Color.FromArgb(0xFF, 0x00, 0x00, 0xFF)) });
-            using var gradPen = factory.CreatePen(gradBrush, 3, new StrokeStyle
+            var gradPen = new Pen(gradBrush, 3, new StrokeStyle
             {
                 DashArray = new double[] { 6, 3 },
                 LineCap = StrokeLineCap.Round,

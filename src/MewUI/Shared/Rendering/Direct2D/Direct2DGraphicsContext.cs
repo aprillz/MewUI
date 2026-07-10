@@ -544,12 +544,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillPath(PathGeometry path, IBrush brush)
+    public override void FillPath(PathGeometry path, Brush brush)
         => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
 
-    public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public override void FillPath(PathGeometry path, Brush brush, FillRule fillRule)
     {
-        if (brush is not ISolidColorBrush)
+        if (brush is not SolidColorBrush)
         {
             RecordFillPath();
         }
@@ -558,12 +558,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (brush is ISolidColorBrush solid)
+        if (brush is SolidColorBrush solid)
         {
             FillPath(path, solid.Color, fillRule);
             return;
         }
-        if (brush is IGradientBrush gradient)
+        if (brush is GradientBrush gradient)
         {
             nint geometry = BuildD2DPathGeometry(path, fillRule, out bool ownsGeometry);
             if (geometry == 0)
@@ -589,7 +589,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             }
             return;
         }
-        if (brush is IImageBrush imageBrush)
+        if (brush is ImageBrush imageBrush)
         {
             nint geometry = BuildD2DPathGeometry(path, fillRule, out bool ownsGeometry);
             if (geometry == 0)
@@ -613,15 +613,15 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillRectangle(Rect rect, IBrush brush)
+    public override void FillRectangle(Rect rect, Brush brush)
     {
         if (_renderTarget == 0)
         {
             return;
         }
 
-        if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
-        if (brush is IGradientBrush gradient)
+        if (brush is SolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
+        if (brush is GradientBrush gradient)
         {
             nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
             try
@@ -634,7 +634,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
             return;
         }
-        if (brush is IImageBrush imageBrush)
+        if (brush is ImageBrush imageBrush)
         {
             nint bmpBrush = CreateImageBrushHandle(imageBrush);
             try
@@ -648,15 +648,15 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush)
     {
         if (_renderTarget == 0)
         {
             return;
         }
 
-        if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
-        if (brush is IGradientBrush gradient)
+        if (brush is SolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
+        if (brush is GradientBrush gradient)
         {
             nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
             try
@@ -670,7 +670,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
             return;
         }
-        if (brush is IImageBrush imageBrush)
+        if (brush is ImageBrush imageBrush)
         {
             nint bmpBrush = CreateImageBrushHandle(imageBrush);
             try
@@ -685,15 +685,15 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void FillEllipse(Rect bounds, IBrush brush)
+    public override void FillEllipse(Rect bounds, Brush brush)
     {
         if (_renderTarget == 0)
         {
             return;
         }
 
-        if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
-        if (brush is IGradientBrush gradient)
+        if (brush is SolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
+        if (brush is GradientBrush gradient)
         {
             nint gradBrush = CreateGradientBrush(gradient, bounds, out nint stopCol);
             try
@@ -710,7 +710,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
             return;
         }
-        if (brush is IImageBrush imageBrush)
+        if (brush is ImageBrush imageBrush)
         {
             nint bmpBrush = CreateImageBrushHandle(imageBrush);
             try
@@ -728,7 +728,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawPath(PathGeometry path, IPen pen)
+    public override void DrawPath(PathGeometry path, Pen pen)
     {
         RecordDrawPath();
         if (_renderTarget == 0 || _d2dFactory == 0 || path == null || pen.Thickness <= 0)
@@ -737,7 +737,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
-        nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
+        nint ssHandle = _ownerFactory.GetOrCreateStrokeStyle(pen.StrokeStyle);
 
         nint geometry = BuildD2DPathGeometry(path, FillRule.NonZero, out bool ownsGeometry);
         if (geometry == 0)
@@ -747,7 +747,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         try
         {
-            if (pen.Brush is IGradientBrush gradient)
+            if (pen.Brush is GradientBrush gradient)
             {
                 var objectBounds = gradient.GradientUnits == GradientUnits.ObjectBoundingBox
                     ? path.GetBounds()
@@ -764,7 +764,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             }
             else
             {
-                Color color = pen.Brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+                Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
                 if (color.A == 0)
                 {
                     return;
@@ -783,7 +783,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawLine(Point start, Point end, IPen pen)
+    public override void DrawLine(Point start, Point end, Pen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0)
         {
@@ -791,11 +791,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
-        nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
+        nint ssHandle = _ownerFactory.GetOrCreateStrokeStyle(pen.StrokeStyle);
         var p0 = ToPoint2F(start);
         var p1 = ToPoint2F(end);
 
-        if (pen.Brush is IGradientBrush gradient)
+        if (pen.Brush is GradientBrush gradient)
         {
             Rect objectBounds = default;
             if (gradient.GradientUnits == GradientUnits.ObjectBoundingBox)
@@ -818,7 +818,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         else
         {
-            Color color = pen.Brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+            Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
             if (color.A == 0)
             {
                 return;
@@ -828,7 +828,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawRectangle(Rect rect, IPen pen)
+    public override void DrawRectangle(Rect rect, Pen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0)
         {
@@ -836,10 +836,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
-        nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
+        nint ssHandle = _ownerFactory.GetOrCreateStrokeStyle(pen.StrokeStyle);
         var rf = ToRectF(rect);
 
-        if (pen.Brush is IGradientBrush gradient)
+        if (pen.Brush is GradientBrush gradient)
         {
             nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
             try
@@ -853,7 +853,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         else
         {
-            Color color = pen.Brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+            Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
             if (color.A == 0)
             {
                 return;
@@ -863,7 +863,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0)
         {
@@ -871,10 +871,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
-        nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
+        nint ssHandle = _ownerFactory.GetOrCreateStrokeStyle(pen.StrokeStyle);
         var rr = new D2D1_ROUNDED_RECT(ToRectF(rect), (float)radiusX, (float)radiusY);
 
-        if (pen.Brush is IGradientBrush gradient)
+        if (pen.Brush is GradientBrush gradient)
         {
             nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
             try
@@ -888,7 +888,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         else
         {
-            Color color = pen.Brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+            Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
             if (color.A == 0)
             {
                 return;
@@ -898,7 +898,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
     }
 
-    public override void DrawEllipse(Rect bounds, IPen pen)
+    public override void DrawEllipse(Rect bounds, Pen pen)
     {
         if (_renderTarget == 0 || pen.Thickness <= 0)
         {
@@ -906,14 +906,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
 
         float stroke = QuantizeStrokeDip((float)pen.Thickness);
-        nint ssHandle = pen is Direct2DPen d2dPen ? d2dPen.StrokeStyleHandle : 0;
+        nint ssHandle = _ownerFactory.GetOrCreateStrokeStyle(pen.StrokeStyle);
 
         var center = new D2D1_POINT_2F(
             (float)(bounds.X + bounds.Width / 2),
             (float)(bounds.Y + bounds.Height / 2));
         var ellipse = new D2D1_ELLIPSE(center, (float)(bounds.Width / 2), (float)(bounds.Height / 2));
 
-        if (pen.Brush is IGradientBrush gradient)
+        if (pen.Brush is GradientBrush gradient)
         {
             nint gradBrush = CreateGradientBrush(gradient, bounds, out nint stopCol);
             try
@@ -927,7 +927,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         }
         else
         {
-            Color color = pen.Brush is ISolidColorBrush solid ? solid.Color : Color.Black;
+            Color color = pen.Brush is SolidColorBrush solid ? solid.Color : Color.Black;
             if (color.A == 0)
             {
                 return;
@@ -1949,7 +1949,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     /// Creates a D2D gradient brush and its stop collection. Caller must release both handles.
     /// Returns 0 if creation fails.
     /// </summary>
-    private nint CreateGradientBrush(IGradientBrush brush, Rect objectBounds, out nint stopCollection)
+    private nint CreateGradientBrush(GradientBrush brush, Rect objectBounds, out nint stopCollection)
     {
         stopCollection = 0;
         var stops = brush.Stops;
@@ -1991,7 +1991,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         nint gradBrush = 0;
 
-        if (brush is ILinearGradientBrush linear)
+        if (brush is LinearGradientBrush linear)
         {
             var start = ResolveGradientPoint(linear.StartPoint, brush.GradientUnits, objectBounds);
             var end = ResolveGradientPoint(linear.EndPoint, brush.GradientUnits, objectBounds);
@@ -2001,7 +2001,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             D2D1VTable.CreateLinearGradientBrush(
                 (ID2D1RenderTarget*)_renderTarget, linProps, bProps, stopCollection, out gradBrush);
         }
-        else if (brush is IRadialGradientBrush radial)
+        else if (brush is RadialGradientBrush radial)
         {
             var center = ResolveGradientPoint(radial.Center, brush.GradientUnits, objectBounds);
             var origin = ResolveGradientPoint(radial.GradientOrigin, brush.GradientUnits, objectBounds);
@@ -2027,11 +2027,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     }
 
     /// <summary>
-    /// Creates a native ID2D1BitmapBrush for an <see cref="IImageBrush"/>.
+    /// Creates a native ID2D1BitmapBrush for an <see cref="ImageBrush"/>.
     /// Returns 0 if the image is not a Direct2DImage or the bitmap could not be uploaded.
     /// Caller owns the returned brush handle and must Release it.
     /// </summary>
-    private nint CreateImageBrushHandle(IImageBrush imageBrush)
+    private nint CreateImageBrushHandle(ImageBrush imageBrush)
     {
         nint bitmap = imageBrush.Image switch
         {

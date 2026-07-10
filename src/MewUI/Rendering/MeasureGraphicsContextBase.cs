@@ -72,15 +72,15 @@ public abstract class MeasureGraphicsContextBase : IGraphicsContext
     public void DrawEllipse(Rect bounds, Color color, double thickness, bool strokeInset) { }
     public void SetClipRoundedRect(Rect rect, double radiusX, double radiusY, double borderThickness) { }
     public void DrawLine(Point start, Point end, Color color, double thickness, bool pixelSnap) { }
-    public void DrawLine(Point start, Point end, IPen pen) { }
-    public void DrawRectangle(Rect rect, IPen pen) { }
-    public void FillRectangle(Rect rect, IBrush brush) { }
-    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen) { }
-    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush) { }
-    public void DrawEllipse(Rect bounds, IPen pen) { }
-    public void FillEllipse(Rect bounds, IBrush brush) { }
-    public void DrawPath(PathGeometry path, IPen pen) { }
-    public void FillPath(PathGeometry path, IBrush brush) { }
-    public void FillPath(PathGeometry path, IBrush brush, FillRule fillRule) { }
+    public void DrawLine(Point start, Point end, Pen pen) { }
+    public void DrawRectangle(Rect rect, Pen pen) { }
+    public void FillRectangle(Rect rect, Brush brush) { }
+    public void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen) { }
+    public void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush) { }
+    public void DrawEllipse(Rect bounds, Pen pen) { }
+    public void FillEllipse(Rect bounds, Brush brush) { }
+    public void DrawPath(PathGeometry path, Pen pen) { }
+    public void FillPath(PathGeometry path, Brush brush) { }
+    public void FillPath(PathGeometry path, Brush brush, FillRule fillRule) { }
     public void DrawBoxShadow(Rect bounds, double cornerRadius, double blurRadius, Color shadowColor, double offsetX = 0, double offsetY = 0) { }
 }

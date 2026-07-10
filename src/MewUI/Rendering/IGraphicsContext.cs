@@ -207,37 +207,37 @@ namespace Aprillz.MewUI.Rendering
 
         #endregion
 
-        #region IPen / IBrush overloads
+        #region Pen / Brush overloads
 
         /// <summary>Draws a line using a pen.</summary>
-        void DrawLine(Point start, Point end, IPen pen);
+        void DrawLine(Point start, Point end, Pen pen);
 
         /// <summary>Draws a rectangle outline using a pen.</summary>
-        void DrawRectangle(Rect rect, IPen pen);
+        void DrawRectangle(Rect rect, Pen pen);
 
         /// <summary>Fills a rectangle using a brush.</summary>
-        void FillRectangle(Rect rect, IBrush brush);
+        void FillRectangle(Rect rect, Brush brush);
 
         /// <summary>Draws a rounded rectangle outline using a pen.</summary>
-        void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen);
+        void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen);
 
         /// <summary>Fills a rounded rectangle using a brush.</summary>
-        void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush);
+        void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush);
 
         /// <summary>Draws an ellipse outline using a pen.</summary>
-        void DrawEllipse(Rect bounds, IPen pen);
+        void DrawEllipse(Rect bounds, Pen pen);
 
         /// <summary>Fills an ellipse using a brush.</summary>
-        void FillEllipse(Rect bounds, IBrush brush);
+        void FillEllipse(Rect bounds, Brush brush);
 
         /// <summary>Draws a path outline using a pen.</summary>
-        void DrawPath(PathGeometry path, IPen pen);
+        void DrawPath(PathGeometry path, Pen pen);
 
         /// <summary>Fills a path using a brush.</summary>
-        void FillPath(PathGeometry path, IBrush brush);
+        void FillPath(PathGeometry path, Brush brush);
 
         /// <summary>Fills a path using a brush with an explicit fill rule.</summary>
-        void FillPath(PathGeometry path, IBrush brush, FillRule fillRule);
+        void FillPath(PathGeometry path, Brush brush, FillRule fillRule);
 
         #endregion
 

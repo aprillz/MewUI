@@ -408,7 +408,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Fill();
     }
 
-    public override void DrawLine(Point start, Point end, IPen pen)
+    public override void DrawLine(Point start, Point end, Pen pen)
     {
         if (pen.Thickness <= 0) return;
         var bounds = new Rect(
@@ -430,7 +430,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Stroke();
     }
 
-    public override void DrawRectangle(Rect rect, IPen pen)
+    public override void DrawRectangle(Rect rect, Pen pen)
     {
         if (pen.Thickness <= 0) return;
 
@@ -450,7 +450,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.ShapeAntiAlias(true);
     }
 
-    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, IPen pen)
+    public override void DrawRoundedRectangle(Rect rect, double radiusX, double radiusY, Pen pen)
     {
         if (pen.Thickness <= 0) return;
         float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
@@ -469,7 +469,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Stroke();
     }
 
-    public override void DrawEllipse(Rect bounds, IPen pen)
+    public override void DrawEllipse(Rect bounds, Pen pen)
     {
         if (pen.Thickness <= 0) return;
         float cx = (float)(bounds.X + bounds.Width * 0.5);
@@ -491,7 +491,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Stroke();
     }
 
-    public override void DrawPath(PathGeometry path, IPen pen)
+    public override void DrawPath(PathGeometry path, Pen pen)
     {
         RecordDrawPath();
         if (path == null || pen.Thickness <= 0) return;
@@ -509,10 +509,10 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Stroke();
     }
 
-    public override void FillRectangle(Rect rect, IBrush brush)
+    public override void FillRectangle(Rect rect, Brush brush)
     {
-        if (brush is ISolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
-        if (brush is IImageBrush imageBrush)
+        if (brush is SolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
+        if (brush is ImageBrush imageBrush)
         {
             _vg.ShapeAntiAlias(false);
             _vg.BeginPath();
@@ -521,7 +521,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             _vg.ShapeAntiAlias(true);
             return;
         }
-        if (brush is not IGradientBrush gradient) return;
+        if (brush is not GradientBrush gradient) return;
 
         _vg.ShapeAntiAlias(false);
         _vg.BeginPath();
@@ -531,10 +531,10 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.ShapeAntiAlias(true);
     }
 
-    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, IBrush brush)
+    public override void FillRoundedRectangle(Rect rect, double radiusX, double radiusY, Brush brush)
     {
-        if (brush is ISolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
-        if (brush is IImageBrush imageBrush)
+        if (brush is SolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
+        if (brush is ImageBrush imageBrush)
         {
             float radius = (float)Math.Max(0, Math.Min(radiusX, radiusY));
             _vg.BeginPath();
@@ -542,7 +542,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
             return;
         }
-        if (brush is not IGradientBrush gradient) return;
+        if (brush is not GradientBrush gradient) return;
 
         float r = (float)Math.Max(0, Math.Min(radiusX, radiusY));
         _vg.BeginPath();
@@ -551,10 +551,10 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Fill();
     }
 
-    public override void FillEllipse(Rect bounds, IBrush brush)
+    public override void FillEllipse(Rect bounds, Brush brush)
     {
-        if (brush is ISolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
-        if (brush is IImageBrush imageBrush)
+        if (brush is SolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
+        if (brush is ImageBrush imageBrush)
         {
             float cx = (float)(bounds.X + bounds.Width * 0.5);
             float cy = (float)(bounds.Y + bounds.Height * 0.5);
@@ -563,7 +563,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
             return;
         }
-        if (brush is not IGradientBrush gradient) return;
+        if (brush is not GradientBrush gradient) return;
 
         float ecx = (float)(bounds.X + bounds.Width * 0.5);
         float ecy = (float)(bounds.Y + bounds.Height * 0.5);
@@ -573,24 +573,24 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         _vg.Fill();
     }
 
-    public override void FillPath(PathGeometry path, IBrush brush)
+    public override void FillPath(PathGeometry path, Brush brush)
         => FillPath(path, brush, path?.FillRule ?? FillRule.NonZero);
 
-    public override void FillPath(PathGeometry path, IBrush brush, FillRule fillRule)
+    public override void FillPath(PathGeometry path, Brush brush, FillRule fillRule)
     {
-        if (brush is not ISolidColorBrush)
+        if (brush is not SolidColorBrush)
         {
             RecordFillPath();
         }
         if (path == null) return;
-        if (brush is ISolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
-        if (brush is IImageBrush imageBrush)
+        if (brush is SolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
+        if (brush is ImageBrush imageBrush)
         {
             ReplayNvgPathCommands(path, fillRule);
             if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
             return;
         }
-        if (brush is not IGradientBrush gradient) return;
+        if (brush is not GradientBrush gradient) return;
 
         ReplayNvgPathCommands(path, fillRule);
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, NvgStrokeHelper.ComputePathBounds(path));
@@ -598,13 +598,13 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     }
 
     /// <summary>
-    /// Applies an <see cref="IImageBrush"/> as the current NanoVG fill paint. Returns false
+    /// Applies an <see cref="ImageBrush"/> as the current NanoVG fill paint. Returns false
     /// when the brush cannot be rendered by this backend (e.g. image is not a <see cref="MewVGImage"/>).
     /// The tile is realized via <see cref="NanoVG.ImagePattern"/>, which takes a pre-flag'd
     /// NVG texture (RepeatX/RepeatY set at texture creation) and a paint transform that
     /// positions one tile and sets its size; NanoVG then wraps UVs via GL_REPEAT.
     /// </summary>
-    private bool ApplyImageBrushPaint(IImageBrush imageBrush)
+    private bool ApplyImageBrushPaint(ImageBrush imageBrush)
     {
         if (imageBrush.Image is not MewVGImage mewImage)
         {

@@ -158,26 +158,19 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         _initialized = true;
     }
 
-    // Falls back to the default DIM (lightweight SolidColorBrush). Direct2DSolidColorBrush only stored
-    // the logical Color (no D2D handle) and the context realizes/caches the actual brush by color,
-    // so the override was an exact duplicate of the DIM.
-    // public ISolidColorBrush CreateSolidColorBrush(Color color) =>
-    //     new Direct2DSolidColorBrush(color);
-
-    public IPen CreatePen(Color color, double thickness = 1.0, StrokeStyle? strokeStyle = null)
+    /// <summary>
+    /// Returns the cached <c>ID2D1StrokeStyle*</c> for <paramref name="ss"/>, creating it on
+    /// first use. <see cref="StrokeStyle.Default"/> takes a lock-free fast path via the
+    /// pre-created <see cref="_defaultFixedStrokeStyle"/> handle, since draw calls query this
+    /// on every stroke.
+    /// </summary>
+    internal nint GetOrCreateStrokeStyle(StrokeStyle ss)
     {
-        var ss = strokeStyle ?? StrokeStyle.Default;
-        return new Direct2DPen(color, thickness, ss, GetOrCreateStrokeStyle(ss));
-    }
+        if (_defaultFixedStrokeStyle != 0 && ss == StrokeStyle.Default)
+        {
+            return _defaultFixedStrokeStyle;
+        }
 
-    public IPen CreatePen(IBrush brush, double thickness = 1.0, StrokeStyle? strokeStyle = null)
-    {
-        var ss = strokeStyle ?? StrokeStyle.Default;
-        return new Direct2DPen(brush, thickness, ss, GetOrCreateStrokeStyle(ss));
-    }
-
-    private nint GetOrCreateStrokeStyle(StrokeStyle ss)
-    {
         EnsureInitialized();
         lock (_rtLock)
         {

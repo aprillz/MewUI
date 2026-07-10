@@ -254,7 +254,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
 
         // Cached gradient brush for the track fill, keyed by base color and gradient endpoints
         // (both of which are baked into the brush at creation time).
-        private ILinearGradientBrush? _cachedGradientBrush;
+        private LinearGradientBrush? _cachedGradientBrush;
         private Color _cachedGradientBaseColor;
         private Point _cachedGradientStart;
         private Point _cachedGradientEnd;
@@ -289,13 +289,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         internal void Detach() => _state.Changed -= OnStateChanged;
 
         private void OnStateChanged(object? source) => InvalidateVisual();
-
-        protected override void OnDispose()
-        {
-            base.OnDispose();
-            _cachedGradientBrush?.Dispose();
-            _cachedGradientBrush = null;
-        }
 
         protected override Size MeasureContent(Size availableSize)
         {
@@ -359,8 +352,7 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
                 var opaque = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
                 var transparent = Color.FromArgb(0, baseColor.R, baseColor.G, baseColor.B);
                 var stops = new[] { new GradientStop(0, transparent), new GradientStop(1, opaque) };
-                _cachedGradientBrush?.Dispose();
-                _cachedGradientBrush = GetGraphicsFactory().CreateLinearGradientBrush(gradStart, gradEnd, stops);
+                _cachedGradientBrush = new LinearGradientBrush(gradStart, gradEnd, stops);
                 _cachedGradientBaseColor = baseColor;
                 _cachedGradientStart = gradStart;
                 _cachedGradientEnd = gradEnd;

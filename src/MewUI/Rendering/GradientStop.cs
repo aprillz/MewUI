@@ -77,7 +77,7 @@ public static class GradientBrushHelper
     /// Returns a single representative color for the gradient by sampling at the midpoint (t=0.5).
     /// Used as a fallback on backends that do not support gradients natively.
     /// </summary>
-    public static Color GetRepresentativeColor(this IGradientBrush brush)
+    public static Color GetRepresentativeColor(this GradientBrush brush)
         => Sample(brush.Stops, 0.5);
 
     /// <summary>
