@@ -6,6 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// Base class for all controls.
 /// </summary>
 public abstract class Control : FrameworkElement
+    , IVisualTreeHost
 {
     #region MewProperty Declarations
 
@@ -16,6 +17,12 @@ public abstract class Control : FrameworkElement
     /// <summary>Border color property.</summary>
     public static readonly MewProperty<Color> BorderBrushProperty =
         MewProperty<Color>.Register<Control>(nameof(BorderBrush), Color.Transparent, MewPropertyOptions.AffectsRender);
+
+    /// <summary>Template property. The built template tree replaces the control's own visuals.</summary>
+    public static readonly MewProperty<ControlTemplate?> TemplateProperty =
+        MewProperty<ControlTemplate?>.Register<Control>(nameof(Template), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) => self.OnTemplateChanged());
 
     /// <summary>Foreground (text) color property with inheritance support.</summary>
     public static readonly MewProperty<Color> ForegroundProperty =
@@ -290,8 +297,143 @@ public abstract class Control : FrameworkElement
     protected override Size MeasureOverride(Size availableSize)
     {
         EnsureStyleResolved();
+        ApplyTemplate();
 
         return base.MeasureOverride(availableSize);
+    }
+
+    private ControlTemplateInstance? _templateInstance;
+
+    /// <summary>
+    /// Gets or sets the template that provides this control's visual tree.
+    /// Null keeps the control's own drawn visuals.
+    /// </summary>
+    public ControlTemplate? Template
+    {
+        get => GetValue(TemplateProperty);
+        set => SetValue(TemplateProperty, value);
+    }
+
+    /// <summary>
+    /// Builds and attaches the current template if it is not applied yet.
+    /// Returns true when a new instance was built.
+    /// </summary>
+    protected bool ApplyTemplate()
+    {
+        var template = Template;
+        if (template == null || _templateInstance != null)
+        {
+            return false;
+        }
+
+        var context = new ControlTemplateContext(this);
+        var root = template.Build(this, context)
+            ?? throw new InvalidOperationException("The template build returned no visual root.");
+        if (ReferenceEquals(root, this))
+        {
+            throw new InvalidOperationException("The template visual root cannot be the control itself.");
+        }
+        if (root.Parent != null)
+        {
+            throw new InvalidOperationException("The template visual root already has a visual parent.");
+        }
+
+        // Attach through the Parent setter so theme/DPI/inherited state fans out into the
+        // template subtree before parts are used.
+        root.Parent = this;
+        _templateInstance = new ControlTemplateInstance { VisualRoot = root, Context = context };
+        OnApplyTemplate();
+        return true;
+    }
+
+    /// <summary>
+    /// Called after the template's visual tree is built and attached. Look up named parts here.
+    /// </summary>
+    protected virtual void OnApplyTemplate() { }
+
+    /// <summary>
+    /// Returns the named template part, or null when no template is applied or the part is missing.
+    /// </summary>
+    /// <param name="name">The part name registered during the template build.</param>
+    protected T? GetTemplateChild<T>(string name) where T : Element
+        => _templateInstance?.Context.Find(name) as T;
+
+    private void OnTemplateChanged()
+    {
+        // Tear down eagerly so focus inside the old tree unwinds via OnDetaching;
+        // the replacement builds lazily on the next measure.
+        var instance = _templateInstance;
+        if (instance != null)
+        {
+            _templateInstance = null;
+            if (instance.VisualRoot.Parent == this)
+            {
+                instance.VisualRoot.Parent = null;
+            }
+        }
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+        => _templateInstance == null || visitor(_templateInstance.VisualRoot);
+
+    protected override Size MeasureContent(Size availableSize)
+    {
+        if (_templateInstance != null)
+        {
+            var root = _templateInstance.VisualRoot;
+            root.Measure(availableSize);
+            return root.DesiredSize;
+        }
+
+        return base.MeasureContent(availableSize);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        if (_templateInstance != null)
+        {
+            _templateInstance.VisualRoot.Arrange(bounds);
+        }
+        else
+        {
+            base.ArrangeContent(bounds);
+        }
+    }
+
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        if (_templateInstance != null)
+        {
+            _templateInstance.VisualRoot.Render(context);
+        }
+        else
+        {
+            base.RenderSubtree(context);
+        }
+    }
+
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (_templateInstance == null)
+        {
+            return base.OnHitTest(point);
+        }
+
+        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        {
+            return null;
+        }
+
+        if (_templateInstance.VisualRoot is UIElement uiRoot)
+        {
+            var hit = uiRoot.HitTest(point);
+            if (hit != null)
+            {
+                return hit;
+            }
+        }
+
+        return Bounds.Contains(point) ? this : null;
     }
 
     /// <summary>
@@ -425,6 +567,13 @@ public abstract class Control : FrameworkElement
     protected override void OnRender(IGraphicsContext context)
     {
         base.OnRender(context);
+
+        // A template owns the control's entire visuals; drawing the built-in chrome
+        // underneath it would double-render and defeat re-templating.
+        if (_templateInstance != null)
+        {
+            return;
+        }
 
         var bg = GetValue(BackgroundProperty);
         var border = GetValue(BorderBrushProperty);
