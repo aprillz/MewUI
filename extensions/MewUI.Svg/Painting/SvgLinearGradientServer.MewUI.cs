@@ -6,7 +6,7 @@ namespace Svg;
 
 public partial class SvgLinearGradientServer
 {
-    protected override IBrush? CreateBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke)
+    protected override Brush? CreateBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke)
     {
         bool usesObjectBounds = GradientUnits == SvgCoordinateUnits.ObjectBoundingBox;
         try
@@ -66,7 +66,7 @@ public partial class SvgLinearGradientServer
             }
 
             var stops = CalculateColorStops(styleOwner, renderer, opacity, points[0], effectiveStart, points[1], effectiveEnd);
-            return renderer.GraphicsFactory.CreateLinearGradientBrush(
+            return new LinearGradientBrush(
                 new Point(effectiveStart.X, effectiveStart.Y),
                 new Point(effectiveEnd.X, effectiveEnd.Y),
                 stops,

@@ -4,7 +4,7 @@ namespace Svg;
 
 public partial class SvgFallbackPaintServer
 {
-    public override IBrush GetBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke = false)
+    public override Brush GetBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke = false)
     {
         var primary = _primary?.GetBrush(styleOwner, renderer, opacity, forStroke);
         if (primary is not null)

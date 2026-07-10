@@ -63,12 +63,12 @@ internal sealed class MewSvgRenderer : ISvgRenderer
         }
     }
 
-    public void DrawPath(IPen pen, PathGeometry path)
+    public void DrawPath(Pen pen, PathGeometry path)
     {
         GraphicsContext.DrawPath(path, pen);
     }
 
-    public void FillPath(IBrush brush, PathGeometry path)
+    public void FillPath(Brush brush, PathGeometry path)
     {
         GraphicsContext.FillPath(path, brush, path.FillRule);
     }
