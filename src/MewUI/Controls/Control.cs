@@ -78,6 +78,10 @@ public abstract class Control : FrameworkElement
     private bool _forceApplyStyle;
     private bool _styleNameResolved;
 
+    // ContextVersion at the time _style was resolved; a mismatch means the ancestor
+    // chain changed since and the style must be re-resolved.
+    private int _styleContextVersion = -1;
+
     private Style? _style;
     private string? _styleName;
     private Dictionary<string, UIElement>? _parts;
@@ -277,7 +281,7 @@ public abstract class Control : FrameworkElement
     /// </summary>
     protected void EnsureStyleResolved()
     {
-        if (!_styleNameResolved)
+        if (!_styleNameResolved || _styleContextVersion != ContextVersion)
         {
             ResolveAndApplyStyle();
         }
@@ -306,6 +310,7 @@ public abstract class Control : FrameworkElement
     {
         var oldStyle = _style;
         _style = style;
+        _styleContextVersion = ContextVersion;
 
         // Values the old style set but the new one does not would otherwise linger
         // with Source=Style after the swap.

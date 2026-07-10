@@ -80,6 +80,14 @@ public abstract class Element : MewObject
         {
             if (field != value)
             {
+                // Normalize a direct non-null to non-null reassignment into detach then attach,
+                // so no caller can bypass detach-side context handling (focus unwinding,
+                // style release, visual-root notifications).
+                if (field != null && value != null)
+                {
+                    Parent = null;
+                }
+
                 var oldRoot = FindVisualRoot();
 
                 // Detaching: release window-scoped state (focus) while the parent chain is still intact,
@@ -118,22 +126,22 @@ public abstract class Element : MewObject
         }
     }
 
-    private Element? _logicalContextParent;
+    private Element? _contextParentOverride;
 
     /// <summary>
-    /// Optional logical resolution parent for elements visually hosted outside their
+    /// Optional resolution-context parent for elements visually hosted outside their
     /// conceptual owner (e.g. overlay-hosted content owned by an element deeper in the tree).
     /// Style and inherited-property resolution divert through it; layout, DPI, and
     /// visual-root resolution keep following <see cref="Parent"/>.
     /// </summary>
-    internal Element? LogicalContextParent
+    internal Element? ContextParentOverride
     {
-        get => _logicalContextParent;
+        get => _contextParentOverride;
         set
         {
-            if (_logicalContextParent != value)
+            if (_contextParentOverride != value)
             {
-                _logicalContextParent = value;
+                _contextParentOverride = value;
 
                 // Cached inherited values and context-stamped caches may have been
                 // resolved through the old chain.
@@ -148,10 +156,10 @@ public abstract class Element : MewObject
     }
 
     /// <summary>
-    /// Next element in the context resolution chain: the logical context parent
-    /// when set, otherwise the visual parent.
+    /// Next element in the context resolution chain: the override when set,
+    /// otherwise the visual parent.
     /// </summary>
-    internal Element? ContextParent => _logicalContextParent ?? Parent;
+    internal Element? ContextParent => _contextParentOverride ?? Parent;
 
     /// <summary>
     /// Attaches a child element to this element. Use this in derived controls
