@@ -104,6 +104,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
+
+    // Layout, render, hit test, and propagation must all follow the same visual root:
+    // the template root when a template is applied, otherwise the content directly.
+    // Internal: platform backends (caption hit testing, input guards) must use this
+    // instead of Content, which is the logical user content only.
+    internal Element? EffectiveVisualRoot => TemplateVisualRoot ?? Content;
     private readonly List<AdornerEntry> _adorners = new();
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<Window> _ownedChildren = new();
@@ -1667,7 +1673,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         bool arrangeRan = false;
         using var layoutScope = profiling ? ProfilerMarkers.WindowLayout.Auto() : default;
 
-        if (Handle == 0 || Content == null)
+        if (Handle == 0)
         {
             return;
         }
@@ -1684,6 +1690,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         using (profiling ? ProfilerMarkers.StyleResolve.Auto() : default)
         {
             EnsureStyleResolved();
+        }
+
+        // Window bypasses MeasureOverride, so the template lifecycle runs here.
+        ApplyTemplate();
+
+        var visualRoot = EffectiveVisualRoot;
+        if (visualRoot == null)
+        {
+            return;
         }
 
         var padding = Padding;
@@ -1703,7 +1718,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             long measureStart = profiling ? Stopwatch.GetTimestamp() : 0;
             using (profiling ? ProfilerMarkers.ContentMeasure.Auto() : default)
             {
-                Content.Measure(new Size(Math.Max(0, measureWidth), Math.Max(0, measureHeight)));
+                visualRoot.Measure(new Size(Math.Max(0, measureWidth), Math.Max(0, measureHeight)));
             }
             if (profiling)
             {
@@ -1711,7 +1726,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
             measureRan = true;
 
-            var desired = Content.DesiredSize;
+            var desired = visualRoot.DesiredSize;
             var fitWidth = mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentSize
                 ? Math.Min(desired.Width + padding.HorizontalThickness, WindowSize.MaxWidth)
                 : Width;
@@ -1741,8 +1756,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // client size hasn't changed, avoid re-running Measure/Arrange on every paint.
         if (clientSize == _lastLayoutClientSizeDip &&
             padding == _lastLayoutPadding &&
-            Content == _lastLayoutContent &&
-            !IsLayoutDirty(Content) &&
+            visualRoot == _lastLayoutContent &&
+            !IsLayoutDirty(visualRoot) &&
             !HasOverlayLayoutDirty())
         {
             if (profiling)
@@ -1761,10 +1776,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         const int maxPasses = 8;
         var contentSize = clientSize.Deflate(padding);
 
-        bool needMeasure = HasMeasureDirty(Content)
+        bool needMeasure = HasMeasureDirty(visualRoot)
             || clientSize != _lastLayoutClientSizeDip
             || padding != _lastLayoutPadding
-            || Content != _lastLayoutContent;
+            || visualRoot != _lastLayoutContent;
         for (int pass = 0; pass < maxPasses; pass++)
         {
             if (needMeasure)
@@ -1772,7 +1787,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 long measureStart = profiling ? Stopwatch.GetTimestamp() : 0;
                 using (profiling ? ProfilerMarkers.ContentMeasure.Auto() : default)
                 {
-                    Content.Measure(contentSize);
+                    visualRoot.Measure(contentSize);
                 }
                 if (profiling)
                 {
@@ -1784,7 +1799,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             long arrangeStart = profiling ? Stopwatch.GetTimestamp() : 0;
             using (profiling ? ProfilerMarkers.ContentArrange.Auto() : default)
             {
-                Content.Arrange(new Rect(padding.Left, padding.Top, contentSize.Width, contentSize.Height));
+                visualRoot.Arrange(new Rect(padding.Left, padding.Top, contentSize.Width, contentSize.Height));
             }
             if (profiling)
             {
@@ -1792,13 +1807,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
             arrangeRan = true;
 
-            if (!IsLayoutDirty(Content))
+            if (!IsLayoutDirty(visualRoot))
             {
                 break;
             }
 
             // If only Arrange dirtiness remains after the first pass, avoid re-running Measure.
-            if (needMeasure && !HasMeasureDirty(Content))
+            if (needMeasure && !HasMeasureDirty(visualRoot))
             {
                 needMeasure = false;
             }
@@ -1806,7 +1821,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _lastLayoutClientSizeDip = clientSize;
         _lastLayoutPadding = padding;
-        _lastLayoutContent = Content;
+        _lastLayoutContent = visualRoot;
 
         using (profiling ? ProfilerMarkers.OverlayLayout.Auto() : default)
         {
@@ -1969,12 +1984,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     public void RequerySuggested()
     {
-        if (Content == null)
+        if (EffectiveVisualRoot == null)
         {
             return;
         }
 
-        VisitVisualTree(Content, e =>
+        VisitVisualTree(EffectiveVisualRoot, e =>
         {
             if (e is UIElement u)
             {
@@ -2318,7 +2333,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
                 using (frameTiming.Enabled ? ProfilerMarkers.ContentRender.Auto() : default)
                 {
-                    Content?.Render(context);
+                    EffectiveVisualRoot?.Render(context);
                 }
                 if (frameTiming.Enabled)
                 {
@@ -2477,20 +2492,35 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void DisposeVisualTree()
     {
-        if (Content == null)
+        var visualRoot = EffectiveVisualRoot;
+        if (visualRoot == null)
         {
             DisposeAdorners();
             _popupManager.Dispose();
             return;
         }
 
-        VisualTree.Visit(Content, element =>
+        VisualTree.Visit(visualRoot, element =>
         {
             if (element is IDisposable disposable)
             {
                 disposable.Dispose();
             }
         });
+
+        // A templated window may hold logical content that no presenter projected;
+        // it lives outside the visual root and must still be disposed.
+        var content = Content;
+        if (content != null && content.Parent == null)
+        {
+            VisualTree.Visit(content, element =>
+            {
+                if (element is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            });
+        }
 
         OverlayLayer.Dispose();
 
@@ -2521,9 +2551,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         NotifyThemeChanged(oldTheme, newTheme);
 
-        if (Content != null)
+        if (EffectiveVisualRoot != null)
         {
-            VisitVisualTree(Content, e =>
+            VisitVisualTree(EffectiveVisualRoot, e =>
             {
                 if (e is FrameworkElement c)
                 {
@@ -2554,13 +2584,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         OnDpiChanged(oldDpi, newDpi);
         DpiChanged?.Invoke(oldDpi, newDpi);
 
-        if (Content != null)
+        if (EffectiveVisualRoot != null)
         {
             // Clear cached DPI values so subsequent GetDpi() calls don't traverse parents.
             // This also ensures subtrees moved between windows/tabs don't retain stale DPI.
-            VisitVisualTree(Content, e => e.ClearDpiCache());
+            VisitVisualTree(EffectiveVisualRoot, e => e.ClearDpiCache());
 
-            VisitVisualTree(Content, e =>
+            VisitVisualTree(EffectiveVisualRoot, e =>
             {
                 if (e is FrameworkElement fe)
                 {
@@ -2663,7 +2693,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
         }
 
-        return (Content as UIElement)?.HitTest(point);
+        return (EffectiveVisualRoot as UIElement)?.HitTest(point);
     }
 
     internal void AddAdornerInternal(UIElement adornedElement, UIElement adorner)
