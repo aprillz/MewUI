@@ -15,10 +15,61 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class ClosingEventArgs
 {
+    private Action? _decisionResolved;
+    private int _deferralsPending;
+
     /// <summary>
     /// Set to <c>true</c> to cancel the close operation.
     /// </summary>
     public bool Cancel { get; set; }
+
+    /// <summary>
+    /// Defers the close decision until the returned deferral completes, letting an asynchronous
+    /// handler decide <see cref="Cancel"/> after an await. Take it before the first await.
+    /// </summary>
+    public ClosingDeferral GetDeferral()
+    {
+        _deferralsPending++;
+        return new ClosingDeferral(this);
+    }
+
+    internal bool IsDecisionPending => _deferralsPending > 0;
+
+    internal void AttachDecisionResolved(Action callback) => _decisionResolved = callback;
+
+    internal void CompleteDeferral()
+    {
+        _deferralsPending--;
+        if (_deferralsPending == 0)
+        {
+            _decisionResolved?.Invoke();
+        }
+    }
+}
+
+/// <summary>
+/// Keeps a <see cref="Window.Closing"/> decision pending until <see cref="Complete"/> (or dispose) is called.
+/// </summary>
+public sealed class ClosingDeferral : IDisposable
+{
+    private ClosingEventArgs? _owner;
+
+    internal ClosingDeferral(ClosingEventArgs owner) => _owner = owner;
+
+    /// <summary>Completes this deferral; the close decision resolves once every deferral has completed.</summary>
+    public void Complete()
+    {
+        var owner = _owner;
+        if (owner == null)
+        {
+            return;
+        }
+
+        _owner = null;
+        owner.CompleteDeferral();
+    }
+
+    public void Dispose() => Complete();
 }
 
 /// <summary>
@@ -1130,6 +1181,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _lifetimeState = WindowLifetimeState.Hidden;
     }
 
+    // Async close state: result observed by CloseAsync, plus the deferral round flags.
+    private TaskCompletionSource<bool>? _pendingCloseResult;
+    private bool _closeApproved;
+    private bool _closeDecisionPending;
+
     /// <summary>
     /// Closes the window.
     /// </summary>
@@ -1150,23 +1206,89 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Raises the <see cref="Closing"/> event and returns true if close is allowed, false if cancelled.
-    /// Does not call <see cref="RaiseClosed"/> - the caller is responsible for proceeding with close.
+    /// Requests a close and completes with <see langword="true"/> when the window closed,
+    /// or <see langword="false"/> when a <see cref="Closing"/> handler cancelled it.
+    /// </summary>
+    public Task<bool> CloseAsync()
+    {
+        if (_lifetimeState == WindowLifetimeState.Closed)
+            return Task.FromResult(true);
+
+        _pendingCloseResult ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = _pendingCloseResult.Task;
+        Close();
+        return task;
+    }
+
+    /// <summary>
+    /// Raises the <see cref="Closing"/> event and returns true if close is allowed, false if cancelled
+    /// or still pending on a deferral. Does not call <see cref="RaiseClosed"/> - the caller is
+    /// responsible for proceeding with close.
     /// </summary>
     internal bool RequestClose()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
             return true;
 
-        if (Closing != null)
+        if (_closeApproved)
         {
-            var args = new ClosingEventArgs();
-            Closing.Invoke(args);
-            if (args.Cancel)
-                return false;
+            // A deferred Closing round already allowed this close; don't raise Closing again.
+            _closeApproved = false;
+            return true;
+        }
+
+        if (_closeDecisionPending)
+        {
+            // A deferred Closing decision is in flight; this request joins it.
+            return false;
+        }
+
+        if (Closing == null)
+            return true;
+
+        var args = new ClosingEventArgs();
+        Closing.Invoke(args);
+
+        if (args.IsDecisionPending)
+        {
+            _closeDecisionPending = true;
+            args.AttachDecisionResolved(() => ResolveCloseDecision(args));
+            return false;
+        }
+
+        if (args.Cancel)
+        {
+            CompletePendingCloseResult(false);
+            return false;
         }
 
         return true;
+    }
+
+    private void ResolveCloseDecision(ClosingEventArgs args)
+    {
+        _closeDecisionPending = false;
+
+        // The window can be destroyed externally while the decision was pending.
+        if (_lifetimeState == WindowLifetimeState.Closed)
+            return;
+
+        if (args.Cancel)
+        {
+            CompletePendingCloseResult(false);
+        }
+        else
+        {
+            _closeApproved = true;
+            Close();
+        }
+    }
+
+    private void CompletePendingCloseResult(bool closed)
+    {
+        var pending = _pendingCloseResult;
+        _pendingCloseResult = null;
+        pending?.TrySetResult(closed);
     }
 
     /// <summary>
@@ -1201,10 +1323,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             throw new InvalidOperationException("Cannot show a closed window.");
         }
 
-        if (autoResolveOwner)
-        {
-            owner ??= ResolveDefaultOwner();
-        }
+        owner ??= ResolveDefaultOwner();
 
         if (owner != null && ReferenceEquals(owner, this))
         {
@@ -1224,7 +1343,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            BeginModal(owner);
+            BeginModal(owner, autoResolveOwner);
         }
         catch (Exception ex)
         {
@@ -1257,10 +1376,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             throw new InvalidOperationException("ShowDialog requires a running application loop. Use Application.Run, or call ShowDialogAsync.");
         }
 
-        if (autoResolveOwner)
-        {
-            owner ??= ResolveDefaultOwner();
-        }
+        owner ??= ResolveDefaultOwner();
 
         if (owner != null && ReferenceEquals(owner, this))
         {
@@ -1288,7 +1404,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            BeginModal(owner);
+            BeginModal(owner, autoResolveOwner);
             Application.Current.PlatformHost.RunNestedLoop(() => _lifetimeState != WindowLifetimeState.Closed);
         }
         finally
@@ -1301,7 +1417,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// Applies modal state and shows the window: marks it as a dialog, disables and parents to the owner,
     /// inherits the owner icon, then shows and activates. Shared by <see cref="ShowDialog"/> and <see cref="ShowDialogAsync"/>.
     /// </summary>
-    private void BeginModal(Window? owner)
+    private void BeginModal(Window? owner, bool makeChild)
     {
         _isDialogWindow = true;
         if (owner != null)
@@ -1313,7 +1429,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (owner != null && Icon == null && owner.Icon != null)
             Icon = owner.Icon;
 
-        Show(owner);
+        Show(makeChild ? owner : null);
         if (owner != null && _backend != null && Handle != 0)
         {
             _backend.SetOwner(owner.Handle);
@@ -2033,6 +2149,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         _lifetimeState = WindowLifetimeState.Closed;
+        _closeApproved = false;
+        _closeDecisionPending = false;
+        CompletePendingCloseResult(true);
         UnsubscribeFromDispatcherChanged();
         UnsubscribeGpuInteropInvalidation();
 
