@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A tabbed control with header buttons and content display.
 /// </summary>
-public sealed class TabControl : Control, ISelector, IIndexedSelector
+public sealed class TabControl : Control, ISelector, IIndexedSelector, ILogicalTreeHost
     , IVisualTreeHost
     , IFocusTraversalScope
 {
@@ -513,11 +513,61 @@ public sealed class TabControl : Control, ISelector, IIndexedSelector
     private void AttachTab(TabItem tab)
     {
         tab.Changed += OnTabItemChanged;
+        tab.Owner = this;
+
+        // Every tab's content is a logical child of this control regardless of selection;
+        // only the selected content gets a visual position (UpdateSelection).
+        var content = tab.Content;
+        if (content != null)
+        {
+            AttachLogicalChild(content);
+            tab.AttachedContent = content;
+        }
     }
 
     private void DetachTab(TabItem tab)
     {
         tab.Changed -= OnTabItemChanged;
+
+        if (tab.AttachedContent != null)
+        {
+            DetachLogicalChild(tab.AttachedContent);
+            tab.AttachedContent = null;
+        }
+
+        tab.Owner = null;
+    }
+
+    internal void ValidateTabContent(Element? candidate) => ValidateLogicalChild(candidate);
+
+    bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor)
+    {
+        for (int i = 0; i < _tabs.Count; i++)
+        {
+            var content = _tabs[i].Content;
+            if (content != null && !visitor(content))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected override void OnLogicalChildTaken(Element child)
+    {
+        base.OnLogicalChildTaken(child);
+
+        // A transfer-permitting host adopted a tab's content: clear that tab's record.
+        for (int i = 0; i < _tabs.Count; i++)
+        {
+            if (ReferenceEquals(_tabs[i].AttachedContent, child))
+            {
+                _tabs[i].AttachedContent = null;
+                _tabs[i].Content = null;
+                break;
+            }
+        }
     }
 
     private void ClearHeaders()
@@ -553,6 +603,17 @@ public sealed class TabControl : Control, ISelector, IIndexedSelector
                 break;
 
             case TabItemChange.Content:
+                if (tab.AttachedContent != null)
+                {
+                    DetachLogicalChild(tab.AttachedContent);
+                    tab.AttachedContent = null;
+                }
+                if (tab.Content != null)
+                {
+                    AttachLogicalChild(tab.Content);
+                    tab.AttachedContent = tab.Content;
+                }
+
                 if (ReferenceEquals(tab, SelectedTab))
                 {
                     UpdateSelection();

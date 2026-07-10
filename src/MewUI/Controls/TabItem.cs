@@ -11,7 +11,8 @@ public sealed class TabItem : MewObject
 
     public static readonly MewProperty<Element?> ContentProperty =
         MewProperty<Element?>.Register<TabItem>(nameof(Content), null,
-            changed: static (self, _, _) => self.NotifyChanged(TabItemChange.Content));
+            changed: static (self, _, _) => self.NotifyChanged(TabItemChange.Content),
+            validate: static (self, value) => self.Owner?.ValidateTabContent(value));
 
     public static readonly MewProperty<bool> IsEnabledProperty =
         MewProperty<bool>.Register<TabItem>(nameof(IsEnabled), true,
@@ -58,6 +59,13 @@ public sealed class TabItem : MewObject
     }
 
     internal event Action<TabItem, TabItemChange>? Changed;
+
+    // The owning TabControl while this tab is registered. The tab's Content is a logical
+    // child of that control (offscreen tabs stay owned); the control tracks the attached
+    // element here so a later Content change can release the previous one.
+    internal TabControl? Owner { get; set; }
+
+    internal Element? AttachedContent { get; set; }
 
     private void NotifyChanged(TabItemChange change) => Changed?.Invoke(this, change);
 }
