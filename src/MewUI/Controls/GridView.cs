@@ -197,13 +197,24 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     /// <summary>Occurs when the set of selected rows changes (multi-select).</summary>
     public event Action? SelectedIndicesChanged;
 
-    // Shared selection entry for row/cell pointer-down. Sets Handled so row and cell handlers don't double-apply.
+    // The pointer-down event that already applied selection. Row and cell handlers both funnel
+    // here with the same args instance; comparing it deduplicates without marking the event
+    // Handled, which would suppress interactive cell content (e.g. a ComboBox opening its popup).
+    private MouseEventArgs? _lastSelectionAppliedEvent;
+
+    // Shared selection entry for row/cell pointer-down. Selection observes the click, it does not consume it.
     internal void HandleRowPointerDown(int rowIndex, MouseEventArgs e)
     {
         if (!IsEffectivelyEnabled)
         {
             return;
         }
+
+        if (ReferenceEquals(_lastSelectionAppliedEvent, e))
+        {
+            return;
+        }
+        _lastSelectionAppliedEvent = e;
 
         var multi = _core.MultiView;
         if (multi != null && multi.SelectionMode != ItemsSelectionMode.Single)
@@ -214,8 +225,6 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             SelectedIndex = rowIndex;
         }
-
-        e.Handled = true;
     }
 
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)

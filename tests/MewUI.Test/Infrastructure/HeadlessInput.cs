@@ -16,23 +16,28 @@ internal static class HeadlessInput
         => WindowInputRouter.MouseMove(window, position, position,
             leftDown: false, rightDown: false, middleDown: false);
 
-    public static void SendMouseDown(this Window window, Point position, MouseButton button = MouseButton.Left)
+    public static void SendMouseDown(this Window window, Point position, MouseButton button = MouseButton.Left,
+        ModifierKeys modifiers = ModifierKeys.None)
         => WindowInputRouter.MouseButton(window, position, position, button, isDown: true,
             leftDown: button == MouseButton.Left,
             rightDown: button == MouseButton.Right,
             middleDown: button == MouseButton.Middle,
-            clickCount: 1);
+            clickCount: 1,
+            modifiers: modifiers);
 
-    public static void SendMouseUp(this Window window, Point position, MouseButton button = MouseButton.Left)
+    public static void SendMouseUp(this Window window, Point position, MouseButton button = MouseButton.Left,
+        ModifierKeys modifiers = ModifierKeys.None)
         => WindowInputRouter.MouseButton(window, position, position, button, isDown: false,
             leftDown: false, rightDown: false, middleDown: false,
-            clickCount: 1);
+            clickCount: 1,
+            modifiers: modifiers);
 
-    public static void SendClick(this Window window, Point position, MouseButton button = MouseButton.Left)
+    public static void SendClick(this Window window, Point position, MouseButton button = MouseButton.Left,
+        ModifierKeys modifiers = ModifierKeys.None)
     {
         window.SendMouseMove(position);
-        window.SendMouseDown(position, button);
-        window.SendMouseUp(position, button);
+        window.SendMouseDown(position, button, modifiers);
+        window.SendMouseUp(position, button, modifiers);
     }
 
     public static void SendMouseWheel(this Window window, Point position, double deltaY)
