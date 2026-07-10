@@ -186,6 +186,14 @@ internal sealed class PropertyValueStore
         if (entry.Source == source && entry.Value is not AnimatedEntry && Equals(entry.Value, value))
             return;
 
+        // Pre-commit veto: rejecting before the entry is written keeps the store and the
+        // side effects of changed callbacks (e.g. tree mutation) consistent. Unlike coerce
+        // this also runs for null.
+        if (property.ValidateCallback != null && _ownerRef.TryGetTarget(out var validateOwner))
+        {
+            property.ValidateCallback(validateOwner, value);
+        }
+
         var oldValue = CaptureEffective(ref entry, property);
 
         // Stop any running animation

@@ -213,6 +213,160 @@ public abstract class Element : MewObject
     }
 
     /// <summary>
+    /// Gets the logical owner of this element. Independent from the visual <see cref="Parent"/>;
+    /// a logical child may exist without being attached to any visual tree.
+    /// </summary>
+    public Element? LogicalParent { get; internal set; }
+
+    /// <summary>
+    /// Makes this element the logical owner of <paramref name="child"/> without touching
+    /// its visual <see cref="Parent"/>.
+    /// </summary>
+    /// <param name="child">The element to own logically.</param>
+    protected void AttachLogicalChild(Element child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+
+        if (ReferenceEquals(child, this))
+        {
+            throw new InvalidOperationException("An element cannot be its own logical child.");
+        }
+
+        if (child.LogicalParent == this)
+        {
+            return;
+        }
+
+        if (child.LogicalParent != null)
+        {
+            throw new InvalidOperationException("The element already has a logical parent.");
+        }
+
+        for (var ancestor = LogicalParent; ancestor != null; ancestor = ancestor.LogicalParent)
+        {
+            if (ReferenceEquals(ancestor, child))
+            {
+                throw new InvalidOperationException("Attaching the element would create a logical tree cycle.");
+            }
+        }
+
+        var oldRoot = child.FindLogicalRoot();
+        child.LogicalParent = this;
+        child.OnLogicalParentChanged();
+        NotifyLogicalRootChanged(child, oldRoot, child.FindLogicalRoot());
+    }
+
+    /// <summary>
+    /// Releases the logical ownership of <paramref name="child"/> if this element is its owner.
+    /// Does not touch the visual <see cref="Parent"/> and never disposes the child.
+    /// </summary>
+    /// <param name="child">The element to release.</param>
+    protected void DetachLogicalChild(Element child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+
+        if (child.LogicalParent != this)
+        {
+            return;
+        }
+
+        var oldRoot = child.FindLogicalRoot();
+        child.LogicalParent = null;
+        child.OnLogicalParentChanged();
+        NotifyLogicalRootChanged(child, oldRoot, child);
+    }
+
+    /// <summary>
+    /// Rejects a proposed logical child before it is committed: self, an element owned by a
+    /// different logical parent, or a logical ancestor of this element (cycle). Intended for
+    /// use in a property validate callback so a rejecting throw leaves no store/tree mismatch.
+    /// </summary>
+    /// <param name="candidate">The proposed logical child; null is always valid.</param>
+    protected void ValidateLogicalChild(Element? candidate)
+    {
+        if (candidate == null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(candidate, this))
+        {
+            throw new InvalidOperationException("An element cannot be its own logical child.");
+        }
+
+        if (candidate.LogicalParent != null && candidate.LogicalParent != this)
+        {
+            throw new InvalidOperationException("The element already has a logical parent.");
+        }
+
+        for (var ancestor = LogicalParent; ancestor != null; ancestor = ancestor.LogicalParent)
+        {
+            if (ReferenceEquals(ancestor, candidate))
+            {
+                throw new InvalidOperationException("Attaching the element would create a logical tree cycle.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Replaces a logical child slot: detaches the old child logically and visually, then
+    /// attaches the new one the same way. All failure causes must have been rejected up front
+    /// (see <see cref="ValidateLogicalChild"/>); the mutation itself does not fail.
+    /// </summary>
+    /// <param name="oldChild">The child leaving the slot.</param>
+    /// <param name="newChild">The child entering the slot.</param>
+    protected void ChangeLogicalChild(Element? oldChild, Element? newChild)
+    {
+        if (oldChild != null)
+        {
+            DetachLogicalChild(oldChild);
+            if (oldChild.Parent == this)
+            {
+                oldChild.Parent = null;
+            }
+        }
+
+        if (newChild != null)
+        {
+            AttachLogicalChild(newChild);
+            newChild.Parent = this;
+        }
+    }
+
+    /// <summary>
+    /// Returns the topmost element of the logical parent chain,
+    /// this element itself when it has no logical owner.
+    /// </summary>
+    public Element FindLogicalRoot()
+    {
+        var current = this;
+        while (current.LogicalParent != null)
+        {
+            current = current.LogicalParent;
+        }
+
+        return current;
+    }
+
+    /// <summary>
+    /// Called when <see cref="LogicalParent"/> changes.
+    /// </summary>
+    protected virtual void OnLogicalParentChanged() { }
+
+    /// <summary>
+    /// Called on every element of the logical subtree when its logical root changes.
+    /// </summary>
+    protected virtual void OnLogicalRootChanged(Element? oldRoot, Element? newRoot) { }
+
+    private static void NotifyLogicalRootChanged(Element element, Element? oldRoot, Element? newRoot)
+    {
+        if (!ReferenceEquals(oldRoot, newRoot))
+        {
+            LogicalTree.Visit(element, node => node.OnLogicalRootChanged(oldRoot, newRoot));
+        }
+    }
+
+    /// <summary>
     /// Gets whether a new Measure pass is needed.
     /// </summary>
     public bool IsMeasureDirty { get; private set; } = true;

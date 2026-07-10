@@ -56,6 +56,12 @@ public abstract class MewProperty
     /// </summary>
     internal Func<IPropertyOwner, object, object>? CoerceCallback { get; set; }
 
+    /// <summary>
+    /// Optional pre-commit validation callback. Runs for every proposed value (including null)
+    /// before the store entry is written; throwing rejects the set with no state change.
+    /// </summary>
+    internal Action<IPropertyOwner, object?>? ValidateCallback { get; set; }
+
     /// <summary>Whether value changes should trigger InvalidateVisual.</summary>
     public bool AffectsRender => (Options & MewPropertyOptions.AffectsRender) != 0;
 
@@ -188,12 +194,14 @@ public sealed class MewProperty<T> : MewProperty
     /// <param name="options">Metadata flags.</param>
     /// <param name="changed">Callback invoked when the property value changes.</param>
     /// <param name="coerce">Callback invoked to coerce the property value.</param>
+    /// <param name="validate">Callback invoked before a proposed value is stored; throw to reject with no state change.</param>
     public static MewProperty<T> Register<TOwner>(
         string name,
         T defaultValue,
         MewPropertyOptions options = MewPropertyOptions.None,
         Action<TOwner, T, T>? changed = null,
-        Func<TOwner, T, T>? coerce = null)
+        Func<TOwner, T, T>? coerce = null,
+        Action<TOwner, T>? validate = null)
     {
         var property = new MewProperty<T>(name, defaultValue, options);
 
@@ -212,6 +220,12 @@ public sealed class MewProperty<T> : MewProperty
                 coerce((TOwner)(object)owner, value is T v ? v : defaultValue)!;
         }
 
+        if (validate is not null)
+        {
+            property.ValidateCallback = (owner, boxedValue) =>
+                validate((TOwner)(object)owner, boxedValue is T typedValue ? typedValue : default!);
+        }
+
         return property;
     }
 
@@ -226,14 +240,16 @@ public sealed class MewProperty<T> : MewProperty
     /// <param name="options">Metadata flags.</param>
     /// <param name="changed">Callback invoked when the property value changes.</param>
     /// <param name="coerce">Callback invoked to coerce the property value.</param>
+    /// <param name="validate">Callback invoked before a proposed value is stored; throw to reject with no state change.</param>
     public static MewPropertyKey<T> RegisterReadOnly<TOwner>(
         string name,
         T defaultValue,
         MewPropertyOptions options = MewPropertyOptions.None,
         Action<TOwner, T, T>? changed = null,
-        Func<TOwner, T, T>? coerce = null)
+        Func<TOwner, T, T>? coerce = null,
+        Action<TOwner, T>? validate = null)
     {
-        var property = Register<TOwner>(name, defaultValue, options, changed, coerce);
+        var property = Register<TOwner>(name, defaultValue, options, changed, coerce, validate);
         var key = new MewPropertyKey<T>(property);
         property.ReadOnlyKey = key;
         return key;

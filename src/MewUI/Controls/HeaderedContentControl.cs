@@ -7,11 +7,13 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public class HeaderedContentControl : ContentControl
     , IVisualTreeHost
+    , ILogicalTreeHost
 {
     public static readonly MewProperty<Element?> HeaderProperty =
         MewProperty<Element?>.Register<HeaderedContentControl>(nameof(Header), null,
             MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) => self.OnHeaderChanged(oldValue, newValue));
+            static (self, oldValue, newValue) => self.OnHeaderChanged(oldValue, newValue),
+            validate: static (self, value) => self.ValidateHeader(value));
 
     /// <summary>
     /// Gets or sets the header element.
@@ -22,11 +24,30 @@ public class HeaderedContentControl : ContentControl
         set => SetValue(HeaderProperty, value);
     }
 
-    protected virtual void OnHeaderChanged(Element? oldValue, Element? newValue)
+    /// <summary>
+    /// Rejects an invalid Header candidate before the value is committed.
+    /// </summary>
+    /// <param name="candidate">The proposed header; null is always valid.</param>
+    protected virtual void ValidateHeader(Element? candidate)
     {
-        if (oldValue != null) oldValue.Parent = null;
-        if (newValue != null) newValue.Parent = this;
+        ValidateLogicalChild(candidate);
+        if (candidate != null && ReferenceEquals(candidate, Content))
+        {
+            throw new InvalidOperationException("The element is already the Content of this control.");
+        }
     }
+
+    protected override void ValidateContent(Element? candidate)
+    {
+        base.ValidateContent(candidate);
+        if (candidate != null && ReferenceEquals(candidate, Header))
+        {
+            throw new InvalidOperationException("The element is already the Header of this control.");
+        }
+    }
+
+    protected virtual void OnHeaderChanged(Element? oldValue, Element? newValue)
+        => ChangeLogicalChild(oldValue, newValue);
 
     public static readonly MewProperty<double> HeaderSpacingProperty =
         MewProperty<double>.Register<HeaderedContentControl>(nameof(HeaderSpacing), 0.0,
@@ -121,6 +142,13 @@ public class HeaderedContentControl : ContentControl
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
+    {
+        if (Header != null && !visitor(Header)) return false;
+        if (Content != null && !visitor(Content)) return false;
+        return true;
+    }
+
+    bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor)
     {
         if (Header != null && !visitor(Header)) return false;
         if (Content != null && !visitor(Content)) return false;
