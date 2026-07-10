@@ -30,7 +30,7 @@ public sealed class MewDrawingContext : DrawingContext
     /// <summary>The MewUI graphics context for the current frame.</summary>
     public IGraphicsContext G { get; }
 
-    /// <summary>The graphics factory, used by paints to create gradient brushes and dashed pens.</summary>
+    /// <summary>The graphics factory for the current backend.</summary>
     public IGraphicsFactory Factory { get; }
 
     /// <summary>Frame background color.</summary>
@@ -43,8 +43,8 @@ public sealed class MewDrawingContext : DrawingContext
 
     // Optional gradient/image fill brush and dashed/styled stroke pen; when set they take
     // precedence over ActiveColor. Set by gradient/dashed paints in OnPaintStarted.
-    internal IBrush? ActiveBrush { get; set; }
-    internal IPen? ActivePen { get; set; }
+    internal Brush? ActiveBrush { get; set; }
+    internal Pen? ActivePen { get; set; }
 
     // Current draw area in local coords; gradient paints map their relative (0..1) coordinates
     // to this. Set to the element bounds by the host and to the active clip zone while drawing.

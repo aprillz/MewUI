@@ -11,7 +11,7 @@ namespace Aprillz.MewUI.MewCharts.Painting;
 /// </summary>
 public class SolidColorPaint : MewPaint
 {
-    private IPen? _pen;
+    private Pen? _pen;
 
     public SolidColorPaint() { }
 
@@ -56,8 +56,7 @@ public class SolidColorPaint : MewPaint
 
         if (DashArray is { Length: > 0 } && PaintStyle.HasFlag(PaintStyle.Stroke))
         {
-            _pen?.Dispose();
-            _pen = context.Factory.CreatePen(Color, thickness, new StrokeStyle { DashArray = DashArray, DashOffset = DashOffset });
+            _pen = new Pen(Color, thickness, new StrokeStyle { DashArray = DashArray, DashOffset = DashOffset });
             context.ActivePen = _pen;
         }
         else
@@ -68,8 +67,6 @@ public class SolidColorPaint : MewPaint
 
     internal override void DisposeTask()
     {
-        _pen?.Dispose();
-        _pen = null;
         base.DisposeTask();
     }
 
