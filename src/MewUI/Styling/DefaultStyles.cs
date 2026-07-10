@@ -7,6 +7,9 @@ namespace Aprillz.MewUI;
 /// </summary>
 public static class DefaultStyles
 {
+    // Style resolution can run on multiple UI threads (per-window loops, parallel tests);
+    // the cache must not be mutated concurrently.
+    private static readonly object _stylesLock = new();
     private static Dictionary<Type, Style>? _styles;
 
     private static IReadOnlyDictionary<Type, Func<Style>> StyleFactories =>
@@ -78,20 +81,23 @@ public static class DefaultStyles
     /// </summary>
     public static Style? GetStyle(Type controlType)
     {
-        _styles ??= new Dictionary<Type, Style>();
-        if (_styles.TryGetValue(controlType, out var style))
+        lock (_stylesLock)
         {
+            _styles ??= new Dictionary<Type, Style>();
+            if (_styles.TryGetValue(controlType, out var style))
+            {
+                return style;
+            }
+
+            if (!StyleFactories.TryGetValue(controlType, out var factory))
+            {
+                return null;
+            }
+
+            style = factory();
+            _styles[controlType] = style;
             return style;
         }
-
-        if (!StyleFactories.TryGetValue(controlType, out var factory))
-        {
-            return null;
-        }
-
-        style = factory();
-        _styles[controlType] = style;
-        return style;
     }
 
     private static Style CreateControlBaseStyle() =>

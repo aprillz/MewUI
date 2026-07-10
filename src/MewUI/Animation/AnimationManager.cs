@@ -11,6 +11,11 @@ public sealed class AnimationManager
 {
     private static AnimationManager? _instance;
 
+    // Clocks start/stop from any UI thread (per-window render loops, tests), so every
+    // list mutation and the update sweep run under _sync. Same-thread reentrancy from
+    // tick callbacks (a tick starting/stopping another clock) is handled by the
+    // _isUpdating deferral, and the monitor is reentrant for those nested calls.
+    private readonly object _sync = new();
     private readonly List<AnimationClock> _active = new();
     private readonly List<AnimationClock> _pendingAdd = new();
     private readonly List<AnimationClock> _pendingRemove = new();
@@ -21,43 +26,61 @@ public sealed class AnimationManager
     /// <summary>
     /// Gets the singleton animation manager instance.
     /// </summary>
-    internal static AnimationManager Instance => _instance ??= new AnimationManager();
+    internal static AnimationManager Instance
+    {
+        get
+        {
+            var existing = Volatile.Read(ref _instance);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var created = new AnimationManager();
+            return Interlocked.CompareExchange(ref _instance, created, null) ?? created;
+        }
+    }
 
     /// <summary>
     /// Gets the number of currently active animations.
     /// </summary>
-    public int ActiveCount => _active.Count;
+    public int ActiveCount
+    {
+        get { lock (_sync) { return _active.Count; } }
+    }
 
     internal void Register(AnimationClock clock)
     {
-        // Only ever called for a not-yet-running clock (AnimationClock.Start guards on its running state), so a clock
-        // appears at most once and a single Unregister fully removes it.
-        if (_isUpdating)
+        lock (_sync)
         {
-            _pendingAdd.Add(clock);
-        }
-        else
-        {
-            _active.Add(clock);
-        }
+            // Only ever called for a not-yet-running clock (AnimationClock.Start guards on its running state), so a clock
+            // appears at most once and a single Unregister fully removes it.
+            if (_isUpdating)
+            {
+                _pendingAdd.Add(clock);
+            }
+            else
+            {
+                _active.Add(clock);
+            }
 
-        EnableContinuousMode();
+            EnableContinuousMode();
+        }
     }
 
     internal void Unregister(AnimationClock clock)
     {
-        if (_isUpdating)
+        lock (_sync)
         {
-            _pendingRemove.Add(clock);
-        }
-        else
-        {
-            _active.Remove(clock);
-        }
-
-        if (!_isUpdating)
-        {
-            DisableContinuousModeIfIdle();
+            if (_isUpdating)
+            {
+                _pendingRemove.Add(clock);
+            }
+            else
+            {
+                _active.Remove(clock);
+                DisableContinuousModeIfIdle();
+            }
         }
     }
 
@@ -67,44 +90,47 @@ public sealed class AnimationManager
     /// </summary>
     public void Update()
     {
-        if (_active.Count == 0 && _pendingAdd.Count == 0)
+        lock (_sync)
         {
-            return;
-        }
-
-        long now = Stopwatch.GetTimestamp();
-
-        _isUpdating = true;
-        try
-        {
-            for (int i = 0; i < _active.Count; i++)
+            if (_active.Count == 0 && _pendingAdd.Count == 0)
             {
-                _active[i].Update(now);
-            }
-        }
-        finally
-        {
-            _isUpdating = false;
-        }
-
-        // Apply deferred additions/removals
-        if (_pendingAdd.Count > 0)
-        {
-            _active.AddRange(_pendingAdd);
-            _pendingAdd.Clear();
-        }
-
-        if (_pendingRemove.Count > 0)
-        {
-            for (int i = 0; i < _pendingRemove.Count; i++)
-            {
-                _active.Remove(_pendingRemove[i]);
+                return;
             }
 
-            _pendingRemove.Clear();
-        }
+            long now = Stopwatch.GetTimestamp();
 
-        DisableContinuousModeIfIdle();
+            _isUpdating = true;
+            try
+            {
+                for (int i = 0; i < _active.Count; i++)
+                {
+                    _active[i].Update(now);
+                }
+            }
+            finally
+            {
+                _isUpdating = false;
+            }
+
+            // Apply deferred additions/removals
+            if (_pendingAdd.Count > 0)
+            {
+                _active.AddRange(_pendingAdd);
+                _pendingAdd.Clear();
+            }
+
+            if (_pendingRemove.Count > 0)
+            {
+                for (int i = 0; i < _pendingRemove.Count; i++)
+                {
+                    _active.Remove(_pendingRemove[i]);
+                }
+
+                _pendingRemove.Clear();
+            }
+
+            DisableContinuousModeIfIdle();
+        }
     }
 
     private void EnableContinuousMode()
@@ -137,10 +163,16 @@ public sealed class AnimationManager
     /// </summary>
     internal static void Reset()
     {
-        _instance?.DisableContinuousModeIfIdle();
-        _instance?._active.Clear();
-        _instance?._pendingAdd.Clear();
-        _instance?._pendingRemove.Clear();
-        _instance = null;
+        var instance = Interlocked.Exchange(ref _instance, null);
+        if (instance != null)
+        {
+            lock (instance._sync)
+            {
+                instance.DisableContinuousModeIfIdle();
+                instance._active.Clear();
+                instance._pendingAdd.Clear();
+                instance._pendingRemove.Clear();
+            }
+        }
     }
 }
