@@ -1,4 +1,4 @@
-#if DEBUG
+﻿#if DEBUG
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Rendering;
@@ -72,7 +72,7 @@ public partial class Window
             AdornerLayer.Remove(_debugInspectorAdorner);
             _debugInspectorAdorner = null;
             _debugInspectorOverlay = null;
-            RequestLayout();
+            RequestUpdatePass();
             RequestRender();
 #if DEBUG
             DevToolsInspectorOpenChanged?.Invoke(false);

@@ -1,4 +1,4 @@
-using Aprillz.MewUI.Controls;
+﻿using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Diagnostics;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
@@ -73,7 +73,7 @@ partial class Window
             _performanceAdorner = null;
             _performanceOverlay = null;
             UpdateProfilerEnabled();
-            RequestLayout();
+            RequestUpdatePass();
             RequestRender();
             PerformanceMonitorOpenChanged?.Invoke(false);
             return;

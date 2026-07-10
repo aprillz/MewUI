@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Animation;
@@ -77,7 +77,7 @@ public sealed class ClosingDeferral : IDisposable
 /// </summary>
 public partial class Window : ContentControl, ILayoutRoundingHost
 {
-    private readonly DispatcherMergeKey _layoutMergeKey = new(DispatcherPriority.Layout);
+    private readonly DispatcherMergeKey _updatePassMergeKey = new(DispatcherPriority.Layout);
     private readonly DispatcherMergeKey _renderMergeKey = new(DispatcherPriority.Render);
 
     private enum WindowLifetimeState
@@ -97,7 +97,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     // True while RenderFrame is inside RenderFrameCore; guards against reentrant paints.
     private bool _renderFrameActive;
     private Action? _cachedInvalidateBackend;
-    private Action? _cachedLayoutAndRender;
+    private Action? _cachedUpdatePass;
     private LayoutPerformanceStats _lastLayoutPerformanceStats;
 
     private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
@@ -1668,7 +1668,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
-    /// Performs layout measurement and arrangement for the window content.
+    /// Runs the update pass for the window content: drains queued visual-state
+    /// reconciliations, then performs measure/arrange when layout is dirty.
     /// </summary>
     public void PerformLayout()
     {
@@ -1939,19 +1940,24 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public override void InvalidateMeasure()
     {
         base.InvalidateMeasure();
-        RequestLayout();
+        RequestUpdatePass();
     }
 
     /// <summary>
-    /// Invalidates arrangement and schedules a layout pass.
+    /// Invalidates arrangement and schedules an update pass.
     /// </summary>
     public override void InvalidateArrange()
     {
         base.InvalidateArrange();
-        RequestLayout();
+        RequestUpdatePass();
     }
 
-    internal void RequestLayout()
+    /// <summary>
+    /// Schedules the pre-render update pass: visual-state drain, then measure/arrange when
+    /// layout is dirty, then a render. Both layout invalidation and visual-state invalidation
+    /// funnel here - the drain is the first step of the pass, not a separate pipeline stage.
+    /// </summary>
+    internal void RequestUpdatePass()
     {
         var dispatcher = ApplicationDispatcher;
         if (dispatcher == null)
@@ -1961,12 +1967,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        _cachedLayoutAndRender ??= () =>
+        _cachedUpdatePass ??= () =>
         {
             PerformLayout();
             RequestRender();
         };
-        (dispatcher as IDispatcherCore)?.PostMerged(_layoutMergeKey, _cachedLayoutAndRender, DispatcherPriority.Layout);
+        (dispatcher as IDispatcherCore)?.PostMerged(_updatePassMergeKey, _cachedUpdatePass, DispatcherPriority.Layout);
     }
 
     internal void RequestRender()
@@ -2712,7 +2718,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             Element = adorner
         });
 
-        RequestLayout();
+        RequestUpdatePass();
         RequestRender();
     }
 
@@ -2724,7 +2730,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             {
                 _adorners[i].Element.Parent = null;
                 _adorners.RemoveAt(i);
-                RequestLayout();
+                RequestUpdatePass();
                 RequestRender();
                 return true;
             }
@@ -2748,7 +2754,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         if (removed > 0)
         {
-            RequestLayout();
+            RequestUpdatePass();
             RequestRender();
         }
 
@@ -2768,7 +2774,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         _adorners.Clear();
-        RequestLayout();
+        RequestUpdatePass();
         RequestRender();
     }
 

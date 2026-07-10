@@ -1,4 +1,4 @@
-namespace Aprillz.MewUI.Controls;
+﻿namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Shared bookkeeping for a window-owned collection of top-level elements (overlays, adorners, popups):
@@ -33,7 +33,7 @@ internal sealed class ElementLayer
 
         element.Parent = _window;
         _elements.Add(element);
-        _window.RequestLayout();
+        _window.RequestUpdatePass();
         _window.RequestRender();
     }
 
@@ -47,7 +47,7 @@ internal sealed class ElementLayer
         if (!_elements.Remove(element)) return false;
 
         element.Parent = null;
-        _window.RequestLayout();
+        _window.RequestUpdatePass();
         _window.RequestRender();
         return true;
     }

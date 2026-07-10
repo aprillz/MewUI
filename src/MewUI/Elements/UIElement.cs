@@ -483,10 +483,9 @@ public abstract partial class UIElement : Element
         _visualStateDirty = true;
         window.RegisterVisualStateDirty(this);
 
-        // The drain lives at the start of PerformLayout, so a LAYOUT pass must be scheduled:
-        // a render-only request never runs the drain and the state change would starve.
-        // PerformLayout skips the expensive measure/arrange when nothing is layout-dirty.
-        window.RequestLayout();
+        // The drain is the first step of the update pass; a render-only request would
+        // never run it and the queued state change would starve.
+        window.RequestUpdatePass();
     }
 
     internal bool IsVisualStateDirty => _visualStateDirty;
