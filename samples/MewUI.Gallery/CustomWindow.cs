@@ -230,7 +230,10 @@ public class CustomWindow : Window
         _shadow.WithTheme((t, s) =>
             s.ShadowColor = Color.FromArgb((byte)(t.IsDark ? 100 : 48), 0, 0, 0));
 
-        base.Content = _shadow;
+        // The chrome is a window template: Window.Content stays the real user content and is
+        // projected into the chrome through the ContentPresenter in the content area.
+        _contentArea.Child = new ContentPresenter();
+        Template = new DelegateControlTemplate<CustomWindow>((window, _) => window._shadow);
 
         // React to IsActive, WindowState, and Theme changes
         Activated += UpdateChromeAppearance;
@@ -243,12 +246,6 @@ public class CustomWindow : Window
 
     /// <summary>Right area of the title bar (e.g. theme toggle, search).</summary>
     public StackPanel TitleBarRight => _rightArea;
-
-    public new UIElement? Content
-    {
-        get => _contentArea.Child;
-        set => _contentArea.Child = value;
-    }
 
     public new Thickness Padding
     {

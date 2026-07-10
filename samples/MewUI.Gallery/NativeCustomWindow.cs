@@ -194,7 +194,11 @@ public class NativeCustomWindow : Window
             )
         };
         _chromeBorder.SetBinding(Border.BorderBrushProperty, this, BorderBrushProperty);
-        base.Content = _chromeBorder;
+
+        // The chrome is a window template: Window.Content stays the real user content and is
+        // projected into the chrome through the ContentPresenter in the content area.
+        _contentArea.Child = new ContentPresenter();
+        Template = new DelegateControlTemplate<NativeCustomWindow>((window, _) => window._chromeBorder);
 
         // WindowState -> glyph + chrome update
         ClientSizeChanged += _ =>
@@ -223,12 +227,6 @@ public class NativeCustomWindow : Window
 
     /// <summary>Right area of the title bar (e.g. theme toggle).</summary>
     public StackPanel TitleBarRight => _rightArea;
-
-    public new UIElement? Content
-    {
-        get => _contentArea.Child;
-        set => _contentArea.Child = value;
-    }
 
     public new Thickness Padding
     {
