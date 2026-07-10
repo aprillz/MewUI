@@ -54,6 +54,12 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _hasPendingConfigure;
     private double _pendingConfigureWidthDip;
     private double _pendingConfigureHeightDip;
+    private nint _netWmSyncRequestAtom;
+    private nint _netWmSyncRequestCounterAtom;
+    // EWMH frame-sync counter (_NET_WM_SYNC_REQUEST). 0 when the SYNC extension is unavailable.
+    private nint _frameSyncCounter;
+    private bool _hasPendingFrameSyncValue;
+    private long _pendingFrameSyncValue;
     private X11GLVisualInfo? _glVisualInfo;
 
     private readonly ClickCountTracker _clickCountTracker = new();
@@ -683,9 +689,20 @@ internal sealed class X11WindowBackend : IWindowBackend
         _xdndSelectionAtom = NativeX11.XInternAtom(Display, "XdndSelection", false);
         _textUriListAtom = NativeX11.XInternAtom(Display, "text/uri-list", false);
         _xdndSelectionPropertyAtom = NativeX11.XInternAtom(Display, "MEWUI_XDND_SELECTION", false);
+        _netWmSyncRequestAtom = NativeX11.XInternAtom(Display, "_NET_WM_SYNC_REQUEST", false);
+        _netWmSyncRequestCounterAtom = NativeX11.XInternAtom(Display, "_NET_WM_SYNC_REQUEST_COUNTER", false);
+        InitializeFrameSync();
         if (_wmProtocolsAtom != 0 && _wmDeleteWindowAtom != 0)
         {
-            NativeX11.XSetWMProtocols(Display, Handle, ref _wmDeleteWindowAtom, 1);
+            if (_frameSyncCounter != 0)
+            {
+                Span<nint> protocols = [_wmDeleteWindowAtom, _netWmSyncRequestAtom];
+                NativeX11.XSetWMProtocols(Display, Handle, ref protocols[0], protocols.Length);
+            }
+            else
+            {
+                NativeX11.XSetWMProtocols(Display, Handle, ref _wmDeleteWindowAtom, 1);
+            }
         }
 
         ApplyXdndAware();
@@ -1305,6 +1322,20 @@ internal sealed class X11WindowBackend : IWindowBackend
                     if (_xdndLeaveAtom != 0 && client.message_type == _xdndLeaveAtom)
                     {
                         HandleXdndLeave();
+                        break;
+                    }
+
+                    if (_frameSyncCounter != 0 &&
+                        _wmProtocolsAtom != 0 &&
+                        client.message_type == _wmProtocolsAtom &&
+                        client.format == 32 &&
+                        (nint)client.data[0] == _netWmSyncRequestAtom)
+                    {
+                        // data[1] is the timestamp; data[2]/data[3] carry the value the WM waits
+                        // for. Only the latest value matters: raising the counter to it also
+                        // acknowledges earlier requests coalesced in the same event batch.
+                        _pendingFrameSyncValue = ((long)client.data[3] << 32) | (uint)client.data[2];
+                        _hasPendingFrameSyncValue = true;
                         break;
                     }
 
@@ -2335,8 +2366,12 @@ internal sealed class X11WindowBackend : IWindowBackend
         var client = Window.ClientSize;
         int pixelWidth = (int)Math.Max(1, Math.Ceiling(client.Width * Window.DpiScale));
         int pixelHeight = (int)Math.Max(1, Math.Ceiling(client.Height * Window.DpiScale));
-        var surface = new X11GLWindowSurface(Display, Handle, visualInfo, Window.DpiScale, pixelWidth, pixelHeight);
+        // Resize frames present immediately: the WM paces the resize (sync counter or pointer
+        // grab), so waiting for vblank here only adds latency between resize steps.
+        bool preferImmediatePresent = clientSizeChanged || _hasPendingFrameSyncValue;
+        var surface = new X11GLWindowSurface(Display, Handle, visualInfo, Window.DpiScale, pixelWidth, pixelHeight, preferImmediatePresent);
         Window.RenderFrame(surface);
+        CompleteFrameSync();
     }
 
     /// <summary>Applies the latest coalesced ConfigureNotify size, returning true when the client size changed.</summary>
@@ -2360,6 +2395,64 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         Window.SetClientSizeDip(widthDip, heightDip);
         return true;
+    }
+
+    /// <summary>Creates the XSync counter advertised via _NET_WM_SYNC_REQUEST_COUNTER; no-op when the SYNC extension is unavailable.</summary>
+    private void InitializeFrameSync()
+    {
+        if (_netWmSyncRequestAtom == 0 || _netWmSyncRequestCounterAtom == 0 || _cardinalAtom == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (XSyncExt.XSyncQueryExtension(Display, out _, out _) == 0 ||
+                XSyncExt.XSyncInitialize(Display, out _, out _) == 0)
+            {
+                return;
+            }
+
+            _frameSyncCounter = XSyncExt.XSyncCreateCounter(Display, XSyncValue.FromInt64(0));
+        }
+        catch (DllNotFoundException)
+        {
+            return;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return;
+        }
+
+        if (_frameSyncCounter == 0)
+        {
+            return;
+        }
+
+        unsafe
+        {
+            nint counter = _frameSyncCounter;
+            NativeX11.XChangeProperty(Display, Handle, _netWmSyncRequestCounterAtom, _cardinalAtom,
+                32, 0 /* PropModeReplace */, (nint)(&counter), 1);
+        }
+    }
+
+    /// <summary>Signals the WM that the frame for the latest _NET_WM_SYNC_REQUEST has been presented.</summary>
+    private void CompleteFrameSync()
+    {
+        if (!_hasPendingFrameSyncValue)
+        {
+            return;
+        }
+
+        _hasPendingFrameSyncValue = false;
+        if (_frameSyncCounter == 0 || Display == 0)
+        {
+            return;
+        }
+
+        XSyncExt.XSyncSetCounter(Display, _frameSyncCounter, XSyncValue.FromInt64(_pendingFrameSyncValue));
+        NativeX11.XFlush(Display);
     }
 
     public void Dispose()
@@ -2392,6 +2485,14 @@ internal sealed class X11WindowBackend : IWindowBackend
         if (handle == 0 || Display == 0)
         {
             return;
+        }
+
+        if (_frameSyncCounter != 0)
+        {
+            // Release a WM still waiting on the last sync request before destroying the counter.
+            CompleteFrameSync();
+            XSyncExt.XSyncDestroyCounter(Display, _frameSyncCounter);
+            _frameSyncCounter = 0;
         }
 
         try
@@ -2726,7 +2827,9 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         public X11GLVisualInfo VisualInfo { get; }
 
-        public X11GLWindowSurface(nint display, nint window, X11GLVisualInfo visualInfo, double dpiScale, int pixelWidth, int pixelHeight)
+        public bool PreferImmediatePresent { get; }
+
+        public X11GLWindowSurface(nint display, nint window, X11GLVisualInfo visualInfo, double dpiScale, int pixelWidth, int pixelHeight, bool preferImmediatePresent)
         {
             Display = display;
             Window = window;
@@ -2734,6 +2837,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             DpiScale = dpiScale <= 0 ? 1.0 : dpiScale;
             PixelWidth = pixelWidth;
             PixelHeight = pixelHeight;
+            PreferImmediatePresent = preferImmediatePresent;
         }
     }
 }

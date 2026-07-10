@@ -28,6 +28,7 @@
     <Compile Include="..\MewUI\Shared\Native\Linux\LibC.cs" LinkBase="Native" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\X11.cs" LinkBase="Native\X11.cs" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\XI2.cs" LinkBase="Native\XI2.cs" />
+    <Compile Include="..\MewUI\Shared\Native\Linux\X11\XSyncExt.cs" LinkBase="Native\XSyncExt.cs" />
     <Compile Include="..\MewUI\Shared\Native\Linux\X11\LibGL.cs" LinkBase="Native\LibGL.cs" />
   </ItemGroup>
 

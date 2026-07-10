@@ -167,7 +167,7 @@ public sealed partial class MewVGX11GraphicsFactory
 
         var res = (MewVGX11WindowResources)resources;
         var ctx = res.GetOrCreateContext(_offscreenProvider, RaiseGpuInteropInvalidated);
-        ctx.SetTarget(glx.Display, glx.Window);
+        ctx.SetTarget(glx.Display, glx.Window, glx.PreferImmediatePresent);
         return ctx;
     }
 

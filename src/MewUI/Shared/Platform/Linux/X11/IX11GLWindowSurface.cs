@@ -11,6 +11,9 @@ public interface IX11GLWindowSurface : IWindowSurface
     nint Window { get; }
 
     X11GLVisualInfo VisualInfo { get; }
+
+    /// <summary>True when this frame should present without waiting for vblank (e.g. interactive resize).</summary>
+    bool PreferImmediatePresent => false;
 }
 
 /// <summary>

@@ -34,11 +34,11 @@ internal sealed partial class MewVGX11GraphicsContext
         OpenGLPixelRenderSurface pixelSurface)
         => new(new X11OffscreenFrameSession(offscreen, offscreenProvider, pixelSurface), gpuInteropInvalidated: null);
 
-    internal void SetTarget(nint display, nint window)
+    internal void SetTarget(nint display, nint window, bool preferImmediatePresent)
     {
         if (_frameSession is X11WindowFrameSession windowSession)
         {
-            windowSession.SetTarget(display, window);
+            windowSession.SetTarget(display, window, preferImmediatePresent);
         }
     }
 
@@ -528,6 +528,7 @@ internal sealed partial class MewVGX11GraphicsContext
         private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider;
         private nint _display;
         private nint _window;
+        private bool _preferImmediatePresent;
 
         public X11WindowFrameSession(MewVGX11WindowResources resources, IMewVGOffscreenSurfaceProvider offscreenProvider)
         {
@@ -541,10 +542,11 @@ internal sealed partial class MewVGX11GraphicsContext
 
         public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
 
-        public void SetTarget(nint display, nint window)
+        public void SetTarget(nint display, nint window, bool preferImmediatePresent)
         {
             _display = display;
             _window = window;
+            _preferImmediatePresent = preferImmediatePresent;
         }
 
         public void BeginFrame()
@@ -568,7 +570,9 @@ internal sealed partial class MewVGX11GraphicsContext
             }
             TextCache.ReleasePendingDeletes();
             NvgStrokeHelper.ReleasePendingGradientLutDeletes(_resources.Vg);
-            _resources.SetSwapInterval(GetSwapInterval());
+            // Resize frames skip vsync: the WM already paces the resize via the frame-sync
+            // protocol, so blocking on vblank here only delays the next resize step.
+            _resources.SetSwapInterval(_preferImmediatePresent ? 0 : GetSwapInterval());
             _resources.SwapBuffers(_display, _window);
             _resources.ReleaseCurrent();
         }
