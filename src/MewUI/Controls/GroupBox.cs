@@ -68,6 +68,11 @@ public sealed class GroupBox : HeaderedContentControl
     /// <returns>The desired size.</returns>
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var borderInset = GetBorderVisualInset();
 
         var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
@@ -112,6 +117,12 @@ public sealed class GroupBox : HeaderedContentControl
 
     protected override void ArrangeContent(Rect bounds)
     {
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
         var outer = bounds;
         double boxTop = outer.Y;
 
@@ -145,6 +156,11 @@ public sealed class GroupBox : HeaderedContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bounds = GetBorderRenderMetrics(Bounds, BorderThickness, 0).Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0)
         {
