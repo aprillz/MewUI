@@ -13,6 +13,9 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         Increment
     }
 
+    /// <summary>Template part name for the editable text box; register a TextBox under this name to receive the edit pipeline.</summary>
+    public const string PART_TEXT_BOX = "PART_TextBox";
+
     public static readonly MewProperty<string> FormatProperty =
         MewProperty<string>.Register<NumericUpDown>(nameof(Format), "0.##", MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.OnFormatChanged());
@@ -53,6 +56,12 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             ? Math.Max(1, Math.Round(Step, MidpointRounding.AwayFromZero))
             : Step;
 
+    /// <summary>Increases the value by one effective step.</summary>
+    public void StepUp() => Value += GetEffectiveStep();
+
+    /// <summary>Decreases the value by one effective step.</summary>
+    public void StepDown() => Value -= GetEffectiveStep();
+
     private TextMeasureCache _measureCache;
     private string? _cachedDisplayText;
     private double _cachedDisplayValue = double.NaN;
@@ -60,8 +69,18 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private ButtonPart _hoverPart;
     private ButtonPart _pressedPart;
     private readonly TextBox _textBox;
+    private TextBox? _partTextBox;
     private bool _suppressTextBoxUpdate;
     private WheelNotchAccumulator _wheelAccumulator;
+
+    private TextBox ActiveTextBox
+    {
+        get
+        {
+            // The template's PART_TextBox overrides the built-in text box when attached.
+            return _partTextBox ?? _textBox;
+        }
+    }
 
     protected override VisualState ComputeVisualState()
     {
@@ -208,7 +227,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnEnabledChanged()
     {
         base.OnEnabledChanged();
-        _textBox.IsEnabled = IsEffectivelyEnabled;
+        ActiveTextBox.IsEnabled = IsEffectivelyEnabled;
     }
 
     protected override void OnValueChanged(double value)
@@ -220,6 +239,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     protected override Size MeasureContent(Size available)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(available);
+        }
+
         var factory = GetGraphicsFactory();
         var font = GetFont(factory);
         string text = GetDisplayText();
@@ -235,6 +259,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     {
         base.ArrangeContent(bounds);
 
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var inner = GetSnappedBorderBounds(bounds).Deflate(new Thickness(GetBorderVisualInset()));
         double buttonAreaWidth = Math.Min(GetButtonAreaWidth(), inner.Width);
         var textRect = new Rect(inner.X + Padding.Left, inner.Y + Padding.Top,
@@ -247,7 +276,10 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     protected override void OnRender(IGraphicsContext context)
     {
-        _textBox.IsEnabled = IsEffectivelyEnabled;
+        if (HasTemplateInstance)
+        {
+            return;
+        }
 
         double radius = CornerRadius;
 
@@ -330,6 +362,12 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
+        if (HasTemplateInstance)
+        {
+            base.RenderSubtree(context);
+            return;
+        }
+
         if (IsEditing)
         {
             _textBox.Render(context);
@@ -360,6 +398,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
             return;
@@ -392,6 +435,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var part = HitTestButtonPart(e.Position);
         if (_hoverPart != part)
         {
@@ -413,6 +461,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         if (e.Button != MouseButton.Left || _pressedPart == ButtonPart.None)
         {
             return;
@@ -427,9 +480,14 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         var releasedPart = HitTestButtonPart(e.Position);
         if (releasedPart == _pressedPart && IsEffectivelyEnabled)
         {
-            double step = GetEffectiveStep();
-            Value += _pressedPart == ButtonPart.Increment ? step : -step;
-            UpdateTextBoxFromValue();
+            if (_pressedPart == ButtonPart.Increment)
+            {
+                StepUp();
+            }
+            else
+            {
+                StepDown();
+            }
         }
 
         _pressedPart = ButtonPart.None;
@@ -484,6 +542,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     protected override UIElement? OnHitTest(Point point)
     {
+        if (HasTemplateInstance)
+        {
+            return base.OnHitTest(point);
+        }
+
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
@@ -531,7 +594,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     {
         if (IsEditing)
         {
-            var text = _textBox.Text;
+            var text = ActiveTextBox.Text;
             return string.IsNullOrEmpty(text) ? FormatValue(Value) : text;
         }
 
@@ -551,21 +614,28 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private void UpdateEditMode()
     {
         bool editing = IsEditing;
-        _textBox.IsVisible = editing;
-        _textBox.IsHitTestVisible = editing;
-        _textBox.IsEnabled = IsEffectivelyEnabled;
+        var textBox = ActiveTextBox;
+
+        // The part's IsVisible/IsHitTestVisible belong to the template author (e.g. ctx.Bind to
+        // IsEditingProperty); only the built-in text box toggles them itself.
+        if (_partTextBox == null)
+        {
+            textBox.IsVisible = editing;
+            textBox.IsHitTestVisible = editing;
+        }
+        textBox.IsEnabled = IsEffectivelyEnabled;
 
         if (editing)
         {
             SyncTextBoxStyle();
             UpdateTextBoxFromValue();
-            _textBox.Focus();
-            _textBox.SelectAll();
+            textBox.Focus();
+            textBox.SelectAll();
         }
         else
         {
             var root = FindVisualRoot();
-            if (root is Window window && window.FocusManager.FocusedElement == _textBox)
+            if (root is Window window && window.FocusManager.FocusedElement == textBox)
             {
                 window.FocusManager.SetFocus(this);
             }
@@ -578,10 +648,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     private void SyncTextBoxStyle()
     {
-        _textBox.FontFamily = FontFamily;
-        _textBox.FontSize = FontSize;
-        _textBox.FontWeight = FontWeight;
-        _textBox.Foreground = Foreground;
+        var textBox = ActiveTextBox;
+        textBox.FontFamily = FontFamily;
+        textBox.FontSize = FontSize;
+        textBox.FontWeight = FontWeight;
+        textBox.Foreground = Foreground;
     }
 
     private void UpdateTextBoxFromValue()
@@ -591,8 +662,9 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return;
         }
 
+        var textBox = ActiveTextBox;
         var formatted = FormatValue(Value);
-        if (_textBox.Text == formatted)
+        if (textBox.Text == formatted)
         {
             return;
         }
@@ -600,7 +672,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         _suppressTextBoxUpdate = true;
         try
         {
-            _textBox.Text = formatted;
+            textBox.Text = formatted;
         }
         finally
         {
@@ -611,7 +683,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private bool TryParseTextBox(out double value)
     {
         value = 0;
-        var text = _textBox.Text;
+        var text = ActiveTextBox.Text;
         if (string.IsNullOrWhiteSpace(text))
         {
             return false;
@@ -692,11 +764,77 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         }
     }
 
+    private void OnPartTextBoxGotFocus() => BeginEdit();
+
+    private protected override void OnTemplateInstanceAttached()
+    {
+        base.OnTemplateInstanceAttached();
+
+        var part = GetTemplateChild<TextBox>(PART_TEXT_BOX);
+        if (part == null)
+        {
+            return;
+        }
+
+        _partTextBox = part;
+        part.TextChanged += OnTextBoxTextChanged;
+        part.KeyDown += OnTextBoxKeyDown;
+        part.LostFocus += OnTextBoxLostFocus;
+        part.GotFocus += OnPartTextBoxGotFocus;
+
+        part.IsEnabled = IsEffectivelyEnabled;
+        SyncTextBoxStyle();
+        UpdateTextBoxFromValue();
+    }
+
+    private protected override void OnTemplateInstanceDetached()
+    {
+        base.OnTemplateInstanceDetached();
+
+        var part = _partTextBox;
+        if (part == null)
+        {
+            return;
+        }
+
+        if (IsEditing)
+        {
+            CommitEdit();
+        }
+
+        part.TextChanged -= OnTextBoxTextChanged;
+        part.KeyDown -= OnTextBoxKeyDown;
+        part.LostFocus -= OnTextBoxLostFocus;
+        part.GotFocus -= OnPartTextBoxGotFocus;
+        _partTextBox = null;
+
+        // Restore the built-in text box's visibility/enabled state now that it is active again.
+        UpdateEditMode();
+    }
+
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => visitor(_textBox);
+    {
+        var templateRoot = TemplateVisualRoot;
+        if (templateRoot != null)
+        {
+            return visitor(templateRoot);
+        }
+
+        return visitor(_textBox);
+    }
 
     protected override void OnDispose()
     {
+        var part = _partTextBox;
+        if (part != null)
+        {
+            part.TextChanged -= OnTextBoxTextChanged;
+            part.KeyDown -= OnTextBoxKeyDown;
+            part.LostFocus -= OnTextBoxLostFocus;
+            part.GotFocus -= OnPartTextBoxGotFocus;
+            _partTextBox = null;
+        }
+
         _textBox.TextChanged -= OnTextBoxTextChanged;
         _textBox.KeyDown -= OnTextBoxKeyDown;
         _textBox.LostFocus -= OnTextBoxLostFocus;
