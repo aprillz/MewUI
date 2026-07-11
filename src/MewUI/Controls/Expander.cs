@@ -67,6 +67,11 @@ public class Expander : HeaderedContentControl
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var inner = availableSize.Deflate(Padding);
 
         double headerHeight = 0;
@@ -102,6 +107,12 @@ public class Expander : HeaderedContentControl
 
     protected override void ArrangeContent(Rect bounds)
     {
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
         var inner = bounds.Deflate(Padding);
         double y = inner.Y;
 
@@ -128,6 +139,12 @@ public class Expander : HeaderedContentControl
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
+        if (HasTemplateInstance)
+        {
+            base.RenderSubtree(context);
+            return;
+        }
+
         Header?.Render(context);
         if (IsExpanded)
         {
@@ -137,6 +154,11 @@ public class Expander : HeaderedContentControl
 
     protected override void OnRender(IGraphicsContext context)
     {
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bounds = GetSnappedBorderBounds(Bounds);
         DrawBackgroundAndBorder(context, bounds, Background, BorderBrush, BorderThickness, CornerRadius);
 
@@ -156,6 +178,11 @@ public class Expander : HeaderedContentControl
 
     protected override UIElement? OnHitTest(Point point)
     {
+        if (HasTemplateInstance)
+        {
+            return base.OnHitTest(point);
+        }
+
         if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
         {
             return null;
@@ -187,6 +214,11 @@ public class Expander : HeaderedContentControl
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+
+        if (HasTemplateInstance)
+        {
+            return;
+        }
 
         if (e.Button != MouseButton.Left || !IsEffectivelyEnabled)
         {
