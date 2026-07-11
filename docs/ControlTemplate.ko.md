@@ -8,6 +8,9 @@
 - **템플릿은 opt-in입니다.** `Template`이 null이면(기본값) 컨트롤은 기존의 자체 렌더링
   경로를 그대로 사용하며, 성능 특성도 변하지 않습니다. 템플릿을 설정한 컨트롤만
   템플릿 경로로 동작합니다.
+- 단, 일부 조합 컨트롤(현재 `NumericUpDown`)은 테마 기본 스타일이 템플릿을 공급하는
+  **기본 템플릿** 컨트롤입니다. 이 경우 로컬 `Template` 없이도 항상 템플릿 경로로
+  동작합니다(아래 "기본 템플릿" 절).
 
 ```csharp
 // 정의: 시각 트리의 청사진. 여러 컨트롤 인스턴스에 재사용 가능.
@@ -49,10 +52,16 @@ host.Template = template
 host.Template = other (교체)
   -> 이전 트리 즉시 detach (내부 포커스는 안전하게 해제됨)
   -> 다음 measure에서 새 템플릿 빌드
+
+테마 전환
+  -> 교체와 동일한 재빌드 이벤트 (다음 measure에서 새 트리)
 ```
 
 - 빌드가 measure 시점인 이유: 속성 설정 시점에는 컨트롤이 아직 트리에 붙기 전일 수
   있어 테마, DPI, 스타일 해석 컨텍스트가 없습니다.
+- 테마 전환이 재빌드 이벤트라는 것의 저자 관점 의미: `Build` 안에서 테마 값을 읽어
+  써도 안전하고(전환 시 새 테마로 다시 빌드됨), 교체 때와 마찬가지로 파트의 일시
+  상태는 전환 시 초기화됩니다.
 - 템플릿이 적용되면 measure, arrange, render, hit test, 트리 순회가 전부
   **템플릿 루트 하나**를 통해 흐릅니다. 컨트롤의 기존 자체 구현은 실행되지 않습니다.
 
@@ -76,6 +85,32 @@ public class Badge : Control
 - `ctx.Get<T>(name)`은 템플릿 저자용(없으면 예외), `GetTemplateChild<T>`는 컨트롤용
   (없으면 null - 템플릿이 그 파트를 생략하는 것을 허용)입니다.
 - 같은 이름을 두 번 등록하면 빌드 시점에 예외가 납니다.
+
+#### 파트 상호작용 계약 (PART_*)
+
+단순 조회를 넘어, 컨트롤이 **약속된 이름의 파트에 자기 동작을 배선**하는 계약이
+있습니다. 첫 사례가 `NumericUpDown.PART_TEXT_BOX`입니다: 템플릿이 이 이름으로
+TextBox를 등록하면 컨트롤이 편집 파이프라인 전체를 인계합니다 - 값 <-> 텍스트 동기화,
+Enter/Escape 커밋/취소, 파트 포커스 진입 시 편집 시작, 포커스 이탈 시 커밋.
+
+```csharp
+nud.Template = new DelegateControlTemplate<NumericUpDown>((owner, ctx) =>
+{
+    var editBox = new TextBox();
+    ctx.Register(NumericUpDown.PART_TEXT_BOX, editBox);   // 편집 파이프라인 인계
+
+    var display = new TextBlock();
+    ctx.Bind(display, TextBlock.TextProperty, NumericUpDown.DisplayTextProperty);
+    ctx.Bind(editBox, TextBox.IsVisibleProperty, NumericUpDown.IsEditingProperty);
+    // ...배치 생략...
+});
+```
+
+- 비편집 표시는 `DisplayText` 읽기 전용 속성(포맷 적용된 값 문자열)을 바인딩합니다.
+- 역방향 데이터 흐름(파트 -> 컨트롤)이 필요한 파트가 이 계약의 대상입니다. 단방향
+  시각 반영이면 `ctx.Bind`로 충분하고 계약이 필요 없습니다.
+- 파트가 등록되지 않으면 해당 기능이 비활성화될 뿐 예외는 없습니다
+  (`BeginEdit`가 no-op이 되는 식).
 
 ### <a id="presenter"></a>ContentPresenter: logical 슬롯의 투영
 
@@ -158,6 +193,28 @@ _pathHost.Template = new DelegateControlTemplate<ContentControl>((host, ctx) =>
     return chrome;
 });
 ```
+
+### <a id="default-template"></a>기본 템플릿: 스타일이 공급하는 템플릿
+
+`Template`은 일반 속성이므로 **테마 기본 스타일의 setter로도 공급**할 수 있습니다.
+파트들이 실제 컨트롤로 상호작용을 소유하는 조합 컨트롤이 이 방식을 씁니다.
+`NumericUpDown`이 첫 사례입니다: 표시 TextBlock + 숨김 편집 TextBox + RepeatButton
+스피너 열이 테마 스타일의 템플릿으로 공급되고, 컨트롤 자체에는 그리기 코드가 없습니다.
+
+```csharp
+// 테마 기본 스타일 안 (프레임워크 내부)
+Setter.Create(Control.TemplateProperty, (ControlTemplate?)NumericUpDownTemplate.Instance)
+```
+
+- **우선순위는 값 저장소 규칙 그대로**입니다: 로컬 `Template`이 스타일 템플릿을
+  이깁니다. 앱은 로컬 대입만으로 기본 룩을 통째로 교체할 수 있습니다.
+- **로컬 `Template = null` 명시는 "스타일 템플릿 거부"입니다.** 기본 템플릿 컨트롤은
+  자체 그리기 경로가 없으므로 빈 컨트롤이 됩니다(룩리스 컨트롤의 표준 의미론).
+- `StyleName`이나 서브트리 `StyleSheet` 타입 규칙으로도 템플릿을 갖는 스타일을 공급할
+  수 있으므로, 앱/화면 단위의 룩 변형이 스타일 체계 안에서 성립합니다.
+- 어느 컨트롤이 기본 드로잉이고 어느 컨트롤이 기본 템플릿인지의 기준: **파트가 실제
+  컨트롤로 존재해야 상호작용이 성립하는가**. 프리미티브(TextBox, Button, CheckBox 등)는
+  드로잉이 본질이라 기본 템플릿을 갖지 않습니다.
 
 ### <a id="state-parts"></a>상태 파트 패턴: 여러 표현 상태의 전환
 
