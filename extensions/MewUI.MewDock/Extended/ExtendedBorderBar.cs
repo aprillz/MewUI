@@ -36,8 +36,10 @@ internal sealed class ExtendedBorderBar : FlexBorderBar
         base.SyncSelection();
     }
 
+    // The caption participates in the visual tree only while expanded (render and hit test both
+    // gate on Expanded), so a collapsed bar must not yield it.
     protected override bool VisitChildrenCore(Func<Element, bool> visitor)
-        => visitor(_caption) && base.VisitChildrenCore(visitor);
+        => (!Expanded || visitor(_caption)) && base.VisitChildrenCore(visitor);
 
     protected override Size MeasureContent(Size availableSize)
     {

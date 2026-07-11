@@ -8,8 +8,15 @@ namespace Aprillz.MewUI;
 public interface IVisualTreeHost
 {
     /// <summary>
-    /// Visits visual children of the current element.
+    /// Visits the children that participate in the current frame's visual tree, topmost first.
     /// </summary>
+    /// <remarks>
+    /// Contract: yield only children that render this frame (a collapsed or hidden part is not
+    /// visited), in front-to-back order (a child rendered later, i.e. on top, is visited first).
+    /// The base hit test probes children in yield order and takes the first hit, so a host whose
+    /// yield order cannot be front-to-back (e.g. a panel storing children in render order) must
+    /// keep its own hit-test override. Visitor callbacks run on hot paths; do not allocate.
+    /// </remarks>
     bool VisitChildren(Func<Element, bool> visitor);
 }
 

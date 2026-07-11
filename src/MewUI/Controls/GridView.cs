@@ -762,8 +762,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         return list;
     }
 
+    // Topmost-first: the scroll viewer renders after (on top of) the header row.
     protected override bool VisitScrollChildren(Func<Element, bool> visitor)
-        => visitor(_header) && visitor(_scrollViewer);
+        => visitor(_scrollViewer) && visitor(_header);
 
     protected override Size MeasureContent(Size availableSize)
     {
