@@ -743,7 +743,7 @@ internal sealed class ManagedFileDialogWindow : Window
             double originY = Math.Round(Bounds.Y * scale) + Math.Round((Bounds.Height * scale - extent) / 2);
             double stroke = Math.Max(1, scale * 1);
             double radius = Math.Max(1, extent * 0.12);
-            var color = GetValue(Control.ForegroundProperty);
+            var color = GetValue(TextElement.ForegroundProperty);
 
             void Outline(double x, double y, double width, double height, bool fill)
             {

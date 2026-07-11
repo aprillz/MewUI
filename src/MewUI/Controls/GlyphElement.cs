@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// A lightweight element that displays a <see cref="GlyphKind"/> shape.
-/// Foreground color is inherited from the nearest ancestor <see cref="Control"/>.
+/// Foreground color is inherited from ancestors.
 /// </summary>
 public sealed class GlyphElement : FrameworkElement
 {
@@ -17,7 +17,15 @@ public sealed class GlyphElement : FrameworkElement
     public static readonly MewProperty<double> StrokeThicknessProperty =
         MewProperty<double>.Register<GlyphElement>(nameof(StrokeThickness), 1.0, MewPropertyOptions.AffectsRender);
 
-    private Color? _foreground;
+    /// <summary>
+    /// Gets or sets the foreground color, backed by <see cref="TextElement.ForegroundProperty"/> so it participates
+    /// in the same inheritance chain as text-bearing ancestors.
+    /// </summary>
+    public Color Foreground
+    {
+        get => GetValue(TextElement.ForegroundProperty);
+        set => SetValue(TextElement.ForegroundProperty, value);
+    }
 
     public GlyphKind Kind
     {
@@ -38,33 +46,11 @@ public sealed class GlyphElement : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the foreground color. When not explicitly set, inherits from
-    /// the nearest ancestor <see cref="Control.ForegroundProperty"/>.
+    /// Clears a locally set <see cref="Foreground"/>, reverting to the inherited value.
     /// </summary>
-    public Color Foreground
-    {
-        get => _foreground ?? GetValue(Control.ForegroundProperty);
-        set
-        {
-            if (_foreground.HasValue && _foreground.Value == value)
-            {
-                return;
-            }
-
-            _foreground = value;
-            InvalidateVisual();
-        }
-    }
-
     public void ClearForeground()
     {
-        if (!_foreground.HasValue)
-        {
-            return;
-        }
-
-        _foreground = null;
-        InvalidateVisual();
+        PropertyStore.ClearLocal(TextElement.ForegroundProperty);
     }
 
     protected override Size MeasureContent(Size availableSize)

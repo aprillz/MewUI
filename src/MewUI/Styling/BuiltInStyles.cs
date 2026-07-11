@@ -36,7 +36,7 @@ public static class BuiltInStyles
             Transitions =
             [
                 Transition.Create(Control.BackgroundProperty),
-                Transition.Create(Control.ForegroundProperty),
+                Transition.Create(TextElement.ForegroundProperty),
             ],
             Setters =
             [
@@ -85,7 +85,7 @@ public static class BuiltInStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground.WithAlpha(128)),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],
@@ -124,12 +124,12 @@ public static class BuiltInStyles
             Transitions =
             [
                 Transition.Create(Control.BackgroundProperty),
-                Transition.Create(Control.ForegroundProperty),
+                Transition.Create(TextElement.ForegroundProperty),
             ],
             Setters =
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.Accent),
-                Setter.Create(Control.ForegroundProperty, t => t.Palette.AccentText),
+                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.AccentText),
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
             ],
             Triggers =
@@ -157,7 +157,7 @@ public static class BuiltInStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],

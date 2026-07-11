@@ -6,11 +6,11 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Lightweight text element (WPF-like) that does not carry full <see cref="Control"/> features.
-/// Shares <see cref="Control.ForegroundProperty"/>, <see cref="Control.FontFamilyProperty"/>,
-/// <see cref="Control.FontSizeProperty"/>, and <see cref="Control.FontWeightProperty"/> so that
+/// Inherits <see cref="TextElement.ForegroundProperty"/>, <see cref="TextElement.FontFamilyProperty"/>,
+/// <see cref="TextElement.FontSizeProperty"/>, and <see cref="TextElement.FontWeightProperty"/> so that
 /// inherited values propagate naturally from parent controls without style-target interference.
 /// </summary>
-public partial class TextBlock : FrameworkElement, IDisposable
+public partial class TextBlock : TextElement, IDisposable
 {
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<TextBlock>(nameof(Text), string.Empty,
@@ -64,46 +64,6 @@ public partial class TextBlock : FrameworkElement, IDisposable
     {
         get => GetValue(TextProperty);
         set => SetValue(TextProperty, value ?? string.Empty);
-    }
-
-    /// <summary>
-    /// Gets or sets the text foreground color.
-    /// Shares <see cref="Control.ForegroundProperty"/> - inherits from the nearest parent Control.
-    /// </summary>
-    public Color Foreground
-    {
-        get => GetValue(Control.ForegroundProperty);
-        set => SetValue(Control.ForegroundProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the font family.
-    /// Shares <see cref="Control.FontFamilyProperty"/> - inherits from the nearest parent Control.
-    /// </summary>
-    public string FontFamily
-    {
-        get => GetValue(Control.FontFamilyProperty);
-        set => SetValue(Control.FontFamilyProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the font size.
-    /// Shares <see cref="Control.FontSizeProperty"/> - inherits from the nearest parent Control.
-    /// </summary>
-    public double FontSize
-    {
-        get => GetValue(Control.FontSizeProperty);
-        set => SetValue(Control.FontSizeProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the font weight.
-    /// Shares <see cref="Control.FontWeightProperty"/> - inherits from the nearest parent Control.
-    /// </summary>
-    public FontWeight FontWeight
-    {
-        get => GetValue(Control.FontWeightProperty);
-        set => SetValue(Control.FontWeightProperty, value);
     }
 
     /// <summary>
@@ -162,9 +122,9 @@ public partial class TextBlock : FrameworkElement, IDisposable
     {
         base.OnMewPropertyChanged(property);
 
-        if (property.Id == Control.FontFamilyProperty.Id ||
-            property.Id == Control.FontSizeProperty.Id ||
-            property.Id == Control.FontWeightProperty.Id)
+        if (property.Id == TextElement.FontFamilyProperty.Id ||
+            property.Id == TextElement.FontSizeProperty.Id ||
+            property.Id == TextElement.FontWeightProperty.Id)
         {
             InvalidateFont();
         }

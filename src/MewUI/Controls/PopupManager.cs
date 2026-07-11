@@ -635,7 +635,7 @@ internal sealed class PopupManager
         });
     }
 
-    private static readonly MewProperty FontFamilyProperty = Control.FontFamilyProperty;
+    private static readonly MewProperty FontFamilyProperty = TextElement.FontFamilyProperty;
 
     private static void ApplyPopupThemeChange(UIElement popup, Theme oldTheme, Theme newTheme)
     {

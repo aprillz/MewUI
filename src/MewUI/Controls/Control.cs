@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for all controls.
 /// </summary>
-public abstract class Control : FrameworkElement
+public abstract class Control : TextElement
     , IVisualTreeHost
 {
     #region MewProperty Declarations
@@ -23,26 +23,6 @@ public abstract class Control : FrameworkElement
         MewProperty<ControlTemplate?>.Register<Control>(nameof(Template), null,
             MewPropertyOptions.AffectsLayout,
             static (self, oldValue, newValue) => self.OnTemplateChanged());
-
-    /// <summary>Foreground (text) color property with inheritance support.</summary>
-    public static readonly MewProperty<Color> ForegroundProperty =
-        MewProperty<Color>.Register<Control>(nameof(Foreground), Color.Black,
-            MewPropertyOptions.AffectsRender | MewPropertyOptions.Inherits);
-
-    /// <summary>Font family property with inheritance support.</summary>
-    public static readonly MewProperty<string> FontFamilyProperty =
-        MewProperty<string>.Register<Control>(nameof(FontFamily), "Segoe UI",
-            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
-
-    /// <summary>Font size property with inheritance support.</summary>
-    public static readonly MewProperty<double> FontSizeProperty =
-        MewProperty<double>.Register<Control>(nameof(FontSize), 12.0,
-            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
-
-    /// <summary>Font weight property with inheritance support.</summary>
-    public static readonly MewProperty<FontWeight> FontWeightProperty =
-        MewProperty<FontWeight>.Register<Control>(nameof(FontWeight), FontWeight.Normal,
-            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
 
     /// <summary>Corner radius for background/border rendering.</summary>
     public static readonly MewProperty<double> CornerRadiusProperty =
@@ -125,15 +105,6 @@ public abstract class Control : FrameworkElement
     }
 
     /// <summary>
-    /// Gets or sets the foreground (text) color.
-    /// </summary>
-    public Color Foreground
-    {
-        get => GetValue(ForegroundProperty);
-        set => SetValue(ForegroundProperty, value);
-    }
-
-    /// <summary>
     /// Gets or sets the border color.
     /// </summary>
     public Color BorderBrush
@@ -173,33 +144,6 @@ public abstract class Control : FrameworkElement
     /// Gets the content bounds (bounds minus padding).
     /// </summary>
     protected Rect ContentBounds => Bounds.Deflate(Padding);
-
-    /// <summary>
-    /// Gets or sets the font family.
-    /// </summary>
-    public string FontFamily
-    {
-        get => GetValue(FontFamilyProperty);
-        set => SetValue(FontFamilyProperty, value ?? string.Empty);
-    }
-
-    /// <summary>
-    /// Gets or sets the font size.
-    /// </summary>
-    public double FontSize
-    {
-        get => GetValue(FontSizeProperty);
-        set => SetValue(FontSizeProperty, value);
-    }
-
-    /// <summary>
-    /// Gets or sets the font weight.
-    /// </summary>
-    public FontWeight FontWeight
-    {
-        get => GetValue(FontWeightProperty);
-        set => SetValue(FontWeightProperty, value);
-    }
 
     #region VisualState System
 

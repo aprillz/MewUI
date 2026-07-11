@@ -20,7 +20,7 @@ public static class DefaultStyles
         [
             Transition.Create(Control.BackgroundProperty),
             Transition.Create(Control.BorderBrushProperty),
-            Transition.Create(Control.ForegroundProperty),
+            Transition.Create(TextElement.ForegroundProperty),
         ];
 
     private static Transition[] SliderColorTransitions =>
@@ -143,7 +143,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.DisabledControlBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],
@@ -256,10 +256,10 @@ public static class DefaultStyles
             Setters =
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.WindowBackground),
-                Setter.Create(Control.ForegroundProperty, t => t.Palette.WindowText),
-                Setter.Create(Control.FontFamilyProperty, t => t.Metrics.FontFamily),
-                Setter.Create(Control.FontSizeProperty, t => t.Metrics.FontSize),
-                Setter.Create(Control.FontWeightProperty, t => t.Metrics.FontWeight),
+                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.WindowText),
+                Setter.Create(TextElement.FontFamilyProperty, t => t.Metrics.FontFamily),
+                Setter.Create(TextElement.FontSizeProperty, t => t.Metrics.FontSize),
+                Setter.Create(TextElement.FontWeightProperty, t => t.Metrics.FontWeight),
                 Setter.Create(Control.PaddingProperty, t=>t.Metrics.ContainerPadding),
             ],
         };
@@ -397,7 +397,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                         Setter.Create(ToggleSwitch.ThumbBrushProperty, t => t.Palette.DisabledText),
                     ],
                 },
@@ -495,7 +495,7 @@ public static class DefaultStyles
                 {
                     Match = VisualStateFlags.None,
                     Exclude = VisualStateFlags.Enabled,
-                    Setters = [Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText)],
+                    Setters = [Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText)],
                 },
             ],
         };
@@ -555,7 +555,7 @@ public static class DefaultStyles
                 // Matches the other button-like controls; the container shares the same face.
                 // Padding comes from SegmentedControl.ItemPadding; height follows the control.
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace),
-                Setter.Create(Control.ForegroundProperty, t => t.Palette.WindowText),
+                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.WindowText),
                 Setter.Create(Control.CornerRadiusProperty, 0.0),
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
             ],
@@ -603,7 +603,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
                 // Disabled + Selected ??mirror ToggleButton's disabled-checked face.
@@ -697,7 +697,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],
@@ -780,7 +780,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
                 new StateTrigger
@@ -826,7 +826,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.DisabledControlBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],
@@ -884,7 +884,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],
@@ -948,7 +948,7 @@ public static class DefaultStyles
                     Setters =
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
                 // Disabled + Selected
@@ -960,7 +960,7 @@ public static class DefaultStyles
                     [
                         Setter.Create(Control.BackgroundProperty, t => t.Palette.ContainerBackground),
                         Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
-                        Setter.Create(Control.ForegroundProperty, t => t.Palette.DisabledText),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                     ],
                 },
             ],
