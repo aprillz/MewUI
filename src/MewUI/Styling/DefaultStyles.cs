@@ -166,7 +166,8 @@ public static class DefaultStyles
             Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
             Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
             Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
-            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+            Setter.Create(Control.TemplateProperty, static theme => (ControlTemplate?)NumericUpDownTemplate.GetForTheme(theme)));
 
     private static Style CreateItemsControlStyle()
         => CreateControlBasedStyle(typeof(ItemsControl),
