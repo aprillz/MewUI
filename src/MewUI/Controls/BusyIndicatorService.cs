@@ -393,24 +393,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
         _child.Render(context);
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (_child is UIElement uiChild)
-        {
-            var result = uiChild.HitTest(point);
-            if (result != null)
-            {
-                return result;
-            }
-        }
-        return Bounds.Contains(point) ? this : null;
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_child);
 
     internal void UpdateMessage(string message)

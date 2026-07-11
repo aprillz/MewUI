@@ -470,30 +470,6 @@ public abstract class Control : FrameworkElement
         }
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (_templateInstance == null)
-        {
-            return base.OnHitTest(point);
-        }
-
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (_templateInstance.VisualRoot is UIElement uiRoot)
-        {
-            var hit = uiRoot.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return Bounds.Contains(point) ? this : null;
-    }
-
     /// <summary>
     /// Queues a visual-state reconciliation that re-applies style values even when the state
     /// flags compare equal, snapping instead of animating. Used when a virtualization-pinned

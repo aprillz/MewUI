@@ -848,21 +848,6 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
                 }
             });
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-        var hit = _scrollViewer.HitTest(point);
-        if (hit != null)
-        {
-            return hit;
-        }
-
-        return base.OnHitTest(point);
-    }
-
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);

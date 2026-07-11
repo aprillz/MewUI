@@ -339,22 +339,6 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         }
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        var hit = _panel.HitTest(point);
-        if (hit != null)
-        {
-            return hit;
-        }
-
-        return Bounds.Contains(point) ? this : null;
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => visitor(_panel);
 
     protected override void OnDispose()

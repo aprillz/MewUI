@@ -906,35 +906,6 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         }
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        // IMPORTANT: children may be arranged outside this control's bounds due to scrolling.
-        // Hit testing must be clipped to the control bounds to avoid "ghost" input on clipped content.
-        if (!Bounds.Contains(point))
-        {
-            return null;
-        }
-
-        var scrollHit = _scrollViewer.HitTest(point);
-        if (scrollHit != null)
-        {
-            return scrollHit;
-        }
-
-        var headerHit = _header.HitTest(point);
-        if (headerHit != null)
-        {
-            return headerHit;
-        }
-
-        return Bounds.Contains(point) ? this : null;
-    }
-
     private void BeforeRowRender(IGraphicsContext context, int index, Rect itemRect)
     {
         if (!ZebraStriping)

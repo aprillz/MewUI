@@ -92,26 +92,6 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
         projected?.Render(context);
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        var projected = ActiveProjection;
-        if (projected is UIElement uiContent)
-        {
-            var hit = uiContent.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return Bounds.Contains(point) ? this : null;
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var projected = ActiveProjection;

@@ -139,37 +139,6 @@ public class ContentControl : Control
         Content?.Render(context);
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (HasTemplateInstance)
-        {
-            return base.OnHitTest(point);
-        }
-
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        // First check children
-        if (Content is UIElement uiContent)
-        {
-            var result = uiContent.HitTest(point);
-            if (result != null)
-            {
-                return result;
-            }
-        }
-
-        // Then check self
-        if (Bounds.Contains(point))
-        {
-            return this;
-        }
-
-        return null;
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var templateRoot = TemplateVisualRoot;

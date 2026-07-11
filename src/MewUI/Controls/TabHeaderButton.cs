@@ -96,17 +96,6 @@ internal sealed class TabHeaderButton : ContentControl
 
     internal override void OnAccessKey() => ClickedCallback?.Invoke(Index);
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        // Match WPF semantics: disabled tabs should not participate in hit testing,
-        // otherwise they keep receiving hover/mouse-over changes and triggering redraw.
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-        return base.OnHitTest(point); 
-    }
-
     protected override void OnRender(IGraphicsContext context)
     {
         var bg = GetValue(BackgroundProperty);
