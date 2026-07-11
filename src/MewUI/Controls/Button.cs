@@ -124,7 +124,7 @@ public partial class Button : Control, IVisualTreeHost
             _pressCapture.EndPress();
 
             // Fire click if still over button
-            if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
+            if (!SuppressClickOnMouseUp && IsEffectivelyEnabled && Bounds.Contains(e.Position))
             {
                 OnClick();
             }
@@ -132,6 +132,9 @@ public partial class Button : Control, IVisualTreeHost
             e.Handled = true;
         }
     }
+
+    /// <summary>When true, mouse-up does not raise <see cref="Click"/> (RepeatButton fires it from press/timer instead).</summary>
+    private protected virtual bool SuppressClickOnMouseUp => false;
 
     protected override void OnMouseLeave()
     {
