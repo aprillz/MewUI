@@ -274,6 +274,45 @@ public sealed class ControlTemplateTests
         Assert.ThrowsExactly<InvalidOperationException>(() => window.PerformLayout());
     }
 
+    [TestMethod]
+    public void BindChrome_ForwardsChromePropertiesAndFollowsChanges()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        Border? chrome = null;
+        var template = new DelegateControlTemplate<TemplatedControl>((owner, ctx) =>
+        {
+            chrome = new Border();
+            ctx.BindChrome(chrome);
+            return chrome;
+        });
+
+        var window = HeadlessWindow.Create();
+        var control = new TemplatedControl
+        {
+            Template = template,
+            Background = Color.Red,
+            BorderBrush = Color.Blue,
+            BorderThickness = 3,
+            CornerRadius = 5,
+        };
+        window.Content = control;
+        window.PerformLayout();
+
+        Assert.IsNotNull(chrome);
+        Assert.AreEqual(Color.Red, chrome.Background, "BindChrome applies the current background");
+        Assert.AreEqual(Color.Blue, chrome.BorderBrush);
+        Assert.AreEqual(3, chrome.BorderThickness);
+        Assert.AreEqual(5, chrome.CornerRadius);
+
+        control.Background = Color.Green;
+        Assert.AreEqual(Color.Green, chrome.Background, "BindChrome keeps forwarding changes");
+    }
+
     private sealed class Badge : Control
     {
     }

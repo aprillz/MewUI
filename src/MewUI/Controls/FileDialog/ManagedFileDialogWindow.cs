@@ -183,10 +183,7 @@ internal sealed class ManagedFileDialogWindow : Window
             {
                 Child = new Grid().Children(_breadcrumb.CenterVertical(), _pathBox),
             };
-            ctx.Bind(chrome, Control.BackgroundProperty, Control.BackgroundProperty);
-            ctx.Bind(chrome, Control.BorderBrushProperty, Control.BorderBrushProperty);
-            ctx.Bind(chrome, Control.BorderThicknessProperty, Control.BorderThicknessProperty);
-            ctx.Bind(chrome, Control.CornerRadiusProperty, Control.CornerRadiusProperty);
+            ctx.BindChrome(chrome);
             return chrome;
         });
         _pathHost.OnMouseDown(_ =>

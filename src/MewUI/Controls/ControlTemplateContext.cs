@@ -36,6 +36,27 @@ public sealed class ControlTemplateContext
         (_bindings ??= new()).Add((sourceProperty.Id, entry));
     }
 
+    /// <summary>
+    /// Keeps the same property of a target part in sync with <see cref="Owner"/>.
+    /// </summary>
+    /// <param name="target">The template part to update.</param>
+    /// <param name="property">The property to forward from owner to part.</param>
+    public void Bind<T>(Element target, MewProperty<T> property)
+        => Bind(target, property, property);
+
+    /// <summary>
+    /// Forwards the owner's chrome properties (Background, BorderBrush, BorderThickness,
+    /// CornerRadius) to the template part that takes over the suppressed chrome rendering.
+    /// </summary>
+    /// <param name="target">The template part that draws the chrome.</param>
+    public void BindChrome(Element target)
+    {
+        Bind(target, Control.BackgroundProperty);
+        Bind(target, Control.BorderBrushProperty);
+        Bind(target, Control.BorderThicknessProperty);
+        Bind(target, Control.CornerRadiusProperty);
+    }
+
     internal void ReleaseBindings()
     {
         if (_bindings == null)
