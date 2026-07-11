@@ -23,7 +23,7 @@ internal static class NumericUpDownTemplate
         double separatorWidth = theme.Metrics.ControlBorderThickness;
         double spinnerWidth = theme.Metrics.BaseControlHeight - theme.Metrics.ControlBorderThickness * 2;
 
-        var displayText = new TextBlock().Column(0);
+        var displayText = new TextBlock().CenterVertical();
         ctx.Register(NumericUpDown.PART_DISPLAY_TEXT, displayText);
         ctx.Bind(displayText, TextBlock.TextProperty, NumericUpDown.DisplayTextProperty);
 
@@ -38,8 +38,16 @@ internal static class NumericUpDownTemplate
             // Focus enters via SetIsEditing, not Tab; keeps the control a single tab stop while editing.
             IsTabStop = false,
             ImeMode = ImeMode.Disabled,
-        }.Column(0);
+        };
         ctx.Register(NumericUpDown.PART_TEXT_BOX, editBox);
+
+        // Padding is the text area's inset only; the separator and spinner column run the full
+        // inner height, matching the pre-template layout.
+        var textHost = new Border
+        {
+            Child = new Grid().Children(displayText, editBox),
+        }.Column(0);
+        ctx.Bind(textHost, Control.PaddingProperty);
 
         var separator = new Border
         {
@@ -54,7 +62,7 @@ internal static class NumericUpDownTemplate
 
         var grid = new Grid()
             .Columns(GridLength.Star, GridLength.Pixels(separatorWidth), GridLength.Pixels(spinnerWidth))
-            .Children(displayText, editBox, separator, spinner);
+            .Children(textHost, separator, spinner);
 
         var chrome = new Border
         {
@@ -62,7 +70,6 @@ internal static class NumericUpDownTemplate
             ClipToBounds = true,
         };
         ctx.BindChrome(chrome);
-        ctx.Bind(chrome, Control.PaddingProperty);
 
         return chrome;
     }
