@@ -1,13 +1,15 @@
-using Aprillz.MewUI.Controls.Text;
 using Aprillz.MewUI.Input;
-using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class NumericUpDown : RangeBase, IVisualTreeHost
+public sealed class NumericUpDown : RangeBase
 {
     /// <summary>Template part name for the editable text box; register a TextBox under this name to receive the edit pipeline.</summary>
     public const string PART_TEXT_BOX = "PART_TextBox";
+
+    // Default-template-only part: the TextBlock shown while not editing. Not a public contract
+    // because custom templates are free to omit it (see UpdateEditMode).
+    internal const string PART_DISPLAY_TEXT = "PART_DisplayText";
 
     public static readonly MewProperty<string> FormatProperty =
         MewProperty<string>.Register<NumericUpDown>(nameof(Format), "0.##", MewPropertyOptions.AffectsLayout,
@@ -28,16 +30,21 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     public static readonly MewProperty<bool> IsEditingProperty = IsEditingPropertyKey.Property;
 
+    private static readonly MewPropertyKey<string> DisplayTextPropertyKey =
+        MewProperty<string>.RegisterReadOnly<NumericUpDown>(nameof(DisplayText), "");
+
+    public static readonly MewProperty<string> DisplayTextProperty = DisplayTextPropertyKey.Property;
+
     private void OnFormatChanged()
     {
-        _measureCache.Invalidate();
+        UpdateDisplayText();
         UpdateTextBoxFromValue();
     }
 
     private void OnIsIntegerChanged()
     {
         CoerceValue(ValueProperty);
-        _measureCache.Invalidate();
+        UpdateDisplayText();
         UpdateTextBoxFromValue();
     }
 
@@ -55,25 +62,10 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     /// <summary>Decreases the value by one effective step.</summary>
     public void StepDown() => Value -= GetEffectiveStep();
 
-    private TextMeasureCache _measureCache;
-    private string? _cachedDisplayText;
-    private double _cachedDisplayValue = double.NaN;
-    private string? _cachedDisplayFormat;
-    private readonly TextBox _textBox;
-    private readonly RepeatButton _decrementButton;
-    private readonly RepeatButton _incrementButton;
+    private TextBlock? _displayPart;
     private TextBox? _partTextBox;
     private bool _suppressTextBoxUpdate;
     private WheelNotchAccumulator _wheelAccumulator;
-
-    private TextBox ActiveTextBox
-    {
-        get
-        {
-            // The template's PART_TextBox overrides the built-in text box when attached.
-            return _partTextBox ?? _textBox;
-        }
-    }
 
     static NumericUpDown()
     {
@@ -82,63 +74,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     public NumericUpDown()
     {
-        _textBox = new TextBox
-        {
-            BorderThickness = 0,
-            Padding = new Thickness(0),
-            Background = Color.Transparent,
-            MinHeight = 0,
-            IsVisible = false,
-            IsHitTestVisible = false,
-            // Focus enters via SetIsEditing, not Tab; keeps the control a single tab stop while editing.
-            IsTabStop = false,
-            ImeMode = Input.ImeMode.Disabled
-        };
-        _textBox.TextChanged += OnTextBoxTextChanged;
-        _textBox.KeyDown += OnTextBoxKeyDown;
-        _textBox.LostFocus += OnTextBoxLostFocus;
-
-        _decrementButton = CreateSpinnerButton(GlyphKind.ChevronDown);
-        _incrementButton = CreateSpinnerButton(GlyphKind.ChevronUp);
-        _decrementButton.Click += OnDecrementClick;
-        _incrementButton.Click += OnIncrementClick;
-
-        AttachChild(_textBox);
-        AttachChild(_decrementButton);
-        AttachChild(_incrementButton);
-    }
-
-    private static RepeatButton CreateSpinnerButton(GlyphKind glyphKind)
-        => new()
-        {
-            // Spinner parts must not join the tab order or steal focus from the control.
-            Focusable = false,
-            IsTabStop = false,
-            BorderThickness = 0,
-            CornerRadius = 0,
-            Padding = new Thickness(0),
-            MinHeight = 0,
-            Content = new GlyphElement { Kind = glyphKind },
-        };
-
-    private void OnIncrementClick()
-    {
-        if (!IsEditing)
-        {
-            Focus();
-        }
-
-        StepUp();
-    }
-
-    private void OnDecrementClick()
-    {
-        if (!IsEditing)
-        {
-            Focus();
-        }
-
-        StepDown();
+        SetValue(DisplayTextPropertyKey, FormatValue(Value));
     }
 
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
@@ -158,15 +94,18 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     /// </summary>
     public bool IsEditing => GetValue(IsEditingProperty);
 
+    /// <summary>Gets the formatted value text shown while not editing.</summary>
+    public string DisplayText => GetValue(DisplayTextProperty);
+
     private void SetIsEditing(bool value) => SetValue(IsEditingPropertyKey, value);
 
     /// <summary>
     /// Enters edit mode: shows the TextBox, focuses it and selects all text.
-    /// No-op if already editing or the control is disabled.
+    /// No-op if already editing, the control is disabled, or no editable TextBox part is attached.
     /// </summary>
     public void BeginEdit()
     {
-        if (IsEditing || !IsEffectivelyEnabled)
+        if (_partTextBox == null || IsEditing || !IsEffectivelyEnabled)
         {
             return;
         }
@@ -180,7 +119,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     /// </summary>
     public void CommitEdit()
     {
-        if (!IsEditing)
+        if (_partTextBox == null || !IsEditing)
         {
             return;
         }
@@ -210,7 +149,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     /// </summary>
     public void CancelEdit()
     {
-        if (!IsEditing)
+        if (_partTextBox == null || !IsEditing)
         {
             return;
         }
@@ -244,136 +183,23 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-        _measureCache.Invalidate();
         SyncTextBoxStyle();
     }
 
     protected override void OnEnabledChanged()
     {
         base.OnEnabledChanged();
-        ActiveTextBox.IsEnabled = IsEffectivelyEnabled;
-        _decrementButton.IsEnabled = IsEffectivelyEnabled;
-        _incrementButton.IsEnabled = IsEffectivelyEnabled;
+
+        if (_partTextBox != null)
+        {
+            _partTextBox.IsEnabled = IsEffectivelyEnabled;
+        }
     }
 
     protected override void OnValueChanged(double value)
     {
-        _measureCache.Invalidate();
-        InvalidateMeasure();
+        UpdateDisplayText();
         UpdateTextBoxFromValue();
-    }
-
-    protected override Size MeasureContent(Size available)
-    {
-        if (HasTemplateInstance)
-        {
-            return base.MeasureContent(available);
-        }
-
-        var factory = GetGraphicsFactory();
-        var font = GetFont(factory);
-        string text = GetDisplayText();
-        var textSize = _measureCache.Measure(factory, GetDpi(), font, text, TextWrapping.NoWrap, 0);
-
-        double buttonAreaWidth = GetButtonAreaWidth();
-        double width = textSize.Width + Padding.HorizontalThickness + buttonAreaWidth;
-        double height = textSize.Height + Padding.VerticalThickness;
-        return new Size(width, height).Inflate(new Thickness(GetBorderVisualInset()));
-    }
-
-    protected override void ArrangeContent(Rect bounds)
-    {
-        base.ArrangeContent(bounds);
-
-        if (HasTemplateInstance)
-        {
-            return;
-        }
-
-        var inner = GetSnappedBorderBounds(bounds).Deflate(new Thickness(GetBorderVisualInset()));
-        double buttonAreaWidth = Math.Min(GetButtonAreaWidth(), inner.Width);
-        var textRect = new Rect(inner.X + Padding.Left, inner.Y + Padding.Top,
-            Math.Max(0, inner.Width - buttonAreaWidth - Padding.HorizontalThickness),
-            Math.Max(0, inner.Height - Padding.VerticalThickness));
-
-        textRect = LayoutRounding.SnapBoundsRectToPixels(textRect, GetDpi() / 96.0);
-        _textBox.Arrange(textRect);
-
-        var (decRect, incRect) = GetButtonRects();
-        _decrementButton.Arrange(decRect);
-        _incrementButton.Arrange(incRect);
-    }
-
-    protected override void OnRender(IGraphicsContext context)
-    {
-        if (HasTemplateInstance)
-        {
-            return;
-        }
-
-        double radius = CornerRadius;
-
-        var state = CurrentVisualState;
-        bool isEnabled = state.IsEnabled;
-        Color bg = GetValue(BackgroundProperty);
-        Color border = GetValue(BorderBrushProperty);
-
-        var metrics = GetBorderRenderMetrics(Bounds, BorderThickness, radius);
-        var bounds = metrics.Bounds;
-        var borderInset = metrics.UniformThickness;
-
-        DrawBackgroundAndBorder(context, bounds, bg, border, BorderThickness, radius);
-
-        var inner = bounds.Deflate(new Thickness(borderInset));
-
-        double buttonAreaWidth = Math.Min(GetButtonAreaWidth(), inner.Width);
-        var textRect = new Rect(inner.X + Padding.Left, inner.Y + Padding.Top,
-            Math.Max(0, inner.Width - buttonAreaWidth - Padding.HorizontalThickness),
-            Math.Max(0, inner.Height - Padding.VerticalThickness));
-
-        textRect = LayoutRounding.SnapBoundsRectToPixels(textRect, context.DpiScale);
-
-        var font = GetFont();
-        var textColor = isEnabled ? Foreground : Theme.Palette.DisabledText;
-        if (!IsEditing)
-        {
-            context.DrawText(GetDisplayText(), textRect, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
-        }
-    }
-
-    protected override void RenderSubtree(IGraphicsContext context)
-    {
-        if (HasTemplateInstance)
-        {
-            base.RenderSubtree(context);
-            return;
-        }
-
-        if (_incrementButton.Bounds.Width > 0)
-        {
-            var metrics = GetBorderRenderMetrics(Bounds, BorderThickness, CornerRadius);
-            var inner = metrics.Bounds.Deflate(new Thickness(metrics.UniformThickness));
-
-            // Clip the square spinner buttons to the rounded inner chrome so their corners stay inside.
-            context.Save();
-            context.SetClipRoundedRect(inner, metrics.UniformInnerRadius, metrics.UniformInnerRadius);
-
-            _decrementButton.Render(context);
-            _incrementButton.Render(context);
-
-            if (BorderThickness > 0)
-            {
-                double separatorX = _incrementButton.Bounds.Left;
-                context.DrawLine(new Point(separatorX, inner.Y), new Point(separatorX, inner.Bottom), Theme.Palette.ControlBorder, BorderThickness, pixelSnap: true);
-            }
-
-            context.Restore();
-        }
-
-        if (IsEditing)
-        {
-            _textBox.Render(context);
-        }
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -393,17 +219,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         Value += notches * GetEffectiveStep();
         e.Handled = true;
-        UpdateTextBoxFromValue();
-        InvalidateVisual();
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
-        if (HasTemplateInstance)
-        {
-            return;
-        }
 
         if (!IsEffectivelyEnabled || e.Button != MouseButton.Left)
         {
@@ -415,7 +235,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             Focus();
         }
 
-        // Spinner presses never reach here: the RepeatButton children take the hit and handle it.
+        // Spinner presses never reach here: the RepeatButton parts take the hit and handle it.
         BeginEdit();
         e.Handled = true;
     }
@@ -436,13 +256,11 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         if (e.Key == Key.Up)
         {
             StepUp();
-            InvalidateVisual();
             e.Handled = true;
         }
         else if (e.Key == Key.Down)
         {
             StepDown();
-            InvalidateVisual();
             e.Handled = true;
         }
     }
@@ -463,84 +281,29 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         InvalidateVisual();
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (HasTemplateInstance)
-        {
-            return base.OnHitTest(point);
-        }
-
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (_incrementButton.HitTest(point) is UIElement incrementHit)
-        {
-            return incrementHit;
-        }
-        if (_decrementButton.HitTest(point) is UIElement decrementHit)
-        {
-            return decrementHit;
-        }
-
-        if (IsEditing)
-        {
-            var hit = _textBox.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return base.OnHitTest(point);
-    }
-
-    private double GetButtonAreaWidth() => (Theme.Metrics.BaseControlHeight - Theme.Metrics.ControlBorderThickness * 2);
-
-    private (Rect decRect, Rect incRect) GetButtonRects()
-    {
-        var inner = GetSnappedBorderBounds(Bounds).Deflate(new Thickness(GetBorderVisualInset()));
-        double buttonAreaWidth = Math.Min(GetButtonAreaWidth(), inner.Width);
-        var buttonRect = new Rect(inner.Right - buttonAreaWidth, inner.Y, buttonAreaWidth, inner.Height);
-        var incRect = new Rect(buttonRect.X, buttonRect.Y, buttonRect.Width, buttonRect.Height / 2);
-        var decRect = new Rect(buttonRect.X, buttonRect.Y + buttonRect.Height / 2, buttonRect.Width, buttonRect.Height / 2);
-        return (decRect, incRect);
-    }
-
-    private string GetDisplayText()
-    {
-        if (IsEditing)
-        {
-            var text = ActiveTextBox.Text;
-            return string.IsNullOrEmpty(text) ? FormatValue(Value) : text;
-        }
-
-        var v = Value;
-        var fmt = Format;
-        if (_cachedDisplayText != null && _cachedDisplayValue == v && _cachedDisplayFormat == fmt)
-            return _cachedDisplayText;
-
-        _cachedDisplayText = FormatValue(v);
-        _cachedDisplayValue = v;
-        _cachedDisplayFormat = fmt;
-        return _cachedDisplayText;
-    }
+    private void UpdateDisplayText() => SetValue(DisplayTextPropertyKey, FormatValue(Value));
 
     private string FormatValue(double value) => value.ToString(Format);
 
     private void UpdateEditMode()
     {
-        bool editing = IsEditing;
-        var textBox = ActiveTextBox;
-
-        // The part's IsVisible/IsHitTestVisible belong to the template author (e.g. ctx.Bind to
-        // IsEditingProperty); only the built-in text box toggles them itself.
-        if (_partTextBox == null)
+        var textBox = _partTextBox;
+        if (textBox == null)
         {
+            return;
+        }
+
+        bool editing = IsEditing;
+
+        // The default template's display TextBlock is the only part whose visibility this
+        // control owns; a custom template without it keeps full author control (ctx.Bind, etc.).
+        if (_displayPart != null)
+        {
+            _displayPart.IsVisible = !editing;
             textBox.IsVisible = editing;
             textBox.IsHitTestVisible = editing;
         }
+
         textBox.IsEnabled = IsEffectivelyEnabled;
 
         if (editing)
@@ -558,15 +321,16 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
                 window.FocusManager.SetFocus(this);
             }
         }
-
-        _measureCache.Invalidate();
-        InvalidateMeasure();
-        InvalidateVisual();
     }
 
     private void SyncTextBoxStyle()
     {
-        var textBox = ActiveTextBox;
+        var textBox = _partTextBox;
+        if (textBox == null)
+        {
+            return;
+        }
+
         textBox.FontFamily = FontFamily;
         textBox.FontSize = FontSize;
         textBox.FontWeight = FontWeight;
@@ -575,12 +339,12 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
     private void UpdateTextBoxFromValue()
     {
-        if (!IsEditing || _suppressTextBoxUpdate)
+        var textBox = _partTextBox;
+        if (textBox == null || !IsEditing || _suppressTextBoxUpdate)
         {
             return;
         }
 
-        var textBox = ActiveTextBox;
         var formatted = FormatValue(Value);
         if (textBox.Text == formatted)
         {
@@ -601,7 +365,13 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private bool TryParseTextBox(out double value)
     {
         value = 0;
-        var text = ActiveTextBox.Text;
+        var textBox = _partTextBox;
+        if (textBox == null)
+        {
+            return false;
+        }
+
+        var text = textBox.Text;
         if (string.IsNullOrWhiteSpace(text))
         {
             return false;
@@ -629,10 +399,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
                 _suppressTextBoxUpdate = false;
             }
         }
-
-        _measureCache.Invalidate();
-        InvalidateMeasure();
-        InvalidateVisual();
     }
 
     private void OnTextBoxKeyDown(KeyEventArgs e)
@@ -661,7 +427,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         if (e.Key == Key.Up)
         {
             Value += GetEffectiveStep();
-            UpdateTextBoxFromValue();
             e.Handled = true;
             return;
         }
@@ -669,7 +434,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         if (e.Key == Key.Down)
         {
             Value -= GetEffectiveStep();
-            UpdateTextBoxFromValue();
             e.Handled = true;
         }
     }
@@ -687,6 +451,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private protected override void OnTemplateInstanceAttached()
     {
         base.OnTemplateInstanceAttached();
+
+        _displayPart = GetTemplateChild<TextBlock>(PART_DISPLAY_TEXT);
 
         var part = GetTemplateChild<TextBox>(PART_TEXT_BOX);
         if (part == null)
@@ -709,6 +475,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     {
         base.OnTemplateInstanceDetached();
 
+        _displayPart = null;
+
         var part = _partTextBox;
         if (part == null)
         {
@@ -725,20 +493,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         part.LostFocus -= OnTextBoxLostFocus;
         part.GotFocus -= OnPartTextBoxGotFocus;
         _partTextBox = null;
-
-        // Restore the built-in text box's visibility/enabled state now that it is active again.
-        UpdateEditMode();
-    }
-
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-    {
-        var templateRoot = TemplateVisualRoot;
-        if (templateRoot != null)
-        {
-            return visitor(templateRoot);
-        }
-
-        return visitor(_textBox) && visitor(_decrementButton) && visitor(_incrementButton);
     }
 
     protected override void OnDispose()
@@ -753,20 +507,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             _partTextBox = null;
         }
 
-        _textBox.TextChanged -= OnTextBoxTextChanged;
-        _textBox.KeyDown -= OnTextBoxKeyDown;
-        _textBox.LostFocus -= OnTextBoxLostFocus;
-        DetachChild(_textBox);
-        _textBox.Dispose();
-
-        _decrementButton.Click -= OnDecrementClick;
-        _incrementButton.Click -= OnIncrementClick;
-        DetachChild(_decrementButton);
-        DetachChild(_incrementButton);
-        _decrementButton.Dispose();
-        _incrementButton.Dispose();
-
         base.OnDispose();
     }
 }
-
