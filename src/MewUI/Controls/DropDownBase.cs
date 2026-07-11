@@ -167,6 +167,11 @@ public abstract class DropDownBase : Control, IPopupOwner
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var borderInset = GetBorderVisualInset();
         var hInset = borderInset * 2 + Padding.HorizontalThickness;
         var innerWidth = Math.Max(0, availableSize.Width - hInset);
@@ -199,31 +204,34 @@ public abstract class DropDownBase : Control, IPopupOwner
 
     protected override void OnRender(IGraphicsContext context)
     {
-        var bounds = GetSnappedBorderBounds(Bounds);
-        var borderInset = GetBorderVisualInset();
-        double radius = CornerRadiusDip;
-
-        var state = CurrentVisualState;
-
-        var bg = PickButtonBackground(state);
-
-        Color baseBorder = state.IsEnabled ? BorderBrush : Theme.Palette.ControlBorder;
-        var borderColor = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.6);
-
-        DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
-
-        var headerHeight = ResolveHeaderHeight();
-        var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
-        var innerHeaderRect = headerRect.Deflate(new Thickness(borderInset));
-
-        ArrowForeground = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
-        var profiler = PerformanceProfiler.Instance;
-        using (profiler.IsEnabled ? profiler.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this) : default)
+        if (!HasTemplateInstance)
         {
-            RenderHeaderContent(context, headerRect, innerHeaderRect);
-        }
+            var bounds = GetSnappedBorderBounds(Bounds);
+            var borderInset = GetBorderVisualInset();
+            double radius = CornerRadiusDip;
 
-        DrawArrow(context, innerHeaderRect, ArrowForeground, IsDropDownOpen);
+            var state = CurrentVisualState;
+
+            var bg = PickButtonBackground(state);
+
+            Color baseBorder = state.IsEnabled ? BorderBrush : Theme.Palette.ControlBorder;
+            var borderColor = PickAccentBorder(Theme, baseBorder, state, hoverMix: 0.6);
+
+            DrawBackgroundAndBorder(context, bounds, bg, borderColor, BorderThickness, radius);
+
+            var headerHeight = ResolveHeaderHeight();
+            var headerRect = new Rect(bounds.X, bounds.Y, bounds.Width, headerHeight);
+            var innerHeaderRect = headerRect.Deflate(new Thickness(borderInset));
+
+            ArrowForeground = state.IsEnabled ? Foreground : Theme.Palette.DisabledText;
+            var profiler = PerformanceProfiler.Instance;
+            using (profiler.IsEnabled ? profiler.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this) : default)
+            {
+                RenderHeaderContent(context, headerRect, innerHeaderRect);
+            }
+
+            DrawArrow(context, innerHeaderRect, ArrowForeground, IsDropDownOpen);
+        }
 
         // Popup bounds only depend on: this control's own bounds (ArrangeContent/OnSizeChanged),
         // MaxDropDownHeight (OnMaxDropDownHeightChanged), the window's client size (ClientSizeChanged,
