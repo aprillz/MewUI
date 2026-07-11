@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A control with a clickable header that expands/collapses its content.
 /// </summary>
-public class Expander : HeaderedContentControl
+public class Expander : HeaderedContentControl, IVisualTreeHost
 {
     public static readonly MewProperty<bool> IsExpandedProperty =
         MewProperty<bool>.Register<Expander>(nameof(IsExpanded), true,
@@ -176,39 +176,19 @@ public class Expander : HeaderedContentControl
             IsExpanded ? GlyphKind.ChevronDown : GlyphKind.ChevronRight);
     }
 
-    protected override UIElement? OnHitTest(Point point)
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
-        if (HasTemplateInstance)
+        var templateRoot = TemplateVisualRoot;
+        if (templateRoot != null)
         {
-            return base.OnHitTest(point);
+            return visitor(templateRoot);
         }
 
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        // Probe the header element so its own children (label/glyph/interactive) get the hit
-        // for tooltip/cursor/hover, instead of collapsing the whole header row to self.
-        if (Header is UIElement headerUi && headerUi.HitTest(point) is UIElement headerHit)
-        {
-            return headerHit;
-        }
-
-        // Content participates only when expanded: collapsed content is not arranged and keeps
-        // stale bounds, so an unconditional probe would phantom-hit it.
-        if (IsExpanded && Content is UIElement contentUi && contentUi.HitTest(point) is UIElement contentHit)
-        {
-            return contentHit;
-        }
-
-        // Glyph strip or bare header area with no child hit: self, so OnMouseDown can toggle.
-        if (Bounds.Contains(point))
-        {
-            return this;
-        }
-
-        return null;
+        if (Header != null && !visitor(Header)) return false;
+        // Collapsed content is not arranged this frame (stale bounds), so it does not
+        // participate in the visual tree.
+        if (IsExpanded && Content != null && !visitor(Content)) return false;
+        return true;
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

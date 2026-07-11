@@ -93,4 +93,42 @@ public sealed class ExpanderTemplateTests
         Assert.AreSame(expander, header.LogicalParent);
         Assert.AreSame(expander, content.LogicalParent);
     }
+
+    [TestMethod]
+    public void CollapsedContent_DoesNotParticipateInVisualTree()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var content = new Border();
+        var window = HeadlessWindow.Create();
+        var expander = new Expander { Header = new TextBlock { Text = "title" }, Content = content, IsExpanded = true };
+        window.Content = expander;
+        window.PerformLayout();
+
+        Assert.IsTrue(VisitsChild(expander, content), "expanded content participates in the visual tree");
+
+        expander.IsExpanded = false;
+        window.PerformLayout();
+
+        Assert.IsFalse(VisitsChild(expander, content), "collapsed content is not part of this frame's visual tree");
+    }
+
+    private static bool VisitsChild(IVisualTreeHost host, Element child)
+    {
+        bool visited = false;
+        host.VisitChildren(candidate =>
+        {
+            if (ReferenceEquals(candidate, child))
+            {
+                visited = true;
+                return false;
+            }
+            return true;
+        });
+        return visited;
+    }
 }
