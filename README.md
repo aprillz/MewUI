@@ -109,6 +109,7 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
     ```
 
 - Run: `dotnet run your_app.cs`
+
 ---
 ## 🧪 C# Markup at a Glance
 
@@ -179,7 +180,10 @@ NativeAOT executable size depends on the platform host, rendering backend, resou
 | Gallery | Linux x64 / X11 + MewVG | 7.420 MB | 3.518 MB |
 | Gallery | macOS arm64 / MewVG | 5.625 MB | 2.555 MB |
 
+<img src="https://github.com/user-attachments/assets/92dae0e7-6ecb-46f8-b405-2fcab629375b" />
+
 The Gallery is a full-featured showcase sample. Use the Hello World rows as the minimum deployment-size baseline.
+
 ---
 ## 🔗 State & Binding (AOT-friendly)
 
@@ -225,6 +229,7 @@ Panels:
 - `SplitPanel` (drag splitter)
 
 > All panels except `Canvas` (absolute) and `SplitPanel` support `Spacing`.
+
 ---
 ## 🧩 Extensions
 
@@ -251,6 +256,7 @@ Optional packages layered on top of the core - reference only what you need.
 > Without an interop package, Skia content still renders via the CPU upload fallback. Skia is also bundled as metapackages `Aprillz.MewUI.Skia.Windows` / `.Linux` / `.MacOS` / `.All`.
 
 > **MewDock** is a C# port of [FlexLayout](https://github.com/caplin/FlexLayout) (MIT). **MewCharts** bundles the [LiveChartsCore](https://github.com/beto-rodriguez/LiveCharts2) engine (MIT). See `THIRD_PARTY_NOTICES.md` for license notices.
+
 ---
 ## 🎨 Theme
 
@@ -277,13 +283,14 @@ Backends:
 | **MewVG** | Linux/X11 | `Aprillz.MewUI.Backend.MewVG.X11` |
 | **MewVG** | macOS | `Aprillz.MewUI.Backend.MewVG.MacOS` |
 
-> **MewVG** is a managed port of [NanoVG](https://github.com/memononen/nanovg), using OpenGL on Windows/Linux and Metal on macOS.
+> **[MewVG](https://github.com/aprillz/MewVG)** is a managed port of [NanoVG](https://github.com/memononen/nanovg), using OpenGL on Windows/Linux and Metal on macOS.
 
 Backends are registered by the referenced backend packages (Trim/AOT-friendly). In app code you typically either:
 - call `*Backend.Register()` before `Application.Run(...)`, or
 - use the builder chain: `Application.Create().Use...().Run(...)`
 
 When using a metapackage (e.g., `Aprillz.MewUI.Windows`), you can select a single backend at publish time with `-p:MewUIBackend=Direct2D`. See [Installation & Packages](docs/Installation.md) for details.
+
 ---
 ## 🪟 Platform Abstraction
 
