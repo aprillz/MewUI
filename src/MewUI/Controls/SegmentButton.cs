@@ -140,20 +140,6 @@ public sealed class SegmentButton : ContentControl
         }
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        // Disabled segments should not participate in hit testing (no hover/mouse-over churn).
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        // Return the actual hit (Label / Glyph / self). Collapsing non-focusable descendants to
-        // `this` would drop their ToolTip / Cursor / hover. The segment still owns the click via
-        // OnMouseDown bubbling, and focusable descendants handle their own clicks first.
-        return base.OnHitTest(point);
-    }
-
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);

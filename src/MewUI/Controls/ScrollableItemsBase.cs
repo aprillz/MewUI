@@ -76,17 +76,6 @@ public abstract class ScrollableItemsBase : Control, ISubtreeInvalidationHost
     /// </summary>
     protected virtual bool VisitScrollChildren(Func<Element, bool> visitor) => visitor(_scrollViewer);
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        var hit = _scrollViewer.HitTest(point);
-        return hit ?? base.OnHitTest(point);
-    }
-
     /// <summary>
     /// Resolves the foreground color for an item, applying the correct priority:
     /// disabled state > selection state > default Foreground.

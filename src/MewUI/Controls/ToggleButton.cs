@@ -130,28 +130,4 @@ public partial class ToggleButton : ToggleBase
         }
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (Content is UIElement uiContent)
-        {
-            var result = uiContent.HitTest(point);
-            if (result != null)
-            {
-                return result;
-            }
-        }
-
-        if (Bounds.Contains(point))
-        {
-            return this;
-        }
-
-        return null;
-    }
-
 }

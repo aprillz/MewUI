@@ -520,12 +520,32 @@ public abstract partial class UIElement : Element
             return null;
         }
 
-        if (Bounds.Contains(point))
+        if (!Bounds.Contains(point))
         {
-            return this;
+            return null;
         }
 
-        return null;
+        // VisitChildren yields participating children topmost-first, so the first hit wins;
+        // hosts whose yield order is not front-to-back keep their own override.
+        if (this is IVisualTreeHost host)
+        {
+            UIElement? childHit = null;
+            host.VisitChildren(child =>
+            {
+                if (child is UIElement childElement && childElement.HitTest(point) is UIElement hit)
+                {
+                    childHit = hit;
+                    return false;
+                }
+                return true;
+            });
+            if (childHit != null)
+            {
+                return childHit;
+            }
+        }
+
+        return this;
     }
 
     /// <summary>

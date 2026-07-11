@@ -26,25 +26,6 @@ public sealed class Border : Control, IVisualTreeHost, ILogicalTreeHost
             static (self, oldValue, newValue) => self.OnChildChanged(oldValue, newValue),
             validate: static (self, value) => self.ValidateLogicalChild(value, allowTransfer: true));
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (Child != null)
-        {
-            var hit = Child.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return base.OnHitTest(point);
-    }
-
     public UIElement? Child
     {
         get => GetValue(ChildProperty);

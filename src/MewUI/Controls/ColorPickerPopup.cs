@@ -77,17 +77,6 @@ internal sealed class ColorPickerPopup : Control, IVisualTreeHost
         context.DrawRoundedRectangle(bounds, radius, radius, Theme.Palette.ControlBorder, 1, strokeInset: true);
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-            return null;
-
-        var hit = _scrollViewer.HitTest(point);
-        if (hit != null) return hit;
-
-        return Bounds.Contains(point) ? this : null;
-    }
-
     public void Configure(ColorPickerKind kind, bool showAlpha)
     {
         bool changed = false;

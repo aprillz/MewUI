@@ -185,30 +185,6 @@ public class HeaderedContentControl : ContentControl
         }
     }
 
-    protected override UIElement? OnHitTest(Point point)
-    {
-        if (HasTemplateInstance)
-        {
-            return base.OnHitTest(point);
-        }
-
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
-        {
-            return null;
-        }
-
-        if (Header is UIElement headerUi)
-        {
-            var hit = headerUi.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return base.OnHitTest(point);
-    }
-
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
     {
         var templateRoot = TemplateVisualRoot;
