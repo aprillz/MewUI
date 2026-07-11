@@ -648,6 +648,10 @@ public abstract class Element : MewObject
         VisualTree.Visit(this, element => element.OnVisualRootChanged(oldRoot, newRoot));
     }
 
+    /// <summary>The last DPI resolved by <see cref="GetDpiCached"/>, or 0 if never resolved.
+    /// Reads the raw cache without re-resolving, so subclasses can detect a change on re-attach.</summary>
+    private protected uint LastResolvedDpi => _cachedDpi;
+
     internal uint GetDpiCached()
     {
         if (_dpiCacheVersion == _contextVersion)

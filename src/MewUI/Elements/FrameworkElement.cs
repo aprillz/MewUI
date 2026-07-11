@@ -343,10 +343,27 @@ public abstract class FrameworkElement : UIElement, IDisposable
     {
         base.OnVisualRootChanged(oldRoot, newRoot);
 
+        if (newRoot == null)
+        {
+            return;
+        }
+
+        // DPI, like theme, is broadcast only to attached elements. A detached subtree (e.g. a cached
+        // navigation page) that resolved a different DPI keeps stale, DPI-baked font caches; re-run the
+        // standard DpiChanged pass so measure and fonts refresh. The DPI cache was invalidated by the
+        // context-version bump and re-resolves lazily, so don't stamp it - at startup the window may not
+        // know its real DPI yet, and comparing against a stamped value would suppress the first change.
+        uint previousDpi = LastResolvedDpi;
+        uint newDpi = newRoot is Window window ? window.Dpi : 0;
+        if (previousDpi != 0 && newDpi != 0 && previousDpi != newDpi)
+        {
+            NotifyDpiChanged(previousDpi, newDpi);
+        }
+
         // Theme changes are broadcast only to elements currently in the visual tree.
         // Elements that were detached (e.g. recycled/pooled item containers) may retain a stale ThemeInternal.
         // When re-attached, refresh theme so controls render with the current theme without requiring re-binding.
-        if (!Application.IsRunning || newRoot == null)
+        if (!Application.IsRunning)
         {
             return;
         }
