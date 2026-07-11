@@ -196,4 +196,63 @@ public sealed class NumericUpDownTemplateTests
 
         Assert.IsTrue(capturedPart.IsVisible, "ctx.Bind mirrors IsEditing onto the part's IsVisible");
     }
+
+    [TestMethod]
+    public void SpinnerHit_ResolvesToRepeatButtonAndStepsOnPress()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var window = HeadlessWindow.Create();
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, Step = 1, Value = 5, Width = 120, Height = 28 };
+        window.Content = nud;
+        window.PerformLayout();
+
+        var bounds = nud.Bounds;
+        var incrementPoint = new Point(bounds.Right - 5, bounds.Y + 5);
+        var hit = nud.HitTest(incrementPoint);
+        var button = FindAncestorRepeatButton(hit);
+        Assert.IsNotNull(button, "the spinner area resolves into a RepeatButton part");
+
+        button.RaiseMouseDown(new MouseEventArgs(incrementPoint, incrementPoint, MouseButton.Left, leftButton: true));
+
+        Assert.AreEqual(6, nud.Value, "pressing the increment spinner steps immediately");
+    }
+
+    [TestMethod]
+    public void TextAreaHit_ResolvesToControlItself()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var window = HeadlessWindow.Create();
+        var nud = new NumericUpDown { Minimum = 0, Maximum = 10, Value = 5, Width = 120, Height = 28 };
+        window.Content = nud;
+        window.PerformLayout();
+
+        var bounds = nud.Bounds;
+        var textPoint = new Point(bounds.X + 5, bounds.Y + bounds.Height / 2);
+        var hit = nud.HitTest(textPoint);
+
+        Assert.AreSame(nud, hit, "the text area hits the control so a click begins editing");
+    }
+
+    private static RepeatButton? FindAncestorRepeatButton(UIElement? hit)
+    {
+        for (Element? current = hit; current != null; current = current.Parent)
+        {
+            if (current is RepeatButton repeatButton)
+            {
+                return repeatButton;
+            }
+        }
+
+        return null;
+    }
 }
