@@ -19,6 +19,17 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
 
     internal Control? TemplatedParent { get; private set; }
 
+    // A duplicate presenter for the same slot loses ownership to the last writer; a projection
+    // counts only while the content is still parented here, so the loser degrades to empty.
+    private Element? ActiveProjection
+    {
+        get
+        {
+            var projected = _projected;
+            return projected != null && projected.Parent == this ? projected : null;
+        }
+    }
+
     internal void AttachToTemplatedParent(Control owner)
     {
         TemplatedParent = owner;
@@ -59,23 +70,26 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
 
     protected override Size MeasureContent(Size availableSize)
     {
-        if (_projected == null)
+        var projected = ActiveProjection;
+        if (projected == null)
         {
             return Size.Empty;
         }
 
-        _projected.Measure(availableSize);
-        return _projected.DesiredSize;
+        projected.Measure(availableSize);
+        return projected.DesiredSize;
     }
 
     protected override void ArrangeContent(Rect bounds)
     {
-        _projected?.Arrange(bounds);
+        var projected = ActiveProjection;
+        projected?.Arrange(bounds);
     }
 
     protected override void RenderSubtree(IGraphicsContext context)
     {
-        _projected?.Render(context);
+        var projected = ActiveProjection;
+        projected?.Render(context);
     }
 
     protected override UIElement? OnHitTest(Point point)
@@ -85,7 +99,8 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
             return null;
         }
 
-        if (_projected is UIElement uiContent)
+        var projected = ActiveProjection;
+        if (projected is UIElement uiContent)
         {
             var hit = uiContent.HitTest(point);
             if (hit != null)
@@ -98,5 +113,8 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-        => _projected == null || visitor(_projected);
+    {
+        var projected = ActiveProjection;
+        return projected == null || visitor(projected);
+    }
 }

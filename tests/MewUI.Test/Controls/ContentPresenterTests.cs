@@ -202,4 +202,70 @@ public sealed class ContentPresenterTests
         Assert.IsInstanceOfType<ContentPresenter>(content.Parent, "applying a template hands the visual attach to the presenter");
         Assert.AreSame(host, content.LogicalParent);
     }
+
+    [TestMethod]
+    public void DuplicateSlotPresenters_OnlyLastWinsOwnership()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var template = new DelegateControlTemplate<ContentControl>(static (owner, ctx) =>
+        {
+            var presenterA = new ContentPresenter();
+            var presenterB = new ContentPresenter();
+            return new StackPanel().Children(presenterA, presenterB);
+        });
+
+        var window = HeadlessWindow.Create();
+        var content = new TextBlock { Text = "hello" };
+        var host = new ContentControl { Content = content, Template = template };
+        window.Content = host;
+        window.PerformLayout();
+
+        var stack = (StackPanel)host.TemplateVisualRoot!;
+        var first = (ContentPresenter)stack.Children[0];
+        var second = (ContentPresenter)stack.Children[1];
+
+        Assert.AreSame(second, content.Parent, "the last presenter wired for the slot keeps ownership");
+        first.Measure(new Size(100, 100));
+        Assert.AreEqual(Size.Empty, first.DesiredSize, "the losing presenter measures empty instead of double-measuring the content");
+    }
+
+    [TestMethod]
+    public void DuplicateSlotPresenters_ContentSwapStillHasSingleOwner()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var template = new DelegateControlTemplate<ContentControl>(static (owner, ctx) =>
+        {
+            var presenterA = new ContentPresenter();
+            var presenterB = new ContentPresenter();
+            return new StackPanel().Children(presenterA, presenterB);
+        });
+
+        var window = HeadlessWindow.Create();
+        var first = new TextBlock();
+        var host = new ContentControl { Content = first, Template = template };
+        window.Content = host;
+        window.PerformLayout();
+
+        var second = new TextBlock();
+        host.Content = second;
+        window.PerformLayout();
+
+        var stack = (StackPanel)host.TemplateVisualRoot!;
+        var presenterA = (ContentPresenter)stack.Children[0];
+        var presenterB = (ContentPresenter)stack.Children[1];
+
+        Assert.IsNull(first.Parent, "the replaced content leaves whichever presenter held it");
+        Assert.IsInstanceOfType<ContentPresenter>(second.Parent, "the new content lands on exactly one presenter");
+        Assert.IsTrue(ReferenceEquals(second.Parent, presenterA) || ReferenceEquals(second.Parent, presenterB));
+    }
 }
