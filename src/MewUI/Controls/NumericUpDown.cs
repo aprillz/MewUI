@@ -6,13 +6,6 @@ namespace Aprillz.MewUI.Controls;
 
 public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 {
-    private enum ButtonPart
-    {
-        None,
-        Decrement,
-        Increment
-    }
-
     /// <summary>Template part name for the editable text box; register a TextBox under this name to receive the edit pipeline.</summary>
     public const string PART_TEXT_BOX = "PART_TextBox";
 
@@ -66,9 +59,9 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     private string? _cachedDisplayText;
     private double _cachedDisplayValue = double.NaN;
     private string? _cachedDisplayFormat;
-    private ButtonPart _hoverPart;
-    private ButtonPart _pressedPart;
     private readonly TextBox _textBox;
+    private readonly RepeatButton _decrementButton;
+    private readonly RepeatButton _incrementButton;
     private TextBox? _partTextBox;
     private bool _suppressTextBoxUpdate;
     private WheelNotchAccumulator _wheelAccumulator;
@@ -80,15 +73,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             // The template's PART_TextBox overrides the built-in text box when attached.
             return _partTextBox ?? _textBox;
         }
-    }
-
-    protected override VisualState ComputeVisualState()
-    {
-        var state = base.ComputeVisualState();
-
-        if (_pressedPart != ButtonPart.None)
-            return state with { Flags = state.Flags | VisualStateFlags.Pressed };
-        return state;
     }
 
     static NumericUpDown()
@@ -114,7 +98,47 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         _textBox.KeyDown += OnTextBoxKeyDown;
         _textBox.LostFocus += OnTextBoxLostFocus;
 
+        _decrementButton = CreateSpinnerButton(GlyphKind.ChevronDown);
+        _incrementButton = CreateSpinnerButton(GlyphKind.ChevronUp);
+        _decrementButton.Click += OnDecrementClick;
+        _incrementButton.Click += OnIncrementClick;
+
         AttachChild(_textBox);
+        AttachChild(_decrementButton);
+        AttachChild(_incrementButton);
+    }
+
+    private static RepeatButton CreateSpinnerButton(GlyphKind glyphKind)
+        => new()
+        {
+            // Spinner parts must not join the tab order or steal focus from the control.
+            Focusable = false,
+            IsTabStop = false,
+            BorderThickness = 0,
+            CornerRadius = 0,
+            Padding = new Thickness(0),
+            MinHeight = 0,
+            Content = new GlyphElement { Kind = glyphKind },
+        };
+
+    private void OnIncrementClick()
+    {
+        if (!IsEditing)
+        {
+            Focus();
+        }
+
+        StepUp();
+    }
+
+    private void OnDecrementClick()
+    {
+        if (!IsEditing)
+        {
+            Focus();
+        }
+
+        StepDown();
     }
 
     public static readonly MewProperty<bool> ChangeOnWheelProperty =
@@ -228,6 +252,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
     {
         base.OnEnabledChanged();
         ActiveTextBox.IsEnabled = IsEffectivelyEnabled;
+        _decrementButton.IsEnabled = IsEffectivelyEnabled;
+        _incrementButton.IsEnabled = IsEffectivelyEnabled;
     }
 
     protected override void OnValueChanged(double value)
@@ -272,6 +298,10 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         textRect = LayoutRounding.SnapBoundsRectToPixels(textRect, GetDpi() / 96.0);
         _textBox.Arrange(textRect);
+
+        var (decRect, incRect) = GetButtonRects();
+        _decrementButton.Arrange(decRect);
+        _incrementButton.Arrange(incRect);
     }
 
     protected override void OnRender(IGraphicsContext context)
@@ -291,72 +321,23 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         var metrics = GetBorderRenderMetrics(Bounds, BorderThickness, radius);
         var bounds = metrics.Bounds;
         var borderInset = metrics.UniformThickness;
-        var cornerRadius = metrics.UniformRadius;
 
         DrawBackgroundAndBorder(context, bounds, bg, border, BorderThickness, radius);
 
         var inner = bounds.Deflate(new Thickness(borderInset));
 
         double buttonAreaWidth = Math.Min(GetButtonAreaWidth(), inner.Width);
-        var buttonRect = new Rect(inner.Right - buttonAreaWidth, inner.Y, buttonAreaWidth, inner.Height);
         var textRect = new Rect(inner.X + Padding.Left, inner.Y + Padding.Top,
             Math.Max(0, inner.Width - buttonAreaWidth - Padding.HorizontalThickness),
             Math.Max(0, inner.Height - Padding.VerticalThickness));
 
         textRect = LayoutRounding.SnapBoundsRectToPixels(textRect, context.DpiScale);
-        buttonRect = LayoutRounding.SnapBoundsRectToPixels(buttonRect, context.DpiScale);
-
-        (var decRect, var incRect) = GetButtonRects();
-
-        Color baseButton = Theme.Palette.ButtonFace;
-        Color hoverButton = Color.Composite(baseButton, Theme.Palette.AccentHoverOverlay);
-        Color pressedButton = Color.Composite(baseButton, Theme.Palette.AccentPressedOverlay);
-        Color disabledButton = Theme.Palette.ButtonDisabledBackground;
-
-        Color decBg = !isEnabled
-            ? disabledButton
-            : _pressedPart == ButtonPart.Decrement ? pressedButton
-            : _hoverPart == ButtonPart.Decrement ? hoverButton
-            : baseButton;
-
-        Color incBg = !isEnabled
-            ? disabledButton
-            : _pressedPart == ButtonPart.Increment ? pressedButton
-            : _hoverPart == ButtonPart.Increment ? hoverButton
-            : baseButton;
-
-        if (buttonRect.Width > 0)
-        {
-            var innerRadius = metrics.UniformInnerRadius;
-            context.Save();
-            context.SetClipRoundedRect(
-                inner,
-                innerRadius,
-                innerRadius);
-
-            context.FillRectangle(decRect, decBg);
-            context.FillRectangle(incRect, incBg);
-
-            if (BorderThickness > 0)
-            {
-                context.DrawLine(new Point(buttonRect.Left, buttonRect.Y), new Point(buttonRect.Left, buttonRect.Bottom), Theme.Palette.ControlBorder, BorderThickness, pixelSnap: true);
-            }
-
-            context.Restore();
-        }
 
         var font = GetFont();
         var textColor = isEnabled ? Foreground : Theme.Palette.DisabledText;
         if (!IsEditing)
         {
             context.DrawText(GetDisplayText(), textRect, font, textColor, TextAlignment.Left, TextAlignment.Center, TextWrapping.NoWrap);
-        }
-
-        if (buttonRect.Width > 0)
-        {
-            var chevronSize = Theme.Metrics.BaseControlHeight / 8;
-            Glyph.Draw(context, decRect.Center, chevronSize, textColor, GlyphKind.ChevronDown);
-            Glyph.Draw(context, incRect.Center, chevronSize, textColor, GlyphKind.ChevronUp);
         }
     }
 
@@ -366,6 +347,27 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         {
             base.RenderSubtree(context);
             return;
+        }
+
+        if (_incrementButton.Bounds.Width > 0)
+        {
+            var metrics = GetBorderRenderMetrics(Bounds, BorderThickness, CornerRadius);
+            var inner = metrics.Bounds.Deflate(new Thickness(metrics.UniformThickness));
+
+            // Clip the square spinner buttons to the rounded inner chrome so their corners stay inside.
+            context.Save();
+            context.SetClipRoundedRect(inner, metrics.UniformInnerRadius, metrics.UniformInnerRadius);
+
+            _decrementButton.Render(context);
+            _incrementButton.Render(context);
+
+            if (BorderThickness > 0)
+            {
+                double separatorX = _incrementButton.Bounds.Left;
+                context.DrawLine(new Point(separatorX, inner.Y), new Point(separatorX, inner.Bottom), Theme.Palette.ControlBorder, BorderThickness, pixelSnap: true);
+            }
+
+            context.Restore();
         }
 
         if (IsEditing)
@@ -413,85 +415,8 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             Focus();
         }
 
-        var part = HitTestButtonPart(e.Position);
-        if (part == ButtonPart.None)
-        {
-            BeginEdit();
-            e.Handled = true;
-            return;
-        }
-
-        _pressedPart = part;
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.CaptureMouse(this);
-        }
-
-        InvalidateVisual();
-        e.Handled = true;
-    }
-
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        base.OnMouseMove(e);
-        if (HasTemplateInstance)
-        {
-            return;
-        }
-
-        var part = HitTestButtonPart(e.Position);
-        if (_hoverPart != part)
-        {
-            _hoverPart = part;
-            InvalidateVisual();
-        }
-    }
-
-    protected override void OnMouseLeave()
-    {
-        base.OnMouseLeave();
-        if (_hoverPart != ButtonPart.None && !IsMouseCaptured)
-        {
-            _hoverPart = ButtonPart.None;
-            InvalidateVisual();
-        }
-    }
-
-    protected override void OnMouseUp(MouseEventArgs e)
-    {
-        base.OnMouseUp(e);
-        if (HasTemplateInstance)
-        {
-            return;
-        }
-
-        if (e.Button != MouseButton.Left || _pressedPart == ButtonPart.None)
-        {
-            return;
-        }
-
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            window.ReleaseMouseCapture();
-        }
-
-        var releasedPart = HitTestButtonPart(e.Position);
-        if (releasedPart == _pressedPart && IsEffectivelyEnabled)
-        {
-            if (_pressedPart == ButtonPart.Increment)
-            {
-                StepUp();
-            }
-            else
-            {
-                StepDown();
-            }
-        }
-
-        _pressedPart = ButtonPart.None;
-        InvalidateVisual();
+        // Spinner presses never reach here: the RepeatButton children take the hit and handle it.
+        BeginEdit();
         e.Handled = true;
     }
 
@@ -510,15 +435,13 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
 
         if (e.Key == Key.Up)
         {
-            Value += GetEffectiveStep();
-            UpdateTextBoxFromValue();
+            StepUp();
             InvalidateVisual();
             e.Handled = true;
         }
         else if (e.Key == Key.Down)
         {
-            Value -= GetEffectiveStep();
-            UpdateTextBoxFromValue();
+            StepDown();
             InvalidateVisual();
             e.Handled = true;
         }
@@ -552,6 +475,15 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return null;
         }
 
+        if (_incrementButton.HitTest(point) is UIElement incrementHit)
+        {
+            return incrementHit;
+        }
+        if (_decrementButton.HitTest(point) is UIElement decrementHit)
+        {
+            return decrementHit;
+        }
+
         if (IsEditing)
         {
             var hit = _textBox.HitTest(point);
@@ -574,20 +506,6 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         var incRect = new Rect(buttonRect.X, buttonRect.Y, buttonRect.Width, buttonRect.Height / 2);
         var decRect = new Rect(buttonRect.X, buttonRect.Y + buttonRect.Height / 2, buttonRect.Width, buttonRect.Height / 2);
         return (decRect, incRect);
-    }
-
-    private ButtonPart HitTestButtonPart(Point position)
-    {
-        var (decRect, incRect) = GetButtonRects();
-        if (decRect.Contains(position))
-        {
-            return ButtonPart.Decrement;
-        }
-        if (incRect.Contains(position))
-        {
-            return ButtonPart.Increment;
-        }
-        return ButtonPart.None;
     }
 
     private string GetDisplayText()
@@ -820,7 +738,7 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
             return visitor(templateRoot);
         }
 
-        return visitor(_textBox);
+        return visitor(_textBox) && visitor(_decrementButton) && visitor(_incrementButton);
     }
 
     protected override void OnDispose()
@@ -840,6 +758,14 @@ public sealed class NumericUpDown : RangeBase, IVisualTreeHost
         _textBox.LostFocus -= OnTextBoxLostFocus;
         DetachChild(_textBox);
         _textBox.Dispose();
+
+        _decrementButton.Click -= OnDecrementClick;
+        _incrementButton.Click -= OnIncrementClick;
+        DetachChild(_decrementButton);
+        DetachChild(_incrementButton);
+        _decrementButton.Dispose();
+        _incrementButton.Dispose();
+
         base.OnDispose();
     }
 }
