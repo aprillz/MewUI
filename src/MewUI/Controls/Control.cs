@@ -303,6 +303,7 @@ public abstract class Control : FrameworkElement
     }
 
     private ControlTemplateInstance? _templateInstance;
+    private bool _templateThemeStale;
 
     /// <summary>
     /// Gets or sets the template that provides this control's visual tree.
@@ -320,6 +321,12 @@ public abstract class Control : FrameworkElement
     /// </summary>
     protected bool ApplyTemplate()
     {
+        if (_templateThemeStale)
+        {
+            _templateThemeStale = false;
+            DetachTemplateInstance();
+        }
+
         var template = Template;
         if (template == null || _templateInstance != null)
         {
@@ -409,6 +416,11 @@ public abstract class Control : FrameworkElement
     {
         // Tear down eagerly so focus inside the old tree unwinds via OnDetaching;
         // the replacement builds lazily on the next measure.
+        DetachTemplateInstance();
+    }
+
+    private void DetachTemplateInstance()
+    {
         var instance = _templateInstance;
         if (instance != null)
         {
@@ -845,6 +857,15 @@ public abstract class Control : FrameworkElement
 
         // Re-resolve style with new theme's palette colors.
         ResolveAndApplyStyle();
+
+        // A template instance is an artifact of the theme it was built under (builds may bake
+        // metrics/colors), so it is rebuilt lazily; deferring the detach keeps the theme
+        // broadcast walk from mutating the tree it is traversing.
+        if (_templateInstance != null)
+        {
+            _templateThemeStale = true;
+            InvalidateMeasure();
+        }
     }
 
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)

@@ -9,24 +9,14 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 internal static class NumericUpDownTemplate
 {
-    private static readonly Dictionary<Theme, DelegateControlTemplate<NumericUpDown>> _perTheme = [];
+    private static DelegateControlTemplate<NumericUpDown>? _instance;
 
-    /// <summary>Gets the shared template definition for the theme; each control builds its own tree.</summary>
-    public static DelegateControlTemplate<NumericUpDown> GetForTheme(Theme theme)
-    {
-        lock (_perTheme)
-        {
-            if (!_perTheme.TryGetValue(theme, out var template))
-            {
-                template = new DelegateControlTemplate<NumericUpDown>(Build);
-                _perTheme[theme] = template;
-            }
-            return template;
-        }
-    }
+    /// <summary>Gets the shared template definition; each control that applies it builds its own tree.</summary>
+    public static DelegateControlTemplate<NumericUpDown> Instance
+        => _instance ??= new DelegateControlTemplate<NumericUpDown>(Build);
 
-    // Build reads theme values at build time; the per-theme definition cache makes a theme swap
-    // deliver a different definition, which rebuilds the instance with fresh metrics and colors.
+    // Build reads theme values at build time; Control invalidates template instances on theme
+    // change, so a rebuilt tree always bakes the current theme's metrics and colors.
     private static Element Build(NumericUpDown owner, ControlTemplateContext ctx)
     {
         var theme = owner.ThemeInternal;
