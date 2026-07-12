@@ -322,6 +322,7 @@ If neither is available in `PATH`, MewUI throws:
 - [RenderLoop](docs/RenderLoop.md)
 - [Hot Reload](docs/HotReload.md)
 - [Custom Controls](docs/CustomControls.md)
+- [Control Template](docs/ControlTemplate.md)
 
 ---
 ## 🤝 Community
