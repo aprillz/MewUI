@@ -1,99 +1,161 @@
 # Render Loop Concept
 
-This document summarizes MewUI’s render-loop model after the recent changes. It is an internal guide for backend/platform behavior and scheduling.
+This document describes MewUI's render-loop model: how rendering is scheduled relative to the
+message loop and layout, how continuous/on-request rendering is controlled, and how each
+backend maps that control onto its present/vsync mechanism. It is an internal guide for
+backend/platform behavior and scheduling.
 
 ---
 
 ## 1. Goals
 
-- Keep the UI responsive by decoupling rendering from message processing.
+- Keep the UI responsive by decoupling rendering from message/layout processing.
 - Support both:
-  - **On-request rendering** (UI invalidation triggers render)
-  - **Continuous rendering** (animation / max FPS scenarios)
-- Allow backend-level vsync control and consistent behavior across Win32, X11, D2D, OpenGL, and GDI.
+  - **On-request rendering** (the default): a window renders only when something invalidates it.
+  - **Continuous rendering**: the loop renders every window every iteration, for animations and
+    max-FPS scenarios.
+- Give backend-level vsync control with consistent behavior across the Win32, X11, and macOS
+  platform hosts and the Direct2D, MewVG (OpenGL/Metal), and GDI graphics backends.
 
 ---
 
-## 2. Modes
+## 2. RenderLoopSettings
 
-### 2.1 OnRequest (default)
+The loop is configured via `Application.Current.RenderLoopSettings` (`Aprillz.MewUI.RenderLoopSettings`):
 
-- `Window.Invalidate()` / `RequestRender()` marks a window as needing render.
-- Platform host waits for render requests or OS messages.
-- When signaled, only **invalidated windows** render.
-- This mirrors WPF-style “coalesced” rendering where multiple invalidations merge.
+- `Continuous` (`bool`) - user flag that forces continuous rendering. This is the only direct way
+  to request continuous rendering; the animation system requests it on its own (see below) while
+  clocks are running. `SetContinuous(bool)` is a convenience setter for the same flag.
+- `TargetFps` (`int`) - frame cap for continuous rendering. `0` (the default) means uncapped.
+- `VSyncEnabled` (`bool`) - backend present/swap behavior. Defaults to `true`. Turning it off also
+  forces continuous rendering (see `IsContinuous` below), since there is no vsync to pace on.
+- `IsContinuous` (`bool`, read-only) - `true` when the loop should run continuously:
 
-### 2.2 Continuous
+  ```
+  IsContinuous = !VSyncEnabled || Continuous || AnimationActive
+  ```
 
-- The host repeatedly renders **every window**, even if there is no invalidation.
-- The render loop throttles by `TargetFps` (optional).  
-  `TargetFps = 0` means “no limit”.
-- This is intended for animations and profiling (Max FPS).
+  This is the single value the platform host reads every loop iteration; nothing sets the loop
+  mode directly.
+- `AnimationActive` (internal) - driven by `AnimationManager`: set while one or more animation
+  clocks are active, cleared when idle. Not a user-facing knob.
 
----
+There is no separate "mode" enum - on-request vs. continuous is entirely the computed
+`IsContinuous` value. By default (`Continuous = false`, `VSyncEnabled = true`, no active
+animations) `IsContinuous` is `false`, i.e. on-request rendering.
 
-## 3. RenderLoopSettings
+A real example, from the Gallery sample's "Max FPS" toggle:
 
-The loop is configured via `Application.Current.RenderLoopSettings`:
-
-- `Mode` → `OnRequest` or `Continuous`
-- `TargetFps` → frame cap (0 = unlimited)
-- `VSyncEnabled` → backend present/swap behavior
-
-These settings are read by the platform host and the graphics backend.
-
----
-
-## 4. Backend Behavior
-
-### 4.1 Direct2D
-
-- Uses DXGI present options.
-- `VSyncEnabled = false` → `PresentOptions = IMMEDIATELY`
-- `VSyncEnabled = true` → default present (vsync controlled by DXGI/DWM)
-
-### 4.2 OpenGL
-
-- Uses platform swap interval (WGL/GLX).
-- `VSyncEnabled = false` → `SwapInterval = 0`
-- `VSyncEnabled = true` → default vsync (usually 1)
-
-### 4.3 GDI
-
-- GDI has no vsync; `VSyncEnabled` does not change behavior.
-- Rendering still participates in on-request and continuous scheduling.
+```csharp
+var scheduler = Application.Current.RenderLoopSettings;
+scheduler.TargetFps = 0;
+scheduler.VSyncEnabled = !maxFpsEnabled;
+scheduler.SetContinuous(maxFpsEnabled);
+```
 
 ---
 
-## 5. Rendering vs Message Loop
+## 3. On-request vs. continuous scheduling
 
-- **OnRequest**: render is triggered when the render-request flag is set.
-- **Continuous**: render is performed every loop iteration (with throttling).
-- In both modes, OS messages are still processed every loop.
+Both the Win32 and X11 platform hosts (`Win32PlatformHost`, `X11PlatformHost`) run a single
+message/render loop (`PumpLoop`) per process, shared by every registered window - there is no
+per-window OS loop. Each iteration branches on `RenderLoopSettings.IsContinuous`:
 
-The platform host avoids relying on WM_PAINT directly and uses “RenderIfNeeded” or “RenderNow” to draw without forcing WM_PAINT storms.
+### 3.1 On-request (`IsContinuous == false`)
+
+- The loop blocks (`MsgWaitForMultipleObjectsEx` on Win32, the platform equivalent on X11) until
+  either an OS message arrives or a window has requested a render.
+- When woken, only windows whose backend has `NeedsRender == true` are rendered
+  (`RenderIfNeeded`), then pending OS messages are drained.
+- If a window still needs a render afterward (e.g. an invalidation happened while draining
+  messages), the render-request event is re-armed for the next iteration.
+- Multiple invalidations before the next wake-up coalesce into a single render, similar to
+  WPF-style render-request merging.
+
+### 3.2 Continuous (`IsContinuous == true`)
+
+- Every iteration processes pending messages, then renders **every** window unconditionally
+  (`RenderNow`), regardless of whether it was invalidated.
+- If `TargetFps > 0`, the loop sleeps/waits out the remainder of the frame budget after
+  rendering; `TargetFps == 0` means it renders as fast as it can loop.
+- This is what animations rely on (see `AnimationActive` above) and what "Max FPS" profiling
+  toggles use.
+
+The macOS platform host (`MacOSPlatformHost`) implements the same `NeedsRender` /
+`RenderIfNeeded` / `RenderNow` / `IsContinuous` / `TargetFps` contract.
 
 ---
 
-## 6. FPS & Diagnostics
+## 4. Message loop, update pass, and render
 
-- `Window.FrameRendered` fires at the end of each render frame.
-- Sample and Gallery use this to compute and display FPS.
-- In Continuous mode, `FrameRendered` should update every frame.
+A window's invalidation and rendering funnel through the UI dispatcher's priority queue
+(`DispatcherPriority`: `Idle` < `Background` < `Render` < `Layout` < `Input` < `Normal`, higher
+runs first). Each dispatcher drain (`DispatcherQueue.Process`) processes queues from highest
+priority to lowest, so anything a `Layout`-priority action enqueues at `Render` priority is still
+drained within the same pass:
+
+- `UIElement.InvalidateVisualState()` queues the element on its window
+  (`Window.RegisterVisualStateDirty`) for reconciliation.
+- `Window.InvalidateMeasure()` / `InvalidateArrange()` call `RequestUpdatePass()`, which posts a
+  merged action at `DispatcherPriority.Layout`. That action runs `Window.PerformLayout()` - which
+  reconciles queued visual-state invalidations (`UpdateVisualStates()`), resolves the window's own
+  style, applies the template, then measures/arranges - and finally calls `RequestRender()`.
+- `RequestRender()` (internal) posts a merged action at `DispatcherPriority.Render` that calls
+  `_backend.Invalidate(true)`, which sets the backend's `NeedsRender` flag and asks the platform
+  host to wake the render loop.
+- `Window.Invalidate()` and `Window.InvalidateVisual()` (public) both call `RequestRender()`
+  directly, skipping the layout stage - use these when layout is already known to be current.
+
+So the effective per-frame order is: **OS/dispatcher messages -> update pass (visual-state
+reconciliation, then measure/arrange, only if something is dirty) -> platform host render call**.
+Inside the actual render (`Window.RenderFrame` -> `RenderFrameCore`), `AnimationManager.Instance
+.Update()` runs first to advance active animation clocks before the draw traversal, so animated
+values are current for that frame's paint.
+
+### Win32 specifics
+
+- `WM_PAINT` is still handled (`Win32WindowBackend.HandlePaint`) and renders immediately inside
+  `BeginPaint`/`EndPaint` (via `UpdateLayeredWindow` instead for per-pixel-alpha windows) - the
+  platform host does not force `WM_PAINT` for its own request-driven renders, and calls
+  `ValidateRect` after presenting so it doesn't generate a redundant repaint.
+- OS-driven modal loops (interactive resize/move, or a native menu - `WM_ENTERSIZEMOVE` /
+  `WM_ENTERMENULOOP`) run inside `DefWindowProc` and suspend `PumpLoop`. To keep animations and
+  pending invalidations progressing during that time, the backend starts a `WM_TIMER` (8 ms) on
+  entry and stops it on `WM_EXITSIZEMOVE` / `WM_EXITMENULOOP`.
 
 ---
 
-## 7. Design Notes
+## 5. Backend vsync behavior
 
-- The loop keeps rendering **separate from invalidation** to allow max-FPS mode.
-- Render requests are **coalesced** in OnRequest mode to avoid redundant work.
-- Continuous mode renders even without invalidation so animations can advance.
+| Backend | VSyncEnabled = true | VSyncEnabled = false |
+|---|---|---|
+| Direct2D (swap-chain present) | DXGI `Present` sync interval `1` | sync interval `0` |
+| Direct2D (HwndRenderTarget present) | `D2D1_PRESENT_OPTIONS.NONE` | `D2D1_PRESENT_OPTIONS.IMMEDIATELY` |
+| MewVG / OpenGL (Win32 WGL, X11 GLX/EGL) | swap interval `1` | swap interval `0` |
+| MewVG / Metal (macOS) | `CAMetalLayer.displaySyncEnabled = true` | `displaySyncEnabled = false` |
+| GDI | no effect - GDI has no vsync concept | no effect |
+
+GDI still fully participates in on-request/continuous scheduling (that mechanism lives in the
+platform host, not the graphics backend) - `VSyncEnabled` just has nothing to control there.
 
 ---
 
-## 8. Future Extensions
+## 6. FPS and frame diagnostics
 
-- Retained/composition rendering layers could plug into the same loop.
-- Animation scheduling can align to `TargetFps` for stable pacing.
-- Per-window scheduling (e.g., only active window in continuous) can be added later.
+- `Window.FrameRendered` (`event Action?`) fires after every rendered frame, in both scheduling
+  modes. `Window.FirstFrameRendered` fires once, the first time a frame is rendered.
+- `Window.LastFrameStats` (`RenderStats`) holds the previous frame's `DrawCalls`, `CullCount`,
+  `RenderedCalls`, and `CullRatio`.
+- The Sample and Gallery apps use `FrameRendered` to accumulate frames over a one-second window
+  and compute/display an FPS readout, and read `LastFrameStats` to show draw/cull counts.
 
+---
+
+## 7. Design notes
+
+- Rendering is kept separate from invalidation so continuous/max-FPS mode is just "always treat
+  every window as needing a render," without a different code path.
+- On-request renders are coalesced (merged dispatcher posts, `NeedsRender` flag) so redundant
+  invalidations collapse into one render per wake-up.
+- Continuous mode renders even without invalidation so animations - and anything else driving
+  `AnimationActive` - can advance every frame.
