@@ -505,7 +505,7 @@ internal static unsafe class MacOSWindowInterop
     public static void SetFirstResponder(nint window, nint responder)
     {
         EnsureInitialized();
-        if (window == 0 || responder == 0 || SelMakeFirstResponder == 0)
+        if (window == 0 || SelMakeFirstResponder == 0)
         {
             return;
         }
@@ -1230,12 +1230,23 @@ internal static unsafe class MacOSWindowInterop
         return false;
     }
 
+    private static bool TryGetActiveTextInputTarget(nint view, out MacOSWindowBackend backend)
+    {
+        if (TryGetTextInputTarget(view, out backend) && backend.AcceptsImeTextInput)
+        {
+            return true;
+        }
+
+        backend = null!;
+        return false;
+    }
+
     [UnmanagedCallersOnly]
     private static void MewUITextInputView_insertText(nint self, nint _cmd, nint text, NSRange replacementRange)
     {
         try
         {
-            if (!TryGetTextInputTarget(self, out var backend))
+            if (!TryGetActiveTextInputTarget(self, out var backend))
             {
                 return;
             }
@@ -1255,7 +1266,7 @@ internal static unsafe class MacOSWindowInterop
     {
         try
         {
-            if (!TryGetTextInputTarget(self, out var backend))
+            if (!TryGetActiveTextInputTarget(self, out var backend))
             {
                 return;
             }
@@ -1275,7 +1286,7 @@ internal static unsafe class MacOSWindowInterop
     {
         try
         {
-            if (!TryGetTextInputTarget(self, out var backend))
+            if (!TryGetActiveTextInputTarget(self, out var backend))
             {
                 return;
             }
@@ -1295,7 +1306,7 @@ internal static unsafe class MacOSWindowInterop
     {
         try
         {
-            if (!TryGetTextInputTarget(self, out var backend))
+            if (!TryGetActiveTextInputTarget(self, out var backend))
             {
                 return;
             }
@@ -1331,7 +1342,7 @@ internal static unsafe class MacOSWindowInterop
     {
         try
         {
-            var result = TryGetTextInputTarget(self, out var backend) && backend.ImeHasMarkedText ? (byte)1 : (byte)0;
+            var result = TryGetActiveTextInputTarget(self, out var backend) && backend.ImeHasMarkedText ? (byte)1 : (byte)0;
             MacOSWindowBackend.ImeNativeLogger.Write($"objc hasMarkedText view=0x{self:x} -> {result}");
             return result;
         }
@@ -1347,7 +1358,7 @@ internal static unsafe class MacOSWindowInterop
         try
         {
             const ulong NSNotFound = (ulong)long.MaxValue;
-            if (!TryGetTextInputTarget(self, out var backend) || !backend.ImeHasMarkedText)
+            if (!TryGetActiveTextInputTarget(self, out var backend) || !backend.ImeHasMarkedText)
             {
                 MacOSWindowBackend.ImeNativeLogger.Write($"objc markedRange view=0x{self:x} -> (NSNotFound,0)");
                 return new NSRange(NSNotFound, 0);
@@ -1390,7 +1401,7 @@ internal static unsafe class MacOSWindowInterop
         // - Otherwise, report an empty selection at 0.
         try
         {
-            if (TryGetTextInputTarget(self, out var backend))
+            if (TryGetActiveTextInputTarget(self, out var backend))
             {
                 if (backend.Window.FocusManager.FocusedElement is Controls.TextBase tb)
                 {
@@ -1465,7 +1476,7 @@ internal static unsafe class MacOSWindowInterop
     {
         try
         {
-            if (!TryGetTextInputTarget(self, out var backend))
+            if (!TryGetActiveTextInputTarget(self, out var backend))
             {
                 return 0;
             }
@@ -1551,7 +1562,7 @@ internal static unsafe class MacOSWindowInterop
                     var frame = ObjC.MsgSend_rect(window, SelFrame);
 
                     // Try to get the caret position from the focused text element.
-                    if (TryGetTextInputTarget(self, out var backend) &&
+                    if (TryGetActiveTextInputTarget(self, out var backend) &&
                         backend.Window.FocusManager.FocusedElement is ITextCompositionClient client)
                     {
                         var caretRect = client.GetCharRectInWindow(client.CompositionStartIndex);
@@ -1575,11 +1586,6 @@ internal static unsafe class MacOSWindowInterop
                         MacOSWindowBackend.ImeNativeLogger.Write($"objc firstRectForCharacterRange view=0x{self:x} range=({range.location},{range.length}) actualRangePtr=0x{actualRange:x} -> ({r.origin.x},{r.origin.y},{r.size.width},{r.size.height}) titleBar={titleBarHeight}");
                         return r;
                     }
-
-                    // Fallback: top-left of window.
-                    var fallback = new NSRect(frame.origin.x + 10, frame.origin.y + frame.size.height - 30, 0, 0);
-                    MacOSWindowBackend.ImeNativeLogger.Write($"objc firstRectForCharacterRange view=0x{self:x} range=({range.location},{range.length}) -> fallback");
-                    return fallback;
                 }
             }
         }
