@@ -45,7 +45,8 @@ public static MewProperty<T> Register<TOwner>(
     T defaultValue,                       // 기본값
     MewPropertyOptions options = MewPropertyOptions.None,
     Action<TOwner, T, T>? changed = null, // 변경 콜백 (owner, oldValue, newValue)
-    Func<TOwner, T, T>? coerce = null     // 강제(coerce) 콜백 (owner, proposed) => stored
+    Func<TOwner, T, T>? coerce = null,    // 강제(coerce) 콜백 (owner, proposed) => stored
+    Action<TOwner, T>? validate = null    // 검증(validate) 콜백 (owner, proposed), throw로 거부
 )
 ```
 
@@ -84,6 +85,19 @@ public static readonly MewProperty<double> ValueProperty =
 // 예: 리사이즈 가능 여부가 바뀌면 CanMaximize를 다시 강제
 CoerceValue(CanMaximizeProperty);
 ```
+
+### 검증(validate) 콜백이 있는 프로퍼티
+
+`validate` 콜백은 저장 직전 실행되는 pre-commit veto입니다. coerce 이후, 우선순위 가드를 통과하고 동일 값 no-op이 아닌 쓰기에 대해서만 실행됩니다. 콜백이 throw하면 set이 거부되어 아무것도 저장되지 않고 변경 통지도 발생하지 않습니다. `coerce`와 달리 `null`에도 실행됩니다.
+
+```csharp
+public static readonly MewProperty<Element?> ChildProperty =
+    MewProperty<Element?>.Register<Border>(nameof(Child), null,
+        MewPropertyOptions.AffectsLayout,
+        validate: static (self, value) => self.ValidateLogicalChild(value, allowTransfer: true));
+```
+
+유효하지 않은 대입을 반영 전에 거부하는 데 사용합니다. 예를 들어 이미 다른 논리 부모에 속한 요소를 거부합니다. veto가 저장 이전에 실행되므로 저장소와 `changed` 콜백의 부수 효과(트리 변경 등)가 일관되게 유지됩니다.
 
 ### 읽기전용 프로퍼티
 
@@ -259,8 +273,10 @@ new StackPanel()
 
 ```
 SetValue / SetStyle / SetTrigger
-  → coerce 콜백 적용
+  → 더 높은 우선순위 소스가 이미 값을 가지면 거부
+  → coerce 콜백 적용 (null은 건너뜀)
   → 동일 값이면 여기서 중단 (통지 생략)
+  → validate 콜백 실행 (pre-commit veto; throw 시 상태 변화 없이 거부)
   → 실행 중인 애니메이션 중단
   → 값 저장 후:
 

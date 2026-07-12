@@ -45,7 +45,8 @@ public static MewProperty<T> Register<TOwner>(
     T defaultValue,                       // Default value
     MewPropertyOptions options = MewPropertyOptions.None,
     Action<TOwner, T, T>? changed = null, // Change callback (owner, oldValue, newValue)
-    Func<TOwner, T, T>? coerce = null     // Coerce callback (owner, proposed) => stored
+    Func<TOwner, T, T>? coerce = null,    // Coerce callback (owner, proposed) => stored
+    Action<TOwner, T>? validate = null    // Validation callback (owner, proposed); throw to reject
 )
 ```
 
@@ -84,6 +85,19 @@ When external state used by the coercion rule changes, call `CoerceValue` to req
 // Example: re-coerce CanMaximize when resizability changes
 CoerceValue(CanMaximizeProperty);
 ```
+
+### Properties with validate callbacks
+
+The `validate` callback is a pre-commit veto. It runs just before the value is stored, after coerce, and only for writes that pass the priority guard and are not same-value no-ops. Throwing from it rejects the set with no state change: nothing is stored and no change notifications fire. Unlike `coerce`, it also runs for `null`.
+
+```csharp
+public static readonly MewProperty<Element?> ChildProperty =
+    MewProperty<Element?>.Register<Border>(nameof(Child), null,
+        MewPropertyOptions.AffectsLayout,
+        validate: static (self, value) => self.ValidateLogicalChild(value, allowTransfer: true));
+```
+
+Use it to reject an invalid assignment before it takes effect, for example an element that already belongs to another logical parent. Because the veto runs before storage, the value store and the side effects of `changed` callbacks (such as tree mutation) stay consistent.
 
 ### Read-only properties
 
@@ -249,8 +263,10 @@ When a property's value actually changes, processing happens in this order:
 
 ```
 SetValue / SetStyle / SetTrigger
-  -> apply coerce callback
+  -> reject if a higher-priority source already owns the value
+  -> apply coerce callback (skipped for null)
   -> stop here if the value is equal (skip notification)
+  -> run validate callback (pre-commit veto; throwing rejects with no state change)
   -> stop any running animation
   -> store the value, then:
 
