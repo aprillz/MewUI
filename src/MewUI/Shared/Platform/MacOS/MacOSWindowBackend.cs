@@ -68,11 +68,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     private bool _imeHasMarkedText;
     private string _imeMarkedText = string.Empty;
+    private ImeMode _imeMode = ImeMode.Auto;
     private DragEventArgs? _lastDragEventArgs;
 
     internal string ImeMarkedText => _imeMarkedText;
 
     internal Window Window => _window;
+
+    internal bool AcceptsImeTextInput =>
+        _imeHasMarkedText || (_imeMode != ImeMode.Disabled && _window.FocusManager.FocusedElement is ITextInputClient);
 
     private bool _isHandlingKeyDown;
     private string? _pendingKeyDownTextInput;
@@ -799,7 +803,15 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     }
 
     public void SetImeMode(ImeMode mode)
-    { }
+    {
+        _imeMode = mode;
+        if (mode == ImeMode.Disabled)
+        {
+            CancelImeComposition();
+        }
+
+        SyncAppKitTextInputActivation();
+    }
 
     public void CancelImeComposition()
     {
@@ -928,7 +940,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.RegisterTextInputTarget(_nsView, this);
             if (_allowDrop) MacOSWindowInterop.RegisterForDragDrop(_nsView);
             MacOSWindowInterop.RegisterMetalLayerTarget(_metalLayer, this);
-            MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
             if (_metalLayer != 0)
             {
                 MacOSWindowInterop.SetLayerOpaque(_metalLayer, !_allowsTransparency);
@@ -1292,13 +1303,6 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     private void HandleMouseButton(nint ev, Point pos, Point screenPos, MouseButton button, bool isDown)
     {
-        // Keep our view as first responder so key input / NSTextInputClient (IME) continues to work
-        // after mouse interaction. AppKit can move first responder to internal views during activation.
-        if (isDown && _nsWindow != 0 && _nsView != 0)
-        {
-            MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
-        }
-
         int clickCount;
         int buttonIndex = (int)button;
         if (isDown)
@@ -1344,6 +1348,11 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             _middleDown,
             clickCount,
             GetModifierKeys(ev));
+
+        if (isDown)
+        {
+            SyncAppKitTextInputActivation();
+        }
     }
 
     // Trackpad point-delta → notch normalization.
@@ -1410,14 +1419,23 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         _isHandlingKeyDown = true;
         try
         {
-            // Route through NSTextInputClient so IME/dead-keys AND plain text input can be delivered via insertText/setMarkedText.
-            // This must not be gated on PreviewKeyDown handling: containers may handle key events (e.g. shortcuts),
-            // but IME still needs the native key events to finalize composition and deliver committed text.
+            // Route through NSTextInputClient only while a real text input target is focused. The NSView itself is
+            // always capable of NSTextInputClient, but waking AppKit text services globally makes macOS show IME UI
+            // (for example the "(A)" input indicator) even over non-text controls.
+            bool routeThroughTextInputClient = AcceptsImeTextInput;
             if (_nsWindow != 0 && _nsView != 0)
             {
-                MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
-                MacOSWindowInterop.InterpretKeyEvent(_nsView, ev);
-                ImeLogger.Write($"InterpretKeyEvent view=0x{_nsView:x} window=0x{_nsWindow:x} imeHasMarked={_imeHasMarkedText} imeState={_imeState}");
+                if (routeThroughTextInputClient)
+                {
+                    MacOSWindowInterop.SetFirstResponder(_nsWindow, _nsView);
+                    MacOSWindowInterop.InterpretKeyEvent(_nsView, ev);
+                    ImeLogger.Write($"InterpretKeyEvent view=0x{_nsView:x} window=0x{_nsWindow:x} imeHasMarked={_imeHasMarkedText} imeState={_imeState}");
+                }
+                else
+                {
+                    MacOSWindowInterop.SetFirstResponder(_nsWindow, 0);
+                    ImeLogger.Write($"InterpretKeyEvent skipped (no text input focus) view=0x{_nsView:x} window=0x{_nsWindow:x}");
+                }
             }
 
             // Shortcuts (Ctrl/Cmd chords) must be routed as key events even while IME is composing.
@@ -1487,6 +1505,11 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 return;
             }
 
+            if (!routeThroughTextInputClient)
+            {
+                DispatchTextInputFromEventCharacters(ev, modifiers);
+            }
+
             // If insertText delivered a Tab/newline during this keyDown, defer it until after KeyDown routing.
             // This allows KeyDown handlers (e.g. AcceptTab/AcceptReturn) to suppress text input consistently.
             if (_pendingKeyDownTextInput is { Length: > 0 } pending)
@@ -1512,9 +1535,58 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
         finally
         {
+            SyncAppKitTextInputActivation();
             _isHandlingKeyDown = false;
             _pendingKeyDownTextInput = null;
         }
+    }
+
+    private void SyncAppKitTextInputActivation()
+    {
+        if (_nsWindow == 0 || _nsView == 0)
+        {
+            return;
+        }
+
+        MacOSWindowInterop.SetFirstResponder(_nsWindow, AcceptsImeTextInput ? _nsView : 0);
+    }
+
+    private void DispatchTextInputFromEventCharacters(nint ev, ModifierKeys modifiers)
+    {
+        if (modifiers.HasFlag(ModifierKeys.Control) || modifiers.HasFlag(ModifierKeys.Meta))
+        {
+            return;
+        }
+
+        var text = MacOSInterop.GetEventCharacters(ev);
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        bool hasText = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (!char.IsControl(text[i]))
+            {
+                hasText = true;
+                break;
+            }
+        }
+
+        if (!hasText)
+        {
+            return;
+        }
+
+        var textArgs = new TextInputEventArgs(text);
+        _window.RaisePreviewTextInput(textArgs);
+        if (!textArgs.Handled && _window.FocusManager.FocusedElement is ITextInputClient client)
+        {
+            client.HandleTextInput(textArgs);
+        }
+
+        ImeLogger.Write($"Event characters emitted TextInput handled={textArgs.Handled} text='{Truncate(text)}'");
     }
 
     private void HandleKeyUp(nint ev)
