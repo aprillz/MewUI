@@ -164,7 +164,16 @@ internal sealed class PopupManager
         _window.Invalidate();
     }
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+        => ShowPopup(owner, popup, _ => bounds, sizeToContent, staysOpen);
+
+    /// <summary>
+    /// Opens <paramref name="popup"/>, measuring its placement via <paramref name="measureBounds"/> only
+    /// after the popup is attached and its style/inherited context resolves, so placement reflects the
+    /// styled popup (correct border/fonts) instead of a pre-attach measurement with fallback metrics.
+    /// Returns the measured placement bounds.
+    /// </summary>
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(popup);
@@ -179,8 +188,9 @@ internal sealed class PopupManager
                 {
                     existingChrome.ContextParentOverride = owner;
                 }
-                UpdatePopup(popup, bounds);
-                return;
+                var updatedBounds = measureBounds(_window);
+                UpdatePopup(popup, updatedBounds);
+                return updatedBounds;
             }
         }
 
@@ -209,9 +219,12 @@ internal sealed class PopupManager
         // measurement done before attachment (e.g. MeasureToolTip) is corrected.
         ForceStyleAndMeasureRefresh(popup);
 
-        // The caller sized a content-sized popup from a measurement taken before attachment, where the
-        // fallback font differs from the inherited one; re-derive the width from the connected measure
-        // so the content is not clipped by a stale pre-attach size.
+        // Measure placement now that the popup is attached and styled, so both width and height reflect
+        // the resolved style/fonts (a pre-attach measurement saw a zero border thickness that undersized
+        // the popup and forced a spurious scrollbar).
+        var bounds = measureBounds(_window);
+
+        // Re-derive the width from the connected measure so a content-sized popup is not clipped.
         if (sizeToContent)
         {
             bounds = ResizeToContentWidth(popup, bounds);
@@ -222,6 +235,7 @@ internal sealed class PopupManager
         LayoutPopup(entry);
 
         _window.Invalidate();
+        return bounds;
     }
 
     internal void UpdatePopup(UIElement popup, Rect bounds)

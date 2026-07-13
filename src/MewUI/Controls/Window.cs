@@ -2616,8 +2616,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal void CloseAllPopups()
         => _popupManager.CloseAllPopups();
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
         => _popupManager.ShowPopup(owner, popup, bounds, sizeToContent, staysOpen);
+
+    /// <summary>
+    /// Opens a popup whose placement is measured only after it is attached and style-resolved. Use this
+    /// overload when the placement math depends on the popup's own measured size.
+    /// </summary>
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
+        => _popupManager.ShowPopup(owner, popup, measureBounds, sizeToContent, staysOpen);
 
     internal void RequestClosePopups(PopupCloseRequest request)
         => _popupManager.RequestClosePopups(request);

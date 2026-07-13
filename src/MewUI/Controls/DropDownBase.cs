@@ -388,8 +388,10 @@ public abstract class DropDownBase : Control, IPopupOwner
         var popup = EnsurePopupContent();
         SyncPopupContent(popup);
 
-        var popupBounds = CalculatePopupBounds(window, popup);
-        window.ShowPopup(this, popup, popupBounds, PopupSizesToContent);
+        // Placement is measured inside ShowPopup, after the popup is attached and its style resolves,
+        // so CalculatePopupBounds sees the styled popup (correct border/fonts) rather than a pre-attach
+        // one whose named style has not resolved yet (which undersized the popup and forced a scrollbar).
+        var popupBounds = window.ShowPopup(this, popup, w => CalculatePopupBounds(w, popup), PopupSizesToContent);
         _lastPopupBounds = popupBounds;
         _popupBoundsDirty = false;
 
