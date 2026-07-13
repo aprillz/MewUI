@@ -1,3 +1,5 @@
+using System;
+
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.WriteableBitmapSample.Controls;
@@ -79,13 +81,13 @@ Element PixelCanvasDemo() => new DockPanel()
 
                 new ComboBox()
                     .Width(120)
-                    .Items(brushColors.Select(c => c.Item2).ToArray())
+                    .Items(brushColors, x => x.Item2)
                     .SelectedIndex(0)
                     .OnSelectionChanged(s =>
                     {
-                        if (s is Tuple<Color, string> accent)
+                        if (s is (Color color, string name))
                         {
-                            pixelCanvas.BrushColor = accent.Item1;
+                            pixelCanvas.BrushColor = color;
                         }
                     }),
 
@@ -377,21 +379,19 @@ static void Startup()
     if (OperatingSystem.IsWindows())
     {
         Win32Platform.Register();
-
-        //if (args.Any(a => a is "--gdi"))
-        //{
-        //GdiBackend.Register();
-        //}
-        //else if (args.Any(a => a is "--gl"))
-        //{
-        //OpenGLWin32Backend.Register();
-        //}
-        //else
-        //{
         Direct2DBackend.Register();
-        //}
     }
- 
+    else if (OperatingSystem.IsMacOS())
+    {
+        MacOSPlatform.Register();
+        MewVGMacOSBackend.Register();
+    }
+    else
+    {
+        X11Platform.Register();
+        MewVGX11Backend.Register();
+    }
+
 
     Application.DispatcherUnhandledException += e =>
     {
