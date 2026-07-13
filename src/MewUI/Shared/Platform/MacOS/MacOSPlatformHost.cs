@@ -184,6 +184,31 @@ public sealed class MacOSPlatformHost : IPlatformHost
         return new Point(location.x * scale, topY * scale);
     }
 
+    public Rect GetWorkAreaForPoint(Point screenPositionPx)
+    {
+        double scale = MacOSInterop.GetMainScreenScaleFactor();
+        if (scale <= 0)
+        {
+            scale = 1.0;
+        }
+
+        // Same top-left px <-> Cocoa flip convention as GetCursorScreenPosition. The flip uses the
+        // main screen frame, so secondary-monitor regions are approximate until the screen-pixel
+        // contract carries its reference screen.
+        var mainFrame = MacOSInterop.GetMainScreenFrame();
+        double mainTop = mainFrame.origin.y + mainFrame.size.height;
+        var cocoaPoint = new NSPoint(screenPositionPx.X / scale, mainTop - (screenPositionPx.Y / scale));
+
+        var visible = MacOSWindowInterop.GetScreenVisibleFrameForCocoaPoint(cocoaPoint);
+        if (visible.size.width <= 0 || visible.size.height <= 0)
+        {
+            return default;
+        }
+
+        double topPx = (mainTop - (visible.origin.y + visible.size.height)) * scale;
+        return new Rect(visible.origin.x * scale, topPx, visible.size.width * scale, visible.size.height * scale);
+    }
+
     // setIgnoresMouseEvents (click-through) + orderFront-without-makeKey (no-activate) + high window level give
     // a non-activating, click-through, transparent overlay.
     public bool SupportsTransparentOverlay => true;

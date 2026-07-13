@@ -14,6 +14,9 @@ public static class AssemblyFixture
     [AssemblyInitialize]
     public static void Initialize(TestContext context)
     {
+        // Headless tests exercise the in-surface popup path (no real OS windows to host native popups).
+        PopupManager.PreferNativePopups = false;
+
         if (OperatingSystem.IsWindows())
         {
             Application.DefaultGraphicsFactory = new GdiGraphicsFactory();

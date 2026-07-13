@@ -146,21 +146,24 @@ public abstract class DropDownBase : Control, IPopupOwner
             width = 120;
         }
 
-        var client = window.ClientSize;
-        double x = PopupPlacement.ClampHorizontal(bounds.X, width, client.Width, floorToZero: true);
+        var region = window.GetPopupPlacementRegion(bounds);
+        double x = PopupPlacement.ClampHorizontal(bounds.X, width, region, floorToLeftEdge: true);
 
         double maxHeight = Math.Max(0, MaxDropDownHeight);
         if (maxHeight <= 0)
         {
-            maxHeight = Math.Max(0, client.Height);
+            maxHeight = Math.Max(0, region.Height);
         }
 
         // Avoid infinite height to keep scrollable content stable.
         popup.Measure(new Size(width, maxHeight));
         double desiredHeight = Math.Min(Math.Max(0, popup.DesiredSize.Height), maxHeight);
 
+        // Open downward when the dropdown fits below the header (standard behavior), flipping up only
+        // when it does not fit below - preferring the side with more raw space would open upward for a
+        // control low in the window because the native work-area region extends far above it.
         double belowY = bounds.Y + ResolveHeaderHeight();
-        var (y, height) = PopupPlacement.ResolveVerticalPreferMoreSpace(bounds.Y, belowY, client.Height, desiredHeight);
+        var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, region, desiredHeight);
 
         return new Rect(x, y, width, height);
     }
@@ -388,8 +391,10 @@ public abstract class DropDownBase : Control, IPopupOwner
         var popup = EnsurePopupContent();
         SyncPopupContent(popup);
 
-        var popupBounds = CalculatePopupBounds(window, popup);
-        window.ShowPopup(this, popup, popupBounds, PopupSizesToContent);
+        // Placement is measured inside ShowPopup, after the popup is rooted and its style resolves,
+        // so CalculatePopupBounds sees the styled popup (correct border/fonts) rather than a pre-attach
+        // one whose named style has not resolved yet.
+        var popupBounds = window.ShowPopup(this, popup, w => CalculatePopupBounds(w, popup), PopupSizesToContent);
         _lastPopupBounds = popupBounds;
         _popupBoundsDirty = false;
 

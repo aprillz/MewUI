@@ -29,6 +29,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private nint _nsView;
     private nint _metalLayer;
     private bool _shown;
+    // Owner attach requested before the first Show; applied once the window is ordered in (see SetOwner).
+    private nint _pendingOwnerHandle;
     private int _needsRender;
     private double _lastDpiScale = 1.0;
     private double _opacity = 1.0;
@@ -192,18 +194,28 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetAlertPanelAnimation(_nsWindow);
         }
 
-        if (_window.IsOverlayWindow)
+        switch (_window.Kind)
         {
             // Input-transparent overlay (drag preview): click-through (ignoresMouseEvents) + float above all +
             // order front WITHOUT making it key/main, so it never steals capture/focus from the drag source.
-            MacOSWindowInterop.SetWindowEnabled(_nsWindow, false); // ignoresMouseEvents = true
-            MacOSWindowInterop.SetWindowLevel(_nsWindow, 25);      // NSStatusWindowLevel: above normal/floating
-            MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+            case Controls.WindowKind.Overlay:
+                MacOSWindowInterop.SetWindowEnabled(_nsWindow, false); // ignoresMouseEvents = true
+                MacOSWindowInterop.SetWindowLevel(_nsWindow, 25);      // NSStatusWindowLevel: above normal/floating
+                MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+                break;
+
+            // Non-activating popup: order front without key/main so the owner keeps its active look;
+            // the borderless popup window still receives mouse input.
+            case Controls.WindowKind.Popup:
+                MacOSWindowInterop.OrderFrontWindow(_nsWindow);
+                break;
+
+            default:
+                MacOSWindowInterop.ShowWindow(_nsWindow);
+                break;
         }
-        else
-        {
-            MacOSWindowInterop.ShowWindow(_nsWindow);
-        }
+
+        ApplyPendingOwner();
 
         if (_window.IsDialogWindow)
         {
@@ -215,7 +227,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.HideCloseButton(_nsWindow);
         }
 
-        if (_allowsTransparency && _window.IsOverlayWindow)
+        if (_allowsTransparency && _window.UsesBorderlessSurfaceChrome)
         {
             // Borderless mask = square corners (titled windows get rounded corners that would clip the overlay's
             // own content, e.g. a rounded chip). Transparency comes from the non-opaque layer, not the mask.
@@ -262,11 +274,11 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     {
         if (_nsWindow != 0)
         {
-            if (_window.IsOverlayWindow)
+            if (_window.UsesBorderlessSurfaceChrome)
             {
-                // The overlay uses a borderless style mask (square corners), which has no
-                // Closable bit, so performClose: would be ignored. Close it directly. windowWillClose still
-                // fires RaiseClosedOnce.
+                // Chrome-less surfaces use a borderless style mask, which has no Closable bit,
+                // so performClose: would be ignored (the window would stay on screen). Close directly.
+                // windowWillClose still fires RaiseClosedOnce.
                 MacOSWindowInterop.CloseWindowImmediate(_nsWindow);
             }
             else
@@ -667,6 +679,28 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
+        if (!_shown)
+        {
+            // addChildWindow orders a hidden child window onto the screen; defer the attach until
+            // Show so the window only appears once it has been placed.
+            _pendingOwnerHandle = ownerHandle;
+            return;
+        }
+
+        ApplyOwner(ownerHandle);
+    }
+
+    private void ApplyPendingOwner()
+    {
+        if (_pendingOwnerHandle != 0)
+        {
+            ApplyOwner(_pendingOwnerHandle);
+            _pendingOwnerHandle = 0;
+        }
+    }
+
+    private void ApplyOwner(nint ownerHandle)
+    {
         var ownerWindow = MacOSWindowInterop.GetWindowFromView(ownerHandle);
         if (ownerWindow == 0)
         {
@@ -700,8 +734,17 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if (_nsWindow != 0)
         {
             MacOSWindowInterop.SetWindowTransparency(_nsWindow, _nsView, _allowsTransparency);
-            MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _allowsTransparency ? MacOSWindowInterop.TransparentStyleMask : _defaultStyleMask);
-            MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
+            if (_window.UsesBorderlessSurfaceChrome)
+            {
+                // Chrome-less surfaces stay borderless: the transparent-titled mask would re-grow
+                // window chrome and let the window become key.
+                MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0);
+            }
+            else
+            {
+                MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _allowsTransparency ? MacOSWindowInterop.TransparentStyleMask : _defaultStyleMask);
+                MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
+            }
             if (_metalLayer != 0)
             {
                 MacOSWindowInterop.SetLayerOpaque(_metalLayer, !_allowsTransparency);
@@ -923,7 +966,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             heightDip: initialClientSize.Height,
             allowsTransparency: _allowsTransparency,
             isDialog: _window.IsDialogWindow,
-            isToolWindow: _window.IsToolWindow);
+            kind: _window.Kind);
 
         if (_nsWindow != 0)
         {
@@ -961,7 +1004,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.RegisterWindowCloseTarget(_nsWindow, this);
 
             // Opt standard top-level windows into native fullscreen so WindowState.FullScreen / the green button work.
-            if (!_window.IsOverlayWindow && !_allowsTransparency && !_window.IsToolWindow)
+            if (_window.Kind is not (Controls.WindowKind.Overlay or Controls.WindowKind.Tool) && !_allowsTransparency)
             {
                 const ulong NSWindowCollectionBehaviorFullScreenPrimary = 1ul << 7;
                 ulong behavior = ObjC.MsgSend_ulong(_nsWindow, ObjC.Sel("collectionBehavior"));
@@ -1147,6 +1190,13 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private void SyncZoomState()
     {
         if (_nsWindow == 0)
+        {
+            return;
+        }
+
+        // Zoom semantics do not apply to non-activating surfaces; a spurious isZoomed on a borderless
+        // window would otherwise flip WindowState to Maximized and balloon the popup to the work area.
+        if (_window.IsNonActivatingSurface)
         {
             return;
         }

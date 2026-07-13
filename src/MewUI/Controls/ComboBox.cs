@@ -289,8 +289,8 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
             width = 120;
         }
 
-        var client = window.ClientSize;
-        double x = PopupPlacement.ClampHorizontal(bounds.X, width, client.Width, floorToZero: true);
+        var region = window.GetPopupPlacementRegion(bounds);
+        double x = PopupPlacement.ClampHorizontal(bounds.X, width, region, floorToLeftEdge: true);
 
         // Do not measure the popup ListBox with infinite height; it can reset its scroll state.
         double itemHeight = ResolveItemHeight();
@@ -299,8 +299,11 @@ public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
         double maxHeight = Math.Max(0, MaxDropDownHeight);
         double desiredClamped = Math.Min(desiredHeight, maxHeight);
 
+        // Open downward when the dropdown fits below the box (standard combo behavior), only flipping
+        // up when it does not fit below. Preferring the side with more raw space would open upward for a
+        // box low in the window, because the native work-area region extends far above it.
         double belowY = bounds.Bottom;
-        var (y, height) = PopupPlacement.ResolveVerticalPreferMoreSpace(bounds.Y, belowY, client.Height, desiredClamped);
+        var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, region, desiredClamped);
 
         return new Rect(x, y, width, height);
     }

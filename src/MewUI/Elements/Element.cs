@@ -643,6 +643,32 @@ public abstract class Element : MewObject
         return root;
     }
 
+    /// <summary>
+    /// The popup window hosting this element as a portal subtree, when this element is that subtree's
+    /// boundary (the popup chrome overrides this); otherwise <see langword="null"/>. Descendants use it
+    /// to resolve the surface that actually owns their input even though their visual root stays the
+    /// owner window (portal model).
+    /// </summary>
+    internal virtual Window? HostedPopupSurface => null;
+
+    /// <summary>
+    /// Resolves the window that owns this element's mouse input. For content hosted in a native popup
+    /// window (portal model) this is that popup window - the surface input actually flows through - not
+    /// the owner window returned by <see cref="FindVisualRoot"/>. Falls back to the visual root.
+    /// </summary>
+    internal Window? ResolveInputHostWindow()
+    {
+        for (Element? ancestor = this; ancestor != null; ancestor = ancestor.Parent)
+        {
+            if (ancestor.HostedPopupSurface is Window host)
+            {
+                return host;
+            }
+        }
+
+        return FindVisualRoot() as Window;
+    }
+
     private void NotifyVisualRootChanged(Element? oldRoot, Element? newRoot)
     {
         VisualTree.Visit(this, element => element.OnVisualRootChanged(oldRoot, newRoot));

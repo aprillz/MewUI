@@ -101,15 +101,11 @@ internal sealed class DragPreviewOverlay : UIElement
                 var dx = topLeft.X - element.Bounds.X;
                 var dy = topLeft.Y - element.Bounds.Y;
                 context.Translate(dx, dy);
-                if (element.Parent == null)
-                {
-                    // Detached preview (e.g. a chip): no Window root, so render past the viewport cull.
-                    element.RenderDetached(context);
-                }
-                else
-                {
-                    element.Render(context);
-                }
+                // Render past the viewport cull whether the source is detached (no window root) or live:
+                // this draws the element into a foreign surface (the preview), so the cull's ambient
+                // viewport is this overlay's window, not the element's own - its bounds live in the source
+                // window's coordinate space and would otherwise be dropped.
+                element.RenderDetached(context);
                 return;
             }
 

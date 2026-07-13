@@ -316,6 +316,23 @@ public sealed class Win32PlatformHost : IPlatformHost
         return GetSystemDpi();
     }
 
+    public Rect GetWorkAreaForPoint(Point screenPositionPx)
+    {
+        const uint MonitorDefaultToNearest = 2;
+        var point = new POINT((int)Math.Round(screenPositionPx.X), (int)Math.Round(screenPositionPx.Y));
+        var monitor = User32.MonitorFromPoint(point, MonitorDefaultToNearest);
+        if (monitor != 0)
+        {
+            var info = MONITORINFO.Create();
+            if (User32.GetMonitorInfo(monitor, ref info))
+            {
+                var work = info.rcWork;
+                return new Rect(work.left, work.top, work.Width, work.Height);
+            }
+        }
+        return default;
+    }
+
     // WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE provide a click-through, non-activating overlay.
     public bool SupportsTransparentOverlay => true;
 

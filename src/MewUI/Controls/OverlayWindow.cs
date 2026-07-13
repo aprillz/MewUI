@@ -1,3 +1,5 @@
+using Aprillz.MewUI.Controls;
+
 namespace Aprillz.MewUI;
 
 /// <summary>
@@ -12,7 +14,7 @@ internal sealed class OverlayWindow : Window
     {
         Topmost = true;
         ShowInTaskbar = false;
-        IsOverlayWindow = true;
+        Kind = WindowKind.Overlay;
         StartupLocation = WindowStartupLocation.Manual;
         AllowsTransparency = transparent;
         Padding = new(0);

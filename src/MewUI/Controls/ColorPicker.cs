@@ -147,18 +147,18 @@ public sealed class ColorPicker : DropDownBase
     protected override Rect CalculatePopupBounds(Window window, UIElement popup)
     {
         var bounds = Bounds;
-        var client = window.ClientSize;
+        var region = window.GetPopupPlacementRegion(bounds);
 
         // Measure with unconstrained width so the popup reports its natural width
-        // (otherwise inner panels with Stretch/Grid columns expand to the client width).
-        popup.Measure(new Size(double.PositiveInfinity, client.Height));
-        double popupW = Math.Min(popup.DesiredSize.Width, client.Width);
+        // (otherwise inner panels with Stretch/Grid columns expand to the region width).
+        popup.Measure(new Size(double.PositiveInfinity, region.Height));
+        double popupW = Math.Min(popup.DesiredSize.Width, region.Width);
         double popupH = popup.DesiredSize.Height;
 
-        double x = PopupPlacement.ClampHorizontal(bounds.X, popupW, client.Width, floorToZero: false);
+        double x = PopupPlacement.ClampHorizontal(bounds.X, popupW, region, floorToLeftEdge: false);
 
         double belowY = bounds.Y + ResolveHeaderHeight();
-        var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, client.Height, popupH);
+        var (y, height) = PopupPlacement.ResolveVerticalPreferBelowIfFits(bounds.Y, belowY, region, popupH);
 
         return new Rect(x, y, popupW, height);
     }

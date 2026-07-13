@@ -1,20 +1,41 @@
-﻿using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI;
 
+/// <summary>
+/// Per-window popup policy layer: owns the open-popup list, close policy, owner
+/// notification, focus restoration, and tooltip caching, and delegates the actual
+/// visual hosting to an <see cref="IPopupHost"/>.
+/// </summary>
 internal sealed class PopupManager
 {
+    /// <summary>
+    /// Host popups in their own OS windows (native) instead of the owner surface. Internal, not a public
+    /// policy surface (see agent/popup-native-window/plan.md). Headless tests set this false to keep the
+    /// in-surface path as their baseline.
+    /// </summary>
+    internal static bool PreferNativePopups = true;
+
     private readonly Window _window;
     private readonly List<PopupEntry> _popups = new();
+    private readonly InSurfacePopupHost _inSurfaceHost;
+    private readonly NativePopupHost _nativeHost;
 
     private ToolTip? _toolTip;
     private UIElement? _toolTipOwner;
 
     private bool _isClosingPopups;
 
-    public PopupManager(Window window) => _window = window;
+    public PopupManager(Window window)
+    {
+        _window = window;
+        _inSurfaceHost = new InSurfacePopupHost(window, _popups);
+        _nativeHost = new NativePopupHost(window, _popups);
+    }
+
+    private IPopupHost ResolveHost() => PreferNativePopups ? _nativeHost : _inSurfaceHost;
 
     internal int Count => _popups.Count;
 
@@ -22,78 +43,29 @@ internal sealed class PopupManager
 
     internal bool HasAny => _popups.Count > 0;
 
-    internal bool HasLayoutDirty()
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var element = _popups[i].Element;
-            if (element.IsMeasureDirty || element.IsArrangeDirty)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    internal bool HasLayoutDirty() => _inSurfaceHost.HasLayoutDirty() || _nativeHost.HasLayoutDirty();
 
     internal void LayoutDirtyPopups()
     {
-        if (_popups.Count == 0)
-        {
-            return;
-        }
-
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var entry = _popups[i];
-            if (!entry.Element.IsVisible)
-            {
-                continue;
-            }
-
-            if (!entry.Element.IsMeasureDirty && !entry.Element.IsArrangeDirty)
-            {
-                continue;
-            }
-
-            LayoutPopup(entry);
-        }
+        _inSurfaceHost.LayoutDirty();
+        _nativeHost.LayoutDirty();
     }
 
-    internal void Render(IGraphicsContext context)
+    // Native popups draw into their own windows, so only the in-surface host paints/hit-tests the owner surface.
+    internal void Render(IGraphicsContext context) => _inSurfaceHost.Render(context);
+
+    internal UIElement? HitTest(Point point) => _inSurfaceHost.HitTest(point);
+
+    internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme)
     {
-        // Popups render last (on top).
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var entry = _popups[i];
-            if (entry.Chrome != null)
-            {
-                entry.Chrome.Render(context);
-            }
-            else
-            {
-                entry.Element.Render(context);
-            }
-        }
+        _inSurfaceHost.NotifyThemeChanged(oldTheme, newTheme);
+        _nativeHost.NotifyThemeChanged(oldTheme, newTheme);
     }
 
-    internal UIElement? HitTest(Point point)
+    internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
     {
-        for (int i = _popups.Count - 1; i >= 0; i--)
-        {
-            if (!_popups[i].Bounds.Contains(point))
-            {
-                continue;
-            }
-
-            var hit = _popups[i].Element.HitTest(point);
-            if (hit != null)
-            {
-                return hit;
-            }
-        }
-
-        return null;
+        _inSurfaceHost.NotifyDpiChanged(oldDpi, newDpi);
+        _nativeHost.NotifyDpiChanged(oldDpi, newDpi);
     }
 
     internal void Dispose()
@@ -105,38 +77,12 @@ internal sealed class PopupManager
                 disposable.Dispose();
             }
 
-            DetachEntry(entry);
+            entry.Host?.Detach(entry);
         }
 
         _popups.Clear();
         _toolTipOwner = null;
         _toolTip = null;
-    }
-
-    internal void NotifyThemeChanged(Theme oldTheme, Theme newTheme)
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var entry = _popups[i];
-            if (entry.Chrome != null)
-            {
-                entry.Chrome.NotifyThemeChanged(oldTheme, newTheme);
-            }
-
-            if (entry.Element is FrameworkElement fe)
-            {
-                fe.NotifyThemeChanged(oldTheme, newTheme);
-            }
-        }
-    }
-
-    internal void NotifyDpiChanged(uint oldDpi, uint newDpi)
-    {
-        for (int i = 0; i < _popups.Count; i++)
-        {
-            var root = (UIElement?)_popups[i].Chrome ?? _popups[i].Element;
-            ApplyPopupDpiChange(root, oldDpi, newDpi);
-        }
     }
 
     internal void CloseAllPopups()
@@ -164,10 +110,28 @@ internal sealed class PopupManager
         _window.Invalidate();
     }
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+        => ShowPopup(owner, popup, _ => bounds, sizeToContent, staysOpen);
+
+    /// <summary>
+    /// Opens <paramref name="popup"/>, computing its placement via <paramref name="measureBounds"/> only
+    /// after the popup is rooted in this window (chrome attached, style/inherited/DPI/theme resolved), so
+    /// placement measures the fully-styled popup instead of a pre-attach one whose named style and fonts
+    /// have not resolved yet. Returns the measured placement bounds.
+    /// </summary>
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(popup);
+
+        // Opening an interactive popup is a user interaction with this window, but not every platform
+        // activates an inactive window on the triggering click (e.g. right-click), so anchor activation
+        // here: keyboard focus and the deactivation-close policy both depend on the owner being active.
+        // Hover popups (ToolTip, hit-test-invisible) must not steal activation.
+        if (popup.IsHitTestVisible && !_window.IsActive)
+        {
+            _window.Activate();
+        }
 
         // Replace if already present.
         for (int i = 0; i < _popups.Count; i++)
@@ -175,53 +139,30 @@ internal sealed class PopupManager
             if (_popups[i].Element == popup)
             {
                 _popups[i].Owner = owner;
-                if (_popups[i].Chrome is PopupChrome existingChrome)
-                {
-                    existingChrome.ContextParentOverride = owner;
-                }
-                UpdatePopup(popup, bounds);
-                return;
+                _popups[i].Host?.OnOwnerChanged(_popups[i]);
+                var updatedBounds = measureBounds(_window);
+                UpdatePopup(popup, updatedBounds);
+                return updatedBounds;
             }
         }
 
-        // Popups can be cached/reused (e.g. ComboBox keeps a ListBox instance even while closed).
-        // If a popup is moved between windows (or the window DPI differs), ensure the popup updates its DPI-sensitive
-        // caches (fonts, layout) before measuring/arranging.
-        uint oldDpi = popup.GetDpiCached();
-        var oldTheme = popup is FrameworkElement popupElement
-            ? popupElement.ThemeInternal
-            : _window.ThemeInternal;
+        var host = ResolveHost();
+        var entry = new PopupEntry { Owner = owner, Element = popup, StaysOpen = staysOpen, Host = host };
 
-        // Wrap in PopupChrome so the drop shadow renders within the chrome's layout bounds,
-        // avoiding clipping by ancestor clip regions.
-        var chrome = new PopupChrome(popup);
-
-        // Before attach so attach-time style/inherited resolution already sees the owner context.
-        chrome.ContextParentOverride = owner;
-        chrome.Parent = _window;
-        chrome.AttachChild();
-
-        ApplyPopupDpiChange(chrome, oldDpi, _window.Dpi);
-        ApplyPopupThemeChange(chrome, oldTheme, _window.ThemeInternal);
-
-        // Now that the popup is in the visual tree, inherited properties (e.g. FontFamily)
-        // are resolvable. Force style re-resolution and measure invalidation so that any
-        // measurement done before attachment (e.g. MeasureToolTip) is corrected.
-        ForceStyleAndMeasureRefresh(popup);
-
-        // The caller sized a content-sized popup from a measurement taken before attachment, where the
-        // fallback font differs from the inherited one; re-derive the width from the connected measure
-        // so the content is not clipped by a stale pre-attach size.
-        if (sizeToContent)
-        {
-            bounds = ResizeToContentWidth(popup, bounds);
-        }
-
-        var entry = new PopupEntry { Owner = owner, Element = popup, Chrome = chrome, Bounds = bounds, StaysOpen = staysOpen };
+        // Root the popup before measuring it for placement: its named style (e.g. ComboBoxPopup) and
+        // inherited properties (fonts) only resolve once its context chain reaches this window's
+        // stylesheet, which is what attaching the chrome establishes. Measuring first (as callers used
+        // to) sized the popup from unstyled metrics - a zero border thickness that forced a spurious
+        // scrollbar, or a fallback font that clipped content.
+        PopupHostSupport.AttachChrome(_window, entry);
+        var measuredBounds = measureBounds(_window);
+        entry.Bounds = measuredBounds;
+        host.Attach(entry, sizeToContent);
         _popups.Add(entry);
-        LayoutPopup(entry);
+        host.Layout(entry);
 
         _window.Invalidate();
+        return measuredBounds;
     }
 
     internal void UpdatePopup(UIElement popup, Rect bounds)
@@ -233,8 +174,7 @@ internal sealed class PopupManager
                 continue;
             }
 
-            _popups[i].Bounds = bounds;
-            LayoutPopup(_popups[i]);
+            _popups[i].Host?.UpdateBounds(_popups[i], bounds);
             _window.Invalidate();
             return;
         }
@@ -387,7 +327,7 @@ internal sealed class PopupManager
         // focus/close side effects that re-enter this manager, and a stale index would strand RemoveAt.
         var entry = _popups[index];
         _popups.RemoveAt(index);
-        DetachEntry(entry);
+        entry.Host?.Detach(entry);
 
         if (entry.Owner is IPopupOwner owner)
         {
@@ -509,41 +449,6 @@ internal sealed class PopupManager
         _toolTipOwner = null;
     }
 
-    private static void DetachEntry(PopupEntry entry)
-    {
-        if (entry.Chrome != null)
-        {
-            entry.Chrome.DetachChild();
-            entry.Chrome.Parent = null;
-            entry.Chrome.ContextParentOverride = null;
-        }
-        else
-        {
-            entry.Element.Parent = null;
-        }
-    }
-
-    private static void LayoutPopup(PopupEntry entry)
-    {
-        if (entry.Chrome != null)
-        {
-            // Chrome bounds include shadow padding around the content area.
-            var chromeBounds = entry.Bounds.Inflate(PopupChrome.ShadowPadding);
-            entry.Chrome.Measure(new Size(chromeBounds.Width, chromeBounds.Height));
-            entry.Chrome.Arrange(chromeBounds);
-
-            // Keep the stored bounds consistent with the child's actually arranged (layout-rounded) bounds,
-            // otherwise hit-testing (e.g. mouse wheel on popup content) can miss by sub-pixel rounding.
-            entry.Bounds = entry.Chrome.Child.Bounds;
-        }
-        else
-        {
-            entry.Element.Measure(new Size(entry.Bounds.Width, entry.Bounds.Height));
-            entry.Element.Arrange(entry.Bounds);
-            entry.Bounds = entry.Element.Bounds;
-        }
-    }
-
     private void EnsureFocusNotInClosedPopup(UIElement popup, UIElement owner)
     {
         var focused = _window.FocusManager.FocusedElement;
@@ -580,91 +485,6 @@ internal sealed class PopupManager
                 owner.SetFocusWithin(false);
             }
         }
-    }
-
-    private static void ApplyPopupDpiChange(UIElement popup, uint oldDpi, uint newDpi)
-    {
-        if (oldDpi == 0 || newDpi == 0 || oldDpi == newDpi)
-        {
-            return;
-        }
-
-        // Clear DPI caches again (Parent assignment already does this, but be defensive for future changes),
-        // and notify controls so they can recreate DPI-dependent resources (fonts, etc.).
-        popup.ClearDpiCacheDeep();
-        VisualTree.Visit(popup, e =>
-        {
-            e.ClearDpiCache();
-            if (e is FrameworkElement fe)
-            {
-                fe.NotifyDpiChanged(oldDpi, newDpi);
-            }
-        });
-    }
-
-    private Rect ResizeToContentWidth(UIElement popup, Rect bounds)
-    {
-        var client = _window.ClientSize;
-        // Measure unconstrained in width so the now-inherited font drives the natural content width;
-        // keep the caller's height constraint so its vertical placement decision is preserved.
-        popup.Measure(new Size(double.PositiveInfinity, bounds.Height));
-        double width = Math.Min(popup.DesiredSize.Width, client.Width);
-        if (width.Equals(bounds.Width))
-        {
-            return bounds;
-        }
-        double x = bounds.X;
-        if (x + width > client.Width)
-        {
-            x = Math.Max(0, client.Width - width);
-        }
-        return new Rect(x, bounds.Y, width, bounds.Height);
-    }
-
-    private static void ForceStyleAndMeasureRefresh(UIElement popup)
-    {
-        VisualTree.Visit(popup, e =>
-        {
-            if (e is Control c)
-            {
-                c.ResolveAndApplyStyle();
-                c.InvalidateFontCache(FontFamilyProperty);
-            }
-
-            e.InvalidateMeasure();
-        });
-    }
-
-    private static readonly MewProperty FontFamilyProperty = TextElement.FontFamilyProperty;
-
-    private static void ApplyPopupThemeChange(UIElement popup, Theme oldTheme, Theme newTheme)
-    {
-        if (oldTheme == newTheme)
-        {
-            return;
-        }
-
-        VisualTree.Visit(popup, e =>
-        {
-            if (e is FrameworkElement element)
-            {
-                element.NotifyThemeChanged(oldTheme, newTheme);
-            }
-        });
-    }
-
-
-    internal sealed class PopupEntry
-    {
-        public required UIElement Element { get; init; }
-
-        public required UIElement Owner { get; set; }
-
-        public Rect Bounds { get; set; }
-
-        public bool StaysOpen { get; set; }
-
-        public PopupChrome? Chrome { get; set; }
     }
 }
 

@@ -178,8 +178,8 @@ public sealed class ContextMenu : Control, IPopupOwner
         _parentMenu = null;
 
         // Measure without passing infinity into backends that may convert widths to ints.
-        var client = window.ClientSize;
-        Measure(new Size(Math.Max(0, client.Width), Math.Max(0, client.Height)));
+        var region = window.GetPopupPlacementRegion(new Rect(positionInWindow.X, positionInWindow.Y, 0, 0));
+        Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         var desired = DesiredSize;
 
         double width = Math.Max(0, desired.Width);
@@ -191,15 +191,15 @@ public sealed class ContextMenu : Control, IPopupOwner
             height = Math.Min(height, maxH);
         }
 
-        double x = PopupPlacement.ClampHorizontal(positionInWindow.X, width, client.Width, floorToZero: false);
+        double x = PopupPlacement.ClampHorizontal(positionInWindow.X, width, region, floorToLeftEdge: false);
         double y = positionInWindow.Y;
 
-        if (y + height > client.Height)
+        if (y + height > region.Bottom)
         {
             // Flip above the anchor point (anchorTopY for MenuBar items, or the click Y for context menus).
             double flipAnchor = anchorTopY ?? positionInWindow.Y;
             double flippedY = flipAnchor - height;
-            y = flippedY >= 0 ? flippedY : Math.Max(0, client.Height - height);
+            y = flippedY >= region.Y ? flippedY : Math.Max(region.Y, region.Bottom - height);
         }
 
         window.ShowPopup(owner, this, new Rect(x, y, width, height));
@@ -626,8 +626,8 @@ public sealed class ContextMenu : Control, IPopupOwner
         }
         subMenuPopup._parentMenu = this;
 
-        var client = window.ClientSize;
-        subMenuPopup.Measure(new Size(Math.Max(0, client.Width), Math.Max(0, client.Height)));
+        var region = window.GetPopupPlacementRegion(ownerRowBounds);
+        subMenuPopup.Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         var desired = subMenuPopup.DesiredSize;
 
         double width = Math.Max(0, desired.Width);
@@ -638,20 +638,20 @@ public sealed class ContextMenu : Control, IPopupOwner
             height = Math.Min(height, maxH);
         }
 
-        // Place to the right of the row (WPF-like), clamped to window client.
+        // Place to the right of the row (WPF-like), clamped to the placement region.
         const double horizontalOffset = 2;
         double verticalOffset = -(BorderThickness + Padding.Top);
         double x = ownerRowBounds.Right + horizontalOffset;
         double y = ownerRowBounds.Y + verticalOffset;
 
-        if (x + width > client.Width)
+        if (x + width > region.Right)
         {
-            x = Math.Max(0, ownerRowBounds.X - horizontalOffset - width);
+            x = Math.Max(region.X, ownerRowBounds.X - horizontalOffset - width);
         }
 
-        if (y + height > client.Height)
+        if (y + height > region.Bottom)
         {
-            y = Math.Max(0, client.Height - height);
+            y = Math.Max(region.Y, region.Bottom - height);
         }
 
         window.ShowPopup(this, subMenuPopup, new Rect(x, y, width, height));

@@ -112,6 +112,13 @@ internal interface IPlatformHost : IDisposable
     uint GetDpiForPoint(Point screenPositionPx) => GetSystemDpi();
 
     /// <summary>
+    /// Gets the work area (screen bounds minus reserved regions such as the taskbar) of the monitor
+    /// containing the given screen-pixel point (Y-down), in screen pixels. Lets placement clamp a
+    /// popup to its target monitor. Returns an empty rect when the platform cannot report it yet.
+    /// </summary>
+    Rect GetWorkAreaForPoint(Point screenPositionPx) => default;
+
+    /// <summary>
     /// Whether the platform supports a click-through, non-activating, transparent top-level overlay window.
     /// When true, drag-and-drop uses a single such window that follows the cursor across windows and the desktop
     /// (continuous preview); when false it falls back to a per-window overlay (hidden between windows).

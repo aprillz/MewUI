@@ -240,6 +240,9 @@ internal static unsafe class MacOSWindowInterop
             return;
         }
 
+        // When another application is frontmost, makeKeyAndOrderFront alone does not switch apps,
+        // leaving the window key-less and visually inactive.
+        MacOSInterop.ActivateApplication();
         ObjC.MsgSend_void_nint_nint(window, SelMakeKeyAndOrderFront, 0);
     }
 
@@ -338,6 +341,41 @@ internal static unsafe class MacOSWindowInterop
         }
 
         return ObjC.MsgSend_rect(window, SelFrame);
+    }
+
+    /// <summary>
+    /// Returns the visibleFrame (work area) of the screen containing the given Cocoa point,
+    /// falling back to the main screen when no screen contains it.
+    /// </summary>
+    public static NSRect GetScreenVisibleFrameForCocoaPoint(NSPoint cocoaPoint)
+    {
+        EnsureInitialized();
+        var clsScreen = ObjC.GetClass("NSScreen");
+        if (clsScreen == 0)
+        {
+            return default;
+        }
+
+        var screens = ObjC.MsgSend_nint(clsScreen, ObjC.Sel("screens"));
+        long count = screens != 0 ? (long)ObjC.MsgSend_nint(screens, ObjC.Sel("count")) : 0;
+        for (long i = 0; i < count; i++)
+        {
+            var screen = ObjC.MsgSend_nint_nint(screens, SelObjectAtIndex, (nint)i);
+            if (screen == 0)
+            {
+                continue;
+            }
+
+            var frame = ObjC.MsgSend_rect(screen, ObjC.Sel("frame"));
+            if (cocoaPoint.x >= frame.origin.x && cocoaPoint.x < frame.origin.x + frame.size.width
+                && cocoaPoint.y >= frame.origin.y && cocoaPoint.y < frame.origin.y + frame.size.height)
+            {
+                return ObjC.MsgSend_rect(screen, ObjC.Sel("visibleFrame"));
+            }
+        }
+
+        var mainScreen = ObjC.MsgSend_nint(clsScreen, ObjC.Sel("mainScreen"));
+        return mainScreen != 0 ? ObjC.MsgSend_rect(mainScreen, ObjC.Sel("visibleFrame")) : default;
     }
 
     public static NSRect GetScreenFrame(nint window)
@@ -616,20 +654,28 @@ internal static unsafe class MacOSWindowInterop
         }
     }
 
-    public static nint CreateWindow(string title, double widthDip, double heightDip, bool allowsTransparency, bool isDialog, bool isToolWindow)
+    public static nint CreateWindow(string title, double widthDip, double heightDip, bool allowsTransparency, bool isDialog, Aprillz.MewUI.Controls.WindowKind kind)
     {
         EnsureInitialized();
 
         nint windowClass;
         ulong styleMask;
-        if (allowsTransparency)
+        if (kind == Aprillz.MewUI.Controls.WindowKind.Popup)
+        {
+            // Non-activating popup surface: a plain borderless NSWindow refuses key/main status by
+            // default (unlike the MewUIWindow subclass, whose whole point is allowing borderless
+            // windows to become key), so clicks in the popup never steal the owner's active look.
+            windowClass = ClsNSWindow;
+            styleMask = 0; // NSWindowStyleMaskBorderless
+        }
+        else if (allowsTransparency)
         {
             // Borderless windows (AllowsTransparency) need MewUIWindow subclass for canBecomeKeyWindow.
             EnsureMewUIWindowClass();
             windowClass = ClsMewUIWindow != 0 ? ClsMewUIWindow : ClsNSWindow;
             styleMask = TransparentStyleMask;
         }
-        else if (isToolWindow)
+        else if (kind == Aprillz.MewUI.Controls.WindowKind.Tool)
         {
             // Floating tool/utility window: an NSPanel with the utility-window mask (thin title bar, floats
             // above the app). Close button only - no miniaturizable. MewUIPanel subclass so the panel can
@@ -644,6 +690,8 @@ internal static unsafe class MacOSWindowInterop
             windowClass = ClsNSWindow;
             styleMask = isDialog ? DialogStyleMask : DefaultStyleMask;
         }
+
+        bool isToolWindow = kind == Aprillz.MewUI.Controls.WindowKind.Tool;
 
         var win = ObjC.MsgSend_nint(windowClass, SelAlloc);
         if (win == 0)
@@ -664,6 +712,11 @@ internal static unsafe class MacOSWindowInterop
         ObjC.MsgSend_void_nint_bool(win, ObjC.Sel("setReleasedWhenClosed:"), false);
 
         SetTitle(win, title);
+        if (kind == Aprillz.MewUI.Controls.WindowKind.Popup)
+        {
+            // The popup chrome draws its own drop shadow; the OS window shadow would double it.
+            ObjC.MsgSend_void_nint_bool(win, ObjC.Sel("setHasShadow:"), false);
+        }
         if (isDialog || isToolWindow)
         {
             // Close-only chrome (hide miniaturize/zoom buttons).

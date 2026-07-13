@@ -57,6 +57,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
         Window = window;
     }
 
+    // SetWindowPos activates the target window unless SWP_NOACTIVATE is passed; a pure style/frame
+    // refresh must never activate (it would e.g. yank a non-activating popup to the foreground).
+    private const uint SWP_NOACTIVATE_ON_REFRESH = 0x0010;
+
     public void SetResizable(bool resizable)
     {
         if (Handle == 0)
@@ -97,8 +101,8 @@ internal sealed class Win32WindowBackend : IWindowBackend
             EnterFullScreen();
         }
 
-        var showCmd = Window.IsOverlayWindow
-            // Input-transparent overlays must not take activation away from the source window.
+        var showCmd = Window.IsNonActivatingSurface
+            // Non-activating surfaces must not take activation away from the owner window.
             ? ShowWindowCommands.SW_SHOWNOACTIVATE
             : Window.WindowState switch
             {
@@ -106,6 +110,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 Controls.WindowState.Minimized => ShowWindowCommands.SW_SHOWMINIMIZED,
                 _ => ShowWindowCommands.SW_SHOW,
             };
+
+        // Paint BEFORE the window is shown so its first on-screen frame is the fully-laid-out content,
+        // not a blank surface the render loop fills a frame or more later. Popups open on a discrete
+        // user action and must appear complete immediately; without this the surface is shown first and
+        // late-arriving content (e.g. taller color-picker rows) is missing from the initial frames.
+        // Mirrors the X11 backend's paint-before-map for popup/overlay surfaces.
+        if (Window.UsesBorderlessSurfaceChrome)
+        {
+            RenderNow();
+        }
+
         User32.ShowWindow(Handle, showCmd);
         User32.UpdateWindow(Handle);
     }
@@ -201,7 +216,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         uint current = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
         uint style = GetWindowStyle() | (current & WS_VISIBLE);
         User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
 
     private void EnterFullScreen()
@@ -251,7 +266,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         uint style = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
         style = value ? (style | WS_MINIMIZEBOX) : (style & ~WS_MINIMIZEBOX);
         User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
 
     public void SetCanMaximize(bool value)
@@ -268,7 +283,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         uint style = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
         style = value ? (style | WS_MAXIMIZEBOX) : (style & ~WS_MAXIMIZEBOX);
         User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
 
     public void SetTopmost(bool value)
@@ -304,7 +319,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             exStyle &= ~WS_EX_APPWINDOW;
         }
 
-        if (Window.IsToolWindow && !Window.AllowsTransparency)
+        if (Window.Kind == Controls.WindowKind.Tool && !Window.AllowsTransparency)
         {
             exStyle |= WS_EX_TOOLWINDOW;
             exStyle &= ~WS_EX_APPWINDOW;
@@ -316,7 +331,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         User32.SetWindowLongPtr(Handle, GWL_EXSTYLE, (nint)exStyle);
         ApplyOwnerHandle();
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
 
     public void Close()
@@ -576,7 +591,17 @@ internal sealed class Win32WindowBackend : IWindowBackend
             windowH = rect.Height;
         }
 
-        User32.SetWindowPos(Handle, 0, 0, 0, windowW, windowH, 0x0002 | 0x0004); // SWP_NOMOVE | SWP_NOZORDER
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_NOACTIVATE = 0x0010;
+        uint flags = SWP_NOMOVE | SWP_NOZORDER;
+        // A non-activating surface must not be pulled to the foreground by a programmatic resize
+        // (the fit-to-content resize runs right after Show and would otherwise steal the owner's activation).
+        if (Window.IsNonActivatingSurface)
+        {
+            flags |= SWP_NOACTIVATE;
+        }
+        User32.SetWindowPos(Handle, 0, 0, 0, windowW, windowH, flags);
     }
 
     public Point GetPosition()
@@ -713,6 +738,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
             case WindowMessages.WM_CAPTURECHANGED:
                 // Capture can be revoked by the OS (e.g. deactivation). Keep UI state consistent.
                 Window.ClearMouseCaptureState();
+                if (Window.Kind == Controls.WindowKind.Popup)
+                {
+                    HandlePopupSurfaceCaptureChanged(msg, lParam);
+                }
                 return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_PAINT:
@@ -752,6 +781,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
             case WindowMessages.WM_ACTIVATE:
                 return HandleActivate(wParam);
+
+            case WindowMessages.WM_MOUSEACTIVATE:
+                // Non-activating surfaces: clicking their content must not steal foreground from the
+                // owner window (that would break light-dismiss and leave the owner looking inactive).
+                if (Window.IsNonActivatingSurface)
+                {
+                    const int MA_NOACTIVATE = 3;
+                    return MA_NOACTIVATE;
+                }
+                return User32.DefWindowProc(Handle, msg, wParam, lParam);
 
             case WindowMessages.WM_LBUTTONDOWN:
                 return HandleMouseButton(lParam, MouseButton.Left, isDown: true, isDoubleClickMessage: false);
@@ -1355,6 +1394,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private uint GetWindowStyle()
     {
+        // Popup surfaces carry no caption, border, or resize frame: the popup chrome draws its own
+        // shadow and rounding. Kept ahead of the transparency branch so a transparent popup does not
+        // pick up the resize-tracking WS_THICKFRAME meant for top-level custom-chrome windows.
+        if (Window.Kind == Controls.WindowKind.Popup)
+        {
+            return WindowStyles.WS_POPUP;
+        }
+
         // Per-pixel transparency cannot use the default visible non-client chrome because
         // layered presentation and input routing both use client coordinates. Keep
         // WS_THICKFRAME for native resize tracking, then remove the actual non-client
@@ -1380,7 +1427,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             {
                 style &= ~WindowStyles.WS_SYSMENU;
             }
-            if (Window.IsToolWindow)
+            if (Window.Kind == Controls.WindowKind.Tool)
             {
                 // Tool windows expose only a close button (no minimize/maximize), matching the utility-window
                 // contract on the other platforms.
@@ -1425,20 +1472,30 @@ internal sealed class Win32WindowBackend : IWindowBackend
             exStyle |= WindowStylesEx.WS_EX_APPWINDOW;
         }
 
-        // Tool/utility window: thin caption + excluded from the taskbar. ShowInTaskbar=false
-        // is handled separately by an owner HWND so normal dialog chrome stays unchanged.
-        if (Window.IsToolWindow && !Window.AllowsTransparency)
+        switch (Window.Kind)
         {
-            exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW;
-            exStyle &= ~WindowStylesEx.WS_EX_APPWINDOW;
-        }
+            // Tool/utility window: thin caption + excluded from the taskbar. ShowInTaskbar=false
+            // is handled separately by an owner HWND so normal dialog chrome stays unchanged.
+            case Controls.WindowKind.Tool when !Window.AllowsTransparency:
+                exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW;
+                exStyle &= ~WindowStylesEx.WS_EX_APPWINDOW;
+                break;
 
-        // Input-transparent overlay (drag preview): clicks pass through (WS_EX_TRANSPARENT) and the window
-        // never activates (WS_EX_NOACTIVATE), so it cannot steal capture/focus from the source window.
-        // WS_EX_LAYERED is required for the click-through hit-test pass-through to work.
-        if (Window.IsOverlayWindow)
-        {
-            exStyle |= WindowStylesEx.WS_EX_TRANSPARENT | WindowStylesEx.WS_EX_LAYERED | WindowStylesEx.WS_EX_NOACTIVATE;
+            // Popup surface: excluded from the taskbar (WS_EX_TOOLWINDOW) and never activated
+            // (WS_EX_NOACTIVATE) so it does not steal focus from the owner. Unlike the overlay it omits
+            // WS_EX_TRANSPARENT, so it still receives mouse input. Per-pixel alpha comes from the
+            // transparency branch above when AllowsTransparency is set.
+            case Controls.WindowKind.Popup:
+                exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW | WindowStylesEx.WS_EX_NOACTIVATE;
+                exStyle &= ~WindowStylesEx.WS_EX_APPWINDOW;
+                break;
+
+            // Input-transparent overlay (drag preview): clicks pass through (WS_EX_TRANSPARENT) and the window
+            // never activates (WS_EX_NOACTIVATE), so it cannot steal capture/focus from the source window.
+            // WS_EX_LAYERED is required for the click-through hit-test pass-through to work.
+            case Controls.WindowKind.Overlay:
+                exStyle |= WindowStylesEx.WS_EX_TRANSPARENT | WindowStylesEx.WS_EX_LAYERED | WindowStylesEx.WS_EX_NOACTIVATE;
+                break;
         }
 
         return exStyle;
@@ -1463,7 +1520,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         uint style = GetWindowStyle();
         User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
 
     private void HandleDestroy()
@@ -1742,7 +1799,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         User32.SetWindowLongPtr(Handle, GWL_EXSTYLE, (nint)exStyle);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
 
     private void ApplyOpacity()
@@ -1986,6 +2043,38 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return 0;
     }
 
+    /// <summary>
+    /// Maintains the popup dismiss watch (mouse capture) for popup surfaces. Losing capture to nothing
+    /// (an inner control released it) re-arms the watch; losing it to an unrelated window, or a mode
+    /// cancel, asks the framework to light-dismiss.
+    /// </summary>
+    private void HandlePopupSurfaceCaptureChanged(uint msg, nint lParam)
+    {
+        if (msg == WindowMessages.WM_CANCELMODE)
+        {
+            _ = Window.OnPopupSurfaceWatchTransfer(0);
+            return;
+        }
+
+        nint newHolder = lParam;
+        if (newHolder == Handle)
+        {
+            return;
+        }
+
+        if (newHolder == 0)
+        {
+            if (Handle != 0 && User32.IsWindowVisible(Handle))
+            {
+                User32.SetCapture(Handle);
+            }
+        }
+        else
+        {
+            _ = Window.OnPopupSurfaceWatchTransfer(newHolder);
+        }
+    }
+
     private nint HandleActivate(nint wParam)
     {
         bool active = (wParam.ToInt64() & 0xFFFF) != 0;
@@ -2039,6 +2128,41 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         int xPx = (short)(lParam.ToInt64() & 0xFFFF);
         int yPx = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+
+        // Dismiss watch: while a popup surface holds capture, presses land here regardless of pointer
+        // location. A press over a related surface (owner window or sibling popup of the same owner)
+        // is handed to that window and acts there normally - its close policy decides what closes -
+        // matching the in-surface path and the X11 owner-events grab. Any other outside press
+        // light-dismisses and is consumed (standard menu UX: the closing click does not also act on
+        // whatever is underneath).
+        if (isDown && Window.Kind == Controls.WindowKind.Popup && User32.GetClientRect(Handle, out var popupClient)
+            && (xPx < 0 || yPx < 0 || xPx >= popupClient.Width || yPx >= popupClient.Height))
+        {
+            const uint GA_ROOT = 2;
+            var screenPt = new POINT(xPx, yPx);
+            User32.ClientToScreen(Handle, ref screenPt);
+            nint hit = User32.WindowFromPoint(screenPt);
+            nint root = hit == 0 ? 0 : User32.GetAncestor(hit, GA_ROOT);
+            if (root != 0 && Window.IsPopupPressForwardTarget(root))
+            {
+                var targetPt = screenPt;
+                User32.ScreenToClient(root, ref targetPt);
+                uint forwardMsg = button switch
+                {
+                    MouseButton.Right => isDoubleClickMessage ? WindowMessages.WM_RBUTTONDBLCLK : WindowMessages.WM_RBUTTONDOWN,
+                    MouseButton.Middle => isDoubleClickMessage ? WindowMessages.WM_MBUTTONDBLCLK : WindowMessages.WM_MBUTTONDOWN,
+                    _ => isDoubleClickMessage ? WindowMessages.WM_LBUTTONDBLCLK : WindowMessages.WM_LBUTTONDOWN,
+                };
+                // wParam (MK_* state) is unused by our own WndProc, which re-reads key state itself.
+                _ = User32.PostMessage(root, forwardMsg, 0, (targetPt.y << 16) | (targetPt.x & 0xFFFF));
+            }
+            else
+            {
+                Window.OnPopupSurfaceOutsidePress();
+            }
+
+            return 0;
+        }
         var pos = new Point(xPx / Window.DpiScale, yPx / Window.DpiScale);
         var screenPos = ClientToScreen(pos);
         bool leftDown = (User32.GetKeyState(VirtualKeys.VK_LBUTTON) & 0x8000) != 0;

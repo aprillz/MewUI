@@ -1,56 +1,33 @@
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
-/// Shared math for placing drop-down/tooltip popups relative to an anchor within a window's client area.
-/// Keeps horizontal clamping and vertical flip behavior identical across the popup-owning controls.
+/// Shared math for placing drop-down/tooltip popups relative to an anchor within a placement region:
+/// the owner window's client area for in-surface popups, or the monitor work area for natively hosted
+/// popups (see Window.GetPopupPlacementRegion). Keeps horizontal clamping and vertical flip behavior
+/// identical across the popup-owning controls.
 /// </summary>
 internal static class PopupPlacement
 {
     /// <summary>
-    /// Clamps a candidate x so a popup of the given width stays within the client width.
-    /// When <paramref name="floorToZero"/> is set, also floors the result to zero (DropDownBase/ComboBox
-    /// clamp a possibly-negative anchor this way; DatePicker/ColorPicker/ContextMenu/tooltips do not).
+    /// Clamps a candidate x so a popup of the given width stays within the region.
+    /// When <paramref name="floorToLeftEdge"/> is set, also floors the result to the region's left edge
+    /// (DropDownBase/ComboBox clamp a possibly-outside anchor this way; DatePicker/ColorPicker/
+    /// ContextMenu/tooltips do not).
     /// </summary>
-    public static double ClampHorizontal(double anchorX, double width, double clientWidth, bool floorToZero)
+    public static double ClampHorizontal(double anchorX, double width, Rect region, bool floorToLeftEdge)
     {
         double x = anchorX;
-        if (x + width > clientWidth)
+        if (x + width > region.Right)
         {
-            x = Math.Max(0, clientWidth - width);
+            x = Math.Max(region.X, region.Right - width);
         }
 
-        if (floorToZero && x < 0)
+        if (floorToLeftEdge && x < region.X)
         {
-            x = 0;
+            x = region.X;
         }
 
         return x;
-    }
-
-    /// <summary>
-    /// Resolves vertical placement by preferring whichever side (below/above the anchor) has more raw
-    /// space, then clamping height to that side's available space. Used by DropDownBase and ComboBox.
-    /// </summary>
-    public static (double y, double height) ResolveVerticalPreferMoreSpace(
-        double anchorY, double belowY, double clientHeight, double desiredHeight)
-    {
-        double availableBelow = Math.Max(0, clientHeight - belowY);
-        double availableAbove = Math.Max(0, anchorY);
-
-        double y;
-        double height;
-        if (availableBelow >= availableAbove)
-        {
-            y = belowY;
-            height = Math.Min(desiredHeight, availableBelow);
-        }
-        else
-        {
-            height = Math.Min(desiredHeight, availableAbove);
-            y = anchorY - height;
-        }
-
-        return (y, height);
     }
 
     /// <summary>
@@ -58,10 +35,10 @@ internal static class PopupPlacement
     /// or has more space than above; otherwise flips above. Used by DatePicker and ColorPicker.
     /// </summary>
     public static (double y, double height) ResolveVerticalPreferBelowIfFits(
-        double anchorY, double belowY, double clientHeight, double desiredHeight)
+        double anchorY, double belowY, Rect region, double desiredHeight)
     {
-        double availableBelow = Math.Max(0, clientHeight - belowY);
-        double availableAbove = Math.Max(0, anchorY);
+        double availableBelow = Math.Max(0, region.Bottom - belowY);
+        double availableAbove = Math.Max(0, anchorY - region.Y);
 
         double y;
         double height;

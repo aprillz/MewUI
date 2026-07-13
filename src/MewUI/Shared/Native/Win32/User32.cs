@@ -156,6 +156,9 @@ internal static partial class User32
     public static partial bool ScreenToClient(nint hWnd, ref POINT lpPoint);
 
     [LibraryImport(LibraryName)]
+    public static partial nint GetAncestor(nint hWnd, uint gaFlags);
+
+    [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AdjustWindowRectEx(ref RECT lpRect, uint dwStyle, [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle);
 

@@ -52,6 +52,10 @@ internal static class WindowInputRouter
         bool middleDown,
         ModifierKeys modifiers = ModifierKeys.None)
     {
+        // Popup surfaces arrange their hosted subtree in the owner's coordinate space; map the
+        // surface-local position into that space once so hit tests and event positions agree
+        // with element bounds everywhere downstream.
+        positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
         // A drag in progress (or a gesture about to be promoted) consumes the move; skip normal routing.
@@ -94,6 +98,7 @@ internal static class WindowInputRouter
         int clickCount,
         ModifierKeys modifiers = ModifierKeys.None)
     {
+        positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
         var element = HitTest(window, positionInWindow);
@@ -215,6 +220,7 @@ internal static class WindowInputRouter
         bool middleDown = false,
         ModifierKeys modifiers = ModifierKeys.None)
     {
+        positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
         var element = window.HitTest(positionInWindow);

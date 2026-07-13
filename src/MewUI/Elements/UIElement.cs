@@ -421,6 +421,19 @@ public abstract partial class UIElement : Element
 
     protected virtual Size ArrangeOverride(Size finalSize) => finalSize;
 
+    // Render-time cull viewport in layout coordinates (the space element Bounds live in), set by the
+    // window driving the current render. A normal window sets its client rect; a popup surface hosting
+    // a portal subtree sets its client rect in the owner's coordinate space (where the subtree is
+    // arranged), so content that lies outside the owner but inside the popup is not wrongly culled.
+    // null (no active window frame) disables the cull.
+    [ThreadStatic] private static Rect? _renderCullViewport;
+
+    internal static Rect? RenderCullViewport
+    {
+        get => _renderCullViewport;
+        set => _renderCullViewport = value;
+    }
+
     public sealed override void Render(IGraphicsContext context)
     {
         if (!IsVisible)
@@ -429,7 +442,7 @@ public abstract partial class UIElement : Element
         }
 
         if (!SkipViewportCull && _cacheSnapshotDepth == 0 && this is not Window &&
-            (FindVisualRoot() is not Window root || !new Rect(root.ClientSize).IntersectsWith(Bounds)))
+            _renderCullViewport is Rect cullViewport && !cullViewport.IntersectsWith(Bounds))
         {
             ReleaseBitmapCachesInSubtree();
             return;

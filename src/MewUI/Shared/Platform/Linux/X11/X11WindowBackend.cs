@@ -135,16 +135,23 @@ internal sealed class X11WindowBackend : IWindowBackend
             SetOwner(owner.Handle);
         }
 
-        NativeX11.XMapWindow(Display, Handle);
-
-        if (Window.IsOverlayWindow)
+        if (Window.Kind is Controls.WindowKind.Overlay or Controls.WindowKind.Popup)
         {
-            // Override-redirect overlay: raise above everything (the WM does not stack it) and never take
-            // focus/activation (it must not steal capture/focus from the drag source).
+            // Paint BEFORE mapping: a mapped-but-unpainted surface is composited as-is until the first
+            // damage arrives (visible as a flash, especially under remoted compositors). GL renders to
+            // an unmapped window fine, so produce the first frame up front.
+            RenderNow();
+
+            // Override-redirect surface: raise above everything (the WM does not stack it) and never take
+            // focus/activation (it must not steal capture/focus from the owner). Already placed above by
+            // ApplyResolvedStartupPosition, so the managed post-map placement path below does not apply.
+            NativeX11.XMapWindow(Display, Handle);
             NativeX11.XRaiseWindow(Display, Handle);
             NativeX11.XFlush(Display);
             return;
         }
+
+        NativeX11.XMapWindow(Display, Handle);
 
         NativeX11.XFlush(Display);
         ApplyResolvedStartupPosition();
@@ -485,11 +492,14 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
-        // owner_events=true keeps normal in-window delivery; the grab only redirects motion/release
+        // owner_events=true keeps normal in-window delivery; the grab only redirects motion/release/press
         // that would otherwise leave the window, so drags keep flowing through HandleMotion/HandleButton.
+        // ButtonPressMask makes outside presses arrive here too (SetCapture parity), which the popup
+        // dismiss watch relies on to light-dismiss on an outside click.
+        const long ButtonPressMask = 1L << 2;
         const long ButtonMotionMask = 1L << 13;
         const int GrabModeAsync = 1;
-        uint grabMask = (uint)(X11EventMask.ButtonReleaseMask | X11EventMask.PointerMotionMask | ButtonMotionMask);
+        uint grabMask = (uint)(ButtonPressMask | (long)(X11EventMask.ButtonReleaseMask | X11EventMask.PointerMotionMask) | ButtonMotionMask);
         _ = NativeX11.XGrabPointer(
             Display, Handle,
             ownerEvents: true,
@@ -633,10 +643,11 @@ internal sealed class X11WindowBackend : IWindowBackend
             attrs.background_pixel = PackVisualPixel(Window.EffectiveOpaqueBackground, chosen.RedMask, chosen.GreenMask, chosen.BlueMask);
         }
 
-        // Input-transparent overlay: override-redirect = WM-unmanaged (no decoration/focus/taskbar), app-raised.
-        // Click-through during a drag is covered by the pointer grab + the router skipping these windows.
+        // Overlay/popup surfaces: override-redirect = WM-unmanaged (no decoration/focus/taskbar),
+        // app-raised - the same idiom toolkit menus use. Overlay click-through during a drag is covered
+        // by the pointer grab + the router skipping those windows; popups still receive input normally.
         const ulong CWOverrideRedirect = 1UL << 9;
-        if (Window.IsOverlayWindow)
+        if (Window.Kind is Controls.WindowKind.Overlay or Controls.WindowKind.Popup)
         {
             attrs.override_redirect = true;
             valueMask |= CWOverrideRedirect;
@@ -1477,7 +1488,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         NeedsRender = false;
         _resizeRenderPending = false;
-        RenderNowCore();
+        Render();
     }
 
     internal int GetRenderDelayMs()
@@ -1511,11 +1522,6 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         NeedsRender = false;
         _resizeRenderPending = false;
-        RenderNowCore();
-    }
-
-    private void RenderNowCore()
-    {
         Render();
     }
 
@@ -1741,6 +1747,18 @@ internal sealed class X11WindowBackend : IWindowBackend
         int xPx = e.x;
         int yPx = e.y;
         var pos = new Point(xPx / Window.DpiScale, yPx / Window.DpiScale);
+
+        // Dismiss watch: while a popup surface holds the pointer grab, presses land here regardless of
+        // pointer location. A press outside the client area light-dismisses and is consumed (standard
+        // menu UX: the closing click does not also act on whatever is underneath).
+        if (isDown
+            && Window.Kind == Controls.WindowKind.Popup
+            && e.button is X11MouseButton.Left or X11MouseButton.Right or X11MouseButton.Middle
+            && (pos.X < 0 || pos.Y < 0 || pos.X >= Window.ClientSize.Width || pos.Y >= Window.ClientSize.Height))
+        {
+            Window.OnPopupSurfaceOutsidePress();
+            return;
+        }
 
         if (e.button is X11MouseButton.WheelUp or X11MouseButton.WheelDown
                      or X11MouseButton.WheelLeft or X11MouseButton.WheelRight)
@@ -2662,7 +2680,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             var windowType = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE", false);
             var windowTypeValue = Window.IsDialogWindow
                 ? NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_DIALOG", false)
-                : Window.IsToolWindow
+                : Window.Kind == Controls.WindowKind.Tool
                     ? NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_TYPE_UTILITY", false)
                     : 0;
             if (windowType != 0 && windowTypeValue != 0)
@@ -2674,7 +2692,7 @@ internal sealed class X11WindowBackend : IWindowBackend
                 }
             }
 
-            if (Window.IsToolWindow)
+            if (Window.Kind == Controls.WindowKind.Tool)
             {
                 var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
                 var skipTaskbar = NativeX11.XInternAtom(Display, "_NET_WM_STATE_SKIP_TASKBAR", false);

@@ -349,7 +349,7 @@ internal static class WindowDragDropRouter
             }
 
             // Skip the preview overlay: it follows the cursor, so drop resolution must see through it.
-            if (candidate.IsOverlayWindow)
+            if (candidate.Kind == Controls.WindowKind.Overlay)
             {
                 continue;
             }

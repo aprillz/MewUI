@@ -35,6 +35,39 @@ internal sealed class PopupChrome : FrameworkElement, IVisualTreeHost
 
     internal UIElement Child => _child;
 
+    /// <summary>
+    /// The popup window rendering this chrome when it is native-hosted (portal model). Invalidation of the
+    /// popup subtree bubbles through Parent to the owner window, so it is forwarded here to also wake the
+    /// popup window's render/layout pass. Null for in-surface popups.
+    /// </summary>
+    internal Window? HostSurface { get; set; }
+
+    internal override Window? HostedPopupSurface => HostSurface;
+
+    /// <inheritdoc/>
+    public override void InvalidateVisual()
+    {
+        base.InvalidateVisual();
+        HostSurface?.InvalidateVisual();
+    }
+
+    /// <inheritdoc/>
+    public override void InvalidateMeasure()
+    {
+        base.InvalidateMeasure();
+        HostSurface?.InvalidateMeasure();
+    }
+
+    /// <inheritdoc/>
+    public override void InvalidateArrange()
+    {
+        base.InvalidateArrange();
+        // Arrange-only invalidation (e.g. a scroll offset change) bubbles up to here; forward it so the
+        // hosting popup window runs a layout pass, not just a repaint - otherwise the content re-paints
+        // at its old arrangement (the scroll bar moves but the scrolled content does not).
+        HostSurface?.InvalidateArrange();
+    }
+
     private double ShadowOpacity => GetValue(ShadowOpacityProperty);
 
     protected override Size MeasureContent(Size availableSize)

@@ -219,6 +219,18 @@ internal static unsafe class MacOSInterop
         _pasteboardTypeString = ObjC.Retain(ObjC.CreateNSString("public.utf8-plain-text"));
     }
 
+    /// <summary>
+    /// Activates the application (activateIgnoringOtherApps:). Required before making a window key
+    /// when another application is frontmost; makeKeyAndOrderFront alone does not switch apps.
+    /// </summary>
+    public static void ActivateApplication()
+    {
+        if (_nsApp != 0 && SelActivateIgnoringOtherApps != 0)
+        {
+            ObjC.MsgSend_void_nint_bool(_nsApp, SelActivateIgnoringOtherApps, true);
+        }
+    }
+
     public static bool TryHandleSystemKeyEvent(nint ev)
     {
         if (ev == 0)

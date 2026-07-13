@@ -105,11 +105,58 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Thickness _lastLayoutPadding = Thickness.Zero;
     private Element? _lastLayoutContent;
 
+    private Element? _hostedPortalRoot;
+
     // Layout, render, hit test, and propagation must all follow the same visual root:
-    // the template root when a template is applied, otherwise the content directly.
+    // the hosted portal root when this window is a surface for an externally-owned subtree
+    // (native popup), else the template root when a template is applied, otherwise the content.
     // Internal: platform backends (caption hit testing, input guards) must use this
     // instead of Content, which is the logical user content only.
-    internal Element? EffectiveVisualRoot => TemplateVisualRoot ?? Content;
+    internal Element? EffectiveVisualRoot => _hostedPortalRoot ?? TemplateVisualRoot ?? Content;
+
+    /// <summary>
+    /// Sets an externally-owned subtree for this window to lay out, render, and hit-test as its visual root
+    /// without adopting it (its <c>Parent</c> stays with the true owner window). Used by the native popup host
+    /// so a popup window is only a surface: resolution, DPI, and visual root of the content stay with the owner.
+    /// </summary>
+    internal void SetHostedPortalRoot(Element? root) => _hostedPortalRoot = root;
+
+    private Point _hostedPortalOrigin;
+    private Point _lastLayoutPortalOrigin;
+
+    /// <summary>
+    /// Position (in the owner window's coordinate space) where the hosted portal subtree is arranged.
+    /// The subtree keeps the owner's coordinate space so owner-relative logic (placement from element
+    /// bounds, screen conversion through the owner) stays correct in both hosting modes; this surface
+    /// translates by the origin at its render and input edges instead.
+    /// </summary>
+    internal Point HostedPortalOrigin
+    {
+        get => _hostedPortalOrigin;
+        set
+        {
+            if (_hostedPortalOrigin != value)
+            {
+                _hostedPortalOrigin = value;
+                InvalidateVisual();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Maps a surface-local point into the coordinate space the visual tree is arranged in.
+    /// Identity unless this window hosts a portal subtree arranged at <see cref="HostedPortalOrigin"/>.
+    /// </summary>
+    internal Point SurfacePointToVisualTree(Point surfacePoint)
+    {
+        if (_hostedPortalRoot == null)
+        {
+            return surfacePoint;
+        }
+
+        return new Point(surfacePoint.X + _hostedPortalOrigin.X, surfacePoint.Y + _hostedPortalOrigin.Y);
+    }
+
     private readonly List<AdornerEntry> _adorners = new();
     private readonly RadioGroupManager _radioGroups = new();
     private readonly List<Window> _ownedChildren = new();
@@ -544,23 +591,52 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public bool IsToolWindow
     {
-        get;
+        get => _kind == WindowKind.Tool;
         set
         {
             if (_backend is not null)
             {
                 throw new InvalidOperationException("IsToolWindow must be set before the window is shown.");
             }
-            field = value;
+            if (value)
+            {
+                _kind = WindowKind.Tool;
+            }
+            else if (_kind == WindowKind.Tool)
+            {
+                _kind = WindowKind.Normal;
+            }
         }
     }
 
+    private WindowKind _kind;
+
     /// <summary>
-    /// Whether this is a click-through, non-activating overlay window (set only by <see cref="OverlayWindow"/>):
-    /// mouse events pass through to whatever is behind it and showing it never steals focus. Framework-internal;
-    /// each backend maps it to its native click-through and non-activating window flags.
+    /// The mutually exclusive surface role of this window: framework surfaces (popup, overlay) set it
+    /// at construction, tool windows via <see cref="IsToolWindow"/>. Backends branch on this for
+    /// creation class, style mask, and show path; cumulative traits (dialog, alert) stay separate flags.
     /// </summary>
-    internal bool IsOverlayWindow { get; init; }
+    internal WindowKind Kind
+    {
+        get => _kind;
+        init => _kind = value;
+    }
+
+    /// <summary>
+    /// Whether this window is a non-activating surface (popup or overlay): it must never take native
+    /// activation/key/main status away from its owner. Backends consult this at every decision point
+    /// that can activate a window - show command, mouse activation, programmatic move/resize/style
+    /// refresh, zoom/state sync, and close path. The decision-point checklist lives in
+    /// agent/popup-native-window/plan.md.
+    /// </summary>
+    internal bool IsNonActivatingSurface => _kind is WindowKind.Popup or WindowKind.Overlay;
+
+    /// <summary>
+    /// Whether this window is a chrome-less surface: no native title bar, border, shadow, or close
+    /// affordance - the framework draws everything. Backends consult this where OS chrome machinery
+    /// would otherwise engage (style mask selection, close path that requires a close affordance).
+    /// </summary>
+    internal bool UsesBorderlessSurfaceChrome => _kind is WindowKind.Popup or WindowKind.Overlay;
 
     /// <summary>
     /// The opaque color a non-transparent window clears to: the user-set <see cref="Control.Background"/> when it
@@ -1109,6 +1185,32 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     /// <summary>
+    /// Called by the backend when this window is a popup surface and its platform dismiss watch
+    /// (mouse capture / pointer grab / event monitor) saw a press outside the popup.
+    /// </summary>
+    internal virtual void OnPopupSurfaceOutsidePress() { }
+
+    /// <summary>
+    /// Called by the backend when this popup surface lost its dismiss watch to another window.
+    /// Returns true when the new holder is a related popup surface (submenu chain) and the loss
+    /// must not dismiss.
+    /// </summary>
+    internal virtual bool OnPopupSurfaceWatchTransfer(nint newHolderHandle) => false;
+
+    /// <summary>
+    /// Whether a press intercepted by this popup surface's dismiss watch may be handed to the window
+    /// with the given native handle to act there normally: the owner window or a sibling popup surface
+    /// of the same owner. Presses over unrelated windows light-dismiss instead.
+    /// </summary>
+    internal virtual bool IsPopupPressForwardTarget(nint windowHandle) => false;
+
+    /// <summary>
+    /// Re-arms the platform dismiss watch (raw backend mouse capture) for a popup surface without
+    /// routing input to a captured element. No-op when the backend is absent.
+    /// </summary>
+    internal void RecapturePopupSurface() => _backend?.CaptureMouse();
+
+    /// <summary>
     /// Shows the window.
     /// </summary>
     /// <param name="owner">Optional owner window for <see cref="WindowStartupLocation.CenterOwner"/> positioning.</param>
@@ -1143,7 +1245,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         // Native ownership suppresses the child's own taskbar button on Windows. Keep the
         // framework owner for positioning/lifetime, but only native-own auxiliary windows
-        // that opted out of the taskbar.
+        // that opted out of the taskbar. The window handle exists only after Show creates it,
+        // so this must run post-show (Win32 additionally applies the owner at creation itself).
         if (owner != null && !ShowInTaskbar && owner.Handle != 0 && Handle != 0)
         {
             _backend!.SetOwner(owner.Handle);
@@ -1757,6 +1860,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (clientSize == _lastLayoutClientSizeDip &&
             padding == _lastLayoutPadding &&
             visualRoot == _lastLayoutContent &&
+            _hostedPortalOrigin == _lastLayoutPortalOrigin &&
             !IsLayoutDirty(visualRoot) &&
             !HasOverlayLayoutDirty())
         {
@@ -1799,7 +1903,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             long arrangeStart = profiling ? Stopwatch.GetTimestamp() : 0;
             using (profiling ? ProfilerMarkers.ContentArrange.Auto() : default)
             {
-                visualRoot.Arrange(new Rect(padding.Left, padding.Top, contentSize.Width, contentSize.Height));
+                // A hosted portal subtree is arranged at the owner's coordinates (HostedPortalOrigin);
+                // for regular windows the origin is zero and this is the plain client rect.
+                visualRoot.Arrange(new Rect(
+                    padding.Left + _hostedPortalOrigin.X,
+                    padding.Top + _hostedPortalOrigin.Y,
+                    contentSize.Width,
+                    contentSize.Height));
             }
             if (profiling)
             {
@@ -1822,6 +1932,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _lastLayoutClientSizeDip = clientSize;
         _lastLayoutPadding = padding;
         _lastLayoutContent = visualRoot;
+        _lastLayoutPortalOrigin = _hostedPortalOrigin;
 
         using (profiling ? ProfilerMarkers.OverlayLayout.Auto() : default)
         {
@@ -2009,6 +2120,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
+        // Content hosted in a native popup window reaches this via its owner (FindVisualRoot returns
+        // the owner in the portal model), but its input flows through the popup surface: capture there
+        // instead so drag events route to the element and the owner's dismiss watch is not disturbed.
+        var inputHost = element.ResolveInputHostWindow();
+        if (inputHost != null && !ReferenceEquals(inputHost, this))
+        {
+            _captureDelegatedTo = inputHost;
+            inputHost.CaptureMouse(element);
+            return;
+        }
+
         EnsureBackend();
 
         if (_backend!.Handle == 0)
@@ -2027,11 +2149,22 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         element.SetMouseCaptured(true);
     }
 
+    // The popup surface a capture was delegated to, so a later ReleaseMouseCapture on this owner window
+    // (callers resolve capture/release symmetrically through FindVisualRoot) reaches the same surface.
+    private Window? _captureDelegatedTo;
+
     /// <summary>
     /// Releases any active mouse capture for this window.
     /// </summary>
     public void ReleaseMouseCapture()
     {
+        if (_captureDelegatedTo is Window delegated)
+        {
+            _captureDelegatedTo = null;
+            delegated.ReleaseMouseCapture();
+            return;
+        }
+
         _backend?.ReleaseMouseCapture();
         ClearMouseCaptureState();
     }
@@ -2323,6 +2456,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
             }
 
+            // Cull viewport in layout coordinates: this window's client rect, offset into the owner's
+            // coordinate space when hosting a portal subtree so popup content that lies outside the
+            // owner but inside this surface is not culled by the viewport-bounds check in Render.
+            var previousCullViewport = UIElement.RenderCullViewport;
+            UIElement.RenderCullViewport = new Rect(
+                _hostedPortalOrigin.X, _hostedPortalOrigin.Y, clientSize.Width, clientSize.Height);
+
             // Ensure nothing paints outside the client area.
             context.Save();
             // Clip should not shrink due to edge rounding; snap outward to avoid 1px clipping at non-100% DPI.
@@ -2333,7 +2473,19 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
                 using (frameTiming.Enabled ? ProfilerMarkers.ContentRender.Auto() : default)
                 {
-                    EffectiveVisualRoot?.Render(context);
+                    if (_hostedPortalRoot != null && _hostedPortalOrigin != default)
+                    {
+                        // The portal subtree is arranged in the owner's coordinate space; shift it back
+                        // to this surface's origin for painting.
+                        context.Save();
+                        context.Translate(-_hostedPortalOrigin.X, -_hostedPortalOrigin.Y);
+                        _hostedPortalRoot.Render(context);
+                        context.Restore();
+                    }
+                    else
+                    {
+                        EffectiveVisualRoot?.Render(context);
+                    }
                 }
                 if (frameTiming.Enabled)
                 {
@@ -2399,6 +2551,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             finally
             {
                 context.Restore();
+                UIElement.RenderCullViewport = previousCullViewport;
             }
 
             if (context is GraphicsContextBase gcb)
@@ -2616,11 +2769,50 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal void CloseAllPopups()
         => _popupManager.CloseAllPopups();
 
-    internal void ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
         => _popupManager.ShowPopup(owner, popup, bounds, sizeToContent, staysOpen);
+
+    /// <summary>
+    /// Opens a popup whose placement is measured only after it is rooted and style-resolved in this
+    /// window. Use this overload when the placement math depends on the popup's own measured size.
+    /// </summary>
+    internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
+        => _popupManager.ShowPopup(owner, popup, measureBounds, sizeToContent, staysOpen);
 
     internal void RequestClosePopups(PopupCloseRequest request)
         => _popupManager.RequestClosePopups(request);
+
+    /// <summary>
+    /// The region, in this window's client coordinates, that popup placement math may use. In-surface
+    /// popups are confined to the client area; natively hosted popups may use the work area of the
+    /// monitor containing <paramref name="anchorBounds"/>, so they can extend beyond this window.
+    /// Falls back to the client area when the platform cannot report a work area.
+    /// </summary>
+    internal Rect GetPopupPlacementRegion(Rect anchorBounds)
+    {
+        var clientRegion = new Rect(0, 0, ClientSize.Width, ClientSize.Height);
+        if (!PopupManager.PreferNativePopups || _backend == null || Handle == 0 || !Application.IsRunning)
+        {
+            return clientRegion;
+        }
+
+        var anchorCenterPx = ClientToScreen(new Point(
+            anchorBounds.X + (anchorBounds.Width / 2),
+            anchorBounds.Y + (anchorBounds.Height / 2)));
+        var workAreaPx = Application.Current.PlatformHost.GetWorkAreaForPoint(anchorCenterPx);
+        if (workAreaPx.Width <= 0 || workAreaPx.Height <= 0)
+        {
+            return clientRegion;
+        }
+
+        var topLeft = ScreenToClient(new Point(workAreaPx.X, workAreaPx.Y));
+        var bottomRight = ScreenToClient(new Point(workAreaPx.Right, workAreaPx.Bottom));
+        return new Rect(
+            topLeft.X,
+            topLeft.Y,
+            Math.Max(0, bottomRight.X - topLeft.X),
+            Math.Max(0, bottomRight.Y - topLeft.Y));
+    }
 
     internal Size MeasureToolTip(Element content, Size availableSize)
         => _popupManager.MeasureToolTip(content, availableSize);
