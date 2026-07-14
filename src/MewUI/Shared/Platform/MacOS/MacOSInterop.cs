@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Diagnostics;
+
 namespace Aprillz.MewUI.Platform.MacOS;
 
 // Cocoa "point" (DIP) coordinate in double precision.
@@ -44,6 +46,8 @@ internal readonly struct NSRect
 
 internal static unsafe class MacOSInterop
 {
+    private static readonly EnvDebugLogger Logger = new("MEWUI_INTEROP_DEBUG", "[MacOS.Interop]");
+
     private static bool _frameworksLoaded;
     private static nint _nsApp;
     private static nint _wakeEvent;
@@ -651,7 +655,7 @@ internal static unsafe class MacOSInterop
         {
             try
             {
-                Console.WriteLine($"[MacOS][IME] {DateTime.Now:HH:mm:ss.fff} UTF8String fallback: obj=0x{obj:x} -> -string -> UTF8String");
+                Logger.Write($"UTF8String fallback: obj=0x{obj:x} -> -string -> UTF8String");
             }
             catch
             {
