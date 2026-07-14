@@ -1198,11 +1198,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal virtual bool OnPopupSurfaceWatchTransfer(nint newHolderHandle) => false;
 
     /// <summary>
-    /// Whether a press intercepted by this popup surface's dismiss watch may be handed to the window
-    /// with the given native handle to act there normally: the owner window or a sibling popup surface
-    /// of the same owner. Presses over unrelated windows light-dismiss instead.
+    /// Whether pointer input intercepted by this popup surface's dismiss watch (a press or a move) may
+    /// be handed to the window with the given native handle to act there normally: the owner window or a
+    /// sibling popup surface of the same owner. This is the popup input domain membership test, so the
+    /// owner and the active popup chain behave as one input surface. Presses over unrelated windows
+    /// light-dismiss instead; moves over them are ignored.
     /// </summary>
-    internal virtual bool IsPopupPressForwardTarget(nint windowHandle) => false;
+    internal virtual bool IsPopupInputForwardTarget(nint windowHandle) => false;
 
     /// <summary>
     /// Re-arms the platform dismiss watch (raw backend mouse capture) for a popup surface without

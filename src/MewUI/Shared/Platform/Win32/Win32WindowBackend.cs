@@ -2106,6 +2106,33 @@ internal sealed class Win32WindowBackend : IWindowBackend
     {
         EnsureMouseLeaveTracking();
 
+        // Dismiss watch: while a popup surface holds capture, moves land here regardless of pointer
+        // location. A move over a related surface (the owner window or a sibling popup of the same owner)
+        // is handed to that window so its own hover tracking runs there - e.g. a menu bar switching its
+        // open top-level menu as the pointer crosses siblings while a dropdown is open. This keeps the
+        // owner and the active popup chain behaving as one input surface, mirroring the press path.
+        if (Window.Kind == Controls.WindowKind.Popup)
+        {
+            int xPx = (short)(lParam.ToInt64() & 0xFFFF);
+            int yPx = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+            if (User32.GetClientRect(Handle, out var popupClient)
+                && (xPx < 0 || yPx < 0 || xPx >= popupClient.Width || yPx >= popupClient.Height))
+            {
+                const uint GA_ROOT = 2;
+                var screenPt = new POINT(xPx, yPx);
+                User32.ClientToScreen(Handle, ref screenPt);
+                nint hit = User32.WindowFromPoint(screenPt);
+                nint root = hit == 0 ? 0 : User32.GetAncestor(hit, GA_ROOT);
+                if (root != 0 && root != Handle && Window.IsPopupInputForwardTarget(root))
+                {
+                    var targetPt = screenPt;
+                    User32.ScreenToClient(root, ref targetPt);
+                    _ = User32.PostMessage(root, WindowMessages.WM_MOUSEMOVE, 0, (targetPt.y << 16) | (targetPt.x & 0xFFFF));
+                    return 0;
+                }
+            }
+        }
+
         var pos = GetMousePosition(lParam);
         var screenPos = ClientToScreen(pos);
 
@@ -2154,7 +2181,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             User32.ClientToScreen(Handle, ref screenPt);
             nint hit = User32.WindowFromPoint(screenPt);
             nint root = hit == 0 ? 0 : User32.GetAncestor(hit, GA_ROOT);
-            if (root != 0 && Window.IsPopupPressForwardTarget(root))
+            if (root != 0 && Window.IsPopupInputForwardTarget(root))
             {
                 var targetPt = screenPt;
                 User32.ScreenToClient(root, ref targetPt);

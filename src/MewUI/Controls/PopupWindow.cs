@@ -84,7 +84,7 @@ internal sealed class PopupWindow : Window
         return false;
     }
 
-    internal override bool IsPopupPressForwardTarget(nint windowHandle)
+    internal override bool IsPopupInputForwardTarget(nint windowHandle)
     {
         if (windowHandle == 0)
         {
