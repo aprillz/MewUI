@@ -9,21 +9,10 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
 {
     internal readonly record struct WglPixelFormatOptions(int DepthBits, int StencilBits);
 
-    private const uint MonitorDefaultToNearest = 0x00000002;
-    private const uint MonitorInfoPrimary = 0x00000001;
-
     private readonly nint _hwnd;
     private readonly delegate* unmanaged<int, int> _swapIntervalExt;
-    private readonly delegate* unmanaged<int> _getSwapIntervalExt;
     private int _currentSwapInterval = int.MinValue;
     private int _swapIntervalApplyCountdown;
-    private long _makeCurrentTicks;
-    private int _makeCurrentCalls;
-    private int _makeCurrentSkipped;
-    private long _makeCurrentLogDeadlineTicks;
-    private long _swapBuffersTicks;
-    private int _swapBuffersFrames;
-    private long _swapBuffersLogDeadlineTicks;
     private readonly HashSet<uint> _textures = new();
     private bool _disposed;
 
@@ -40,15 +29,13 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         nint hglrc,
         bool supportsBgra,
         bool supportsNpotTextures,
-        delegate* unmanaged<int, int> swapIntervalExt,
-        delegate* unmanaged<int> getSwapIntervalExt)
+        delegate* unmanaged<int, int> swapIntervalExt)
     {
         _hwnd = hwnd;
         Hglrc = hglrc;
         SupportsBgra = supportsBgra;
         SupportsNpotTextures = supportsNpotTextures;
         _swapIntervalExt = swapIntervalExt;
-        _getSwapIntervalExt = getSwapIntervalExt;
     }
 
     public static WglOpenGLWindowResources Create(nint hwnd, nint hdc)
@@ -91,21 +78,12 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
             throw new InvalidOperationException($"wglCreateContext failed: {Marshal.GetLastWin32Error()}");
         }
 
-        // Share textures/buffers with the worker context (if provided). Must happen
-        // before either context starts rendering. Failure is non-fatal - the window
-        // context still works, but background-rebuild texture handoff will fall back
-        // to synchronous readback. Log it so we can spot it on Intel iGPU / mismatched
-        // pixel format cases.
-        bool shared = false;
+        // Share textures/buffers with the worker context (if provided). Must happen before either context
+        // starts rendering. Failure is non-fatal: the window context still works, but background-rebuild
+        // texture handoff falls back to synchronous readback.
         if (shareContext != 0)
         {
-            shared = OpenGL32.wglShareLists(shareContext, hglrc);
-            if (!shared && DiagLog.Enabled)
-            {
-                DiagLog.Write(
-                    $"[WGL] wglShareLists FAILED err={Marshal.GetLastWin32Error()} " +
-                    $"share=0x{shareContext.ToInt64():X} target=0x{hglrc.ToInt64():X}");
-            }
+            OpenGL32.wglShareLists(shareContext, hglrc);
         }
 
         if (!OpenGL32.wglMakeCurrent(hdc, hglrc))
@@ -122,25 +100,6 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
             swapIntervalExt = (delegate* unmanaged<int, int>)swapPtr;
         }
 
-        delegate* unmanaged<int> getSwapIntervalExt = null;
-        nint getSwapPtr = OpenGL32.wglGetProcAddress("wglGetSwapIntervalEXT");
-        if (getSwapPtr != 0)
-        {
-            getSwapIntervalExt = (delegate* unmanaged<int>)getSwapPtr;
-        }
-
-        if (DiagLog.Enabled)
-        {
-            string? vendor = GL.GetVendorString();
-            string? renderer = GL.GetRendererString();
-            string? version = GL.GetVersionString();
-            DiagLog.Write(
-                $"[WGL] hwnd=0x{hwnd.ToInt64():X} depthBits={options.DepthBits} stencilBits={options.StencilBits} " +
-                $"pfd(color={pfd.cColorBits} alpha={pfd.cAlphaBits} depth={pfd.cDepthBits} stencil={pfd.cStencilBits}) " +
-                $"'{vendor}' '{renderer}' '{version}'");
-            DiagLog.WriteProcessMemory("after WGL context create");
-        }
-
         // Baseline state for 2D.
         GL.Disable(0x0B71 /* GL_DEPTH_TEST */);
         GL.Disable(0x0B44 /* GL_CULL_FACE */);
@@ -152,7 +111,7 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
 
         OpenGL32.wglMakeCurrent(0, 0);
 
-        return new WglOpenGLWindowResources(hwnd, hglrc, supportsBgra, supportsNpot, swapIntervalExt, getSwapIntervalExt);
+        return new WglOpenGLWindowResources(hwnd, hglrc, supportsBgra, supportsNpot, swapIntervalExt);
     }
 
     private static bool DetectBgraSupport()
@@ -233,104 +192,20 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         if (OpenGL32.wglGetCurrentContext() == Hglrc &&
             OpenGL32.wglGetCurrentDC() == deviceOrDisplay)
         {
-            LogMakeCurrent(0, skipped: true);
             return;
         }
 
-        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         OpenGL32.wglMakeCurrent(deviceOrDisplay, Hglrc);
-        LogMakeCurrent(System.Diagnostics.Stopwatch.GetTimestamp() - start, skipped: false);
     }
 
     public void ReleaseCurrent()
     {
-        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         OpenGL32.wglMakeCurrent(0, 0);
-        LogMakeCurrent(System.Diagnostics.Stopwatch.GetTimestamp() - start, skipped: false);
-    }
-
-    private void LogMakeCurrent(long elapsedTicks, bool skipped)
-    {
-        if (!DiagLog.Enabled)
-        {
-            return;
-        }
-
-        if (skipped)
-        {
-            _makeCurrentSkipped++;
-        }
-        else
-        {
-            _makeCurrentCalls++;
-            _makeCurrentTicks += elapsedTicks;
-        }
-
-        long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (_makeCurrentLogDeadlineTicks == 0)
-        {
-            _makeCurrentLogDeadlineTicks = now + System.Diagnostics.Stopwatch.Frequency;
-            return;
-        }
-
-        if (now < _makeCurrentLogDeadlineTicks)
-        {
-            return;
-        }
-
-        int calls = Math.Max(1, _makeCurrentCalls);
-        double avgMs = _makeCurrentTicks / (double)calls * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-        string line =
-            $"[WGL MakeCurrent] hwnd=0x{_hwnd:X} calls={_makeCurrentCalls} skipped={_makeCurrentSkipped} avgMs={avgMs:F3} " +
-            $"current=0x{OpenGL32.wglGetCurrentContext():X} dc=0x{OpenGL32.wglGetCurrentDC():X}";
-        DiagLog.Write(line);
-        Console.WriteLine(line);
-
-        _makeCurrentTicks = 0;
-        _makeCurrentCalls = 0;
-        _makeCurrentSkipped = 0;
-        _makeCurrentLogDeadlineTicks = now + System.Diagnostics.Stopwatch.Frequency;
     }
 
     public void SwapBuffers(nint deviceOrDisplay, nint nativeWindow)
     {
-        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         _ = Gdi32.SwapBuffers(deviceOrDisplay);
-        long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
-
-        if (!DiagLog.Enabled)
-        {
-            return;
-        }
-
-        _swapBuffersTicks += elapsed;
-        _swapBuffersFrames++;
-        long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (_swapBuffersLogDeadlineTicks == 0)
-        {
-            _swapBuffersLogDeadlineTicks = now + System.Diagnostics.Stopwatch.Frequency;
-            return;
-        }
-
-        if (now < _swapBuffersLogDeadlineTicks)
-        {
-            return;
-        }
-
-        int frames = Math.Max(1, _swapBuffersFrames);
-        double avgMs = _swapBuffersTicks / (double)frames * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-        string actualSwap = _getSwapIntervalExt == null ? "n/a" : _getSwapIntervalExt().ToString();
-        nint monitor = User32.MonitorFromWindow(_hwnd, MonitorDefaultToNearest);
-        bool primary = IsPrimaryMonitor(monitor);
-        string line =
-            $"[WGL SwapBuffers] hwnd=0x{_hwnd:X} monitor=0x{monitor:X} primary={primary} frames={_swapBuffersFrames} avgMs={avgMs:F3} " +
-            $"requestedSwap={_currentSwapInterval} actualSwap={actualSwap}";
-        DiagLog.Write(line);
-        Console.WriteLine(line);
-
-        _swapBuffersTicks = 0;
-        _swapBuffersFrames = 0;
-        _swapBuffersLogDeadlineTicks = now + System.Diagnostics.Stopwatch.Frequency;
     }
 
     public void SetSwapInterval(int interval)
@@ -362,27 +237,6 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
             _currentSwapInterval = int.MinValue;
             _swapIntervalApplyCountdown = 0;
         }
-
-        if (DiagLog.Enabled)
-        {
-            string actualSwap = _getSwapIntervalExt == null ? "n/a" : _getSwapIntervalExt().ToString();
-            nint monitor = User32.MonitorFromWindow(_hwnd, MonitorDefaultToNearest);
-            bool primary = IsPrimaryMonitor(monitor);
-            string line = $"[WGL SwapInterval] hwnd=0x{_hwnd:X} monitor=0x{monitor:X} primary={primary} request={interval} result={result} actual={actualSwap}";
-            DiagLog.Write(line);
-            Console.WriteLine(line);
-        }
-    }
-
-    private static bool IsPrimaryMonitor(nint monitor)
-    {
-        if (monitor == 0)
-        {
-            return false;
-        }
-
-        MONITORINFO info = MONITORINFO.Create();
-        return User32.GetMonitorInfo(monitor, ref info) && (info.dwFlags & MonitorInfoPrimary) != 0;
     }
 
     public void TrackTexture(uint textureId)
