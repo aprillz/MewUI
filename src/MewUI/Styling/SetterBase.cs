@@ -29,6 +29,11 @@ public abstract class SetterBase
         Property = property;
         ThemeResolver = themeResolver;
     }
+
+    private protected SetterBase(MewProperty property)
+    {
+        Property = property;
+    }
 }
 
 /// <summary>
@@ -51,6 +56,23 @@ public sealed class Setter : SetterBase
     /// </summary>
     public static Setter Create<T>(MewProperty<T> property, Func<Theme, T> resolve)
         => new(property, t => resolve(t)!);
+
+    /// <summary>
+    /// Creates a setter that unsets <paramref name="property"/> within a derived (<c>BasedOn</c>) style,
+    /// reverting it to the inherited value, or the type default when nothing is inherited, as if no style
+    /// in the chain set it. Higher-priority sources (a local value, animation, or a matching trigger) still win.
+    /// </summary>
+    public static UnsetSetter Unset(MewProperty property)
+        => new(property);
+}
+
+/// <summary>
+/// Unsets a property within a derived <see cref="Style"/> (<c>BasedOn</c>), reverting it to the inherited
+/// value (or the type default) instead of a value the base style would provide.
+/// </summary>
+public sealed class UnsetSetter : SetterBase
+{
+    internal UnsetSetter(MewProperty property) : base(property) { }
 }
 
 /// <summary>

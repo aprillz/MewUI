@@ -669,6 +669,8 @@ public abstract class Control : TextElement
         {
             if (style.Setters[i] is Setter s)
                 result[s.Property.Id] = (s, ValueSource.Style);
+            else if (style.Setters[i] is UnsetSetter u)
+                result.Remove(u.Property.Id);
         }
 
         // Matching triggers (override base setters)
@@ -730,6 +732,10 @@ public abstract class Control : TextElement
             {
                 if (style.Setters[i] is Setter s && s.Property.Id == propertyId)
                     return s.ResolveValue(Theme);
+                // An Unset in a more-derived level terminates the walk: the property is
+                // intentionally not set by this chain, so it must not fall through to a base value.
+                if (style.Setters[i] is UnsetSetter u && u.Property.Id == propertyId)
+                    return null;
             }
             style = style.BasedOn;
         }
@@ -762,6 +768,8 @@ public abstract class Control : TextElement
             {
                 if (style.Setters[i] is Setter s && s.Property.Id == propertyId)
                     return true;
+                if (style.Setters[i] is UnsetSetter u && u.Property.Id == propertyId)
+                    return false;
             }
             style = style.BasedOn;
         }
