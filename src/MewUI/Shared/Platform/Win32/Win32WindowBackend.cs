@@ -216,20 +216,28 @@ internal sealed class Win32WindowBackend : IWindowBackend
     }
 
     // Reapplies the recomputed window style (preserving the visible bit) and forces a frame recalc.
-    private void ApplyWindowStyle()
+    // GWL_STYLE packs MewUI-owned frame/caption/resize bits together with bits MewUI does not own:
+    // WS_VISIBLE, the WS_MINIMIZE/WS_MAXIMIZE state bits, and any WS_CHILD an external host may set.
+    // Rewriting the whole word would clear those, so a restyle touches only the owned bits.
+    private const uint OWNED_STYLE_MASK =
+        WindowStyles.WS_POPUP | WindowStyles.WS_CAPTION | WindowStyles.WS_SYSMENU
+        | WindowStyles.WS_THICKFRAME | WindowStyles.WS_MINIMIZEBOX | WindowStyles.WS_MAXIMIZEBOX;
+
+    private void ReapplyOwnedStyle()
     {
         const int GWL_STYLE = -16;
-        const uint WS_VISIBLE = 0x10000000;
         const uint SWP_NOSIZE = 0x0001;
         const uint SWP_NOMOVE = 0x0002;
         const uint SWP_NOZORDER = 0x0004;
         const uint SWP_FRAMECHANGED = 0x0020;
 
         uint current = (uint)User32.GetWindowLongPtr(Handle, GWL_STYLE).ToInt64();
-        uint style = GetWindowStyle() | (current & WS_VISIBLE);
-        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
+        uint merged = (current & ~OWNED_STYLE_MASK) | (GetWindowStyle() & OWNED_STYLE_MASK);
+        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)merged);
         User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
     }
+
+    private void ApplyWindowStyle() => ReapplyOwnedStyle();
 
     private void EnterFullScreen()
     {
@@ -1522,18 +1530,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         => (Window.GraphicsFactory as IWin32TransparencyCapabilities)?.TransparencyMode
            ?? Win32TransparencyMode.Bitmap;
 
-    private void ApplyResizeMode()
-    {
-        const int GWL_STYLE = -16;
-        const uint SWP_NOSIZE = 0x0001;
-        const uint SWP_NOMOVE = 0x0002;
-        const uint SWP_NOZORDER = 0x0004;
-        const uint SWP_FRAMECHANGED = 0x0020;
-
-        uint style = GetWindowStyle();
-        User32.SetWindowLongPtr(Handle, GWL_STYLE, (nint)style);
-        User32.SetWindowPos(Handle, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE_ON_REFRESH);
-    }
+    private void ApplyResizeMode() => ReapplyOwnedStyle();
 
     private void HandleDestroy()
     {
