@@ -335,7 +335,6 @@ new TextBox()
 | `Placeholder(string)` | Placeholder |
 | `IsReadOnly(bool)` | Read only |
 | `AcceptTab(bool)` | Accept tab key |
-| `AcceptReturn(bool)` | Accept return characters |
 | `CaretPosition(int)` | Caret position |
 | `ImeMode(ImeMode)` | Input method editor mode |
 | `MaxLength(int)` | Maximum text length |
