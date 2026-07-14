@@ -1237,33 +1237,50 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         ResolveStartupPosition();
         _backend!.EnsureTheme(Theme.IsDark);
-        _backend!.Show();
-        // Re-apply after Show for platforms (macOS) where window chrome appearance
+
+        // Unified display sequence, identical on every backend (see agent/window-lifecycle/plan.md):
+        //   1) CreateSurface   create hidden, Handle/DPI valid
+        //   2) PerformLayout   confirm size (unconditional, so step 4 always sees a laid-out tree even
+        //                      when step 3 defers Loaded)
+        //   3) RaiseLoaded     lay out -> Loaded handlers -> lay out again (flush deferred changes)
+        //   4) PresentSurface  paint the hidden window, then reveal it (no flash; Loaded changes are in
+        //                      the first on-screen frame)
+        _backend!.CreateSurface();
+        PerformLayout();
+        RaiseLoadedIfReady();
+        _backend!.PresentSurface();
+
+        // Re-apply after reveal for platforms (macOS) where window chrome appearance
         // may reset when the window is first ordered on screen.
         _backend!.EnsureTheme(Theme.IsDark);
         _lifetimeState = WindowLifetimeState.Shown;
 
         // Native ownership suppresses the child's own taskbar button on Windows. Keep the
         // framework owner for positioning/lifetime, but only native-own auxiliary windows
-        // that opted out of the taskbar. The window handle exists only after Show creates it,
-        // so this must run post-show (Win32 additionally applies the owner at creation itself).
+        // that opted out of the taskbar. The window handle exists only after the surface is
+        // created (Win32 additionally applies the owner at creation itself).
         if (owner != null && !ShowInTaskbar && owner.Handle != 0 && Handle != 0)
         {
             _backend!.SetOwner(owner.Handle);
         }
+    }
 
-        // Raise Loaded once, and only after the application's dispatcher is ready.
-        // Do not rely on PlatformHost.Run ordering: a first render can happen during Show on some platforms.
-        if (!_loadedRaised && Application.IsRunning)
+    // Raises Loaded once, and only after the application's dispatcher is ready. A window shown before
+    // the dispatcher exists subscribes and raises later; its first paint then precedes Loaded (fallback).
+    private void RaiseLoadedIfReady()
+    {
+        if (_loadedRaised || !Application.IsRunning)
         {
-            if (Application.Current.Dispatcher != null)
-            {
-                RaiseLoaded();
-            }
-            else
-            {
-                SubscribeToDispatcherChanged();
-            }
+            return;
+        }
+
+        if (Application.Current.Dispatcher != null)
+        {
+            RaiseLoaded();
+        }
+        else
+        {
+            SubscribeToDispatcherChanged();
         }
     }
 
@@ -2237,8 +2254,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         SubscribeGpuInteropInvalidation();
 
+        // Lay out first so Loaded handlers observe an arranged tree (Bounds are valid), matching WPF.
         PerformLayout();
         Loaded?.Invoke();
+
+        // Loaded handlers commonly set content or bindings that were deferred until load (e.g. filling
+        // a label). Re-run layout so the arranged tree already reflects those changes before the first
+        // paint (which every backend performs in PresentSurface, after this returns). Cheap no-op when
+        // Loaded changed nothing (PerformLayout early-outs on a clean tree).
+        PerformLayout();
 
         if (_firstFrameRenderedPending && !_firstFrameRenderedRaised)
         {

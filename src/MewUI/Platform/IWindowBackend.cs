@@ -17,9 +17,18 @@ public interface IWindowBackend : IDisposable
     void SetResizable(bool resizable);
 
     /// <summary>
-    /// Shows the native window.
+    /// Creates the native window in a hidden (unmapped) state. After this returns <see cref="Handle"/>
+    /// is valid and DPI is resolved; the window is not on screen and nothing has been painted.
+    /// No-op if the surface already exists (a hide/show cycle reuses it).
     /// </summary>
-    void Show();
+    void CreateSurface() { }
+
+    /// <summary>
+    /// Paints the first frame while the window is still hidden, then reveals the already-painted window
+    /// (map / order front). Called by the framework after layout and the <c>Loaded</c> event so the first
+    /// on-screen frame reflects Loaded-time changes with no flash.
+    /// </summary>
+    void PresentSurface();
 
     /// <summary>
     /// Hides the native window.

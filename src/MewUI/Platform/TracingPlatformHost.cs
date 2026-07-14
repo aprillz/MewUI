@@ -99,10 +99,16 @@ internal sealed class TracingPlatformHost : IPlatformHost
             _innerBackend.SetResizable(resizable);
         }
 
-        public void Show()
+        public void CreateSurface()
         {
-            DiagLog.Write($"[WindowBackend#{_backendId}] Show");
-            _innerBackend.Show();
+            DiagLog.Write($"[WindowBackend#{_backendId}] CreateSurface");
+            _innerBackend.CreateSurface();
+        }
+
+        public void PresentSurface()
+        {
+            DiagLog.Write($"[WindowBackend#{_backendId}] PresentSurface");
+            _innerBackend.PresentSurface();
         }
 
         public void Hide()

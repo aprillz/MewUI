@@ -168,7 +168,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
     }
 
-    public void Show()
+    public void CreateSurface()
     {
         EnsureCreated();
         if (_nsWindow == 0)
@@ -176,16 +176,18 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             throw new InvalidOperationException("NSWindow creation failed.");
         }
 
+        // Resolve DPI before the framework lays out (step 2) so measure/arrange use the correct scale.
+        UpdateDpiIfNeeded();
+    }
+
+    public void PresentSurface()
+    {
         if (_shown)
         {
             UpdateDpiIfNeeded();
             UpdateClientSizeIfNeeded(forceLayout: true);
             return;
         }
-
-        UpdateDpiIfNeeded();
-
-        _window.PerformLayout();
 
         _shown = true;
 

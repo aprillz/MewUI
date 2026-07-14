@@ -114,16 +114,22 @@ internal sealed class X11WindowBackend : IWindowBackend
         ApplyResizeMode();
     }
 
-    public void Show()
+    public void CreateSurface()
     {
-        if (_shown)
+        if (Handle != 0)
         {
             return;
         }
 
         CreateWindow();
+    }
 
-        Window.PerformLayout();
+    public void PresentSurface()
+    {
+        if (_shown)
+        {
+            return;
+        }
 
         SetClientSize(Window.Width, Window.Height);
 
@@ -149,6 +155,15 @@ internal sealed class X11WindowBackend : IWindowBackend
             NativeX11.XRaiseWindow(Display, Handle);
             NativeX11.XFlush(Display);
             return;
+        }
+
+        // Normal top-level at Normal state: paint before mapping so the first composited frame is the
+        // laid-out, Loaded-updated content, not a map-then-paint flash (same principle as popups above).
+        // State-changed windows are resized by the WM after mapping, so a pre-map paint would be at the
+        // wrong size; let the render loop repaint those.
+        if (Window.WindowState == Controls.WindowState.Normal)
+        {
+            RenderNow();
         }
 
         NativeX11.XMapWindow(Display, Handle);

@@ -28,6 +28,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private nint _hIconSmall;
     private nint _hIconBig;
     private bool _initialEraseDone;
+    private bool _presented;
     private double _opacity = 1.0;
     private bool _allowsTransparency;
     private nint _dropTargetCom;
@@ -82,16 +83,25 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
     }
 
-    public void Show()
+    public void CreateSurface()
     {
         if (Handle != 0)
         {
-            User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
             return;
         }
 
         CreateWindow();
-        Window.PerformLayout();
+    }
+
+    public void PresentSurface()
+    {
+        if (_presented)
+        {
+            User32.ShowWindow(Handle, ShowWindowCommands.SW_SHOW);
+            return;
+        }
+        _presented = true;
+
         ApplyResolvedStartupPosition();
 
         // No SW_* command maps to fullscreen. Apply the fullscreen geometry while the window is still
@@ -111,18 +121,20 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 _ => ShowWindowCommands.SW_SHOW,
             };
 
-        // Paint BEFORE the window is shown so its first on-screen frame is the fully-laid-out content,
-        // not a blank surface the render loop fills a frame or more later. Popups open on a discrete
-        // user action and must appear complete immediately; without this the surface is shown first and
-        // late-arriving content (e.g. taller color-picker rows) is missing from the initial frames.
-        // Mirrors the X11 backend's paint-before-map for popup/overlay surfaces.
-        if (Window.UsesBorderlessSurfaceChrome)
+        // Maximize/minimize set the window geometry as part of the reveal, so painting beforehand would
+        // paint at the wrong (restored) size. For those, reveal first then force a synchronous paint at
+        // the final size. Every other case paints while still hidden so the first on-screen frame is the
+        // fully-laid-out content (including Loaded-time changes) with no flash.
+        if (showCmd is ShowWindowCommands.SW_SHOWMAXIMIZED or ShowWindowCommands.SW_SHOWMINIMIZED)
+        {
+            User32.ShowWindow(Handle, showCmd);
+            User32.UpdateWindow(Handle);
+        }
+        else
         {
             RenderNow();
+            User32.ShowWindow(Handle, showCmd);
         }
-
-        User32.ShowWindow(Handle, showCmd);
-        User32.UpdateWindow(Handle);
     }
 
     public void Hide()

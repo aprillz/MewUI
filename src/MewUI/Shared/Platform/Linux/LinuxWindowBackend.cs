@@ -10,7 +10,7 @@ internal sealed class LinuxWindowBackend : IWindowBackend
 
     public void SetResizable(bool resizable) { }
 
-    public void Show()
+    public void PresentSurface()
         => throw new PlatformNotSupportedException("Linux window backend is not implemented yet.");
 
     public void Hide() { }

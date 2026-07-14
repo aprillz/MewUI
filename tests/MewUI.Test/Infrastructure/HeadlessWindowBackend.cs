@@ -14,7 +14,7 @@ internal sealed class HeadlessWindowBackend : IWindowBackend
 
     public void SetResizable(bool resizable) { }
 
-    public void Show() { }
+    public void PresentSurface() { }
 
     public void Hide() { }
 
