@@ -155,6 +155,7 @@ partial class GalleryView : UserControl
             Page("Drag & Drop", DragDropPage, "drag_regular"),
             Page("Selection", SelectionPage, "multiselect_regular"),
             Page("Typography", TypographyPage, "text_font_regular"),
+            Page("Styling", StylingPage, "color_regular"),
 
             Group("Collections"),
             Page("Lists", ListsPage, "list_regular"),
