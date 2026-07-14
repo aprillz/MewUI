@@ -379,6 +379,97 @@ public sealed class X11PlatformHost : IPlatformHost
         return default;
     }
 
+    public Rect GetWorkAreaForPoint(Point screenPositionPx)
+    {
+        // _NET_WORKAREA is the EWMH desktop work area (screen minus reserved panels/docks), already in device
+        // pixels and root coordinates. It is a single rect spanning all monitors per virtual desktop, so a
+        // multi-monitor result is approximate until per-monitor struts are queried; still tighter than the
+        // full-client fallback the caller uses on default. The point is unused for that reason.
+        if (Display == 0)
+        {
+            return default;
+        }
+
+        nint workAreaAtom = NativeX11.XInternAtom(Display, "_NET_WORKAREA", true);
+        if (workAreaAtom == 0)
+        {
+            return default;
+        }
+
+        var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
+        var workArea = ReadCardinalArray(root, workAreaAtom);
+        if (workArea.Length < 4)
+        {
+            return default;
+        }
+
+        int baseIndex = ReadCurrentDesktop(root) * 4;
+        if (baseIndex < 0 || baseIndex + 4 > workArea.Length)
+        {
+            baseIndex = 0;
+        }
+
+        return new Rect(workArea[baseIndex], workArea[baseIndex + 1], workArea[baseIndex + 2], workArea[baseIndex + 3]);
+    }
+
+    private int ReadCurrentDesktop(nint root)
+    {
+        nint atom = NativeX11.XInternAtom(Display, "_NET_CURRENT_DESKTOP", true);
+        if (atom == 0)
+        {
+            return 0;
+        }
+
+        var values = ReadCardinalArray(root, atom);
+        return values.Length > 0 && values[0] >= 0 ? (int)values[0] : 0;
+    }
+
+    // Reads a format-32 CARDINAL array property; returns [] when absent or malformed. Format-32 rides one
+    // C long per element (Xlib LP64 convention): 8 bytes each on 64-bit, 4 on 32-bit.
+    private long[] ReadCardinalArray(nint window, nint atom)
+    {
+        const nint AnyPropertyType = 0;
+        int status = NativeX11.XGetWindowProperty(
+            Display, window, atom, 0, 1024, false, AnyPropertyType,
+            out _, out int actualFormat, out nuint nitems, out _, out nint prop);
+
+        if (status != 0 || prop == 0 || actualFormat != 32 || nitems == 0)
+        {
+            if (prop != 0)
+            {
+                NativeX11.XFree(prop);
+            }
+
+            return [];
+        }
+
+        try
+        {
+            var result = new long[checked((int)nitems)];
+            unsafe
+            {
+                if (IntPtr.Size == 8)
+                {
+                    new ReadOnlySpan<long>((void*)prop, result.Length).CopyTo(result);
+                }
+                else
+                {
+                    var source = new ReadOnlySpan<int>((void*)prop, result.Length);
+                    for (int i = 0; i < result.Length; i++)
+                    {
+                        result[i] = source[i];
+                    }
+                }
+            }
+
+            return result;
+        }
+        finally
+        {
+            NativeX11.XFree(prop);
+        }
+    }
+
     // An override-redirect, transparent, app-raised window gives a no-activate always-on-top overlay; the
     // drag's pointer grab + the router skipping these windows cover click-through during a drag.
     // Transparency only works while a compositing manager owns the _NET_WM_CM_Sn selection; without one the
