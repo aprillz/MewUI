@@ -16,7 +16,7 @@ internal sealed class ManagedFileDialogWindow : Window
     private readonly List<PlaceItem> _placeItems = new();
 
     private readonly GridView _grid;
-    private readonly StackPanel _breadcrumb;
+    private readonly FileDialogBreadcrumb _breadcrumb;
     private readonly TextBox _fileName;
     private readonly NavigationList _places;
     private SegmentButton _backButton = null!;
@@ -51,7 +51,7 @@ internal sealed class ManagedFileDialogWindow : Window
         ShowInTaskbar = false;
         this.Resizable(780, 560);
 
-        _breadcrumb = new StackPanel().Horizontal().Spacing(2);
+        _breadcrumb = new FileDialogBreadcrumb(EnterPathEdit);
         _grid = BuildGrid();
         _iconView = BuildIconView();
         _viewHost = new Border { Child = _grid };
@@ -149,7 +149,7 @@ internal sealed class ManagedFileDialogWindow : Window
                 ExitPathEdit();
                 _browser.Navigate(target);
                 // Navigation rebuilt the breadcrumb, replacing the crumb ExitPathEdit re-homed onto.
-                LastCrumbButton()?.Focus();
+                _breadcrumb.LastCrumbButton?.Focus();
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape)
@@ -451,7 +451,7 @@ internal sealed class ManagedFileDialogWindow : Window
 
         if (reHome)
         {
-            var crumb = LastCrumbButton();
+            var crumb = _breadcrumb.LastCrumbButton;
             if (crumb != null)
             {
                 crumb.Focus();
@@ -461,18 +461,6 @@ internal sealed class ManagedFileDialogWindow : Window
                 FocusManager.ClearFocus();
             }
         }
-    }
-
-    private Button? LastCrumbButton()
-    {
-        for (int i = _breadcrumb.Count - 1; i >= 0; i--)
-        {
-            if (_breadcrumb[i] is Button crumb)
-            {
-                return crumb;
-            }
-        }
-        return null;
     }
 
     // A new navigation started: drop the stale file-list selection right away so an inaccessible or
@@ -514,7 +502,6 @@ internal sealed class ManagedFileDialogWindow : Window
 
     private void RebuildBreadcrumb()
     {
-        _breadcrumb.Clear();
         string path = _browser.CurrentDirectory;
         var segments = new List<(string Label, string Path)>();
 
@@ -535,29 +522,7 @@ internal sealed class ManagedFileDialogWindow : Window
             segments.Add((part, accumulated));
         }
 
-        bool first = true;
-        foreach (var (label, segmentPath) in segments)
-        {
-            if (!first)
-            {
-                _breadcrumb.Add(new GlyphElement().Kind(GlyphKind.ChevronRight).GlyphSize(4).CenterVertical().WithTheme((t, c) => c.Foreground(t.Palette.DisabledText)));
-            }
-            first = false;
-
-            string target = segmentPath;
-            _breadcrumb.Add(new Button().Content(label, false).TabIndex(2).StyleName(BuiltInStyles.FlatButton)
-                .OnClick(() => _browser.Navigate(target))
-                .OnKeyDown(e =>
-                {
-                    // F2 is the Windows/Linux edit-in-place idiom. macOS uses Return, which here navigates,
-                    // so Mac users reach text entry via the global Cmd+Shift+G instead.
-                    if (e.Key == Key.F2 && (OperatingSystem.IsWindows() || OperatingSystem.IsLinux()))
-                    {
-                        EnterPathEdit();
-                        e.Handled = true;
-                    }
-                }));
-        }
+        _breadcrumb.SetEntries(segments, _browser.Navigate);
     }
 
     private void OnViewSelectionChanged()
