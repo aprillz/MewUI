@@ -73,7 +73,7 @@ var accentButton = new Style(typeof(Button))
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
-        Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.AccentText),
+        Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.AccentText),
         Setter.Create(Control.BorderBrushProperty, (Theme t) => t.Palette.Accent),
     ],
 };
@@ -89,7 +89,7 @@ var accentButton = new Style(typeof(Button))
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
-        Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.AccentText),
+        Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.AccentText),
     ],
     Triggers =
     [
@@ -111,7 +111,7 @@ var accentButton = new Style(typeof(Button))
             Exclude = VisualStateFlags.Enabled,
             Setters = [
                 Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.ButtonDisabledBackground),
-                Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.DisabledText),
+                Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.DisabledText),
             ],
         },
     ],
@@ -131,7 +131,7 @@ var style = new Style(typeof(Button))
     [
         Transition.Create(Control.BackgroundProperty),
         Transition.Create(Control.BorderBrushProperty),
-        Transition.Create(Control.ForegroundProperty),
+        Transition.Create(TextElement.ForegroundProperty),
     ],
     Setters = [...],
     Triggers = [...],
@@ -159,6 +159,31 @@ var myButton = new Style(typeof(Button))
 
 > **Policy**: if `BasedOn` is not set, only the setters/triggers defined in this style apply. The framework does not auto-merge with the theme style. This matches WPF behavior and keeps styling predictable.
 
+### 2.6 Unset (reverting BasedOn values)
+
+`BasedOn` is additive — a derived style overrides base setters but cannot remove them. `Setter.Unset(property)` fills that gap: within a derived style it unsets the property, so it reverts to the inherited value (or the type default when nothing is inherited), exactly as if no style in the chain had set it. This mirrors CSS `unset`.
+
+```csharp
+// Keep the base chrome (background, border, ...) but let the font follow the ambient/inherited value
+var menuDropDown = new Style(typeof(ContextMenu))
+{
+    BasedOn = Style.ForType<ContextMenu>(),
+    Setters =
+    [
+        Setter.Unset(TextElement.FontFamilyProperty),
+        Setter.Unset(TextElement.FontSizeProperty),
+        Setter.Unset(TextElement.ForegroundProperty),
+    ],
+};
+```
+
+Scope:
+
+- Acts only on the **Style-base tier** of this style chain for the named property. Higher-priority sources still win: a `Local` value, a running animation, and a matching trigger are untouched.
+- For an inherited property (`Foreground`, `Font*`), Unset reverts to the value inherited from ancestors; if no ancestor provides one, to the type default (including any `OverrideDefaultValue`).
+- In a nested `BasedOn` chain, an Unset at a more-derived level wins over base setters below it, and a still-more-derived level can re-set the property.
+- Unset applies to base setters, not to trigger setters.
+
 ---
 
 ## 3. StyleSheet
@@ -171,10 +196,10 @@ var myButton = new Style(typeof(Button))
 ### 3.1 Named styles
 
 ```csharp
-// Define on a window
+// Define on a window (named styles take a factory, created lazily on first lookup)
 window.StyleSheet = new StyleSheet();
-window.StyleSheet.Define("accent-button", accentButton);
-window.StyleSheet.Define("flat-button", flatButtonStyle);
+window.StyleSheet.Define("accent-button", () => accentButton);
+window.StyleSheet.Define("flat-button", () => flatButtonStyle);
 
 // Apply to a control
 var btn = new Button { StyleName = "accent-button" };
@@ -218,18 +243,9 @@ innerPanel.StyleSheet.Define<Button>(accentButtonStyle);
 // outerPanel > CheckBox → unaffected (no type rule)
 ```
 
-### 3.4 Named style references in type rules
-
-Type rules can reference named styles instead of direct style objects:
-
-```csharp
-toolbar.StyleSheet = new StyleSheet();
-toolbar.StyleSheet.Define<Button>("flat-button"); // resolved from nearest StyleSheet
-```
-
 ---
 
-## 5. Property value sources
+## 4. Property value sources
 
 Each property value has a source that determines its priority:
 
@@ -250,13 +266,13 @@ var btn = new Button().Content("Red Button");
 btn.Background = Color.Red; // Local value — hover trigger won't change this
 ```
 
-### Foreground inheritance
+### Foreground and font inheritance
 
-`Foreground` is set on `Window` and inherited by all descendants. Individual controls do **not** set `Foreground` in their base style. Disabled triggers on specific controls (Button, TextBox, etc.) override with `DisabledText` when needed.
+`Foreground`, `FontFamily`, `FontSize`, and `FontWeight` are declared on `TextElement` (the base class for text-bearing elements, above `Control`) with the `Inherits` flag. The `Window` default style sets them, and all descendants inherit them down the tree. Individual controls do **not** set these in their base style. Disabled triggers on specific controls (Button, TextBox, etc.) override `Foreground` with `DisabledText` when needed.
 
 ---
 
-## 6. Theme integration
+## 5. Theme integration
 
 Styles use `Func<Theme, T>` setters to react to theme changes automatically:
 
@@ -282,7 +298,7 @@ var baseStyle = Style.ForType<Button>();
 
 ---
 
-## 7. Complete example
+## 6. Complete example
 
 ```csharp
 // Define styles (static, shared, theme-aware)
@@ -313,7 +329,7 @@ var accentButton = new Style(typeof(Button))
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
-        Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.AccentText),
+        Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.AccentText),
         Setter.Create(Control.BorderBrushProperty, (Theme t) => t.Palette.Accent),
     ],
     Triggers =
@@ -339,7 +355,7 @@ var accentButton = new Style(typeof(Button))
 
 // Register in StyleSheet
 window.StyleSheet = new StyleSheet();
-window.StyleSheet.Define("accent", accentButton);
+window.StyleSheet.Define("accent", () => accentButton);
 
 // Apply via StyleSheet type rule (container-level)
 var toolbar = new StackPanel().Horizontal().Spacing(4);
