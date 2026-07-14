@@ -339,7 +339,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             exStyle &= ~WS_EX_APPWINDOW;
         }
 
-        if (Window.Kind == Controls.WindowKind.Tool && !Window.AllowsTransparency)
+        if (Window.Kind == Controls.WindowKind.Tool)
         {
             exStyle |= WS_EX_TOOLWINDOW;
             exStyle &= ~WS_EX_APPWINDOW;
@@ -1494,9 +1494,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
         switch (Window.Kind)
         {
-            // Tool/utility window: thin caption + excluded from the taskbar. ShowInTaskbar=false
-            // is handled separately by an owner HWND so normal dialog chrome stays unchanged.
-            case Controls.WindowKind.Tool when !Window.AllowsTransparency:
+            // Tool/utility window: excluded from taskbar + Alt-Tab via WS_EX_TOOLWINDOW, regardless of
+            // AllowsTransparency (the tool role is orthogonal to per-pixel alpha; the thin-caption effect
+            // is moot on a borderless surface). Set at creation so Alt-Tab registration is decided up front
+            // rather than patched late. ShowInTaskbar=false is additionally owner-HWND handled.
+            case Controls.WindowKind.Tool:
                 exStyle |= WindowStylesEx.WS_EX_TOOLWINDOW;
                 exStyle &= ~WindowStylesEx.WS_EX_APPWINDOW;
                 break;
