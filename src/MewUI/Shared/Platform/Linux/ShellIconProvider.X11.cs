@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 
+using Aprillz.MewUI.Diagnostics;
+
 namespace Aprillz.MewUI.Platform.Linux.X11;
 
 /// <summary>
@@ -8,6 +10,8 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 /// </summary>
 internal sealed partial class LinuxShellIconProvider : IShellIconProvider
 {
+    private static readonly EnvDebugLogger Logger = new("MEWUI_ICON_DEBUG", "[Icon.Linux]");
+
     private readonly Dictionary<string, ImageSource?> _cache = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
@@ -155,7 +159,7 @@ internal sealed partial class LinuxShellIconProvider : IShellIconProvider
             string? png = FindRasterPng(iconName, atLeast, categories, baseDirectories);
             if (png != null)
             {
-                Console.Error.WriteLine($"[icon.linux] match png>=req req={sizePx} -> {png}");
+                Logger.Write($"Match png>=req req={sizePx} -> {png}");
                 return ImageSource.FromFile(png);
             }
 
@@ -165,7 +169,7 @@ internal sealed partial class LinuxShellIconProvider : IShellIconProvider
                 var rendered = RenderSvgViaPixbuf(svg, sizePx);
                 if (rendered != null)
                 {
-                    Console.Error.WriteLine($"[icon.linux] match svg req={sizePx} -> {svg}");
+                    Logger.Write($"Match svg req={sizePx} -> {svg}");
                     return rendered;
                 }
             }
@@ -173,12 +177,12 @@ internal sealed partial class LinuxShellIconProvider : IShellIconProvider
             png = FindRasterPng(iconName, below, categories, baseDirectories);
             if (png != null)
             {
-                Console.Error.WriteLine($"[icon.linux] match png<req(upscale) req={sizePx} -> {png}");
+                Logger.Write($"Match png<req(upscale) req={sizePx} -> {png}");
                 return ImageSource.FromFile(png);
             }
         }
 
-        Console.Error.WriteLine($"[icon.linux] NO MATCH req={sizePx} names=[{string.Join(",", iconNames)}] cats=[{string.Join(",", categories)}]");
+        Logger.Write($"NO MATCH req={sizePx} names=[{string.Join(",", iconNames)}] cats=[{string.Join(",", categories)}]");
         return null;
     }
 
