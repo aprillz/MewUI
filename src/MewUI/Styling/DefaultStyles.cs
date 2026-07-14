@@ -206,6 +206,10 @@ public static class DefaultStyles
             Setters =
             [
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
+                Setter.Create(TextElement.ForegroundProperty, t => t.Palette.WindowText),
+                Setter.Create(TextElement.FontFamilyProperty, t => t.Metrics.FontFamily),
+                Setter.Create(TextElement.FontSizeProperty, t => t.Metrics.FontSize),
+                Setter.Create(TextElement.FontWeightProperty, t => t.Metrics.FontWeight),
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),
                 Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
@@ -215,6 +219,10 @@ public static class DefaultStyles
     private static Style CreateToolTipStyle()
         => CreateControlBasedStyle(typeof(ToolTip),
             Setter.Create(Control.PaddingProperty, new Thickness(8, 4, 8, 4)),
+            Setter.Create(TextElement.ForegroundProperty, t => t.Palette.WindowText),
+            Setter.Create(TextElement.FontFamilyProperty, t => t.Metrics.FontFamily),
+            Setter.Create(TextElement.FontSizeProperty, t => t.Metrics.FontSize),
+            Setter.Create(TextElement.FontWeightProperty, t => t.Metrics.FontWeight),
             Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
             Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness));
 
