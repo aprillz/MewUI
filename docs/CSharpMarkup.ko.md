@@ -335,7 +335,6 @@ new TextBox()
 | `Placeholder(string)` | 플레이스홀더 |
 | `IsReadOnly(bool)` | 읽기 전용 |
 | `AcceptTab(bool)` | 탭 키 허용 |
-| `AcceptReturn(bool)` | 리턴 문자 허용 |
 | `CaretPosition(int)` | 캐럿 위치 |
 | `ImeMode(ImeMode)` | 입력기 모드 |
 | `MaxLength(int)` | 최대 텍스트 길이 |
