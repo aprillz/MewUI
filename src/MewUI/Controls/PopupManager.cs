@@ -157,8 +157,12 @@ internal sealed class PopupManager
         PopupHostSupport.AttachChrome(_window, entry);
         var measuredBounds = measureBounds(_window);
         entry.Bounds = measuredBounds;
-        host.Attach(entry, sizeToContent);
+        // Register before showing the native surface: when a sibling popup (submenu) shows and takes
+        // the platform watch during ShowSurface, the parent's watch-transfer check scans _popups to
+        // recognize it as a popup surface. If the new popup is not yet listed, the parent gets a
+        // spurious dismiss and the whole chain closes.
         _popups.Add(entry);
+        host.Attach(entry, sizeToContent);
         host.Layout(entry);
 
         _window.Invalidate();
