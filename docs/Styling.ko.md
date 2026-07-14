@@ -73,7 +73,7 @@ var accentButton = new Style(typeof(Button))
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
-        Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.AccentText),
+        Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.AccentText),
         Setter.Create(Control.BorderBrushProperty, (Theme t) => t.Palette.Accent),
     ],
 };
@@ -89,7 +89,7 @@ var accentButton = new Style(typeof(Button))
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
-        Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.AccentText),
+        Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.AccentText),
     ],
     Triggers =
     [
@@ -111,7 +111,7 @@ var accentButton = new Style(typeof(Button))
             Exclude = VisualStateFlags.Enabled,
             Setters = [
                 Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.ButtonDisabledBackground),
-                Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.DisabledText),
+                Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.DisabledText),
             ],
         },
     ],
@@ -131,7 +131,7 @@ var style = new Style(typeof(Button))
     [
         Transition.Create(Control.BackgroundProperty),
         Transition.Create(Control.BorderBrushProperty),
-        Transition.Create(Control.ForegroundProperty),
+        Transition.Create(TextElement.ForegroundProperty),
     ],
     Setters = [...],
     Triggers = [...],
@@ -159,6 +159,31 @@ var myButton = new Style(typeof(Button))
 
 > **방침**: `BasedOn`을 설정하지 않으면 이 스타일에 정의된 setter/trigger만 적용됩니다. 프레임워크가 테마 스타일과 자동 병합하지 않습니다. WPF와 동일한 동작이며 스타일링을 예측 가능하게 유지합니다.
 
+### 2.6 Unset (BasedOn 값 되돌리기)
+
+`BasedOn`은 가산적입니다 — 파생 스타일이 base setter를 override할 수는 있어도 제거할 수는 없습니다. `Setter.Unset(property)`가 그 빈틈을 메웁니다: 파생 스타일 안에서 해당 속성을 unset하여, 체인의 어떤 스타일도 그 속성을 설정하지 않은 것처럼 상속값(상속이 없으면 타입 기본값)으로 되돌립니다. CSS `unset`과 같은 의미입니다.
+
+```csharp
+// base의 chrome(배경, 테두리 등)는 유지하되 폰트만 앰비언트/상속값을 따르게 함
+var menuDropDown = new Style(typeof(ContextMenu))
+{
+    BasedOn = Style.ForType<ContextMenu>(),
+    Setters =
+    [
+        Setter.Unset(TextElement.FontFamilyProperty),
+        Setter.Unset(TextElement.FontSizeProperty),
+        Setter.Unset(TextElement.ForegroundProperty),
+    ],
+};
+```
+
+스코프:
+
+- 해당 속성에 대해 이 스타일 체인의 **Style-base 티어만** 비웁니다. 상위 소스는 그대로 이깁니다: `Local` 값, 진행 중인 애니메이션, 매칭되는 트리거는 건드리지 않습니다.
+- 상속 속성(`Foreground`, `Font*`)이면 조상에서 상속된 값으로 복귀하고, 조상에 값이 없으면 타입 기본값(`OverrideDefaultValue` 포함)으로 복귀합니다.
+- 중첩 `BasedOn` 체인에서는 더 파생된 레벨의 Unset이 아래 base setter를 이기고, 더더욱 파생된 레벨은 그 속성을 다시 set할 수 있습니다.
+- Unset은 base setter에 적용되며 트리거 setter에는 적용되지 않습니다.
+
 ---
 
 ## 3. StyleSheet
@@ -171,10 +196,10 @@ var myButton = new Style(typeof(Button))
 ### 3.1 이름 기반 스타일
 
 ```csharp
-// Window에 정의
+// Window에 정의 (이름 기반 스타일은 팩토리를 받아 최초 조회 시 생성)
 window.StyleSheet = new StyleSheet();
-window.StyleSheet.Define("accent-button", accentButton);
-window.StyleSheet.Define("flat-button", flatButtonStyle);
+window.StyleSheet.Define("accent-button", () => accentButton);
+window.StyleSheet.Define("flat-button", () => flatButtonStyle);
 
 // 컨트롤에 적용
 var btn = new Button { StyleName = "accent-button" };
@@ -220,7 +245,7 @@ innerPanel.StyleSheet.Define<Button>(accentButtonStyle);
 
 ---
 
-## 5. 속성 값 소스
+## 4. 속성 값 소스
 
 각 속성 값에는 우선순위를 결정하는 소스가 있습니다:
 
@@ -241,13 +266,13 @@ var btn = new Button().Content("빨간 버튼");
 btn.Background = Color.Red; // Local 값 — hover 트리거가 변경하지 않음
 ```
 
-### Foreground 상속
+### Foreground와 폰트 상속
 
-`Foreground`는 `Window`에 설정되어 모든 자손이 상속받습니다. 개별 컨트롤은 기본 스타일에서 `Foreground`를 설정하지 않습니다. Button, TextBox 등 특정 컨트롤의 disabled 트리거만 `DisabledText`로 override합니다.
+`Foreground`, `FontFamily`, `FontSize`, `FontWeight`는 텍스트를 갖는 요소의 기반 클래스인 `TextElement`(`Control`의 상위)에 `Inherits` 플래그로 선언됩니다. `Window` 기본 스타일이 이들을 설정하고, 모든 자손이 트리를 따라 상속받습니다. 개별 컨트롤은 기본 스타일에서 이들을 설정하지 않습니다. Button, TextBox 등 특정 컨트롤의 disabled 트리거만 `Foreground`를 `DisabledText`로 override합니다.
 
 ---
 
-## 6. 테마 통합
+## 5. 테마 통합
 
 스타일은 `Func<Theme, T>` setter를 사용하여 테마 변경에 자동으로 반응합니다:
 
@@ -273,7 +298,7 @@ var baseStyle = Style.ForType<Button>();
 
 ---
 
-## 7. 전체 예제
+## 6. 전체 예제
 
 ```csharp
 // 스타일 정의 (static, 공유, 테마 반응)
@@ -304,7 +329,7 @@ var accentButton = new Style(typeof(Button))
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
-        Setter.Create(Control.ForegroundProperty, (Theme t) => t.Palette.AccentText),
+        Setter.Create(TextElement.ForegroundProperty, (Theme t) => t.Palette.AccentText),
         Setter.Create(Control.BorderBrushProperty, (Theme t) => t.Palette.Accent),
     ],
     Triggers =
@@ -330,7 +355,7 @@ var accentButton = new Style(typeof(Button))
 
 // StyleSheet에 등록
 window.StyleSheet = new StyleSheet();
-window.StyleSheet.Define("accent", accentButton);
+window.StyleSheet.Define("accent", () => accentButton);
 
 // StyleSheet 타입 규칙으로 적용 (컨테이너 범위)
 var toolbar = new StackPanel().Horizontal().Spacing(4);
