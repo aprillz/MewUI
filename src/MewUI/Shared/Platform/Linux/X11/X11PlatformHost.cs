@@ -17,6 +17,8 @@ public sealed class X11PlatformHost : IPlatformHost
 {
     public const string PlatformIdentifier = "X11";
 
+    private static readonly EnvDebugLogger Logger = new("MEWUI_X11_DEBUG", "[X11][XError]");
+
     private readonly Dictionary<nint, X11WindowBackend> _windows = new();
     private readonly List<X11WindowBackend> _renderBackends = new(capacity: 8);
     private bool _running;
@@ -580,8 +582,6 @@ public sealed class X11PlatformHost : IPlatformHost
         NativeX11.XSetErrorHandler((nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnXError);
     }
 
-    private static readonly EnvDebugLogger XErrorLogger = new("MEWUI_X11_DEBUG", "[X11][XError]");
-
     // Mirrors Xlib's XErrorEvent layout (natural alignment matches the C struct on both 32/64-bit).
     [StructLayout(LayoutKind.Sequential)]
     private struct XErrorEventNative
@@ -603,18 +603,9 @@ public sealed class X11PlatformHost : IPlatformHost
     {
         try
         {
-            const byte BadWindow = 3;
-            const byte BadDrawable = 9;
-
             var error = *(XErrorEventNative*)errorEventPtr;
-            if (error.error_code is BadWindow or BadDrawable)
-            {
-                XErrorLogger.Write($"code={error.error_code} request={error.request_code}.{error.minor_code} resource=0x{(ulong)error.resourceid:X} serial={(ulong)error.serial}");
-            }
-            else
-            {
-                Console.Error.WriteLine($"[X11][XError] code={error.error_code} request={error.request_code}.{error.minor_code} resource=0x{(ulong)error.resourceid:X} serial={(ulong)error.serial}");
-            }
+
+            Logger.Write($"code={error.error_code} request={error.request_code}.{error.minor_code} resource=0x{(ulong)error.resourceid:X} serial={(ulong)error.serial}");
         }
         catch
         {
