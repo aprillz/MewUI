@@ -3,7 +3,10 @@ using Aprillz.MewUI.Concept;
 
 Startup(args);
 //Application.Run(FitContentGridTest.Create());
-Application.Run(MeasureConstraintTest.Create()); // issue #173 regression
+//Application.Run(MeasureConstraintTest.Create()); // issue #173 regression
+//Application.Run(Issue199FitContentTest.Create()); // issue #199 regression
+Application.Run(MinTrackReleaseTest.Create()); // Win32 min-track release (chrome-less windows)
+//Application.Run(StyleChangeTest.Create());
 //Application.Run(ZoomPanCanvasTest.Create());
 
 static void Startup(string[] args)

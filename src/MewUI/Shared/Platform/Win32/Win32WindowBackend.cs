@@ -1923,6 +1923,14 @@ internal sealed class Win32WindowBackend : IWindowBackend
             }
         }
 
+        // The OS default min track size exists for caption buttons; windows without visible
+        // non-client chrome (transparent or borderless) have none, so only the WindowSize minimums apply.
+        if (_allowsTransparency || Window.Borderless)
+        {
+            info->ptMinTrackSize.x = 1;
+            info->ptMinTrackSize.y = 1;
+        }
+
         var ws = Window.WindowSize;
         double minW = ws.MinWidth;
         double minH = ws.MinHeight;
