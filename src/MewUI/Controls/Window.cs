@@ -100,6 +100,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private Action? _cachedUpdatePass;
     private LayoutPerformanceStats _lastLayoutPerformanceStats;
 
+    // Update-pass scheduler: the generation counts every RequestUpdatePass arrival, a pass converges
+    // when one measure/arrange round completes without the generation moving. Element dirty flags
+    // say where work is; they are never used as a convergence criterion (overlay chrome and hidden
+    // elements stay legitimately dirty forever).
+    private ulong _updateGeneration;
+    private ulong _layoutCompletedGeneration = ulong.MaxValue;
+    private int _updatePassDepth;
+
+    // A settled pass recorded its generation; an unsettled pass leaves it behind and posts
+    // exactly one continuation.
+    internal bool IsUpdatePassSettled => _updateGeneration == _layoutCompletedGeneration;
+
     private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
@@ -1786,6 +1798,33 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     public void PerformLayout()
     {
+        if (Handle == 0)
+        {
+            return;
+        }
+
+        if (_updatePassDepth > 0)
+        {
+            // Synchronous re-entry: Win32 delivers WM_SIZE inside SetWindowPos while a pass is
+            // running, and its handler calls back into PerformLayout. The applied client size is
+            // already recorded; signal the outer pass to re-converge instead of nesting a layout.
+            _updateGeneration++;
+            return;
+        }
+
+        _updatePassDepth++;
+        try
+        {
+            PerformLayoutCore();
+        }
+        finally
+        {
+            _updatePassDepth--;
+        }
+    }
+
+    private void PerformLayoutCore()
+    {
         var profiler = PerformanceProfiler.Instance;
         bool profiling = profiler.IsEnabled;
         long layoutStart = profiling ? Stopwatch.GetTimestamp() : 0;
@@ -1794,11 +1833,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         bool measureRan = false;
         bool arrangeRan = false;
         using var layoutScope = profiling ? ProfilerMarkers.WindowLayout.Auto() : default;
-
-        if (Handle == 0)
-        {
-            return;
-        }
 
         // Reconcile queued visual-state invalidations before layout reads state-dependent
         // properties (e.g. a style trigger may adjust size/padding based on IsEnabled).
@@ -1874,14 +1908,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         var clientSize = _clientSizeDip;
 
-        // Layout can be expensive (e.g., large item collections). If nothing is dirty and the
-        // client size hasn't changed, avoid re-running Measure/Arrange on every paint.
+        // Cheap per-paint path: nothing arrived since the last completed pass and the inputs are
+        // unchanged, so measure/arrange would be a no-op tree walk.
         if (clientSize == _lastLayoutClientSizeDip &&
             padding == _lastLayoutPadding &&
             visualRoot == _lastLayoutContent &&
             _hostedPortalOrigin == _lastLayoutPortalOrigin &&
-            !IsLayoutDirty(visualRoot) &&
-            !HasOverlayLayoutDirty())
+            _updateGeneration == _layoutCompletedGeneration)
         {
             if (profiling)
             {
@@ -1897,27 +1930,30 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         const int maxPasses = 8;
-        var contentSize = clientSize.Deflate(padding);
+        bool converged = false;
+        ulong cleanGeneration = 0;
 
-        bool needMeasure = HasMeasureDirty(visualRoot)
-            || clientSize != _lastLayoutClientSizeDip
-            || padding != _lastLayoutPadding
-            || visualRoot != _lastLayoutContent;
         for (int pass = 0; pass < maxPasses; pass++)
         {
-            if (needMeasure)
+            // Re-read per round: a synchronous WM_SIZE in the previous round may have recorded a
+            // new applied client size, and a mid-round style change may have altered Padding.
+            clientSize = _clientSizeDip;
+            padding = Padding;
+            var contentSize = clientSize.Deflate(padding);
+
+            ulong generationBefore = _updateGeneration;
+
+            long measureStart = profiling ? Stopwatch.GetTimestamp() : 0;
+            using (profiling ? ProfilerMarkers.ContentMeasure.Auto() : default)
             {
-                long measureStart = profiling ? Stopwatch.GetTimestamp() : 0;
-                using (profiling ? ProfilerMarkers.ContentMeasure.Auto() : default)
-                {
-                    visualRoot.Measure(contentSize);
-                }
-                if (profiling)
-                {
-                    measureTicks += Stopwatch.GetTimestamp() - measureStart;
-                }
-                measureRan = true;
+                // A clean tree under an unchanged constraint returns immediately; no dirty gate needed.
+                visualRoot.Measure(contentSize);
             }
+            if (profiling)
+            {
+                measureTicks += Stopwatch.GetTimestamp() - measureStart;
+            }
+            measureRan = true;
 
             long arrangeStart = profiling ? Stopwatch.GetTimestamp() : 0;
             using (profiling ? ProfilerMarkers.ContentArrange.Auto() : default)
@@ -1936,16 +1972,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
             arrangeRan = true;
 
-            if (!IsLayoutDirty(visualRoot))
+            if (_updateGeneration == generationBefore)
             {
+                converged = true;
+                cleanGeneration = generationBefore;
                 break;
             }
 
-            // If only Arrange dirtiness remains after the first pass, avoid re-running Measure.
-            if (needMeasure && !HasMeasureDirty(visualRoot))
-            {
-                needMeasure = false;
-            }
+            // Consume visual-state invalidations that arrived mid-round before the next round
+            // reads state-dependent properties.
+            UpdateVisualStates();
         }
 
         _lastLayoutClientSizeDip = clientSize;
@@ -1960,6 +1996,22 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             OverlayLayer.Layout(clientSize);
         }
 
+        if (converged && _updateGeneration == cleanGeneration)
+        {
+            _layoutCompletedGeneration = _updateGeneration;
+        }
+        else
+        {
+            // Unsettled: the pass budget ran out, or overlay layout invalidated again. Hand the
+            // dispatcher exactly one continuation; chaining passes from inside is what spun (#199).
+            if (!converged)
+            {
+                LogNonConvergedLayout(visualRoot);
+            }
+
+            PostUpdatePass();
+        }
+
         if (profiling)
         {
             _lastLayoutPerformanceStats = new LayoutPerformanceStats(
@@ -1970,34 +2022,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 measureRan,
                 arrangeRan);
         }
-    }
-
-    private bool HasOverlayLayoutDirty()
-    {
-        // Popups/adorners are not part of the window Content tree, but they still bubble invalidation
-        // up to the Window (Parent = this). If we early-return purely based on Content dirtiness,
-        // overlay elements can get stuck with stale DesiredSize/Bounds until the owner explicitly
-        // re-calls ShowPopup/UpdatePopup.
-        if (OverlayLayer.HasLayoutDirty())
-        {
-            return true;
-        }
-
-        for (int i = 0; i < _adorners.Count; i++)
-        {
-            var element = _adorners[i].Element;
-            if (element.IsMeasureDirty || element.IsArrangeDirty)
-            {
-                return true;
-            }
-        }
-
-        if (_popupManager.HasLayoutDirty())
-        {
-            return true;
-        }
-
-        return false;
     }
 
     private void LayoutAdorners()
@@ -2033,13 +2057,22 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _popupManager.LayoutDirtyPopups();
     }
 
-    // Full tree walks on purpose: an O(1) root-flag check is unsound here because layout passes
-    // may legitimately clear a container's flag while skipping still-dirty descendants (virtualization).
-    private static bool HasMeasureDirty(Element root)
-        => VisualTree.Find(root, static e => e.IsMeasureDirty) != null;
-
-    private static bool IsLayoutDirty(Element root)
-        => VisualTree.Find(root, static e => e.IsMeasureDirty || e.IsArrangeDirty) != null;
+    // Diagnostic only - runs when the convergence loop exhausts its pass budget. Dirty flags are
+    // not a convergence criterion (overlay chrome and hidden elements stay legitimately dirty).
+    [Conditional("DEBUG")]
+    private static void LogNonConvergedLayout(Element root)
+    {
+        int logged = 0;
+        VisualTree.Visit(root, e =>
+        {
+            if (logged < 8 && (e.IsMeasureDirty || e.IsArrangeDirty))
+            {
+                Debug.WriteLine(
+                    $"[MewUI] layout did not converge: {e.GetType().Name} measureDirty={e.IsMeasureDirty} arrangeDirty={e.IsArrangeDirty}");
+                logged++;
+            }
+        });
+    }
 
     public void Invalidate() => RequestRender();
 
@@ -2080,6 +2113,21 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// pipeline stage.
     /// </summary>
     internal void RequestUpdatePass()
+    {
+        _updateGeneration++;
+        if (_updatePassDepth > 0)
+        {
+            // The running pass owns pass-internal invalidation: the generation bump above is the
+            // arrival signal its convergence loop (or end-of-pass continuation) consumes. Posting
+            // here would spin - the dispatcher releases the merge key before execution, so a
+            // mid-pass post becomes a fresh work item instead of merging (issue #199).
+            return;
+        }
+
+        PostUpdatePass();
+    }
+
+    private void PostUpdatePass()
     {
         var dispatcher = ApplicationDispatcher;
         if (dispatcher == null)

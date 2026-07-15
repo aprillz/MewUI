@@ -120,9 +120,9 @@ public abstract class Element : MewObject
                 OnParentChanged();
 
                 // A subtree already dirty (new elements default dirty, or invalidated while
-                // detached) must re-propagate into the new parent chain on attach - otherwise
-                // Window's O(1) descendant-dirty checks (HasMeasureDirty/IsLayoutDirty) would miss
-                // it, since those no longer walk the tree and only trust the root's own flag.
+                // detached) must re-propagate into the new parent chain on attach - the Window
+                // learns about pending layout only through invalidation arrivals (update-pass
+                // generation), so a silent attach would never get laid out.
                 if (value != null)
                 {
                     if (IsMeasureDirty)
