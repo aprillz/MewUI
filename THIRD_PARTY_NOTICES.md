@@ -115,6 +115,15 @@ https://p.yusukekamiyamane.com/
 Copyright (c) Yusuke Kamiyamane. Licensed under the Creative Commons Attribution 3.0 license.
 https://creativecommons.org/licenses/by/3.0/
 
+## Fluent UI System Icons
+
+The `Aprillz.MewUI.Svg` sample (`samples/MewUI.Svg.Sample`) bundles SVG icons from Fluent UI System Icons.
+https://github.com/microsoft/fluentui-system-icons
+
+Copyright (c) 2020 Microsoft Corporation
+
+Licensed under the MIT License (full text identical to the FlexLayout MIT License above).
+
 ## Simple Icons
 
 The `Aprillz.MewUI.Svg` sample (`samples/MewUI.Svg.Sample`) bundles icons and metadata from Simple Icons.
@@ -125,4 +134,3 @@ https://creativecommons.org/publicdomain/zero/1.0/
 
 Brand icons/logos remain trademarks of their respective owners; Simple Icons and this project are not
 affiliated with, endorsed by, or sponsored by those owners. Use of a logo does not imply any endorsement.
-
