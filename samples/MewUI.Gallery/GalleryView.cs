@@ -57,11 +57,18 @@ partial class GalleryView : UserControl
             .Vertical()
             .Children(new TextBlock().Text("Settings").FontSize(22).Bold());
 
-    private static PathGeometry Ico(string name)
+    private static PathShape Ico(string name)
     {
         var all = IconResource.GetAll();
         var entry = Array.Find(all, x => x.Name == name) ?? all[0];
-        return PathGeometry.Parse(entry.PathData);
+        var icon = new PathShape
+        {
+            Data = PathGeometry.Parse(entry.PathData),
+            Stretch = Stretch.Uniform,
+        };
+        icon.Bind(Shape.FillProperty, icon, TextElement.ForegroundProperty,
+            (Color color) => (Brush)new SolidColorBrush(color));
+        return icon;
     }
 
     public GalleryView(Window window)
@@ -137,10 +144,10 @@ partial class GalleryView : UserControl
         return new StackPanel().Vertical().Spacing(16).Children(children.ToArray());
     }
 
-    private sealed record NavEntry(NavigationItemKind Kind, string Title, PathGeometry? Icon, Func<FrameworkElement>? Page);
+    private sealed record NavEntry(NavigationItemKind Kind, string Title, Element? Icon, Func<FrameworkElement>? Page);
 
-    // Single source of navigation entries, shared by both shells. Group headers carry a top-level icon;
-    // pages are the selectable items.
+    // Single source of navigation entries, shared by both shells. Group headers separate sections;
+    // pages are selectable items with their own icon elements.
     private NavEntry[] NavEntries()
     {
         NavEntry Group(string title) => new(NavigationItemKind.Header, title, null, null);
@@ -156,6 +163,9 @@ partial class GalleryView : UserControl
             Page("Selection", SelectionPage, "multiselect_regular"),
             Page("Typography", TypographyPage, "text_font_regular"),
             Page("Styling", StylingPage, "color_regular"),
+
+            Group("Navigation"),
+            Page("NavigationView", NavigationViewPage, "navigation_regular"),
 
             Group("Collections"),
             Page("Lists", ListsPage, "list_regular"),

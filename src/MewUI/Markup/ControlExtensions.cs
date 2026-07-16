@@ -2671,9 +2671,7 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Configures the navigation pane items, their icons, and the selected-item-to-content mapping in one
-    /// typed call. Rows show an icon (when provided) plus text; <see cref="NavigationItemKind.Header"/> rows
-    /// are bold group titles, items are indented, and text is hidden when the pane is compact.
+    /// Configures navigation pane items with optional <see cref="PathGeometry"/> icons.
     /// </summary>
     public static NavigationView Items<T>(
         this NavigationView view,
@@ -2687,6 +2685,34 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(textSelector);
 
+        Func<T, Element?>? elementIcon = icon == null
+            ? null
+            : item => CreateNavigationPathIcon(icon(item));
+        ApplyNavItems(view, view.Pane, items, textSelector, elementIcon, kind, keySelector);
+        if (content != null)
+        {
+            view.ContentSelector = o => o is T t ? content(t) : null;
+        }
+        return view;
+    }
+
+    /// <summary>
+    /// Configures navigation pane items with arbitrary <see cref="Element"/> icons. A returned instance cannot
+    /// be shared by rows at the same time. Text is hidden when the pane is compact.
+    /// </summary>
+    public static NavigationView Items<T>(
+        this NavigationView view,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, Element?> icon,
+        Func<T, Element?>? content = null,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(textSelector);
+        ArgumentNullException.ThrowIfNull(icon);
+
         ApplyNavItems(view, view.Pane, items, textSelector, icon, kind, keySelector);
         if (content != null)
         {
@@ -2696,9 +2722,7 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Configures the bottom-pinned footer items (e.g. a Settings entry) with the same shape as the main
-    /// <c>Items</c> call. Selection is shared with the main items, so only one entry is selected across the
-    /// whole pane and its content shows in the content region.
+    /// Configures bottom-pinned footer items with optional <see cref="PathGeometry"/> icons.
     /// </summary>
     public static NavigationView FooterItems<T>(
         this NavigationView view,
@@ -2711,6 +2735,34 @@ public static class ControlExtensions
     {
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(textSelector);
+
+        Func<T, Element?>? elementIcon = icon == null
+            ? null
+            : item => CreateNavigationPathIcon(icon(item));
+        ApplyNavItems(view, view.FooterPane, items, textSelector, elementIcon, kind, keySelector);
+        if (content != null)
+        {
+            view.FooterContentSelector = o => o is T t ? content(t) : null;
+        }
+        return view;
+    }
+
+    /// <summary>
+    /// Configures bottom-pinned footer items with arbitrary <see cref="Element"/> icons. A returned instance
+    /// cannot be shared by rows at the same time.
+    /// </summary>
+    public static NavigationView FooterItems<T>(
+        this NavigationView view,
+        IReadOnlyList<T> items,
+        Func<T, string> textSelector,
+        Func<T, Element?> icon,
+        Func<T, Element?>? content = null,
+        Func<T, NavigationItemKind>? kind = null,
+        Func<T, object?>? keySelector = null)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(textSelector);
+        ArgumentNullException.ThrowIfNull(icon);
 
         ApplyNavItems(view, view.FooterPane, items, textSelector, icon, kind, keySelector);
         if (content != null)
@@ -2726,7 +2778,7 @@ public static class ControlExtensions
         NavigationList pane,
         IReadOnlyList<T> items,
         Func<T, string> textSelector,
-        Func<T, PathGeometry?>? icon,
+        Func<T, Element?>? icon,
         Func<T, NavigationItemKind>? kind,
         Func<T, object?>? keySelector)
     {
@@ -2735,30 +2787,34 @@ public static class ControlExtensions
         pane.ItemTemplate = new DelegateTemplate<T>(
             build: _ =>
             {
-                var iconShape = new PathShape()
-                    .Stretch(Stretch.Uniform).Size(16).CenterVertical();
-                // Icon fill follows the inherited foreground, so it tracks theme, app overrides, and disabled
-                // dimming exactly like the text label.
-                iconShape.Bind(Shape.FillProperty, iconShape, TextElement.ForegroundProperty,
-                    (Color color) => (Brush)new SolidColorBrush(color));
+                var iconHost = new ContentControl
+                {
+                    Width = 16,
+                    Height = 16,
+                    BorderThickness = 0,
+                    IsHitTestVisible = false,
+                    HorizontalAlignment = MewUI.HorizontalAlignment.Center,
+                    VerticalAlignment = MewUI.VerticalAlignment.Center,
+                };
                 var label = new TextBlock().CenterVertical();
-                return new StackPanel().Horizontal().Spacing(10).CenterVertical().Children(iconShape, label);
+                return new StackPanel().Horizontal().Spacing(10).CenterVertical().Children(iconHost, label);
             },
             bind: (element, item, index, ctx) =>
             {
                 var row = (StackPanel)element;
-                var iconShape = (PathShape)row.Children[0];
+                var iconHost = (ContentControl)row.Children[0];
                 var label = (TextBlock)row.Children[1];
-                bool isHeader = (kind == null ? NavigationItemKind.Item : kind(item)) == NavigationItemKind.Header;
+                var itemKind = kind == null ? NavigationItemKind.Item : kind(item);
+                bool isHeader = itemKind == NavigationItemKind.Header;
                 bool rail = view.PaneIsRail;
                 bool showText = view.PaneShowsText;
 
-                iconShape.Data = icon?.Invoke(item);
+                iconHost.Content = itemKind == NavigationItemKind.Item ? icon?.Invoke(item) : null;
+                iconHost.IsVisible = iconHost.Content != null;
 
                 if (isHeader)
                 {
                     // Group headers: small uppercase with space above, no icon. In the compact rail they collapse to a spacer.
-                    iconShape.IsVisible = false;
                     label.IsVisible = !rail && showText;
                     label.Text = textSelector(item).ToUpperInvariant();
                     label.FontSize = 11;
@@ -2769,7 +2825,6 @@ public static class ControlExtensions
                 else
                 {
                     // Items: larger text, indented under their group header; icon-only and centered in the rail.
-                    iconShape.IsVisible = iconShape.Data != null;
                     label.IsVisible = showText;
                     label.Text = textSelector(item);
                     label.FontSize = 13;
@@ -2783,7 +2838,29 @@ public static class ControlExtensions
                 {
                     host.ToolTip(rail && !isHeader ? textSelector(item) : null);
                 }
+            },
+            unbind: (element, _, _, _) =>
+            {
+                var row = (StackPanel)element;
+                ((ContentControl)row.Children[0]).Content = null;
+                if (element.Parent is Border host)
+                {
+                    host.ToolTip((string?)null);
+                }
             });
+    }
+
+    private static Element? CreateNavigationPathIcon(PathGeometry? geometry)
+    {
+        if (geometry == null)
+        {
+            return null;
+        }
+
+        var icon = new PathShape { Data = geometry, Stretch = Stretch.Uniform };
+        icon.Bind(Shape.FillProperty, icon, TextElement.ForegroundProperty,
+            (Color color) => (Brush)new SolidColorBrush(color));
+        return icon;
     }
 
     #endregion

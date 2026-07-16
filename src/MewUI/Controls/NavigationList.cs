@@ -52,7 +52,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
         _presenter = new StackItemsPresenter();
         _presenter.ItemsSource = _itemsSource;
         // Each row is wrapped in a host that owns the padding and the per-kind min-height.
-        _presenter.ItemTemplate = new RowTemplate(this);
+        _presenter.ItemTemplate = new RowTemplate(this, _itemTemplate);
         _presenter.BeforeItemRender = OnBeforeItemRender;
         _presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
 
@@ -86,7 +86,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
             ArgumentNullException.ThrowIfNull(value);
             _itemTemplate = value;
             // Re-wrap so pooled containers rebuild against the new inner template.
-            _presenter.ItemTemplate = new RowTemplate(this);
+            _presenter.ItemTemplate = new RowTemplate(this, _itemTemplate);
             InvalidateItemBindings();
             InvalidateMeasure();
             InvalidateVisual();
@@ -569,22 +569,27 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
     private sealed class RowTemplate : IDataTemplate
     {
         private readonly NavigationList _owner;
+        private readonly IDataTemplate _itemTemplate;
 
-        public RowTemplate(NavigationList owner) => _owner = owner;
+        public RowTemplate(NavigationList owner, IDataTemplate itemTemplate)
+        {
+            _owner = owner;
+            _itemTemplate = itemTemplate;
+        }
 
         public FrameworkElement Build(TemplateContext context)
-            => new Border { Padding = _owner.ItemPadding, Child = _owner._itemTemplate.Build(context) };
+            => new Border { Padding = _owner.ItemPadding, Child = _itemTemplate.Build(context) };
 
         public void Bind(FrameworkElement view, object? item, int index, TemplateContext context)
         {
             var host = (Border)view;
             host.Padding = _owner.ItemPadding;
             host.MinHeight = _owner.KindAt(index) == NavigationItemKind.Item ? _owner.ResolveItemHeight() : 0;
-            _owner._itemTemplate.Bind((FrameworkElement)host.Child!, item, index, context);
+            _itemTemplate.Bind((FrameworkElement)host.Child!, item, index, context);
         }
 
         public void Unbind(FrameworkElement view, object? item, int index, TemplateContext context)
-            => _owner._itemTemplate.Unbind((FrameworkElement)((Border)view).Child!, item, index, context);
+            => _itemTemplate.Unbind((FrameworkElement)((Border)view).Child!, item, index, context);
     }
 }
 
