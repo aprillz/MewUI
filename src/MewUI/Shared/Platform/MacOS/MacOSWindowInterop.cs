@@ -332,6 +332,24 @@ internal static unsafe class MacOSWindowInterop
         }
     }
 
+    public static Size GetContentSize(nint window)
+    {
+        EnsureInitialized();
+        if (window == 0 || SelFrame == 0)
+        {
+            return default;
+        }
+
+        var contentView = ObjC.MsgSend_nint(window, ObjC.Sel("contentView"));
+        if (contentView == 0)
+        {
+            return default;
+        }
+
+        var frame = ObjC.MsgSend_rect(contentView, SelFrame);
+        return new Size(frame.size.width, frame.size.height);
+    }
+
     public static NSRect GetWindowFrame(nint window)
     {
         EnsureInitialized();

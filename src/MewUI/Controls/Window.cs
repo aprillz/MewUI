@@ -112,6 +112,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     // exactly one continuation.
     internal bool IsUpdatePassSettled => _updateGeneration == _layoutCompletedGeneration;
 
+    // Sizing transaction (spec -> desired -> requested -> applied): the fit branch submits a
+    // target once per change and accepts whatever client size the platform applies.
+    private Size _requestedClientSize;
+    private bool _hasRequestedClientSize;
+
     private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
     private Size _lastLayoutClientSizeDip = Size.Empty;
     private Thickness _lastLayoutPadding = Thickness.Zero;
@@ -490,12 +495,18 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 CoerceValue(CanMaximizeProperty);
             }
 
-            if (_backend != null)
+            if (_backend != null && (!double.IsNaN(field.Width) || !double.IsNaN(field.Height)))
             {
-                // FitContent defers sizing to PerformLayout.
-                if (!double.IsNaN(field.Width) && !double.IsNaN(field.Height))
-                    _backend.SetClientSize(field.Width, field.Height);
+                // Push the spec'd axes; a fit axis (NaN) keeps its current value until the fit
+                // branch submits its content-derived target.
+                _backend.SetClientSize(
+                    double.IsNaN(field.Width) ? _clientSizeDip.Width : field.Width,
+                    double.IsNaN(field.Height) ? _clientSizeDip.Height : field.Height);
             }
+
+            // A new spec starts a new sizing transaction: the fit branch must re-submit.
+            _hasRequestedClientSize = false;
+            RequestUpdatePass();
         }
     } = WindowSize.Resizable(DefaultWidth, DefaultHeight);
 
@@ -1860,16 +1871,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         var padding = Padding;
         var mode = WindowSize.Mode;
 
-        // For FitContent modes, measure content with max constraints first,
-        // then resize the window to match the content's desired size.
+        // For FitContent modes, measure content with per-axis constraints first (max on fit axes,
+        // the spec'd size on fixed axes), then resize the window to the content's desired size.
         if (mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize)
         {
-            var measureWidth = mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentSize
-                ? WindowSize.MaxWidth - padding.HorizontalThickness
-                : Width - padding.HorizontalThickness;
-            var measureHeight = mode is WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize
-                ? WindowSize.MaxHeight - padding.VerticalThickness
-                : Height - padding.VerticalThickness;
+            var spec = WindowSize;
+            var measureWidth = (mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentSize
+                ? spec.MaxWidth
+                : spec.Width) - padding.HorizontalThickness;
+            var measureHeight = (mode is WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize
+                ? spec.MaxHeight
+                : spec.Height) - padding.VerticalThickness;
 
             long measureStart = profiling ? Stopwatch.GetTimestamp() : 0;
             using (profiling ? ProfilerMarkers.ContentMeasure.Auto() : default)
@@ -1884,11 +1896,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
             var desired = visualRoot.DesiredSize;
             var fitWidth = mode is WindowSizeMode.FitContentWidth or WindowSizeMode.FitContentSize
-                ? Math.Min(desired.Width + padding.HorizontalThickness, WindowSize.MaxWidth)
-                : Width;
+                ? Math.Min(desired.Width + padding.HorizontalThickness, spec.MaxWidth)
+                : spec.Width;
             var fitHeight = mode is WindowSizeMode.FitContentHeight or WindowSizeMode.FitContentSize
-                ? Math.Min(desired.Height + padding.VerticalThickness, WindowSize.MaxHeight)
-                : Height;
+                ? Math.Min(desired.Height + padding.VerticalThickness, spec.MaxHeight)
+                : spec.Height;
+
+            // A zero-size client cannot back a render surface; keep at least one pixel per axis.
+            fitWidth = Math.Max(fitWidth, 1);
+            fitHeight = Math.Max(fitHeight, 1);
 
             // Snap to pixel boundaries to avoid fractional DIP sizes that cause
             // mismatches between the view backing size and the rendering surface.
@@ -1899,10 +1915,15 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 fitHeight = Math.Ceiling(fitHeight * dpiScale) / dpiScale;
             }
 
-            if (fitWidth != Width || fitHeight != Height)
+            // Submit only when the target changes, and accept whatever client size the platform
+            // applies - possibly clamped to an OS minimum. The fit contract is
+            // max(content, OS minimum); a clamped result is never re-fought (issue #199).
+            var target = new Size(fitWidth, fitHeight);
+            if (!_hasRequestedClientSize || target != _requestedClientSize)
             {
-                _clientSizeDip = new Size(fitWidth, fitHeight);
-                _backend?.SetClientSize(fitWidth, fitHeight);
+                _hasRequestedClientSize = true;
+                _requestedClientSize = target;
+                _backend?.SetClientSize(target.Width, target.Height);
             }
         }
 
@@ -2248,8 +2269,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _backend.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
         if (Borderless)
             _backend.SetBorderless(true);
-        if (!double.IsNaN(WindowSize.Width) && !double.IsNaN(WindowSize.Height))
-            _backend.SetClientSize(WindowSize.Width, WindowSize.Height);
+        if (!double.IsNaN(WindowSize.Width) || !double.IsNaN(WindowSize.Height))
+        {
+            // Push the spec'd axes; a fit axis (NaN) keeps its current value until the fit
+            // branch submits its content-derived target.
+            _backend.SetClientSize(
+                double.IsNaN(WindowSize.Width) ? _clientSizeDip.Width : WindowSize.Width,
+                double.IsNaN(WindowSize.Height) ? _clientSizeDip.Height : WindowSize.Height);
+        }
+
+        // A fresh backend starts a fresh sizing transaction.
+        _hasRequestedClientSize = false;
         if (Topmost)
             _backend.SetTopmost(true);
         if (!ShowInTaskbar)

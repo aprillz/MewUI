@@ -460,12 +460,18 @@ internal sealed class X11WindowBackend : IWindowBackend
             return;
         }
 
+        // Record the request optimistically (the async ConfigureNotify confirms the applied size),
+        // then refresh WM_NORMAL_HINTS before resizing: a non-resizable window pins
+        // PMinSize == PMaxSize to the current size, and the stale pin would make the WM reject a
+        // content-driven fit resize (issue #199).
+        Window.SetClientSizeDip(widthDip, heightDip);
+        ApplyResizeMode();
+
         double dpiScale = Window.DpiScale <= 0 ? 1.0 : Window.DpiScale;
         uint widthPx = (uint)Math.Max(1, (int)Math.Round(widthDip * dpiScale));
         uint heightPx = (uint)Math.Max(1, (int)Math.Round(heightDip * dpiScale));
 
         NativeX11.XResizeWindow(Display, Handle, widthPx, heightPx);
-        Window.SetClientSizeDip(widthDip, heightDip);
         NativeX11.XFlush(Display);
     }
 

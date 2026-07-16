@@ -504,7 +504,13 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         if (_nsWindow != 0)
         {
             MacOSWindowInterop.SetClientSize(_nsWindow, widthDip, heightDip);
-            _window.SetClientSizeDip(widthDip, heightDip);
+
+            // setContentSize: is synchronous but AppKit may clamp (titled-window minimums);
+            // record the applied content size, not the request.
+            var applied = MacOSWindowInterop.GetContentSize(_nsWindow);
+            _window.SetClientSizeDip(
+                applied.Width > 0 ? applied.Width : widthDip,
+                applied.Height > 0 ? applied.Height : heightDip);
         }
     }
 
@@ -1037,8 +1043,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         }
 
         var requestedSize = GetInitialClientSize();
-        MacOSWindowInterop.SetClientSize(_nsWindow, requestedSize.Width, requestedSize.Height);
-        _window.SetClientSizeDip(requestedSize.Width, requestedSize.Height);
+        SetClientSize(requestedSize.Width, requestedSize.Height);
     }
 
     private Size GetInitialClientSize()
