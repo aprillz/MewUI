@@ -17,6 +17,12 @@ Commit messages must be written in English.
 
   * Use bullet points only with the `- ` prefix.
   * Keep bullets short and factual.
+  * Write bullets as concise release-note statements, not long prose.
+  * Keep one semantic change per bullet.
+  * Include a concrete reason, constraint, or user-visible behavior when it
+    distinguishes the change.
+  * Avoid abstract benefits such as consistency or simplicity unless the
+    change directly demonstrates them.
   * Wrap lines at approximately 72 characters.
   * Omit the body unless it provides important context not already
     expressed by the subject.
