@@ -25,6 +25,12 @@ Label statusLabel = null!;
 Label sizeLabel = null!;
 Label drawTimeLabel = null!;
 Label fileCountLabel = null!;
+DispatcherTimer renderRateTimer = null!;
+
+var fpsText = new ObservableValue<string>("FPS: -");
+var fpsStopwatch = new System.Diagnostics.Stopwatch();
+var fpsFrames = 0;
+var maxFpsEnabled = new ObservableValue<bool>(false);
 
 SvgDocument? currentDocument = null;
 string[] svgFiles = LoadSvgFiles();
@@ -44,8 +50,11 @@ var root = new Window()
             new TabControl()
                 .TabItems(
                     new TabItem()
-                        .Header("Icons")
-                        .Content(IconsView()),
+                        .Header("Simple Icons")
+                        .Content(IconsView("simple_icons")),
+                    new TabItem()
+                        .Header("Fluent Icons")
+                        .Content(IconsView("fluent_icons")),
                     new TabItem()
                         .Header("Issues")
                         .Content(IssuesView())
@@ -53,10 +62,16 @@ var root = new Window()
         )
         .OnLoaded(() =>
         {
-            // Bind here (not at StatusBar() construction) — vectorPreview's `out` slot is
+            // Bind here (not at StatusBar() construction) - vectorPreview's `out` slot is
             // populated only after Body() runs, which happens after StatusBar() in arg order.
             drawTimeLabel.Bind(Label.TextProperty, vectorPreview, SvgView.LastDrawTimeProperty,
                 ts => ts == TimeSpan.Zero ? string.Empty : $"Draw: {ts.GetText()}");
+
+            // Refresh the FPS readout once a second even if frames stop (so it falls back to 0 when idle).
+            renderRateTimer = new DispatcherTimer()
+                .IntervalMs(1000)
+                .OnTick(() => CheckFps());
+            renderRateTimer.Start();
 
             string? startupFile = null;
 
@@ -77,10 +92,50 @@ var root = new Window()
                 LoadFile(svgFiles[initialIndex]);
             }
         })
-        .OnClosed(ReleaseCurrentPreview)
+        .OnFrameRendered(() =>
+        {
+            if (!fpsStopwatch.IsRunning)
+            {
+                fpsStopwatch.Restart();
+                fpsFrames = 0;
+                return;
+            }
+
+            fpsFrames++;
+            CheckFps();
+        })
+        .OnClosed(() =>
+        {
+            ReleaseCurrentPreview();
+            maxFpsEnabled.Value = false;
+        })
     );
 
 Application.Run(root);
+
+void CheckFps()
+{
+    double elapsed = fpsStopwatch.Elapsed.TotalSeconds;
+    if (elapsed >= 1.0)
+    {
+        fpsText.Value = $"FPS: {(fpsFrames <= 1 ? 0 : fpsFrames) / elapsed:0.0}";
+        fpsFrames = 0;
+        fpsStopwatch.Restart();
+    }
+}
+
+void EnsureMaxFpsLoop()
+{
+    if (!Application.IsRunning)
+    {
+        return;
+    }
+
+    var scheduler = Application.Current.RenderLoopSettings;
+    scheduler.TargetFps = 0;
+    scheduler.VSyncEnabled = !maxFpsEnabled.Value;
+    scheduler.SetContinuous(maxFpsEnabled.Value);
+}
 
 // The original SVG issue viewer (file list + source editor + vector/PNG preview).
 Element IssuesView() => new DockPanel()
@@ -96,12 +151,12 @@ Element IssuesView() => new DockPanel()
 // Parses every .svg in icons.zip up front (data), then shows them through a virtualized
 // WrapPresenter (only visible rows are realized). Loads all entries to exercise parse-all cost
 // while keeping the visual tree bounded by virtualization.
-Element IconsView()
+Element IconsView(string iconSet)
 {
     var sources = new List<SvgImageSource>();
     string header;
 
-    string zipPath = Path.Combine(AppContext.BaseDirectory, "icons.zip");
+    string zipPath = Path.Combine(AppContext.BaseDirectory, $"{iconSet}.zip");
     if (File.Exists(zipPath))
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -133,35 +188,50 @@ Element IconsView()
         }
         stopwatch.Stop();
 
-        header = $"icons.zip — {sources.Count} icons (ZIP entry -> SvgImageSource), virtualized WrapPresenter | parse {stopwatch.ElapsedMilliseconds} ms";
+        header = $"icons.zip - {sources.Count} icons (ZIP entry -> SvgImageSource), virtualized WrapPresenter | parse {stopwatch.ElapsedMilliseconds} ms";
     }
     else
     {
         header = "icons.zip was not found in the output directory.";
     }
 
+    var iconSize = new ObservableValue<double>(32);
+    var padding = 4;
     var icons = new ItemsControl()
-        .WrapPresenter(48, 48)
+        .WrapPresenter(iconSize.Value + padding * 2, iconSize.Value + padding * 2)
+        .ItemPadding(padding)
         .ItemsSource(ItemsView.Create(sources))
         .ItemTemplate(new DelegateTemplate<SvgImageSource>(
-            build: ctx => new Image()
-                .Register(ctx, "Img")
-                .StretchMode(Stretch.Uniform),
+            build: ctx =>
+            {
+                var img = new Image()
+                    .Register(ctx, "Img")
+                    .StretchMode(Stretch.Uniform);
+                return img;
+            },
             bind: (view, item, index, ctx) =>
-                ctx.Get<Image>("Img").Source(item)));
+                ctx.Get<Image>("Img").Bind(Image.WidthProperty, iconSize).Bind(Image.HeightProperty, iconSize).Source(item)));
 
     // S/M/L radio buttons resize the virtualized tiles by re-applying the WrapPresenter
     // (SetPresenter keeps ItemsSource/ItemTemplate + scroll offset).
-    void SetIconSize(double size) => icons.WrapPresenter(size, size);
+    void SetIconSize(double size)
+    {
+        iconSize.Value = size;
+        icons.WrapPresenter(size + padding * 2, size + padding * 2);
+    }
 
     var sizeBar = new StackPanel()
         .Horizontal()
         .Spacing(8)
         .Children(
             new Label().Text("Size:").CenterVertical(),
-            new RadioButton().Content("S").GroupName("IconSize").CenterVertical().OnChecked(() => SetIconSize(32)),
-            new RadioButton().Content("M").GroupName("IconSize").CenterVertical().IsChecked().OnChecked(() => SetIconSize(64)),
-            new RadioButton().Content("L").GroupName("IconSize").CenterVertical().OnChecked(() => SetIconSize(128)));
+            new RadioButton().Content("16").CenterVertical().BindIsChecked(iconSize, x => x == 16, x => (x, 16.0)).OnChecked(() => SetIconSize(16)),
+            new RadioButton().Content("32").CenterVertical().BindIsChecked(iconSize, x => x == 32, x => (x, 32.0)).OnChecked(() => SetIconSize(32)),
+            new RadioButton().Content("64").CenterVertical().BindIsChecked(iconSize, x => x == 64, x => (x, 64.0)).OnChecked(() => SetIconSize(64)),
+            new RadioButton().Content("128").CenterVertical().BindIsChecked(iconSize, x => x == 128, x => (x, 128.0)).OnChecked(() => SetIconSize(128)),
+            new CheckBox().Content("Max FPS").CenterVertical().BindIsChecked(maxFpsEnabled)
+                .OnCheckedChanged(_ => EnsureMaxFpsLoop()),
+            new Label().CenterVertical().BindText(fpsText));
 
     return new DockPanel()
         .Padding(12)
@@ -205,7 +275,7 @@ static Dictionary<string, string> LoadIconColors(ZipArchive archive)
     }
     catch
     {
-        // No color metadata — icons render untinted.
+        // No color metadata - icons render untinted.
     }
 
     return map;
