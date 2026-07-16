@@ -165,7 +165,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         set => EstimatedItemHeight = value;
     }
 
-    public double DesiredContentHeight
+    public double PreferredViewportHeight
     {
         get
         {
@@ -176,7 +176,6 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     }
 
     public bool FillsAvailableWidth => true;
-    public bool IsNonVirtualized => false;
 
     public VariableHeightItemsPresenter()
     {

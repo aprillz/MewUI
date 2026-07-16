@@ -116,7 +116,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
 
     public bool UseHorizontalExtentForLayout { get; set; }
 
-    public double DesiredContentHeight
+    public double PreferredViewportHeight
     {
         get
         {
@@ -127,7 +127,6 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
     }
 
     public bool FillsAvailableWidth => false;
-    public bool IsNonVirtualized => false;
 
     public event Action<Point>? OffsetCorrectionRequested;
 

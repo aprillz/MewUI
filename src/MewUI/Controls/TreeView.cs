@@ -337,6 +337,30 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
     }
 
     /// <summary>
+    /// Gets or sets the horizontal scrollbar mode. Items wider than the viewport scroll
+    /// horizontally (default: Auto).
+    /// </summary>
+    public ScrollMode HorizontalScroll
+    {
+        get => GetValue(HorizontalScrollProperty);
+        set => SetValue(HorizontalScrollProperty, value);
+    }
+
+    public static readonly MewProperty<ScrollMode> HorizontalScrollProperty =
+        MewProperty<ScrollMode>.Register<TreeView>(nameof(HorizontalScroll), ScrollMode.Auto, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self.OnHorizontalScrollChanged());
+
+    private void OnHorizontalScrollChanged()
+    {
+        // Disabled lays items out at the viewport width so Ellipsis trimming can engage;
+        // scrollable modes lay out at the natural extent width instead.
+        if (_presenter != null)
+        {
+            _presenter.UseHorizontalExtentForLayout = HorizontalScroll != ScrollMode.Disabled;
+        }
+    }
+
+    /// <summary>
     /// Initializes a new instance of the TreeView class.
     /// </summary>
     public TreeView()
@@ -361,11 +385,11 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         _scrollViewer = new ScrollViewer
         {
             VerticalScroll = ScrollMode.Auto,
-            HorizontalScroll = ScrollMode.Auto,
             BorderThickness = 0,
             Background = default,
             Content = _presenter,
         };
+        _scrollViewer.SetBinding(ScrollViewer.HorizontalScrollProperty, this, HorizontalScrollProperty);
         _scrollViewer.Parent = this;
         _scrollViewer.SetBinding(PaddingProperty, this, PaddingProperty);
         _scrollViewer.ScrollChanged += OnScrollViewerChanged;
@@ -669,19 +693,11 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
         UpdateObservedExtentWidthFromRealized();
         extentWidth = Math.Max(extentWidth, _observedExtentWidth);
 
-        double desiredWidth;
-        if (HorizontalAlignment == HorizontalAlignment.Stretch && !double.IsPositiveInfinity(widthLimit))
-        {
-            desiredWidth = widthLimit;
-        }
-        else if (double.IsPositiveInfinity(widthLimit))
-        {
-            desiredWidth = extentWidth;
-        }
-        else
-        {
-            desiredWidth = Math.Min(extentWidth, widthLimit);
-        }
+        // Desired width is the natural item width regardless of alignment: stretch is an arrange
+        // concern (issue #199).
+        double desiredWidth = double.IsPositiveInfinity(widthLimit)
+            ? extentWidth
+            : Math.Min(extentWidth, widthLimit);
 
         double itemHeight = ResolveItemHeight();
         double height = _itemsSource.Count * GetPixelAlignedItemHeight();
@@ -806,6 +822,9 @@ public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoView
                 {
                     IsHitTestVisible = false,
                     TextWrapping = TextWrapping.NoWrap,
+                    // Engages only when items are laid out at the viewport width
+                    // (HorizontalScroll = Disabled); scrollable modes get the full extent width.
+                    TextTrimming = TextTrimming.CharacterEllipsis,
                 },
             bind: (view, item, index, _) =>
             {

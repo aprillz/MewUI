@@ -148,10 +148,10 @@ public sealed class ItemsControl : ScrollableItemsBase
         double maxWidth;
         int count = ItemsSource.Count;
 
-        // Some presenters (Variable, Stack) always fill available width.
-        // Stretch alignment also fills available width without measuring individual items.
-        bool useFullWidth = !double.IsPositiveInfinity(widthLimit) &&
-            (HorizontalAlignment == HorizontalAlignment.Stretch || _presenter.FillsAvailableWidth);
+        // Some presenters (Variable, Stack, Wrap) fill available width by their own contract.
+        // Alignment must not leak into Measure: desired width is the natural item width, stretch
+        // is applied by the arrange pass (issue #199).
+        bool useFullWidth = !double.IsPositiveInfinity(widthLimit) && _presenter.FillsAvailableWidth;
 
         if (useFullWidth)
         {
@@ -170,7 +170,7 @@ public sealed class ItemsControl : ScrollableItemsBase
                 {
                     double itemHeightEstimate = ResolveItemHeight();
                     double viewportEstimate = double.IsPositiveInfinity(availableSize.Height)
-                        ? _presenter.DesiredContentHeight
+                        ? _presenter.PreferredViewportHeight
                         : Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2);
 
                     int visibleEstimate = itemHeightEstimate <= 0 ? count : (int)Math.Ceiling(viewportEstimate / itemHeightEstimate) + 1;
@@ -189,7 +189,8 @@ public sealed class ItemsControl : ScrollableItemsBase
                         maxWidth = Math.Max(maxWidth, _textWidthCache.GetOrMeasure(measure.Context, measure.Font, dpi, text) + itemPadW);
                         if (maxWidth >= widthLimit)
                         {
-                            maxWidth = widthLimit;
+                            // Stop measuring, but keep the uncapped width: the scroll extent must
+                            // stay natural (desired is clamped separately).
                             break;
                         }
                     }
@@ -208,14 +209,14 @@ public sealed class ItemsControl : ScrollableItemsBase
                         maxWidth = Math.Max(maxWidth, _textWidthCache.GetOrMeasure(measure.Context, measure.Font, dpi, text) + itemPadW);
                         if (maxWidth >= widthLimit)
                         {
-                            maxWidth = widthLimit;
+                            // Stop measuring, but keep the uncapped width: the scroll extent must
+                            // stay natural (desired is clamped separately).
                             break;
                         }
                     }
                 }
             }
 
-            maxWidth = Math.Min(maxWidth, widthLimit);
         }
 
         double itemHeight = ResolveItemHeight();
@@ -228,18 +229,17 @@ public sealed class ItemsControl : ScrollableItemsBase
             double.IsPositiveInfinity(availableSize.Height) ? double.PositiveInfinity : Math.Max(0, availableSize.Height - borderInset * 2));
         _scrollViewer.Measure(childAvailable);
 
-        double desiredHeight;
-        if (_presenter.IsNonVirtualized || double.IsPositiveInfinity(availableSize.Height))
-        {
-            desiredHeight = _presenter.DesiredContentHeight;
-        }
-        else
-        {
-            desiredHeight = Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2);
-        }
+        double heightLimit = double.IsPositiveInfinity(availableSize.Height)
+            ? double.PositiveInfinity
+            : Math.Max(0, availableSize.Height - Padding.VerticalThickness - borderInset * 2);
+
+        // Preferred viewport height clamped to the constraint: echoing the full available height
+        // made fit-content windows expand to their max (issue #199). The real viewport still
+        // arrives via Arrange/SetViewport, so virtualization is unaffected.
+        double desiredHeight = Math.Min(_presenter.PreferredViewportHeight, heightLimit);
 
         return new Size(
-            Math.Max(0, maxWidth + Padding.HorizontalThickness + borderInset * 2),
+            Math.Max(0, Math.Min(maxWidth, widthLimit) + Padding.HorizontalThickness + borderInset * 2),
             Math.Max(0, desiredHeight + Padding.VerticalThickness + borderInset * 2));
     }
 

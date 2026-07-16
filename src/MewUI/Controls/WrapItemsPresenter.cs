@@ -69,9 +69,8 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
     public double ItemHeightHint { get => ItemHeight; set { /* Wrap uses its own ItemHeight; ignore hint */ } }
     public bool UseHorizontalExtentForLayout { get; set; }
     public bool FillsAvailableWidth => true;
-    public bool IsNonVirtualized => false;
 
-    public double DesiredContentHeight
+    public double PreferredViewportHeight
     {
         get
         {

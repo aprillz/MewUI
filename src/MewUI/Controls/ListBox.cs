@@ -259,6 +259,30 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
     }
 
     /// <summary>
+    /// Gets or sets the horizontal scrollbar mode. Items wider than the viewport scroll
+    /// horizontally (default: Auto).
+    /// </summary>
+    public ScrollMode HorizontalScroll
+    {
+        get => GetValue(HorizontalScrollProperty);
+        set => SetValue(HorizontalScrollProperty, value);
+    }
+
+    public static readonly MewProperty<ScrollMode> HorizontalScrollProperty =
+        MewProperty<ScrollMode>.Register<ListBox>(nameof(HorizontalScroll), ScrollMode.Auto, MewPropertyOptions.AffectsLayout,
+            static (self, _, _) => self.OnHorizontalScrollChanged());
+
+    private void OnHorizontalScrollChanged()
+    {
+        // Disabled lays items out at the viewport width so Ellipsis trimming can engage;
+        // scrollable modes lay out at the natural extent width instead.
+        if (_presenter != null)
+        {
+            _presenter.UseHorizontalExtentForLayout = HorizontalScroll != ScrollMode.Disabled;
+        }
+    }
+
+    /// <summary>
     /// Initializes a new instance of the ListBox class.
     /// </summary>
     public ListBox()
@@ -268,7 +292,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
             value => SetValue(SelectedItemProperty, value),
             value => SetValue(SelectedItemsPropertyKey, value));
 
-        _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
+        // Same policy as TreeView: items wider than the viewport scroll horizontally
+        // (the presenter reports its natural width as the scroll extent).
+        _scrollViewer.SetBinding(ScrollViewer.HorizontalScrollProperty, this, HorizontalScrollProperty);
 
         ItemPadding = Theme.Metrics.ItemPadding;
 
@@ -335,6 +361,7 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         presenter.BeforeItemRender = OnBeforeItemRender;
         presenter.ItemPadding = ItemPadding;
         presenter.ItemHeightHint = ResolveItemHeight();
+        presenter.UseHorizontalExtentForLayout = HorizontalScroll != ScrollMode.Disabled;
         presenter.OffsetCorrectionRequested += OnPresenterOffsetCorrectionRequested;
     }
 
@@ -366,11 +393,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         double maxWidth;
         int count = ItemsSource.Count;
 
-        if (HorizontalAlignment == HorizontalAlignment.Stretch && !double.IsPositiveInfinity(widthLimit))
-        {
-            maxWidth = widthLimit;
-        }
-        else
+        // Desired width is the natural item width regardless of alignment: stretch is an arrange
+        // concern, and echoing the constraint made fit-content sizing impossible (issue #199).
         {
             using var measure = BeginTextMeasurement();
 
@@ -399,7 +423,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
                     maxWidth = Math.Max(maxWidth, _textWidthCache.GetOrMeasure(measure.Context, measure.Font, dpi, item) + itemPadW);
                     if (maxWidth >= widthLimit)
                     {
-                        maxWidth = widthLimit;
+                        // Stop measuring, but keep the uncapped width: the scroll extent must stay
+                        // natural (desired is clamped separately) so wide items can h-scroll.
                         break;
                     }
                 }
@@ -428,7 +453,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
                     maxWidth = Math.Max(maxWidth, _textWidthCache.GetOrMeasure(measure.Context, measure.Font, dpi, item) + itemPadW);
                     if (maxWidth >= widthLimit)
                     {
-                        maxWidth = widthLimit;
+                        // Stop measuring, but keep the uncapped width: the scroll extent must stay
+                        // natural (desired is clamped separately) so wide items can h-scroll.
                         break;
                     }
                 }
@@ -446,12 +472,12 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
 
         // - FixedHeight/VariableHeight/Stack: count * itemHeight
         // - Wrap: rows * itemHeight
-        double height = _presenter.DesiredContentHeight;
+        double height = _presenter.PreferredViewportHeight;
         if (height <= 0)
             height = count * itemHeight;
 
         return new Size(
-            Math.Max(0, maxWidth + Padding.HorizontalThickness + borderInset * 2),
+            Math.Max(0, Math.Min(maxWidth, widthLimit) + Padding.HorizontalThickness + borderInset * 2),
             Math.Max(0, height + Padding.VerticalThickness + borderInset * 2));
     }
 
@@ -713,6 +739,9 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
                 {
                     IsHitTestVisible = false,
                     TextWrapping = TextWrapping.NoWrap,
+                    // Engages only when items are laid out at the viewport width
+                    // (HorizontalScroll = Disabled); scrollable modes get the full extent width.
+                    TextTrimming = TextTrimming.CharacterEllipsis,
                 },
             bind: (view, _, index, _) =>
             {

@@ -239,7 +239,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
             double.IsPositiveInfinity(availableSize.Width) ? double.PositiveInfinity : Math.Max(0, availableSize.Width - borderInset * 2),
             double.IsPositiveInfinity(availableSize.Height) ? double.PositiveInfinity : Math.Max(0, availableSize.Height - borderInset * 2)));
 
-        double height = _presenter.DesiredContentHeight;
+        double height = _presenter.PreferredViewportHeight;
         if (height <= 0)
         {
             height = ItemsSource.Count * ResolveItemHeight();

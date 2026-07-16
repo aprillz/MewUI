@@ -3,27 +3,24 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI.Concept;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Regression test for issue #199:
-//   Window.FitContentSize() with an empty ListBox hung the UI thread and the window
-//   never appeared.
+// Regression checks for issue #199. Two independent defects:
+//   1) The update pass rescheduled itself for pass-internal invalidation while the
+//      dirty-scan convergence check never went false for windows containing overlay
+//      chrome - together the fit-content layout spun at 100% CPU. Fixed by the
+//      generation-based update scheduler in Window.
+//   2) List controls echoed the finite measure constraint as their desired size when
+//      stretched, so FitContentSize() always landed on its max (a 1000x18 sliver)
+//      instead of the content. Fixed by keeping alignment out of Measure: desired
+//      size is the natural content size, stretch is applied at arrange.
 //
-// The bug: the fit-content branch of PerformLayout compared its target against the
-// APPLIED client size. An empty ListBox asks for almost no height (just its border),
-// the OS refuses that and clamps to its minimum window size, so applied != target
-// forever. Every layout therefore re-requested the same target, and the synchronous
-// WM_SIZE that SetWindowPos delivers re-entered PerformLayout -> never terminates.
-//
-// The fix: compare against the last REQUESTED target instead. A refused target is
-// asked for exactly once and the size the OS actually applied is what gets laid out.
-//
-// This file gives two checks:
-//   1) Liveness - the buttons open the repro windows. With the bug the first one never
-//                 appears (the UI thread is stuck before the window is shown).
-//   2) Asserted - measures a detached empty ListBox to show the width it really asks
-//                 for. This settles the "ListBox width looks infinite and overflows"
-//                 report: it never asks for infinity, it asks for ALL of whatever
-//                 finite width it is offered (stretch), which is also why
-//                 FitContentSize() grows the window to its max width.
+// Buttons:
+//   - "#199 repro" / "Repro, no DockPanel": the issue code verbatim. Both must open
+//     small content-sized windows (OS minimum permitting) without hanging, and must
+//     behave identically (DockPanel is a pass-through for a single fill child).
+//   - plain / sliver / refused-target / grow-shrink: regression cases around fit
+//     sizing and stretch arrange.
+//   - "Re-check": measures a detached empty ListBox and asserts its desired width is
+//     content based - never the offered constraint, never infinite.
 // ─────────────────────────────────────────────────────────────────────────────
 internal static class Issue199FitContentTest
 {
@@ -55,7 +52,7 @@ internal static class Issue199FitContentTest
                             Text = "Each button opens its own window. With the bug, the first one never appears.",
                             FontSize = 12,
                         },
-                        new StackPanel()
+                        new WrapPanel()
                             .Horizontal()
                             .Spacing(8)
                             .Children(
@@ -66,6 +63,8 @@ internal static class Issue199FitContentTest
                                 new Button().Content("Plain 1000x18 sliver + ListBox").OnClick(OpenPlainSliver),
                                 new Button().Content("Refused target (10x10)").OnClick(OpenRefusedTarget),
                                 new Button().Content("Grow / shrink").OnClick(OpenGrowShrink),
+                                new Button().Content("Long item h-scroll").OnClick(() => OpenLongItem(true)),
+                                new Button().Content("Long item without h-scroll").OnClick(() => OpenLongItem(false)),
                                 new Button().Content("Re-check").OnClick(() => status.Text = RunCheck())),
                         status));
 
@@ -86,21 +85,18 @@ internal static class Issue199FitContentTest
         double finiteWidth = finite.DesiredSize.Width;
         double unboundedWidth = unbounded.DesiredSize.Width;
 
-        //   Report: "the width looks infinite" -> would mean unboundedWidth is Infinity -> FAIL
-        //   Actual: an unbounded ListBox falls back to its items, so an empty one asks for ~0 -> PASS
-        bool pass = double.IsFinite(unboundedWidth);
-        bool takesAll = Math.Abs(finiteWidth - PROBE) < 0.5;
+        // Desired size must be content based: never the offered constraint (stretch is an arrange
+        // concern), never infinite.
+        bool contentBased = finiteWidth < PROBE / 2;
+        bool neverInfinite = double.IsFinite(unboundedWidth);
+        bool pass = contentBased && neverInfinite;
 
         return
-            $"{(pass ? "PASS" : "FAIL")}  (empty ListBox never asks for infinite width)\n" +
+            $"{(pass ? "PASS" : "FAIL")}  (desired size is content based; alignment never inflates Measure)\n" +
             $"measured at {PROBE:0}x{PROBE:0} : desired = {finiteWidth:0.#} x {finite.DesiredSize.Height:0.#}" +
-            $"   ({(takesAll ? "takes the WHOLE offered width (stretch)" : "sizes to its items")})\n" +
+            $"   (must be item sized, not the offered width)\n" +
             $"measured at infinity   : desired = {unboundedWidth:0.#} x {unbounded.DesiredSize.Height:0.#}" +
-            $"   (must be finite)\n" +
-            "\n" +
-            "A stretched ListBox asks for all the width it is offered, so FitContentSize() grows the\n" +
-            "window to its max width (1000 by default). Its height, though, is only its border when the\n" +
-            "list is empty - that is the tiny value the OS refuses, which is what issue #199 looped on.";
+            $"   (must be finite)";
     }
 
     /// <summary>The literal issue #199 code.</summary>
@@ -233,6 +229,32 @@ internal static class Issue199FitContentTest
             .FitContentSize(600, 600);
 
         ShowAndReport(window, "grow-shrink", null);
+    }
+
+    /// <summary>
+    /// A stretched ListBox with an item wider than the viewport: the scroll extent stays the
+    /// natural item width, so a horizontal scroll bar must appear and scroll the long item.
+    /// </summary>
+    private static void OpenLongItem(bool hScroll)
+    {
+        var list = new ListBox();
+        list.ItemsSource = ItemsView.Create(new[]
+        {
+            "short",
+            "this item is deliberately much wider than the 300 DIP viewport - drag the horizontal bar to scroll it into view",
+            "also short",
+        });
+        list.HorizontalScroll = hScroll ? ScrollMode.Auto : ScrollMode.Disabled;
+
+        var window = new Window()
+            .Title("Long item: horizontal scroll in a stretched ListBox")
+            .Resizable(300, 200)
+            .Content(
+                new DockPanel().Children(
+                    list
+                ));
+
+        ShowAndReport(window, "long item", list);
     }
 
     private static void ShowAndReport(Window window, string label, ListBox? list)

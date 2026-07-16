@@ -110,10 +110,9 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     public event Action<Point>? OffsetCorrectionRequested;
 
-    public double DesiredContentHeight => _totalHeight;
+    public double PreferredViewportHeight => _totalHeight;
 
     public bool FillsAvailableWidth => true;
-    public bool IsNonVirtualized => true;
 
     /// <summary>
     /// Gets the total measured height of all items.
