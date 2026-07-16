@@ -44,6 +44,15 @@ Commit messages must be written in English.
 * Interpret the diff as a before-and-after transformation of the code, not
   as an independent list of added and removed lines.
 * Identify the single primary semantic change across the entire diff.
+* Describe the final conceptual API model rather than compatibility
+  overloads or adapters used to implement it.
+* When a broader type replaces a narrower model while the previous API is
+  retained for compatibility, describe the change as a generalization in
+  the subject and record the compatibility mechanism in the body.
+* Prefer a before-and-after type description when it identifies the API
+  change precisely. For example, prefer
+  `Generalize NavigationView icons from PathGeometry to Element` over
+  `Add Element icon overloads to NavigationView`.
 * Determine the final code structure before choosing verbs such as `Add`,
   `Remove`, `Replace`, `Convert`, `Move`, or `Rename`.
 * When removed and added members represent the same concept in a different
@@ -90,6 +99,20 @@ Commit messages must be written in English.
   primary change was implemented.
 * Include a body only when it adds independently meaningful context,
   constraints, or a secondary change.
+* Treat public API compatibility, ownership or lifetime requirements, and
+  user-visible behavior needed for release notes as independently
+  meaningful context when they are not already clear from the subject.
+* Do not omit the body when release notes would otherwise require
+  reconstructing the API contract or compatibility details from the diff.
+
+### Issue references
+
+* When the available repository context identifies a related issue or pull
+  request, append its number to the subject as `(#NNN)`.
+* Do not invent an issue or pull request number when none can be determined
+  from the available context.
+* Do not generate standalone reference footers such as `Refs #NNN` or
+  closing keywords such as `Fixes #NNN`.
 
 ### Project context
 
