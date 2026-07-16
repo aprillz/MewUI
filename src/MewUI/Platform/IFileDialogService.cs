@@ -21,8 +21,20 @@ public interface IFileDialogService
     string? SelectFolder(FolderDialogOptions options);
 
     /// <summary>
-    /// Whether a native OS file dialog can actually be shown on this platform right now. Used by the
-    /// Auto backend to decide between native and the managed in-framework dialog.
+    /// Whether a native OS file dialog can actually be shown on this platform right now. Used to resolve
+    /// a native preference to either the native or managed in-framework dialog.
     /// </summary>
     bool IsNativeDialogAvailable() => true;
+}
+
+/// <summary>
+/// Signals that a native dialog became unavailable while it was being opened. Callers may safely retry
+/// the request with the managed dialog; user cancellation must not be represented by this exception.
+/// </summary>
+internal sealed class NativeDialogUnavailableException : Exception
+{
+    public NativeDialogUnavailableException(string message, Exception? innerException = null)
+        : base(message, innerException)
+    {
+    }
 }

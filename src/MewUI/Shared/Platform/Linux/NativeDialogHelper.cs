@@ -3,7 +3,7 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI.Platform.Linux;
 
 /// <summary>
-/// Shared helpers for native Linux dialogs (XDG portal, zenity/kdialog): bridge an async/blocking dialog to
+/// Shared helpers for XDG Desktop Portal dialogs: bridge an asynchronous portal request to
 /// the synchronous service contract via a nested event loop (keeps the UI responsive) and make it modal by
 /// disabling the owner window for the dialog's duration.
 /// </summary>

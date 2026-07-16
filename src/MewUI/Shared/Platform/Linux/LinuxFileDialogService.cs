@@ -3,14 +3,17 @@ namespace Aprillz.MewUI.Platform.Linux;
 internal sealed class LinuxFileDialogService : IFileDialogService
 {
     public string[]? OpenFile(OpenFileDialogOptions options)
-        => LinuxExternalDialogs.OpenFile(options);
+        => throw Unavailable();
 
     public string? SaveFile(SaveFileDialogOptions options)
-        => LinuxExternalDialogs.SaveFile(options);
+        => throw Unavailable();
 
     public string? SelectFolder(FolderDialogOptions options)
-        => LinuxExternalDialogs.SelectFolder(options);
+        => throw Unavailable();
 
     public bool IsNativeDialogAvailable()
-        => LinuxExternalDialogs.IsToolAvailable();
+        => false;
+
+    private static NativeDialogUnavailableException Unavailable()
+        => new("No native Linux file-dialog service is available.");
 }

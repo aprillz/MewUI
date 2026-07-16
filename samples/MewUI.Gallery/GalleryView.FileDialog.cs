@@ -14,8 +14,8 @@ partial class GalleryView
             new FileFilter("All files", "*.*"),
         };
 
-        // One card per backend: every action inside forces that backend via options.Backend.
-        FrameworkElement BackendCard(string title, FileDialogBackend backend)
+        // One card per preference: native is preferred when requested, with managed fallback.
+        FrameworkElement BackendCard(string title, bool preferNative)
         {
             var status = new ObservableValue<string>("Result: -");
 
@@ -26,7 +26,7 @@ partial class GalleryView
                     Owner = window,
                     Title = "Open File",
                     Filters = filters,
-                    Backend = backend,
+                    PreferNative = preferNative,
                 });
                 status.Value = path is null ? "Result: canceled" : $"Result: {path}";
             }
@@ -38,7 +38,7 @@ partial class GalleryView
                     Owner = window,
                     Title = "Open Files",
                     Filters = filters,
-                    Backend = backend,
+                    PreferNative = preferNative,
                 });
                 status.Value = files is null || files.Length == 0
                     ? "Result: canceled"
@@ -54,7 +54,7 @@ partial class GalleryView
                     Filters = filters,
                     FileName = "untitled.txt",
                     DefaultExtension = "txt",
-                    Backend = backend,
+                    PreferNative = preferNative,
                 });
                 status.Value = path is null ? "Result: canceled" : $"Result: {path}";
             }
@@ -65,7 +65,7 @@ partial class GalleryView
                 {
                     Owner = window,
                     Title = "Select Folder",
-                    Backend = backend,
+                    PreferNative = preferNative,
                 });
                 status.Value = folder is null ? "Result: canceled" : $"Result: {folder}";
             }
@@ -84,7 +84,7 @@ partial class GalleryView
         }
 
         return CardGrid(
-            BackendCard("Managed", FileDialogBackend.Managed),
-            BackendCard("Native", FileDialogBackend.Native));
+            BackendCard("Managed", preferNative: false),
+            BackendCard("Prefer Native", preferNative: true));
     }
 }

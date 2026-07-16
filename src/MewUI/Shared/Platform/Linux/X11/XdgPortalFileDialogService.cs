@@ -9,9 +9,8 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 
 /// <summary>
 /// File dialogs via the XDG Desktop Portal (<c>org.freedesktop.portal.FileChooser</c>) over DBus.
-/// Preferred Linux native path (sandbox-friendly, honors the desktop's native chooser); falls back to
-/// external tools when the portal is unavailable. Async portal calls are bridged to the synchronous
-/// <see cref="IFileDialogService"/> via a nested event loop.
+/// Preferred Linux native path (sandbox-friendly and honors the desktop's native chooser). Async portal
+/// calls are bridged to the synchronous <see cref="IFileDialogService"/> via a nested event loop.
 /// </summary>
 internal sealed class XdgPortalFileDialogService : IFileDialogService
 {
@@ -49,22 +48,43 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
 
     public string[]? OpenFile(OpenFileDialogOptions options)
     {
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
-        return NativeDialogHelper.PumpUntil(OpenFileAsync(options));
+        try
+        {
+            using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
+            return NativeDialogHelper.PumpUntil(OpenFileAsync(options));
+        }
+        catch (Exception ex) when (ex is not NativeDialogUnavailableException)
+        {
+            throw new NativeDialogUnavailableException("XDG Desktop Portal failed to open a file dialog.", ex);
+        }
     }
 
     public string? SaveFile(SaveFileDialogOptions options)
     {
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
-        var result = NativeDialogHelper.PumpUntil(SaveFileAsync(options));
-        return result is { Length: > 0 } ? result[0] : null;
+        try
+        {
+            using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
+            var result = NativeDialogHelper.PumpUntil(SaveFileAsync(options));
+            return result is { Length: > 0 } ? result[0] : null;
+        }
+        catch (Exception ex) when (ex is not NativeDialogUnavailableException)
+        {
+            throw new NativeDialogUnavailableException("XDG Desktop Portal failed to open a save dialog.", ex);
+        }
     }
 
     public string? SelectFolder(FolderDialogOptions options)
     {
-        using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
-        var result = NativeDialogHelper.PumpUntil(SelectFolderAsync(options));
-        return result is { Length: > 0 } ? result[0] : null;
+        try
+        {
+            using var modal = NativeDialogHelper.BeginOwnerModal(options.Owner?.Handle ?? 0);
+            var result = NativeDialogHelper.PumpUntil(SelectFolderAsync(options));
+            return result is { Length: > 0 } ? result[0] : null;
+        }
+        catch (Exception ex) when (ex is not NativeDialogUnavailableException)
+        {
+            throw new NativeDialogUnavailableException("XDG Desktop Portal failed to open a folder dialog.", ex);
+        }
     }
 
     public bool IsNativeDialogAvailable() => IsAvailable();
@@ -178,20 +198,32 @@ internal sealed class XdgPortalFileDialogService : IFileDialogService
         var parentWindow = owner != 0 ? "x11:" + owner.ToString("x") : string.Empty;
 
         var request = new Request(connection, Destination, expectedPath);
-        var tcs = new TaskCompletionSource<string[]?>();
+        var tcs = new TaskCompletionSource<string[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var subscription = await request.WatchResponseAsync(notification =>
         {
             if (notification.IsCompletion)
             {
                 tcs.TrySetException(notification.Exception!);
             }
-            else if (notification.Value.Results.TryGetValue("uris", out var uris))
-            {
-                tcs.TrySetResult(uris.GetArray<string>());
-            }
             else
             {
-                tcs.TrySetResult(null); // user cancelled
+                switch (notification.Value.Response)
+                {
+                    case 0 when notification.Value.Results.TryGetValue("uris", out var uris):
+                        tcs.TrySetResult(uris.GetArray<string>());
+                        break;
+                    case 0:
+                        tcs.TrySetException(new InvalidOperationException(
+                            "XDG Desktop Portal returned success without selected URIs."));
+                        break;
+                    case 1:
+                        tcs.TrySetResult(null); // user cancelled
+                        break;
+                    default:
+                        tcs.TrySetException(new InvalidOperationException(
+                            $"XDG Desktop Portal ended the request with response {notification.Value.Response}."));
+                        break;
+                }
             }
         }, ObserverFlags.EmitAll);
 

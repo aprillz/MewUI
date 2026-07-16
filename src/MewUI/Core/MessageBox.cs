@@ -26,33 +26,45 @@ public enum NativeMessageBoxIcon : uint
 }
 
 /// <summary>
-/// Native platform message box (synchronous only).
+/// Native-preferred platform message box (synchronous only), with managed fallback while the application runs.
 /// </summary>
 public static class NativeMessageBox
 {
-    private static nint ResolveOwnerHandle(nint owner)
+    private static Window? ResolveOwnerWindow(nint owner)
     {
-        if (owner != 0 || !Application.IsRunning)
+        if (!Application.IsRunning)
         {
-            return owner;
+            return null;
         }
 
         var windows = Application.Current.AllWindows;
+        if (owner != 0)
+        {
+            for (int i = 0; i < windows.Count; i++)
+            {
+                if (windows[i].Handle == owner)
+                {
+                    return windows[i];
+                }
+            }
+            return null;
+        }
+
         for (int i = 0; i < windows.Count; i++)
         {
             var w = windows[i];
             if (w.IsActive && w.Handle != 0)
-                return w.Handle;
+                return w;
         }
 
         for (int i = 0; i < windows.Count; i++)
         {
             var w = windows[i];
             if (w.Handle != 0)
-                return w.Handle;
+                return w;
         }
 
-        return 0;
+        return null;
     }
 
     public static bool? Show(string text, string caption = "Aprillz.MewUI", NativeMessageBoxButtons buttons = NativeMessageBoxButtons.Ok, NativeMessageBoxIcon icon = NativeMessageBoxIcon.None)
@@ -61,9 +73,61 @@ public static class NativeMessageBox
     public static bool? Show(nint owner, string text, string caption = "Aprillz.MewUI", NativeMessageBoxButtons buttons = NativeMessageBoxButtons.Ok, NativeMessageBoxIcon icon = NativeMessageBoxIcon.None)
     {
         var host = Application.IsRunning ? Application.Current.PlatformHost : Application.DefaultPlatformHost;
-        owner = ResolveOwnerHandle(owner);
-        return host.MessageBox.Show(owner, text ?? string.Empty, caption ?? string.Empty, buttons, icon);
+        var ownerWindow = ResolveOwnerWindow(owner);
+        if (owner == 0)
+        {
+            owner = ownerWindow?.Handle ?? 0;
+        }
+
+        Exception? nativeFailure = null;
+        try
+        {
+            if (host.MessageBox.IsNativeDialogAvailable())
+            {
+                return host.MessageBox.Show(owner, text ?? string.Empty, caption ?? string.Empty, buttons, icon);
+            }
+        }
+        catch (Exception ex)
+        {
+            nativeFailure = ex;
+            DiagLog.Write($"[messagebox] Native dialog failed; falling back to managed. {ex.GetType().Name}");
+        }
+
+        if (!Application.IsRunning)
+        {
+            throw new PlatformNotSupportedException(
+                "No native message box is available and managed fallback requires a running MewUI application.",
+                nativeFailure);
+        }
+
+        return MessageBox.Prompt(new MessageBoxOptions
+        {
+            Message = text ?? string.Empty,
+            Title = caption ?? string.Empty,
+            Icon = ToManagedIcon(icon),
+            Buttons = ToManagedButtons(buttons),
+            Owner = ownerWindow,
+        });
     }
+
+    internal static PromptIconKind ToManagedIcon(NativeMessageBoxIcon icon) => icon switch
+    {
+        NativeMessageBoxIcon.None => PromptIconKind.None,
+        NativeMessageBoxIcon.Information => PromptIconKind.Info,
+        NativeMessageBoxIcon.Warning => PromptIconKind.Warning,
+        NativeMessageBoxIcon.Error => PromptIconKind.Error,
+        NativeMessageBoxIcon.Question => PromptIconKind.Question,
+        _ => PromptIconKind.None,
+    };
+
+    internal static IReadOnlyList<MessageButton> ToManagedButtons(NativeMessageBoxButtons buttons) => buttons switch
+    {
+        NativeMessageBoxButtons.Ok => MessageBoxWindow.ButtonsOk,
+        NativeMessageBoxButtons.OkCancel => MessageBoxWindow.ButtonsOkCancel,
+        NativeMessageBoxButtons.YesNo => MessageBoxWindow.ButtonsYesNo,
+        NativeMessageBoxButtons.YesNoCancel => MessageBoxWindow.ButtonsYesNoCancel,
+        _ => MessageBoxWindow.ButtonsOk,
+    };
 }
 
 /// <summary>

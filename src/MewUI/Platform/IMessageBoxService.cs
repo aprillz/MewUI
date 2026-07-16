@@ -5,6 +5,9 @@ namespace Aprillz.MewUI.Platform;
 /// </summary>
 public interface IMessageBoxService
 {
+    /// <summary>Whether this platform can show a native message box.</summary>
+    bool IsNativeDialogAvailable() => true;
+
     /// <summary>
     /// Shows a message box and returns the user selection.
     /// </summary>

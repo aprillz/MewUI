@@ -301,13 +301,17 @@ Currently implemented:
 - Linux/X11 (`Aprillz.MewUI.Platform.X11`)
 - macOS (`Aprillz.MewUI.Platform.MacOS`)
 
-### Linux dialogs dependency
-On Linux, `MessageBox` and file dialogs are currently implemented via external tools:
-- `zenity` (GNOME/GTK)
-- `kdialog` (KDE)
+### Dialog integration
 
-If neither is available in `PATH`, MewUI throws:
-`PlatformNotSupportedException: No supported Linux dialog tool found (zenity/kdialog).`
+Prompt and file/folder services are routed through the platform abstraction. Managed MewUI `MessageBox` prompts support both synchronous and asynchronous use and are the recommended cross-platform choice. `NativeMessageBox` is optional when an OS-provided prompt is specifically desired, and falls back to managed when native integration is unavailable.
+
+MewUI provides cross-platform managed file and folder dialogs. By default, file and folder dialogs prefer native integration (`PreferNative = true`) and fall back to managed when it is unavailable or fails:
+
+- Windows uses Win32 file/folder dialogs.
+- macOS uses AppKit file/folder dialogs.
+- Linux/X11 uses XDG Desktop Portal. Portal unavailability or failure falls back to managed dialogs.
+
+Set `PreferNative` to `false` to use the managed dialog directly.
 
 ---
 ## 📄Docs

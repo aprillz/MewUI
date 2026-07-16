@@ -2,18 +2,18 @@ namespace Aprillz.MewUI.Platform.Linux.X11;
 
 internal sealed class X11FileDialogService : IFileDialogService
 {
-    // Prefer the XDG Desktop Portal (native, sandbox-friendly); fall back to external tools (zenity/kdialog).
+    // XDG Desktop Portal is the only native Linux file-dialog path. Core falls back to managed.
     private readonly XdgPortalFileDialogService _portal = new();
 
     public string[]? OpenFile(OpenFileDialogOptions options)
-        => XdgPortalFileDialogService.IsAvailable() ? _portal.OpenFile(options) : LinuxExternalDialogs.OpenFile(options);
+        => _portal.OpenFile(options);
 
     public string? SaveFile(SaveFileDialogOptions options)
-        => XdgPortalFileDialogService.IsAvailable() ? _portal.SaveFile(options) : LinuxExternalDialogs.SaveFile(options);
+        => _portal.SaveFile(options);
 
     public string? SelectFolder(FolderDialogOptions options)
-        => XdgPortalFileDialogService.IsAvailable() ? _portal.SelectFolder(options) : LinuxExternalDialogs.SelectFolder(options);
+        => _portal.SelectFolder(options);
 
     public bool IsNativeDialogAvailable()
-        => XdgPortalFileDialogService.IsAvailable() || LinuxExternalDialogs.IsToolAvailable();
+        => XdgPortalFileDialogService.IsAvailable();
 }
