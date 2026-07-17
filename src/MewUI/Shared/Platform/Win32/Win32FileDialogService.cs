@@ -16,18 +16,20 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
             flags |= OFN_ALLOWMULTISELECT;
         }
 
-        return ShowOpenOrSave(
-            isSave: false,
-            owner: options.Owner?.Handle ?? 0,
-            title: options.Title,
-            initialDirectory: options.InitialDirectory,
-            filter: FileDialogFilters.ToLegacyFilterString(options.Filters),
-            defaultExtension: null,
-            fileName: null,
-            flags: flags,
-            out var selected)
+        // Runs on an STA worker with a nested UI loop (like SelectFolder) so MewUI keeps rendering
+        // behind the native dialog's own modal message loop instead of freezing.
+        return StaHelper.Run(() => ShowOpenOrSave(
+                isSave: false,
+                owner: options.Owner?.Handle ?? 0,
+                title: options.Title,
+                initialDirectory: options.InitialDirectory,
+                filter: FileDialogFilters.ToLegacyFilterString(options.Filters),
+                defaultExtension: null,
+                fileName: null,
+                flags: flags,
+                out var selected)
             ? selected
-            : null;
+            : null);
     }
 
     public string? SaveFile(SaveFileDialogOptions options)
@@ -40,21 +42,24 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
             flags |= OFN_OVERWRITEPROMPT;
         }
 
-        if (!ShowOpenOrSave(
-                isSave: true,
-                owner: options.Owner?.Handle ?? 0,
-                title: options.Title,
-                initialDirectory: options.InitialDirectory,
-                filter: FileDialogFilters.ToLegacyFilterString(options.Filters),
-                defaultExtension: options.DefaultExtension,
-                fileName: options.FileName,
-                flags: flags,
-                out var selected))
+        return StaHelper.Run(() =>
         {
-            return null;
-        }
+            if (!ShowOpenOrSave(
+                    isSave: true,
+                    owner: options.Owner?.Handle ?? 0,
+                    title: options.Title,
+                    initialDirectory: options.InitialDirectory,
+                    filter: FileDialogFilters.ToLegacyFilterString(options.Filters),
+                    defaultExtension: options.DefaultExtension,
+                    fileName: options.FileName,
+                    flags: flags,
+                    out var selected))
+            {
+                return null;
+            }
 
-        return selected is { Length: > 0 } ? selected[0] : null;
+            return selected is { Length: > 0 } ? selected[0] : null;
+        });
     }
 
     public string? SelectFolder(FolderDialogOptions options)

@@ -3,20 +3,26 @@ namespace Aprillz.MewUI.Platform.Win32;
 internal static class StaHelper
 {
     /// <summary>
-    /// Runs <paramref name="func"/> on an STA thread and returns its result. While the application loop is
-    /// running, pumps a nested loop so rendering and input stay live (same pattern as the X11 portal helper).
+    /// Runs <paramref name="func"/> on a dedicated STA thread and returns its result. While the application
+    /// loop is running, the calling (UI) thread pumps a nested loop so rendering stays live while
+    /// <paramref name="func"/> runs a blocking native modal (same pattern as the X11 portal helper).
     /// </summary>
     public static T Run<T>(Func<T> func)
     {
         ArgumentNullException.ThrowIfNull(func);
 
-        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        bool appRunning = Application.IsRunning;
+
+        // With no running loop there is nothing to keep painting, so an STA caller can just call straight
+        // through. When the loop IS running we must offload even from an STA UI thread: otherwise the
+        // native modal's own message loop blocks this thread and MewUI stops rendering behind the dialog.
+        if (!appRunning && Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
         {
             return func();
         }
 
         // Capture on the calling thread; the app can be quitting by the time the worker finishes.
-        var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
+        var dispatcher = appRunning ? Application.Current.Dispatcher : null;
 
         T result = default!;
         Exception? exception = null;
@@ -48,7 +54,7 @@ internal static class StaHelper
 #pragma warning restore CA1416 // Validate platform compatibility
         thread.Start();
 
-        if (Application.IsRunning)
+        if (appRunning)
         {
             Application.Current.PlatformHost.RunNestedLoop(() => !done.IsSet);
         }
