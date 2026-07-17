@@ -910,7 +910,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
                     // render every tick while animations are active to advance their clocks.
                     // Otherwise honor the standard NeedsRender flag - the dispatcher will dispatch
                     // its own WM_INVOKE inside the modal pump and flip the flag at its own pace.
-                    if (AnimationManager.Instance.ActiveCount > 0)
+                    if (AnimationManager.Instance.HasRenderDemand)
                     {
                         RenderNow();
                     }

@@ -2463,7 +2463,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         ArgumentNullException.ThrowIfNull(surface);
         var clientSize = _clientSizeDip;
         var target = _cachedRenderTarget;
-        if (target == null || !target.Matches(surface))
+        if (target == null || !target.TryUpdateSurface(surface))
         {
             // Surface or pixel size changed - cached context references stale handles.
             _renderContext?.Dispose();

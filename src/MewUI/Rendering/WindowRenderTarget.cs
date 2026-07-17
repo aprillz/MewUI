@@ -18,20 +18,41 @@ internal sealed class WindowRenderTarget : IRenderTarget
     /// <inheritdoc/>
     public double DpiScale { get; }
 
-    public Platform.IWindowSurface Surface { get; }
+    public Platform.IWindowSurface Surface { get; private set; }
+
+    private readonly Type _surfaceType;
+    private readonly nint _surfaceHandle;
+    private readonly Platform.PlatformDisplayIdentity _displayIdentity;
 
     public WindowRenderTarget(Platform.IWindowSurface surface)
     {
         Surface = surface ?? throw new ArgumentNullException(nameof(surface));
+        _surfaceType = surface.GetType();
+        _surfaceHandle = surface.Handle;
+        _displayIdentity = surface.DisplayIdentity;
         PixelWidth = Math.Max(1, surface.PixelWidth);
         PixelHeight = Math.Max(1, surface.PixelHeight);
         DpiScale = surface.DpiScale <= 0 ? 1.0 : surface.DpiScale;
     }
 
-    internal bool Matches(Platform.IWindowSurface surface)
+    internal bool TryUpdateSurface(Platform.IWindowSurface surface)
     {
-        return ReferenceEquals(Surface, surface)
-            && PixelWidth == Math.Max(1, surface.PixelWidth)
-            && PixelHeight == Math.Max(1, surface.PixelHeight);
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var dpiScale = surface.DpiScale <= 0 ? 1.0 : surface.DpiScale;
+        if (_surfaceType != surface.GetType()
+            || _surfaceHandle != surface.Handle
+            || _displayIdentity != surface.DisplayIdentity
+            || PixelWidth != Math.Max(1, surface.PixelWidth)
+            || PixelHeight != Math.Max(1, surface.PixelHeight)
+            || DpiScale != dpiScale)
+        {
+            return false;
+        }
+
+        // Platform backends may create a lightweight wrapper for every paint. Keep the cached
+        // graphics context, but expose the newest wrapper to BeginFrame/presentation code.
+        Surface = surface;
+        return true;
     }
 }

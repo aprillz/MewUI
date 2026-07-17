@@ -49,6 +49,17 @@ public sealed class AnimationManager
         get { lock (_sync) { return _active.Count; } }
     }
 
+    internal bool HasRenderDemand
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return HasUnpausedClock();
+            }
+        }
+    }
+
     internal void Register(AnimationClock clock)
     {
         lock (_sync)
@@ -79,6 +90,21 @@ public sealed class AnimationManager
             else
             {
                 _active.Remove(clock);
+                DisableContinuousModeIfIdle();
+            }
+        }
+    }
+
+    internal void OnPauseStateChanged()
+    {
+        lock (_sync)
+        {
+            if (HasUnpausedClock())
+            {
+                EnableContinuousMode();
+            }
+            else
+            {
                 DisableContinuousModeIfIdle();
             }
         }
@@ -145,7 +171,7 @@ public sealed class AnimationManager
 
     private void DisableContinuousModeIfIdle()
     {
-        if (_active.Count > 0 || _pendingAdd.Count > 0)
+        if (HasUnpausedClock())
         {
             return;
         }
@@ -158,6 +184,27 @@ public sealed class AnimationManager
         Application.Current.RenderLoopSettings.AnimationActive = false;
     }
 
+    private bool HasUnpausedClock()
+    {
+        for (int i = 0; i < _active.Count; i++)
+        {
+            if (_active[i].IsRunning && !_active[i].IsPaused)
+            {
+                return true;
+            }
+        }
+
+        for (int i = 0; i < _pendingAdd.Count; i++)
+        {
+            if (_pendingAdd[i].IsRunning && !_pendingAdd[i].IsPaused)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Resets the singleton instance. For testing purposes only.
     /// </summary>
@@ -168,10 +215,10 @@ public sealed class AnimationManager
         {
             lock (instance._sync)
             {
-                instance.DisableContinuousModeIfIdle();
                 instance._active.Clear();
                 instance._pendingAdd.Clear();
                 instance._pendingRemove.Clear();
+                instance.DisableContinuousModeIfIdle();
             }
         }
     }

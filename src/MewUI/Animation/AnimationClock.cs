@@ -132,6 +132,7 @@ public sealed class AnimationClock
 
         _isPaused = true;
         _pauseTimestamp = Stopwatch.GetTimestamp();
+        AnimationManager.Instance.OnPauseStateChanged();
     }
 
     /// <summary>
@@ -146,6 +147,7 @@ public sealed class AnimationClock
 
         _isPaused = false;
         _pauseAccumulated += Stopwatch.GetTimestamp() - _pauseTimestamp;
+        AnimationManager.Instance.OnPauseStateChanged();
     }
 
     /// <summary>
