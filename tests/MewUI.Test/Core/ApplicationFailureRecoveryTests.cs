@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Platform;
 
 namespace MewUI.Test.Core;
@@ -37,6 +38,72 @@ public sealed class ApplicationFailureRecoveryTests
         Assert.IsTrue(successful.Disposed);
     }
 
+    [TestMethod]
+    public void FailedRuntime_ReleasesPreRunTimerSubscription()
+    {
+        EnsureRegistered();
+        using var timer = new DispatcherTimer(TimeSpan.FromMilliseconds(10));
+        timer.Start();
+        Assert.IsTrue(timer.IsEnabled);
+
+        Hosts.Enqueue(new FailurePlatformHost(throwFromFontDefaults: true));
+        Assert.ThrowsExactly<InvalidOperationException>(() => Application.Run(new Window()));
+
+        Assert.IsFalse(timer.IsEnabled);
+    }
+
+    [TestMethod]
+    public void RuntimeEnd_ClearsDragRouterStaticState()
+    {
+        EnsureRegistered();
+        var source = new Border { CanDrag = true };
+        var mainWindow = new Window { Content = source };
+        Hosts.Enqueue(new FailurePlatformHost(onRun: (_, window) =>
+        {
+            WindowDragDropRouter.OnMouseDown(window, new Point(1, 1), new Point(10, 10), source);
+            Assert.IsTrue(WindowDragDropRouter.HasPendingState);
+        }));
+
+        Application.Run(mainWindow);
+
+        Assert.IsFalse(WindowDragDropRouter.HasPendingState);
+    }
+
+    [TestMethod]
+    public void ThemeBroadcast_UsesStableWindowAndAdornerSnapshots()
+    {
+        EnsureRegistered();
+        int addedWindowNotifications = 0;
+        var addedWindow = new Window();
+        addedWindow.ThemeChanged += (_, _) => addedWindowNotifications++;
+
+        var mainWindow = new Window();
+        var adorned = new Border();
+        var secondAdorner = new ThemeProbeElement();
+        var firstAdorner = new ThemeProbeElement
+        {
+            Callback = () => mainWindow.RemoveAdornerInternal(secondAdorner),
+        };
+        mainWindow.AddAdornerInternal(adorned, firstAdorner);
+        mainWindow.AddAdornerInternal(adorned, secondAdorner);
+
+        Hosts.Enqueue(new FailurePlatformHost(onRun: (app, window) =>
+        {
+            window.ThemeChanged += (_, _) =>
+            {
+                app.UnregisterWindow(window);
+                app.RegisterWindow(addedWindow);
+            };
+            app.SetTheme(ThemeVariant.Dark);
+        }));
+
+        Application.Run(mainWindow);
+
+        Assert.AreEqual(1, firstAdorner.NotificationCount);
+        Assert.AreEqual(1, secondAdorner.NotificationCount);
+        Assert.AreEqual(0, addedWindowNotifications);
+    }
+
     private static void EnsureRegistered()
     {
         if (_registered)
@@ -48,7 +115,10 @@ public sealed class ApplicationFailureRecoveryTests
         _registered = true;
     }
 
-    private sealed class FailurePlatformHost(bool throwFromFontDefaults = false, bool throwFromRun = false) : IPlatformHost
+    private sealed class FailurePlatformHost(
+        bool throwFromFontDefaults = false,
+        bool throwFromRun = false,
+        Action<Application, Window>? onRun = null) : IPlatformHost
     {
         public bool Disposed { get; private set; }
         public Application? RunningApplication { get; private set; }
@@ -74,6 +144,8 @@ public sealed class ApplicationFailureRecoveryTests
             {
                 throw new InvalidOperationException("run failure");
             }
+
+            onRun?.Invoke(app, mainWindow);
         }
 
         public void Quit(Application app) { }
@@ -81,4 +153,16 @@ public sealed class ApplicationFailureRecoveryTests
         public void Dispose() => Disposed = true;
     }
 
+    private sealed class ThemeProbeElement : ContentControl
+    {
+        public int NotificationCount { get; private set; }
+        public Action? Callback { get; init; }
+
+        protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+        {
+            base.OnThemeChanged(oldTheme, newTheme);
+            NotificationCount++;
+            Callback?.Invoke();
+        }
+    }
 }

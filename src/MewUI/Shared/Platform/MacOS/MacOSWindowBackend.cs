@@ -1102,9 +1102,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         {
             _window.RaiseClosed();
         }
-        catch
+        catch (Exception ex)
         {
-            // Never let exceptions escape the native callback.
+            // Never let exceptions escape the native callback, but preserve dispatcher error semantics.
+            Application.RouteLifecycleException(ex);
         }
     }
 

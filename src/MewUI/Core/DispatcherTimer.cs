@@ -232,6 +232,16 @@ public sealed class DispatcherTimer : IDisposable
     {
         if (dispatcher == null)
         {
+            lock (_gate)
+            {
+                // Runtime shutdown also covers hosts that failed before installing a dispatcher.
+                // Disable the timer so it neither retains this instance through the static event
+                // nor silently resumes in a later Application.Run.
+                _isEnabled = false;
+                _scheduled?.Dispose();
+                _scheduled = null;
+                UnsubscribeFromDispatcherChanged();
+            }
             return;
         }
 
