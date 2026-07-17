@@ -340,9 +340,9 @@ public abstract class MewObject : IPropertyOwner
 
     /// <summary>
     /// Binds a <see cref="MewProperty{T}"/> on this object to a <see cref="MewProperty{T}"/> on a source object.
-    /// When the source property changes, this object's property is updated at the style (target) tier,
-    /// so local values on this object still take precedence.
-    /// Replaces any existing binding for the same property.
+    /// When the source property changes, this object's property is written as a local value,
+    /// overwriting any local value set on this object; to set a local value over a bound property,
+    /// clear the binding first. Replaces any existing binding for the same property.
     /// </summary>
     public void SetBinding<T>(MewProperty<T> property, MewObject source, MewProperty<T> sourceProperty)
     {
