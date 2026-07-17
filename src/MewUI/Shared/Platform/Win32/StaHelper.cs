@@ -1,10 +1,12 @@
-using System.Runtime.Versioning;
-
 namespace Aprillz.MewUI.Platform.Win32;
 
 internal static class StaHelper
 {
-    public static T Run<T>(Func<T> func, Action? pump = null)
+    /// <summary>
+    /// Runs <paramref name="func"/> on an STA thread and returns its result. While the application loop is
+    /// running, pumps a nested loop so rendering and input stay live (same pattern as the X11 portal helper).
+    /// </summary>
+    public static T Run<T>(Func<T> func)
     {
         ArgumentNullException.ThrowIfNull(func);
 
@@ -12,6 +14,9 @@ internal static class StaHelper
         {
             return func();
         }
+
+        // Capture on the calling thread; the app can be quitting by the time the worker finishes.
+        var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
 
         T result = default!;
         Exception? exception = null;
@@ -30,6 +35,8 @@ internal static class StaHelper
             finally
             {
                 done.Set();
+                // The worker finishes off the UI thread; poke the dispatcher so the nested loop wakes and re-checks.
+                dispatcher?.BeginInvoke(static () => { });
             }
         })
         {
@@ -41,11 +48,12 @@ internal static class StaHelper
 #pragma warning restore CA1416 // Validate platform compatibility
         thread.Start();
 
-        while (!done.IsSet)
+        if (Application.IsRunning)
         {
-            pump?.Invoke();
-            Thread.Sleep(1);
+            Application.Current.PlatformHost.RunNestedLoop(() => !done.IsSet);
         }
+
+        done.Wait();
 
         if (exception != null)
         {
@@ -55,4 +63,3 @@ internal static class StaHelper
         return result;
     }
 }
-
