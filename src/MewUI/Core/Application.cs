@@ -227,12 +227,36 @@ public sealed class Application
                 throw new InvalidOperationException("Application is already running.");
             }
 
-            var host = DefaultPlatformHost;
-            var app = new Application(host);
-            _current = app;
-            _ = app.Theme;
-            app.RegisterWindow(mainWindow);
-            app.RunCore(mainWindow);
+            Application? app = null;
+            try
+            {
+                var host = DefaultPlatformHost;
+                app = new Application(host);
+                _current = app;
+                _ = app.Theme;
+                app.RegisterWindow(mainWindow);
+                app.RunCore(mainWindow);
+            }
+            finally
+            {
+                try
+                {
+                    if (app != null)
+                    {
+                        app._windows.Clear();
+                        app.Dispatcher = null;
+                    }
+                }
+                finally
+                {
+                    _current = null;
+
+                    // Platform hosts are run-scoped. Clear the process reference before disposing so a
+                    // throwing Dispose cannot strand a stale host and prevent the next Application.Run.
+                    var host = Interlocked.Exchange(ref _defaultPlatformHost, null);
+                    host?.Dispose();
+                }
+            }
         }
     }
 
@@ -281,12 +305,6 @@ public sealed class Application
     private void RunCore(Window mainWindow)
     {
         PlatformHost.Run(this, mainWindow);
-        _current = null;
-
-        // Platform hosts are created fresh per run, so dispose them. Graphics factories are process singletons
-        // held by the persistent provider, so there is nothing to clear or dispose here.
-        _defaultPlatformHost?.Dispose();
-        _defaultPlatformHost = null;
 
         var fatal = Interlocked.Exchange(ref _pendingFatalException, null);
         if (fatal != null)

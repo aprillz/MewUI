@@ -77,17 +77,16 @@ public enum DispatcherOperationStatus
 /// </summary>
 public sealed class DispatcherOperation
 {
-    private volatile DispatcherOperationStatus _status;
+    private int _status;
     private volatile DispatcherPriority _priority;
-    internal Action? Action;
+    private Action? _action;
 
 
     internal DispatcherOperation(DispatcherPriority priority, Action action)
     {
         _priority = priority;
-        Action = action;
-
-        _status = DispatcherOperationStatus.Pending;
+        _action = action;
+        _status = (int)DispatcherOperationStatus.Pending;
     }
 
 
@@ -102,7 +101,7 @@ public sealed class DispatcherOperation
         get => _priority;
         set
         {
-            if (_status == DispatcherOperationStatus.Pending)
+            if (Status == DispatcherOperationStatus.Pending)
             {
                 _priority = value;
             }
@@ -112,7 +111,7 @@ public sealed class DispatcherOperation
     /// <summary>
     /// Gets the current status of this operation.
     /// </summary>
-    public DispatcherOperationStatus Status => _status;
+    public DispatcherOperationStatus Status => (DispatcherOperationStatus)Volatile.Read(ref _status);
 
     /// <summary>
     /// Attempts to abort the operation. Returns <see langword="true"/> if the operation
@@ -120,18 +119,40 @@ public sealed class DispatcherOperation
     /// </summary>
     public bool Abort()
     {
-        if (_status != DispatcherOperationStatus.Pending)
+        if (Interlocked.CompareExchange(
+                ref _status,
+                (int)DispatcherOperationStatus.Aborted,
+                (int)DispatcherOperationStatus.Pending) != (int)DispatcherOperationStatus.Pending)
         {
             return false;
         }
 
-        _status = DispatcherOperationStatus.Aborted;
-        Action = null;
+        Interlocked.Exchange(ref _action, null);
         return true;
     }
 
-    internal void MarkExecuting() => _status = DispatcherOperationStatus.Executing;
-    internal void MarkCompleted() => _status = DispatcherOperationStatus.Completed;
+    internal bool TryMarkExecuting()
+        => Interlocked.CompareExchange(
+            ref _status,
+            (int)DispatcherOperationStatus.Executing,
+            (int)DispatcherOperationStatus.Pending) == (int)DispatcherOperationStatus.Pending;
+
+    internal Action TakeActionForExecution()
+        => Interlocked.Exchange(ref _action, null)
+            ?? throw new InvalidOperationException("Dispatcher operation action was not available after execution started.");
+
+    internal void MarkCompleted()
+    {
+        bool completed = Interlocked.CompareExchange(
+            ref _status,
+            (int)DispatcherOperationStatus.Completed,
+            (int)DispatcherOperationStatus.Executing) == (int)DispatcherOperationStatus.Executing;
+
+        if (!completed && Status != DispatcherOperationStatus.Aborted)
+        {
+            throw new InvalidOperationException($"Cannot complete dispatcher operation from state {Status}.");
+        }
+    }
 }
 
 /// <summary>
