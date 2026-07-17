@@ -250,13 +250,26 @@ internal sealed class GdiGLReadbackSkiaSurfaceHost : ISkiaSurfaceHost, IOpaqueAw
 
     private void ReleaseSurfaceResources()
     {
-        _image?.Dispose(); _image = null;
-        _skSurface?.Dispose(); _skSurface = null;
-        _renderTarget?.Dispose(); _renderTarget = null;
+        // Skia surface/render-target disposal and the GL deletes below issue GL calls; they only
+        // take effect against this host's context, so make it current and restore the caller's.
+        nint prevDc = WglBootstrap.wglGetCurrentDC();
+        nint prevRc = WglBootstrap.wglGetCurrentContext();
+        bool switched = _hglrc != 0 && prevRc != _hglrc;
+        if (_hglrc != 0) MakeContextCurrent();
+        try
+        {
+            _image?.Dispose(); _image = null;
+            _skSurface?.Dispose(); _skSurface = null;
+            _renderTarget?.Dispose(); _renderTarget = null;
 
-        if (_glFbo != 0) { uint fbo = _glFbo; unsafe { SkiaGLInterop.DeleteFramebuffers(1, &fbo); } _glFbo = 0; }
-        if (_glStencil != 0) { uint rb = _glStencil; unsafe { SkiaGLInterop.DeleteRenderbuffers(1, &rb); } _glStencil = 0; }
-        if (_glTexture != 0) { uint t = _glTexture; SkiaGLInterop.DeleteTextures(1, ref t); _glTexture = 0; }
+            if (_glFbo != 0) { uint fbo = _glFbo; unsafe { SkiaGLInterop.DeleteFramebuffers(1, &fbo); } _glFbo = 0; }
+            if (_glStencil != 0) { uint rb = _glStencil; unsafe { SkiaGLInterop.DeleteRenderbuffers(1, &rb); } _glStencil = 0; }
+            if (_glTexture != 0) { uint t = _glTexture; SkiaGLInterop.DeleteTextures(1, ref t); _glTexture = 0; }
+        }
+        finally
+        {
+            if (switched) WglBootstrap.wglMakeCurrent(prevDc, prevRc);
+        }
 
         if (_dibHandle != 0) { GdiDibInterop.DeleteObject(_dibHandle); _dibHandle = 0; _dibBits = 0; }
 
@@ -269,6 +282,10 @@ internal sealed class GdiGLReadbackSkiaSurfaceHost : ISkiaSurfaceHost, IOpaqueAw
         if (_disposed) return;
         _disposed = true;
 
+        nint prevDc = WglBootstrap.wglGetCurrentDC();
+        nint prevRc = WglBootstrap.wglGetCurrentContext();
+        if (_hglrc != 0) MakeContextCurrent();
+
         ReleaseSurfaceResources();
 
         _grContext?.Dispose(); _grContext = null;
@@ -276,7 +293,16 @@ internal sealed class GdiGLReadbackSkiaSurfaceHost : ISkiaSurfaceHost, IOpaqueAw
 
         if (_hglrc != 0)
         {
-            WglBootstrap.wglMakeCurrent(0, 0);
+            // Restore the caller's context; never leave the soon-deleted context current.
+            if (prevRc != 0 && prevRc != _hglrc)
+            {
+                WglBootstrap.wglMakeCurrent(prevDc, prevRc);
+            }
+            else
+            {
+                WglBootstrap.wglMakeCurrent(0, 0);
+            }
+
             WglBootstrap.wglDeleteContext(_hglrc);
             _hglrc = 0;
         }

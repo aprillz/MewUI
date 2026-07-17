@@ -25,6 +25,7 @@ internal sealed class SkiaMetalSurfaceHost : ISkiaSurfaceHost
     private int _pixelWidth;
     private int _pixelHeight;
     private bool _disposed;
+    private bool _surfaceInvalidated;
 
     // One sync Paint after each size change to dodge the recreation-frame Skia/MewVG race.
     private bool _flushSyncForNextPaint;
@@ -36,7 +37,7 @@ internal sealed class SkiaMetalSurfaceHost : ISkiaSurfaceHost
 
     public int PixelWidth => _pixelWidth;
     public int PixelHeight => _pixelHeight;
-    public bool SurfaceInvalidated => false;
+    public bool SurfaceInvalidated => _surfaceInvalidated;
     public string Description => "GPU zero-copy (Skia Metal → MewVG Metal)";
 
     public bool EnsureSurface(int pixelWidth, int pixelHeight)
@@ -47,6 +48,7 @@ internal sealed class SkiaMetalSurfaceHost : ISkiaSurfaceHost
         if (_surface != null && pixelWidth == _pixelWidth && pixelHeight == _pixelHeight) return true;
 
         ReleaseSurfaceResources();
+        _surfaceInvalidated = false;
         _pixelWidth = pixelWidth;
         _pixelHeight = pixelHeight;
         _flushSyncForNextPaint = true;
@@ -86,10 +88,10 @@ internal sealed class SkiaMetalSurfaceHost : ISkiaSurfaceHost
         using var writeScope = _renderSurface.BeginExternalWrite();
         if (HasWriteAffinityChanged(writeScope))
         {
-            _surface?.Dispose(); _surface = null;
-            _backendTexture?.Dispose(); _backendTexture = null;
-            _image?.Dispose(); _image = null;
-            _writeAffinity = null;
+            // Same recovery contract as the GL host: drop everything and let the view
+            // recreate via SurfaceInvalidated instead of demoting to the CPU path forever.
+            ReleaseSurfaceResources();
+            _surfaceInvalidated = true;
             return null;
         }
 
@@ -150,7 +152,7 @@ internal sealed class SkiaMetalSurfaceHost : ISkiaSurfaceHost
     private bool HasWriteAffinityChanged(IExternalGpuWriteScope scope)
     {
         var current = (scope as IGpuResourceAffinityProvider)?.Affinity;
-        return _writeAffinity is { } previous && current is { } next && previous != next;
+        return _writeAffinity is GpuResourceAffinity previous && current is GpuResourceAffinity next && previous != next;
     }
 
     private void ReleaseSurfaceResources()

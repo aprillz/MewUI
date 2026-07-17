@@ -284,33 +284,46 @@ internal sealed class SkiaWglInteropHost : ISkiaSurfaceHost
 
     private void ReleaseSurfaceResources()
     {
-        _image?.Dispose(); _image = null;
-        _surface?.Dispose(); _surface = null;
-        _renderTarget?.Dispose(); _renderTarget = null;
+        // Skia surface disposal, DXUnregisterObject and the GL deletes below issue GL calls; they
+        // only take effect against this host's context, so make it current and restore the caller's.
+        nint prevDc = WglD2DInterop.wglGetCurrentDC();
+        nint prevRc = WglD2DInterop.wglGetCurrentContext();
+        bool switched = _hglrc != 0 && prevRc != _hglrc;
+        if (_hglrc != 0) MakeContextCurrent();
+        try
+        {
+            _image?.Dispose(); _image = null;
+            _surface?.Dispose(); _surface = null;
+            _renderTarget?.Dispose(); _renderTarget = null;
 
-        if (_wglObject != 0 && _wglDevice != 0)
-        {
-            WglD2DInterop.DXUnregisterObject(_wglDevice, _wglObject);
-            _wglObject = 0;
-        }
+            if (_wglObject != 0 && _wglDevice != 0)
+            {
+                WglD2DInterop.DXUnregisterObject(_wglDevice, _wglObject);
+                _wglObject = 0;
+            }
 
-        if (_glFbo != 0)
-        {
-            uint fbo = _glFbo;
-            unsafe { SkiaGLInterop.DeleteFramebuffers(1, &fbo); }
-            _glFbo = 0;
+            if (_glFbo != 0)
+            {
+                uint fbo = _glFbo;
+                unsafe { SkiaGLInterop.DeleteFramebuffers(1, &fbo); }
+                _glFbo = 0;
+            }
+            if (_glStencil != 0)
+            {
+                uint rb = _glStencil;
+                unsafe { SkiaGLInterop.DeleteRenderbuffers(1, &rb); }
+                _glStencil = 0;
+            }
+            if (_glTexture != 0)
+            {
+                uint t = _glTexture;
+                SkiaGLInterop.DeleteTextures(1, ref t);
+                _glTexture = 0;
+            }
         }
-        if (_glStencil != 0)
+        finally
         {
-            uint rb = _glStencil;
-            unsafe { SkiaGLInterop.DeleteRenderbuffers(1, &rb); }
-            _glStencil = 0;
-        }
-        if (_glTexture != 0)
-        {
-            uint t = _glTexture;
-            SkiaGLInterop.DeleteTextures(1, ref t);
-            _glTexture = 0;
+            if (switched) WglD2DInterop.wglMakeCurrent(prevDc, prevRc);
         }
 
         if (_d3d11Texture != 0) { WglD2DInterop.Release(_d3d11Texture); _d3d11Texture = 0; }
@@ -324,6 +337,10 @@ internal sealed class SkiaWglInteropHost : ISkiaSurfaceHost
         if (_disposed) return;
         _disposed = true;
 
+        nint prevDc = WglD2DInterop.wglGetCurrentDC();
+        nint prevRc = WglD2DInterop.wglGetCurrentContext();
+        if (_hglrc != 0) MakeContextCurrent();
+
         ReleaseSurfaceResources();
 
         if (_wglDevice != 0) { WglD2DInterop.DXCloseDevice(_wglDevice); _wglDevice = 0; }
@@ -333,7 +350,16 @@ internal sealed class SkiaWglInteropHost : ISkiaSurfaceHost
 
         if (_hglrc != 0)
         {
-            WglD2DInterop.wglMakeCurrent(0, 0);
+            // Restore the caller's context; never leave the soon-deleted context current.
+            if (prevRc != 0 && prevRc != _hglrc)
+            {
+                WglD2DInterop.wglMakeCurrent(prevDc, prevRc);
+            }
+            else
+            {
+                WglD2DInterop.wglMakeCurrent(0, 0);
+            }
+
             WglD2DInterop.wglDeleteContext(_hglrc);
             _hglrc = 0;
         }

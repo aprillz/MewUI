@@ -69,6 +69,9 @@ internal static unsafe partial class WglBootstrap
     [LibraryImport("opengl32.dll", EntryPoint = "wglGetCurrentContext")]
     public static partial nint wglGetCurrentContext();
 
+    [LibraryImport("opengl32.dll", EntryPoint = "wglGetCurrentDC")]
+    public static partial nint wglGetCurrentDC();
+
     // GL core 1.x - exported directly by opengl32.dll
     public const uint GL_BGRA = 0x80E1;
     public const uint GL_UNSIGNED_BYTE = 0x1401;
