@@ -12,7 +12,6 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
 {
     private bool _disposed;
-    private nint _perPixelAlphaHandle;
     private nint _outlineDc;
     private nint _outlineOldObject;
 
@@ -87,22 +86,9 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
 
     internal nint GetHandle(GdiFontRenderMode mode)
     {
-        if (mode == GdiFontRenderMode.Default)
-        {
-            return Handle;
-        }
-
-        if (_perPixelAlphaHandle != 0)
-        {
-            return _perPixelAlphaHandle;
-        }
-
-        int height = -(int)Math.Round(Size * Dpi / 96.0, MidpointRounding.AwayFromZero);
-        // Use ClearType quality for stronger hinting. The caller extracts coverage
-        // from the max of R/G/B channels, so subpixel data is collapsed into alpha
-        // but glyph shapes benefit from ClearType's tighter grid-fitting.
-        _perPixelAlphaHandle = CreateFontCore(height, GdiConstants.CLEARTYPE_QUALITY);
-        return _perPixelAlphaHandle == 0 ? Handle : _perPixelAlphaHandle;
+        // The primary handle is already created with ClearType quality, which is also
+        // what coverage rasterization requires. Reuse it instead of owning a duplicate HFONT.
+        return Handle;
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)
@@ -259,11 +245,6 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
         {
             Gdi32.DeleteObject(Handle);
             Handle = 0;
-            if (_perPixelAlphaHandle != 0)
-            {
-                Gdi32.DeleteObject(_perPixelAlphaHandle);
-                _perPixelAlphaHandle = 0;
-            }
             if (_outlineDc != 0)
             {
                 if (_outlineOldObject != 0)
@@ -290,13 +271,16 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
             return family;
 
         var key = (family, weight);
-        if (_weightFaceCache.TryGetValue(key, out var cached))
-            return cached ?? family;
+        lock (_weightFaceCache)
+        {
+            if (_weightFaceCache.TryGetValue(key, out var cached))
+                return cached ?? family;
 
-        // Enumerate all fonts that match the base family's charset.
-        string? resolved = FindSubFamilyByWeight(family, (int)weight);
-        _weightFaceCache[key] = resolved;
-        return resolved ?? family;
+            // Enumerate all fonts that match the base family's charset.
+            string? resolved = FindSubFamilyByWeight(family, (int)weight);
+            _weightFaceCache[key] = resolved;
+            return resolved ?? family;
+        }
     }
 
     private static unsafe string? FindSubFamilyByWeight(string baseFamily, int targetWeight)

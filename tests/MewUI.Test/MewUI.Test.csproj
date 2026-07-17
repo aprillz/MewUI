@@ -12,6 +12,8 @@
     <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
     <!-- GDI backend (Windows-only at runtime) for offscreen render-surface validation tests. -->
     <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
+    <!-- Backend/platform audit coverage only; product reference graph remains unchanged. -->
+    <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
   </ItemGroup>
 
 </Project>

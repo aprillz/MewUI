@@ -20,6 +20,66 @@ public sealed class OffscreenTextAlphaTests
     private const int Height = 28;
 
     [TestMethod]
+    public void GdiOffscreen_GlobalAlpha_AppliesConsistentlyToPrimitivesAndText()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        const int surfaceWidth = 200;
+        const int surfaceHeight = 40;
+        using var factory = new GdiGraphicsFactory();
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(surfaceWidth, surfaceHeight, 1.0));
+        using (var context = factory.CreateContext(surface))
+        {
+            context.BeginFrame(surface);
+            context.GlobalAlpha = 0.5f;
+            var color = Color.FromArgb(255, 255, 255, 255);
+            context.FillRectangle(new Rect(2, 4, 24, 24), color);
+            context.FillEllipse(new Rect(34, 4, 24, 24), color);
+            context.DrawEllipse(new Rect(66, 4, 24, 24), color, 6);
+            context.DrawLine(new Point(100, 7), new Point(124, 25), color, 6);
+            using var font = factory.CreateFont("Segoe UI", 24, 96);
+            context.DrawText("M", new Rect(134, 2, 40, 34), font, color);
+            context.EndFrame();
+        }
+
+        var cpu = (ICpuPixelSurface)surface;
+        var pixels = cpu.GetReadOnlyPixelSpan();
+        int stride = cpu.StrideBytes;
+        int[] maxima =
+        [
+            MaxAlpha(pixels, stride, 2, 4, 24, 24),
+            MaxAlpha(pixels, stride, 34, 4, 24, 24),
+            MaxAlpha(pixels, stride, 66, 4, 24, 24),
+            MaxAlpha(pixels, stride, 98, 2, 30, 30),
+            MaxAlpha(pixels, stride, 132, 0, 48, 38),
+        ];
+
+        foreach (int alpha in maxima)
+        {
+            Assert.IsGreaterThanOrEqualTo(120, alpha);
+            Assert.IsLessThanOrEqualTo(136, alpha);
+        }
+    }
+
+    private static int MaxAlpha(ReadOnlySpan<byte> pixels, int stride, int x, int y, int width, int height)
+    {
+        int maximum = 0;
+        for (int row = y; row < y + height; row++)
+        {
+            for (int column = x; column < x + width; column++)
+            {
+                maximum = Math.Max(maximum, pixels[row * stride + column * 4 + 3]);
+            }
+        }
+
+        return maximum;
+    }
+
+    [TestMethod]
     public void GdiOffscreen_TransparentSurface_TextProducesAlpha()
     {
         if (!OperatingSystem.IsWindows())
