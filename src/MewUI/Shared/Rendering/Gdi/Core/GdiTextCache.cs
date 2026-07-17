@@ -204,6 +204,13 @@ internal sealed class GdiTextCache : IDisposable
             return;
         }
 
+        if (_map.TryGetValue(key, out var replaced))
+        {
+            _lru.Remove(replaced);
+            _currentBytes -= replaced.Value.Bytes;
+            _surfacePool.Return(replaced.Value.Surface);
+        }
+
         long bytes = (long)surface.Width * surface.Height * 4;
         var node = new LinkedListNode<CacheEntry>(new CacheEntry(key, text.ToString(), surface, bytes));
         _lru.AddFirst(node);
@@ -225,7 +232,10 @@ internal sealed class GdiTextCache : IDisposable
         {
             var last = _lru.Last;
             _lru.RemoveLast();
-            _map.Remove(last.Value.Key);
+            if (_map.TryGetValue(last.Value.Key, out var mapped) && ReferenceEquals(mapped, last))
+            {
+                _map.Remove(last.Value.Key);
+            }
             _currentBytes -= last.Value.Bytes;
 
             // Hand the surface back to the shared scratch pool instead of destroying its DIB outright.

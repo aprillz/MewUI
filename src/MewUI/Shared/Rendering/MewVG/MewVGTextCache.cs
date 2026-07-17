@@ -84,6 +84,16 @@ internal sealed class MewVGTextCache : IDisposable
 
         var entry = new MewVGTextEntry(imageId, bmp.WidthPx, bmp.HeightPx, 0, 0, bmp.WidthPx, bmp.HeightPx);
         long bytes = EstimateBytes(bmp.WidthPx, bmp.HeightPx);
+        if (_map.TryGetValue(key, out var replaced))
+        {
+            _lru.Remove(replaced);
+            _currentBytes -= replaced.Value.Bytes;
+            if (replaced.Value.Entry.ImageId != 0)
+            {
+                _pendingDeletes.Enqueue(replaced.Value.Entry.ImageId);
+            }
+        }
+
         var newNode = new LinkedListNode<CacheEntry>(new CacheEntry(key, text.ToString(), entry, bytes));
         _lru.AddFirst(newNode);
         _map[key] = newNode;
@@ -114,7 +124,10 @@ internal sealed class MewVGTextCache : IDisposable
         while (_currentBytes > MaxBytes && _lru.Last is { } last)
         {
             _lru.RemoveLast();
-            _map.Remove(last.Value.Key);
+            if (_map.TryGetValue(last.Value.Key, out var mapped) && ReferenceEquals(mapped, last))
+            {
+                _map.Remove(last.Value.Key);
+            }
 
             int imageId = last.Value.Entry.ImageId;
             if (imageId != 0)

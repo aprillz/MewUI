@@ -1772,9 +1772,20 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         nint textFormat = 0;
         nint textLayout = 0;
+        bool ownsTextFormat = false;
         try
         {
-            textFormat = CreateDWriteTextFormat(dwFont, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+            if (_textFormatCache != null)
+            {
+                textFormat = _textFormatCache.GetOrCreate(
+                    _dwriteFactory, dwFont, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+            }
+            else
+            {
+                textFormat = CreateDWriteTextFormat(
+                    dwFont, TextAlignment.Left, TextAlignment.Top, TextWrapping.Wrap);
+                ownsTextFormat = true;
+            }
             if (textFormat == 0)
             {
                 return Size.Empty;
@@ -1806,7 +1817,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         finally
         {
             ComHelpers.Release(textLayout);
-            ComHelpers.Release(textFormat);
+            if (ownsTextFormat)
+            {
+                ComHelpers.Release(textFormat);
+            }
         }
     }
 

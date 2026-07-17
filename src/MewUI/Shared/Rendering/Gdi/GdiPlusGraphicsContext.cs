@@ -413,6 +413,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void DrawLineCore(Point start, Point end, Color color, double thickness = 1)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
@@ -615,6 +616,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void DrawEllipseCore(Rect bounds, Color color, double thickness = 1)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || thickness <= 0 || !EnsureGraphics())
         {
             return;
@@ -645,6 +647,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     protected override void FillEllipseCore(Rect bounds, Color color)
     {
+        color = BlendGlobalAlpha(color);
         if (color.A == 0 || !EnsureGraphics())
         {
             return;
@@ -2787,9 +2790,33 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             Height = Math.Max(1, height);
 
             MemDc = Gdi32.CreateCompatibleDC(screenDc);
+            if (MemDc == 0)
+            {
+                throw new InvalidOperationException("Failed to create the GDI back-buffer DC.");
+            }
+
             var bmi = BITMAPINFO.Create32bpp(Width, Height);
             _bitmap = Gdi32.CreateDIBSection(screenDc, ref bmi, usage: 0, out _bits, 0, 0);
+            if (_bitmap == 0 || _bits == 0)
+            {
+                Gdi32.DeleteDC(MemDc);
+                MemDc = 0;
+                _bitmap = 0;
+                _bits = 0;
+                throw new InvalidOperationException("Failed to create the GDI back-buffer bitmap.");
+            }
+
             _oldBitmap = Gdi32.SelectObject(MemDc, _bitmap);
+            if (_oldBitmap == 0 || _oldBitmap == new nint(-1))
+            {
+                Gdi32.DeleteObject(_bitmap);
+                Gdi32.DeleteDC(MemDc);
+                MemDc = 0;
+                _bitmap = 0;
+                _oldBitmap = 0;
+                _bits = 0;
+                throw new InvalidOperationException("Failed to select the GDI back-buffer bitmap.");
+            }
         }
 
         private void Destroy()

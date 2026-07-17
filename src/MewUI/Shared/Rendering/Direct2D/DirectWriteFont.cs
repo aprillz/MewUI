@@ -297,6 +297,15 @@ internal sealed unsafe partial class DirectWriteFont : FontBase, IGlyphOutlineFo
         return face;
     }
 
+    public override void Dispose()
+    {
+        var fontFace = _cachedFontFace;
+        _cachedFontFace = 0;
+        _faceLookupAttempted = true;
+        ComHelpers.Release(fontFace);
+        base.Dispose();
+    }
+
     private unsafe nint TryCreateFontFace(IDWriteFactory* factory, nint fontCollection, string familyName)
     {
         nint collection = fontCollection;
