@@ -1589,6 +1589,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
         catch
         {
+            // Best-effort IME candidate positioning: a transient text-layout failure must not
+            // abort key processing; the platform input method keeps its previous caret rectangle.
         }
     }
 
@@ -2562,8 +2564,9 @@ internal sealed class X11WindowBackend : IWindowBackend
                 _inputMethod = null;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Application.RouteLifecycleException(ex);
         }
 
         // Release graphics resources BEFORE XDestroyWindow. The GL teardown calls
@@ -2577,23 +2580,25 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             Window.ReleaseWindowGraphicsResources(handle);
         }
-        catch { }
+        catch (Exception ex) { Application.RouteLifecycleException(ex); }
 
         if (destroyWindow)
         {
             try { NativeX11.XDestroyWindow(Display, handle); }
-            catch { }
+            catch (Exception ex) { Application.RouteLifecycleException(ex); }
         }
 
         if (_colormap != 0)
         {
             try { NativeX11.XFreeColormap(Display, _colormap); }
-            catch { }
+            catch (Exception ex) { Application.RouteLifecycleException(ex); }
             _colormap = 0;
         }
 
-        try { _host.UnregisterWindow(handle); } catch { }
-        try { Window.DisposeVisualTree(); } catch { }
+        try { _host.UnregisterWindow(handle); }
+        catch (Exception ex) { Application.RouteLifecycleException(ex); }
+        try { Window.DisposeVisualTree(); }
+        catch (Exception ex) { Application.RouteLifecycleException(ex); }
 
         if (Handle == handle)
         {
@@ -2609,7 +2614,8 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         _closedRaised = true;
-        try { Window.RaiseClosed(); } catch { }
+        try { Window.RaiseClosed(); }
+        catch (Exception ex) { Application.RouteLifecycleException(ex); }
     }
 
     public void CenterOnOwner()

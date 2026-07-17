@@ -2370,7 +2370,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _ownedChildren.Clear();
             for (int i = 0; i < ownedChildren.Length; i++)
             {
-                try { ownedChildren[i]?.Close(); } catch { }
+                try { ownedChildren[i]?.Close(); }
+                catch (Exception ex) { Application.RouteLifecycleException(ex); }
             }
         }
 
@@ -2382,7 +2383,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _modalChildren.Clear();
             for (int i = 0; i < children.Length; i++)
             {
-                try { children[i]?.Close(); } catch { }
+                try { children[i]?.Close(); }
+                catch (Exception ex) { Application.RouteLifecycleException(ex); }
             }
         }
 
@@ -2823,9 +2825,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         _popupManager.NotifyThemeChanged(oldTheme, newTheme);
 
-        for (int i = 0; i < _adorners.Count; i++)
+        var adorners = _adorners.ToArray();
+        for (int i = 0; i < adorners.Length; i++)
         {
-            if (_adorners[i].Element is FrameworkElement fe)
+            if (adorners[i].Element is FrameworkElement fe)
             {
                 fe.NotifyThemeChanged(oldTheme, newTheme);
             }

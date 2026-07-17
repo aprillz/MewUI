@@ -1,5 +1,6 @@
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Input;
 
 namespace Aprillz.MewUI;
 
@@ -243,8 +244,25 @@ public sealed class Application
                 {
                     if (app != null)
                     {
+                        WindowDragDropRouter.ResetForRuntimeEnd();
                         app._windows.Clear();
-                        app.Dispatcher = null;
+                        if (app.Dispatcher != null)
+                        {
+                            app.Dispatcher = null;
+                        }
+                        else
+                        {
+                            // A host may fail before installing a dispatcher. Pre-run timers still
+                            // need a deterministic runtime-end notification to release their static
+                            // DispatcherChanged subscription.
+                            DispatcherChanged?.Invoke(null);
+                        }
+                    }
+                    else
+                    {
+                        // Default host/font initialization can fail before the Application object
+                        // exists. This still terminates the attempted runtime for pre-run waiters.
+                        DispatcherChanged?.Invoke(null);
                     }
                 }
                 finally
@@ -279,7 +297,8 @@ public sealed class Application
 
     private void ApplyThemeChange(Theme oldTheme, Theme newTheme)
     {
-        foreach (var window in AllWindows)
+        var windows = _windows.ToArray();
+        foreach (var window in windows)
         {
             window.BroadcastThemeChanged(oldTheme, newTheme);
         }
@@ -399,6 +418,35 @@ public sealed class Application
 
     internal void NotifyFatalDispatcherException(Exception ex)
         => Interlocked.CompareExchange(ref _pendingFatalException, ex, null);
+
+    internal static void RouteLifecycleException(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+
+        var app = _current;
+        if (app == null)
+        {
+            DiagLog.Write($"[lifecycle] {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        if (app.TryHandleDispatcherException(ex))
+        {
+            return;
+        }
+
+        app.NotifyFatalDispatcherException(ex);
+        try
+        {
+            app.PlatformHost.Quit(app);
+        }
+        catch (Exception quitException)
+        {
+            // The original lifecycle exception remains the fatal error. Shutdown is best-effort
+            // here because this path is commonly entered from an OS callback boundary.
+            DiagLog.Write($"[lifecycle] Quit failed: {quitException.GetType().Name}: {quitException.Message}");
+        }
+    }
 
     private static void ApplyPlatformFontDefaults(IPlatformHost host)
     {

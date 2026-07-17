@@ -23,14 +23,19 @@ internal static class WindowDragDropRouter
     private static DragCandidate? _candidate;
     private static DragSession? _activeSession;
     private static ExternalDragSession? _externalSession;
+    private static int _routingDepth;
 
     internal static bool IsActive => _activeSession != null;
 
     internal static DragSession? ActiveSession => _activeSession;
 
+    internal static bool HasPendingState => _candidate != null || _activeSession != null || _externalSession != null;
+
     /// <summary>Records a drag candidate when a mouse-down lands on a <see cref="UIElement.CanDrag"/> element (or its ancestor).</summary>
     public static void OnMouseDown(Window window, Point positionInWindow, Point screenPosition, UIElement? leaf)
     {
+        if (_routingDepth != 0) return;
+
         // An active drag in progress consumes new presses (shouldn't normally happen - capture diverts them).
         if (_activeSession != null) return;
 
@@ -54,23 +59,31 @@ internal static class WindowDragDropRouter
     /// </summary>
     public static bool OnMouseMove(Window window, Point positionInWindow, Point screenPosition)
     {
-        if (_activeSession != null)
+        if (!TryEnterRouting()) return _activeSession != null;
+        try
         {
-            UpdateActiveDrag(window, positionInWindow, screenPosition);
-            return true;
+            if (_activeSession != null)
+            {
+                UpdateActiveDrag(window, positionInWindow, screenPosition);
+                return true;
+            }
+
+            if (_candidate == null) return false;
+
+            var dx = positionInWindow.X - _candidate.StartPositionInWindow.X;
+            var dy = positionInWindow.Y - _candidate.StartPositionInWindow.Y;
+            if (dx * dx + dy * dy < DragGestureThresholdDip * DragGestureThresholdDip)
+            {
+                return false;
+            }
+
+            // Threshold exceeded - try to promote to an active session.
+            return TryPromoteCandidate();
         }
-
-        if (_candidate == null) return false;
-
-        var dx = positionInWindow.X - _candidate.StartPositionInWindow.X;
-        var dy = positionInWindow.Y - _candidate.StartPositionInWindow.Y;
-        if (dx * dx + dy * dy < DragGestureThresholdDip * DragGestureThresholdDip)
+        finally
         {
-            return false;
+            ExitRouting();
         }
-
-        // Threshold exceeded - try to promote to an active session.
-        return TryPromoteCandidate();
     }
 
     /// <summary>
@@ -79,44 +92,68 @@ internal static class WindowDragDropRouter
     /// </summary>
     public static bool OnMouseUp(Window window, Point positionInWindow, Point screenPosition)
     {
-        if (_activeSession != null)
+        if (!TryEnterRouting()) return _activeSession != null;
+        try
         {
-            PerformDropAndEnd(window, positionInWindow, screenPosition);
-            return true;
-        }
+            if (_activeSession != null)
+            {
+                PerformDropAndEnd(window, positionInWindow, screenPosition);
+                return true;
+            }
 
-        if (_candidate != null)
+            if (_candidate != null)
+            {
+                _candidate = null;
+                return false; // candidate was a click, not a drag - let normal MouseUp routing run
+            }
+
+            return false;
+        }
+        finally
         {
-            _candidate = null;
-            return false; // candidate was a click, not a drag - let normal MouseUp routing run
+            ExitRouting();
         }
-
-        return false;
     }
 
     /// <summary>Cancels any active drag session (Esc, source window closing, etc.).</summary>
     public static void CancelActive()
     {
-        if (_activeSession == null) return;
-        EndSession(canceled: true);
+        if (!TryEnterRouting()) return;
+        try
+        {
+            if (_activeSession == null) return;
+            EndSession(canceled: true);
+        }
+        finally
+        {
+            ExitRouting();
+        }
     }
 
     /// <summary>Starts a drag session by explicit API call (bypasses gesture detection).</summary>
     public static void BeginExplicitDrag(Window window, UIElement source, IDataObject data, DragDropEffects effects, DragPreviewContent? preview)
     {
-        if (_activeSession != null) return;
-
-        var startInWindow = source.TranslatePoint(default, window);
-        var startInElement = default(Point);
-        var screenPosition = window.LastMouseScreenPositionPx;
-
-        var args = new DragStartingEventArgs(startInElement, startInWindow)
+        if (!TryEnterRouting()) return;
+        try
         {
-            Data = data,
-            AllowedEffects = effects,
-            Preview = preview,
-        };
-        StartSession(window, source, args);
+            if (_activeSession != null) return;
+
+            var startInWindow = source.TranslatePoint(default, window);
+            var startInElement = default(Point);
+            var screenPosition = window.LastMouseScreenPositionPx;
+
+            var args = new DragStartingEventArgs(startInElement, startInWindow)
+            {
+                Data = data,
+                AllowedEffects = effects,
+                Preview = preview,
+            };
+            StartSession(window, source, args);
+        }
+        finally
+        {
+            ExitRouting();
+        }
     }
 
     private static bool TryPromoteCandidate()
@@ -512,48 +549,82 @@ internal static class WindowDragDropRouter
     /// <summary>External drag entered the window. Computes the target chain and raises element-level DragEnter.</summary>
     public static void OnExternalDragEnter(Window window, DragEventArgs args)
     {
-        if (_activeSession != null) return; // ignore while an internal session owns the cursor
-
-        // Clear any stale chain from a prior session that didn't get a clean Leave.
-        if (_externalSession != null)
+        if (!TryEnterRouting()) return;
+        try
         {
-            LeaveExternalChain(args);
-        }
+            if (_activeSession != null) return; // ignore while an internal session owns the cursor
 
-        _externalSession = new ExternalDragSession(window);
-        DispatchExternalEnterOver(window, args, raiseEnter: true);
+            // Clear any stale chain from a prior session that didn't get a clean Leave.
+            if (_externalSession != null)
+            {
+                LeaveExternalChain(args);
+            }
+
+            _externalSession = new ExternalDragSession(window);
+            DispatchExternalEnterOver(window, args, raiseEnter: true);
+        }
+        finally
+        {
+            ExitRouting();
+        }
     }
 
     /// <summary>External drag moved over the window. Diffs the chain and raises Leave/Enter/Over.</summary>
     public static void OnExternalDragOver(Window window, DragEventArgs args)
     {
-        if (_activeSession != null) return;
-
-        if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window))
+        if (!TryEnterRouting()) return;
+        try
         {
-            // Treat a stray Over as Enter so backends that drop the Enter message don't desync the chain.
-            OnExternalDragEnter(window, args);
-            return;
-        }
+            if (_activeSession != null) return;
 
-        DispatchExternalEnterOver(window, args, raiseEnter: false);
+            if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window))
+            {
+                // Treat a stray Over as Enter without re-entering the public routing guard.
+                if (_externalSession != null)
+                {
+                    LeaveExternalChain(args);
+                }
+                _externalSession = new ExternalDragSession(window);
+                DispatchExternalEnterOver(window, args, raiseEnter: true);
+                return;
+            }
+
+            DispatchExternalEnterOver(window, args, raiseEnter: false);
+        }
+        finally
+        {
+            ExitRouting();
+        }
     }
 
     /// <summary>External drag left the window. Leaves the current chain and clears state.</summary>
     public static void OnExternalDragLeave(Window window, DragEventArgs args)
     {
-        if (_activeSession != null) return;
-        if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window)) return;
+        if (!TryEnterRouting()) return;
+        try
+        {
+            if (_activeSession != null) return;
+            if (_externalSession == null || !ReferenceEquals(_externalSession.Window, window)) return;
 
-        LeaveExternalChain(args);
-        window.RaiseDragLeave(args);
+            LeaveExternalChain(args);
+            window.RaiseDragLeave(args);
+        }
+        finally
+        {
+            ExitRouting();
+        }
     }
 
     /// <summary>External drag dropped on the window. Routes the drop through the element chain, then falls back to window-level.</summary>
     /// <returns>The final negotiated effect (None when nothing accepted).</returns>
     public static DragDropEffects OnExternalDrop(Window window, DragEventArgs args)
     {
-        if (_activeSession != null) return DragDropEffects.None;
+        if (!TryEnterRouting()) return DragDropEffects.None;
+        if (_activeSession != null)
+        {
+            ExitRouting();
+            return DragDropEffects.None;
+        }
 
         try
         {
@@ -590,6 +661,7 @@ internal static class WindowDragDropRouter
         {
             _externalSession = null;
             _scratchNewChain.Clear();
+            ExitRouting();
         }
     }
 
@@ -656,13 +728,69 @@ internal static class WindowDragDropRouter
 
     private static void LeaveExternalChain(DragEventArgs args)
     {
-        var session = _externalSession!;
+        var session = _externalSession;
+        _externalSession = null;
+        if (session == null) return;
+
         for (int i = 0; i < session.CurrentChain.Count; i++)
         {
             session.CurrentChain[i].RaiseDragLeave(args);
         }
         session.CurrentChain.Clear();
+    }
+
+    private static bool TryEnterRouting()
+    {
+        if (_routingDepth != 0)
+        {
+            return false;
+        }
+
+        _routingDepth = 1;
+        return true;
+    }
+
+    private static void ExitRouting() => _routingDepth = 0;
+
+    internal static void ResetForRuntimeEnd()
+    {
+        // Drop process-wide references first. Cleanup below may invoke user/platform code and must
+        // not leave a half-ended session reachable if that code fails or re-enters the router.
+        _candidate = null;
+        var activeSession = _activeSession;
+        _activeSession = null;
+        var externalSession = _externalSession;
         _externalSession = null;
+        _scratchNewChain.Clear();
+
+        if (externalSession != null)
+        {
+            externalSession.CurrentChain.Clear();
+        }
+
+        if (activeSession == null)
+        {
+            return;
+        }
+
+        activeSession.CurrentChain.Clear();
+        try
+        {
+            DetachPreview(activeSession);
+        }
+        catch (Exception ex)
+        {
+            Application.RouteLifecycleException(ex);
+        }
+
+        try
+        {
+            activeSession.SourceWindow.ReleaseMouseAfterDrag();
+        }
+        catch (Exception ex)
+        {
+            Application.RouteLifecycleException(ex);
+        }
     }
 
     private static DragDropEffects NormalizeEffect(DragEventArgs args)
