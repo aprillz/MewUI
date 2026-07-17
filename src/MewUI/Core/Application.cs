@@ -348,6 +348,7 @@ public sealed class Application
     /// <summary>
     /// Dispatches pending messages in the message queue.
     /// </summary>
+    [Obsolete("DoEvents will be removed. Await asynchronous work or use the dispatcher; for synchronous modal UI use Window.ShowDialog.")]
     public static void DoEvents()
     {
         if (_current == null)

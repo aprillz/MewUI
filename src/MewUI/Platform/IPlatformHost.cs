@@ -88,6 +88,7 @@ internal interface IPlatformHost : IDisposable
     /// <summary>
     /// Processes pending messages without entering a full message loop (best effort).
     /// </summary>
+    [Obsolete("DoEvents will be removed. Await asynchronous work, use the dispatcher, or run an explicit nested loop via RunNestedLoop.")]
     void DoEvents();
 
     /// <summary>

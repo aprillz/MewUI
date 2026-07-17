@@ -62,8 +62,7 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
         ArgumentNullException.ThrowIfNull(options);
 
         // Run on an STA thread to avoid MTA/UI-thread hangs with COM-based dialogs.
-        Action? pump = Application.IsRunning ? Application.DoEvents : null;
-        return StaHelper.Run(() => SelectFolderCore(options), pump);
+        return StaHelper.Run(() => SelectFolderCore(options));
     }
 
     private static unsafe string? SelectFolderCore(FolderDialogOptions options)
