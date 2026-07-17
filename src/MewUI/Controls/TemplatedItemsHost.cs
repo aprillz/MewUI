@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI.Controls;
 
-internal sealed class TemplatedItemsHost
+internal sealed class TemplatedItemsHost : IDisposable
 {
     internal struct ItemsRangeLayout
     {
@@ -76,6 +76,8 @@ internal sealed class TemplatedItemsHost
     }
 
     public void RecycleAll() => _presenter.RecycleAll();
+
+    public void Dispose() => _presenter.Dispose();
 
     public void VisitRealized(Action<Element> visitor) => _presenter.VisitRealized(visitor);
 

@@ -1181,6 +1181,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         {
             if (!ReferenceEquals(window.FocusManager.FocusedElement, _deferredFocusOwner))
             {
+                ClearDeferredFocus();
                 return;
             }
         }
@@ -1188,23 +1189,29 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         {
             if (window.FocusManager.FocusedElement != null)
             {
+                ClearDeferredFocus();
                 return;
             }
         }
 
         if (container is not Element root || !VisualTree.IsInSubtreeOf(deferred, root))
         {
+            ClearDeferredFocus();
             return;
         }
 
         if (!deferred.Focusable || !deferred.IsEffectivelyEnabled || !deferred.IsVisible)
         {
-            _deferredFocusedElement = null;
-            _deferredFocusOwner = null;
+            ClearDeferredFocus();
             return;
         }
 
         window.FocusManager.SetFocus(deferred);
+        ClearDeferredFocus();
+    }
+
+    private void ClearDeferredFocus()
+    {
         _deferredFocusedElement = null;
         _deferredFocusOwner = null;
         _deferredFocusedIndex = null;
@@ -1433,6 +1440,16 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         }
 
         return a.Equals(b);
+    }
+
+    protected override void OnDispose()
+    {
+        _itemsSource.Changed -= OnItemsChanged;
+        RecycleAll();
+        _pool.Clear();
+        _recycledByIndex.Clear();
+        ClearDeferredFocus();
+        base.OnDispose();
     }
 
     private static IDataTemplate CreateDefaultItemTemplate()

@@ -94,7 +94,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     public T GetValue<T>(MewProperty<T> property)
     {
-        ref var entry = ref GetEntry(property.Id);
+        var entry = GetEntry(property.Id);
 
         if (entry.Source == ValueSource.Default)
             return property.GetDefaultForType(_ownerType);
@@ -110,7 +110,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     public object GetBoxedValue(MewProperty property)
     {
-        ref var entry = ref GetEntry(property.Id);
+        var entry = GetEntry(property.Id);
 
         if (entry.Source == ValueSource.Default)
             return property.GetBoxedDefaultForType(_ownerType);
@@ -126,7 +126,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     public void SetLocal(MewProperty<bool> property, bool value)
     {
-        ref var entry = ref GetEntry(property.Id);
+        var entry = GetEntry(property.Id);
         if (entry.Source == ValueSource.Local && entry.Value is bool existing && existing == value)
             return;
 
@@ -139,7 +139,7 @@ internal sealed class PropertyValueStore
     public void SetLocal<T>(MewProperty<T> property, T value)
     {
         // Fast path: skip boxing when the value hasn't changed.
-        ref var entry = ref GetEntry(property.Id);
+        var entry = GetEntry(property.Id);
         if (entry.Source == ValueSource.Local && entry.Value is T existing &&
             EqualityComparer<T>.Default.Equals(existing, value))
             return;
@@ -214,9 +214,11 @@ internal sealed class PropertyValueStore
     /// </summary>
     public void ClearSource(int propertyId, ValueSource source)
     {
-        ref var entry = ref GetEntry(propertyId);
-        if (entry.Source != source)
+        var snapshot = GetEntry(propertyId);
+        if (snapshot.Source != source)
             return;
+
+        ref var entry = ref EnsureEntry(propertyId);
 
         var property = MewPropertyRegistry.GetProperty(propertyId);
 
@@ -297,9 +299,11 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void ClearInherited(int propertyId)
     {
-        ref var entry = ref GetEntry(propertyId);
-        if (entry.Source != ValueSource.Inherited)
+        var snapshot = GetEntry(propertyId);
+        if (snapshot.Source != ValueSource.Inherited)
             return;
+
+        ref var entry = ref EnsureEntry(propertyId);
         entry.Value = null;
         entry.Source = ValueSource.Default;
     }
@@ -368,7 +372,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     public bool HasOwnValue(int propertyId)
     {
-        ref var entry = ref GetEntry(propertyId);
+        var entry = GetEntry(propertyId);
         return entry.Source != ValueSource.Default;
     }
 
@@ -377,7 +381,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal ValueSource GetSource(int propertyId)
     {
-        ref var entry = ref GetEntry(propertyId);
+        var entry = GetEntry(propertyId);
         return entry.Source;
     }
 
@@ -386,7 +390,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal bool HasTargetValue(int propertyId)
     {
-        ref var entry = ref GetEntry(propertyId);
+        var entry = GetEntry(propertyId);
         return entry.Source != ValueSource.Default;
     }
 
@@ -396,7 +400,7 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal object? GetCurrentVisualValue(int propertyId)
     {
-        ref var entry = ref GetEntry(propertyId);
+        var entry = GetEntry(propertyId);
         if (entry.Value is AnimatedEntry animated)
             return animated.AnimatedValue;
         return entry.Value;
@@ -466,10 +470,12 @@ internal sealed class PropertyValueStore
     /// </summary>
     internal void ClearAnimatedValue(int propertyId)
     {
-        ref var entry = ref GetEntry(propertyId);
+        var snapshot = GetEntry(propertyId);
 
-        if (entry.Value is not AnimatedEntry animated)
+        if (snapshot.Value is not AnimatedEntry animated)
             return;
+
+        ref var entry = ref EnsureEntry(propertyId);
 
         var property = MewPropertyRegistry.GetProperty(propertyId);
         var oldValue = property != null ? (object?)animated.AnimatedValue : null;
@@ -557,13 +563,13 @@ internal sealed class PropertyValueStore
         return property.GetBoxedDefaultForType(_ownerType);
     }
 
-    private ref Entry GetEntry(int id)
+    private Entry GetEntry(int id)
     {
         if (_entries != null)
         {
             if (id < _entries.Length)
-                return ref _entries[id];
-            return ref Entry.Empty;
+                return _entries[id];
+            return default;
         }
 
         if (_sparseEntries != null)
@@ -571,11 +577,11 @@ internal sealed class PropertyValueStore
             for (int i = 0; i < _sparseCount; i++)
             {
                 if (_sparseEntries[i].PropertyId == id)
-                    return ref _sparseEntries[i].Entry;
+                    return _sparseEntries[i].Entry;
             }
         }
 
-        return ref Entry.Empty;
+        return default;
     }
 
     private ref Entry EnsureEntry(int id)
@@ -632,8 +638,6 @@ internal sealed class PropertyValueStore
 
     private struct Entry
     {
-        public static Entry Empty;
-
         public object? Value;       // plain value, or AnimatedEntry when animating
         public ValueSource Source;  // who set this value
     }

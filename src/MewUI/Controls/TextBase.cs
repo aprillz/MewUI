@@ -1121,6 +1121,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     protected override void OnDispose()
     {
         Document.Dispose();
+        base.OnDispose();
     }
 
     protected virtual void NotifyTextChanged()

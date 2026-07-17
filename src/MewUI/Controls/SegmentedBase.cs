@@ -346,6 +346,7 @@ public abstract class SegmentedBase : Control, IVisualTreeHost
         _itemsSource.SelectionChanged -= OnItemsViewSelectionChangedCore;
         _itemsSource.Changed -= OnItemsViewChangedCore;
         ResetContexts();
+        base.OnDispose();
     }
 
     private IDataTemplate CreateDefaultItemTemplate()

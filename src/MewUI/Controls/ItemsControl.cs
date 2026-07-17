@@ -417,11 +417,14 @@ public sealed class ItemsControl : ScrollableItemsBase
 
     protected override void OnDispose()
     {
+        _itemsSource.Changed -= OnItemsChanged;
         _presenter.OffsetCorrectionRequested -= OnPresenterOffsetCorrectionRequested;
         if (_presenter is IDisposable dp)
         {
             dp.Dispose();
         }
+
+        base.OnDispose();
     }
 
     internal void SetPresenter(IItemsPresenter presenter)

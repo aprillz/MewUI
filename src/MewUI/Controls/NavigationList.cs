@@ -563,6 +563,7 @@ public class NavigationList : ScrollableItemsBase, ISelector, IIndexedSelector
     {
         _itemsSource.Changed -= OnItemsChanged;
         _itemsSource.SelectionChanged -= OnItemsSelectionChanged;
+        base.OnDispose();
     }
 
     // Wraps each row's content in a host that owns ItemPadding and, for Item rows, the min-height.
