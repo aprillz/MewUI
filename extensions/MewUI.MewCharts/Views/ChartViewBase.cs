@@ -309,11 +309,16 @@ public abstract class ChartViewBase : Control, IChartView
         }
         else if (newRoot is null && _loaded)
         {
-            CoreCanvas.Invalidated -= OnCanvasInvalidated;
-            _observer?.Dispose();
-            CoreChart.Unload();
-            _loaded = false;
+            UnloadChart();
         }
+    }
+
+    private void UnloadChart()
+    {
+        CoreCanvas.Invalidated -= OnCanvasInvalidated;
+        _observer?.Dispose();
+        CoreChart.Unload();
+        _loaded = false;
     }
 
     private void OnCanvasInvalidated(CoreMotionCanvas canvas)
@@ -365,7 +370,17 @@ public abstract class ChartViewBase : Control, IChartView
 
     protected override void OnDispose()
     {
-        CoreCanvas.Invalidated -= OnCanvasInvalidated;
+        if (_loaded)
+        {
+            // Disposed while still attached (window teardown): unload the chart and release the
+            // observer subscriptions, otherwise app-lifetime Series collections pin this view.
+            UnloadChart();
+        }
+        else
+        {
+            CoreCanvas.Invalidated -= OnCanvasInvalidated;
+        }
+
         base.OnDispose();
     }
 }

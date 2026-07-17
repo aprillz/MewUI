@@ -17,8 +17,7 @@ namespace Aprillz.MewUI.Skia.Controls;
 /// </summary>
 public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
 {
-    private byte[] _cpuBuffer = [];
-    private GCHandle _cpuPin;
+    private PinnedPixelBuffer? _cpuPixels;
     private SKSurface? _cpuSurface;
     private int _cpuPixelWidth;
     private int _cpuPixelHeight;
@@ -28,6 +27,7 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
     private ISkiaSurfaceHost? _gpuHost;
     private bool _gpuResolved;
     private bool _gpuDemoted;
+    private string? _gpuDemotionReason;
     private IGpuInteropInvalidationSource? _gpuInteropInvalidationSource;
 
     /// <summary>Fires per render pass with the Skia canvas already sized to the current bounds.</summary>
@@ -46,7 +46,9 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
     public Color? Background { get; set; }
 
     public string PathDescription => _gpuDemoted
-        ? "CPU upload (Skia → byte[] → backend)"
+        ? (_gpuDemotionReason is null
+            ? "CPU upload (Skia → byte[] → backend)"
+            : $"CPU upload (Skia → byte[] → backend), GPU demoted: {_gpuDemotionReason}")
         : (_gpuHost is not null ? _gpuHost.Description : "Pending");
 
     int IRasterSource.PixelWidth => _cpuPixelWidth;
@@ -57,7 +59,7 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
     int IRasterSource.Version => _cpuVersion;
 
     PixelBufferLock IPixelBufferSource.Lock() => new(
-        _cpuBuffer, _cpuPixelWidth, _cpuPixelHeight, _cpuPixelWidth * 4,
+        _cpuPixels?.Buffer ?? [], _cpuPixelWidth, _cpuPixelHeight, _cpuPixelWidth * 4,
         _cpuVersion, dirtyRegion: null, release: null);
 
     protected override Size MeasureContent(Size availableSize) => Size.Empty;
@@ -120,8 +122,12 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
             context.DrawImage(image, Bounds);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            // Demotion is permanent for this control; keep the reason observable instead of
+            // failing silently (PathDescription surfaces it, debugger output logs it once).
+            _gpuDemotionReason = ex.Message;
+            System.Diagnostics.Debug.WriteLine($"[SkiaCanvasView] GPU path demoted: {ex}");
             return false;
         }
     }
@@ -129,7 +135,7 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
     private void InvokePainter(SKSurface surface, int width, int height)
     {
         var canvas = surface.Canvas;
-        var clear = Background is { } bg ? new SKColor(bg.R, bg.G, bg.B, bg.A) : SKColors.Transparent;
+        var clear = Background is Color bg ? new SKColor(bg.R, bg.G, bg.B, bg.A) : SKColors.Transparent;
         canvas.Clear(clear);
         var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
         PaintSurface?.Invoke(canvas, info);
@@ -164,11 +170,10 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
         DisposeCpuSurface();
         _cpuPixelWidth = width;
         _cpuPixelHeight = height;
-        _cpuBuffer = new byte[checked(width * height * 4)];
-        _cpuPin = GCHandle.Alloc(_cpuBuffer, GCHandleType.Pinned);
+        _cpuPixels = new PinnedPixelBuffer(checked(width * height * 4));
 
         var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        _cpuSurface = SKSurface.Create(info, _cpuPin.AddrOfPinnedObject(), info.RowBytes);
+        _cpuSurface = SKSurface.Create(info, _cpuPixels.Address, info.RowBytes);
     }
 
     private void DisposeCpuSurface()
@@ -177,10 +182,38 @@ public class SkiaCanvasView : FrameworkElement, IPixelBufferSource
         _cpuImage = null;
         _cpuSurface?.Dispose();
         _cpuSurface = null;
-        if (_cpuPin.IsAllocated) _cpuPin.Free();
-        _cpuBuffer = [];
+        _cpuPixels?.Dispose();
+        _cpuPixels = null;
         _cpuPixelWidth = 0;
         _cpuPixelHeight = 0;
+    }
+
+    // Finalizer backstop: if the view is never disposed the pin must not outlive the buffer's
+    // reachability, otherwise the GC could never move or reclaim it.
+    private sealed class PinnedPixelBuffer : IDisposable
+    {
+        private GCHandle _pin;
+
+        public PinnedPixelBuffer(int byteCount)
+        {
+            Buffer = new byte[byteCount];
+            _pin = GCHandle.Alloc(Buffer, GCHandleType.Pinned);
+        }
+
+        public byte[] Buffer { get; }
+
+        public nint Address => _pin.AddrOfPinnedObject();
+
+        public void Dispose()
+        {
+            if (_pin.IsAllocated) _pin.Free();
+            GC.SuppressFinalize(this);
+        }
+
+        ~PinnedPixelBuffer()
+        {
+            if (_pin.IsAllocated) _pin.Free();
+        }
     }
 
     protected override void OnDispose()

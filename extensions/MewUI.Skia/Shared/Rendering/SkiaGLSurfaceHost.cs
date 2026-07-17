@@ -137,7 +137,7 @@ internal sealed class SkiaGLSurfaceHost : ISkiaSurfaceHost
     private bool HasWriteAffinityChanged(IExternalGpuWriteScope scope)
     {
         var current = (scope as IGpuResourceAffinityProvider)?.Affinity;
-        return _writeAffinity is { } previous && current is { } next && previous != next;
+        return _writeAffinity is GpuResourceAffinity previous && current is GpuResourceAffinity next && previous != next;
     }
 
     private void ReleaseSurfaceResources()
