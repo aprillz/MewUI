@@ -6,7 +6,7 @@ internal sealed class DispatcherQueue
 {
     internal readonly struct WorkItem
     {
-        public required Action Action { get; init; }
+        public Action? Action { get; init; }
         public DispatcherMergeKey? MergeKey { get; init; }
         public ManualResetEventSlim? Signal { get; init; }
         public DispatcherOperation? Operation { get; init; }
@@ -50,7 +50,7 @@ internal sealed class DispatcherQueue
     {
         ArgumentNullException.ThrowIfNull(action);
         var op = new DispatcherOperation(priority, action);
-        EnqueueInternal(priority, new WorkItem { Action = action, Operation = op });
+        EnqueueInternal(priority, new WorkItem { Operation = op });
         return op;
     }
 
@@ -106,14 +106,23 @@ internal sealed class DispatcherQueue
 
                 try
                 {
-                    if (op != null && op.Status == DispatcherOperationStatus.Aborted)
+                    Action action;
+                    if (op != null)
                     {
-                        continue;
+                        if (!op.TryMarkExecuting())
+                        {
+                            continue;
+                        }
+
+                        action = op.TakeActionForExecution();
+                    }
+                    else
+                    {
+                        action = item.Action
+                            ?? throw new InvalidOperationException("Dispatcher work item has no action.");
                     }
 
-                    op?.MarkExecuting();
-                    item.Action();
-                    op?.MarkCompleted();
+                    action();
                 }
                 catch (Exception ex)
                 {
@@ -135,6 +144,7 @@ internal sealed class DispatcherQueue
                 }
                 finally
                 {
+                    op?.MarkCompleted();
                     item.Signal?.Set();
                 }
             }
