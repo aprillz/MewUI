@@ -57,6 +57,9 @@ internal static partial class X11
     public static partial void XDestroyWindow(nint display, nint window);
 
     [LibraryImport(LibraryName)]
+    public static partial int XFreeColormap(nint display, nint colormap);
+
+    [LibraryImport(LibraryName)]
     public static partial void XMapWindow(nint display, nint window);
 
     [LibraryImport(LibraryName)]
@@ -208,10 +211,12 @@ internal static partial class X11
     public static partial nint XLookupKeysym(ref XKeyEvent key_event, int index);
 
     [LibraryImport(LibraryName)]
-    public static partial int XLookupString(ref XKeyEvent event_struct, byte[] buffer_return, int bytes_buffer, out nint keysym_return, out nint status_in_out);
-
-    [LibraryImport(LibraryName)]
-    public static unsafe partial int XLookupString(ref XKeyEvent event_struct, byte* buffer_return, int bytes_buffer, out nint keysym_return, out nint status_in_out);
+    public static unsafe partial int XLookupString(
+        ref XKeyEvent event_struct,
+        byte* buffer_return,
+        int bytes_buffer,
+        out nint keysym_return,
+        XComposeStatus* status_in_out);
 
     // XIM / UTF-8 input (minimal; XCreateIC is varargs and is bound via dynamic delegates in platform code).
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
@@ -308,6 +313,13 @@ internal struct XVisualInfo
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct XComposeStatus
+{
+    public nint compose_ptr;
+    public int chars_matched;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct XSetWindowAttributes
 {
     public nint background_pixmap;
@@ -319,12 +331,10 @@ internal struct XSetWindowAttributes
     public int backing_store;
     public ulong backing_planes;
     public ulong backing_pixel;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool save_under;
+    public int save_under;
     public nint event_mask;
     public nint do_not_propagate_mask;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool override_redirect;
+    public int override_redirect;
     public nint colormap;
     public nint cursor;
 }
@@ -334,8 +344,7 @@ internal struct XKeyEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public nint root;
@@ -345,8 +354,7 @@ internal struct XKeyEvent
     public int x_root, y_root;
     public uint state;
     public uint keycode;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool same_screen;
+    public int same_screen;
 }
 
 /// <summary>
@@ -379,8 +387,7 @@ internal struct XButtonEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public nint root;
@@ -390,8 +397,7 @@ internal struct XButtonEvent
     public int x_root, y_root;
     public uint state;
     public uint button;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool same_screen;
+    public int same_screen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -399,8 +405,7 @@ internal struct XMotionEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public nint root;
@@ -410,8 +415,7 @@ internal struct XMotionEvent
     public int x_root, y_root;
     public uint state;
     public byte is_hint;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool same_screen;
+    public int same_screen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -480,8 +484,7 @@ internal struct XGenericEventCookie
 {
     public int type;
     public nuint serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public int extension;
     public int evtype;
@@ -494,8 +497,7 @@ internal struct XFocusChangeEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public int mode;
@@ -507,8 +509,7 @@ internal struct XPropertyEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public nint atom;
@@ -521,8 +522,7 @@ internal struct XExposeEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public int x;
@@ -537,8 +537,7 @@ internal struct XConfigureEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint @event;
     public nint window;
@@ -548,8 +547,7 @@ internal struct XConfigureEvent
     public int height;
     public int border_width;
     public nint above;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool override_redirect;
+    public int override_redirect;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -584,8 +582,7 @@ internal unsafe struct XClientMessageEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint window;
     public nint message_type;
@@ -598,8 +595,7 @@ internal struct XSelectionEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint requestor;
     public nint selection;
@@ -613,8 +609,7 @@ internal struct XDestroyWindowEvent
 {
     public int type;
     public ulong serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public nint @event;
     public nint window;
@@ -635,17 +630,13 @@ internal struct XWindowAttributes
     public int backing_store;
     public ulong backing_planes;
     public ulong backing_pixel;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool save_under;
+    public int save_under;
     public nint colormap;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool map_installed;
+    public int map_installed;
     public int map_state;
     public long all_event_masks;
     public long your_event_mask;
     public long do_not_propagate_mask;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool override_redirect;
+    public int override_redirect;
     public nint screen;
 }
-

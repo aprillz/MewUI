@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.Gdi\MewUI.Backend.Gdi.csproj" />
     <!-- Backend/platform audit coverage only; product reference graph remains unchanged. -->
     <ProjectReference Include="..\..\src\MewUI.Backend.Direct2D\MewUI.Backend.Direct2D.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.X11\MewUI.Platform.X11.csproj" />
   </ItemGroup>
 
 </Project>

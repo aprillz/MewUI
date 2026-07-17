@@ -117,8 +117,7 @@ internal struct XIDeviceInfo
     public nint name;            // const char*
     public int use;
     public int attachment;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool enabled;
+    public int enabled;
     public int num_classes;
     public nint classes;         // XIAnyClassInfo**
 }
@@ -132,8 +131,7 @@ internal struct XIDeviceEvent
 {
     public int type;
     public nuint serial;
-    [MarshalAs(UnmanagedType.Bool)]
-    public bool send_event;
+    public int send_event;
     public nint display;
     public int extension;
     public int evtype;

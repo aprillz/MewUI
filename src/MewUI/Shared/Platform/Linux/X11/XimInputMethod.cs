@@ -159,7 +159,8 @@ internal sealed class XimInputMethod : IX11InputMethod
         int byteCount;
         fixed (byte* p = buf)
         {
-            byteCount = NativeX11.XLookupString(ref e, p, buf.Length, out _, out _);
+            XComposeStatus composeStatus = default;
+            byteCount = NativeX11.XLookupString(ref e, p, buf.Length, out _, &composeStatus);
         }
 
         if (byteCount > 0)

@@ -127,8 +127,26 @@ internal sealed partial class Win32FileDialogService : IFileDialogService
                 Marshal.ThrowExceptionForHR(hr);
             }
 
-            FileDialogVTable.GetResult(dialog, out resultItemPtr);
-            FileDialogVTable.GetDisplayName((IShellItem*)resultItemPtr, (uint)SIGDN.SIGDN_FILESYSPATH, out nint pszPath);
+            hr = FileDialogVTable.GetResult(dialog, out resultItemPtr);
+            if (hr < 0)
+            {
+                Marshal.ThrowExceptionForHR(hr);
+            }
+            if (resultItemPtr == 0)
+            {
+                return null;
+            }
+
+            hr = FileDialogVTable.GetDisplayName(
+                (IShellItem*)resultItemPtr, (uint)SIGDN.SIGDN_FILESYSPATH, out nint pszPath);
+            if (hr < 0)
+            {
+                Marshal.ThrowExceptionForHR(hr);
+            }
+            if (pszPath == 0)
+            {
+                return null;
+            }
             try
             {
                 var path = Marshal.PtrToStringUni(pszPath);

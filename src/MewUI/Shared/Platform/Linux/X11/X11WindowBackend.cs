@@ -24,6 +24,11 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _wmProtocolsAtom;
     private nint _atomAtom;
     private nint _netWmWindowOpacityAtom;
+    private nint _netWmStateAtom;
+    private nint _netWmStateMaximizedHorzAtom;
+    private nint _netWmStateMaximizedVertAtom;
+    private nint _netWmStateHiddenAtom;
+    private nint _netWmStateFullscreenAtom;
     private nint _cardinalAtom;
     private nint _motifWmHintsAtom;
     private nint _xdndAwareAtom;
@@ -58,6 +63,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private nint _netWmSyncRequestCounterAtom;
     // EWMH frame-sync counter (_NET_WM_SYNC_REQUEST). 0 when the SYNC extension is unavailable.
     private nint _frameSyncCounter;
+    private nint _colormap;
     private bool _hasPendingFrameSyncValue;
     private long _pendingFrameSyncValue;
     private X11GLVisualInfo? _glVisualInfo;
@@ -637,9 +643,15 @@ internal sealed class X11WindowBackend : IWindowBackend
             X11EventMask.PointerMotionMask | X11EventMask.FocusChangeMask |
             X11EventMask.PropertyChangeMask;
 
+        _colormap = NativeX11.XCreateColormap(Display, root, chosen.Visual, AllocNone);
+        if (_colormap == 0)
+        {
+            throw new InvalidOperationException("XCreateColormap failed.");
+        }
+
         var attrs = new XSetWindowAttributes
         {
-            colormap = NativeX11.XCreateColormap(Display, root, chosen.Visual, AllocNone),
+            colormap = _colormap,
             event_mask = (nint)windowEventMask,
             // A window whose visual depth differs from its parent's needs an explicit border
             // pixel, otherwise XCreateWindow fails with BadMatch.
@@ -670,7 +682,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         const ulong CWOverrideRedirect = 1UL << 9;
         if (Window.Kind is Controls.WindowKind.Overlay or Controls.WindowKind.Popup)
         {
-            attrs.override_redirect = true;
+            attrs.override_redirect = 1;
             valueMask |= CWOverrideRedirect;
         }
 
@@ -688,6 +700,8 @@ internal sealed class X11WindowBackend : IWindowBackend
 
         if (Handle == 0)
         {
+            NativeX11.XFreeColormap(Display, _colormap);
+            _colormap = 0;
             throw new InvalidOperationException("XCreateWindow failed.");
         }
 
@@ -705,6 +719,11 @@ internal sealed class X11WindowBackend : IWindowBackend
         _wmDeleteWindowAtom = NativeX11.XInternAtom(Display, "WM_DELETE_WINDOW", false);
         _atomAtom = NativeX11.XInternAtom(Display, "ATOM", false);
         _netWmWindowOpacityAtom = NativeX11.XInternAtom(Display, "_NET_WM_WINDOW_OPACITY", true);
+        _netWmStateAtom = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
+        _netWmStateMaximizedHorzAtom = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MAXIMIZED_HORZ", false);
+        _netWmStateMaximizedVertAtom = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MAXIMIZED_VERT", false);
+        _netWmStateHiddenAtom = NativeX11.XInternAtom(Display, "_NET_WM_STATE_HIDDEN", false);
+        _netWmStateFullscreenAtom = NativeX11.XInternAtom(Display, "_NET_WM_STATE_FULLSCREEN", false);
         _cardinalAtom = NativeX11.XInternAtom(Display, "CARDINAL", false);
         _motifWmHintsAtom = NativeX11.XInternAtom(Display, "_MOTIF_WM_HINTS", false);
         _xdndAwareAtom = NativeX11.XInternAtom(Display, "XdndAware", false);
@@ -1451,21 +1470,19 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private void HandlePropertyNotify(in XPropertyEvent e)
     {
-        var netWmState = NativeX11.XInternAtom(Display, "_NET_WM_STATE", false);
-        if (netWmState == 0 || e.atom != netWmState)
+        if (_netWmStateAtom == 0 || e.atom != _netWmStateAtom)
         {
             return;
         }
 
-        var atoms = ReadAtomProperty(Handle, netWmState);
-        var maxH = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MAXIMIZED_HORZ", false);
-        var maxV = NativeX11.XInternAtom(Display, "_NET_WM_STATE_MAXIMIZED_VERT", false);
-        var hidden = NativeX11.XInternAtom(Display, "_NET_WM_STATE_HIDDEN", false);
-        var fullscreen = NativeX11.XInternAtom(Display, "_NET_WM_STATE_FULLSCREEN", false);
+        var atoms = ReadAtomProperty(Handle, _netWmStateAtom);
 
-        bool isMaximized = maxH != 0 && maxV != 0 && atoms.Contains(maxH) && atoms.Contains(maxV);
-        bool isMinimized = hidden != 0 && atoms.Contains(hidden);
-        bool isFullScreen = fullscreen != 0 && atoms.Contains(fullscreen);
+        bool isMaximized = _netWmStateMaximizedHorzAtom != 0 &&
+            _netWmStateMaximizedVertAtom != 0 &&
+            atoms.Contains(_netWmStateMaximizedHorzAtom) &&
+            atoms.Contains(_netWmStateMaximizedVertAtom);
+        bool isMinimized = _netWmStateHiddenAtom != 0 && atoms.Contains(_netWmStateHiddenAtom);
+        bool isFullScreen = _netWmStateFullscreenAtom != 0 && atoms.Contains(_netWmStateFullscreenAtom);
 
         var newState = isMinimized ? Controls.WindowState.Minimized
             : isFullScreen ? Controls.WindowState.FullScreen
@@ -2566,6 +2583,13 @@ internal sealed class X11WindowBackend : IWindowBackend
         {
             try { NativeX11.XDestroyWindow(Display, handle); }
             catch { }
+        }
+
+        if (_colormap != 0)
+        {
+            try { NativeX11.XFreeColormap(Display, _colormap); }
+            catch { }
+            _colormap = 0;
         }
 
         try { _host.UnregisterWindow(handle); } catch { }

@@ -33,6 +33,12 @@ internal static unsafe class ComHelpers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int QueryInterface(nint ptr, in Guid riid, out nint ppvObject)
     {
+        if (ptr == 0)
+        {
+            ppvObject = 0;
+            return unchecked((int)0x80004003); // E_POINTER
+        }
+
         nint result = 0;
         fixed (Guid* pIid = &riid)
         {

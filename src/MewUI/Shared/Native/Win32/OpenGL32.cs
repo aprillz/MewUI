@@ -7,13 +7,13 @@ internal static partial class OpenGL32
     private const string LibraryName = "opengl32.dll";
 
     // WGL
-    [LibraryImport(LibraryName)]
+    [LibraryImport(LibraryName, SetLastError = true)]
     public static partial nint wglCreateContext(nint hdc);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     public static partial nint wglGetProcAddress(string lpszProc);
 
-    [LibraryImport(LibraryName)]
+    [LibraryImport(LibraryName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool wglMakeCurrent(nint hdc, nint hglrc);
 
