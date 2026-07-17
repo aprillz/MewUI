@@ -74,9 +74,10 @@ internal sealed class VirtualizedItemsPresenter
     /// </summary>
     public void RecycleAll()
     {
-        foreach (var index in _realized.Keys.ToArray())
+        var keys = GetSortedKeys();
+        for (int i = 0; i < keys.Length; i++)
         {
-            Recycle(index);
+            Recycle(keys[i]);
         }
     }
 
@@ -261,8 +262,10 @@ internal sealed class VirtualizedItemsPresenter
             return;
         }
 
-        foreach (var key in _realized.Keys.ToArray())
+        var realizedKeys = GetSortedKeys();
+        for (int i = 0; i < realizedKeys.Length; i++)
         {
+            int key = realizedKeys[i];
             if (key < first || key >= lastExclusive)
             {
                 if (!IsFocusedSubtree(key))

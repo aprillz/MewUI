@@ -17,6 +17,40 @@ public sealed class HeadlessInputTests
     private static readonly Color NORMAL_COLOR = Color.FromRgb(10, 20, 30);
     private static readonly Color HOT_COLOR = Color.FromRgb(200, 40, 40);
 
+    [TestMethod]
+    public void PointerRouting_HitTestsWindowOncePerEvent()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        var window = new CountingWindow();
+        window.AttachBackend(new HeadlessWindowBackend());
+        window.SetClientSizeDip(800, 600);
+        window.Content = new Border();
+        window.PerformLayout();
+
+        window.SendMouseMove(new Point(10, 10));
+        Assert.AreEqual(1, window.HitTestCount, "mouse move");
+
+        window.HitTestCount = 0;
+        window.SendMouseDown(new Point(10, 10));
+        Assert.AreEqual(1, window.HitTestCount, "mouse button");
+    }
+
+    private sealed class CountingWindow : Window
+    {
+        public int HitTestCount { get; set; }
+
+        protected override UIElement? OnHitTest(Point point)
+        {
+            HitTestCount++;
+            return base.OnHitTest(point);
+        }
+    }
+
     private static StyleSheet HotSheet(double hotWidth = 100)
     {
         var sheet = new StyleSheet();

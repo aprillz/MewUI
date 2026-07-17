@@ -189,8 +189,6 @@ public partial class TextBlock : TextElement, IDisposable
         var constraintWidth = wrapping != TextWrapping.NoWrap ? maxWidth : double.PositiveInfinity;
         var constraints = new TextLayoutConstraints(new Rect(0, 0, constraintWidth, 0));
 
-        using var ctx = factory.CreateMeasurementContext(GetDpi());
-
         _textStore.SetFormat(new TextFormat
         {
             Font = font,
@@ -199,6 +197,13 @@ public partial class TextBlock : TextElement, IDisposable
             Wrapping = wrapping,
             Trimming = TextTrimming
         });
+
+        if (_textStore.TryGetMeasuredSize(in constraints, out var measuredSize))
+        {
+            return measuredSize;
+        }
+
+        using var ctx = factory.CreateMeasurementContext(GetDpi());
         return _textStore.Measure(ctx, Text, in constraints);
     }
 

@@ -64,11 +64,10 @@ internal static class WindowInputRouter
             return;
         }
 
-        var element = HitTest(window, positionInWindow);
-
         // Mouse-over must reflect the real element under the pointer, not the capture target,
         // so IsMouseOver stops tracking a captured element once the pointer leaves it.
         var actualHit = window.HitTest(positionInWindow);
+        var element = window.CapturedElement ?? actualHit;
         UpdateMouseOver(window, actualHit);
 
         var args = new MouseEventArgs(positionInWindow, screenPosition, MewUI.MouseButton.Left, leftDown, rightDown, middleDown, modifiers: modifiers)
@@ -101,12 +100,11 @@ internal static class WindowInputRouter
         positionInWindow = window.SurfacePointToVisualTree(positionInWindow);
         window.UpdateLastMousePosition(positionInWindow, screenPosition);
 
-        var element = HitTest(window, positionInWindow);
-
         // Focus and popup-close policy must react to the real element under the pointer, not the
         // capture target, so clicking elsewhere while capture is active does not re-focus/keep-open
         // whatever currently holds capture.
         var actualHit = window.HitTest(positionInWindow);
+        var element = window.CapturedElement ?? actualHit;
         if (isDown)
         {
             window.AccessKeyManager.OnPointerDown();

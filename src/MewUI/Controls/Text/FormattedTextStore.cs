@@ -15,6 +15,7 @@ internal sealed class FormattedTextStore
     private double _renderHeight;
     private double _measureConstraintWidth;
     private double _measureConstraintHeight;
+    private bool _hasMeasuredSize;
     private bool _dirty = true;
 
     public TextFormat? Format => _format;
@@ -39,12 +40,42 @@ internal sealed class FormattedTextStore
         _measuredSize = Size.Empty;
         _renderWidth = 0;
         _renderHeight = 0;
+        _hasMeasuredSize = false;
         _dirty = true;
     }
 
     public void SetFormat(TextFormat format)
     {
+        ArgumentNullException.ThrowIfNull(format);
+
+        var previous = _format;
+        if (previous != null
+            && ReferenceEquals(previous.Font, format.Font)
+            && previous.HorizontalAlignment == format.HorizontalAlignment
+            && previous.VerticalAlignment == format.VerticalAlignment
+            && previous.Wrapping == format.Wrapping
+            && previous.Trimming == format.Trimming)
+        {
+            _format = format;
+            return;
+        }
+
         _format = format;
+        InvalidateLayout();
+    }
+
+    public bool TryGetMeasuredSize(in TextLayoutConstraints constraints, out Size measuredSize)
+    {
+        if (_hasMeasuredSize &&
+            _measureConstraintWidth == constraints.Bounds.Width &&
+            _measureConstraintHeight == constraints.Bounds.Height)
+        {
+            measuredSize = _measuredSize;
+            return true;
+        }
+
+        measuredSize = Size.Empty;
+        return false;
     }
 
     /// <summary>Measure phase: compute size only. Native layout created and released immediately by MeasurementContext.</summary>
@@ -53,15 +84,14 @@ internal sealed class FormattedTextStore
         if (_format == null) return Size.Empty;
 
         // Skip re-measurement if constraints haven't changed since last measure
-        if (!_dirty && _measuredSize != Size.Empty &&
-            _measureConstraintWidth == constraints.Bounds.Width &&
-            _measureConstraintHeight == constraints.Bounds.Height)
-            return _measuredSize;
+        if (TryGetMeasuredSize(in constraints, out var measuredSize))
+            return measuredSize;
 
         var layout = ctx.CreateTextLayout(text, _format, in constraints);
         _measuredSize = layout?.MeasuredSize ?? Size.Empty;
         _measureConstraintWidth = constraints.Bounds.Width;
         _measureConstraintHeight = constraints.Bounds.Height;
+        _hasMeasuredSize = true;
         return _measuredSize;
     }
 
