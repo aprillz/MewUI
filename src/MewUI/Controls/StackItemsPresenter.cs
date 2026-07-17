@@ -533,6 +533,14 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         }
     }
 
+    protected override void OnDispose()
+    {
+        _itemsSource.Changed -= OnItemsChanged;
+        RecycleAll();
+        _pool.Clear();
+        base.OnDispose();
+    }
+
     private static IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
             build: _ => new TextBlock(),

@@ -429,6 +429,13 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
         InvalidateArrange();
     }
 
+    protected override void OnDispose()
+    {
+        _itemsSource.Changed -= OnItemsChanged;
+        _itemsHost.Dispose();
+        base.OnDispose();
+    }
+
     private static IDataTemplate CreateDefaultItemTemplate()
         => new DelegateTemplate<object?>(
             build: _ => new TextBlock(),

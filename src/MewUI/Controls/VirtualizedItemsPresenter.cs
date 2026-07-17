@@ -80,6 +80,15 @@ internal sealed class VirtualizedItemsPresenter
         }
     }
 
+    public void Dispose()
+    {
+        RecycleAll();
+        FlushRecycledByIndexToPool();
+        _pool.Clear();
+        _pendingRebind?.Clear();
+        ClearDeferredFocus();
+    }
+
     /// <summary>
     /// Visits all realized containers (useful for diagnostic traversal).
     /// </summary>
@@ -416,6 +425,7 @@ internal sealed class VirtualizedItemsPresenter
         {
             if (!ReferenceEquals(window.FocusManager.FocusedElement, _deferredFocusOwner))
             {
+                ClearDeferredFocus();
                 return;
             }
         }
@@ -424,23 +434,29 @@ internal sealed class VirtualizedItemsPresenter
             // Focus was cleared when we deferred it; only restore if focus is still null.
             if (window.FocusManager.FocusedElement != null)
             {
+                ClearDeferredFocus();
                 return;
             }
         }
 
         if (container is not Element root || !VisualTree.IsInSubtreeOf(deferred, root))
         {
+            ClearDeferredFocus();
             return;
         }
 
         if (!deferred.Focusable || !deferred.IsEffectivelyEnabled || !deferred.IsVisible)
         {
-            _deferredFocusedElement = null;
-            _deferredFocusOwner = null;
+            ClearDeferredFocus();
             return;
         }
 
         window.FocusManager.SetFocus(deferred);
+        ClearDeferredFocus();
+    }
+
+    private void ClearDeferredFocus()
+    {
         _deferredFocusedElement = null;
         _deferredFocusOwner = null;
         _deferredFocusedIndex = null;

@@ -759,6 +759,8 @@ public sealed class ScrollViewer : ContentControl
         {
             dh.Dispose();
         }
+
+        base.OnDispose();
     }
 
     /// <summary>

@@ -879,6 +879,8 @@ public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHos
         {
             multi.SelectedIndicesChanged -= OnItemsSelectedIndicesChanged;
         }
+
+        base.OnDispose();
     }
 
     private void OnItemsSelectedIndicesChanged()
