@@ -11,15 +11,14 @@ namespace Aprillz.MewUI.Platform.Linux.X11.IBus;
 /// </summary>
 internal sealed class IBusInputMethod : IX11InputMethod
 {
+    private static readonly EnvDebugLogger Logger = new("MEWUI_IME_DEBUG", "[IBus.IM]");
+
+    // IBus capability flags
     private const uint IBUS_CAP_PREEDIT_TEXT = 1 << 0;
     private const uint IBUS_CAP_FOCUS = 1 << 3;
 
     // IBus key state modifiers (match X11 but with IBus release flag)
     private const uint IBUS_RELEASE_MASK = 1 << 30;
-
-    private static readonly EnvDebugLogger Logger = new("MEWUI_IME_DEBUG", "[IBus.IM]");
-
-    // IBus capability flags
 
     private IBusConnection? _ibus;
     private bool _disposed;
@@ -168,7 +167,7 @@ internal sealed class IBusInputMethod : IX11InputMethod
 
         try
         {
-            Logger.Write($"[IBus.CommitText] sig='{msg.Signature}' bodyLen={msg.Body.Length}");
+            Console.Error.WriteLine($"[IBus.CommitText] sig='{msg.Signature}' bodyLen={msg.Body.Length}");
             var r = new DBusReader(msg.Body, 0);
             string? text = r.ReadIBusText();
             if (!string.IsNullOrEmpty(text))
@@ -197,7 +196,7 @@ internal sealed class IBusInputMethod : IX11InputMethod
 
         try
         {
-            Logger.Write($"[IBus.UpdatePreedit] sig='{msg.Signature}' bodyLen={msg.Body.Length}");
+            Console.Error.WriteLine($"[IBus.UpdatePreedit] sig='{msg.Signature}' bodyLen={msg.Body.Length}");
             var r = new DBusReader(msg.Body, 0);
             string? text = r.ReadIBusText();
             uint cursorPos = r.ReadUInt32();
