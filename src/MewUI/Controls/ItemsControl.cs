@@ -438,6 +438,7 @@ public sealed class ItemsControl : ScrollableItemsBase
         InitializePresenter(presenter);
 
         _presenter = presenter;
+        _presenter.ItemPadding = ItemPadding;
         _scrollViewer.Content = (UIElement)_presenter;
         _scrollViewer.HorizontalScroll = ScrollMode.Disabled;
         _scrollViewer.VerticalScroll = presenter is StackItemsPresenter
