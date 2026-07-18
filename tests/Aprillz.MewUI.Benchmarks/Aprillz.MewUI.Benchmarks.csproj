@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>Aprillz.MewUI.Benchmarks</AssemblyName>
     <OutputType>Exe</OutputType>
     <!-- Single TFM: property-store micro-benchmarks are runtime-representative on net8.0, and this
          matches the BenchmarkDotNet version already restored by the SvgNet submodule. -->
