@@ -61,6 +61,17 @@ public sealed class PropertyStoreAllocationTests
         });
     }
 
+    [TestMethod]
+    public void SetInherited_UnderHigherSource_DoesNotAllocate()
+    {
+        var owner = new AllocOwner();
+        owner.PropertyStore.SetLocal(AllocOwner.A, BrushA);
+
+        // Inherited is a re-resolvable cache: while a higher source wins, caching it must be skipped
+        // rather than allocating a shadow slot set to preserve a value that would be re-resolved.
+        AssertNoPerOpAllocation(() => owner.PropertyStore.SetInherited(AllocOwner.A, BrushB));
+    }
+
     // Averages under one byte per op: a one-time re-JIT allocation amortizes away over the run, while
     // any genuine per-op allocation (tens of bytes) fails.
     private static void AssertNoPerOpAllocation(Action op)
