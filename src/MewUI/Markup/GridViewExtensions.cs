@@ -152,6 +152,33 @@ public static class GridViewExtensions
     }
 
     /// <summary>
+    /// Adds a column using Auto, Star, or Pixel sizing.
+    /// </summary>
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        GridLength width,
+        IDataTemplate<TItem> template,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity,
+        bool resizable = true)
+    {
+        ArgumentNullException.ThrowIfNull(gridView);
+        ArgumentNullException.ThrowIfNull(template);
+
+        gridView.AddColumns(new GridViewColumn<TItem>
+        {
+            Header = header ?? string.Empty,
+            Width = width,
+            CellTemplate = template,
+            MinWidth = minWidth,
+            MaxWidth = maxWidth,
+            IsResizable = resizable,
+        });
+        return gridView;
+    }
+
+    /// <summary>
     /// Adds a column.
     /// </summary>
     /// <typeparam name="TItem">Item type.</typeparam>
@@ -169,20 +196,34 @@ public static class GridViewExtensions
         IDataTemplate<TItem> template,
         double minWidth = 0,
         bool resizable = true)
-    {
-        ArgumentNullException.ThrowIfNull(gridView);
-        ArgumentNullException.ThrowIfNull(template);
+        => AddColumn(gridView, header, GridLength.Pixels(width), template, minWidth, double.PositiveInfinity, resizable);
 
-        gridView.AddColumns(new GridViewColumn<TItem>
-        {
-            Header = header ?? string.Empty,
-            Width = width,
-            CellTemplate = template,
-            MinWidth = minWidth,
-            IsResizable = resizable,
-        });
-        return gridView;
-    }
+    /// <summary>
+    /// Adds a fixed-width column with minimum and maximum constraints.
+    /// </summary>
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        double width,
+        IDataTemplate<TItem> template,
+        double minWidth,
+        double maxWidth,
+        bool resizable = true)
+        => AddColumn(gridView, header, GridLength.Pixels(width), template, minWidth, maxWidth, resizable);
+
+    /// <summary>
+    /// Adds an Auto, Star, or Pixel column using delegate-based templating.
+    /// </summary>
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        GridLength width,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity,
+        bool resizable = true)
+        => AddColumn(gridView, header, width, new DelegateTemplate<TItem>(build, bind), minWidth, maxWidth, resizable);
 
     /// <summary>
     /// Adds a column using delegate-based templating.
@@ -212,10 +253,45 @@ public static class GridViewExtensions
         double width,
         Func<TemplateContext, FrameworkElement> build,
         Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        double minWidth,
+        double maxWidth,
+        bool resizable = true)
+        => AddColumn(gridView, header, GridLength.Pixels(width), new DelegateTemplate<TItem>(build, bind), minWidth, maxWidth, resizable);
+
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        GridLength width,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext> unbind,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity,
+        bool resizable = true)
+        => AddColumn(gridView, header, width, new DelegateTemplate<TItem>(build, bind, unbind), minWidth, maxWidth, resizable);
+
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        double width,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
         Action<FrameworkElement, TItem, int, TemplateContext> unbind,
         double minWidth = 0,
         bool resizable = true)
         => AddColumn(gridView, header, width, new DelegateTemplate<TItem>(build, bind, unbind), minWidth, resizable);
+
+    public static GridView AddColumn<TItem>(
+        this GridView gridView,
+        string header,
+        double width,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext> unbind,
+        double minWidth,
+        double maxWidth,
+        bool resizable = true)
+        => AddColumn(gridView, header, GridLength.Pixels(width), new DelegateTemplate<TItem>(build, bind, unbind), minWidth, maxWidth, resizable);
 
     /// <summary>
     /// Creates a column definition.
@@ -229,6 +305,26 @@ public static class GridViewExtensions
         double width,
         IDataTemplate<TItem> template)
         => new GridViewColumn<TItem> { Header = header ?? string.Empty, Width = width, CellTemplate = template };
+
+    /// <summary>
+    /// Creates an Auto, Star, or Pixel column definition with width constraints.
+    /// </summary>
+    public static GridViewColumn<TItem> Column<TItem>(
+        string header,
+        GridLength width,
+        IDataTemplate<TItem> template,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity,
+        bool resizable = true)
+        => new GridViewColumn<TItem>
+        {
+            Header = header ?? string.Empty,
+            Width = width,
+            MinWidth = minWidth,
+            MaxWidth = maxWidth,
+            IsResizable = resizable,
+            CellTemplate = template,
+        };
 
     /// <summary>
     /// Creates a column definition using delegate-based templating.
@@ -246,6 +342,28 @@ public static class GridViewExtensions
         Action<FrameworkElement, TItem, int, TemplateContext> bind,
         Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null)
         => new GridViewColumn<TItem> { Header = header ?? string.Empty, Width = width, CellTemplate = new DelegateTemplate<TItem>(build, bind, unbind) };
+
+    /// <summary>
+    /// Creates an Auto, Star, or Pixel column definition using delegate-based templating.
+    /// </summary>
+    public static GridViewColumn<TItem> Column<TItem>(
+        string header,
+        GridLength width,
+        Func<TemplateContext, FrameworkElement> build,
+        Action<FrameworkElement, TItem, int, TemplateContext> bind,
+        Action<FrameworkElement, TItem, int, TemplateContext>? unbind = null,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity,
+        bool resizable = true)
+        => new GridViewColumn<TItem>
+        {
+            Header = header ?? string.Empty,
+            Width = width,
+            MinWidth = minWidth,
+            MaxWidth = maxWidth,
+            IsResizable = resizable,
+            CellTemplate = new DelegateTemplate<TItem>(build, bind, unbind),
+        };
 
     /// <summary>
     /// Sets the column header text.
@@ -271,9 +389,55 @@ public static class GridViewExtensions
     public static GridViewColumn<TItem> Width<TItem>(this GridViewColumn<TItem> column, double width)
     {
         ArgumentNullException.ThrowIfNull(column);
-        column.Width = width;
+        column.Width = GridLength.Pixels(width);
         return column;
     }
+
+    /// <summary>
+    /// Sets an Auto, Star, or Pixel width together with its constraints.
+    /// </summary>
+    public static GridViewColumn<TItem> Width<TItem>(
+        this GridViewColumn<TItem> column,
+        GridLength width,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        column.Width = width;
+        column.MinWidth = minWidth;
+        column.MaxWidth = maxWidth;
+        return column;
+    }
+
+    /// <summary>
+    /// Sets a fixed pixel width together with its constraints.
+    /// </summary>
+    public static GridViewColumn<TItem> Width<TItem>(
+        this GridViewColumn<TItem> column,
+        double width,
+        double minWidth,
+        double maxWidth)
+        => column.Width(GridLength.Pixels(width), minWidth, maxWidth);
+
+    public static GridViewColumn<TItem> PixelWidth<TItem>(
+        this GridViewColumn<TItem> column,
+        double width,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity)
+        => column.Width(GridLength.Pixels(width), minWidth, maxWidth);
+
+    public static GridViewColumn<TItem> AutoWidth<TItem>(
+        this GridViewColumn<TItem> column,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity)
+        => column.Width(GridLength.Auto, minWidth, maxWidth);
+
+    public static GridViewColumn<TItem> StarWidth<TItem>(
+        this GridViewColumn<TItem> column,
+        double weight = 1,
+        double minWidth = 0,
+        double maxWidth = double.PositiveInfinity)
+        => column.Width(GridLength.Stars(weight), minWidth, maxWidth);
 
     /// <summary>
     /// Sets the column minimum width.
@@ -286,6 +450,16 @@ public static class GridViewExtensions
     {
         ArgumentNullException.ThrowIfNull(column);
         column.MinWidth = minWidth;
+        return column;
+    }
+
+    /// <summary>
+    /// Sets the column maximum width.
+    /// </summary>
+    public static GridViewColumn<TItem> MaxWidth<TItem>(this GridViewColumn<TItem> column, double maxWidth)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        column.MaxWidth = maxWidth;
         return column;
     }
 

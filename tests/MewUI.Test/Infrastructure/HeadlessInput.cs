@@ -40,6 +40,22 @@ internal static class HeadlessInput
         window.SendMouseUp(position, button, modifiers);
     }
 
+    public static void SendDoubleClick(this Window window, Point position, MouseButton button = MouseButton.Left,
+        ModifierKeys modifiers = ModifierKeys.None)
+    {
+        window.SendClick(position, button, modifiers);
+        WindowInputRouter.MouseButton(window, position, position, button, isDown: true,
+            leftDown: button == MouseButton.Left,
+            rightDown: button == MouseButton.Right,
+            middleDown: button == MouseButton.Middle,
+            clickCount: 2,
+            modifiers: modifiers);
+        WindowInputRouter.MouseButton(window, position, position, button, isDown: false,
+            leftDown: false, rightDown: false, middleDown: false,
+            clickCount: 2,
+            modifiers: modifiers);
+    }
+
     public static void SendMouseWheel(this Window window, Point position, double deltaY)
         => WindowInputRouter.MouseWheel(window, position, position, new Vector(0, deltaY));
 

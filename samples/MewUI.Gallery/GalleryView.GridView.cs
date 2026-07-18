@@ -22,7 +22,7 @@ partial class GalleryView
             .Select(i => new SimpleGridRow(i, $"Item {i}", (i % 6) switch { 1 => "Warning", 2 => "Error", _ => "Normal" }))
             .ToArray();
         GridView simple = null!;
-        var gridHitText = new ObservableValue<string>("Click: (none)");
+        var gridHitText = new ObservableValue<string>("Boundary: drag to resize · double-click to Auto");
         return Card(
             "GridView",
             new DockPanel()
@@ -54,17 +54,17 @@ partial class GalleryView
                         .Columns(
                             new GridViewColumn<SimpleGridRow>()
                                 .Header("#")
-                                .Width(60)
+                                .PixelWidth(60)
                                 .Text(row => row.Id.ToString()),
 
                             new GridViewColumn<SimpleGridRow>()
                                 .Header("Name")
-                                .Width(100)
+                                .AutoWidth(minWidth: 100, maxWidth: 240)
                                 .Text(row => row.Name),
 
                             new GridViewColumn<SimpleGridRow>()
                                 .Header("Status")
-                                .Width(100)
+                                .AutoWidth(minWidth: 100, maxWidth: 160)
                                 .Template(
                                     build: _ => new TextBlock().Margin(8, 0).CenterVertical(),
                                     bind: (view, row) => view
@@ -193,12 +193,12 @@ partial class GalleryView
 
                 new GridViewColumn<ComplexGridRow>()
                     .Header("Name")
-                    .Width(110)
+                    .StarWidth(minWidth: 100)
                     .Text(x => x.Name),
 
                 new GridViewColumn<ComplexGridRow>()
                     .Header("Amount")
-                    .Width(110)
+                    .StarWidth(2, minWidth: 110)
                     .Template(
                         build: _ => new NumericUpDown().Padding(6, 0).CenterVertical().Minimum(0).Maximum(100).Step(0.5).Format("0.##"),
                         bind: (view, row) => view.BindValue(row.Amount)
@@ -206,7 +206,7 @@ partial class GalleryView
 
                 new GridViewColumn<ComplexGridRow>()
                     .Header("Error")
-                    .Width(60)
+                    .AutoWidth(minWidth: 60, maxWidth: 80)
                     .Template(
                         build: _ => new CheckBox().Center(),
                         bind: (view, row) => view.BindIsChecked(row.HasError)
@@ -214,7 +214,7 @@ partial class GalleryView
 
                 new GridViewColumn<ComplexGridRow>()
                     .Header("Status")
-                    .Width(110)
+                    .AutoWidth(minWidth: 90, maxWidth: 140)
                     .Template(
                         build: _ => new TextBlock().Margin(8, 0).CenterVertical(),
                         bind: (view, row) => view.BindText(row.StatusText)
@@ -450,7 +450,7 @@ partial class GalleryView
 
                             new GridViewColumn<VariableHeightGridRow>()
                                 .Header("Note")
-                                .Width(440)
+                                .StarWidth(minWidth: 240)
                                 .Bind(
                                     build: _ => new TextBlock()
                                         .TextWrapping(TextWrapping.Wrap),
