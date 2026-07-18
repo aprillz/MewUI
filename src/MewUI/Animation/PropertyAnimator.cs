@@ -93,6 +93,54 @@ internal sealed class PropertyAnimator
     }
 
     /// <summary>
+    /// Animates the overlay from an explicit <paramref name="from"/> to <paramref name="to"/> where
+    /// the store's base value is already <paramref name="to"/> (the caller revealed it, e.g. by
+    /// clearing a higher source). Only the overlay animates; the base is not re-set, and on
+    /// completion the overlay clears back to the revealed base.
+    /// </summary>
+    internal void AnimateFromTo(MewProperty property, object from, object to, TimeSpan duration, Func<double, double> easing)
+    {
+        int id = property.Id;
+
+        if (Equals(from, to) || !TypeLerp.CanLerp(property.ValueType))
+        {
+            // Nothing to animate: drop any overlay so the revealed base shows immediately.
+            if (_states != null && _states.TryGetValue(id, out var existing))
+            {
+                existing.Clock?.Stop();
+                _states.Remove(id);
+            }
+            _store.ClearAnimatedValue(id);
+            return;
+        }
+
+        _states ??= new();
+        if (!_states.TryGetValue(id, out var state))
+        {
+            state = new AnimState();
+            _states[id] = state;
+            state.Clock = new AnimationClock(duration, easing);
+            state.Clock.TickCallback = progress => OnTick(id, progress);
+            state.Clock.CompletedCallback = () => _states?.Remove(id);
+        }
+        else
+        {
+            state.Clock!.Stop();
+            state.Clock.Duration = duration;
+            state.Clock.EasingFunction = easing;
+        }
+
+        state.FromValue = from;
+        state.TargetValue = to;
+        state.PropertyType = property.ValueType;
+        state.LerpDelegate = TypeLerp.GetDelegate(state.PropertyType);
+
+        // Base is already `to` (revealed by the caller); only overlay the animation.
+        _store.SetAnimatedValue(id, from);
+        state.Clock.Start();
+    }
+
+    /// <summary>
     /// Stops all running animations and clears animated overlays.
     /// </summary>
     public void StopAll()
