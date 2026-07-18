@@ -80,6 +80,26 @@ public static class GridViewExtensions
         return gridView;
     }
 
+    /// <summary>Applies an initial local single-column sort.</summary>
+    public static GridView SortByColumn(
+        this GridView gridView,
+        int columnIndex,
+        GridViewSortDirection direction = GridViewSortDirection.Ascending)
+    {
+        ArgumentNullException.ThrowIfNull(gridView);
+        gridView.SortByColumn(columnIndex, direction);
+        return gridView;
+    }
+
+    /// <summary>Adds a local sort change handler.</summary>
+    public static GridView OnSortChanged(this GridView gridView, Action<GridViewSortChange> handler)
+    {
+        ArgumentNullException.ThrowIfNull(gridView);
+        ArgumentNullException.ThrowIfNull(handler);
+        gridView.SortChanged += handler;
+        return gridView;
+    }
+
     /// <summary>
     /// Enables or disables zebra striping.
     /// </summary>
@@ -488,6 +508,31 @@ public static class GridViewExtensions
         this GridViewColumn<TItem> column,
         bool value = true)
         => column.Resizable(value);
+
+    /// <summary>Enables sorting by a key selected from each row item.</summary>
+    public static GridViewColumn<TItem> SortBy<TItem, TKey>(
+        this GridViewColumn<TItem> column,
+        Func<TItem, TKey> keySelector,
+        IComparer<TKey>? comparer = null)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentNullException.ThrowIfNull(keySelector);
+        comparer ??= Comparer<TKey>.Default;
+        column.SortComparer = Comparer<TItem>.Create(
+            (left, right) => comparer.Compare(keySelector(left), keySelector(right)));
+        return column;
+    }
+
+    /// <summary>Enables sorting with a comparer over complete row items.</summary>
+    public static GridViewColumn<TItem> SortWith<TItem>(
+        this GridViewColumn<TItem> column,
+        IComparer<TItem> comparer)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        ArgumentNullException.ThrowIfNull(comparer);
+        column.SortComparer = comparer;
+        return column;
+    }
 
     /// <summary>
     /// Sets the column cell template.

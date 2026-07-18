@@ -24,5 +24,11 @@ public sealed class GridViewColumn<TItem>
     /// </summary>
     public bool IsResizable { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets the item comparer used when this column is sorted. A null comparer makes
+    /// the column non-sortable.
+    /// </summary>
+    public IComparer<TItem>? SortComparer { get; set; }
+
     public IDataTemplate<TItem>? CellTemplate { get; set; }
 }

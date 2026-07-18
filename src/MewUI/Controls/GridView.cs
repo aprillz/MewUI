@@ -92,6 +92,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             InvalidateItemBindings();
             InvalidateVisual();
         };
+        _core.SortChanged += change =>
+        {
+            _header.InvalidateMeasure();
+            _header.InvalidateVisual();
+            SortChanged?.Invoke(change);
+        };
         _core.ColumnsChanged += () =>
         {
             _header.SetColumns(_core.Columns);
@@ -113,6 +119,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     }
 
     public event Action<object?>? SelectionChanged;
+
+    /// <summary>Occurs when the active single-column sort changes.</summary>
+    public event Action<GridViewSortChange>? SortChanged;
 
     public bool ZebraStriping
     {
@@ -504,9 +513,22 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     /// </summary>
     public ISelectableItemsView ItemsSource
     {
-        get => _core.ItemsSource;
+        get => _core.SourceItemsView;
         set => _core.SetItems(value ?? ItemsView.EmptySelectable);
     }
+
+    /// <summary>Gets the active sorted column index, or -1 when source order is displayed.</summary>
+    public int SortColumnIndex => _core.SortColumnIndex;
+
+    /// <summary>Gets the active single-column sort direction.</summary>
+    public GridViewSortDirection SortDirection => _core.SortDirection;
+
+    /// <summary>Applies a local sort using the comparer registered on the specified column.</summary>
+    public void SortByColumn(int columnIndex, GridViewSortDirection direction)
+        => _core.SortByColumn(columnIndex, direction);
+
+    /// <summary>Clears the active sort and restores current source order.</summary>
+    public void ClearSort() => _core.ClearSort();
 
     public void SetColumns<TItem>(IReadOnlyList<GridViewColumn<TItem>> columns)
     {
@@ -763,13 +785,17 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             }
 
             ValidateColumn(c);
+            var sortComparer = c.SortComparer;
             list.Add(new GridViewCore.ColumnDefinition(
                 c.Header,
                 c.Width,
                 c.MinWidth,
                 c.MaxWidth,
                 c.IsResizable,
-                c.CellTemplate));
+                c.CellTemplate,
+                sortComparer == null
+                    ? null
+                    : (left, right) => sortComparer.Compare((TItem)left!, (TItem)right!)));
         }
 
         return list;
@@ -1035,6 +1061,10 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             _core.ResetAutoDesiredWidths();
             _presenter.RecycleAll();
+            if (_presenter is VariableHeightItemsPresenter variableHeightPresenter)
+            {
+                variableHeightPresenter.InvalidateHeights();
+            }
             // A wholesale swap resets the underlying view's mode; re-apply the control-level setting.
             _core.SelectionMode = SelectionMode;
         }
@@ -1252,6 +1282,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     private sealed class HeaderRow : Panel
     {
         private const double SeparatorHitWidth = 6;
+        private const double SortIndicatorSlotWidth = 18;
 
         private readonly GridView _owner;
         private readonly List<TextBlock> _cells = new();
@@ -1263,6 +1294,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         private double _resizeDragStartX;
         private double _resizeDragStartWidth;
         private GridViewCore.ColumnResizeSession? _resizeSession;
+        private int _pressedSortColumnIndex = -1;
 
         public HeaderRow(GridView owner)
         {
@@ -1301,7 +1333,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             for (int i = 0; i < columns.Count; i++)
             {
                 _cells[i].Text = columns[i].Header;
-                _cells[i].Margin = new Thickness(6, 0, 6, 0);
+                _cells[i].Margin = columns[i].IsSortable
+                    ? new Thickness(6, 0, SortIndicatorSlotWidth, 0)
+                    : new Thickness(6, 0, 6, 0);
             }
         }
 
@@ -1366,7 +1400,26 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             double inset = Math.Min(6, Math.Max(0, (bounds.Height - 2) / 2));
             for (int i = 0; i < _owner._core.Columns.Count; i++)
             {
-                x += Math.Max(0, _owner._core.Columns[i].ActualWidth);
+                double width = Math.Max(0, _owner._core.Columns[i].ActualWidth);
+                double right = x + width;
+                if (_owner._core.SortColumnIndex == i && width >= SortIndicatorSlotWidth)
+                {
+                    double centerX = right - SortIndicatorSlotWidth / 2;
+                    if (centerX >= bounds.Left && centerX <= bounds.Right)
+                    {
+                        Glyph.Draw(
+                            context,
+                            new Point(centerX, bounds.Y + bounds.Height / 2),
+                            3,
+                            theme.Palette.WindowText,
+                            _owner._core.SortDirection == GridViewSortDirection.Ascending
+                                ? GlyphKind.ChevronUp
+                                : GlyphKind.ChevronDown,
+                            1);
+                    }
+                }
+
+                x = right;
                 if (x >= bounds.Right - 0.5)
                 {
                     break;
@@ -1374,6 +1427,21 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
                 context.DrawLine(new Point(x, bounds.Y + inset), new Point(x, bounds.Bottom - inset), stroke, 1, pixelSnap: true);
             }
+        }
+
+        private int HitTestColumn(double localX)
+        {
+            double x = -HorizontalOffset;
+            for (int i = 0; i < _owner._core.Columns.Count; i++)
+            {
+                double right = x + Math.Max(0, _owner._core.Columns[i].ActualWidth);
+                if (localX >= x && localX < right)
+                {
+                    return i;
+                }
+                x = right;
+            }
+            return -1;
         }
 
         /// <summary>
@@ -1404,9 +1472,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             var pos = e.GetPosition(this);
             bool autoSize = e.ClickCount >= 2;
             int col = HitTestSeparator(pos.X, forAutoSize: autoSize);
-            if (col < 0) return;
-
-            if (autoSize)
+            if (col >= 0 && autoSize)
             {
                 if (_owner._core.ResetColumnToAuto(col))
                 {
@@ -1418,19 +1484,35 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 return;
             }
 
-            _resizeColumnIndex = col;
-            _resizeDragStartX = pos.X;
-            _resizeDragStartWidth = _owner._core.Columns[col].ActualWidth;
-            _resizeSession = _owner._core.BeginColumnResize(col);
-            if (_resizeSession == null)
+            if (col >= 0)
             {
-                _resizeColumnIndex = -1;
+                _resizeColumnIndex = col;
+                _resizeDragStartX = pos.X;
+                _resizeDragStartWidth = _owner._core.Columns[col].ActualWidth;
+                _resizeSession = _owner._core.BeginColumnResize(col);
+                if (_resizeSession == null)
+                {
+                    _resizeColumnIndex = -1;
+                    return;
+                }
+                Cursor = CursorType.SizeWE;
+
+                if (_owner.FindVisualRoot() is Window resizeWindow)
+                    resizeWindow.CaptureMouse(this);
+
+                e.Handled = true;
                 return;
             }
-            Cursor = CursorType.SizeWE;
 
-            if (_owner.FindVisualRoot() is Window window)
-                window.CaptureMouse(this);
+            int sortColumn = HitTestColumn(pos.X);
+            if (sortColumn < 0 || !_owner._core.Columns[sortColumn].IsSortable)
+            {
+                return;
+            }
+
+            _pressedSortColumnIndex = sortColumn;
+            if (_owner.FindVisualRoot() is Window sortWindow)
+                sortWindow.CaptureMouse(this);
 
             e.Handled = true;
         }
@@ -1458,6 +1540,16 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 return;
             }
 
+            if (_pressedSortColumnIndex >= 0)
+            {
+                if (!e.LeftButton || !IsMouseCaptured)
+                {
+                    _pressedSortColumnIndex = -1;
+                }
+                e.Handled = true;
+                return;
+            }
+
             // Update cursor based on separator hover
             Cursor = HitTestSeparator(pos.X) >= 0
                 ? CursorType.SizeWE
@@ -1468,16 +1560,33 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             base.OnMouseUp(e);
 
-            if (_resizeColumnIndex < 0) return;
+            if (_resizeColumnIndex >= 0)
+            {
+                _resizeColumnIndex = -1;
+                _resizeSession = null;
+                Cursor = null;
 
-            _resizeColumnIndex = -1;
-            _resizeSession = null;
-            Cursor = null;
+                if (_owner.FindVisualRoot() is Window resizeWindow)
+                    resizeWindow.ReleaseMouseCapture();
 
-            if (_owner.FindVisualRoot() is Window window)
-                window.ReleaseMouseCapture();
+                e.Handled = true;
+                return;
+            }
 
-            e.Handled = true;
+            if (_pressedSortColumnIndex >= 0)
+            {
+                int pressed = _pressedSortColumnIndex;
+                _pressedSortColumnIndex = -1;
+                if (_owner.FindVisualRoot() is Window sortWindow)
+                    sortWindow.ReleaseMouseCapture();
+
+                var pos = e.GetPosition(this);
+                if (HitTestColumn(pos.X) == pressed && HitTestSeparator(pos.X) < 0)
+                {
+                    _owner._core.CycleSort(pressed);
+                }
+                e.Handled = true;
+            }
         }
     }
 
@@ -1813,7 +1922,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 double minWidth,
                 double maxWidth,
                 bool isResizable,
-                IDataTemplate cellTemplate)
+                IDataTemplate cellTemplate,
+                Comparison<object?>? sortComparison = null)
             {
                 Header = header;
                 Width = width;
@@ -1821,6 +1931,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 MaxWidth = maxWidth;
                 IsResizable = isResizable;
                 CellTemplate = cellTemplate;
+                SortComparison = sortComparison;
             }
 
             public string Header { get; }
@@ -1834,6 +1945,10 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             public bool IsResizable { get; }
 
             public IDataTemplate CellTemplate { get; }
+
+            public Comparison<object?>? SortComparison { get; }
+
+            public bool IsSortable => SortComparison != null;
 
             public double AutoDesiredWidth { get; set; }
 
@@ -1861,7 +1976,11 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             public double[] WorkingWidths { get; init; } = [];
         }
 
-        private ISelectableItemsView _itemsView = ItemsView.EmptySelectable;
+        private ISelectableItemsView _sourceItemsView = ItemsView.EmptySelectable;
+        private GridViewSortedItemsView _itemsView = GridViewSortedItemsView.Create(
+            ItemsView.EmptySelectable,
+            null,
+            GridViewSortDirection.None);
         private readonly List<ColumnDefinition> _columns = new();
         private readonly List<GridViewColumnWidthRequest> _widthRequests = new();
         private double[] _resolvedWidths = [];
@@ -1872,6 +1991,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         public int ColumnsVersion => _columnsVersion;
 
         public ISelectableItemsView ItemsSource => _itemsView;
+
+        public ISelectableItemsView SourceItemsView => _sourceItemsView;
+
+        public int SortColumnIndex { get; private set; } = -1;
+
+        public GridViewSortDirection SortDirection { get; private set; }
 
         public int SelectedIndex
         {
@@ -1920,6 +2045,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
         public event Action? ColumnsChanged;
 
+        public event Action<GridViewSortChange>? SortChanged;
+
         public void SetItems(ISelectableItemsView itemsView)
         {
             ArgumentNullException.ThrowIfNull(itemsView);
@@ -1929,29 +2056,25 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             object? previousSelectedItem = previousSelectedIndex >= 0 && previousSelectedIndex < old.Count
                 ? old.GetItem(previousSelectedIndex)
                 : null;
-            UnhookItemsView(old);
 
-            _itemsView = itemsView;
-            HookItemsView(_itemsView);
-
-            if (_itemsView is IMultiSelectableItemsView newMulti)
+            Comparison<object?>? comparison = SortColumnIndex >= 0
+                ? _columns[SortColumnIndex].SortComparison
+                : null;
+            var next = GridViewSortedItemsView.Create(itemsView, comparison, SortDirection);
+            if (itemsView is IMultiSelectableItemsView newMulti)
             {
                 newMulti.ClearSelection();
             }
-
-            // Only preserve the selected index when the item at that index in the new view is confirmed to
-            // be the same item (by reference, or by key when the view provides a KeySelector). Otherwise the
-            // previous index would silently select an unrelated row belonging to the new source.
-            bool sameItem = false;
-            if (previousSelectedItem != null && previousSelectedIndex >= 0 && previousSelectedIndex < _itemsView.Count)
+            if (previousSelectedItem != null)
             {
-                var candidate = _itemsView.GetItem(previousSelectedIndex);
-                var keySelector = _itemsView.KeySelector;
-                sameItem = ReferenceEquals(candidate, previousSelectedItem)
-                    || (keySelector != null && Equals(keySelector(candidate), keySelector(previousSelectedItem)));
+                next.SelectedItem = previousSelectedItem;
             }
 
-            _itemsView.SelectedIndex = sameItem ? previousSelectedIndex : -1;
+            UnhookItemsView(old);
+            old.Dispose();
+            _sourceItemsView = itemsView;
+            _itemsView = next;
+            HookItemsView(_itemsView);
 
             ItemsChanged?.Invoke(new ItemsChange(ItemsChangeKind.Reset, 0, _itemsView.Count));
         }
@@ -1959,6 +2082,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         public void SetColumns(IReadOnlyList<ColumnDefinition> columns)
         {
             ArgumentNullException.ThrowIfNull(columns);
+
+            ClearSort();
 
             _columns.Clear();
             for (int i = 0; i < columns.Count; i++)
@@ -1968,6 +2093,78 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
             _columnsVersion++;
             ColumnsChanged?.Invoke();
+        }
+
+        public void SortByColumn(int columnIndex, GridViewSortDirection direction)
+        {
+            if (direction is < GridViewSortDirection.None or > GridViewSortDirection.Descending)
+            {
+                throw new ArgumentOutOfRangeException(nameof(direction));
+            }
+            if (direction == GridViewSortDirection.None)
+            {
+                ClearSort();
+                return;
+            }
+            if ((uint)columnIndex >= (uint)_columns.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(columnIndex));
+            }
+
+            var comparison = _columns[columnIndex].SortComparison
+                ?? throw new InvalidOperationException($"GridView column {columnIndex} does not define a sort comparer.");
+            if (SortColumnIndex == columnIndex && SortDirection == direction)
+            {
+                return;
+            }
+
+            int previousColumn = SortColumnIndex;
+            var previousDirection = SortDirection;
+            SortColumnIndex = columnIndex;
+            SortDirection = direction;
+            try
+            {
+                _itemsView.SetSort(comparison, direction);
+            }
+            catch
+            {
+                SortColumnIndex = previousColumn;
+                SortDirection = previousDirection;
+                throw;
+            }
+
+            SortChanged?.Invoke(new GridViewSortChange(columnIndex, direction));
+        }
+
+        public void ClearSort()
+        {
+            if (SortDirection == GridViewSortDirection.None)
+            {
+                return;
+            }
+
+            SortColumnIndex = -1;
+            SortDirection = GridViewSortDirection.None;
+            _itemsView.SetSort(null, GridViewSortDirection.None);
+            SortChanged?.Invoke(new GridViewSortChange(-1, GridViewSortDirection.None));
+        }
+
+        public void CycleSort(int columnIndex)
+        {
+            if ((uint)columnIndex >= (uint)_columns.Count || !_columns[columnIndex].IsSortable)
+            {
+                return;
+            }
+
+            var next = SortColumnIndex != columnIndex
+                ? GridViewSortDirection.Ascending
+                : SortDirection switch
+                {
+                    GridViewSortDirection.Ascending => GridViewSortDirection.Descending,
+                    GridViewSortDirection.Descending => GridViewSortDirection.None,
+                    _ => GridViewSortDirection.Ascending,
+                };
+            SortByColumn(columnIndex, next);
         }
 
         public void AddColumns(IReadOnlyList<ColumnDefinition> columns)
