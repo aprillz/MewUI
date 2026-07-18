@@ -230,7 +230,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
+        _core.ResetAutoDesiredWidths();
         InvalidateItemBindings();
+        InvalidateMeasure();
         InvalidateVisual();
     }
 
@@ -290,7 +292,11 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         }
     }
 
-    private void OnCellPaddingChanged() => InvalidateItemBindings();
+    private void OnCellPaddingChanged()
+    {
+        _core.ResetAutoDesiredWidths();
+        InvalidateItemBindings();
+    }
 
     private void InvalidateGridItemBindings() => InvalidateItemBindings();
 
@@ -711,7 +717,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         double cur = contentX;
         for (int i = 0; i < _core.Columns.Count; i++)
         {
-            double w = Math.Max(0, _core.Columns[i].Width);
+            double w = Math.Max(0, _core.Columns[i].ActualWidth);
             double next = cur + w;
             if (x >= cur && x < next)
             {
@@ -756,10 +762,56 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 throw new InvalidOperationException("GridViewColumn.CellTemplate is required.");
             }
 
-            list.Add(new GridViewCore.ColumnDefinition(c.Header, c.Width, c.MinWidth, c.IsResizable, c.CellTemplate));
+            ValidateColumn(c);
+            list.Add(new GridViewCore.ColumnDefinition(
+                c.Header,
+                c.Width,
+                c.MinWidth,
+                c.MaxWidth,
+                c.IsResizable,
+                c.CellTemplate));
         }
 
         return list;
+    }
+
+    private static void ValidateColumn<TItem>(GridViewColumn<TItem> column)
+    {
+        var width = column.Width;
+        switch (width.GridUnitType)
+        {
+            case GridUnitType.Auto:
+                break;
+            case GridUnitType.Pixel:
+                if (!double.IsFinite(width.Value) || width.Value < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(column.Width), "Pixel width must be finite and non-negative.");
+                }
+                break;
+            case GridUnitType.Star:
+                if (!double.IsFinite(width.Value) || width.Value <= 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(column.Width), "Star weight must be finite and greater than zero.");
+                }
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(column.Width), "Unknown GridUnitType.");
+        }
+
+        if (!double.IsFinite(column.MinWidth) || column.MinWidth < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(column.MinWidth), "MinWidth must be finite and non-negative.");
+        }
+
+        if (double.IsNaN(column.MaxWidth) || column.MaxWidth < 0 || double.IsNegativeInfinity(column.MaxWidth))
+        {
+            throw new ArgumentOutOfRangeException(nameof(column.MaxWidth), "MaxWidth must be non-negative or positive infinity.");
+        }
+
+        if (column.MaxWidth < column.MinWidth)
+        {
+            throw new ArgumentOutOfRangeException(nameof(column.MaxWidth), "MaxWidth must be greater than or equal to MinWidth.");
+        }
     }
 
     // Topmost-first: the scroll viewer renders after (on top of) the header row.
@@ -775,17 +827,14 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             ? double.PositiveInfinity
             : Math.Max(0, availableSize.Width - Padding.HorizontalThickness - borderInset * 2);
 
-        _columnsExtentWidth = 0;
-        for (int i = 0; i < _core.Columns.Count; i++)
-        {
-            _columnsExtentWidth += Math.Max(0, _core.Columns[i].Width);
-        }
+        double headerH = ResolveHeaderHeight();
+        _header.MeasureAutoColumns(headerH);
+        _columnsExtentWidth = _core.ResolveColumnWidths(widthLimit, out _);
 
         double contentWidth = double.IsPositiveInfinity(widthLimit)
             ? _columnsExtentWidth
             : Math.Min(_columnsExtentWidth, widthLimit);
 
-        double headerH = ResolveHeaderHeight();
         double rowH = ResolveRowHeight();
         double alignedRowH = GetPixelAlignedRowHeight();
 
@@ -828,6 +877,17 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         var contentBounds = innerBounds.Deflate(Padding);
 
         double headerH = ResolveHeaderHeight();
+
+        // Measure owns the presenter's scroll extent. Arrange may legitimately resolve Star
+        // columns to a different final width: for example, a WrapPanel measures its children
+        // with infinite width to obtain their natural size and then arranges them into a finite
+        // slot. Feeding that final width back into measure makes the columns (and presenter
+        // extent) alternate between their natural minimum and the arranged viewport forever.
+        //
+        // Rows are measured by the presenter against the final layout width below, so updating
+        // ActualWidth here is sufficient; it must not invalidate measure or rewrite the measured
+        // scroll extent.
+        _columnsExtentWidth = _core.ResolveColumnWidths(Math.Max(0, contentBounds.Width), out _);
 
         _rowsViewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Width), dpiScale);
         _rowsViewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Height - headerH), dpiScale);
@@ -926,9 +986,34 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         double total = 0;
         for (int i = 0; i < _core.Columns.Count; i++)
         {
-            total += Math.Max(0, _core.Columns[i].Width);
+            total += Math.Max(0, _core.Columns[i].ActualWidth);
         }
         return total;
+    }
+
+    private void ReportAutoDesiredWidth(int columnIndex, double desiredWidth)
+    {
+        if (!_core.ReportAutoDesiredWidth(columnIndex, desiredWidth))
+        {
+            return;
+        }
+
+        if (_presenter is VariableHeightItemsPresenter variableHeightPresenter)
+        {
+            variableHeightPresenter.InvalidateHeights();
+        }
+        InvalidateMeasure();
+    }
+
+    private void InvalidateColumnSizing()
+    {
+        InvalidateGridItemBindings();
+        if (_presenter is VariableHeightItemsPresenter variableHeightPresenter)
+        {
+            variableHeightPresenter.InvalidateHeights();
+        }
+        InvalidateMeasure();
+        InvalidateVisual();
     }
 
     private void BindRowTemplate(FrameworkElement element, object? item, int index, TemplateContext _)
@@ -948,6 +1033,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         // signals a wholesale collection change.
         if (change.Kind == ItemsChangeKind.Reset)
         {
+            _core.ResetAutoDesiredWidths();
             _presenter.RecycleAll();
             // A wholesale swap resets the underlying view's mode; re-apply the control-level setting.
             _core.SelectionMode = SelectionMode;
@@ -1176,6 +1262,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
         private double _resizeDragStartX;
         private double _resizeDragStartWidth;
+        private GridViewCore.ColumnResizeSession? _resizeSession;
 
         public HeaderRow(GridView owner)
         {
@@ -1224,7 +1311,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             {
                 // Use actual column width as constraint so TextTrimming/Ellipsis works
                 double colWidth = i < _owner._core.Columns.Count
-                    ? Math.Max(0, _owner._core.Columns[i].Width)
+                    ? Math.Max(0, _owner._core.Columns[i].ActualWidth)
                     : double.PositiveInfinity;
                 _cells[i].Measure(new Size(colWidth, availableSize.Height));
             }
@@ -1232,12 +1319,26 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             return new Size(availableSize.Width, availableSize.Height);
         }
 
+        public void MeasureAutoColumns(double availableHeight)
+        {
+            for (int i = 0; i < _cells.Count && i < _owner._core.Columns.Count; i++)
+            {
+                if (!_owner._core.Columns[i].Width.IsAuto)
+                {
+                    continue;
+                }
+
+                _cells[i].Measure(new Size(double.PositiveInfinity, Math.Max(0, availableHeight)));
+                _owner._core.ReportAutoDesiredWidth(i, _cells[i].DesiredSize.Width);
+            }
+        }
+
         protected override void ArrangeContent(Rect bounds)
         {
             double x = bounds.X - HorizontalOffset;
             for (int i = 0; i < _cells.Count; i++)
             {
-                double w = Math.Max(0, _owner._core.Columns[i].Width);
+                double w = Math.Max(0, _owner._core.Columns[i].ActualWidth);
                 _cells[i].Arrange(new Rect(x, bounds.Y, w, bounds.Height));
                 x += w;
             }
@@ -1265,7 +1366,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             double inset = Math.Min(6, Math.Max(0, (bounds.Height - 2) / 2));
             for (int i = 0; i < _owner._core.Columns.Count; i++)
             {
-                x += Math.Max(0, _owner._core.Columns[i].Width);
+                x += Math.Max(0, _owner._core.Columns[i].ActualWidth);
                 if (x >= bounds.Right - 0.5)
                 {
                     break;
@@ -1279,14 +1380,17 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         /// Returns the column index whose right-edge separator is near the given X position,
         /// or -1 if no resizable separator is hit.
         /// </summary>
-        private int HitTestSeparator(double localX)
+        private int HitTestSeparator(double localX, bool forAutoSize = false)
         {
             var columns = _owner._core.Columns;
             double x = -HorizontalOffset;
             for (int i = 0; i < columns.Count; i++)
             {
-                x += Math.Max(0, columns[i].Width);
-                if (Math.Abs(localX - x) <= SeparatorHitWidth / 2 && columns[i].IsResizable)
+                x += Math.Max(0, columns[i].ActualWidth);
+                bool canUseSeparator = forAutoSize
+                    ? _owner._core.CanAutoSizeColumn(i)
+                    : _owner._core.CanResizeColumn(i);
+                if (Math.Abs(localX - x) <= SeparatorHitWidth / 2 && canUseSeparator)
                     return i;
             }
             return -1;
@@ -1298,12 +1402,31 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             if (e.Handled || e.Button != MouseButton.Left) return;
 
             var pos = e.GetPosition(this);
-            int col = HitTestSeparator(pos.X);
+            bool autoSize = e.ClickCount >= 2;
+            int col = HitTestSeparator(pos.X, forAutoSize: autoSize);
             if (col < 0) return;
+
+            if (autoSize)
+            {
+                if (_owner._core.ResetColumnToAuto(col))
+                {
+                    _owner.InvalidateColumnSizing();
+                    InvalidateArrange();
+                    InvalidateVisual();
+                }
+                e.Handled = true;
+                return;
+            }
 
             _resizeColumnIndex = col;
             _resizeDragStartX = pos.X;
-            _resizeDragStartWidth = _owner._core.Columns[col].Width;
+            _resizeDragStartWidth = _owner._core.Columns[col].ActualWidth;
+            _resizeSession = _owner._core.BeginColumnResize(col);
+            if (_resizeSession == null)
+            {
+                _resizeColumnIndex = -1;
+                return;
+            }
             Cursor = CursorType.SizeWE;
 
             if (_owner.FindVisualRoot() is Window window)
@@ -1323,17 +1446,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 double delta = pos.X - _resizeDragStartX;
                 double newWidth = _resizeDragStartWidth + delta;
 
-                _owner._core.SetColumnWidth(_resizeColumnIndex, newWidth);
-                _owner.InvalidateGridItemBindings();
-                // Variable-height rows recompute height from cell content; column-width
-                // changes can change wrap break points - row height changes. Tell the
-                // presenter to drop its cached heights so prefix sums re-measure.
-                if (_owner._presenter is VariableHeightItemsPresenter variableHeightPresenter)
+                if (!_owner._core.ResizeColumn(_resizeSession!, newWidth))
                 {
-                    variableHeightPresenter.InvalidateHeights();
+                    e.Handled = true;
+                    return;
                 }
-                _owner.InvalidateMeasure();
-                _owner.InvalidateVisual();
+                _owner.InvalidateColumnSizing();
                 InvalidateArrange();
                 InvalidateVisual();
                 e.Handled = true;
@@ -1353,6 +1471,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             if (_resizeColumnIndex < 0) return;
 
             _resizeColumnIndex = -1;
+            _resizeSession = null;
             Cursor = null;
 
             if (_owner.FindVisualRoot() is Window window)
@@ -1504,10 +1623,18 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             double maxCellH = 0;
             for (int i = 0; i < _cells.Count; i++)
             {
-                double w = Math.Max(0, _owner._core.Columns[i].Width - padH);
                 double h = double.IsPositiveInfinity(availableSize.Height)
                     ? double.PositiveInfinity
                     : Math.Max(0, availableSize.Height - padV);
+
+                var column = _owner._core.Columns[i];
+                if (column.Width.IsAuto)
+                {
+                    _cells[i].View.Measure(new Size(double.PositiveInfinity, h));
+                    _owner.ReportAutoDesiredWidth(i, _cells[i].View.DesiredSize.Width + padH);
+                }
+
+                double w = Math.Max(0, column.ActualWidth - padH);
                 _cells[i].View.Measure(new Size(w, h));
                 if (_cells[i].View.DesiredSize.Height > maxCellH)
                 {
@@ -1530,7 +1657,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             var pad = _owner.CellPadding;
             for (int i = 0; i < _cells.Count; i++)
             {
-                double w = Math.Max(0, _owner._core.Columns[i].Width);
+                double w = Math.Max(0, _owner._core.Columns[i].ActualWidth);
                 var cellRect = new Rect(
                     x + pad.Left,
                     bounds.Y + pad.Top,
@@ -1581,7 +1708,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 double x = snapped.X;
                 for (int i = 0; i < _owner._core.Columns.Count; i++)
                 {
-                    x += Math.Max(0, _owner._core.Columns[i].Width);
+                    x += Math.Max(0, _owner._core.Columns[i].ActualWidth);
                     if (x >= snapped.Right - 0.5)
                     {
                         break;
@@ -1678,10 +1805,66 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     internal sealed class GridViewCore
     {
-        internal record struct ColumnDefinition(string Header, double Width, double MinWidth, bool IsResizable, IDataTemplate CellTemplate);
+        internal sealed class ColumnDefinition
+        {
+            public ColumnDefinition(
+                string header,
+                GridLength width,
+                double minWidth,
+                double maxWidth,
+                bool isResizable,
+                IDataTemplate cellTemplate)
+            {
+                Header = header;
+                Width = width;
+                MinWidth = minWidth;
+                MaxWidth = maxWidth;
+                IsResizable = isResizable;
+                CellTemplate = cellTemplate;
+            }
+
+            public string Header { get; }
+
+            public GridLength Width { get; set; }
+
+            public double MinWidth { get; }
+
+            public double MaxWidth { get; }
+
+            public bool IsResizable { get; }
+
+            public IDataTemplate CellTemplate { get; }
+
+            public double AutoDesiredWidth { get; set; }
+
+            public double ActualWidth { get; set; }
+        }
+
+        internal sealed class ColumnResizeSession
+        {
+            public required int TargetIndex { get; init; }
+
+            public required int ColumnCount { get; init; }
+
+            public required double StartWidth { get; init; }
+
+            public required bool IsStar { get; init; }
+
+            public required bool IsAuto { get; init; }
+
+            public required double[] InitialWidths { get; init; }
+
+            public required double[] InitialWeights { get; init; }
+
+            public required int[] PeerIndices { get; init; }
+
+            public double[] WorkingWidths { get; init; } = [];
+        }
 
         private ISelectableItemsView _itemsView = ItemsView.EmptySelectable;
         private readonly List<ColumnDefinition> _columns = new();
+        private readonly List<GridViewColumnWidthRequest> _widthRequests = new();
+        private double[] _resolvedWidths = [];
         private int _columnsVersion;
 
         public IReadOnlyList<ColumnDefinition> Columns => _columns;
@@ -1800,17 +1983,280 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             ColumnsChanged?.Invoke();
         }
 
-        /// <summary>
-        /// Updates the width of a single column (e.g. during resize drag).
-        /// Does not fire ColumnsChanged; caller is responsible for layout invalidation.
-        /// </summary>
-        public void SetColumnWidth(int index, double width)
+        public double ResolveColumnWidths(double availableWidth, out bool changed)
         {
-            if ((uint)index >= (uint)_columns.Count) return;
-            var col = _columns[index];
-            col.Width = Math.Max(col.MinWidth, width);
-            _columns[index] = col;
-            _columnsVersion++;
+            _widthRequests.Clear();
+            for (int i = 0; i < _columns.Count; i++)
+            {
+                var column = _columns[i];
+                _widthRequests.Add(new GridViewColumnWidthRequest(
+                    column.Width,
+                    column.AutoDesiredWidth,
+                    column.MinWidth,
+                    column.MaxWidth));
+            }
+
+            if (_resolvedWidths.Length < _columns.Count)
+            {
+                _resolvedWidths = new double[_columns.Count];
+            }
+
+            double extent = GridViewColumnWidthResolver.Resolve(_widthRequests, availableWidth, _resolvedWidths);
+            changed = false;
+            for (int i = 0; i < _columns.Count; i++)
+            {
+                double actual = _resolvedWidths[i];
+                if (!_columns[i].ActualWidth.Equals(actual))
+                {
+                    _columns[i].ActualWidth = actual;
+                    changed = true;
+                }
+            }
+
+            return extent;
+        }
+
+        public bool ReportAutoDesiredWidth(int index, double desiredWidth)
+        {
+            if ((uint)index >= (uint)_columns.Count || double.IsNaN(desiredWidth) || desiredWidth <= 0)
+            {
+                return false;
+            }
+
+            var column = _columns[index];
+            if (!column.Width.IsAuto)
+            {
+                return false;
+            }
+
+            desiredWidth = Math.Min(Math.Max(desiredWidth, column.MinWidth), column.MaxWidth);
+            if (desiredWidth <= column.AutoDesiredWidth + 0.01)
+            {
+                return false;
+            }
+
+            column.AutoDesiredWidth = desiredWidth;
+            return true;
+        }
+
+        public void ResetAutoDesiredWidths()
+        {
+            for (int i = 0; i < _columns.Count; i++)
+            {
+                _columns[i].AutoDesiredWidth = 0;
+            }
+        }
+
+        public bool CanResizeColumn(int index)
+            => (uint)index < (uint)_columns.Count && _columns[index].IsResizable;
+
+        public bool CanAutoSizeColumn(int index)
+            => (uint)index < (uint)_columns.Count && _columns[index].IsResizable;
+
+        public bool ResetColumnToAuto(int index)
+        {
+            if (!CanAutoSizeColumn(index))
+            {
+                return false;
+            }
+
+            var column = _columns[index];
+            column.Width = GridLength.Auto;
+            // Auto observations are monotonic during normal virtualization. An explicit
+            // auto-fit gesture is also the escape hatch that allows a previously wider
+            // observation to shrink to the currently realized header/cell content.
+            column.AutoDesiredWidth = 0;
+            return true;
+        }
+
+        public ColumnResizeSession? BeginColumnResize(int index)
+        {
+            if (!CanResizeColumn(index))
+            {
+                return null;
+            }
+
+            var target = _columns[index];
+
+            var initialWidths = new double[_columns.Count];
+            var initialWeights = new double[_columns.Count];
+            for (int i = 0; i < _columns.Count; i++)
+            {
+                initialWidths[i] = _columns[i].ActualWidth;
+                initialWeights[i] = _columns[i].Width.IsStar ? _columns[i].Width.Value : 0;
+            }
+
+            var peers = new List<int>();
+            if (target.Width.IsStar)
+            {
+                // Prefer columns to the right, matching the separator being dragged. If there
+                // are none, compensate with Star columns on the left.
+                for (int i = index + 1; i < _columns.Count; i++)
+                {
+                    if (_columns[i].IsResizable && _columns[i].Width.IsStar)
+                    {
+                        peers.Add(i);
+                    }
+                }
+                if (peers.Count == 0)
+                {
+                    for (int i = index - 1; i >= 0; i--)
+                    {
+                        if (_columns[i].IsResizable && _columns[i].Width.IsStar)
+                        {
+                            peers.Add(i);
+                        }
+                    }
+                }
+            }
+
+            return new ColumnResizeSession
+            {
+                TargetIndex = index,
+                ColumnCount = _columns.Count,
+                StartWidth = target.ActualWidth,
+                IsStar = target.Width.IsStar,
+                IsAuto = target.Width.IsAuto,
+                InitialWidths = initialWidths,
+                InitialWeights = initialWeights,
+                PeerIndices = peers.ToArray(),
+                WorkingWidths = new double[_columns.Count],
+            };
+        }
+
+        public bool ResizeColumn(ColumnResizeSession session, double requestedWidth)
+        {
+            ArgumentNullException.ThrowIfNull(session);
+            if (session.ColumnCount != _columns.Count || (uint)session.TargetIndex >= (uint)_columns.Count)
+            {
+                return false;
+            }
+
+            var target = _columns[session.TargetIndex];
+            requestedWidth = Math.Min(Math.Max(requestedWidth, target.MinWidth), target.MaxWidth);
+
+            if (!session.IsStar)
+            {
+                if (target.ActualWidth.Equals(requestedWidth) && target.Width.IsAbsolute && target.Width.Value.Equals(requestedWidth))
+                {
+                    return false;
+                }
+
+                target.Width = GridLength.Pixels(requestedWidth);
+                if (session.IsAuto)
+                {
+                    target.AutoDesiredWidth = 0;
+                }
+                target.ActualWidth = requestedWidth;
+                return true;
+            }
+
+            Array.Copy(session.InitialWidths, session.WorkingWidths, session.ColumnCount);
+            double requestedDelta = requestedWidth - session.StartWidth;
+            if (Math.Abs(requestedDelta) <= 0.001)
+            {
+                return false;
+            }
+
+            if (session.PeerIndices.Length == 0)
+            {
+                // A lone Star has no relative weight that can express a manual width. Once the
+                // user actually drags it, materialize the requested width as Pixel so the last
+                // column remains resizable and may intentionally create or remove overflow.
+                target.Width = GridLength.Pixels(requestedWidth);
+                target.ActualWidth = requestedWidth;
+                return true;
+            }
+
+            bool targetExpands = requestedDelta > 0;
+            double capacity = 0;
+            for (int i = 0; i < session.PeerIndices.Length; i++)
+            {
+                int peerIndex = session.PeerIndices[i];
+                var peer = _columns[peerIndex];
+                double peerCapacity = targetExpands
+                    ? Math.Max(0, session.InitialWidths[peerIndex] - peer.MinWidth)
+                    : Math.Max(0, peer.MaxWidth - session.InitialWidths[peerIndex]);
+                capacity += peerCapacity;
+            }
+
+            double appliedMagnitude = Math.Min(Math.Abs(requestedDelta), capacity);
+            if (appliedMagnitude <= 0.001)
+            {
+                return false;
+            }
+
+            double appliedDelta = targetExpands ? appliedMagnitude : -appliedMagnitude;
+            session.WorkingWidths[session.TargetIndex] = session.StartWidth + appliedDelta;
+            DistributeResizeCompensation(session, appliedMagnitude, targetExpands);
+
+            // Re-express every Star width in a common scale. Using only the changed pair would
+            // mix pixel-like weights with the untouched original weights and distort the next
+            // viewport resolve.
+            const double minimumWeight = 0.000001;
+            for (int i = 0; i < _columns.Count; i++)
+            {
+                if (!_columns[i].Width.IsStar)
+                {
+                    continue;
+                }
+
+                double actual = session.WorkingWidths[i];
+                _columns[i].ActualWidth = actual;
+                _columns[i].Width = GridLength.Stars(Math.Max(minimumWeight, actual));
+            }
+
+            return true;
+        }
+
+        private void DistributeResizeCompensation(ColumnResizeSession session, double amount, bool targetExpands)
+        {
+            var unresolved = new List<int>(session.PeerIndices);
+            double remaining = amount;
+
+            while (unresolved.Count > 0 && remaining > 0.001)
+            {
+                double totalWeight = 0;
+                for (int i = 0; i < unresolved.Count; i++)
+                {
+                    totalWeight += Math.Max(0.000001, session.InitialWeights[unresolved[i]]);
+                }
+
+                bool constrained = false;
+                for (int i = unresolved.Count - 1; i >= 0; i--)
+                {
+                    int peerIndex = unresolved[i];
+                    var peer = _columns[peerIndex];
+                    double capacity = targetExpands
+                        ? Math.Max(0, session.InitialWidths[peerIndex] - peer.MinWidth)
+                        : Math.Max(0, peer.MaxWidth - session.InitialWidths[peerIndex]);
+                    double share = remaining * Math.Max(0.000001, session.InitialWeights[peerIndex]) / totalWeight;
+                    if (share >= capacity - 0.001)
+                    {
+                        session.WorkingWidths[peerIndex] = targetExpands
+                            ? session.InitialWidths[peerIndex] - capacity
+                            : session.InitialWidths[peerIndex] + capacity;
+                        remaining = Math.Max(0, remaining - capacity);
+                        unresolved.RemoveAt(i);
+                        constrained = true;
+                    }
+                }
+
+                if (constrained)
+                {
+                    continue;
+                }
+
+                for (int i = 0; i < unresolved.Count; i++)
+                {
+                    int peerIndex = unresolved[i];
+                    double share = remaining * Math.Max(0.000001, session.InitialWeights[peerIndex]) / totalWeight;
+                    session.WorkingWidths[peerIndex] = targetExpands
+                        ? session.InitialWidths[peerIndex] - share
+                        : session.InitialWidths[peerIndex] + share;
+                }
+                remaining = 0;
+            }
         }
 
         private void HookItemsView(ISelectableItemsView view)
