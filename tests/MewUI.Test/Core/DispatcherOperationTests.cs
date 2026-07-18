@@ -64,15 +64,31 @@ public sealed class DispatcherOperationTests
     }
 
     [TestMethod]
-    public void ThrowingCallback_StillReachesCompletedState()
+    public void ThrowingCallback_ReachesFaultedStateWithException()
+    {
+        var queue = new DispatcherQueue();
+        var thrown = new InvalidOperationException("expected");
+        DispatcherOperation operation = queue.EnqueueWithOperation(
+            DispatcherPriority.Normal,
+            () => throw thrown);
+
+        queue.Process();
+
+        Assert.AreEqual(DispatcherOperationStatus.Faulted, operation.Status);
+        Assert.AreSame(thrown, operation.Exception);
+    }
+
+    [TestMethod]
+    public void SuccessfulCallback_HasNoException()
     {
         var queue = new DispatcherQueue();
         DispatcherOperation operation = queue.EnqueueWithOperation(
             DispatcherPriority.Normal,
-            static () => throw new InvalidOperationException("expected"));
+            static () => { });
 
         queue.Process();
 
         Assert.AreEqual(DispatcherOperationStatus.Completed, operation.Status);
+        Assert.IsNull(operation.Exception);
     }
 }

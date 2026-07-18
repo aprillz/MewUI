@@ -104,6 +104,7 @@ internal sealed class DispatcherQueue
                     _mergeKeys.TryRemove(item.MergeKey, out _);
                 }
 
+                bool faulted = false;
                 try
                 {
                     Action action;
@@ -126,6 +127,11 @@ internal sealed class DispatcherQueue
                 }
                 catch (Exception ex)
                 {
+                    // The operation reaches its Faulted terminal state carrying the exception,
+                    // independent of how the app-level handler routes it below.
+                    faulted = true;
+                    op?.MarkFaulted(ex);
+
                     // Dispatcher-level exception handling:
                     // - If the app handler marks it as handled, continue processing.
                     // - Otherwise, record fatal and request shutdown to unwind the message loop.
@@ -144,7 +150,11 @@ internal sealed class DispatcherQueue
                 }
                 finally
                 {
-                    op?.MarkCompleted();
+                    if (!faulted)
+                    {
+                        op?.MarkCompleted();
+                    }
+
                     item.Signal?.Set();
                 }
             }

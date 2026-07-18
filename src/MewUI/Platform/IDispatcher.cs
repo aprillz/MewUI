@@ -70,6 +70,8 @@ public enum DispatcherOperationStatus
     Completed,
     /// <summary>The operation was aborted before execution.</summary>
     Aborted,
+    /// <summary>The operation's callback threw; see <see cref="DispatcherOperation.Exception"/>.</summary>
+    Faulted,
 }
 
 /// <summary>
@@ -80,6 +82,7 @@ public sealed class DispatcherOperation
     private int _status;
     private volatile DispatcherPriority _priority;
     private Action? _action;
+    private Exception? _exception;
 
 
     internal DispatcherOperation(DispatcherPriority priority, Action action)
@@ -112,6 +115,12 @@ public sealed class DispatcherOperation
     /// Gets the current status of this operation.
     /// </summary>
     public DispatcherOperationStatus Status => (DispatcherOperationStatus)Volatile.Read(ref _status);
+
+    /// <summary>
+    /// Gets the exception thrown by the callback when <see cref="Status"/> is
+    /// <see cref="DispatcherOperationStatus.Faulted"/>; otherwise <see langword="null"/>.
+    /// </summary>
+    public Exception? Exception => _exception;
 
     /// <summary>
     /// Attempts to abort the operation. Returns <see langword="true"/> if the operation
@@ -151,6 +160,23 @@ public sealed class DispatcherOperation
         if (!completed && Status != DispatcherOperationStatus.Aborted)
         {
             throw new InvalidOperationException($"Cannot complete dispatcher operation from state {Status}.");
+        }
+    }
+
+    internal void MarkFaulted(Exception exception)
+    {
+        // Publish the exception before the status flips so a reader that observes Faulted sees it
+        // (the CompareExchange below is a full barrier).
+        _exception = exception;
+
+        bool faulted = Interlocked.CompareExchange(
+            ref _status,
+            (int)DispatcherOperationStatus.Faulted,
+            (int)DispatcherOperationStatus.Executing) == (int)DispatcherOperationStatus.Executing;
+
+        if (!faulted)
+        {
+            throw new InvalidOperationException($"Cannot fault dispatcher operation from state {Status}.");
         }
     }
 }
