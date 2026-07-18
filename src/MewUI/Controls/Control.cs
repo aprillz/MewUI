@@ -690,56 +690,26 @@ public abstract class Control : TextElement
 
     private void RestoreFromStyle(Style style, int propertyId, bool snap)
     {
-        // If a higher-priority source (Local) owns this property, don't touch it
-        var currentSource = PropertyStore.GetSource(propertyId);
-        if (currentSource >= ValueSource.Local)
+        // If a higher-priority source (Local) owns this property, don't touch it.
+        if (PropertyStore.GetSource(propertyId) >= ValueSource.Local)
             return;
 
-        // Find the base setter value for this property from the style chain
-        var setterValue = FindStyleSetterValue(style, propertyId);
-        if (setterValue != null)
-        {
-            var property = MewPropertyRegistry.GetProperty(propertyId);
-            if (property != null)
-            {
-                if (!snap && _style?.FindTransition(propertyId) is Transition transition)
-                {
-                    // Animate directly - Animator bypasses source priority and
-                    // SetTargetDirect updates BaseSource to Style.
-                    // No ClearSource needed; avoids intermediate null/default flash.
-                    Animator.Animate(property, setterValue, transition.Duration, transition.Easing, ValueSource.Style);
-                }
-                else
-                {
-                    // Snap: force-set by clearing trigger source first, then setting style value
-                    PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
-                    PropertyStore.SetStyle(property, setterValue);
-                }
-            }
-        }
-        else
-        {
-            // No style setter - clear trigger to let inherited/default take effect
-            PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
-        }
-    }
+        var property = MewPropertyRegistry.GetProperty(propertyId);
 
-    private object? FindStyleSetterValue(Style? style, int propertyId)
-    {
-        while (style != null)
+        if (!snap && property != null && _style?.FindTransition(propertyId) is Transition transition)
         {
-            for (int i = 0; i < style.Setters.Count; i++)
-            {
-                if (style.Setters[i] is Setter s && s.Property.Id == propertyId)
-                    return s.ResolveValue(Theme);
-                // An Unset in a more-derived level terminates the walk: the property is
-                // intentionally not set by this chain, so it must not fall through to a base value.
-                if (style.Setters[i] is UnsetSetter u && u.Property.Id == propertyId)
-                    return null;
-            }
-            style = style.BasedOn;
+            // The store preserves the lower slots under the trigger, so clearing the trigger reveals
+            // the preserved style/inherited/default base directly - no style-chain re-derivation.
+            // Animate the overlay from the old trigger visual to that revealed base.
+            object from = PropertyStore.GetCurrentVisualValue(propertyId) ?? PropertyStore.GetBoxedValue(property);
+            PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
+            object to = PropertyStore.GetBoxedValue(property);
+            Animator.AnimateFromTo(property, from, to, transition.Duration, transition.Easing);
+            return;
         }
-        return null;
+
+        // Snap: clearing the trigger reveals the preserved lower slot automatically.
+        PropertyStore.ClearSource(propertyId, ValueSource.Trigger);
     }
 
     /// <summary>
