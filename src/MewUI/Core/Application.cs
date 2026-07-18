@@ -17,6 +17,14 @@ public sealed class Application
     private static Func<IPlatformHost>? _platformHostProvider;
     private static IPlatformHost? _defaultPlatformHost;
 
+    // Surface-kind handshake: the platform host produces one native surface family and a backend
+    // consumes a specific one. Both are recorded at registration so a mismatch fails immediately
+    // with a clear error rather than at the first render's surface downcast.
+    private static PlatformSurfaceKind? _platformSurfaceKind;
+    private static PlatformSurfaceKind? _backendSurfaceKind;
+    private static string? _platformSurfaceOrigin;
+    private static string? _backendSurfaceOrigin;
+
     private Exception? _pendingFatalException;
 
     private readonly List<Window> _windows = new();
@@ -374,8 +382,10 @@ public sealed class Application
 
     /// <summary>
     /// Registers the graphics backend. Backend packages call this once at startup; only one is allowed per process.
+    /// <paramref name="requiredSurface"/> is the native surface family the backend needs, checked against
+    /// the registered platform host.
     /// </summary>
-    internal static void RegisterGraphicsFactory(Func<IGraphicsFactory> factory)
+    internal static void RegisterGraphicsFactory(Func<IGraphicsFactory> factory, PlatformSurfaceKind requiredSurface, string origin)
     {
         ArgumentNullException.ThrowIfNull(factory);
         EnsureNotRunning("graphics backend");
@@ -385,12 +395,18 @@ public sealed class Application
         {
             throw new InvalidOperationException("A graphics backend is already registered. Register only one per process.");
         }
+
+        _backendSurfaceKind = requiredSurface;
+        _backendSurfaceOrigin = origin;
+        VerifySurfaceKindMatch();
     }
 
     /// <summary>
     /// Registers the platform host. Platform packages call this once at startup; only one is allowed per process.
+    /// <paramref name="surface"/> is the native surface family the host produces, checked against the
+    /// registered graphics backend.
     /// </summary>
-    internal static void RegisterPlatformHost(Func<IPlatformHost> factory)
+    internal static void RegisterPlatformHost(Func<IPlatformHost> factory, PlatformSurfaceKind surface, string origin)
     {
         ArgumentNullException.ThrowIfNull(factory);
         EnsureNotRunning("platform host");
@@ -400,6 +416,33 @@ public sealed class Application
         {
             throw new InvalidOperationException("A platform host is already registered. Register only one per process.");
         }
+
+        _platformSurfaceKind = surface;
+        _platformSurfaceOrigin = origin;
+        VerifySurfaceKindMatch();
+    }
+
+    // Fails a mismatched platform/backend pair as soon as both are registered (order-independent),
+    // rather than deferring to the first render where the backend downcasts the platform surface.
+    private static void VerifySurfaceKindMatch()
+        => ValidateSurfaceKinds(_platformSurfaceKind, _backendSurfaceKind, _platformSurfaceOrigin, _backendSurfaceOrigin);
+
+    // Pure check (no static state) so the compatibility rule can be tested in isolation.
+    internal static void ValidateSurfaceKinds(
+        PlatformSurfaceKind? platformSurface, PlatformSurfaceKind? backendSurface,
+        string? platformOrigin, string? backendOrigin)
+    {
+        if (platformSurface is not PlatformSurfaceKind platform ||
+            backendSurface is not PlatformSurfaceKind backend ||
+            platform == backend)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Incompatible platform and graphics backend: the {backendOrigin} backend needs a " +
+            $"{backend} window surface but the {platformOrigin} platform host produces a {platform} surface. " +
+            "Register a matching platform/backend pair (e.g. Win32 + Direct2D, X11 + MewVG.X11).");
     }
 
     internal bool TryHandleDispatcherException(Exception ex)

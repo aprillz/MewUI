@@ -111,7 +111,7 @@ public sealed class ApplicationFailureRecoveryTests
             return;
         }
 
-        Application.RegisterPlatformHost(static () => Hosts.Dequeue());
+        Application.RegisterPlatformHost(static () => Hosts.Dequeue(), Aprillz.MewUI.Platform.PlatformSurfaceKind.Win32, "Test");
         _registered = true;
     }
 

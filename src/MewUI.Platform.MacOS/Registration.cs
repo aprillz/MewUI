@@ -12,7 +12,7 @@ public static class MacOSPlatform
 
     public static void Register()
     {
-        Application.RegisterPlatformHost(CreateHost);
+        Application.RegisterPlatformHost(CreateHost, Platform.PlatformSurfaceKind.MacOS, "MacOS");
         PlatformConventions.Current = new MacOSConventions();
     }
 
