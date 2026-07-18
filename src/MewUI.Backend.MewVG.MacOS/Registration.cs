@@ -10,7 +10,7 @@ public static class MewVGMacOSBackend
         public static string BackendIdentifier => MewVGMacOSGraphicsFactory.BackendIdentifier;
 
     public static void Register()
-        => Application.RegisterGraphicsFactory(static () => new MewVGMacOSGraphicsFactory());
+        => Application.RegisterGraphicsFactory(static () => new MewVGMacOSGraphicsFactory(), Platform.PlatformSurfaceKind.MacOS, "MewVG.MacOS");
 
     public static ApplicationBuilder UseMewVGMetal(this ApplicationBuilder builder)
     {
