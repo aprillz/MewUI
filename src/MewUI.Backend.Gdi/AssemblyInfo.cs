@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
 
 [assembly: DisableRuntimeMarshalling]
-[assembly: InternalsVisibleTo("MewUI.Test")]
+[assembly: InternalsVisibleTo("Aprillz.MewUI.Test")]
 

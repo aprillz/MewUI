@@ -63,6 +63,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj" />
+    <Project Path="tests/MewUI.Benchmarks/MewUI.Benchmarks.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
     <Project Path="tests/MewUI.Test/MewUI.Test.csproj" />
