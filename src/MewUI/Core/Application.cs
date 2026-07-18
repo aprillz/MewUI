@@ -28,6 +28,13 @@ public sealed class Application
     private Exception? _pendingFatalException;
 
     private readonly List<Window> _windows = new();
+    private Window? _mainWindow;
+
+    /// <summary>
+    /// Determines when the run loop ends automatically as windows close. Process-level policy; set
+    /// before <see cref="Run"/>. Defaults to <see cref="MewUI.ShutdownMode.OnLastWindowClose"/>.
+    /// </summary>
+    public static ShutdownMode ShutdownMode { get; set; } = ShutdownMode.OnLastWindowClose;
     private readonly ThemeManager _themeManager;
     private readonly RenderLoopSettings _renderLoopSettings = new();
     private IGraphicsFactory? _graphicsFactory;
@@ -245,6 +252,7 @@ public sealed class Application
                 app = new Application(host);
                 _current = app;
                 _ = app.Theme;
+                app._mainWindow = mainWindow;
                 app.RegisterWindow(mainWindow);
                 app.RunCore(mainWindow);
             }
@@ -328,8 +336,25 @@ public sealed class Application
 
     internal void UnregisterWindow(Window window)
     {
+        bool wasMainWindow = ReferenceEquals(window, _mainWindow);
         _windows.Remove(window);
+
+        // The shutdown decision lives here (not in each platform host) so it is policy-driven and
+        // owned in one place. Platform hosts only maintain their own hwnd registry for routing.
+        if (ShouldShutdownAfterClose(ShutdownMode, wasMainWindow, _windows.Count))
+        {
+            Quit();
+        }
     }
+
+    // Pure decision so the policy is unit-testable in isolation.
+    internal static bool ShouldShutdownAfterClose(ShutdownMode mode, bool wasMainWindow, int remainingWindows)
+        => mode switch
+        {
+            ShutdownMode.OnExplicitShutdown => false,
+            ShutdownMode.OnMainWindowClose => wasMainWindow,
+            _ => remainingWindows == 0,
+        };
 
     private void RunCore(Window mainWindow)
     {

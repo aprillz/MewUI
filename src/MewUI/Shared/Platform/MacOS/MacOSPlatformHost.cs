@@ -107,10 +107,11 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
     internal void UnregisterWindow(nint handle)
     {
+        // Shutdown is decided by Application.UnregisterWindow (ShutdownMode-aware); the host only
+        // drops its routing entry here.
         _windows.Remove(handle);
         if (_windows.Count == 0)
         {
-            _running = false;
             // Stop theme notifications as early as possible to avoid callbacks during teardown.
             MacOSInterop.TrySetThemeChangedCallback(null);
         }
