@@ -109,11 +109,9 @@ public sealed class X11PlatformHost : IPlatformHost
 
     internal void UnregisterWindow(nint window)
     {
+        // Shutdown is decided by Application.UnregisterWindow (ShutdownMode-aware); the host only
+        // drops its routing entry here.
         _windows.Remove(window);
-        if (_windows.Count == 0)
-        {
-            _running = false;
-        }
     }
 
     public void Run(Application app, Window mainWindow)

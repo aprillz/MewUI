@@ -122,6 +122,65 @@ public sealed class ApplicationFailureRecoveryTests
         StringAssert.Contains(nested.Message, "already running");
     }
 
+    [TestMethod]
+    public void OnLastWindowClose_ClosingSoleWindow_QuitsThroughApplication()
+    {
+        EnsureRegistered();
+        var host = new FailurePlatformHost(onRun: (app, window) => app.UnregisterWindow(window));
+        Hosts.Enqueue(host);
+
+        Application.Run(new Window());
+
+        // Closing the last window drives the shutdown decision through Application (host quit removed).
+        Assert.IsTrue(host.QuitCalled);
+    }
+
+    [TestMethod]
+    public void OnExplicitShutdown_ClosingSoleWindow_DoesNotQuit()
+    {
+        EnsureRegistered();
+        var previous = Application.ShutdownMode;
+        Application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            var host = new FailurePlatformHost(onRun: (app, window) => app.UnregisterWindow(window));
+            Hosts.Enqueue(host);
+
+            Application.Run(new Window());
+
+            Assert.IsFalse(host.QuitCalled);
+        }
+        finally
+        {
+            Application.ShutdownMode = previous;
+        }
+    }
+
+    [TestMethod]
+    public void OnMainWindowClose_ClosingMainWhileOthersRemain_Quits()
+    {
+        EnsureRegistered();
+        var previous = Application.ShutdownMode;
+        Application.ShutdownMode = ShutdownMode.OnMainWindowClose;
+        try
+        {
+            var host = new FailurePlatformHost(onRun: (app, mainWindow) =>
+            {
+                app.RegisterWindow(new Window());
+                app.UnregisterWindow(mainWindow);
+            });
+            Hosts.Enqueue(host);
+
+            Application.Run(new Window());
+
+            Assert.IsTrue(host.QuitCalled);
+        }
+        finally
+        {
+            Application.ShutdownMode = previous;
+        }
+    }
+
     private static void EnsureRegistered()
     {
         if (_registered)
@@ -166,7 +225,8 @@ public sealed class ApplicationFailureRecoveryTests
             onRun?.Invoke(app, mainWindow);
         }
 
-        public void Quit(Application app) { }
+        public bool QuitCalled { get; private set; }
+        public void Quit(Application app) => QuitCalled = true;
         public void DoEvents() { }
         public void Dispose() => Disposed = true;
     }

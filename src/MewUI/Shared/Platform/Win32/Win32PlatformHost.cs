@@ -148,12 +148,9 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     internal void UnregisterWindow(nint hwnd)
     {
+        // The shutdown decision is owned by Application.UnregisterWindow (ShutdownMode-aware); the
+        // host only drops its routing entry here.
         _windows.Remove(hwnd);
-        if (_windows.Count == 0)
-        {
-            _running = false;
-            User32.PostQuitMessage(0);
-        }
     }
 
     public void Run(Application app, Window mainWindow)
