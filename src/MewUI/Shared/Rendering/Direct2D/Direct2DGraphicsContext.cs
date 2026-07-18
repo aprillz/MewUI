@@ -453,6 +453,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     protected override void OnDispose()
     {
         FlushSolidBrushes();
+        FlushGradientStops();
         CollectionPool.Return(_solidBrushes);
         CollectionPool.Return(_states);
         CollectionPool.Return(_clipStack);
@@ -584,7 +585,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             var objectBounds = gradient.GradientUnits == GradientUnits.ObjectBoundingBox
                 ? path.GetBounds()
                 : default;
-            nint gradBrush = CreateGradientBrush(gradient, objectBounds, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, objectBounds);
             try
             {
                 if (gradBrush != 0)
@@ -595,7 +596,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             finally
             {
                 if (ownsGeometry) { ComHelpers.Release(geometry); }
-                ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol);
+                ComHelpers.Release(gradBrush);
             }
             return;
         }
@@ -633,7 +634,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (brush is SolidColorBrush solid) { FillRectangle(rect, solid.Color); return; }
         if (brush is GradientBrush gradient)
         {
-            nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, rect);
             try
             {
                 if (gradBrush != 0)
@@ -641,7 +642,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.FillRectangle((ID2D1RenderTarget*)_renderTarget, ToRectF(rect), gradBrush);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
             return;
         }
         if (brush is ImageBrush imageBrush)
@@ -668,7 +669,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (brush is SolidColorBrush solid) { FillRoundedRectangle(rect, radiusX, radiusY, solid.Color); return; }
         if (brush is GradientBrush gradient)
         {
-            nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, rect);
             try
             {
                 if (gradBrush != 0)
@@ -677,7 +678,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                         new D2D1_ROUNDED_RECT(ToRectF(rect), (float)radiusX, (float)radiusY), gradBrush);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
             return;
         }
         if (brush is ImageBrush imageBrush)
@@ -705,7 +706,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (brush is SolidColorBrush solid) { FillEllipse(bounds, solid.Color); return; }
         if (brush is GradientBrush gradient)
         {
-            nint gradBrush = CreateGradientBrush(gradient, bounds, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, bounds);
             try
             {
                 if (gradBrush != 0)
@@ -717,7 +718,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                         new D2D1_ELLIPSE(center, (float)(bounds.Width / 2), (float)(bounds.Height / 2)), gradBrush);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
             return;
         }
         if (brush is ImageBrush imageBrush)
@@ -762,7 +763,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 var objectBounds = gradient.GradientUnits == GradientUnits.ObjectBoundingBox
                     ? path.GetBounds()
                     : default;
-                nint gradBrush = CreateGradientBrush(gradient, objectBounds, out nint stopCol);
+                nint gradBrush = CreateGradientBrush(gradient, objectBounds);
                 try
                 {
                     if (gradBrush != 0)
@@ -770,7 +771,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                         D2D1VTable.DrawGeometry((ID2D1RenderTarget*)_renderTarget, geometry, gradBrush, stroke, ssHandle);
                     }
                 }
-                finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+                finally { ComHelpers.Release(gradBrush); }
             }
             else
             {
@@ -816,7 +817,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 double maxY = Math.Max(start.Y, end.Y);
                 objectBounds = new Rect(minX, minY, maxX - minX, maxY - minY);
             }
-            nint gradBrush = CreateGradientBrush(gradient, objectBounds, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, objectBounds);
             try
             {
                 if (gradBrush != 0)
@@ -824,7 +825,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.DrawLine((ID2D1RenderTarget*)_renderTarget, p0, p1, gradBrush, stroke, ssHandle);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
         }
         else
         {
@@ -851,7 +852,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         if (pen.Brush is GradientBrush gradient)
         {
-            nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, rect);
             try
             {
                 if (gradBrush != 0)
@@ -859,7 +860,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.DrawRectangle((ID2D1RenderTarget*)_renderTarget, rf, gradBrush, stroke, ssHandle);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
         }
         else
         {
@@ -886,7 +887,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         if (pen.Brush is GradientBrush gradient)
         {
-            nint gradBrush = CreateGradientBrush(gradient, rect, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, rect);
             try
             {
                 if (gradBrush != 0)
@@ -894,7 +895,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.DrawRoundedRectangle((ID2D1RenderTarget*)_renderTarget, rr, gradBrush, stroke, ssHandle);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
         }
         else
         {
@@ -925,7 +926,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
         if (pen.Brush is GradientBrush gradient)
         {
-            nint gradBrush = CreateGradientBrush(gradient, bounds, out nint stopCol);
+            nint gradBrush = CreateGradientBrush(gradient, bounds);
             try
             {
                 if (gradBrush != 0)
@@ -933,7 +934,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                     D2D1VTable.DrawEllipse((ID2D1RenderTarget*)_renderTarget, ellipse, gradBrush, stroke, ssHandle);
                 }
             }
-            finally { ComHelpers.Release(gradBrush); ComHelpers.Release(stopCol); }
+            finally { ComHelpers.Release(gradBrush); }
         }
         else
         {
@@ -1971,40 +1972,16 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     }
 
     /// <summary>
-    /// Creates a D2D gradient brush and its stop collection. Caller must release both handles.
+    /// Creates a D2D gradient brush over the cached stop collection for <paramref name="brush"/>.
+    /// Caller must release the returned brush; the stop collection is owned by the cache.
     /// Returns 0 if creation fails.
     /// </summary>
-    private nint CreateGradientBrush(GradientBrush brush, Rect objectBounds, out nint stopCollection)
+    private nint CreateGradientBrush(GradientBrush brush, Rect objectBounds)
     {
-        stopCollection = 0;
-        var stops = brush.Stops;
-        if (stops == null || stops.Count == 0)
-        {
-            return 0;
-        }
-
-        int stopCount = stops.Count;
-        Span<D2D1_GRADIENT_STOP> d2dStops = stopCount <= 8
-            ? stackalloc D2D1_GRADIENT_STOP[8]
-            : new D2D1_GRADIENT_STOP[stopCount];
-        d2dStops = d2dStops[..stopCount];
-        for (int i = 0; i < stopCount; i++)
-        {
-            var s = stops[i];
-            d2dStops[i] = new D2D1_GRADIENT_STOP((float)Math.Clamp(s.Offset, 0.0, 1.0), ToColorF(s.Color));
-        }
-
-        var extendMode = brush.SpreadMethod switch
-        {
-            SpreadMethod.Reflect => D2D1_EXTEND_MODE.MIRROR,
-            SpreadMethod.Repeat => D2D1_EXTEND_MODE.WRAP,
-            _ => D2D1_EXTEND_MODE.CLAMP
-        };
-
-        int hr = D2D1VTable.CreateGradientStopCollection(
-            (ID2D1RenderTarget*)_renderTarget,
-            d2dStops, D2D1_GAMMA.GAMMA_2_2, extendMode, out stopCollection);
-        if (hr < 0 || stopCollection == 0)
+        // The stop collection depends only on the (immutable) stops and spread method, not on the
+        // per-draw geometry or global alpha, so it is cached per brush instead of rebuilt each draw.
+        nint stopCollection = GetOrCreateStopCollection(brush);
+        if (stopCollection == 0)
         {
             return 0;
         }
@@ -2042,13 +2019,92 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 (ID2D1RenderTarget*)_renderTarget, radProps, bProps, stopCollection, out gradBrush);
         }
 
-        if (gradBrush == 0)
+        return gradBrush;
+    }
+
+    // Reference-keyed so a gradient reused across frames (the common case) hits without hashing its
+    // stops each draw; two distinct-but-equal brushes simply get separate entries. Bounded with
+    // clear-on-overflow and flushed when the render target the collections were built against changes.
+    private const int MaxGradientStopCollections = 64;
+    private nint _gradientStopsRenderTarget;
+    private int _gradientStopsGeneration;
+    private readonly Dictionary<GradientBrush, nint> _gradientStops = new(ReferenceEqualityComparer.Instance);
+
+    private nint GetOrCreateStopCollection(GradientBrush brush)
+    {
+        EnsureGradientStopCacheValid();
+
+        if (_gradientStops.TryGetValue(brush, out var cached) && cached != 0)
         {
-            ComHelpers.Release(stopCollection);
-            stopCollection = 0;
+            return cached;
         }
 
-        return gradBrush;
+        var stops = brush.Stops;
+        if (stops == null || stops.Count == 0)
+        {
+            return 0;
+        }
+
+        int stopCount = stops.Count;
+        Span<D2D1_GRADIENT_STOP> d2dStops = stopCount <= 8
+            ? stackalloc D2D1_GRADIENT_STOP[8]
+            : new D2D1_GRADIENT_STOP[stopCount];
+        d2dStops = d2dStops[..stopCount];
+        for (int i = 0; i < stopCount; i++)
+        {
+            var s = stops[i];
+            d2dStops[i] = new D2D1_GRADIENT_STOP((float)Math.Clamp(s.Offset, 0.0, 1.0), ToColorF(s.Color));
+        }
+
+        var extendMode = brush.SpreadMethod switch
+        {
+            SpreadMethod.Reflect => D2D1_EXTEND_MODE.MIRROR,
+            SpreadMethod.Repeat => D2D1_EXTEND_MODE.WRAP,
+            _ => D2D1_EXTEND_MODE.CLAMP
+        };
+
+        int hr = D2D1VTable.CreateGradientStopCollection(
+            (ID2D1RenderTarget*)_renderTarget,
+            d2dStops, D2D1_GAMMA.GAMMA_2_2, extendMode, out nint stopCollection);
+        if (hr < 0 || stopCollection == 0)
+        {
+            return 0;
+        }
+
+        if (_gradientStops.Count >= MaxGradientStopCollections)
+        {
+            FlushGradientStops();
+        }
+
+        _gradientStops[brush] = stopCollection;
+        return stopCollection;
+    }
+
+    private void FlushGradientStops()
+    {
+        foreach (var (_, collection) in _gradientStops)
+        {
+            ComHelpers.Release(collection);
+        }
+
+        _gradientStops.Clear();
+    }
+
+    private void EnsureGradientStopCacheValid()
+    {
+        if (_renderTarget == 0)
+        {
+            return;
+        }
+
+        if (_gradientStopsRenderTarget == _renderTarget && _gradientStopsGeneration == _renderTargetGeneration)
+        {
+            return;
+        }
+
+        FlushGradientStops();
+        _gradientStopsRenderTarget = _renderTarget;
+        _gradientStopsGeneration = _renderTargetGeneration;
     }
 
     /// <summary>
