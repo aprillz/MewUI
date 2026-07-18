@@ -220,7 +220,9 @@ public sealed class Application
     public IGraphicsFactory GraphicsFactory => _graphicsFactory ??= DefaultGraphicsFactory;
 
     /// <summary>
-    /// Runs the application with the specified main window.
+    /// Runs the application with the specified main window. One UI runtime per process: a second
+    /// concurrent call is rejected. Running again after a previous run returns (normally or by
+    /// exception) is supported - the finally block below restores process state for it.
     /// </summary>
     public static void Run(Window mainWindow)
     {

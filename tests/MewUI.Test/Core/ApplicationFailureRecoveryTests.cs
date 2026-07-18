@@ -104,6 +104,24 @@ public sealed class ApplicationFailureRecoveryTests
         Assert.AreEqual(0, addedWindowNotifications);
     }
 
+    [TestMethod]
+    public void ConcurrentRun_WhileRunning_IsRejected()
+    {
+        EnsureRegistered();
+        InvalidOperationException? nested = null;
+        Hosts.Enqueue(new FailurePlatformHost(onRun: (_, _) =>
+        {
+            // A second Application.Run while the first is active must be rejected (one UI runtime
+            // per process). The guard fires before any host resolution, so no second host is needed.
+            nested = Assert.ThrowsExactly<InvalidOperationException>(() => Application.Run(new Window()));
+        }));
+
+        Application.Run(new Window());
+
+        Assert.IsNotNull(nested);
+        StringAssert.Contains(nested.Message, "already running");
+    }
+
     private static void EnsureRegistered()
     {
         if (_registered)
