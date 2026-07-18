@@ -66,7 +66,7 @@
     <Project Path="tests/Aprillz.MewUI.Benchmarks/Aprillz.MewUI.Benchmarks.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
-    <Project Path="tests/MewUI.Test/MewUI.Test.csproj" />
+    <Project Path="tests/Aprillz.MewUI.Test/Aprillz.MewUI.Test.csproj" />
     <Project Path="tests/MewUI.TextBoxPerformance/MewUI.TextBoxPerformance.csproj" />
   </Folder>
 </Solution>
