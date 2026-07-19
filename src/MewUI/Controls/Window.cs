@@ -88,6 +88,16 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         Closed,
     }
 
+    // Monotonic teardown phase owned by the close coordinator. Backends drive the native destroy
+    // between transitions; the core enforces that each teardown step runs once and in order.
+    private enum WindowClosePhase
+    {
+        Live,
+        Closed,
+        GraphicsReleased,
+        VisualsDisposed,
+    }
+
     private const double DefaultWidth = 800;
     private const double DefaultHeight = 600;
 
@@ -190,6 +200,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private bool _firstFrameRenderedPending;
     private bool _subscribedToDispatcherChanged;
     private WindowLifetimeState _lifetimeState;
+    private WindowClosePhase _closePhase;
     private int _modalDisableCount;
     private bool _isDialogWindow;
     private IGpuInteropInvalidationSource? _gpuInvalidationSource;
@@ -564,7 +575,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             static (self, value) => value && self.WindowSize.IsResizable);
 
     public static readonly MewProperty<bool> CanCloseProperty =
-        MewProperty<bool>.Register<Window>(nameof(CanClose), true, MewPropertyOptions.None);
+        MewProperty<bool>.Register<Window>(nameof(CanClose), true, MewPropertyOptions.None,
+            static (self, _, _) => self._backend?.SetCanClose(self.CanClose));
 
     public static readonly MewProperty<bool> TopmostProperty =
         MewProperty<bool>.Register<Window>(nameof(Topmost), false, MewPropertyOptions.None,
@@ -2288,6 +2300,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             _backend.SetCanMinimize(false);
         if (!CanMaximize)
             _backend.SetCanMaximize(false);
+        if (!CanClose)
+            _backend.SetCanClose(false);
         if (PlatformOptions != null)
             _backend.SetPlatformOptions(PlatformOptions);
         if (AllowDrop)
@@ -2296,6 +2310,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void ReleaseWindowGraphicsResources(nint windowHandle)
     {
+        if (_closePhase >= WindowClosePhase.GraphicsReleased)
+        {
+            return;
+        }
+
+        _closePhase = WindowClosePhase.GraphicsReleased;
+
         if (windowHandle == 0)
         {
             return;
@@ -2389,6 +2410,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         }
 
         _lifetimeState = WindowLifetimeState.Closed;
+        _closePhase = WindowClosePhase.Closed;
         _closeApproved = false;
         _closeDecisionPending = false;
         CompletePendingCloseResult(true);
@@ -2751,6 +2773,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void DisposeVisualTree()
     {
+        if (_closePhase >= WindowClosePhase.VisualsDisposed)
+        {
+            return;
+        }
+
+        _closePhase = WindowClosePhase.VisualsDisposed;
+
         var visualRoot = EffectiveVisualRoot;
         if (visualRoot == null)
         {
