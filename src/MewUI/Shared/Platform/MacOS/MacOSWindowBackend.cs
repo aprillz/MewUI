@@ -878,6 +878,14 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         _window.ClearMouseCaptureState();
         if (_nsWindow != 0)
         {
+            // Complete the close sequence before the native window/layer are freed (mirrors Win32
+            // WM_DESTROY and X11 Cleanup). RaiseClosed is idempotent - windowWillClose normally ran
+            // it already - and releasing the per-window render context and disposing the visual tree
+            // here stops both from leaking until process teardown.
+            _window.RaiseClosed();
+            _window.ReleaseWindowGraphicsResources(_nsWindow);
+            _window.DisposeVisualTree();
+
             _host.UnregisterWindow(_nsWindow);
             MacOSWindowInterop.UnregisterWindowCloseTarget(_nsWindow);
             MacOSWindowInterop.UnregisterTextInputTarget(_nsView);
