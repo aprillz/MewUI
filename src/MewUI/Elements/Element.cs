@@ -555,6 +555,20 @@ public abstract class Element : MewObject
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Marks this element and its private layout subtree for arrange without propagating a new
+    /// layout request to ancestors. Use only while an ancestor-driven layout pass is already
+    /// measuring this element and the current pass will immediately proceed to arrange.
+    /// </summary>
+    protected void InvalidateArrangeForCurrentLayoutPass()
+    {
+        IsArrangeDirty = true;
+        if (this is ISubtreeInvalidationHost)
+        {
+            CascadeArrangeInvalidationToSubtree();
+        }
+    }
+
     private void CascadeArrangeInvalidationToSubtree()
     {
         if (this is not IVisualTreeHost host) return;

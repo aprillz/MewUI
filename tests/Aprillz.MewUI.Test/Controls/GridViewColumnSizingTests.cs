@@ -381,6 +381,86 @@ public sealed class GridViewColumnSizingTests
     }
 
     [TestMethod]
+    public void GridView_AutoFitRearrangesFollowingHeaderCells()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI text measurement is Windows-only.");
+            return;
+        }
+
+        ProgressBar? progressCell = null;
+        Border? onlineCell = null;
+        var grid = new GridView
+        {
+            BorderThickness = 0,
+            Padding = default,
+            ItemsSource = ItemsView.Create(new[] { 1 }),
+        };
+        grid.SetColumns(
+        [
+            PublicColumn(GridLength.Pixels(300)),
+            new GridViewColumn<int>
+            {
+                Header = "Progress",
+                Width = GridLength.Pixels(200),
+                CellTemplate = new DelegateTemplate<int>(
+                    build: _ => progressCell = new ProgressBar
+                    {
+                        Height = 10,
+                        Margin = new Thickness(6, 0),
+                    },
+                    bind: static (_, _, _, _) => { }),
+            },
+            new GridViewColumn<int>
+            {
+                Header = "Online",
+                Width = GridLength.Pixels(100),
+                CellTemplate = new DelegateTemplate<int>(
+                    build: _ => onlineCell = new Border(),
+                    bind: static (_, _, _, _) => { }),
+            },
+        ]);
+
+        var window = HeadlessWindow.Create(500, 200);
+        window.Content = grid;
+        window.PerformLayout();
+        window.PerformLayout();
+
+        var scrollViewer = (ScrollViewer?)VisualTree.Find(grid, static element => element is ScrollViewer);
+        Assert.IsNotNull(scrollViewer);
+        scrollViewer.SetScrollOffsets(100, 0);
+        window.PerformLayout();
+
+        Assert.IsNotNull(progressCell);
+        double progressAutoWidth =
+            progressCell.DesiredSize.Width + grid.CellPadding.HorizontalThickness;
+
+        window.SendDoubleClick(new Point(grid.Bounds.X + 400, grid.Bounds.Y + 10));
+        window.PerformLayout();
+
+        var onlineHeader = (TextBlock?)VisualTree.Find(
+            grid,
+            static element => element is TextBlock text && text.Text == "Online");
+        Assert.IsNotNull(onlineHeader);
+        Assert.IsNotNull(onlineCell);
+        double expectedExtent = 300 + progressAutoWidth + 100;
+        Assert.AreEqual(
+            expectedExtent - scrollViewer.ViewportWidth,
+            scrollViewer.HorizontalOffset,
+            0.001);
+        Assert.AreEqual(
+            onlineCell.Bounds.X + 6 - grid.CellPadding.Left,
+            onlineHeader.Bounds.X,
+            0.001);
+        Assert.AreEqual(
+            grid.Bounds.X + 300 + progressAutoWidth - scrollViewer.HorizontalOffset + 6,
+            onlineHeader.Bounds.X,
+            0.001);
+        Assert.IsTrue(window.IsUpdatePassSettled);
+    }
+
+    [TestMethod]
     public void GridView_DragOnLoneLastStarBoundary_MaterializesToPixel()
     {
         if (!OperatingSystem.IsWindows())
@@ -479,6 +559,117 @@ public sealed class GridViewColumnSizingTests
         Assert.AreEqual(0, contentColumn);
         Assert.IsTrue(grid.TryGetColumnIndexAt(new Point(320, 10), out int starColumn));
         Assert.AreEqual(1, starColumn);
+    }
+
+    [TestMethod]
+    public void GridView_InitialAutoColumnUsesNumericCellIntrinsicWidthInOneLayoutPass()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI text measurement is Windows-only.");
+            return;
+        }
+
+        var grid = new GridView
+        {
+            BorderThickness = 0,
+            Padding = default,
+            ItemsSource = ItemsView.Create(new[] { 13d }),
+        };
+        grid.SetColumns(
+        [
+            new GridViewColumn<double>
+            {
+                Header = "Name",
+                Width = GridLength.Star,
+                MinWidth = 100,
+                CellTemplate = new DelegateTemplate<double>(
+                    build: _ => new TextBlock { Text = "User 01" },
+                    bind: static (_, _, _, _) => { }),
+            },
+            new GridViewColumn<double>
+            {
+                Header = "Amount",
+                Width = GridLength.Auto,
+                CellTemplate = new DelegateTemplate<double>(
+                    build: _ => new NumericUpDown
+                    {
+                        Padding = new Thickness(6, 0),
+                        Minimum = 0,
+                        Maximum = 100,
+                        Step = 0.5,
+                        Format = "0.##",
+                        Value = 13,
+                    },
+                    bind: static (_, _, _, _) => { }),
+            },
+            new GridViewColumn<double>
+            {
+                Header = "Error",
+                Width = GridLength.Auto,
+                MinWidth = 60,
+                MaxWidth = 80,
+                CellTemplate = new DelegateTemplate<double>(
+                    build: _ => new CheckBox(),
+                    bind: static (_, _, _, _) => { }),
+            },
+            new GridViewColumn<double>
+            {
+                Header = "Status",
+                Width = GridLength.Auto,
+                MinWidth = 90,
+                MaxWidth = 140,
+                CellTemplate = new DelegateTemplate<double>(
+                    build: _ => new TextBlock { Text = "OK" },
+                    bind: static (_, _, _, _) => { }),
+            },
+        ]);
+
+        var window = HeadlessWindow.Create(812, 270);
+        window.Content = grid;
+        window.PerformLayout();
+
+        var numeric = (NumericUpDown?)VisualTree.Find(grid, static e => e is NumericUpDown);
+        Assert.IsNotNull(numeric);
+        Assert.IsTrue(window.IsUpdatePassSettled);
+        double arrangedWidth = numeric.Bounds.Width;
+        double availableHeight = numeric.Bounds.Height;
+        numeric.Measure(new Size(double.PositiveInfinity, availableHeight));
+
+        Assert.AreEqual(
+            numeric.DesiredSize.Width,
+            arrangedWidth,
+            0.001,
+            $"initial Auto width must settle in one window update pass (intrinsic={numeric.DesiredSize.Width}, arranged={arrangedWidth})");
+    }
+
+    [TestMethod]
+    public void GridView_InfiniteMeasureAndFiniteArrange_SettlesWithoutAnotherWindowPass()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI text measurement is Windows-only.");
+            return;
+        }
+
+        var grid = new GridView { BorderThickness = 0, Padding = default };
+        grid.SetColumns(
+        [
+            PublicColumn(GridLength.Star, minWidth: 100),
+            PublicColumn(GridLength.Pixels(100)),
+        ]);
+
+        var window = HeadlessWindow.Create(500, 200);
+        var host = new InfiniteWidthMeasureHost();
+        host.Add(grid);
+        window.Content = host;
+        window.PerformLayout();
+
+        Assert.IsTrue(window.IsUpdatePassSettled);
+        Assert.IsTrue(grid.TryGetColumnIndexAt(new Point(350, 10), out int firstColumn));
+        Assert.AreEqual(0, firstColumn);
+        Assert.IsTrue(grid.TryGetColumnIndexAt(new Point(450, 10), out int secondColumn));
+        Assert.AreEqual(1, secondColumn);
     }
 
     private static GridView.GridViewCore CreateCore(params GridView.GridViewCore.ColumnDefinition[] columns)

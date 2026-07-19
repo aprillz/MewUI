@@ -285,6 +285,26 @@ public sealed class GridViewSortingTests
         window.Content = grid;
         window.PerformLayout();
         var firstHeader = new Point(grid.Bounds.X + 70, grid.Bounds.Y + 12);
+        var separator = new Point(grid.Bounds.X + 150, grid.Bounds.Y + 12);
+
+        window.SendMouseMove(separator);
+        var backend = (HeadlessWindowBackend?)window.Backend;
+        Assert.IsNotNull(backend);
+        var header = (Panel?)VisualTree.Find(
+            grid,
+            static element => element is Panel panel && panel.Cursor == CursorType.SizeWE);
+        Assert.IsNotNull(header);
+        Assert.AreEqual(CursorType.SizeWE, backend.LastCursor);
+        window.SendMouseMove(new Point(separator.X - 4, separator.Y));
+        Assert.IsNull(header.Cursor);
+        Assert.IsTrue(header.IsMouseOver);
+        Assert.AreEqual(CursorType.Arrow, backend.LastCursor);
+        window.SendMouseMove(separator);
+        Assert.AreEqual(CursorType.SizeWE, header.Cursor);
+        Assert.AreEqual(CursorType.SizeWE, backend.LastCursor);
+
+        window.SendMouseMove(new Point(separator.X, grid.Bounds.Y + 60));
+        Assert.IsNull(header.Cursor);
 
         window.SendMouseDown(firstHeader);
         window.SendMouseUp(new Point(grid.Bounds.Right + 20, grid.Bounds.Y + 12));
@@ -309,6 +329,60 @@ public sealed class GridViewSortingTests
         Assert.AreEqual(1, grid.SortColumnIndex);
         Assert.AreEqual(GridViewSortDirection.Ascending, grid.SortDirection);
         Assert.AreSame(source, grid.ItemsSource);
+    }
+
+    [TestMethod]
+    public void AutoFitMovingSeparatorClearsNativeResizeCursor()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI text measurement is Windows-only.");
+            return;
+        }
+
+        var grid = new GridView
+        {
+            BorderThickness = 0,
+            Padding = default,
+            HeaderHeight = 30,
+            ItemsSource = ItemsView.Create(new[] { new Row(0, "a", 1) }),
+        };
+        grid.SetColumns(
+        [
+            new GridViewColumn<Row>()
+                .Header("Name")
+                .PixelWidth(150)
+                .Text(row => row.Name)
+                .SortBy(row => row.Name, StringComparer.Ordinal),
+            new GridViewColumn<Row>()
+                .Header("Value")
+                .PixelWidth(150)
+                .Text(row => row.Value.ToString())
+                .SortBy(row => row.Value),
+        ]);
+
+        var window = HeadlessWindow.Create(300, 180);
+        window.Content = grid;
+        window.PerformLayout();
+
+        var separator = new Point(grid.Bounds.X + 150, grid.Bounds.Y + 12);
+        window.SendMouseMove(separator);
+        var backend = (HeadlessWindowBackend?)window.Backend;
+        var header = (Panel?)VisualTree.Find(
+            grid,
+            static element => element is Panel panel && panel.Cursor == CursorType.SizeWE);
+        Assert.IsNotNull(backend);
+        Assert.IsNotNull(header);
+        Assert.AreEqual(CursorType.SizeWE, backend.LastCursor);
+
+        // Auto-fit moves the separator while the pointer remains stationary. No native
+        // mouse-move follows, so layout itself must clear the stale resize cursor.
+        window.SendDoubleClick(separator);
+        window.PerformLayout();
+
+        Assert.AreEqual(GridViewSortDirection.None, grid.SortDirection);
+        Assert.IsNull(header.Cursor);
+        Assert.AreEqual(CursorType.Arrow, backend.LastCursor);
     }
 
     private static GridView.GridViewCore CreateCore(

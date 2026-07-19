@@ -12,6 +12,8 @@ internal sealed class HeadlessWindowBackend : IWindowBackend
 {
     public nint Handle => 1;
 
+    public CursorType LastCursor { get; private set; } = CursorType.Arrow;
+
     public void SetResizable(bool resizable) { }
 
     public void PresentSurface() { }
@@ -54,7 +56,7 @@ internal sealed class HeadlessWindowBackend : IWindowBackend
 
     public void SetAllowsTransparency(bool allowsTransparency) { }
 
-    public void SetCursor(CursorType cursorType) { }
+    public void SetCursor(CursorType cursorType) => LastCursor = cursorType;
 
     public void SetImeMode(ImeMode mode) { }
 

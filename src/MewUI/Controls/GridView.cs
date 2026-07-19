@@ -855,7 +855,14 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
         double headerH = ResolveHeaderHeight();
         _header.MeasureAutoColumns(headerH);
-        _columnsExtentWidth = _core.ResolveColumnWidths(widthLimit, out _);
+        _columnsExtentWidth = _core.ResolveColumnWidths(widthLimit, out bool columnsChanged);
+        if (columnsChanged)
+        {
+            // Measure can resolve new Auto widths after rows were realized in the previous
+            // arrange round. The outer GridView bounds may be unchanged, but its header and
+            // rows still need another arrange with the new column geometry.
+            InvalidateArrangeForCurrentLayoutPass();
+        }
 
         double contentWidth = double.IsPositiveInfinity(widthLimit)
             ? _columnsExtentWidth
@@ -918,9 +925,6 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         _rowsViewportWidth = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Width), dpiScale);
         _rowsViewportHeight = LayoutRounding.RoundToPixel(Math.Max(0, contentBounds.Height - headerH), dpiScale);
 
-        _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
-        _header.Arrange(new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width), headerH));
-
         var rowsViewport = new Rect(
             contentBounds.X,
             contentBounds.Y + headerH,
@@ -935,6 +939,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         _presenter.ItemBindingGeneration = ItemBindingGeneration;
 
         _scrollViewer.Arrange(rowsViewport);
+
+        // ScrollViewer clamps its offsets while arranging against the latest extent. Auto-fit
+        // can shrink that extent, so arrange the header only after the clamp; otherwise its text
+        // keeps the old offset for this frame while separators render with the new offset.
+        _header.HorizontalOffset = _scrollViewer.HorizontalOffset;
+        _header.Arrange(new Rect(contentBounds.X, contentBounds.Y, Math.Max(0, contentBounds.Width), headerH));
 
         if (TryConsumeScrollIntoViewRequest(out var request))
         {
@@ -1029,6 +1039,17 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             variableHeightPresenter.InvalidateHeights();
         }
         InvalidateMeasure();
+    }
+
+    private void MeasureRealizedAutoColumn(int columnIndex)
+    {
+        _presenter.VisitRealized((_, element) =>
+        {
+            if (element is Row row)
+            {
+                row.MeasureAutoColumn(columnIndex);
+            }
+        });
     }
 
     private void InvalidateColumnSizing()
@@ -1376,6 +1397,16 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 _cells[i].Arrange(new Rect(x, bounds.Y, w, bounds.Height));
                 x += w;
             }
+
+            // A resize or auto-fit can move a separator under a stationary pointer. No native
+            // mouse-move is generated in that case, so refresh the separator cursor from the
+            // window's last pointer position after the new column bounds have been applied.
+            if (_resizeColumnIndex < 0 && _pressedSortColumnIndex < 0 && IsMouseOver &&
+                FindVisualRoot() is Window window)
+            {
+                var pointer = window.TranslatePoint(window.LastMousePositionDip, this);
+                UpdateSeparatorCursor(pointer);
+            }
         }
 
         protected override void OnRender(IGraphicsContext context)
@@ -1448,20 +1479,29 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         /// Returns the column index whose right-edge separator is near the given X position,
         /// or -1 if no resizable separator is hit.
         /// </summary>
-        private int HitTestSeparator(double localX, bool forAutoSize = false)
+        private int HitTestSeparator(double localX)
         {
             var columns = _owner._core.Columns;
             double x = -HorizontalOffset;
             for (int i = 0; i < columns.Count; i++)
             {
                 x += Math.Max(0, columns[i].ActualWidth);
-                bool canUseSeparator = forAutoSize
-                    ? _owner._core.CanAutoSizeColumn(i)
-                    : _owner._core.CanResizeColumn(i);
-                if (Math.Abs(localX - x) <= SeparatorHitWidth / 2 && canUseSeparator)
+                if (Math.Abs(localX - x) <= SeparatorHitWidth / 2 &&
+                    _owner._core.CanResizeColumn(i))
+                {
                     return i;
+                }
             }
             return -1;
+        }
+
+        private void UpdateSeparatorCursor(Point position)
+        {
+            bool inside = position.X >= 0 && position.X < Bounds.Width &&
+                position.Y >= 0 && position.Y < Bounds.Height;
+            Cursor = inside && HitTestSeparator(position.X) >= 0
+                ? CursorType.SizeWE
+                : null;
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1471,11 +1511,16 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
             var pos = e.GetPosition(this);
             bool autoSize = e.ClickCount >= 2;
-            int col = HitTestSeparator(pos.X, forAutoSize: autoSize);
+            int col = HitTestSeparator(pos.X);
+            UpdateSeparatorCursor(pos);
             if (col >= 0 && autoSize)
             {
                 if (_owner._core.ResetColumnToAuto(col))
                 {
+                    // Auto-fit is an explicit snapshot of the content currently on screen.
+                    // Presenter measure does not walk realized rows, so collect their intrinsic
+                    // cell widths before resolving the new column width.
+                    _owner.MeasureRealizedAutoColumn(col);
                     _owner.InvalidateColumnSizing();
                     InvalidateArrange();
                     InvalidateVisual();
@@ -1550,10 +1595,16 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 return;
             }
 
-            // Update cursor based on separator hover
-            Cursor = HitTestSeparator(pos.X) >= 0
-                ? CursorType.SizeWE
-                : null;
+            UpdateSeparatorCursor(pos);
+        }
+
+        protected override void OnMouseLeave()
+        {
+            base.OnMouseLeave();
+            if (_resizeColumnIndex < 0)
+            {
+                Cursor = null;
+            }
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
@@ -1758,6 +1809,23 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 ? maxCellH + padV
                 : availableSize.Height;
             return new Size(availableSize.Width, rowH);
+        }
+
+        public void MeasureAutoColumn(int columnIndex)
+        {
+            if ((uint)columnIndex >= (uint)_cells.Count)
+            {
+                return;
+            }
+
+            var pad = _owner.CellPadding;
+            double rowHeight = Bounds.Height > 0 ? Bounds.Height : _owner.ResolveRowHeight();
+            double availableHeight = Math.Max(0, rowHeight - pad.VerticalThickness);
+            var view = _cells[columnIndex].View;
+            view.Measure(new Size(double.PositiveInfinity, availableHeight));
+            _owner._core.ReportAutoDesiredWidth(
+                columnIndex,
+                view.DesiredSize.Width + pad.HorizontalThickness);
         }
 
         protected override void ArrangeContent(Rect bounds)
