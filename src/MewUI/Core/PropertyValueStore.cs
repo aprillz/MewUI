@@ -522,7 +522,10 @@ internal sealed class PropertyValueStore
     /// </summary>
     private object? CaptureEffective(ref Entry entry, MewProperty? property)
     {
-        if (property?.ChangedWithValuesCallback == null)
+        // OnMewPropertyChanged also depends on the comparison below. Capture the real old
+        // value even without a value-aware callback, or a non-null -> null transition looks
+        // like null -> null and silently loses its property side effects.
+        if (property == null)
             return null;
 
         if (entry.Value is AnimatedEntry animated)
