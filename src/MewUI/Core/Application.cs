@@ -1,6 +1,5 @@
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
-using Aprillz.MewUI.Input;
 
 namespace Aprillz.MewUI;
 
@@ -27,8 +26,9 @@ public sealed class Application
 
     private Exception? _pendingFatalException;
 
-    private readonly List<Window> _windows = new();
-    private Window? _mainWindow;
+    // Run-scoped state (window registry, main-window identity) and its ordered teardown. Non-null only
+    // for the duration of a Run; created at run start, disposed at run end.
+    private ApplicationRuntime? _runtime;
 
     /// <summary>
     /// Determines when the run loop ends automatically as windows close. Process-level policy; set
@@ -164,7 +164,7 @@ public sealed class Application
     /// <summary>
     /// Gets currently tracked windows for this application instance.
     /// </summary>
-    public IReadOnlyList<Window> AllWindows => _windows;
+    public IReadOnlyList<Window> AllWindows => _runtime?.Windows ?? (IReadOnlyList<Window>)Array.Empty<Window>();
 
     /// <summary>
     /// Gets the selected graphics backend used by windows/controls.
@@ -251,8 +251,9 @@ public sealed class Application
                 var host = DefaultPlatformHost;
                 app = new Application(host);
                 _current = app;
+                app._runtime = new ApplicationRuntime();
                 _ = app.Theme;
-                app._mainWindow = mainWindow;
+                app._runtime.SetMainWindow(mainWindow);
                 app.RegisterWindow(mainWindow);
                 app.RunCore(mainWindow);
             }
@@ -262,8 +263,9 @@ public sealed class Application
                 {
                     if (app != null)
                     {
-                        WindowDragDropRouter.ResetForRuntimeEnd();
-                        app._windows.Clear();
+                        // Ordered teardown of run-scoped state (drag reset then registry clear).
+                        app._runtime?.Dispose();
+                        app._runtime = null;
                         if (app.Dispatcher != null)
                         {
                             app.Dispatcher = null;
@@ -315,7 +317,7 @@ public sealed class Application
 
     private void ApplyThemeChange(Theme oldTheme, Theme newTheme)
     {
-        var windows = _windows.ToArray();
+        var windows = _runtime?.SnapshotWindows() ?? Array.Empty<Window>();
         foreach (var window in windows)
         {
             window.BroadcastThemeChanged(oldTheme, newTheme);
@@ -324,28 +326,11 @@ public sealed class Application
         ThemeChanged?.Invoke(oldTheme, newTheme);
     }
 
-    internal void RegisterWindow(Window window)
-    {
-        if (_windows.Contains(window))
-        {
-            return;
-        }
+    internal void RegisterWindow(Window window) => _runtime?.Register(window);
 
-        _windows.Add(window);
-    }
-
-    internal void UnregisterWindow(Window window)
-    {
-        bool wasMainWindow = ReferenceEquals(window, _mainWindow);
-        _windows.Remove(window);
-
-        // The shutdown decision lives here (not in each platform host) so it is policy-driven and
-        // owned in one place. Platform hosts only maintain their own hwnd registry for routing.
-        if (ShouldShutdownAfterClose(ShutdownMode, wasMainWindow, _windows.Count))
-        {
-            Quit();
-        }
-    }
+    // The shutdown decision is owned by ApplicationRuntime (policy-driven, one place) rather than each
+    // platform host; hosts only maintain their own hwnd registry for routing.
+    internal void UnregisterWindow(Window window) => _runtime?.Unregister(window);
 
     // Pure decision so the policy is unit-testable in isolation.
     internal static bool ShouldShutdownAfterClose(ShutdownMode mode, bool wasMainWindow, int remainingWindows)
