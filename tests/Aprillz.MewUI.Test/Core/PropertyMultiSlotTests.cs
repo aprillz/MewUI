@@ -24,6 +24,28 @@ public sealed class PropertyMultiSlotTests
         }
     }
 
+    private sealed class NullableOwner : MewObject
+    {
+        public static readonly MewProperty<string?> ValueProperty =
+            MewProperty<string?>.Register<NullableOwner>(nameof(Value), null);
+
+        public int ChangeCount { get; private set; }
+
+        public string? Value
+        {
+            get => GetValue(ValueProperty);
+            set => SetValue(ValueProperty, value);
+        }
+
+        protected override void OnMewPropertyChanged(MewProperty property)
+        {
+            if (property == ValueProperty)
+            {
+                ChangeCount++;
+            }
+        }
+    }
+
     private static readonly MewProperty<int> Prop = SlotOwner.ValueProperty;
 
     [TestMethod]
@@ -95,5 +117,15 @@ public sealed class PropertyMultiSlotTests
         // Clearing the local null reveals the preserved style value.
         owner.PropertyStore.ClearLocal(strProp);
         Assert.AreEqual("styled", owner.PropertyStore.GetValue(strProp));
+    }
+
+    [TestMethod]
+    public void NonNullToNull_RaisesPropertyChanged()
+    {
+        var owner = new NullableOwner { Value = "set" };
+
+        owner.Value = null;
+
+        Assert.AreEqual(2, owner.ChangeCount);
     }
 }
