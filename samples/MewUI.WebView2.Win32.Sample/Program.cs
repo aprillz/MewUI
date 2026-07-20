@@ -334,9 +334,9 @@ try
                     using var deferral = e.GetDeferral();
                     var info = AddTab(uri);
 
-                    await info.WebView.EnsureCoreWebView2Async();  // 초기화 대기
+                    await info.WebView.EnsureCoreWebView2Async();  // Await for the new WebView2 to be initialized before redirecting
 
-                    e.NewWindow = info.WebView.CoreWebView2;  // 리다이렉트
+                    e.NewWindow = info.WebView.CoreWebView2;  // Redirect
                     e.Handled = true;
 
                     deferral.Complete();
@@ -357,6 +357,7 @@ try
                         new Button()
                             .Margin(8, 0, 0, 0)
                             .Content(new GlyphElement().Kind(GlyphKind.Cross).GlyphSize(3.5))
+                            .ToolTip("Close Tab")
                             .MinHeight(0)
                             .Size(16, 16)
                             .Padding(new Thickness(0))
