@@ -475,9 +475,10 @@ public static class DefaultStyles
         {
             Setters =
             [
+                Setter.Create(FrameworkElement.HeightProperty, 10.0),
+                Setter.Create(Control.CornerRadiusProperty, 10.0 / 2),
                 Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
-                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
                 Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
             ],
         };

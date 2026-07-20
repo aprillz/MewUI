@@ -10,7 +10,6 @@ public sealed class ProgressBar : RangeBase
     static ProgressBar()
     {
         MaximumProperty.OverrideDefaultValue<ProgressBar>(100.0);
-        HeightProperty.OverrideDefaultValue<ProgressBar>(10.0);
     }
 
     protected override Size MeasureContent(Size availableSize) => new Size(120, Height);
