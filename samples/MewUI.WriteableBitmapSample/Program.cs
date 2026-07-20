@@ -79,13 +79,13 @@ Element PixelCanvasDemo() => new DockPanel()
 
                 new ComboBox()
                     .Width(120)
-                    .Items(brushColors.Select(c => c.Item2).ToArray())
+                    .Items(brushColors, x => x.Item2)
                     .SelectedIndex(0)
                     .OnSelectionChanged(s =>
                     {
-                        if (s is Tuple<Color, string> accent)
+                        if (s is (Color color, string name))
                         {
-                            pixelCanvas.BrushColor = accent.Item1;
+                            pixelCanvas.BrushColor = color;
                         }
                     }),
 
@@ -391,7 +391,7 @@ static void Startup()
         Direct2DBackend.Register();
         //}
     }
- 
+
 
     Application.DispatcherUnhandledException += e =>
     {
