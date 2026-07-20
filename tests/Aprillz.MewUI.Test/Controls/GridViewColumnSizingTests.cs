@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
+using Aprillz.MewUI.Rendering;
 using MewUI.Test.Infrastructure;
 
 namespace MewUI.Test.Controls;
@@ -205,6 +206,26 @@ public sealed class GridViewColumnSizingTests
         Assert.IsTrue(core.CanAutoSizeColumn(0));
         Assert.IsTrue(core.ResetColumnToAuto(0));
         Assert.IsTrue(core.Columns[0].Width.IsAuto);
+    }
+
+    [TestMethod]
+    public void CollapsedStarResize_MaterializesToPixelWhenPeersHaveNoCapacity()
+    {
+        var core = CreateCore(
+            Column(GridLength.Pixels(400)),
+            Column(GridLength.Star),
+            Column(GridLength.Star));
+        core.ResolveColumnWidths(400, out _);
+
+        AssertClose(0, core.Columns[1].ActualWidth);
+        var session = core.BeginColumnResize(1);
+        Assert.IsNotNull(session);
+        Assert.IsTrue(core.ResizeColumn(session, 80));
+
+        Assert.IsTrue(core.Columns[1].Width.IsAbsolute);
+        AssertClose(80, core.Columns[1].ActualWidth);
+        Assert.IsTrue(core.Columns[2].Width.IsStar);
+        AssertClose(0, core.Columns[2].ActualWidth);
     }
 
     [TestMethod]
@@ -461,6 +482,57 @@ public sealed class GridViewColumnSizingTests
     }
 
     [TestMethod]
+    public void GridView_DragOnSharedBoundary_RevivesZeroWidthColumn()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI text measurement is Windows-only.");
+            return;
+        }
+
+        RenderCountingElement? collapsedCell = null;
+        var grid = new GridView
+        {
+            BorderThickness = 0,
+            Padding = default,
+            ItemsSource = ItemsView.Create(new[] { 1 }),
+        };
+        grid.SetColumns(
+        [
+            PublicColumn(GridLength.Pixels(100)),
+            new GridViewColumn<int>
+            {
+                Width = GridLength.Pixels(0),
+                CellTemplate = new DelegateTemplate<int>(
+                    build: _ => collapsedCell = new RenderCountingElement(),
+                    bind: static (_, _, _, _) => { }),
+            },
+            PublicColumn(GridLength.Pixels(100)),
+        ]);
+
+        var window = HeadlessWindow.Create(300, 200);
+        window.Content = grid;
+        window.PerformLayout();
+
+        RenderGrid(grid);
+        Assert.IsNotNull(collapsedCell);
+        Assert.AreEqual(0, collapsedCell.RenderCount);
+
+        var boundary = new Point(grid.Bounds.X + 100, grid.Bounds.Y + 10);
+        window.SendMouseDown(boundary);
+        window.SendMouseMove(new Point(boundary.X + 40, boundary.Y));
+        window.SendMouseUp(new Point(boundary.X + 40, boundary.Y));
+        window.PerformLayout();
+
+        Assert.IsTrue(grid.TryGetColumnIndexAt(
+            new Point(grid.Bounds.X + 120, grid.Bounds.Y + 10), out int column));
+        Assert.AreEqual(1, column);
+        RenderGrid(grid);
+        Assert.AreEqual(1, collapsedCell.RenderCount);
+        Assert.IsTrue(window.IsUpdatePassSettled);
+    }
+
+    [TestMethod]
     public void GridView_DragOnLoneLastStarBoundary_MaterializesToPixel()
     {
         if (!OperatingSystem.IsWindows())
@@ -702,6 +774,25 @@ public sealed class GridViewColumnSizingTests
         => new DelegateTemplate<int>(
             build: _ => new TextBlock(),
             bind: static (_, _, _, _) => { });
+
+    private static void RenderGrid(GridView grid)
+    {
+        var factory = Application.DefaultGraphicsFactory;
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(300, 200, 1));
+        using var context = factory.CreateContext(surface);
+        context.BeginFrame(surface);
+        grid.Render(context);
+        context.EndFrame();
+    }
+
+    private sealed class RenderCountingElement : FrameworkElement
+    {
+        public int RenderCount { get; private set; }
+
+        protected override Size MeasureContent(Size availableSize) => new(20, 20);
+
+        protected override void OnRender(IGraphicsContext context) => RenderCount++;
+    }
 
     private sealed class InfiniteWidthMeasureHost : Panel
     {

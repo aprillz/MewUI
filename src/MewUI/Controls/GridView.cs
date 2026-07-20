@@ -1483,16 +1483,41 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         {
             var columns = _owner._core.Columns;
             double x = -HorizontalOffset;
+            double nearestDistance = double.PositiveInfinity;
+            double nearestBoundary = double.NaN;
+            int nearestColumn = -1;
+            int collapsedColumn = -1;
             for (int i = 0; i < columns.Count; i++)
             {
-                x += Math.Max(0, columns[i].ActualWidth);
-                if (Math.Abs(localX - x) <= SeparatorHitWidth / 2 &&
-                    _owner._core.CanResizeColumn(i))
+                double width = Math.Max(0, columns[i].ActualWidth);
+                x += width;
+                if (!_owner._core.CanResizeColumn(i))
                 {
-                    return i;
+                    continue;
+                }
+
+                double distance = Math.Abs(localX - x);
+                if (distance > SeparatorHitWidth / 2)
+                {
+                    continue;
+                }
+
+                if (distance < nearestDistance - 0.01)
+                {
+                    nearestDistance = distance;
+                    nearestBoundary = x;
+                    nearestColumn = i;
+                    collapsedColumn = width <= 0.01 ? i : -1;
+                }
+                else if (Math.Abs(x - nearestBoundary) <= 0.01 &&
+                    collapsedColumn < 0 && width <= 0.01)
+                {
+                    // A zero-width column shares its right boundary with the preceding column.
+                    // Prefer the collapsed column so pointer resizing can make it visible again.
+                    collapsedColumn = i;
                 }
             }
-            return -1;
+            return collapsedColumn >= 0 ? collapsedColumn : nearestColumn;
         }
 
         private void UpdateSeparatorCursor(Point position)
@@ -1893,6 +1918,22 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
                     context.DrawLine(new Point(x, snapped.Y), new Point(x, snapped.Bottom), stroke, 1, pixelSnap: true);
                 }
+            }
+        }
+
+        protected override void RenderSubtree(IGraphicsContext context)
+        {
+            for (int i = 0; i < _cells.Count; i++)
+            {
+                // Keep collapsed cells realized and bound so their column can be restored,
+                // but do not render controls into a zero-width slot. Bordered controls would
+                // otherwise collapse both edges into a visible vertical line.
+                if (_owner._core.Columns[i].ActualWidth <= 0.01)
+                {
+                    continue;
+                }
+
+                _cells[i].View.Render(context);
             }
         }
 
@@ -2448,6 +2489,15 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             double appliedMagnitude = Math.Min(Math.Abs(requestedDelta), capacity);
             if (appliedMagnitude <= 0.001)
             {
+                if (targetExpands && session.StartWidth <= 0.001)
+                {
+                    // No Star peer can surrender space when every flexible column is already
+                    // collapsed. Materialize the dragged column as Pixel so the gesture can
+                    // intentionally create horizontal overflow and recover the column.
+                    target.Width = GridLength.Pixels(requestedWidth);
+                    target.ActualWidth = requestedWidth;
+                    return true;
+                }
                 return false;
             }
 
