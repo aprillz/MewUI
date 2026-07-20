@@ -159,6 +159,21 @@ public class NativeCustomWindow : Window
         };
         _titleBar.SetBinding(BackgroundProperty, this, BackgroundProperty);
 
+        // Win32 turns the blank extended-titlebar area into HTCAPTION in the backend. macOS keeps
+        // movableByWindowBackground disabled so interactive content remains usable, therefore its
+        // custom drag zone must explicitly start the native window drag.
+        _titleBar.MouseDown += e =>
+        {
+            // performWindowDragWithEvent: enters AppKit's native drag loop. Starting it again
+            // for the second press prevents the managed double-click handler below from toggling
+            // maximize/restore, so only single presses may initiate a drag.
+            if (e.Button == MouseButton.Left && e.ClickCount == 1)
+            {
+                DragMove();
+                e.Handled = true;
+            }
+        };
+
         // Title bar: double-click to maximize/restore
         _titleBar.MouseDoubleClick += e =>
         {

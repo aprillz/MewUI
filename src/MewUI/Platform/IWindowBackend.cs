@@ -56,6 +56,11 @@ public interface IWindowBackend : IDisposable
     void SetCanMaximize(bool value) { }
 
     /// <summary>
+    /// Enables or disables the close button in the native chrome.
+    /// </summary>
+    void SetCanClose(bool value) { }
+
+    /// <summary>
     /// Sets whether the window stays on top of other windows.
     /// </summary>
     void SetTopmost(bool value) { }

@@ -34,6 +34,7 @@ public sealed class TracingPlatformHostTests
         traced.SetWindowState(WindowState.Maximized);
         traced.SetCanMinimize(false);
         traced.SetCanMaximize(false);
+        traced.SetCanClose(false);
         traced.SetTopmost(true);
         traced.SetShowInTaskbar(false);
         traced.BeginDragMove();
@@ -44,7 +45,7 @@ public sealed class TracingPlatformHostTests
         traced.SetPlatformOptions(null);
         traced.SetAllowDrop(true);
 
-        Assert.AreEqual(12, inner.DefaultMemberCallCount);
+        Assert.AreEqual(13, inner.DefaultMemberCallCount);
         Assert.AreEqual(inner.ChromeCapabilities, traced.ChromeCapabilities);
         Assert.AreEqual(inner.NativeChromeButtonInset, traced.NativeChromeButtonInset);
     }
@@ -79,6 +80,7 @@ public sealed class TracingPlatformHostTests
         public void SetWindowState(WindowState state) => DefaultMemberCallCount++;
         public void SetCanMinimize(bool value) => DefaultMemberCallCount++;
         public void SetCanMaximize(bool value) => DefaultMemberCallCount++;
+        public void SetCanClose(bool value) => DefaultMemberCallCount++;
         public void SetTopmost(bool value) => DefaultMemberCallCount++;
         public void SetShowInTaskbar(bool value) => DefaultMemberCallCount++;
         public void BeginDragMove() => DefaultMemberCallCount++;

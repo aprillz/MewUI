@@ -2198,6 +2198,7 @@ internal static unsafe class MacOSWindowInterop
                     const ulong ExtendedStyleMask = 1ul | 2ul | 4ul | 8ul | (1ul << 14) | (1ul << 15);
                     MacOSWindowInterop.SetWindowStyleMask(window, ExtendedStyleMask);
                     MacOSWindowInterop.SetTitlebarForTransparency(window, true);
+                    backend.ApplyNativeChromeCapabilities();
                 }
             }
         }
@@ -2230,6 +2231,7 @@ internal static unsafe class MacOSWindowInterop
                     const ulong ExtendedStyleMask = 1ul | 2ul | 4ul | 8ul | (1ul << 15);
                     MacOSWindowInterop.SetWindowStyleMask(window, ExtendedStyleMask);
                     MacOSWindowInterop.SetTitlebarForTransparency(window, true);
+                    backend.ApplyNativeChromeCapabilities();
                 }
             }
         }

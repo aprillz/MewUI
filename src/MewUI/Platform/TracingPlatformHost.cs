@@ -110,6 +110,8 @@ internal sealed class TracingPlatformHost : IPlatformHost
 
         public void SetCanMaximize(bool value) => _innerBackend.SetCanMaximize(value);
 
+        public void SetCanClose(bool value) => _innerBackend.SetCanClose(value);
+
         public void SetTopmost(bool value) => _innerBackend.SetTopmost(value);
 
         public void SetShowInTaskbar(bool value) => _innerBackend.SetShowInTaskbar(value);

@@ -63,6 +63,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
     private int _reshapeRendering;
     private long _defaultWindowLevel;
     private ulong _defaultStyleMask;
+    private bool _isManuallyMaximized;
     // Set when a borderless window was temporarily promoted to titled to allow native fullscreen.
     internal bool _borderlessBeforeFullScreen;
     private bool? _lastMetalDisplaySyncEnabled;
@@ -251,6 +252,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             ApplyRequestedClientSize();
         }
 
+        ApplyNativeChromeCapabilities();
+
         ApplyResolvedStartupPlacement();
         UpdateClientSizeIfNeeded(forceLayout: true);
         ApplyResolvedStartupPlacement();
@@ -303,37 +306,53 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     public void SetCanMinimize(bool value)
     {
-        if (_nsWindow == 0)
-        {
-            return;
-        }
-
-        // Toggle NSWindowStyleMaskMiniaturizable (1 << 2 = 4) in styleMask
-        ulong mask = ObjC.MsgSend_ulong(_nsWindow, ObjC.Sel("styleMask"));
-        const ulong NSWindowStyleMaskMiniaturizable = 4;
-        mask = value ? (mask | NSWindowStyleMaskMiniaturizable) : (mask & ~NSWindowStyleMaskMiniaturizable);
-        ObjC.MsgSend_void_nint_ulong(_nsWindow, ObjC.Sel("setStyleMask:"), mask);
-
-        // Also enable/disable the miniaturize button
-        var btn = ObjC.MsgSend_nint_ulong(_nsWindow, ObjC.Sel("standardWindowButton:"), 1);
-        if (btn != 0)
-        {
-            ObjC.MsgSend_void_nint_bool(btn, ObjC.Sel("setEnabled:"), value);
-        }
+        ApplyNativeChromeCapabilities();
     }
 
     public void SetCanMaximize(bool value)
     {
-        if (_nsWindow == 0)
+        ApplyNativeChromeCapabilities();
+    }
+
+    public void SetCanClose(bool value)
+    {
+        ApplyNativeChromeCapabilities();
+    }
+
+    internal void ApplyNativeChromeCapabilities()
+    {
+        if (_nsWindow == 0 || IsNativeFullScreen())
         {
             return;
         }
 
-        // Enable/disable the zoom button (standardWindowButton: 2)
-        var btn = ObjC.MsgSend_nint_ulong(_nsWindow, ObjC.Sel("standardWindowButton:"), 2);
-        if (btn != 0)
+        const ulong NSWindowStyleMaskMiniaturizable = 4;
+
+        ulong mask = MacOSWindowInterop.GetWindowStyleMask(_nsWindow);
+        if (mask != 0)
         {
-            ObjC.MsgSend_void_nint_bool(btn, ObjC.Sel("setEnabled:"), value);
+            // Keep Closable in the style mask so Window.Close() remains programmatically usable;
+            // CanClose governs the native affordance, not the managed close API.
+            ulong updated = _window.CanMinimize
+                ? mask | NSWindowStyleMaskMiniaturizable
+                : mask & ~NSWindowStyleMaskMiniaturizable;
+            if (updated != mask)
+            {
+                MacOSWindowInterop.SetWindowStyleMask(_nsWindow, updated);
+            }
+        }
+
+        SetStandardWindowButtonEnabled(0, _window.CanClose);
+        SetStandardWindowButtonEnabled(1, _window.CanMinimize);
+        SetStandardWindowButtonEnabled(2, _window.CanMaximize);
+    }
+
+    private void SetStandardWindowButtonEnabled(ulong button, bool enabled)
+    {
+        var nativeButton = ObjC.MsgSend_nint_ulong(_nsWindow, ObjC.Sel("standardWindowButton:"), button);
+        if (nativeButton != 0)
+        {
+            ObjC.MsgSend_void_nint_bool(nativeButton, ObjC.Sel("setEnabled:"), enabled);
         }
     }
 
@@ -344,12 +363,9 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             return;
         }
 
-        // macOS doesn't have a direct ShowInTaskbar concept.
-        // The closest approximation is toggling NSWindowCollectionBehaviorStationary.
-        const ulong NSWindowCollectionBehaviorStationary = 1 << 4; // 16
-        ulong behavior = ObjC.MsgSend_ulong(_nsWindow, ObjC.Sel("collectionBehavior"));
-        behavior = value ? (behavior & ~NSWindowCollectionBehaviorStationary) : (behavior | NSWindowCollectionBehaviorStationary);
-        ObjC.MsgSend_void_nint_ulong(_nsWindow, ObjC.Sel("setCollectionBehavior:"), behavior);
+        // macOS has no per-window taskbar entry. The Window menu is its closest per-window
+        // equivalent; do not use Stationary here because that changes Spaces behavior instead.
+        ObjC.MsgSend_void_nint_bool(_nsWindow, ObjC.Sel("setExcludedFromWindowsMenu:"), !value);
     }
 
     public void BeginDragMove()
@@ -419,7 +435,11 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 if (_allowsTransparency || _extendTitleBarHeight > 0)
                 {
                     // Manual maximize using screen visibleFrame
-                    _restoreFrame = ObjC.MsgSend_rect(_nsWindow, ObjC.Sel("frame"));
+                    if (!_isManuallyMaximized)
+                    {
+                        _restoreFrame = ObjC.MsgSend_rect(_nsWindow, ObjC.Sel("frame"));
+                    }
+                    _isManuallyMaximized = true;
                     var screen = ObjC.MsgSend_nint(_nsWindow, ObjC.Sel("screen"));
                     if (screen != 0)
                     {
@@ -443,6 +463,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 else if (_allowsTransparency || _extendTitleBarHeight > 0)
                 {
                     // Restore from manual maximize
+                    _isManuallyMaximized = false;
                     if (_restoreFrame.size.width > 0 && _restoreFrame.size.height > 0)
                     {
                         ObjC.MsgSend_void_nint_rect_bool(_nsWindow, ObjC.Sel("setFrame:display:"), _restoreFrame, true);
@@ -753,6 +774,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
                 MacOSWindowInterop.SetWindowStyleMask(_nsWindow, _allowsTransparency ? MacOSWindowInterop.TransparentStyleMask : _defaultStyleMask);
                 MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
             }
+            ApplyNativeChromeCapabilities();
             if (_metalLayer != 0)
             {
                 MacOSWindowInterop.SetLayerOpaque(_metalLayer, !_allowsTransparency);
@@ -777,9 +799,21 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     public void SetExtendClientAreaToTitleBar(double titleBarHeight)
     {
+        double previousTitleBarHeight = _extendTitleBarHeight;
         _extendTitleBarHeight = titleBarHeight;
         if (_nsWindow == 0)
         {
+            return;
+        }
+
+        // Window re-applies the extended frame after every state transition so Win32 can
+        // recalculate its non-client area. AppKit does not need that refresh. Reapplying the
+        // same style here calls ApplyRequestedClientSize below, which would immediately replace
+        // a freshly maximized frame with the window's configured startup size.
+        if (previousTitleBarHeight == titleBarHeight)
+        {
+            ApplyNativeChromeCapabilities();
+            Invalidate(erase: false);
             return;
         }
 
@@ -804,6 +838,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, false);
         }
 
+        ApplyNativeChromeCapabilities();
+
         Invalidate(erase: false);
     }
 
@@ -813,10 +849,23 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         // The window frame color is determined by the system appearance.
     }
 
-    public WindowChromeCapabilities ChromeCapabilities =>
-        WindowChromeCapabilities.ExtendClientArea
-        | WindowChromeCapabilities.NativeChromeButtons
-        | WindowChromeCapabilities.NativeWindowBorder;
+    public WindowChromeCapabilities ChromeCapabilities
+    {
+        get
+        {
+            var capabilities = WindowChromeCapabilities.ExtendClientArea;
+            if (!_allowsTransparency)
+            {
+                capabilities |= WindowChromeCapabilities.NativeWindowBorder;
+                if (_extendTitleBarHeight > 0)
+                {
+                    capabilities |= WindowChromeCapabilities.NativeChromeButtons;
+                }
+            }
+
+            return capabilities;
+        }
+    }
 
     public Thickness NativeChromeButtonInset
     {
@@ -1019,6 +1068,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             MacOSWindowInterop.SetTitlebarForTransparency(_nsWindow, _allowsTransparency);
             MacOSWindowInterop.RegisterWindowCloseTarget(_nsWindow, this);
 
+            // macOS creates its native objects here (rather than in the platform host constructor).
+            // Push every pre-show Window property now that the handle exists, matching Win32/X11.
+            _window.AttachBackend(this);
+
             // Opt standard top-level windows into native fullscreen so WindowState.FullScreen / the green button work.
             if (_window.Kind is not (Controls.WindowKind.Overlay or Controls.WindowKind.Tool) && !_allowsTransparency)
             {
@@ -1040,6 +1093,8 @@ internal sealed class MacOSWindowBackend : IWindowBackend
             {
                 MacOSWindowInterop.SetWindowStyleMask(_nsWindow, 0); // NSWindowStyleMaskBorderless
             }
+
+            ApplyNativeChromeCapabilities();
         }
     }
 
@@ -1227,6 +1282,13 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
         bool zoomed = IsZoomed();
         var currentState = _window.WindowState;
+
+        // Transparent and extended-titlebar windows are maximized with setFrame rather than zoom:.
+        // isZoomed therefore remains false and must not immediately undo the managed Maximized state.
+        if (_isManuallyMaximized)
+        {
+            return;
+        }
 
         if (zoomed && currentState != Controls.WindowState.Maximized)
         {
