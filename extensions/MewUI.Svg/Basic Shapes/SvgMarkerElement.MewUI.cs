@@ -11,22 +11,18 @@ public abstract partial class SvgMarkerElement
             return result;
         }
 
-        var points = MewSvgPathUtilities.GetMarkerPoints(path);
-        if (points.Count < 2)
-        {
-            return result;
-        }
-
         var markerStart = NormalizeMarkerUri(MarkerStart);
-        if (markerStart is not null)
+        if (markerStart is not null &&
+            MewSvgPathUtilities.TryGetStartMarkerSegment(path, out var startPoint, out var startTangentPoint))
         {
             var marker = OwnerDocument.GetElementById<SvgMarker>(markerStart.ToString());
-            marker?.RenderMarker(renderer, this, points[0], points[0], points[1], true);
+            marker?.RenderMarker(renderer, this, startPoint, startPoint, startTangentPoint, true);
         }
 
         var markerMid = NormalizeMarkerUri(MarkerMid);
         if (markerMid is not null)
         {
+            var points = MewSvgPathUtilities.GetMarkerPoints(path);
             var marker = OwnerDocument.GetElementById<SvgMarker>(markerMid.ToString());
             if (marker is not null)
             {
@@ -38,10 +34,11 @@ public abstract partial class SvgMarkerElement
         }
 
         var markerEnd = NormalizeMarkerUri(MarkerEnd);
-        if (markerEnd is not null)
+        if (markerEnd is not null &&
+            MewSvgPathUtilities.TryGetEndMarkerSegment(path, out var endTangentPoint, out var endPoint))
         {
             var marker = OwnerDocument.GetElementById<SvgMarker>(markerEnd.ToString());
-            marker?.RenderMarker(renderer, this, points[^1], points[^2], points[^1], false);
+            marker?.RenderMarker(renderer, this, endPoint, endTangentPoint, endPoint, false);
         }
 
         return result;
