@@ -310,19 +310,12 @@ public abstract class FrameworkElement : UIElement, IDisposable
     }
 
     /// <summary>
-    /// Gets the graphics factory from the owning window, or the default factory.
+    /// Gets the process-wide graphics factory. Safe to call off the UI thread: unlike a
+    /// <see cref="Element.FindVisualRoot"/> lookup, it never touches the (UI-thread-only) Parent chain.
     /// </summary>
     /// <returns>The graphics factory.</returns>
     protected IGraphicsFactory GetGraphicsFactory()
-    {
-        var root = FindVisualRoot();
-        if (root is Window window)
-        {
-            return window.GraphicsFactory;
-        }
-
-        return Application.DefaultGraphicsFactory;
-    }
+        => Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
 
     /// <summary>
     /// Called when the theme changes.
