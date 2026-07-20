@@ -43,9 +43,13 @@ public partial class SvgMarker
             return;
         }
 
-        var matrix =
-            Matrix3x2.CreateTranslation((float)markerPoint.X, (float)markerPoint.Y) *
-            Matrix3x2.CreateRotation((Orient.IsAuto ? angle : Orient.Angle) * (float)(Math.PI / 180.0));
+        // System.Numerics transforms row vectors from left to right. Build the marker's
+        // local transforms first and place it at the path vertex last. The previous order
+        // translated to markerPoint first, so a child <use> rotate/scale also transformed
+        // the absolute endpoint and moved markers off-canvas (issue-215-01).
+        var matrix = MarkerElement?.Transforms is { Count: > 0 }
+            ? MarkerElement.Transforms.GetMatrix()
+            : Matrix3x2.Identity;
 
         switch (MarkerUnits)
         {
@@ -53,10 +57,10 @@ public partial class SvgMarker
                 if (ViewBox.Width > 0 && ViewBox.Height > 0)
                 {
                     var strokeWidth = owner.StrokeWidth.ToDeviceValue(renderer, UnitRenderingType.Other, this);
-                    matrix *= Matrix3x2.CreateScale(MarkerWidth, MarkerHeight);
                     matrix *= Matrix3x2.CreateTranslation(
                         AdjustForViewBoxWidth(-RefX.ToDeviceValue(renderer, UnitRenderingType.Horizontal, this) * strokeWidth),
                         AdjustForViewBoxHeight(-RefY.ToDeviceValue(renderer, UnitRenderingType.Vertical, this) * strokeWidth));
+                    matrix *= Matrix3x2.CreateScale(MarkerWidth, MarkerHeight);
                 }
                 else
                 {
@@ -72,10 +76,9 @@ public partial class SvgMarker
                 break;
         }
 
-        if (MarkerElement?.Transforms is { Count: > 0 })
-        {
-            matrix *= MarkerElement.Transforms.GetMatrix();
-        }
+        matrix *= Matrix3x2.CreateRotation(
+            (Orient.IsAuto ? angle : Orient.Angle) * (float)(Math.PI / 180.0));
+        matrix *= Matrix3x2.CreateTranslation((float)markerPoint.X, (float)markerPoint.Y);
 
         var transformed = MewSvgPathUtilities.TransformPath(markerPath, matrix);
         var pen = CreatePen(owner, renderer);
