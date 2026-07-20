@@ -153,7 +153,6 @@ partial class GalleryView
         }
 
         grid = new GridView()
-            .Height(190)
             .ItemsSource(all)
             .Apply(g => g.SelectionChanged += obj =>
             {
@@ -181,7 +180,7 @@ partial class GalleryView
 
                 new GridViewColumn<ComplexGridRow>()
                     .Header("Amount")
-                    .StarWidth(2, minWidth: 110)
+                    .AutoWidth()
                     .Template(
                         build: _ => new NumericUpDown().Padding(6, 0).CenterVertical().Minimum(0).Maximum(100).Step(0.5).Format("0.##"),
                         bind: (view, row) => view.BindValue(row.Amount)
@@ -268,8 +267,9 @@ partial class GalleryView
                         .Spacing(2)
                         .Children(
                             new TextBlock().BindText(summaryText).FontSize(11),
-                            new TextBlock().BindText(selectedText).FontSize(11),
-                            new TextBlock().BindText(sortText).FontSize(11)
+                            new StackPanel().Horizontal().Children( 
+                                new TextBlock().BindText(selectedText).FontSize(11),
+                                new TextBlock().BindText(sortText).FontSize(11))
                         ),
 
                     grid
@@ -319,7 +319,7 @@ partial class GalleryView
 
                 new GridViewColumn<TemplateComplexPersonRow>()
                     .Header("User")
-                    .Width(240)
+                    .StarWidth(2)
                     .Bind(
                         build: ctx => new StackPanel()
                             .Vertical()
@@ -354,7 +354,7 @@ partial class GalleryView
 
                 new GridViewColumn<TemplateComplexPersonRow>()
                     .Header("Role")
-                    .Width(120)
+                    .StarWidth()
                     .Bind(
                         build: _ => new ComboBox()
                             .Items(["User", "Admin", "Guest"])
