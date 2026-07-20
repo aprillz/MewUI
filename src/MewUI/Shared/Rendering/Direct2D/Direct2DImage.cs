@@ -50,9 +50,9 @@ internal sealed class Direct2DImage : IImage
         // GPU fast path via the ID2DTextureSource backend marker. When the source exposes
         // a native ID2D1Bitmap1* tied to the same device context as the consumer's render
         // target, we return that bitmap directly - no Lock readback, no CPU premultiply,
-        // no CreateBitmap upload. Offscreen render surfaces and image filter
-        // outputs hit this when both share the factory's shared filter device context
-        // (filter cache -> offscreen render = pure GPU draw, zero CPU touch).
+        // no CreateBitmap upload. Chained filter/scratch surfaces on the same thread hit
+        // this (they share that thread's device context); compositing onto a window's own
+        // render target does not, and falls through to CPU readback below.
         //
         // Cross-backend sources (GL FBO, Metal texture, etc.) don't implement
         // ID2DTextureSource - the cast naturally fails and we fall through to the CPU

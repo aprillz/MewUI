@@ -93,10 +93,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _clipStack = RentClipStack();
     }
 
-    // GPU pixel-surface mode: when the active target is a Direct2DGpuPixelRenderSurface,
-    // we render via the factory's shared filter device context (no DC RT, no DIB), with the
-    // GPU bitmap set as the device target via dc.SetTarget. Subsequent draws and any effect
-    // pass land directly on GPU memory - full zero-copy parity with MewVG's FBO path.
+    // GPU pixel-surface mode: when the active target is a Direct2DGpuPixelRenderSurface, we
+    // render via that surface's own device context (no DC RT, no DIB), with the GPU bitmap
+    // set as the device target via dc.SetTarget. Subsequent draws and any effect pass land
+    // directly on GPU memory - full zero-copy parity with MewVG's FBO path.
     private nint _gpuPixelSurfaceBitmap; // ID2D1Bitmap1* currently set as target (0 = DIB/normal mode)
     private nint _previousDeviceTarget; // saved for SetTarget restore at EndFrame
     private float _previousDcDpiX; // saved DC dpi for restore at EndFrame (GPU pixel-surface path)
@@ -181,12 +181,12 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         D2D1VTable.SetTextAntialiasMode((ID2D1RenderTarget*)_renderTarget, textAa);
     }
 
-    // True when this context's BeginGpuPixelSurfaceFrame was the outermost entry on the shared
-    // DC and therefore issued the BeginDraw. OnEndFrame uses this to decide whether to
-    // issue the matching EndDraw. Nested offscreen entries skip both: they only swap the
-    // DC's target, leaving the outer BeginDraw
-    // active to cover all draws.
-    private bool _calledBeginDrawOnSharedDc;
+    // True when this context's BeginGpuPixelSurfaceFrame was the outermost entry on the
+    // calling thread's device context and therefore issued the BeginDraw. OnEndFrame uses
+    // this to decide whether to issue the matching EndDraw. Nested offscreen/filter entries
+    // skip both: they only swap the DC's target, leaving the outer BeginDraw active to cover
+    // all draws.
+    private bool _calledBeginDrawOnGpuPixelSurface;
 
     // True while a BeginDraw issued by this frame's OnBeginFrame is open. If OnBeginFrame
     // throws before BeginDraw (e.g. render target recreation fails), EndFrame still runs
@@ -204,10 +204,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             _deviceContext = 0;
         }
 
-        // Use the factory's shared filter device context (NOT a DC RT). The bitmap was
-        // created on this DC - they MUST stay paired (cross-DC bitmap usage is undefined).
-        nint sharedDc = _ownerFactory.SharedFilterDeviceContext;
-        if (sharedDc == 0 || !gpuTarget.IsDeviceCurrent || gpuTarget.Bitmap == 0)
+        // Bitmap and DC must stay paired (cross-DC bitmap usage is undefined) - use the creating DC.
+        nint dc = gpuTarget.DeviceContext;
+        if (dc == 0 || !gpuTarget.IsDeviceCurrent || gpuTarget.Bitmap == 0)
         {
             // GPU path failed to init; this shouldn't happen because the bitmap creation
             // would have thrown. Defensive bail.
@@ -215,23 +214,28 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
+        // Validated (and the nested-draw depth bumped) before any native call touches dc -
+        // EnterCurrentThreadDcDraw throws if dc isn't the calling thread's own context, which
+        // must happen before we mutate it, not after.
+        _calledBeginDrawOnGpuPixelSurface = _ownerFactory.EnterCurrentThreadDcDraw(dc);
+
         // _renderTarget and _deviceContext point at the SAME COM object (DeviceContext IS-A
         // RenderTarget) - existing draw methods that take ID2D1RenderTarget* operate on it
         // transparently. _renderTarget is borrowed (matches _ownsRenderTarget=false set at
         // ctor - no Release in OnDispose). _deviceContext is AddRef'd because the existing
         // OnDispose unconditionally Releases it; the AddRef balances that release so the
-        // factory-owned shared DC isn't accidentally disposed.
-        ComHelpers.AddRef(sharedDc);
-        _renderTarget = sharedDc;
-        _deviceContext = sharedDc;
+        // factory-owned DC isn't accidentally disposed.
+        ComHelpers.AddRef(dc);
+        _renderTarget = dc;
+        _deviceContext = dc;
         _renderTargetGeneration = 0;
         EnsureSolidBrushCacheValid();
 
         // Save the DC's previous target so we can restore it on EndFrame. Multiple nested
         // GPU passes (filter source then scratch) chain through the same DC - preserving
         // the parent's target lets nesting work without a per-context push/pop stack.
-        D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out _previousDeviceTarget);
-        D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, gpuTarget.Bitmap);
+        D2D1VTable.GetTarget((ID2D1DeviceContext*)dc, out _previousDeviceTarget);
+        D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, gpuTarget.Bitmap);
         _gpuPixelSurfaceBitmap = gpuTarget.Bitmap;
 
         // Sync the DC's DPI to the bound bitmap's DPI. SetTarget does NOT auto-adopt the
@@ -243,18 +247,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         // OnEndFrame so nested frames each see the right DPI for their own bitmap.
         var prevDpiX = 96f;
         var prevDpiY = 96f;
-        D2D1VTable.GetDpi((ID2D1RenderTarget*)sharedDc, out prevDpiX, out prevDpiY);
+        D2D1VTable.GetDpi((ID2D1RenderTarget*)dc, out prevDpiX, out prevDpiY);
         _previousDcDpiX = prevDpiX;
         _previousDcDpiY = prevDpiY;
         float bitmapDpi = (float)(96.0 * gpuTarget.DpiScale);
-        D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, bitmapDpi, bitmapDpi);
+        D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, bitmapDpi, bitmapDpi);
 
         // Save the parent's transform on the DC so we can restore it on EndFrame. This pass
         // is about to push Identity onto the DC for its own clear/draws - without restore,
         // the parent pass continues with our Identity instead of its own translate/scale,
         // and any subsequent draws (cache hits, post-filter content) end up at the wrong
         // pixel positions.
-        _previousDcTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)sharedDc);
+        _previousDcTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)dc);
         _hasPreviousDcTransform = true;
 
         _globalAlpha = 1f;
@@ -262,18 +266,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         _transform = Matrix3x2.Identity;
         _clipBoundsWorld = null;
 
-        // Only the outermost BeginGpuPixelSurfaceFrame issues BeginDraw - D2D rejects nested
-        // BeginDraw on the same DC with WRONG_STATE. Inner filter/source passes rendered
-        // while the outer pass is still drawing into its own GPU pixel surface on the same
-        // shared DC just swap the DC's target via SetTarget;
-        // the outer BeginDraw covers their draws too.
-        _calledBeginDrawOnSharedDc = _ownerFactory.EnterSharedDcDraw();
-        if (_calledBeginDrawOnSharedDc)
+        // Outermost pass on this thread's DC issues BeginDraw; nested offscreen/filter passes
+        // just swap the target (see _calledBeginDrawOnGpuPixelSurface field comment).
+        if (_calledBeginDrawOnGpuPixelSurface)
         {
             D2D1VTable.BeginDraw((ID2D1RenderTarget*)_renderTarget);
             _issuedBeginDraw = true;
         }
-        // Reset DC transform - the shared DC carries state across BeginDraw cycles AND
+        // Reset DC transform - the DC carries state across BeginDraw cycles AND
         // across nested SetTarget swaps. Push Identity now so the upcoming Clear / first
         // draw can't accidentally inherit a stale matrix from a parent pass.
         D2D1VTable.SetTransform((ID2D1RenderTarget*)_renderTarget, D2D1_MATRIX_3X2_F.Identity);
@@ -346,9 +346,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
                 _issuedBeginDraw = false;
                 if (_gpuPixelSurfaceBitmap != 0)
                 {
-                    _ownerFactory.ExitSharedDcDraw();
-                    shouldEndDraw = _calledBeginDrawOnSharedDc;
-                    _calledBeginDrawOnSharedDc = false;
+                    _ownerFactory.ExitCurrentThreadDcDraw(_renderTarget);
+                    shouldEndDraw = _calledBeginDrawOnGpuPixelSurface;
+                    _calledBeginDrawOnGpuPixelSurface = false;
                 }
 
                 if (shouldEndDraw)
@@ -376,7 +376,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
             if (_gpuPixelSurfaceBitmap != 0 && _renderTarget != 0)
             {
-                // Restore parent's target so the next draw on the shared DC isn't writing into
+                // Restore parent's target so the next draw on this DC isn't writing into
                 // our scratch bitmap. _previousDeviceTarget may be 0 (no parent target) - that
                 // also restores cleanly because SetTarget(NULL) resets to "no target".
                 D2D1VTable.SetTarget((ID2D1DeviceContext*)_renderTarget, _previousDeviceTarget);

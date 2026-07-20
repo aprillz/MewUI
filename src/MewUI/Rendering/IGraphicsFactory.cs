@@ -82,9 +82,8 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     ///     // draw...
     /// });
     /// </code>
-    /// The MewVG (OpenGL) backend overrides this to activate a hidden-window worker
-    /// HGLRC whose textures are share-listed with all window contexts; the resulting
-    /// FBO texture is sample-able by the UI thread without readback.
+    /// Backends with a shared session/context that offscreen and UI-frame rendering would
+    /// otherwise contend over route background surfaces to a separate per-thread context here.
     /// </summary>
     IDisposable AcquireBackgroundRenderScope() => NoOpScope.Instance;
 

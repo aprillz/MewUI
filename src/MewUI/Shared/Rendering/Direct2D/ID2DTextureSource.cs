@@ -24,9 +24,9 @@ public interface ID2DTextureSource : IGpuTextureSource
 
     /// <summary>
     /// The <c>ID2D1DeviceContext*</c> that produced <see cref="NativeBitmap"/>. D2D
-    /// bitmaps are device-bound - consumers compare this against their own context's
-    /// device (or shared filter device context) by reference equality to decide whether
-    /// they can sample the bitmap directly without a copy.
+    /// bitmaps are device-bound - consumers compare this against their own context by
+    /// reference equality to decide whether they can sample the bitmap directly without
+    /// a copy.
     /// </summary>
     nint OwningDeviceContext { get; }
 

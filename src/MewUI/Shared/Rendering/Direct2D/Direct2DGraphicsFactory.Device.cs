@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
@@ -26,34 +28,160 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
         Disposed,
     }
 
-    // GPU pipeline (D3D11 + ID2D1Device + shared ID2D1DeviceContext) for filter operations
-    // that want to stay on-GPU end-to-end. Lazy-initialized on first GPU bitmap creation;
-    // remains 0 if init fails (e.g. headless WARP-less environment) and the factory falls
-    // back to DIB-backed offscreen rendering.
+    // GPU pipeline (D3D11 -> DXGI -> ID2D1Device) shared across every device context this
+    // factory hands out. Lazy-initialized on first GPU bitmap creation; remains 0 if init
+    // fails (e.g. headless WARP-less environment) and the factory falls back to DIB-backed
+    // offscreen rendering.
     private nint _d3dDevice;
     private nint _dxgiDevice;
     private nint _d2dDevice;
-    private nint _filterDeviceContext;
     private GpuDeviceState _gpuDeviceState;
     private readonly List<WeakReference<Direct2DGpuPixelRenderSurface>> _trackedGpuPixelSurfaces = [];
 
-    /// <summary>Shared <c>ID2D1DeviceContext*</c> for filter pipeline GPU surfaces and
-    /// effects. Returns 0 if the GPU pipeline isn't available (caller should fall back to
-    /// DIB-backed rendering).</summary>
-    /// <remarks>
-    /// Internal-only: external bridges (e.g. video sample D3D11 → D2D interop) must NOT
-    /// reach in here, since this DC participates in a nested-BeginDraw counter that
-    /// external BeginDraw calls would corrupt. External code that needs an
-    /// ID2D1DeviceContext should create its own via <see cref="NativeD2DDevice"/>; bitmaps
-    /// are device-bound, not context-bound, so they remain compatible with the shared DC.
-    /// </remarks>
-    internal nint SharedFilterDeviceContext
+    // Every ID2D1DeviceContext this factory has handed out via GetOrCreateCurrentThreadDeviceContext,
+    // for release on device-lost/Dispose. Generation bump on reset invalidates any thread's
+    // cached ThreadDeviceState without needing to reach into other threads' storage.
+    private readonly List<nint> _threadDeviceContexts = [];
+    private int _gpuDeviceGeneration;
+
+    /// <summary>Per (factory instance, calling thread) device context and nesting state -
+    /// keyed by factory (not a plain <c>[ThreadStatic]</c> field) so two factories on the
+    /// same thread never share a context.</summary>
+    private sealed class ThreadDeviceState
     {
-        get
+        public nint Context;
+        public int DeviceGeneration = -1;
+        public int DrawDepth;
+        public int BackgroundScopeDepth;
+    }
+
+    [ThreadStatic] private static ConditionalWeakTable<Direct2DGraphicsFactory, ThreadDeviceState>? _threadStateByFactory;
+
+    private ThreadDeviceState GetThreadState()
+    {
+        var table = _threadStateByFactory ??= new ConditionalWeakTable<Direct2DGraphicsFactory, ThreadDeviceState>();
+        return table.GetValue(this, static _ => new ThreadDeviceState());
+    }
+
+    /// <summary>Lazily creates (or reuses) the calling thread's own <c>ID2D1DeviceContext*</c>,
+    /// from this factory's shared <c>ID2D1Device</c>. Every GPU-resident offscreen surface and
+    /// filter operation draws on the calling thread's context - there is no separate "shared"
+    /// context to contend over. Returns 0 if the GPU pipeline is unavailable; callers fall
+    /// back to DIB-backed rendering.</summary>
+    internal nint GetOrCreateCurrentThreadDeviceContext()
+    {
+        var state = GetThreadState();
+        if (state.Context != 0 && state.DeviceGeneration == _gpuDeviceGeneration)
         {
-            EnsureFilterDeviceContext();
-            return _filterDeviceContext;
+            return state.Context;
         }
+
+        EnsureGpuDeviceChain();
+
+        lock (_gpuDeviceInitLock)
+        {
+            if (_d2dDevice == 0)
+            {
+                return 0;
+            }
+
+            int hr = D2D1VTable.CreateDeviceContext(_d2dDevice, options: 0, out nint dc);
+            if (hr < 0 || dc == 0)
+            {
+                return 0;
+            }
+
+            _threadDeviceContexts.Add(dc);
+            state.Context = dc;
+            state.DeviceGeneration = _gpuDeviceGeneration;
+            return dc;
+        }
+    }
+
+    /// <summary>True when <paramref name="dc"/> is the calling thread's own device context -
+    /// the invariant a GPU pixel surface's draw/readback must satisfy, since a surface's
+    /// context is only ever current on the thread that created it.</summary>
+    internal bool IsCurrentThreadDeviceContext(nint dc) => dc != 0 && dc == GetThreadState().Context;
+
+    /// <summary>Nested-BeginDraw gate for the calling thread's device context - D2D rejects a
+    /// second <c>BeginDraw</c> on the same context without an intervening <c>EndDraw</c>, but
+    /// offscreen/filter passes naturally nest (an outer pass draws into its own GPU surface,
+    /// then an inner filter pass retargets the same context via <c>SetTarget</c> without a
+    /// fresh <c>BeginDraw</c>). Returns true only for the outermost <c>Enter</c>/matching
+    /// <c>Exit</c>; only the outermost call should bracket the real <c>BeginDraw</c>/<c>EndDraw</c>.
+    /// <paramref name="dc"/> must be the calling thread's own context
+    /// (<see cref="IsCurrentThreadDeviceContext"/>) - thread-local state, so no
+    /// <c>Interlocked</c> is needed.</summary>
+    internal bool EnterCurrentThreadDcDraw(nint dc)
+    {
+        var state = GetThreadState();
+        if (state.Context != dc)
+        {
+            throw new InvalidOperationException(
+                "Direct2D device context draw must happen on the thread that created it.");
+        }
+
+        return ++state.DrawDepth == 1;
+    }
+
+    internal bool ExitCurrentThreadDcDraw(nint dc)
+    {
+        var state = GetThreadState();
+        if (state.Context != dc)
+        {
+            throw new InvalidOperationException(
+                "Direct2D device context draw must happen on the thread that created it.");
+        }
+
+        return --state.DrawDepth == 0;
+    }
+
+    /// <summary>See <see cref="IGraphicsFactory.AcquireBackgroundRenderScope"/>. For Direct2D
+    /// this eagerly creates the calling thread's device context (avoiding a stall on the first
+    /// offscreen surface inside the scope); it no longer picks between two different contexts -
+    /// every thread's context is created the same way whether or not a scope is active.</summary>
+    public IDisposable AcquireBackgroundRenderScope()
+    {
+        var state = GetThreadState();
+        if (state.BackgroundScopeDepth > 0)
+        {
+            state.BackgroundScopeDepth++;
+            return new BackgroundRenderScope(this);
+        }
+
+        if (GetOrCreateCurrentThreadDeviceContext() == 0)
+        {
+            return Direct2DNoOpRenderScope.Instance;
+        }
+
+        state.BackgroundScopeDepth = 1;
+        return new BackgroundRenderScope(this);
+    }
+
+    private sealed class BackgroundRenderScope : IDisposable
+    {
+        private readonly Direct2DGraphicsFactory _factory;
+        private bool _disposed;
+
+        public BackgroundRenderScope(Direct2DGraphicsFactory factory) => _factory = factory;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            var state = _factory.GetThreadState();
+            if (state.BackgroundScopeDepth > 0)
+            {
+                state.BackgroundScopeDepth--;
+            }
+            // Device context stays cached for reuse by the next scope on this thread.
+        }
+    }
+
+    private sealed class Direct2DNoOpRenderScope : IDisposable
+    {
+        public static readonly Direct2DNoOpRenderScope Instance = new();
+        public void Dispose() { }
     }
 
     /// <summary>
@@ -67,7 +195,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
     {
         get
         {
-            EnsureFilterDeviceContext();
+            EnsureGpuDeviceChain();
             return _d3dDevice;
         }
     }
@@ -79,7 +207,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
     /// </summary>
     public nint RetainD3D11DeviceForRenderTarget(nint renderTargetHandle)
     {
-        EnsureFilterDeviceContext();
+        EnsureGpuDeviceChain();
 
         nint device = 0;
         lock (_rtLock)
@@ -107,43 +235,25 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
     {
         get
         {
-            EnsureFilterDeviceContext();
+            EnsureGpuDeviceChain();
             return _d2dDevice;
         }
     }
 
-    // Reference count for nested BeginDraw on the shared filter DC. D2D doesn't support
-    // nesting BeginDraw on the same device context - once BeginDraw is active you must
-    // EndDraw before the next BeginDraw. But the offscreen pipeline naturally nests: an
-    // outer pass opens a frame on the shared DC (its offscreen GPU pixel surface), then an
-    // inner filter pass creates another GPU pixel surface and opens another frame on the
-    // same shared DC. The inner
-    // pass switches the DC's target via SetTarget but does NOT issue a fresh BeginDraw -
-    // the outer BeginDraw is still active and covers all draws regardless of bound target.
-    // EnterSharedDcDraw returns true only on the outermost entry; ExitSharedDcDraw returns
-    // true only when leaving the outermost level. Both gate BeginDraw/EndDraw accordingly.
-    private int _sharedDcDrawDepth;
-
-    internal bool EnterSharedDcDraw()
-        => Interlocked.Increment(ref _sharedDcDrawDepth) == 1;
-
-    internal bool ExitSharedDcDraw()
-        => Interlocked.Decrement(ref _sharedDcDrawDepth) == 0;
-
-    // Guards EnsureFilterDeviceContext against concurrent first-use from multiple threads
+    // Guards EnsureGpuDeviceChain against concurrent first-use from multiple threads
     // (UI thread first paint vs background offscreen rebuild). Without this, two threads can
     // both observe the GPU chain as uninitialized and each call D3D11CreateDevice,
     // leaking the loser's device.
-    private readonly object _filterDeviceInitLock = new();
+    private readonly object _gpuDeviceInitLock = new();
 
     private static bool IsDefaultD3D11DeviceChainEnabled()
         => ENABLE_DEFAULT_DEVICECHAIN;
 
-    private void EnsureFilterDeviceContext()
+    private void EnsureGpuDeviceChain()
     {
         if (_gpuDeviceState is GpuDeviceState.Ready or GpuDeviceState.Unavailable or GpuDeviceState.Disposed) return;
 
-        lock (_filterDeviceInitLock)
+        lock (_gpuDeviceInitLock)
         {
             if (_gpuDeviceState is GpuDeviceState.Ready or GpuDeviceState.Unavailable or GpuDeviceState.Disposed) return;
 
@@ -154,14 +264,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
             }
 
             _ = TryEnsureGpuDeviceChainCore();
-        }
-    }
-
-    private bool TryEnsureGpuDeviceChain()
-    {
-        lock (_filterDeviceInitLock)
-        {
-            return TryEnsureGpuDeviceChainCore();
         }
     }
 
@@ -237,17 +339,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
         {
             _dxgiDevice = dxgiDevice;
             _d2dDevice = d2dDevice;
-            int hr = D2D1VTable.CreateDeviceContext(_d2dDevice, options: 0, out _filterDeviceContext);
-            if (hr >= 0 && _filterDeviceContext != 0)
-            {
-                return true;
-            }
-
-            if (_filterDeviceContext != 0)
-            {
-                ComHelpers.Release(_filterDeviceContext);
-                _filterDeviceContext = 0;
-            }
+            return true;
         }
 
         return false;
@@ -287,7 +379,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
 
         bool shouldInvalidateFactoryTargets = false;
 
-        lock (_filterDeviceInitLock)
+        lock (_gpuDeviceInitLock)
         {
             if (_gpuDeviceState == GpuDeviceState.Disposed)
             {
@@ -309,7 +401,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
 
     internal bool TryRecoverGpuDeviceChain()
     {
-        lock (_filterDeviceInitLock)
+        lock (_gpuDeviceInitLock)
         {
             return TryRecoverGpuDeviceChainCore();
         }
@@ -335,7 +427,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
 
     internal void RegisterGpuPixelSurface(Direct2DGpuPixelRenderSurface target)
     {
-        lock (_filterDeviceInitLock)
+        lock (_gpuDeviceInitLock)
         {
             for (int i = _trackedGpuPixelSurfaces.Count - 1; i >= 0; i--)
             {
@@ -365,7 +457,14 @@ public sealed unsafe partial class Direct2DGraphicsFactory : ID3D11RenderTargetD
 
     private void ResetGpuDeviceChain()
     {
-        if (_filterDeviceContext != 0) { ComHelpers.Release(_filterDeviceContext); _filterDeviceContext = 0; }
+        // Release before the owning device goes away; generation bump invalidates thread caches.
+        foreach (nint dc in _threadDeviceContexts)
+        {
+            if (dc != 0) ComHelpers.Release(dc);
+        }
+        _threadDeviceContexts.Clear();
+        unchecked { _gpuDeviceGeneration++; }
+
         if (_d2dDevice != 0) { ComHelpers.Release(_d2dDevice); _d2dDevice = 0; }
         if (_dxgiDevice != 0) { ComHelpers.Release(_dxgiDevice); _dxgiDevice = 0; }
         if (_d3dDevice != 0) { ComHelpers.Release(_d3dDevice); _d3dDevice = 0; }

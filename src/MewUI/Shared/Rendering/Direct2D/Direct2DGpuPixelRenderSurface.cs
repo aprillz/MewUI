@@ -8,18 +8,15 @@ namespace Aprillz.MewUI.Rendering.Direct2D;
 /// GPU-only D2D pixel surface - wraps an <c>ID2D1Bitmap1</c> created with
 /// <c>D2D1_BITMAP_OPTIONS.TARGET</c>. No GDI DIB section is allocated; pixels live
 /// exclusively in GPU memory and are sampled by effects / drawn directly via the
-/// shared device context. Counterpart of MewVG's <c>OpenGLPixelRenderSurface</c>.
+/// creating thread's device context. Counterpart of MewVG's <c>OpenGLPixelRenderSurface</c>.
 /// </summary>
 /// <remarks>
-/// Used by <see cref="Direct2DImageFilterExecutor"/> for source layers and scratch
-/// buffers when the active backend supports the GPU pipeline. Falls back to the
-/// DIB-backed <see cref="Direct2DPixelRenderSurface"/> for layered window compositing
-/// (which legitimately needs CPU access to the pixels).
-/// <para/>
-/// Lifetime: the wrapped <c>ID2D1Bitmap1</c> is created against the factory's shared
-/// <see cref="Direct2DGraphicsFactory.SharedFilterDeviceContext"/>. Cross-DC bitmap usage
-/// is undefined in D2D, so all filter operations on this target must go through the same
-/// shared DC.
+/// Used by <see cref="Direct2DImageFilterExecutor"/> scratch/source buffers and by
+/// general-purpose offscreen requests alike; both are created on the calling thread's own
+/// device context (<see cref="Direct2DGraphicsFactory.GetOrCreateCurrentThreadDeviceContext"/>).
+/// Draw and readback must happen on that same thread - cross-context bitmap access is
+/// undefined in D2D. Falls back to the DIB-backed <see cref="Direct2DPixelRenderSurface"/>
+/// when GPU init fails.
 /// </remarks>
 internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource, ICpuPixelSurface, IDeferredCpuReadableSurface, IDisposable, ID2DTextureSource, IExternalRasterSource
     , IReusableScratchSurface, IExternalWritableGpuSurface, IGpuResourceAffinityProvider
@@ -28,6 +25,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
 
     private readonly Direct2DGraphicsFactory _factory;
     private readonly object _gate = new();
+    private readonly nint _deviceContext;
     private nint _bitmap;
     private nint _dxgiSurface;
     private nint _texture2D;
@@ -51,11 +49,12 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
         DpiScale = dpiScale;
         HasAlpha = hasAlpha;
 
-        nint dc = factory.SharedFilterDeviceContext;
+        nint dc = factory.GetOrCreateCurrentThreadDeviceContext();
         if (dc == 0)
         {
-            throw new InvalidOperationException("Shared D2D filter device context is unavailable; D3D11/D2D1 device init failed.");
+            throw new InvalidOperationException("D2D device context is unavailable; D3D11/D2D1 device init failed.");
         }
+        _deviceContext = dc;
 
         // Opaque RTs (video frames, JPEG-backed bitmaps, etc.) get ALPHA_MODE.IGNORE so the
         // GPU skips per-fragment blend math when this RT is later sampled. PREMULTIPLIED is
@@ -152,13 +151,16 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
     // ID2DTextureSource - exposes the GPU bitmap via the backend marker so D2D consumers
     // can short-circuit the CPU readback path when source and consumer share a device.
     nint ID2DTextureSource.NativeBitmap => IsDeviceCurrent ? _bitmap : 0;
-    nint ID2DTextureSource.OwningDeviceContext => IsDeviceCurrent ? _factory.SharedFilterDeviceContext : 0;
+    nint ID2DTextureSource.OwningDeviceContext => IsDeviceCurrent ? _deviceContext : 0;
     BitmapAlphaMode ID2DTextureSource.AlphaMode
         => HasAlpha ? BitmapAlphaMode.Premultiplied : BitmapAlphaMode.Ignore;
 
     /// <summary>The wrapped <c>ID2D1Bitmap1*</c>. Used by the executor to chain effects without
     /// any CPU readback. Returns 0 when disposed.</summary>
     internal nint Bitmap => IsDeviceCurrent ? _bitmap : 0;
+
+    /// <summary>The device context this bitmap was created on (shared or worker DC).</summary>
+    internal nint DeviceContext => IsDeviceCurrent ? _deviceContext : 0;
 
     public void IncrementVersion() => Interlocked.Increment(ref _version);
 
@@ -241,8 +243,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
             return _readbackBuffer;
         }
 
-        nint dc = _factory.SharedFilterDeviceContext;
-        if (dc == 0) return Array.Empty<byte>();
+        nint dc = _deviceContext;
 
         if (_readbackBitmap == 0)
         {
@@ -328,7 +329,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
             ThrowIfStaleDevice();
             EnsureExternalD3D11HandlesUnderLock();
 
-            var dc = _factory.SharedFilterDeviceContext;
+            var dc = _deviceContext;
             if (dc != 0)
             {
                 D2D1VTable.Flush((ID2D1RenderTarget*)dc);
@@ -415,7 +416,7 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
 
         public void Flush()
         {
-            var dc = _surface._factory.SharedFilterDeviceContext;
+            var dc = _surface._deviceContext;
             if (dc != 0)
             {
                 D2D1VTable.Flush((ID2D1RenderTarget*)dc);

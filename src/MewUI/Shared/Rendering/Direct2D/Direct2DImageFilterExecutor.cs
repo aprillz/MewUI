@@ -8,14 +8,16 @@ using Aprillz.MewUI.Resources;
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
 /// <summary>
-/// GPU-accelerated filter executor for the Direct2D backend. Uses the built-in
-/// <c>CLSID_D2D1GaussianBlur</c> effect via the factory's shared <c>ID2D1DeviceContext</c>.
+/// GPU-accelerated filter executor for the Direct2D backend. Uses the built-in D2D effects
+/// (<c>CLSID_D2D1GaussianBlur</c> etc.) on the destination surface's own device context - the
+/// same one <see cref="Direct2DGpuPixelRenderSurface"/> uses for general offscreen draws, so
+/// filters running on a worker thread's surface use that thread's context too.
 /// </summary>
 /// <remarks>
 /// Two execution paths, picked per call:
 /// <list type="bullet">
 /// <item><b>Zero-copy</b>: when src AND scratch are <see cref="Direct2DGpuPixelRenderSurface"/>
-///   (GPU-resident bitmaps on the shared DC), the effect runs straight from src to dst with
+///   (GPU-resident bitmaps), the effect runs straight from src to dst with
 ///   no CPU touch. Mirrors MewVG's FBO→FBO blur path.</item>
 /// <item><b>CPU round-trip</b>: when ends are DIB-backed
 ///   <see cref="Direct2DPixelRenderSurface"/>, source pixels are CPU-premultiplied,
@@ -135,9 +137,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             // Fast path: both ends GPU-resident. Run effect directly src.Bitmap → dst.Bitmap.
             if (input.UnderlyingSurface is Direct2DGpuPixelRenderSurface srcGpu &&
                 scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
-                _factory.SharedFilterDeviceContext is var sharedDc and not 0)
+                dstGpu.DeviceContext is var dc and not 0)
             {
-                if (!RunGpuOnlyBlur(sharedDc, srcGpu, dstGpu, sigma))
+                if (!RunGpuOnlyBlur(dc, srcGpu, dstGpu, sigma))
                 {
                     return null;
                 }
@@ -175,11 +177,11 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             }
         }
     }
-    private bool RunGpuOnlyBlur(nint sharedDc, Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu, float sigma)
+    private bool RunGpuOnlyBlur(nint dc, Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu, float sigma)
     {
         if (DebugLogs)
             System.Diagnostics.Debug.WriteLine($"[D2DBlur] GPU path src={srcGpu.PixelWidth}x{srcGpu.PixelHeight} σ={sigma:F2}");
-        int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)sharedDc, D2D1.CLSID_D2D1GaussianBlur, out nint effect);
+        int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)dc, D2D1.CLSID_D2D1GaussianBlur, out nint effect);
         if (hr < 0 || effect == 0)
         {
             if (DebugLogs)
@@ -193,13 +195,12 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             if (effectImage == 0) return false;
             try
             {
-                // Effect-local state - independent of the shared DC, no cross-thread race.
                 D2D1VTable.SetEffectInput(effect, 0, srcGpu.Bitmap);
 
-                // EnterSharedDcDraw bumps the nested-depth counter and returns true on the
-                // outermost entry - used below to gate BeginDraw/EndDraw (D2D rejects nested
-                // BeginDraw on the same DC).
-                bool issuedBeginDraw = _factory.EnterSharedDcDraw();
+                // EnterCurrentThreadDcDraw bumps the nested-depth counter and returns true on
+                // the outermost entry - used below to gate BeginDraw/EndDraw (D2D rejects
+                // nested BeginDraw on the same DC).
+                bool issuedBeginDraw = _factory.EnterCurrentThreadDcDraw(dc);
                 try
                 {
                     // Flush before the effect samples its input. The source bitmap was drawn
@@ -211,33 +212,33 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     // pre-write state (post-Clear empty) and produces empty output. Flush
                     // pushes those queued commands to the GPU without ending the BeginDraw
                     // pass. EndDraw later subsumes a Flush so this is no-op for outermost.
-                    D2D1VTable.Flush((ID2D1RenderTarget*)sharedDc);
+                    D2D1VTable.Flush((ID2D1RenderTarget*)dc);
 
-                    D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out nint prevTarget);
-                    var prevTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)sharedDc);
-                    D2D1VTable.GetDpi((ID2D1RenderTarget*)sharedDc, out float prevDpiX, out float prevDpiY);
+                    D2D1VTable.GetTarget((ID2D1DeviceContext*)dc, out nint prevTarget);
+                    var prevTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)dc);
+                    D2D1VTable.GetDpi((ID2D1RenderTarget*)dc, out float prevDpiX, out float prevDpiY);
 
-                    D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, dstGpu.Bitmap);
+                    D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, dstGpu.Bitmap);
                     // Match DPI to the dst bitmap so DrawImage's coordinate space lines up
                     // with its full pixel extent (effect output covers the entire dst
                     // bitmap pixel-for-pixel). Mismatched DPI here causes the effect to
                     // write to a sub-rect.
                     float dstDpi = (float)(96.0 * dstGpu.DpiScale);
-                    D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, dstDpi, dstDpi);
+                    D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, dstDpi, dstDpi);
 
                     if (issuedBeginDraw)
                     {
-                        D2D1VTable.BeginDraw((ID2D1RenderTarget*)sharedDc);
+                        D2D1VTable.BeginDraw((ID2D1RenderTarget*)dc);
                     }
                     // Reset transform (the parent left a Scale+Translate set) so DrawImage
                     // lands at the dst bitmap's (0,0) pixel-for-pixel.
-                    D2D1VTable.SetTransform((ID2D1RenderTarget*)sharedDc, D2D1_MATRIX_3X2_F.Identity);
-                    D2D1VTable.Clear((ID2D1RenderTarget*)sharedDc, new D2D1_COLOR_F(0, 0, 0, 0));
-                    D2D1VTable.DrawImage((ID2D1DeviceContext*)sharedDc, effectImage,
+                    D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, D2D1_MATRIX_3X2_F.Identity);
+                    D2D1VTable.Clear((ID2D1RenderTarget*)dc, new D2D1_COLOR_F(0, 0, 0, 0));
+                    D2D1VTable.DrawImage((ID2D1DeviceContext*)dc, effectImage,
                         D2D1_INTERPOLATION_MODE.LINEAR, D2D1_COMPOSITE_MODE.SOURCE_COPY);
                     if (issuedBeginDraw)
                     {
-                        int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)sharedDc);
+                        int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)dc);
                         if (endHr < 0)
                         {
                             _ = _factory.NotifyGpuDeviceLost(endHr);
@@ -249,14 +250,14 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
                     // Restore inside the lock so the next thread that enters sees the
                     // parent's state, not our intermediate dst settings.
-                    D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, prevTarget);
+                    D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, prevTarget);
                     if (prevTarget != 0) ComHelpers.Release(prevTarget);
-                    D2D1VTable.SetTransform((ID2D1RenderTarget*)sharedDc, prevTransform);
-                    D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, prevDpiX, prevDpiY);
+                    D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, prevTransform);
+                    D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, prevDpiX, prevDpiY);
                 }
                 finally
                 {
-                    _factory.ExitSharedDcDraw();
+                    _factory.ExitCurrentThreadDcDraw(dc);
                 }
             }
             finally
@@ -361,13 +362,8 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
         return committed;
     }
 
-    // ----------------------------------------------------------------------------
-    // ColorMatrix / Offset / Composite / Merge - additional D2D native effects.
-    // All four follow the same GPU-only pattern as TryGpuBlur: resolve inputs to
-    // GPU bitmaps, acquire scratch, apply effect via shared DC. DIB fallback would
-    // require ReadAndPremultiply per input which we leave to CpuImageFilterExecutor.
-    // ----------------------------------------------------------------------------
-
+    // ColorMatrix/Offset/Composite/Merge follow TryGpuBlur's GPU-only pattern; DIB fallback
+    // is left to CpuImageFilterExecutor.
     private FilterResult? TryGpuColorMatrix(ColorMatrixFilter cm, IImageFilterContext ctx)
     {
         FilterResult input = cm.Input is null ? ctx.Source : Execute(cm.Input, ctx);
@@ -380,14 +376,14 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 srcGpu.IsDeviceCurrent &&
                 scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.IsDeviceCurrent &&
-                _factory.SharedFilterDeviceContext is var sharedDc and not 0)
+                dstGpu.DeviceContext is var dc and not 0)
             {
                 // D2D D2D1_MATRIX_5X4_F is 5 rows × 4 cols (output channel = column,
                 // input source/offset = row), but ColorMatrixFilter.Matrix is the source
                 // convention: 4 rows × 5 cols (output channel = row, input source = col).
                 // Transpose into a stackalloc'd Span - 80 bytes, no per-call heap alloc.
                 float[] svgMatrix = cm.Matrix;
-                if (!RunGpuSingleInputEffect(sharedDc, D2D1.CLSID_D2D1ColorMatrix, srcGpu, dstGpu, effect =>
+                if (!RunGpuSingleInputEffect(dc, D2D1.CLSID_D2D1ColorMatrix, srcGpu, dstGpu, effect =>
                     {
                         Span<float> d2d = stackalloc float[20];
                         for (int outCh = 0; outCh < 4; outCh++)
@@ -423,14 +419,17 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 srcGpu.IsDeviceCurrent &&
                 scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.IsDeviceCurrent &&
-                _factory.SharedFilterDeviceContext is var sharedDc and not 0)
+                dstGpu.DeviceContext is var dc and not 0)
             {
-                // dx/dy as user-space DIPs - same as Blur's σ. D2D AffineTransform2D's
-                // matrix translation is in DIPs (scaled by source bitmap dpi internally),
-                // so pre-multiplying by LogicalToPixel double-applies the dpi factor.
-                float dxDip = (float)o.Dx;
-                float dyDip = (float)o.Dy;
-                if (!RunGpuSingleInputEffect(sharedDc, D2D1.CLSID_D2D12DAffineTransform, srcGpu, dstGpu, effect =>
+                // D2D AffineTransform2D translation is expressed in the destination
+                // context's DIPs, while OffsetFilter dx/dy are SVG logical units. Convert
+                // the desired logical-to-pixel offset back to DIPs using the target bitmap's
+                // DPI. These scales can differ when the filtered element has its own
+                // transform (issue-084-02: 24.1 * 0.06945, not a raw 24.1-DIP shift).
+                double targetDpiScale = Math.Max(1e-9, dstGpu.DpiScale);
+                float dxDip = (float)(o.Dx * ctx.LogicalToPixelScaleX / targetDpiScale);
+                float dyDip = (float)(o.Dy * ctx.LogicalToPixelScaleY / targetDpiScale);
+                if (!RunGpuSingleInputEffect(dc, D2D1.CLSID_D2D12DAffineTransform, srcGpu, dstGpu, effect =>
                     {
                         var matrix = new D2D1_MATRIX_3X2_F(1f, 0f, 0f, 1f, dxDip, dyDip);
                         D2D1VTable.SetEffectValueMatrix3x2(effect, (uint)D2D1_2DAFFINETRANSFORM_PROP.TRANSFORM_MATRIX, matrix);
@@ -471,9 +470,9 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 bgGpu.IsDeviceCurrent &&
                 scratch.UnderlyingSurface is Direct2DGpuPixelRenderSurface dstGpu &&
                 dstGpu.IsDeviceCurrent &&
-                _factory.SharedFilterDeviceContext is var sharedDc and not 0)
+                dstGpu.DeviceContext is var dc and not 0)
             {
-                if (!RunGpuTwoInputEffect(sharedDc, D2D1.CLSID_D2D1Composite, bgGpu, fgGpu, dstGpu, effect =>
+                if (!RunGpuTwoInputEffect(dc, D2D1.CLSID_D2D1Composite, bgGpu, fgGpu, dstGpu, effect =>
                     {
                         D2D1VTable.SetEffectValueEnum(effect, (uint)D2D1_COMPOSITE_PROP.MODE, (uint)MapCompositeOp(cf.Op));
                     }))
@@ -522,9 +521,6 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             }
             if (pw <= 0 || ph <= 0) return null;
 
-            nint sharedDc = _factory.SharedFilterDeviceContext;
-            if (sharedDc == 0) return null;
-
             ScratchFilterResult? scratch = ctx.AcquireScratch(pw, ph, heldInputs[0].Bounds);
             if (scratch is null || scratch.UnderlyingSurface is not Direct2DGpuPixelRenderSurface dstGpu)
             {
@@ -538,7 +534,14 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 return null;
             }
 
-            if (!CompositeBitmapsIntoTarget(sharedDc, heldInputs, dstGpu))
+            nint dc = dstGpu.DeviceContext;
+            if (dc == 0)
+            {
+                scratch.Dispose();
+                return null;
+            }
+
+            if (!CompositeBitmapsIntoTarget(dc, heldInputs, dstGpu))
             {
                 scratch.Dispose();
                 return null;
@@ -560,39 +563,39 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     /// <summary>Renders <paramref name="inputs"/> into <paramref name="dstGpu"/> bottom-to-top
     /// with SOURCE_OVER. All inputs assumed to share the source coordinate frame.</summary>
-    private bool CompositeBitmapsIntoTarget(nint sharedDc, IReadOnlyList<FilterResult> inputs, Direct2DGpuPixelRenderSurface dstGpu)
+    private bool CompositeBitmapsIntoTarget(nint dc, IReadOnlyList<FilterResult> inputs, Direct2DGpuPixelRenderSurface dstGpu)
     {
-        // EnterSharedDcDraw - see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
-        bool issuedBeginDraw = _factory.EnterSharedDcDraw();
+        // EnterCurrentThreadDcDraw - see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
+        bool issuedBeginDraw = _factory.EnterCurrentThreadDcDraw(dc);
         bool ok = true;
         try
         {
             // Flush before sampling inputs - see RunGpuOnlyBlur for rationale.
-            D2D1VTable.Flush((ID2D1RenderTarget*)sharedDc);
+            D2D1VTable.Flush((ID2D1RenderTarget*)dc);
 
-            D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out nint prevTarget);
-            var prevTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)sharedDc);
-            D2D1VTable.GetDpi((ID2D1RenderTarget*)sharedDc, out float prevDpiX, out float prevDpiY);
+            D2D1VTable.GetTarget((ID2D1DeviceContext*)dc, out nint prevTarget);
+            var prevTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)dc);
+            D2D1VTable.GetDpi((ID2D1RenderTarget*)dc, out float prevDpiX, out float prevDpiY);
 
-            D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, dstGpu.Bitmap);
+            D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, dstGpu.Bitmap);
             float dstDpi = (float)(96.0 * dstGpu.DpiScale);
-            D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, dstDpi, dstDpi);
+            D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, dstDpi, dstDpi);
 
             if (issuedBeginDraw)
             {
-                D2D1VTable.BeginDraw((ID2D1RenderTarget*)sharedDc);
+                D2D1VTable.BeginDraw((ID2D1RenderTarget*)dc);
             }
-            D2D1VTable.SetTransform((ID2D1RenderTarget*)sharedDc, D2D1_MATRIX_3X2_F.Identity);
-            D2D1VTable.Clear((ID2D1RenderTarget*)sharedDc, new D2D1_COLOR_F(0, 0, 0, 0));
+            D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, D2D1_MATRIX_3X2_F.Identity);
+            D2D1VTable.Clear((ID2D1RenderTarget*)dc, new D2D1_COLOR_F(0, 0, 0, 0));
             for (int i = 0; i < inputs.Count; i++)
             {
                 if (inputs[i].UnderlyingSurface is not Direct2DGpuPixelRenderSurface srcGpu || !srcGpu.IsDeviceCurrent) { ok = false; break; }
-                D2D1VTable.DrawImage((ID2D1DeviceContext*)sharedDc, srcGpu.Bitmap,
+                D2D1VTable.DrawImage((ID2D1DeviceContext*)dc, srcGpu.Bitmap,
                     D2D1_INTERPOLATION_MODE.LINEAR, D2D1_COMPOSITE_MODE.SOURCE_OVER);
             }
             if (issuedBeginDraw)
             {
-                int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)sharedDc);
+                int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)dc);
                 if (endHr < 0)
                 {
                     _ = _factory.NotifyGpuDeviceLost(endHr);
@@ -600,14 +603,14 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                 }
             }
 
-            D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, prevTarget);
+            D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, prevTarget);
             if (prevTarget != 0) ComHelpers.Release(prevTarget);
-            D2D1VTable.SetTransform((ID2D1RenderTarget*)sharedDc, prevTransform);
-            D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, prevDpiX, prevDpiY);
+            D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, prevTransform);
+            D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, prevDpiX, prevDpiY);
         }
         finally
         {
-            _factory.ExitSharedDcDraw();
+            _factory.ExitCurrentThreadDcDraw(dc);
         }
         return ok;
     }
@@ -615,17 +618,17 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     /// <summary>Applies a single-input D2D effect (input bitmap → effect → dst bitmap).
     /// Mirrors the DC state save/restore + BeginDraw bracketing of <see cref="RunGpuOnlyBlur"/>
     /// so multiple effects compose cleanly without leaking transform/dpi/target between them.</summary>
-    private bool RunGpuSingleInputEffect(nint sharedDc, Guid effectClsid,
+    private bool RunGpuSingleInputEffect(nint dc, Guid effectClsid,
         Direct2DGpuPixelRenderSurface srcGpu, Direct2DGpuPixelRenderSurface dstGpu,
         Action<nint> configureEffect)
     {
-        int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)sharedDc, effectClsid, out nint effect);
+        int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)dc, effectClsid, out nint effect);
         if (hr < 0 || effect == 0) return false;
         try
         {
             D2D1VTable.SetEffectInput(effect, 0, srcGpu.Bitmap);
             configureEffect(effect);
-            return DrawEffectIntoBitmap(sharedDc, effect, dstGpu);
+            return DrawEffectIntoBitmap(dc, effect, dstGpu);
         }
         finally
         {
@@ -634,11 +637,11 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
     }
 
     /// <summary>Applies a 2-input D2D effect (e.g. Composite). Input slots: 0=destination/bg, 1=source/fg.</summary>
-    private bool RunGpuTwoInputEffect(nint sharedDc, Guid effectClsid,
+    private bool RunGpuTwoInputEffect(nint dc, Guid effectClsid,
         Direct2DGpuPixelRenderSurface input0, Direct2DGpuPixelRenderSurface input1,
         Direct2DGpuPixelRenderSurface dstGpu, Action<nint> configureEffect)
     {
-        int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)sharedDc, effectClsid, out nint effect);
+        int hr = D2D1VTable.CreateEffect((ID2D1DeviceContext*)dc, effectClsid, out nint effect);
         if (hr < 0 || effect == 0) return false;
         try
         {
@@ -646,7 +649,7 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
             D2D1VTable.SetEffectInput(effect, 0, input0.Bitmap);
             D2D1VTable.SetEffectInput(effect, 1, input1.Bitmap);
             configureEffect(effect);
-            return DrawEffectIntoBitmap(sharedDc, effect, dstGpu);
+            return DrawEffectIntoBitmap(dc, effect, dstGpu);
         }
         finally
         {
@@ -656,39 +659,39 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
 
     /// <summary>DC-state-aware DrawImage(effectOutput → dstGpu.Bitmap). Matches RunGpuOnlyBlur's
     /// state handling: save/swap target, identity-transform + clear + DrawImage, restore.</summary>
-    private bool DrawEffectIntoBitmap(nint sharedDc, nint effect, Direct2DGpuPixelRenderSurface dstGpu)
+    private bool DrawEffectIntoBitmap(nint dc, nint effect, Direct2DGpuPixelRenderSurface dstGpu)
     {
         D2D1VTable.GetEffectOutput(effect, out nint effectImage);
         if (effectImage == 0) return false;
         try
         {
-            // EnterSharedDcDraw - see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
-            bool issuedBeginDraw = _factory.EnterSharedDcDraw();
+            // EnterCurrentThreadDcDraw - see RunGpuOnlyBlur. Nested-depth gate for BeginDraw/EndDraw.
+            bool issuedBeginDraw = _factory.EnterCurrentThreadDcDraw(dc);
             bool ok = true;
             try
             {
                 // Flush before sampling inputs - see RunGpuOnlyBlur for rationale.
-                D2D1VTable.Flush((ID2D1RenderTarget*)sharedDc);
+                D2D1VTable.Flush((ID2D1RenderTarget*)dc);
 
-                D2D1VTable.GetTarget((ID2D1DeviceContext*)sharedDc, out nint prevTarget);
-                var prevTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)sharedDc);
-                D2D1VTable.GetDpi((ID2D1RenderTarget*)sharedDc, out float prevDpiX, out float prevDpiY);
+                D2D1VTable.GetTarget((ID2D1DeviceContext*)dc, out nint prevTarget);
+                var prevTransform = D2D1VTable.GetTransform((ID2D1RenderTarget*)dc);
+                D2D1VTable.GetDpi((ID2D1RenderTarget*)dc, out float prevDpiX, out float prevDpiY);
 
-                D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, dstGpu.Bitmap);
+                D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, dstGpu.Bitmap);
                 float dstDpi = (float)(96.0 * dstGpu.DpiScale);
-                D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, dstDpi, dstDpi);
+                D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, dstDpi, dstDpi);
 
                 if (issuedBeginDraw)
                 {
-                    D2D1VTable.BeginDraw((ID2D1RenderTarget*)sharedDc);
+                    D2D1VTable.BeginDraw((ID2D1RenderTarget*)dc);
                 }
-                D2D1VTable.SetTransform((ID2D1RenderTarget*)sharedDc, D2D1_MATRIX_3X2_F.Identity);
-                D2D1VTable.Clear((ID2D1RenderTarget*)sharedDc, new D2D1_COLOR_F(0, 0, 0, 0));
-                D2D1VTable.DrawImage((ID2D1DeviceContext*)sharedDc, effectImage,
+                D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, D2D1_MATRIX_3X2_F.Identity);
+                D2D1VTable.Clear((ID2D1RenderTarget*)dc, new D2D1_COLOR_F(0, 0, 0, 0));
+                D2D1VTable.DrawImage((ID2D1DeviceContext*)dc, effectImage,
                     D2D1_INTERPOLATION_MODE.LINEAR, D2D1_COMPOSITE_MODE.SOURCE_COPY);
                 if (issuedBeginDraw)
                 {
-                    int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)sharedDc);
+                    int endHr = D2D1VTable.EndDraw((ID2D1RenderTarget*)dc);
                     if (endHr < 0)
                     {
                         _ = _factory.NotifyGpuDeviceLost(endHr);
@@ -696,14 +699,14 @@ internal sealed unsafe class Direct2DImageFilterExecutor : IImageFilterExecutor
                     }
                 }
 
-                D2D1VTable.SetTarget((ID2D1DeviceContext*)sharedDc, prevTarget);
+                D2D1VTable.SetTarget((ID2D1DeviceContext*)dc, prevTarget);
                 if (prevTarget != 0) ComHelpers.Release(prevTarget);
-                D2D1VTable.SetTransform((ID2D1RenderTarget*)sharedDc, prevTransform);
-                D2D1VTable.SetDpi((ID2D1RenderTarget*)sharedDc, prevDpiX, prevDpiY);
+                D2D1VTable.SetTransform((ID2D1RenderTarget*)dc, prevTransform);
+                D2D1VTable.SetDpi((ID2D1RenderTarget*)dc, prevDpiX, prevDpiY);
             }
             finally
             {
-                _factory.ExitSharedDcDraw();
+                _factory.ExitCurrentThreadDcDraw(dc);
             }
             return ok;
         }

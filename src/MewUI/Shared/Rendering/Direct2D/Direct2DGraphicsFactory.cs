@@ -467,15 +467,15 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     /// <summary>Builds a graphics context for a GPU-resident pixel surface. The context's
     /// <c>OnBeginFrame</c> branches into <c>BeginGpuPixelSurfaceFrame</c> when the target is a
-    /// <see cref="Direct2DGpuPixelRenderSurface"/>, using the shared filter device context
-    /// + <c>SetTarget</c> instead of a DC render target - keeps the filter pipeline on-GPU
+    /// <see cref="Direct2DGpuPixelRenderSurface"/>, using the target's own device context
+    /// + <c>SetTarget</c> instead of a DC render target - keeps GPU-resident draws on-GPU
     /// end-to-end.</summary>
     private IGraphicsContext CreateGpuPixelSurfaceContext(Direct2DGpuPixelRenderSurface target)
     {
         EnsureInitialized();
 
         // resolveRenderTarget is unused for GPU targets - the GPU branch in OnBeginFrame
-        // wires _renderTarget directly from the shared DC.
+        // wires _renderTarget directly from the target surface's device context.
         var ctx = new Direct2DGraphicsContext(
             this,
             hwnd: 0,
@@ -502,18 +502,18 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         => new Direct2DPixelRenderSurface(pixelWidth, pixelHeight, dpiScale, hasAlpha);
 
     /// <summary>
-    /// Returns a GPU-resident <see cref="Direct2DGpuPixelRenderSurface"/> when the shared
-    /// device context is available, falling back to the DIB-backed
-    /// <see cref="Direct2DPixelRenderSurface"/> otherwise. The GPU path keeps filter graphs
-    /// fully on-GPU (CreateBitmap1 with TARGET option → effects sample directly →
-    /// downstream draws via SetTarget + DrawImage); the only readback happens when CPU
-    /// executors call <c>Lock</c>, in which case the lock release path also writes the
-    /// modified buffer back to the GPU via <c>CopyFromMemory</c> so subsequent effects see
-    /// the up-to-date pixels.
+    /// Returns a GPU-resident <see cref="Direct2DGpuPixelRenderSurface"/> on the calling
+    /// thread's device context when the GPU pipeline is available, falling back to the
+    /// DIB-backed <see cref="Direct2DPixelRenderSurface"/> otherwise. The GPU path keeps
+    /// filter graphs fully on-GPU (CreateBitmap1 with TARGET option → effects sample
+    /// directly → downstream draws via SetTarget + DrawImage); the only readback happens
+    /// when CPU executors call <c>Lock</c>, in which case the lock release path also writes
+    /// the modified buffer back to the GPU via <c>CopyFromMemory</c> so subsequent effects
+    /// see the up-to-date pixels.
     /// </summary>
     private IRenderSurface CreateOffscreenSurfaceTarget(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha)
     {
-        if (SharedFilterDeviceContext != 0)
+        if (GetOrCreateCurrentThreadDeviceContext() != 0)
         {
             try
             {
@@ -722,8 +722,11 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             // device that cannot bind the shared-device GPU bitmaps, breaking the bitmap cache.
             bool swapChainEligible = mode == WindowTargetMode.SwapChainDeviceContext
                 || (mode == WindowTargetMode.TransparentComposition && Dcomp.IsAvailable);
+            if (swapChainEligible)
+            {
+                EnsureGpuDeviceChain();
+            }
             if (swapChainEligible
-                && SharedFilterDeviceContext != 0
                 && _d2dDevice != 0
                 && _d3dDevice != 0)
             {
@@ -736,7 +739,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             if (mode != WindowTargetMode.HwndRenderTarget)
             {
                 DiagLog.Write($"[D2D] window target fallback to HwndRT hwnd=0x{hwnd:X} mode={mode} " +
-                    $"eligible={swapChainEligible} sharedDc={SharedFilterDeviceContext != 0} d2d={_d2dDevice != 0} d3d={_d3dDevice != 0}");
+                    $"eligible={swapChainEligible} d2d={_d2dDevice != 0} d3d={_d3dDevice != 0}");
             }
 
             // HWND render targets always use IGNORE - the DWM redirection surface
