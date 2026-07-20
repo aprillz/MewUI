@@ -75,6 +75,7 @@ internal sealed class X11WindowBackend : IWindowBackend
     private bool _allowsTransparency;
     private bool _enabled = true;
     private CursorType? _currentCursorType;
+    private bool _transparentResizeCursorActive;
     private IX11InputMethod? _inputMethod;
 
     // XInput2 scroll handling. _xi2Opcode is the per-display extension opcode discovered
@@ -196,6 +197,26 @@ internal sealed class X11WindowBackend : IWindowBackend
     }
 
     public void BeginDragMove()
+        => BeginWmMoveResize(8); // _NET_WM_MOVERESIZE_MOVE
+
+    public void BeginDragResize(Controls.ResizeEdge edge)
+    {
+        int direction = edge switch
+        {
+            Controls.ResizeEdge.TopLeft => 0,
+            Controls.ResizeEdge.Top => 1,
+            Controls.ResizeEdge.TopRight => 2,
+            Controls.ResizeEdge.Right => 3,
+            Controls.ResizeEdge.BottomRight => 4,
+            Controls.ResizeEdge.Bottom => 5,
+            Controls.ResizeEdge.BottomLeft => 6,
+            Controls.ResizeEdge.Left => 7,
+            _ => 8,
+        };
+        BeginWmMoveResize(direction);
+    }
+
+    private void BeginWmMoveResize(int direction)
     {
         if (Display == 0 || Handle == 0)
         {
@@ -224,7 +245,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             xev.xclient.format = 32;
             xev.xclient.data[0] = rootX;
             xev.xclient.data[1] = rootY;
-            xev.xclient.data[2] = 8; // _NET_WM_MOVERESIZE_MOVE
+            xev.xclient.data[2] = direction;
             xev.xclient.data[3] = 1; // Button1
             xev.xclient.data[4] = 1; // source = normal app
         }
@@ -304,6 +325,23 @@ internal sealed class X11WindowBackend : IWindowBackend
         }
 
         ApplyMotifHints();
+    }
+
+    public void SetCanClose(bool value)
+    {
+        if (value)
+        {
+            _motifFunctions |= 0x20; // MWM_FUNC_CLOSE
+        }
+        else
+        {
+            _motifFunctions &= ~0x20u;
+        }
+
+        if (Display != 0 && Handle != 0)
+        {
+            ApplyMotifHints();
+        }
     }
 
     private void ApplyMotifHints()
@@ -1788,6 +1826,14 @@ internal sealed class X11WindowBackend : IWindowBackend
         int yPx = e.y;
         var pos = new Point(xPx / Window.DpiScale, yPx / Window.DpiScale);
 
+        // Transparent top-level windows have no WM decoration, so mirror Win32's non-client edge
+        // hit test and initiate the EWMH resize directly from the shadow/grip area.
+        if (isDown && e.button == X11MouseButton.Left && TryGetTransparentResizeEdge(pos, out var resizeEdge))
+        {
+            BeginDragResize(resizeEdge);
+            return;
+        }
+
         // Dismiss watch: while a popup surface holds the pointer grab, presses land here regardless of
         // pointer location. A press outside the client area light-dismisses and is consumed (standard
         // menu UX: the closing click does not also act on whatever is underneath).
@@ -1908,6 +1954,36 @@ internal sealed class X11WindowBackend : IWindowBackend
             modifiers: GetModifiers((uint)e.state));
     }
 
+    private bool TryGetTransparentResizeEdge(Point position, out Controls.ResizeEdge edge)
+    {
+        edge = default;
+        if (!_allowsTransparency || !Window.WindowSize.IsResizable ||
+            Window.WindowState != Controls.WindowState.Normal)
+        {
+            return false;
+        }
+
+        const double grip = 12;
+        bool left = position.X >= 0 && position.X < grip;
+        bool right = position.X < Window.ClientSize.Width && position.X >= Window.ClientSize.Width - grip;
+        bool top = position.Y >= 0 && position.Y < grip;
+        bool bottom = position.Y < Window.ClientSize.Height && position.Y >= Window.ClientSize.Height - grip;
+
+        edge = (top, bottom, left, right) switch
+        {
+            (true, _, true, _) => Controls.ResizeEdge.TopLeft,
+            (true, _, _, true) => Controls.ResizeEdge.TopRight,
+            (_, true, true, _) => Controls.ResizeEdge.BottomLeft,
+            (_, true, _, true) => Controls.ResizeEdge.BottomRight,
+            (_, _, true, _) => Controls.ResizeEdge.Left,
+            (_, _, _, true) => Controls.ResizeEdge.Right,
+            (true, _, _, _) => Controls.ResizeEdge.Top,
+            (_, true, _, _) => Controls.ResizeEdge.Bottom,
+            _ => default,
+        };
+        return left || right || top || bottom;
+    }
+
     private void HandleMotion(XMotionEvent e)
     {
         var pos = new Point(e.x / Window.DpiScale, e.y / Window.DpiScale);
@@ -1918,6 +1994,23 @@ internal sealed class X11WindowBackend : IWindowBackend
         bool right = (e.state & X11ModifierMask.Button3) != 0;
 
         WindowInputRouter.MouseMove(Window, pos, screenPos, leftDown: left, rightDown: right, middleDown: middle, modifiers: GetModifiers((uint)e.state));
+
+        if (!left && TryGetTransparentResizeEdge(pos, out var resizeEdge))
+        {
+            SetCursor(resizeEdge switch
+            {
+                Controls.ResizeEdge.Left or Controls.ResizeEdge.Right => CursorType.SizeWE,
+                Controls.ResizeEdge.Top or Controls.ResizeEdge.Bottom => CursorType.SizeNS,
+                Controls.ResizeEdge.TopLeft or Controls.ResizeEdge.BottomRight => CursorType.SizeNWSE,
+                _ => CursorType.SizeNESW,
+            });
+            _transparentResizeCursorActive = true;
+        }
+        else if (_transparentResizeCursorActive)
+        {
+            _transparentResizeCursorActive = false;
+            Window.UpdateCursorForElement(Window.MouseOverElement);
+        }
     }
 
     private unsafe void HandleXdndEnter(XClientMessageEvent client)
@@ -2780,10 +2873,10 @@ internal sealed class X11WindowBackend : IWindowBackend
     }
 
     // X11 WM removes all decorations (title bar + border + shadow) - not a true
-    // "extend client area" like Win32/macOS. Reported as None so NativeCustomWindow
-    // keeps the default title bar on X11.
+    // "extend client area" like Win32/macOS. The native WM frame is still present,
+    // so report only that capability; NativeCustomWindow keeps the default title bar.
     public WindowChromeCapabilities ChromeCapabilities =>
-        WindowChromeCapabilities.None;
+        WindowChromeCapabilities.NativeWindowBorder;
 
     public void SetAllowsTransparency(bool allowsTransparency)
     {
