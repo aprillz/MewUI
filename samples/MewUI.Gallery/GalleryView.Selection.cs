@@ -8,7 +8,7 @@ partial class GalleryView
     private FrameworkElement SelectionPage()
     {
         var items = Enumerable
-            .Range(1, 20)
+            .Range(1, 5)
             .Select(i => $"Item {i}")
             .Append("Item Long Long Long Long Long Long Long")
             .ToArray();
