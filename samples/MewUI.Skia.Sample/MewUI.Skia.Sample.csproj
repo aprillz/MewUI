@@ -10,7 +10,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Aprillz.MewUI.Skia.Sample</RootNamespace>
     <AssemblyName>Aprillz.MewUI.Skia.Sample</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

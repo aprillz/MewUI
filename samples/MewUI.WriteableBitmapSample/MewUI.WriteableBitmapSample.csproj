@@ -6,7 +6,6 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Aprillz.MewUI.WriteableBitmapSample</RootNamespace>
     <AssemblyName>Aprillz.MewUI.WriteableBitmapSample</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
 
     <ImplicitUsings>enable</ImplicitUsings>
