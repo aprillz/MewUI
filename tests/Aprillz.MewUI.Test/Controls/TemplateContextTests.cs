@@ -61,6 +61,83 @@ public sealed class TemplateContextTests
     }
 
     [TestMethod]
+    public void Bind_WithBindingPath_ResetRemovesCompletePath()
+    {
+        var context = new TemplateContext();
+        var source = new PathRoot();
+        source.Node.Value = new PathNode("first");
+        var target = new TextBlock();
+        var path = BindingPath
+            .From<PathRoot>()
+            .Then(static value => value.Node)
+            .Then(static value => value!.Text);
+
+        context.Bind(
+            target,
+            TextBlock.TextProperty,
+            source,
+            path,
+            BindingMode.OneWay,
+            fallbackValue: "-");
+        source.Node.Value!.Text.Value = "second";
+        Assert.AreEqual("second", target.Text);
+
+        context.Reset();
+        source.Node.Value.Text.Value = "third";
+
+        Assert.AreEqual("second", target.Text);
+    }
+
+    [TestMethod]
+    public void Bind_WithBindingPath_AppliesFallbackAndRecovers()
+    {
+        var context = new TemplateContext();
+        var source = new PathRoot();
+        var target = new TextBlock();
+        var path = BindingPath
+            .From<PathRoot>()
+            .Then(static value => value.Node)
+            .Then(static value => value!.Text);
+
+        context.Bind(
+            target,
+            TextBlock.TextProperty,
+            source,
+            path,
+            BindingMode.OneWay,
+            fallbackValue: "-");
+        Assert.AreEqual("-", target.Text);
+
+        source.Node.Value = new PathNode("available");
+
+        Assert.AreEqual("available", target.Text);
+    }
+
+    [TestMethod]
+    public void Bind_WithConvertedBindingPath_ResetRemovesBinding()
+    {
+        var context = new TemplateContext();
+        var source = new PathRoot();
+        source.Count.Value = 1;
+        var target = new TextBlock();
+        var path = BindingPath.From<PathRoot>().Then(static value => value.Count);
+
+        context.Bind(
+            target,
+            TextBlock.TextProperty,
+            source,
+            path,
+            static value => $"Count: {value}",
+            mode: BindingMode.OneWay);
+        Assert.AreEqual("Count: 1", target.Text);
+
+        context.Reset();
+        source.Count.Value = 2;
+
+        Assert.AreEqual("Count: 1", target.Text);
+    }
+
+    [TestMethod]
     public void Subscribe_SupportsNotifyCollectionChangedEventHandler()
     {
         var context = new TemplateContext();
@@ -166,5 +243,17 @@ public sealed class TemplateContextTests
             add => _changed += value;
             remove => _changed -= value;
         }
+    }
+
+    private sealed class PathRoot
+    {
+        public ObservableValue<PathNode?> Node { get; } = new();
+
+        public ObservableValue<int> Count { get; } = new();
+    }
+
+    private sealed class PathNode(string text)
+    {
+        public ObservableValue<string> Text { get; } = new(text);
     }
 }

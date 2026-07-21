@@ -132,6 +132,95 @@ element.SetBinding(property, source, convert, convertBack, mode);
 element.SetBinding(TextBlock.TextProperty, otherElement, Window.TitleProperty);
 ```
 
+### 3.4 BindingPath (중첩 source)
+
+`BindingPath<TRoot, TValue>`는 property 이름 문자열, reflection, 생성 코드 없이 재사용 가능한
+중첩 source를 표현합니다. 각 `Then`은 새로운 immutable descriptor를 반환하며 target
+binding에 attach하기 전까지 path는 root instance를 보관하지 않습니다.
+
+```csharp
+sealed class OrderViewModel
+{
+    public ObservableValue<CustomerViewModel?> Customer { get; } = new();
+}
+
+sealed class CustomerViewModel
+{
+    public ObservableValue<string> City { get; } = new();
+}
+
+static readonly BindingPath<OrderViewModel, string> CityPath = BindingPath
+    .From<OrderViewModel>()
+    .Then(static order => order.Customer)
+    .Then(static customer => customer!.City);
+
+var city = new TextBlock().Bind(
+    TextBlock.TextProperty,
+    order,
+    CityPath,
+    mode: BindingMode.OneWay,
+    fallbackValue: "-");
+```
+
+`Then`은 argument 타입에 따라 동작을 선택합니다.
+
+| Segment | 변경 관찰 | writable TwoWay leaf |
+|---------|-----------|----------------------|
+| `Func<TCurrent, TNext>` getter | 안 함 | 불가능 |
+| `Func<TCurrent, ObservableValue<TNext>>` | 함 | 가능 |
+| `MewObject`의 `MewProperty<TNext>` | 함 | read-only가 아니면 가능 |
+
+일반 getter는 최초 attach와 관찰 가능한 upstream segment가 downstream 경로를 다시 구성할
+때 평가합니다. getter 결과만 바뀌어도 알림이 없으므로 binding은 자동으로 갱신되지 않습니다.
+
+```csharp
+var statusPath = BindingPath
+    .From<MyControl>()
+    .Then(MyControl.StatusProperty);
+```
+
+#### Null과 fallback
+
+- 중간 값이 null이면 경로가 unavailable이 되고 `fallbackValue`를 적용합니다.
+- 관찰 가능한 중간 값이 non-null로 돌아오면 경로를 자동으로 다시 연결합니다.
+- 마지막 leaf의 null은 실제 source 값이며 fallback으로 대체하지 않습니다.
+- selector가 null `ObservableValue`를 반환하면 잘못된 경로이므로 예외를 던집니다.
+
+observer는 null owner로 downstream selector를 호출하지 않습니다. C#은 마지막 leaf의
+nullability를 보존하면서 이 runtime 보장을 모든 generic `Then` 호출에 표현할 수 없으므로,
+예제의 `customer!.City`처럼 nullable 중간 parameter에 null-forgiving operator를 사용합니다.
+이 표기는 BindingPath의 runtime null 검사를 비활성화하지 않습니다.
+
+#### TwoWay path
+
+TwoWay binding의 마지막 segment는 writable `ObservableValue<T>` 또는 read-only가 아닌
+`MewProperty<T>`여야 합니다. 일반 getter나 read-only property leaf는 TwoWay binding을
+거부합니다. 변환 TwoWay path에는 `convertBack`이 필요하며, 기존 변환 binding overload와
+달리 path binding은 OneWay로 조용히 강등하지 않습니다.
+
+```csharp
+editor.Bind(
+    TextBase.TextProperty,
+    order,
+    CityPath,
+    convert: static value => value,
+    convertBack: static value => value,
+    mode: BindingMode.TwoWay,
+    fallbackValue: "");
+```
+
+경로가 unavailable인 동안 target 변경은 보관하지 않습니다. 경로가 다시 연결되면 현재
+source 값이 fallback 또는 임시 target 값을 덮어씁니다.
+
+#### 수명과 capture
+
+관찰 가능한 segment는 weak subscription을 사용하므로 long-lived source가 target을 살려
+두지 않습니다. target은 활성 binding을 소유하므로 `ClearBinding`, target disposal 또는
+`TemplateContext.Reset` 전까지 root와 현재 경로 객체를 유지합니다.
+
+`static` lambda는 필수가 아니라 권장 사항입니다. path descriptor가 delegate를 보관하므로
+capture된 객체는 descriptor 또는 이를 사용하는 활성 binding의 수명만큼 유지됩니다.
+
 ---
 
 ## 4. 컨트롤별 바인딩 메서드

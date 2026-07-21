@@ -132,6 +132,95 @@ element.SetBinding(property, source, convert, convertBack, mode);
 element.SetBinding(TextBlock.TextProperty, otherElement, Window.TitleProperty);
 ```
 
+### 3.4 BindingPath (nested sources)
+
+`BindingPath<TRoot, TValue>` describes a reusable nested source without property-name strings,
+reflection, or generated code. Every `Then` returns a new immutable descriptor; a path stores no
+root instance until it is attached to a target binding.
+
+```csharp
+sealed class OrderViewModel
+{
+    public ObservableValue<CustomerViewModel?> Customer { get; } = new();
+}
+
+sealed class CustomerViewModel
+{
+    public ObservableValue<string> City { get; } = new();
+}
+
+static readonly BindingPath<OrderViewModel, string> CityPath = BindingPath
+    .From<OrderViewModel>()
+    .Then(static order => order.Customer)
+    .Then(static customer => customer!.City);
+
+var city = new TextBlock().Bind(
+    TextBlock.TextProperty,
+    order,
+    CityPath,
+    mode: BindingMode.OneWay,
+    fallbackValue: "-");
+```
+
+`Then` selects its behavior from the argument type:
+
+| Segment | Observes changes | Writable TwoWay leaf |
+|---------|------------------|----------------------|
+| `Func<TCurrent, TNext>` getter | No | No |
+| `Func<TCurrent, ObservableValue<TNext>>` | Yes | Yes |
+| `MewProperty<TNext>` on a `MewObject` | Yes | Unless the property is read-only |
+
+An ordinary getter is evaluated during initial attachment and when an observed upstream segment
+rebuilds the downstream path. Changing only the getter result does not notify the binding.
+
+```csharp
+var statusPath = BindingPath
+    .From<MyControl>()
+    .Then(MyControl.StatusProperty);
+```
+
+#### Null and fallback
+
+- A null intermediate value makes the path unavailable and writes `fallbackValue`.
+- When an observed intermediate becomes non-null, the path reconnects automatically.
+- A null final leaf is a real source value and is not replaced by the fallback.
+- A selector returning a null `ObservableValue` is invalid and throws.
+
+The observer never invokes a downstream selector with a null owner. C# cannot express that runtime
+guarantee across every generic `Then` call while also preserving final-leaf nullability, so use the
+null-forgiving operator on a nullable intermediate parameter as shown in `customer!.City`. This does
+not disable BindingPath's runtime null check.
+
+#### TwoWay paths
+
+TwoWay binding requires a writable `ObservableValue<T>` or non-read-only `MewProperty<T>` final
+segment. A getter or read-only property leaf rejects TwoWay binding. Converted TwoWay paths require
+`convertBack`; unlike the older converted binding overloads, path binding does not silently fall
+back to OneWay.
+
+```csharp
+editor.Bind(
+    TextBase.TextProperty,
+    order,
+    CityPath,
+    convert: static value => value,
+    convertBack: static value => value,
+    mode: BindingMode.TwoWay,
+    fallbackValue: "");
+```
+
+While a path is unavailable, target changes are not buffered. When it reconnects, the current
+source value overwrites the fallback or any temporary target value.
+
+#### Lifetime and captures
+
+Observed segments use weak subscriptions, so a long-lived source does not keep the target alive.
+The target owns the active binding and therefore keeps its root and active path objects alive until
+`ClearBinding`, target disposal, or `TemplateContext.Reset`.
+
+`static` lambdas are recommended but not required. A path descriptor stores its delegates, so a
+captured object remains alive as long as the descriptor or an active binding that uses it.
+
 ---
 
 ## 4. Binding Methods by Control
