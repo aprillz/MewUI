@@ -57,20 +57,31 @@ public static class VisualTree
 
         stack.Add(element);
 
-        while (stack.Count > baseIndex)
+        try
         {
-            int lastIdx = stack.Count - 1;
-            var el = stack[lastIdx];
-            stack.RemoveAt(lastIdx);
-
-            visitor(el);
-
-            if (el is IVisualTreeHost host)
+            while (stack.Count > baseIndex)
             {
-                int childStart = stack.Count;
-                host.VisitChildren(_collector);
-                // Reverse newly added children so first child is popped first (DFS pre-order)
-                ReverseRange(stack, childStart, stack.Count - 1);
+                int lastIdx = stack.Count - 1;
+                var el = stack[lastIdx];
+                stack.RemoveAt(lastIdx);
+
+                visitor(el);
+
+                if (el is IVisualTreeHost host)
+                {
+                    int childStart = stack.Count;
+                    host.VisitChildren(_collector);
+                    // Reverse newly added children so first child is popped first (DFS pre-order)
+                    ReverseRange(stack, childStart, stack.Count - 1);
+                }
+            }
+        }
+        finally
+        {
+            // A throwing visitor must not strand element references above baseIndex on the reused stack.
+            if (stack.Count > baseIndex)
+            {
+                stack.RemoveRange(baseIndex, stack.Count - baseIndex);
             }
         }
     }
@@ -94,36 +105,44 @@ public static class VisualTree
         var stack = _stack ??= new List<Element>();
         int baseIndex = stack.Count;
 
-        if (element is IVisualTreeHost rootHost)
+        try
         {
-            int childStart = stack.Count;
-            rootHost.VisitChildren(_collector);
-            ReverseRange(stack, childStart, stack.Count - 1);
-        }
-
-        while (stack.Count > baseIndex)
-        {
-            int lastIdx = stack.Count - 1;
-            var el = stack[lastIdx];
-            stack.RemoveAt(lastIdx);
-
-            if (predicate(el))
-            {
-                // Clear remaining work items back to base
-                if (stack.Count > baseIndex)
-                    stack.RemoveRange(baseIndex, stack.Count - baseIndex);
-                return el;
-            }
-
-            if (el is IVisualTreeHost host)
+            if (element is IVisualTreeHost rootHost)
             {
                 int childStart = stack.Count;
-                host.VisitChildren(_collector);
+                rootHost.VisitChildren(_collector);
                 ReverseRange(stack, childStart, stack.Count - 1);
             }
-        }
 
-        return null;
+            while (stack.Count > baseIndex)
+            {
+                int lastIdx = stack.Count - 1;
+                var el = stack[lastIdx];
+                stack.RemoveAt(lastIdx);
+
+                if (predicate(el))
+                {
+                    return el;
+                }
+
+                if (el is IVisualTreeHost host)
+                {
+                    int childStart = stack.Count;
+                    host.VisitChildren(_collector);
+                    ReverseRange(stack, childStart, stack.Count - 1);
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            // Trim work items back to baseIndex whether we matched early, finished, or a predicate threw.
+            if (stack.Count > baseIndex)
+            {
+                stack.RemoveRange(baseIndex, stack.Count - baseIndex);
+            }
+        }
     }
 
     /// <summary>
