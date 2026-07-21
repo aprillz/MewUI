@@ -8,7 +8,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Aprillz.MewUI.Sample</RootNamespace>
     <AssemblyName>Aprillz.MewUI.Sample</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
   </PropertyGroup>
 

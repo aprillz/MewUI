@@ -6,7 +6,6 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Aprillz.MewUI.Gallery</RootNamespace>
     <AssemblyName>Aprillz.MewUI.Gallery</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
 
     <ImplicitUsings>enable</ImplicitUsings>

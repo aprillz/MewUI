@@ -10,7 +10,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Aprillz.MewUI.Video.Sample</RootNamespace>
     <AssemblyName>Aprillz.MewUI.Video.Sample</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
