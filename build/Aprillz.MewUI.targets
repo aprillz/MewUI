@@ -102,4 +102,14 @@
 
   </Target>
 
+  <!--
+    Hot Reload opt-out. MewUI auto-registers a MetadataUpdateHandler in its own assembly, so
+    Hot Reload works with no app declaration under `dotnet watch`. Setting
+    <MewUIHotReload>false</MewUIHotReload> emits an AppContext switch that disables the handler
+    at runtime (the assembly attribute is baked into MewUI.dll and cannot be removed by MSBuild).
+  -->
+  <ItemGroup Condition="'$(MewUIHotReload)' == 'false'">
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.HotReload.Enabled" Value="false" Trim="false" />
+  </ItemGroup>
+
 </Project>

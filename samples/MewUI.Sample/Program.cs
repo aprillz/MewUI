@@ -3,10 +3,6 @@ using System.Diagnostics;
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
-#if DEBUG
-[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
-#endif
-
 var stopwatch = Stopwatch.StartNew();
 Startup(out var isBench);
 double loadedMs = -1;

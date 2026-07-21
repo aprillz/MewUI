@@ -100,6 +100,16 @@ public static class DefaultStyles
         }
     }
 
+    // Drops instantiated styles so the next lookup re-runs the factory. The factory delegates
+    // are method groups whose IL is replaced in place by Hot Reload, so they need no reset.
+    internal static void ClearInstantiatedStyles()
+    {
+        lock (_stylesLock)
+        {
+            _styles = null;
+        }
+    }
+
     private static Style CreateControlBaseStyle() =>
         new(typeof(Control))
         {

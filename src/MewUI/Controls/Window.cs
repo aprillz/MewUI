@@ -2734,6 +2734,14 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         BuildCallback = build;
     }
 
+    internal void SetBuildCallback(Action<Window> callback, Delegate buildSource)
+    {
+        BuildCallback = callback;
+        // Register the original user build delegate (not the wrapping callback) so Hot Reload
+        // detects edits to the actual build lambda.
+        HotReload.HotReloadRegistry.RegisterBuild(this, buildSource);
+    }
+
     private void SubscribeToDispatcherChanged()
     {
         if (_subscribedToDispatcherChanged)

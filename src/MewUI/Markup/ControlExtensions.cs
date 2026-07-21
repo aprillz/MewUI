@@ -4276,7 +4276,7 @@ public static class ControlExtensions
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(build);
 
-        window.SetBuildCallback(x => build((TWindow)x));
+        window.SetBuildCallback(x => build((TWindow)x), build);
 
         build(window);
 

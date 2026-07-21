@@ -13,10 +13,6 @@ using FFmpeg.AutoGen;
 
 using DynamicBindings = FFmpeg.AutoGen.Bindings.DynamicallyLoaded.DynamicallyLoadedBindings;
 
-#if DEBUG
-[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
-#endif
-
 Startup();
 
 VideoPlayerWindow playerWindow = null!;

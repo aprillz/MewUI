@@ -8,10 +8,6 @@ using Aprillz.MewUI.Skia.Sample.Diagnostics;
 
 using SkiaSharp;
 
-#if DEBUG
-[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Aprillz.MewUI.HotReload.MewUiMetadataUpdateHandler))]
-#endif
-
 Startup();
 
 Window window = null!;
