@@ -159,6 +159,7 @@ partial class GalleryView : UserControl
             Group("Basics"),
             Page("Buttons", ButtonsPage, "tap_single_regular"),
             Page("Inputs", InputsPage, "textbox_regular"),
+            Page("Data Binding", DataBindingPage, "link_regular"),
             Page("Drag & Drop", DragDropPage, "drag_regular"),
             Page("Selection", SelectionPage, "multiselect_regular"),
             Page("Typography", TypographyPage, "text_font_regular"),
