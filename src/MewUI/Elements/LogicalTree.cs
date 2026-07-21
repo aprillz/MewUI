@@ -60,20 +60,31 @@ public static class LogicalTree
 
         stack.Add(element);
 
-        while (stack.Count > baseIndex)
+        try
         {
-            int lastIdx = stack.Count - 1;
-            var el = stack[lastIdx];
-            stack.RemoveAt(lastIdx);
-
-            visitor(el);
-
-            if (el is ILogicalTreeHost host)
+            while (stack.Count > baseIndex)
             {
-                int childStart = stack.Count;
-                host.VisitLogicalChildren(_collector);
-                // Reverse newly added children so first child is popped first (DFS pre-order)
-                ReverseRange(stack, childStart, stack.Count - 1);
+                int lastIdx = stack.Count - 1;
+                var el = stack[lastIdx];
+                stack.RemoveAt(lastIdx);
+
+                visitor(el);
+
+                if (el is ILogicalTreeHost host)
+                {
+                    int childStart = stack.Count;
+                    host.VisitLogicalChildren(_collector);
+                    // Reverse newly added children so first child is popped first (DFS pre-order)
+                    ReverseRange(stack, childStart, stack.Count - 1);
+                }
+            }
+        }
+        finally
+        {
+            // A throwing visitor must not strand element references above baseIndex on the reused stack.
+            if (stack.Count > baseIndex)
+            {
+                stack.RemoveRange(baseIndex, stack.Count - baseIndex);
             }
         }
     }
@@ -97,36 +108,44 @@ public static class LogicalTree
         var stack = _stack ??= new List<Element>();
         int baseIndex = stack.Count;
 
-        if (element is ILogicalTreeHost rootHost)
+        try
         {
-            int childStart = stack.Count;
-            rootHost.VisitLogicalChildren(_collector);
-            ReverseRange(stack, childStart, stack.Count - 1);
-        }
-
-        while (stack.Count > baseIndex)
-        {
-            int lastIdx = stack.Count - 1;
-            var el = stack[lastIdx];
-            stack.RemoveAt(lastIdx);
-
-            if (predicate(el))
-            {
-                // Clear remaining work items back to base
-                if (stack.Count > baseIndex)
-                    stack.RemoveRange(baseIndex, stack.Count - baseIndex);
-                return el;
-            }
-
-            if (el is ILogicalTreeHost host)
+            if (element is ILogicalTreeHost rootHost)
             {
                 int childStart = stack.Count;
-                host.VisitLogicalChildren(_collector);
+                rootHost.VisitLogicalChildren(_collector);
                 ReverseRange(stack, childStart, stack.Count - 1);
             }
-        }
 
-        return null;
+            while (stack.Count > baseIndex)
+            {
+                int lastIdx = stack.Count - 1;
+                var el = stack[lastIdx];
+                stack.RemoveAt(lastIdx);
+
+                if (predicate(el))
+                {
+                    return el;
+                }
+
+                if (el is ILogicalTreeHost host)
+                {
+                    int childStart = stack.Count;
+                    host.VisitLogicalChildren(_collector);
+                    ReverseRange(stack, childStart, stack.Count - 1);
+                }
+            }
+
+            return null;
+        }
+        finally
+        {
+            // Trim work items back to baseIndex whether we matched early, finished, or a predicate threw.
+            if (stack.Count > baseIndex)
+            {
+                stack.RemoveRange(baseIndex, stack.Count - baseIndex);
+            }
+        }
     }
 
     private static void ReverseRange(List<Element> list, int start, int end)
