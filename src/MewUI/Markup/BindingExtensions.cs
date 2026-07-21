@@ -100,4 +100,43 @@ public static class BindingExtensions
         element.SetBinding(property, source, sourceProperty, convert, convertBack, mode);
         return element;
     }
+
+    /// <summary>
+    /// Binds a property to a reusable delegate-based path and returns the target for chaining.
+    /// </summary>
+    public static TElement Bind<TElement, TRoot, T>(
+        this TElement element,
+        MewProperty<T> property,
+        TRoot source,
+        BindingPath<TRoot, T> path,
+        BindingMode? mode = null,
+        T fallbackValue = default!)
+        where TElement : MewObject
+        where TRoot : class
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(property, source, path, mode, fallbackValue);
+        return element;
+    }
+
+    /// <summary>
+    /// Binds a property to a reusable delegate-based path with type conversion and returns the
+    /// target for chaining.
+    /// </summary>
+    public static TElement Bind<TElement, TProp, TRoot, TSource>(
+        this TElement element,
+        MewProperty<TProp> property,
+        TRoot source,
+        BindingPath<TRoot, TSource> path,
+        Func<TSource, TProp> convert,
+        Func<TProp, TSource>? convertBack = null,
+        BindingMode? mode = null,
+        TProp fallbackValue = default!)
+        where TElement : MewObject
+        where TRoot : class
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(property, source, path, convert, convertBack, mode, fallbackValue);
+        return element;
+    }
 }

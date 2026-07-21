@@ -66,6 +66,45 @@ public sealed class TemplateContext : IDisposable
         RegisterPropertyBinding(target, property);
     }
 
+    public void Bind<TRoot, T>(
+        MewObject target,
+        MewProperty<T> property,
+        TRoot source,
+        BindingPath<TRoot, T> path,
+        BindingMode? mode = null,
+        T fallbackValue = default!)
+        where TRoot : class
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(path);
+
+        target.SetBinding(property, source, path, mode, fallbackValue);
+        RegisterPropertyBinding(target, property);
+    }
+
+    public void Bind<TProp, TRoot, TSource>(
+        MewObject target,
+        MewProperty<TProp> property,
+        TRoot source,
+        BindingPath<TRoot, TSource> path,
+        Func<TSource, TProp> convert,
+        Func<TProp, TSource>? convertBack = null,
+        BindingMode? mode = null,
+        TProp fallbackValue = default!)
+        where TRoot : class
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        target.SetBinding(property, source, path, convert, convertBack, mode, fallbackValue);
+        RegisterPropertyBinding(target, property);
+    }
+
     public void Subscribe<TSource, THandler>(
         TSource source,
         Action<TSource, THandler> add,

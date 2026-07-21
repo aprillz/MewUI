@@ -128,6 +128,11 @@ public abstract class MewObject : IPropertyOwner
         return ResolveInheritedValue(property);
     }
 
+    /// <summary>
+    /// Reads an effective property value for the binding infrastructure, including inheritance.
+    /// </summary>
+    internal T GetBindingValue<T>(MewProperty<T> property) => GetValue(property);
+
     // Whether cached inherited values still match the current ancestor chain.
     // Elements override this with a context-version check so a reparent invalidates lazily.
     private protected virtual bool IsInheritedCacheCurrent() => true;
@@ -157,6 +162,16 @@ public abstract class MewObject : IPropertyOwner
                 $"Use SetValue(MewPropertyKey<T>, T) with the registered key.");
         }
 
+        PropertyStore.SetLocal(property, value);
+    }
+
+    /// <summary>
+    /// Writes a local property value for the binding infrastructure without bypassing read-only,
+    /// validation, or coercion rules.
+    /// </summary>
+    internal void SetBindingValue<T>(MewProperty<T> property, T value)
+    {
+        ThrowIfReadOnly(property);
         PropertyStore.SetLocal(property, value);
     }
 
@@ -237,6 +252,98 @@ public abstract class MewObject : IPropertyOwner
 
         var binding = new MewPropertyBinding<TProp, TSource>(
             this, property, source, convert, convertBack, resolvedMode);
+        StorePropertyBinding(property.Id, binding);
+    }
+
+    /// <summary>
+    /// Binds a property to a reusable delegate-based path rooted at <paramref name="source"/>.
+    /// Replaces any existing binding for the same property.
+    /// </summary>
+    public void SetBinding<TRoot, T>(
+        MewProperty<T> property,
+        TRoot source,
+        BindingPath<TRoot, T> path,
+        BindingMode? mode = null,
+        T fallbackValue = default!)
+        where TRoot : class
+    {
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(path);
+        ThrowIfReadOnly(property);
+
+        var resolvedMode = mode ?? (property.BindsTwoWayByDefault
+            ? BindingMode.TwoWay
+            : BindingMode.OneWay);
+        if (resolvedMode == BindingMode.TwoWay && !path.CanWrite)
+        {
+            throw new ArgumentException(
+                "A TwoWay BindingPath must end in a writable ObservableValue or MewProperty.",
+                nameof(path));
+        }
+
+        DisposeExistingBinding(property.Id);
+
+        var binding = new MewPropertyPathBinding<T, TRoot, T>(
+            this,
+            property,
+            source,
+            path,
+            static value => value,
+            static value => value,
+            resolvedMode,
+            fallbackValue);
+        StorePropertyBinding(property.Id, binding);
+    }
+
+    /// <summary>
+    /// Binds a property to a reusable delegate-based path with type conversion.
+    /// Replaces any existing binding for the same property.
+    /// </summary>
+    public void SetBinding<TProp, TRoot, TSource>(
+        MewProperty<TProp> property,
+        TRoot source,
+        BindingPath<TRoot, TSource> path,
+        Func<TSource, TProp> convert,
+        Func<TProp, TSource>? convertBack = null,
+        BindingMode? mode = null,
+        TProp fallbackValue = default!)
+        where TRoot : class
+    {
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(convert);
+        ThrowIfReadOnly(property);
+
+        var resolvedMode = mode ?? (property.BindsTwoWayByDefault
+            ? BindingMode.TwoWay
+            : BindingMode.OneWay);
+        if (resolvedMode == BindingMode.TwoWay && convertBack == null)
+        {
+            throw new ArgumentException(
+                "A converted TwoWay BindingPath requires convertBack.",
+                nameof(convertBack));
+        }
+
+        if (resolvedMode == BindingMode.TwoWay && !path.CanWrite)
+        {
+            throw new ArgumentException(
+                "A TwoWay BindingPath must end in a writable ObservableValue or MewProperty.",
+                nameof(path));
+        }
+
+        DisposeExistingBinding(property.Id);
+
+        var binding = new MewPropertyPathBinding<TProp, TRoot, TSource>(
+            this,
+            property,
+            source,
+            path,
+            convert,
+            convertBack,
+            resolvedMode,
+            fallbackValue);
         StorePropertyBinding(property.Id, binding);
     }
 
