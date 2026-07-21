@@ -566,7 +566,10 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         }
     }
 
-    [ThreadStatic] private static List<int>? _sortedKeysBuffer;
+    // Per-instance (not [ThreadStatic]): GetSortedKeys returns a span over this buffer, so a nested
+    // presenter must not share it - that would clobber an in-flight span. A presenter is never its
+    // own descendant, so same-instance reentrancy cannot occur.
+    private List<int>? _sortedKeysBuffer;
 
     private ReadOnlySpan<int> GetSortedKeys()
     {
