@@ -102,8 +102,8 @@ public sealed class WindowSizingTransactionTests
 
         window.PerformLayout();
 
-        Assert.IsTrue(window.ClientSize.Width >= 1);
-        Assert.IsTrue(window.ClientSize.Height >= 1);
+        Assert.IsGreaterThanOrEqualTo(1, window.ClientSize.Width);
+        Assert.IsGreaterThanOrEqualTo(1, window.ClientSize.Height);
     }
 
     private static Window CreateFitWindow(ApplyingWindowBackend backend, Element content)

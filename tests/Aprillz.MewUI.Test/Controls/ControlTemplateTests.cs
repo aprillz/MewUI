@@ -103,7 +103,7 @@ public sealed class ControlTemplateTests
             return true;
         });
 
-        Assert.AreEqual(1, children.Count);
+        Assert.HasCount(1, children);
         Assert.IsInstanceOfType<Border>(children[0], "the single visual child is the template root");
     }
 
@@ -193,7 +193,7 @@ public sealed class ControlTemplateTests
             children.Add(child);
             return true;
         });
-        Assert.AreEqual(0, children.Count, "without a template the control exposes no template child");
+        Assert.IsEmpty(children, "without a template the control exposes no template child");
     }
 
     [TestMethod]

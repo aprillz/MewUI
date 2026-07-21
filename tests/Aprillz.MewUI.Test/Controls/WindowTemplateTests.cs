@@ -36,7 +36,7 @@ public sealed class WindowTemplateTests
 
         Assert.IsNotNull(chrome);
         Assert.AreEqual(background, chrome.Background, "chrome follows the window background through ctx.Bind");
-        Assert.IsTrue(chrome.Bounds.Width > 0, "the template root is arranged by the window layout");
+        Assert.IsGreaterThan(0, chrome.Bounds.Width, "the template root is arranged by the window layout");
 
         Assert.AreSame(window, content.LogicalParent, "the window keeps logical ownership of its content");
         Assert.IsInstanceOfType<ContentPresenter>(content.Parent, "the chrome's presenter hosts the content visually");
@@ -70,6 +70,6 @@ public sealed class WindowTemplateTests
         window.PerformLayout();
 
         Assert.AreSame(window, content.Parent, "clearing the template rehosts the content directly");
-        Assert.IsTrue(content.Bounds.Width > 0, "the direct layout path resumes");
+        Assert.IsGreaterThan(0, content.Bounds.Width, "the direct layout path resumes");
     }
 }

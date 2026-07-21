@@ -26,7 +26,7 @@ public sealed class WindowUpdateSchedulerTests
         // The mid-pass InvalidateArrange bump is consumed by the convergence loop; a settled pass
         // never runs the continuation branch.
         Assert.IsTrue(window.IsUpdatePassSettled);
-        Assert.IsTrue(element.MeasureCount >= 1);
+        Assert.IsGreaterThanOrEqualTo(1, element.MeasureCount);
     }
 
     [TestMethod]

@@ -78,10 +78,8 @@ public sealed class PopupContextTests
         var small = MeasurePopupFor(smallOwner);
         var large = MeasurePopupFor(largeOwner);
 
-        Assert.IsTrue(large.Height > small.Height,
-            $"expected taller text under the 30pt owner (small={small}, large={large})");
-        Assert.IsTrue(large.Width > small.Width,
-            $"expected wider text under the 30pt owner (small={small}, large={large})");
+        Assert.IsGreaterThan(small.Height, large.Height, $"expected taller text under the 30pt owner (small={small}, large={large})");
+        Assert.IsGreaterThan(small.Width, large.Width, $"expected wider text under the 30pt owner (small={small}, large={large})");
     }
 
     // Re-showing an open popup with a different owner (the replace path) must re-divert

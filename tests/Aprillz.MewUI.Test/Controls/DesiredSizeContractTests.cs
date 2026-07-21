@@ -22,10 +22,8 @@ public sealed class DesiredSizeContractTests
 
         listBox.Measure(new Size(PROBE_W, PROBE_H));
 
-        Assert.IsTrue(listBox.DesiredSize.Width < 50,
-            $"desired width {listBox.DesiredSize.Width} must be chrome only, not the constraint");
-        Assert.IsTrue(listBox.DesiredSize.Height < 50,
-            $"desired height {listBox.DesiredSize.Height} must be chrome only, not the constraint");
+        Assert.IsLessThan(50, listBox.DesiredSize.Width, $"desired width {listBox.DesiredSize.Width} must be chrome only, not the constraint");
+        Assert.IsLessThan(50, listBox.DesiredSize.Height, $"desired height {listBox.DesiredSize.Height} must be chrome only, not the constraint");
     }
 
     [TestMethod]
@@ -39,8 +37,8 @@ public sealed class DesiredSizeContractTests
 
         Assert.AreEqual(narrow.DesiredSize.Width, wide.DesiredSize.Width, 0.5,
             "natural width must not depend on the offered constraint");
-        Assert.IsTrue(narrow.DesiredSize.Width < PROBE_W / 2);
-        Assert.IsTrue(narrow.DesiredSize.Width > 0);
+        Assert.IsLessThan(PROBE_W / 2, narrow.DesiredSize.Width);
+        Assert.IsGreaterThan(0, narrow.DesiredSize.Width);
     }
 
     [TestMethod]
@@ -50,7 +48,7 @@ public sealed class DesiredSizeContractTests
 
         listBox.Measure(new Size(200, PROBE_H));
 
-        Assert.IsTrue(listBox.DesiredSize.Width <= 200 + 0.5);
+        Assert.IsLessThanOrEqualTo(200 + 0.5, listBox.DesiredSize.Width);
     }
 
     [TestMethod]
@@ -63,7 +61,7 @@ public sealed class DesiredSizeContractTests
         wide.Measure(new Size(PROBE_W + 300, PROBE_H));
 
         Assert.AreEqual(narrow.DesiredSize.Width, wide.DesiredSize.Width, 0.5);
-        Assert.IsTrue(narrow.DesiredSize.Width < PROBE_W / 2);
+        Assert.IsLessThan(PROBE_W / 2, narrow.DesiredSize.Width);
     }
 
     [TestMethod]
@@ -71,8 +69,7 @@ public sealed class DesiredSizeContractTests
     {
         var empty = new ItemsControl();
         empty.Measure(new Size(PROBE_W, 1000));
-        Assert.IsTrue(empty.DesiredSize.Height < 50,
-            $"empty desired height {empty.DesiredSize.Height} must be chrome only");
+        Assert.IsLessThan(50, empty.DesiredSize.Height, $"empty desired height {empty.DesiredSize.Height} must be chrome only");
 
         var three = CreateItemsControl(3);
         three.Measure(new Size(PROBE_W, 1000));
@@ -81,15 +78,13 @@ public sealed class DesiredSizeContractTests
         twenty.Measure(new Size(PROBE_W, 1000));
 
         // 1..11 items follow the item count; 12+ stays at the preferred viewport cap.
-        Assert.IsTrue(three.DesiredSize.Height > empty.DesiredSize.Height);
-        Assert.IsTrue(twenty.DesiredSize.Height > three.DesiredSize.Height);
-        Assert.IsTrue(twenty.DesiredSize.Height < 500,
-            $"20 items must cap at the preferred viewport, got {twenty.DesiredSize.Height}");
+        Assert.IsGreaterThan(empty.DesiredSize.Height, three.DesiredSize.Height);
+        Assert.IsGreaterThan(three.DesiredSize.Height, twenty.DesiredSize.Height);
+        Assert.IsLessThan(500, twenty.DesiredSize.Height, $"20 items must cap at the preferred viewport, got {twenty.DesiredSize.Height}");
 
         var clamped = CreateItemsControl(20);
         clamped.Measure(new Size(PROBE_W, 100));
-        Assert.IsTrue(clamped.DesiredSize.Height <= 100 + 0.5,
-            "the preferred viewport must clamp to the finite constraint");
+        Assert.IsLessThanOrEqualTo(100 + 0.5, clamped.DesiredSize.Height, "the preferred viewport must clamp to the finite constraint");
     }
 
     [TestMethod]
@@ -100,8 +95,8 @@ public sealed class DesiredSizeContractTests
 
         itemsControl.Measure(new Size(PROBE_W, 1000));
 
-        Assert.IsTrue(itemsControl.DesiredSize.Height > 0);
-        Assert.IsTrue(itemsControl.DesiredSize.Height < 1000);
+        Assert.IsGreaterThan(0, itemsControl.DesiredSize.Height);
+        Assert.IsLessThan(1000, itemsControl.DesiredSize.Height);
     }
 
     [TestMethod]
@@ -110,8 +105,8 @@ public sealed class DesiredSizeContractTests
         var withDock = LayoutFitWindow(new DockPanel().Children(new ListBox()));
         var withoutDock = LayoutFitWindow(new ListBox());
 
-        Assert.IsTrue(withDock.Width < 100, $"client width {withDock.Width} must be content sized, not the max");
-        Assert.IsTrue(withDock.Height < 100, $"client height {withDock.Height} must be content sized, not the max");
+        Assert.IsLessThan(100, withDock.Width, $"client width {withDock.Width} must be content sized, not the max");
+        Assert.IsLessThan(100, withDock.Height, $"client height {withDock.Height} must be content sized, not the max");
         Assert.AreEqual(withDock, withoutDock, "DockPanel must not change the fit result");
     }
 
@@ -120,8 +115,7 @@ public sealed class DesiredSizeContractTests
     {
         var client = LayoutFitWindow(CreateItemsControl(50));
 
-        Assert.IsTrue(client.Height < 500,
-            $"client height {client.Height} must follow the preferred viewport, not the max");
+        Assert.IsLessThan(500, client.Height, $"client height {client.Height} must follow the preferred viewport, not the max");
     }
 
     [TestMethod]
@@ -149,8 +143,7 @@ public sealed class DesiredSizeContractTests
             .GetField("_presenter", BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(listBox)!;
 
-        Assert.IsTrue(presenter.Extent.Width > 200,
-            $"extent {presenter.Extent.Width} must expose the natural item width for horizontal scrolling");
+        Assert.IsGreaterThan(200, presenter.Extent.Width, $"extent {presenter.Extent.Width} must expose the natural item width for horizontal scrolling");
     }
 
     private static ListBox CreateListBox(params string[] items)

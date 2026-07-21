@@ -46,7 +46,7 @@ public sealed class ParentContextTests
 
         tracker.Parent = containerB;
 
-        Assert.AreEqual(2, tracker.Changes.Count, "detach and attach notifications");
+        Assert.HasCount(2, tracker.Changes, "detach and attach notifications");
         Assert.AreSame(window, tracker.Changes[0].OldRoot);
         Assert.IsNull(tracker.Changes[0].NewRoot);
         Assert.IsNull(tracker.Changes[1].OldRoot);
@@ -152,8 +152,7 @@ public sealed class ParentContextTests
         window.PerformLayout();
         var largeSize = text.DesiredSize;
 
-        Assert.IsTrue(largeSize.Height > smallSize.Height,
-            $"expected re-measure with the 30pt font (small={smallSize}, large={largeSize})");
+        Assert.IsGreaterThan(smallSize.Height, largeSize.Height, $"expected re-measure with the 30pt font (small={smallSize}, large={largeSize})");
     }
 
     // A binding observing an inherited property must update when the element moves under a

@@ -91,11 +91,9 @@ public sealed class OffscreenTextAlphaTests
         var (maxAlpha, coveredPixels) = RenderTextAndMeasureAlpha(fillOpaqueBackground: false);
         Console.WriteLine($"[transparent bg] maxAlpha={maxAlpha}, coveredPixels(alpha>16)={coveredPixels}");
 
-        Assert.IsTrue(maxAlpha > 0,
-            $"Text on a transparent offscreen surface has zero alpha everywhere (maxAlpha={maxAlpha}) " +
+        Assert.IsGreaterThan(0, maxAlpha, $"Text on a transparent offscreen surface has zero alpha everywhere (maxAlpha={maxAlpha}) " +
             "→ invisible after premultiplied compositing. Reproduces the CacheMode invisible-text bug.");
-        Assert.IsTrue(coveredPixels >= 5,
-            $"Expected a cluster of text pixels carrying alpha; got {coveredPixels}.");
+        Assert.IsGreaterThanOrEqualTo(5, coveredPixels, $"Expected a cluster of text pixels carrying alpha; got {coveredPixels}.");
     }
 
     [TestMethod]
@@ -112,7 +110,7 @@ public sealed class OffscreenTextAlphaTests
 
         // With an opaque background the whole surface should be alpha 255; the diagnostic value is
         // whether the text region differs in color (covered pixels here means non-background pixels).
-        Assert.IsTrue(maxAlpha > 0, $"Opaque-background surface unexpectedly has zero alpha (maxAlpha={maxAlpha}).");
+        Assert.IsGreaterThan(0, maxAlpha, $"Opaque-background surface unexpectedly has zero alpha (maxAlpha={maxAlpha}).");
     }
 
     /// <summary>
@@ -166,8 +164,7 @@ public sealed class OffscreenTextAlphaTests
             }
 
             Console.WriteLine($"[imageview round-trip] maxAlpha={maxAlpha}, coveredPixels(alpha>16)={coveredPixels}");
-            Assert.IsTrue(coveredPixels >= 5,
-                $"Text vanished through CreateImageView+DrawImage (coveredPixels={coveredPixels}). " +
+            Assert.IsGreaterThanOrEqualTo(5, coveredPixels, $"Text vanished through CreateImageView+DrawImage (coveredPixels={coveredPixels}). " +
                 "The CacheMode invisible-text bug is in the image-view/blit step, not text rendering.");
         }
         finally
@@ -237,7 +234,7 @@ public sealed class OffscreenTextAlphaTests
             // Dark text premultiplied ⇒ peak pixel RGB all LOW. White (color lost) ⇒ RGB all HIGH.
             bool looksWhite = peakR > 180 && peakG > 180 && peakB > 180;
             Console.WriteLine($"[real TextBlock] maxAlpha={maxAlpha}, peak BGRA=({peakB},{peakG},{peakR},{maxAlpha})  {(looksWhite ? "WHITE(color lost!)" : "DARK(correct)")}");
-            Assert.IsTrue(maxAlpha > 16, $"TextBlock produced no visible coverage (maxAlpha={maxAlpha}).");
+            Assert.IsGreaterThan(16, maxAlpha, $"TextBlock produced no visible coverage (maxAlpha={maxAlpha}).");
             Assert.IsFalse(looksWhite,
                 $"Real TextBlock text rendered WHITE into offscreen surface (peak RGB={peakR},{peakG},{peakB}) - " +
                 "foreground color lost. Reproduces the CacheMode white-text bug.");
@@ -318,8 +315,7 @@ public sealed class OffscreenTextAlphaTests
 
             Console.WriteLine($"[opaque window proxy @dpi{dpi}] darkest pixel BGRA=({darkB},{darkG},{darkR}) luma={minLuma}  " +
                 $"{(minLuma < 128 ? "DARK text present(correct)" : "NO dark text → white/invisible(BUG)")}");
-            Assert.IsTrue(minLuma < 128,
-                $"After blitting the cache onto an opaque white target, no dark text pixels exist (min luma={minLuma}) - " +
+            Assert.IsLessThan(128, minLuma, $"After blitting the cache onto an opaque white target, no dark text pixels exist (min luma={minLuma}) - " +
                 "text turned white/invisible. Reproduces the CacheMode bug.");
         }
         finally
@@ -391,8 +387,7 @@ public sealed class OffscreenTextAlphaTests
 
             Console.WriteLine($"[CacheMode nested e2e] darkest BGRA=({darkB},{darkG},{darkR}) luma={minLuma}  " +
                 $"{(minLuma < 128 ? "DARK(correct)" : "WHITE/invisible(BUG REPRODUCED)")}");
-            Assert.IsTrue(minLuma < 128,
-                $"Cached TextBlock rendered with nested frame produced no dark text (min luma={minLuma}) - bug reproduced.");
+            Assert.IsLessThan(128, minLuma, $"Cached TextBlock rendered with nested frame produced no dark text (min luma={minLuma}) - bug reproduced.");
         }
         finally
         {

@@ -89,7 +89,7 @@ public sealed class HeaderedContentControlLogicalTests
         int contentIndex = visited.IndexOf(content);
         Assert.AreEqual(1, visited.Count(element => ReferenceEquals(element, header)));
         Assert.AreEqual(1, visited.Count(element => ReferenceEquals(element, content)));
-        Assert.IsTrue(headerIndex < contentIndex, "traversal order must be Header before Content");
+        Assert.IsLessThan(contentIndex, headerIndex, "traversal order must be Header before Content");
     }
 
     [TestMethod]

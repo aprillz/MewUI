@@ -38,8 +38,8 @@ public sealed class Direct2DGradientTests
         Assert.IsGreaterThan(190, first.right, $"Expected a light right edge, got {first.right}.");
 
         // The cached-stop-collection draw (frame two) matches the first within readback tolerance.
-        Assert.IsTrue(Math.Abs(first.left - second.left) <= 4, $"Left drifted: {first.left} vs {second.left}.");
-        Assert.IsTrue(Math.Abs(first.right - second.right) <= 4, $"Right drifted: {first.right} vs {second.right}.");
+        Assert.IsLessThanOrEqualTo(4, Math.Abs(first.left - second.left), $"Left drifted: {first.left} vs {second.left}.");
+        Assert.IsLessThanOrEqualTo(4, Math.Abs(first.right - second.right), $"Right drifted: {first.right} vs {second.right}.");
     }
 
     private static (int left, int right) RenderAndSample(Direct2DGraphicsFactory factory, LinearGradientBrush brush)

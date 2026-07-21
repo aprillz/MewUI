@@ -177,10 +177,10 @@ public sealed class LogicalTreeTests
 
         newRoot.Attach(parent);
 
-        Assert.AreEqual(1, parent.RootChanges.Count);
+        Assert.HasCount(1, parent.RootChanges);
         Assert.AreSame(parent, parent.RootChanges[0].OldRoot);
         Assert.AreSame(newRoot, parent.RootChanges[0].NewRoot);
-        Assert.AreEqual(1, descendant.RootChanges.Count, "logical descendants must also observe the root change");
+        Assert.HasCount(1, descendant.RootChanges, "logical descendants must also observe the root change");
         Assert.AreSame(newRoot, descendant.RootChanges[0].NewRoot);
     }
 

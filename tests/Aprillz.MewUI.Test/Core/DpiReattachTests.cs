@@ -32,7 +32,7 @@ public sealed class DpiReattachTests
         window.SetDpi(144);
         window.Content = page;
 
-        Assert.AreEqual(1, tracker.Changes.Count);
+        Assert.HasCount(1, tracker.Changes);
         Assert.AreEqual((96u, 144u), tracker.Changes[0]);
         Assert.AreEqual(144u, tracker.GetDpi());
         Assert.IsTrue(tracker.IsMeasureDirty);
@@ -52,7 +52,7 @@ public sealed class DpiReattachTests
         window.Content = null;
         window.Content = page;
 
-        Assert.AreEqual(0, tracker.Changes.Count);
+        Assert.IsEmpty(tracker.Changes);
     }
 
     [TestMethod]
@@ -64,7 +64,7 @@ public sealed class DpiReattachTests
 
         window.Content = tracker;
 
-        Assert.AreEqual(0, tracker.Changes.Count);
+        Assert.IsEmpty(tracker.Changes);
         Assert.AreEqual(144u, tracker.GetDpi());
     }
 }

@@ -193,14 +193,14 @@ public sealed class SelectionBindingTests
     public void ListBox_SelectedItems_ReflectsSelection()
     {
         var list = new ListBox { ItemsSource = ItemsView.Create(new[] { "a", "b", "c" }) };
-        Assert.AreEqual(0, list.SelectedItems.Count);
+        Assert.IsEmpty(list.SelectedItems);
 
         list.SelectedIndex = 1;
-        Assert.AreEqual(1, list.SelectedItems.Count);
+        Assert.HasCount(1, list.SelectedItems);
         Assert.AreEqual("b", list.SelectedItems[0]);
 
         list.SelectedIndex = -1;
-        Assert.AreEqual(0, list.SelectedItems.Count);
+        Assert.IsEmpty(list.SelectedItems);
     }
 
     [TestMethod]
@@ -229,7 +229,7 @@ public sealed class SelectionBindingTests
 
         data.RemoveAt(2);
 
-        Assert.IsTrue(list.SelectedIndex < 2);
+        Assert.IsLessThan(2, list.SelectedIndex);
         foreach (var item in list.SelectedItems)
             Assert.IsTrue(data.Contains(item));
     }
@@ -251,7 +251,7 @@ public sealed class SelectionBindingTests
             Assert.IsTrue(data.Contains(item));
 
         data.Clear();
-        Assert.AreEqual(0, list.SelectedItems.Count);
+        Assert.IsEmpty(list.SelectedItems);
         Assert.AreEqual(-1, list.SelectedIndex);
     }
 
@@ -271,10 +271,10 @@ public sealed class SelectionBindingTests
         IMultiSelector multi = list;
         multi.SelectionMode = ItemsSelectionMode.Multiple;
         multi.SelectAll();
-        Assert.AreEqual(3, multi.SelectedItems.Count);
+        Assert.HasCount(3, multi.SelectedItems);
         Assert.IsTrue(multi.IsSelected(0));
         multi.ClearSelection();
-        Assert.AreEqual(0, multi.SelectedIndices.Count);
+        Assert.IsEmpty(multi.SelectedIndices);
 
         // TreeView is a multi-selector but not an indexed selector (node-based).
         var tree = new TreeView();
@@ -290,17 +290,17 @@ public sealed class SelectionBindingTests
         list.SelectionMode = ItemsSelectionMode.Multiple;
 
         list.SelectAll();
-        Assert.AreEqual(3, list.SelectedIndices.Count);
-        Assert.AreEqual(3, list.SelectedItems.Count);
+        Assert.HasCount(3, list.SelectedIndices);
+        Assert.HasCount(3, list.SelectedItems);
         Assert.IsTrue(list.IsSelected(0));
         Assert.IsTrue(list.IsSelected(2));
 
         list.ClearSelection();
-        Assert.AreEqual(0, list.SelectedItems.Count);
+        Assert.IsEmpty(list.SelectedItems);
         Assert.IsFalse(list.IsSelected(1));
 
         list.SelectRange(1, 2);
-        Assert.AreEqual(2, list.SelectedItems.Count);
+        Assert.HasCount(2, list.SelectedItems);
         Assert.AreEqual("b", list.SelectedItems[0]);
         Assert.AreEqual("c", list.SelectedItems[1]);
         Assert.IsFalse(list.IsSelected(0));

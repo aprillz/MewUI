@@ -26,7 +26,7 @@ public sealed class TracingPlatformHostTests
         foreach (MethodInfo member in defaultMembers)
         {
             int index = Array.IndexOf(map.InterfaceMethods, member);
-            Assert.IsTrue(index >= 0, $"Missing interface map entry for {member.Name}.");
+            Assert.IsGreaterThanOrEqualTo(0, index, $"Missing interface map entry for {member.Name}.");
             Assert.AreEqual(traced.GetType(), map.TargetMethods[index].DeclaringType,
                 $"{member.Name} is using the interface default instead of forwarding to the inner backend.");
         }
