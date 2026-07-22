@@ -5,11 +5,11 @@ namespace Aprillz.MewUI;
 /// <summary>
 /// Helper for traversing the logical tree. Only follows <see cref="ILogicalTreeHost"/>;
 /// never falls back to the visual <see cref="Element.Parent"/> chain.
-/// Uses iterative traversal with a ThreadStatic stack to avoid per-node closure allocations.
+/// Uses iterative traversal with a reused stack to avoid per-node closure allocations.
 /// </summary>
 public static class LogicalTree
 {
-    [ThreadStatic]
+    // Reused scratch for iterative traversal; the logical tree is walked only on the UI thread.
     private static List<Element>? _stack;
 
     // Single static delegate - no per-call allocation.

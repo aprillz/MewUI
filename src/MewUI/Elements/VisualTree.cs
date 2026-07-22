@@ -4,16 +4,16 @@ namespace Aprillz.MewUI;
 
 /// <summary>
 /// Helper for traversing the visual tree.
-/// Uses iterative traversal with a ThreadStatic stack to avoid
+/// Uses iterative traversal with a reused stack to avoid
 /// per-node closure allocations.
 /// </summary>
 public static class VisualTree
 {
-    [ThreadStatic]
+    // Reused scratch for iterative traversal; the visual tree is walked only on the UI thread.
     private static List<Element>? _stack;
 
     // Single static delegate - no per-call allocation.
-    // Pushes children onto the ThreadStatic stack for iterative processing.
+    // Pushes children onto the reused stack for iterative processing.
     private static readonly Func<Element, bool> _collector = static child =>
     {
         _stack!.Add(child);

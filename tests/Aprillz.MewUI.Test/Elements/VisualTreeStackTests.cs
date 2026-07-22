@@ -6,8 +6,8 @@ using Aprillz.MewUI.Controls;
 namespace MewUI.Test.Elements;
 
 /// <summary>
-/// Guards NC-17: a visitor that throws mid-traversal must not strand element references on the
-/// reused ThreadStatic stack (which would leak them for the life of the thread).
+/// A visitor that throws mid-traversal must not strand element references on the reused traversal
+/// stack (which would leak them for the process lifetime).
 /// </summary>
 [TestClass]
 public sealed class VisualTreeStackTests
