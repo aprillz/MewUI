@@ -271,6 +271,8 @@ public sealed class X11PlatformHost : IPlatformHost
         const int ButtonPress = 4;
         const int ButtonRelease = 5;
         const int MotionNotify = 6;
+        const int EnterNotify = 7;
+        const int LeaveNotify = 8;
         const int DestroyNotify = 17;
         const int Expose = 12;
         const int ConfigureNotify = 22;
@@ -282,6 +284,7 @@ public sealed class X11PlatformHost : IPlatformHost
             KeyPress or KeyRelease => ev.xkey.window,
             ButtonPress or ButtonRelease => ev.xbutton.window,
             MotionNotify => ev.xmotion.window,
+            EnterNotify or LeaveNotify => ev.xcrossing.window,
             DestroyNotify => ev.xdestroywindow.window,
             Expose => ev.xexpose.window,
             ConfigureNotify => ev.xconfigure.window,

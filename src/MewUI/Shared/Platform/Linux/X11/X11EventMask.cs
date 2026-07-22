@@ -7,6 +7,8 @@ internal static class X11EventMask
     public const long KeyReleaseMask = 1L << 1;
     public const long ButtonPressMask = 1L << 2;
     public const long ButtonReleaseMask = 1L << 3;
+    public const long EnterWindowMask = 1L << 4;
+    public const long LeaveWindowMask = 1L << 5;
     public const long PointerMotionMask = 1L << 6;
     public const long ExposureMask = 1L << 15;
     public const long StructureNotifyMask = 1L << 17;
