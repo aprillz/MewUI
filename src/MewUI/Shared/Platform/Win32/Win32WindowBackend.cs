@@ -2126,6 +2126,11 @@ internal sealed class Win32WindowBackend : IWindowBackend
             if (User32.GetClientRect(Handle, out var popupClient)
                 && (xPx < 0 || yPx < 0 || xPx >= popupClient.Width || yPx >= popupClient.Height))
             {
+                // Capture keeps delivering moves to this surface after the pointer has left it.
+                // Clear its hover chain before forwarding; the later WM_MOUSELEAVE is asynchronous
+                // and may not arrive until after the pointer has already entered another surface.
+                WindowInputRouter.UpdateMouseOver(Window, null);
+
                 const uint GA_ROOT = 2;
                 var screenPt = new POINT(xPx, yPx);
                 User32.ClientToScreen(Handle, ref screenPt);
@@ -2135,7 +2140,10 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 {
                     var targetPt = screenPt;
                     User32.ScreenToClient(root, ref targetPt);
-                    _ = User32.PostMessage(root, WindowMessages.WM_MOUSEMOVE, 0, (targetPt.y << 16) | (targetPt.x & 0xFFFF));
+                    // Keep forwarding synchronous. Posted WM_MOUSEMOVE messages are not coalesced
+                    // with the platform's input messages, so rapid movement can build an unbounded
+                    // owner-window backlog that delays the following click while the popup has capture.
+                    _ = User32.SendMessage(root, WindowMessages.WM_MOUSEMOVE, 0, (targetPt.y << 16) | (targetPt.x & 0xFFFF));
                     return 0;
                 }
             }
