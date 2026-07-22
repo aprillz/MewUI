@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.18.1
+#:package Aprillz.MewUI@0.19.1
 
 using System.Collections.ObjectModel;
 using System.Net.Http;
@@ -69,12 +69,15 @@ var _dropSummary = new ObservableValue<string>(
 
 // TopBar state
 var currentAccent = ThemeManager.DefaultAccent;
+var themeMode = new ObservableValue<ThemeVariant>(ThemeVariant.System);
 var fpsText = new ObservableValue<string>("FPS: -");
 var cullText = new ObservableValue<string>("Cull: -");
 var fpsStopwatch = new System.Diagnostics.Stopwatch();
 var fpsFrames = 0;
 var backendText = new TextBlock();
 var themeText = new TextBlock();
+var maxFpsEnabled = new ObservableValue<bool>(false);
+var cardBorders = new List<Border>();
 
 var timer = new DispatcherTimer().Interval(TimeSpan.FromSeconds(1)).OnTick(() =>
 {
@@ -87,6 +90,7 @@ Application
     .UseAccent(Accent.Purple)
     .Run(new Window()
         .Ref(out window)
+        .Padding(0)
         .Apply(_ => window.Drop += e =>
         {
             if (e.Data.TryGetData<IReadOnlyList<string>>(StandardDataFormats.StorageItems, out var items) && items is not null)
@@ -102,10 +106,12 @@ Application
         .StartCenterScreen()
         .OnLoaded(() =>
         {
+            Application.Current.ThemeModeChanged += () => themeMode.Value = Application.Current.ThemeMode;
             StartResourceLoading();
             UpdateTopBar();
             timer.Start();
         })
+        .OnClosed(() => maxFpsEnabled.Value = false)
         .OnFrameRendered(() =>
         {
             if (!fpsStopwatch.IsRunning) { fpsStopwatch.Restart(); fpsFrames = 0; return; }
@@ -113,12 +119,9 @@ Application
             var stats = window.LastFrameStats;
             cullText.Value = $"Draw: {stats.DrawCalls} | Cull: {stats.CullCount} ({stats.CullRatio:P0})";
         })
-        .Content(new DockPanel().Margin(8).Children(
+        .Content(new DockPanel().Children(
             TopBar().DockTop(),
-            new ScrollViewer()
-                .VerticalScroll(ScrollMode.Auto)
-                .Padding(8)
-                .Content(BuildGallery()))));
+            BuildNavigationShell())));
 
 // ═══════════════════════════════════════════════════════════════════════
 // Gallery
@@ -127,59 +130,201 @@ Application
 FrameworkElement TopBar()
 {
     var logoImage = BindResourceImage(
-        new Image().ImageScaleQuality(ImageScaleQuality.HighQuality).Width(300).Height(80).CenterVertical(),
+        new Image().ImageScaleQuality(ImageScaleQuality.HighQuality).Width(200).CenterVertical(),
         logoResource);
 
     return new Border().Padding(12, 10).BorderThickness(1).Child(
         new DockPanel().Spacing(12).Children(
-            new StackPanel().Horizontal().Spacing(8).Children(
+            new StackPanel().Horizontal().CenterVertical().Spacing(8).Children(
                 logoImage,
                 new StackPanel().Vertical().Spacing(2).Children(
                     new TextBlock().Text("MewUI Gallery (FBA)").WithTheme((t, c) => c.Foreground(t.Palette.Accent)).FontSize(18).SemiBold(),
                     backendText,
                     new TextBlock().BindText(resourceStatus).FontSize(11))).DockLeft(),
-        new StackPanel().DockRight().Spacing(8).Children(
             new StackPanel().Horizontal().CenterVertical().Spacing(12).Children(
-                new StackPanel().Horizontal().CenterVertical().Spacing(8).Children(
-                    new RadioButton().Content("System").CenterVertical().IsChecked().OnChecked(() => Application.Current.SetTheme(ThemeVariant.System)),
-                    new RadioButton().Content("Light").CenterVertical().OnChecked(() => Application.Current.SetTheme(ThemeVariant.Light)),
-                    new RadioButton().Content("Dark").CenterVertical().OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark))),
-                themeText.CenterVertical(),
-                new WrapPanel().Orientation(Orientation.Horizontal).Spacing(6).CenterVertical().ItemWidth(22).ItemHeight(22)
-                    .Children(BuiltInAccent.Accents.Select(a => new Button().CornerRadius(14).BorderThickness(0).Content("")
-                        .WithTheme((t, c) => c.Background(a.GetAccentColor(t.IsDark))).ToolTip(a.ToString())
-                        .OnClick(() => { currentAccent = a; Application.Current.SetAccent(a); UpdateTopBar(); })).ToArray())),
-            new StackPanel().Horizontal().Spacing(8).Children(
+                new CheckBox().Content("Max FPS").BindIsChecked(maxFpsEnabled).OnCheckedChanged(_ => EnsureMaxFpsLoop()).CenterVertical(),
                 new TextBlock().BindText(fpsText).CenterVertical(),
-                new TextBlock().BindText(cullText).CenterVertical()))));
+                new TextBlock().BindText(cullText).CenterVertical())));
 }
 
-FrameworkElement BuildGallery() => new StackPanel()
+FrameworkElement BuildNavigationShell()
+{
+    var entries = NavEntries();
+    var navigation = new NavigationView { PaneWidth = 220 };
+
+    Element? PageContent(NavEntry entry) => entry.Page is not null
+        ? new ScrollViewer()
+            .VerticalScroll(ScrollMode.Auto)
+            .Padding(8)
+            .Content(entry.Page())
+        : null;
+
+    navigation.Items(
+        entries,
+        entry => entry.Title,
+        icon: entry => entry.Icon,
+        content: PageContent,
+        kind: entry => entry.Kind);
+
+    var footer = new[]
+    {
+        new NavEntry(
+            NavigationItemKind.Item,
+            "Settings",
+            NavigationIcons.Settings,
+            SettingsPage),
+    };
+    navigation.FooterItems(
+        footer,
+        entry => entry.Title,
+        icon: entry => entry.Icon,
+        content: PageContent,
+        kind: entry => entry.Kind);
+
+    navigation.SelectedIndex = Array.FindIndex(entries, entry => entry.Kind == NavigationItemKind.Item);
+
+    return new Border()
+        .BorderThickness(new Thickness(0, 1, 0, 0))
+        .WithTheme((theme, border) => border.BorderBrush(
+            theme.Palette.WindowBackground.Lerp(theme.Palette.ControlBorder, 0.45)))
+        .Child(navigation);
+}
+
+FrameworkElement SettingsPage() => new StackPanel()
     .Vertical()
+    .Margin(16)
     .Spacing(16)
     .Children(
-                Section("Buttons", ButtonsPage()),
-                Section("Inputs", InputsPage()),
-                Section("Selection", SelectionPage()),
-                Section("Window/Menu", WindowMenuPage()),
-                Section("MessageBox", MessageBoxPage()),
-                Section("Lists", ListsPage()),
-                Section("GridView", GridViewPage()),
-                Section("Panels", PanelsPage()),
-                Section("Layout", LayoutPage()),
-                Section("Typography", TypographyPage()),
-                Section("Media", MediaPage()),
-                Section("Shapes", ShapesPage()),
-                Section("Icons", IconsPage()),
-                Section("Transitions", TransitionsPage()),
-                Section("Overlay", OverlayPage())
-    );
+        new TextBlock().Text("Settings").FontSize(22).Bold(),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Theme").FontSize(14).Bold(),
+            new StackPanel().Horizontal().CenterVertical().Spacing(12).Children(
+                ThemeModePicker(),
+                themeText.CenterVertical())),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Accent").FontSize(14).Bold(),
+            AccentPicker()),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Rendering").FontSize(14).Bold(),
+            new CheckBox()
+                .Content("Cached")
+                .IsChecked(true)
+                .OnCheckedChanged(value => SetCardsCached(value == true))
+                .CenterVertical()),
+
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Resources").FontSize(14).Bold(),
+            new TextBlock().BindText(resourceDetail).TextWrapping(TextWrapping.Wrap)));
+
+FrameworkElement ThemeModePicker() => new StackPanel()
+    .Horizontal()
+    .CenterVertical()
+    .Spacing(8)
+    .Children(
+        new RadioButton()
+            .Content("System")
+            .CenterVertical()
+            .IsChecked()
+            .BindIsChecked(themeMode, mode => mode == ThemeVariant.System)
+            .OnChecked(() => Application.Current.SetTheme(ThemeVariant.System)),
+        new RadioButton()
+            .Content("Light")
+            .CenterVertical()
+            .BindIsChecked(themeMode, mode => mode == ThemeVariant.Light)
+            .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Light)),
+        new RadioButton()
+            .Content("Dark")
+            .CenterVertical()
+            .BindIsChecked(themeMode, mode => mode == ThemeVariant.Dark)
+            .OnChecked(() => Application.Current.SetTheme(ThemeVariant.Dark)));
+
+FrameworkElement AccentPicker() => new StackPanel()
+    .Horizontal()
+    .Spacing(6)
+    .Children(BuiltInAccent.Accents.Select(AccentSwatch).ToArray());
+
+Button AccentSwatch(Accent accent) => new Button()
+    .CornerRadius(11)
+    .CenterVertical()
+    .MinHeight(22)
+    .Width(22)
+    .Height(22)
+    .BorderThickness(0)
+    .Content(string.Empty)
+    .WithTheme((theme, button) => button.Background(accent.GetAccentColor(theme.IsDark)))
+    .ToolTip(accent.ToString())
+    .OnClick(() =>
+    {
+        currentAccent = accent;
+        Application.Current.SetAccent(accent);
+        UpdateTopBar();
+    });
+
+NavEntry[] NavEntries()
+{
+    NavEntry Group(string title) => new(NavigationItemKind.Header, title, null, null);
+    NavEntry Page(string title, Func<FrameworkElement> page, PathGeometry icon) =>
+        new(NavigationItemKind.Item, title, icon, page);
+
+
+    return
+    [
+        Group("Basics"),
+        Page("Buttons", ButtonsPage, NavigationIcons.Buttons),
+        Page("Inputs", InputsPage, NavigationIcons.Inputs),
+        Page("Selection", SelectionPage, NavigationIcons.Selection),
+        Page("Typography", TypographyPage, NavigationIcons.Typography),
+
+        Group("Collections"),
+        Page("Lists", ListsPage, NavigationIcons.Lists),
+        Page("GridView", GridViewPage, NavigationIcons.GridView),
+
+        Group("Layout"),
+        Page("Panels", PanelsPage, NavigationIcons.Panels),
+        Page("Layout", LayoutPage, NavigationIcons.Layout),
+
+        Group("Graphics"),
+        Page("Shapes", ShapesPage, NavigationIcons.Shapes),
+        Page("Media", MediaPage, NavigationIcons.Media),
+        Page("Icons", IconsPage, NavigationIcons.Icons),
+        Page("Transitions", TransitionsPage, NavigationIcons.Transitions),
+
+        Group("Windowing"),
+        Page("Window / Menu", WindowMenuPage, NavigationIcons.WindowMenu),
+        Page("MessageBox", MessageBoxPage, NavigationIcons.MessageBox),
+        Page("Overlay", OverlayPage, NavigationIcons.Overlay),
+    ];
+}
 
 // ── Helpers ──
 void UpdateTopBar()
 {
     backendText.Text($"Backend: {Application.Current.GraphicsFactory.Backend}");
     themeText.WithTheme((t, c) => c.Text($"Theme: {t.Name}"));
+}
+
+void SetCardsCached(bool cached)
+{
+    foreach (var border in cardBorders)
+    {
+        border.CacheMode = cached ? new BitmapCache() : null;
+    }
+}
+
+void EnsureMaxFpsLoop()
+{
+    if (!Application.IsRunning)
+    {
+        return;
+    }
+
+    var scheduler = Application.Current.RenderLoopSettings;
+    scheduler.TargetFps = 0;
+    scheduler.VSyncEnabled = !maxFpsEnabled.Value;
+    scheduler.SetContinuous(maxFpsEnabled.Value);
 }
 
 async Task LoadResourcesAsync()
@@ -284,19 +429,13 @@ void StartResourceLoading()
     _ = LoadResourcesAsync();
 }
 
-FrameworkElement Section(string title, FrameworkElement content) =>
-    new StackPanel()
-        .Vertical()
-        .Spacing(8)
-        .Children(
-            new TextBlock().Text(title).FontSize(18).Bold(),
-            content);
-
-FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320) =>
-    new Border()
+FrameworkElement Card(string title, FrameworkElement content, double minWidth = 320)
+{
+    var border = new Border()
         .MinWidth(minWidth)
         .Padding(14)
         .CornerRadius(10)
+        .Cached()
         .Child(
             new StackPanel()
                 .Vertical()
@@ -307,6 +446,9 @@ FrameworkElement Card(string title, FrameworkElement content, double minWidth = 
                         .Text(title)
                         .Bold(),
                     content));
+    cardBorders.Add(border);
+    return border;
+}
 
 FrameworkElement CardGrid(params FrameworkElement[] cards) =>
     new WrapPanel()
@@ -1441,18 +1583,18 @@ FrameworkElement FileDialogsCard()
         new WrapPanel().Spacing(6).Children(
             new Button().Content("Open Files...").OnClick(() =>
             {
-                var files = FileDialog.OpenFiles(new OpenFileDialogOptions { Owner = window.Handle, Filter = "All Files (*.*)|*.*" });
+                var files = FileDialog.OpenFiles(new OpenFileDialogOptions { Owner = window, Filters = FileFilter.Parse("All Files (*.*)|*.*") });
                 openStatus.Value = files is null || files.Length == 0 ? "Open Files: canceled"
                     : files.Length == 1 ? $"Open Files: {files[0]}" : $"Open Files: {files.Length} files";
             }),
             new Button().Content("Save File...").OnClick(() =>
             {
-                var file = FileDialog.SaveFile(new SaveFileDialogOptions { Owner = window.Handle, Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*", FileName = "demo.txt" });
+                var file = FileDialog.SaveFile(new SaveFileDialogOptions { Owner = window, Filters = FileFilter.Parse("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"), FileName = "demo.txt" });
                 saveStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
             }),
             new Button().Content("Select Folder...").OnClick(() =>
             {
-                var folder = FileDialog.SelectFolder(new FolderDialogOptions { Owner = window.Handle });
+                var folder = FileDialog.SelectFolder(new FolderDialogOptions { Owner = window });
                 folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
             })),
         new TextBlock().BindText(openStatus).FontSize(11).TextWrapping(TextWrapping.Wrap),
@@ -1603,13 +1745,9 @@ void EnableWindowDrag(Window dragWindow, UIElement element)
 
     static Point GetScreenDip(Window dragWindow, MouseEventArgs e)
     {
+        // ClientToScreen now returns top-left, Y-down pixels on every platform.
         var screen = dragWindow.ClientToScreen(e.GetPosition(dragWindow));
         var scale = Math.Max(1.0, dragWindow.DpiScale);
-        if (OperatingSystem.IsMacOS())
-        {
-            return new Point(screen.X / scale, -screen.Y / scale);
-        }
-
         return new Point(screen.X / scale, screen.Y / scale);
     }
 }
@@ -1673,6 +1811,27 @@ async void ShowBusyDemo(bool cancellable)
 // Custom classes
 // ═══════════════════════════════════════════════════════════════════════
 
+static class NavigationIcons
+{
+    public static readonly PathGeometry Buttons = PathGeometry.Parse("M11.75,6 C13.098658,6 13.9287944,6.96910845 13.995631,8.32894133 L14,8.50847912 L14,10.6239658 L16.2191671,11.0269265 C16.3059934,11.0426926 16.3921415,11.0619885 16.4773973,11.0847662 C18.1517032,11.5320892 19.1698052,13.2081266 18.8210232,14.8840108 L18.7783909,15.0635133 L17.7302473,18.9866586 C17.5121898,19.8028361 16.8573252,20.4232391 16.0413431,20.6030664 L15.8760801,20.6330849 L13.4578534,20.9800873 C12.5332557,21.1127621 11.6296196,20.6605333 11.1775403,19.856652 L11.0981723,19.7018603 L11.0690771,19.6393109 C10.834274,19.1345269 10.4818276,18.6948369 10.0427315,18.3563662 L9.84933278,18.2176097 L7.96560087,16.9617884 L7.87170895,16.903392 L7.87170895,16.903392 L7.77431661,16.8510415 L5.41140295,15.6755814 C5.16192093,15.5514735 5.00180973,15.2992831 4.99563339,15.0207048 C4.97105537,13.9121345 5.46115528,13.0567901 6.4145898,12.5800728 C7.11643491,12.2291503 8.04963171,12.2489716 9.24079301,12.5967061 L9.5,12.6762241 L9.5,8.50847912 C9.5,7.05521072 10.3427047,6 11.75,6 Z M11.75,7.5 C11.290032,7.5 11.0376066,7.77493989 11.0038926,8.36636053 L11,8.50847912 L11,13.7525154 C11,14.2865066 10.4577823,14.6494397 9.96410876,14.4458885 C8.50347817,13.843642 7.52268831,13.7030746 7.0854102,13.9217136 C6.83140559,14.0487159 6.66519107,14.2126417 6.57561324,14.4407321 L6.53715909,14.5602504 L8.44240897,15.5080402 L8.62328046,15.6052624 L8.62328046,15.6052624 L8.79765116,15.713713 L10.6813831,16.9695342 C11.3640898,17.424672 11.9221531,18.041075 12.3072464,18.7624149 L12.4291383,19.0066708 L12.4582335,19.0692202 C12.5822556,19.3358453 12.8485386,19.5022497 13.1361683,19.5029349 L13.2447939,19.4952959 L15.6630206,19.1482935 C15.9231839,19.1109615 16.1419003,18.9409604 16.2444544,18.7046345 L16.2810763,18.5994847 L17.32922,14.6763394 C17.5786886,13.7425919 17.0239709,12.7834058 16.0902234,12.5339372 L16.021017,12.5169491 L16.021017,12.5169491 L13.1160046,11.9879766 C12.7949778,11.9296839 12.5528355,11.672241 12.5076173,11.3570515 L12.5,11.2500435 L12.5,8.50847912 C12.5,7.8188652 12.2453502,7.5 11.75,7.5 Z M11.7488353,2.50021005 C14.924699,2.50021005 17.4992452,5.07475626 17.4992452,8.25061996 C17.4992452,8.95339473 17.3731759,9.62672444 17.142419,10.2492275 L16.9982668,10.196565 C16.8536359,10.1457147 16.6487249,10.0802277 16.3908844,10.0209198 C16.1502332,9.96556576 15.9077844,9.92827869 15.663538,9.9090586 C15.8796867,9.3994824 15.9992452,8.83901337 15.9992452,8.25061996 C15.9992452,5.90318338 14.0962719,4.00021005 11.7488353,4.00021005 C9.40139873,4.00021005 7.4984254,5.90318338 7.4984254,8.25061996 C7.4984254,9.2948245 7.87496974,10.2510824 8.49968221,10.9910174 C8.17617954,11.0189235 7.90146959,11.0600799 7.67555237,11.1144867 C7.32454793,11.1990177 7.08752441,11.2842255 6.92334742,11.3768722 C6.33817909,10.47867 5.9984254,9.40432184 5.9984254,8.25061996 C5.9984254,5.07475626 8.57297161,2.50021005 11.7488353,2.50021005 Z");
+    public static readonly PathGeometry Inputs = PathGeometry.Parse("M18.25 3C19.7688 3 21 4.23122 21 5.75V18.25C21 19.7688 19.7688 21 18.25 21H5.75C4.23122 21 3 19.7688 3 18.25V5.75C3 4.23122 4.23122 3 5.75 3H18.25ZM18.25 4.5H5.75C5.05964 4.5 4.5 5.05964 4.5 5.75V18.25C4.5 18.9404 5.05964 19.5 5.75 19.5H18.25C18.9404 19.5 19.5 18.9404 19.5 18.25V5.75C19.5 5.05964 18.9404 4.5 18.25 4.5ZM14.25 11.5H6.75L6.64823 11.5068C6.28215 11.5565 6 11.8703 6 12.25C6 12.6642 6.33579 13 6.75 13H14.25L14.3518 12.9932C14.7178 12.9435 15 12.6297 15 12.25C15 11.8358 14.6642 11.5 14.25 11.5ZM6.75 15.5H17.25C17.6642 15.5 18 15.8358 18 16.25C18 16.6297 17.7178 16.9435 17.3518 16.9932L17.25 17H6.75C6.33579 17 6 16.6642 6 16.25C6 15.8703 6.28215 15.5565 6.64823 15.5068L6.75 15.5ZM17.25 7.5H6.75L6.64823 7.50685C6.28215 7.55651 6 7.8703 6 8.25C6 8.66421 6.33579 9 6.75 9H17.25L17.3518 8.99315C17.7178 8.94349 18 8.6297 18 8.25C18 7.83579 17.6642 7.5 17.25 7.5Z");
+    public static readonly PathGeometry Selection = PathGeometry.Parse("M8.78394278,15.2232321 C9.04997223,15.4897356 9.0738074,15.9064206 8.85569168,16.1998381 L8.78299868,16.2838919 L5.27985783,19.7808019 C5.04225101,20.0179861 4.6802659,20.0655621 4.39272004,19.9095058 L4.29990115,19.8499258 L2.29990115,18.3494109 C1.96857125,18.1008282 1.90149142,17.6307161 2.15007415,17.2993862 C2.37605845,16.9981772 2.78512485,16.9153567 3.10656598,17.0895516 L3.20009885,17.1495592 L4.68,18.26 L7.72328303,15.222288 C8.01643684,14.9296556 8.49131038,14.9300783 8.78394278,15.2232321 Z M21.2375789,16.9994851 C21.6517925,16.9994851 21.9875789,17.3352715 21.9875789,17.7494851 C21.9875789,18.1291808 21.705425,18.442976 21.3393495,18.4926384 L21.2375789,18.4994851 L10.7375789,18.4994851 C10.3233654,18.4994851 9.98757893,18.1636986 9.98757893,17.7494851 C9.98757893,17.3697893 10.2697328,17.0559941 10.6358084,17.0063317 L10.7375789,16.9994851 L21.2375789,16.9994851 Z M21.25,11 C21.6642136,11 22,11.3357864 22,11.75 C22,12.1296958 21.7178461,12.443491 21.3517706,12.4931534 L21.25,12.5 L10.75,12.5 C10.3357864,12.5 10,12.1642136 10,11.75 C10,11.3703042 10.2821539,11.056509 10.6482294,11.0068466 L10.75,11 L21.25,11 Z M8.78469742,3.22398916 C9.05034677,3.49087151 9.07358803,3.90759013 8.85505434,4.20069642 L8.78224162,4.28464649 L5.26910076,7.78155657 C5.03103758,8.0185199 4.66876476,8.06549516 4.38139729,7.9087877 L4.28865553,7.84898929 L2.29865553,6.34950423 C1.96784288,6.10023356 1.90174004,5.62998312 2.15101071,5.29917047 C2.37762041,4.9984317 2.78685802,4.91646136 3.10793649,5.09132385 L3.20134447,5.15152565 L4.671,6.259 L7.72404009,3.22153336 C8.01761068,2.92931908 8.49248314,2.93041858 8.78469742,3.22398916 Z M21.2375789,5.00051494 C21.6517925,5.00051494 21.9875789,5.33630138 21.9875789,5.75051494 C21.9875789,6.13021071 21.705425,6.4440059 21.3393495,6.49366832 L21.2375789,6.50051494 L10.7657573,6.50051494 C10.3515438,6.50051494 10.0157573,6.1647285 10.0157573,5.75051494 C10.0157573,5.37081917 10.2979112,5.05702398 10.6639868,5.00736156 L10.7657573,5.00051494 L21.2375789,5.00051494 Z");
+    public static readonly PathGeometry Typography = PathGeometry.Parse("M14.5033,5.99999992 C14.8108,5.99999992 15.0871,6.18799 15.2003,6.47391 L20.7552,20.5042 L21.2492,20.5042 C21.6634,20.5042 21.9992,20.84 21.9992,21.2542 C21.9992,21.6684 21.6634,22.0043 21.2492,22.0043 L18.75,22.0041 C18.3358,22.0041 18,21.6683 18,21.2541 C18,20.8399 18.3358,20.5041 18.75,20.5041 L19.1419,20.5041 L17.9525,17.4999999 L11.0426,17.4999999 L9.85007,20.5042 L10.2492,20.5042 C10.6634,20.5042 10.9992,20.84 10.9992,21.2542 C10.9992,21.6684 10.6634,22.0043 10.2492,22.0043 L7.74998,22.0041 C7.33577,22.0041 7,21.6683 7,21.2541 C7,20.8399 7.3358,20.5041 7.75002,20.5041 L8.23622,20.5041 L13.8059,6.47329 C13.9193,6.18746 14.1958,5.99999992 14.5033,5.99999992 Z M14.5021,8.78508 L11.638,16 L17.3586,16 L14.5021,8.78508 Z M7.00005,2 C7.31395,2 7.59464,2.19551 7.70349,2.48994 L10.8898,11.109 L10.0618,13.195 L9.43546,11.5008 L4.5638,11.5008 L3.45103,14.5101 C3.30737,14.8986 2.87596,15.0971 2.48746,14.9534 C2.09896,14.8098 1.90047,14.3784 2.04413,13.9899 L6.29657,2.48988 C6.40544,2.19546 6.68615,2 7.00005,2 Z M6.99993,4.91271 L5.11847,10.0008 L8.88093,10.0008 L6.99993,4.91271 Z");
+    public static readonly PathGeometry Lists = PathGeometry.Parse("M16.25,21 C16.664,21 17,21.336 17,21.75 C17,22.164 16.664,22.5 16.25,22.5 L3.75,22.5 C3.336,22.5 3,22.164 3,21.75 C3,21.336 3.336,21 3.75,21 L16.25,21 Z M24.2484387,13.4983804 C24.6624387,13.4983804 24.9984387,13.8343804 24.9984387,14.2483804 C24.9984387,14.6623804 24.6624387,14.9983804 24.2484387,14.9983804 L3.74843873,14.9983804 C3.33443873,14.9983804 2.99843873,14.6623804 2.99843873,14.2483804 C2.99843873,13.8343804 3.33443873,13.4983804 3.74843873,13.4983804 L24.2484387,13.4983804 Z M20.25,6 C20.664,6 21,6.336 21,6.75 C21,7.164 20.664,7.5 20.25,7.5 L3.75,7.5 C3.336,7.5 3,7.164 3,6.75 C3,6.336 3.336,6 3.75,6 L20.25,6 Z");
+    public static readonly PathGeometry GridView = PathGeometry.Parse("M10.75,15 C11.9926407,15 13,16.0073593 13,17.25 L13,22.75 C13,23.9926407 11.9926407,25 10.75,25 L5.25,25 C4.00735931,25 3,23.9926407 3,22.75 L3,17.25 C3,16.0073593 4.00735931,15 5.25,15 L10.75,15 Z M22.75,15 C23.9926407,15 25,16.0073593 25,17.25 L25,22.75 C25,23.9926407 23.9926407,25 22.75,25 L17.25,25 C16.0073593,25 15,23.9926407 15,22.75 L15,17.25 C15,16.0073593 16.0073593,15 17.25,15 L22.75,15 Z M10.75,16.5 L5.25,16.5 C4.83578644,16.5 4.5,16.8357864 4.5,17.25 L4.5,22.75 C4.5,23.1642136 4.83578644,23.5 5.25,23.5 L10.75,23.5 C11.1642136,23.5 11.5,23.1642136 11.5,22.75 L11.5,17.25 C11.5,16.8357864 11.1642136,16.5 10.75,16.5 Z M22.75,16.5 L17.25,16.5 C16.8357864,16.5 16.5,16.8357864 16.5,17.25 L16.5,22.75 C16.5,23.1642136 16.8357864,23.5 17.25,23.5 L22.75,23.5 C23.1642136,23.5 23.5,23.1642136 23.5,22.75 L23.5,17.25 C23.5,16.8357864 23.1642136,16.5 22.75,16.5 Z M10.75,3 C11.9926407,3 13,4.00735931 13,5.25 L13,10.75 C13,11.9926407 11.9926407,13 10.75,13 L5.25,13 C4.00735931,13 3,11.9926407 3,10.75 L3,5.25 C3,4.00735931 4.00735931,3 5.25,3 L10.75,3 Z M22.75,3 C23.9926407,3 25,4.00735931 25,5.25 L25,10.75 C25,11.9926407 23.9926407,13 22.75,13 L17.25,13 C16.0073593,13 15,11.9926407 15,10.75 L15,5.25 C15,4.00735931 16.0073593,3 17.25,3 L22.75,3 Z M10.75,4.5 L5.25,4.5 C4.83578644,4.5 4.5,4.83578644 4.5,5.25 L4.5,10.75 C4.5,11.1642136 4.83578644,11.5 5.25,11.5 L10.75,11.5 C11.1642136,11.5 11.5,11.1642136 11.5,10.75 L11.5,5.25 C11.5,4.83578644 11.1642136,4.5 10.75,4.5 Z M22.75,4.5 L17.25,4.5 C16.8357864,4.5 16.5,4.83578644 16.5,5.25 L16.5,10.75 C16.5,11.1642136 16.8357864,11.5 17.25,11.5 L22.75,11.5 C23.1642136,11.5 23.5,11.1642136 23.5,10.75 L23.5,5.25 C23.5,4.83578644 23.1642136,4.5 22.75,4.5 Z");
+    public static readonly PathGeometry Panels = PathGeometry.Parse("M4.79354404,9.9967648 L9.49194198,9.9967648 C9.90615554,9.9967648 10.241942,10.3325512 10.241942,10.7467648 C10.241942,11.1264606 9.9597881,11.4402558 9.59371254,11.4899182 L9.49194198,11.4967648 L4.79354404,11.4967648 C4.12186769,11.4967648 3.59079463,11.9463924 3.52702849,12.4980996 L3.52060282,12.6096991 L3.50000697,17.3862243 C3.50000697,17.9469657 3.98909414,18.4316397 4.64057057,18.4900335 L4.77293425,18.4959248 L19.2270658,18.4959248 C19.8987421,18.4959248 20.4298213,18.0462972 20.4935825,17.49459 L20.500007,17.3829904 L20.5206098,12.6064652 C20.5206098,12.0457238 20.0315165,11.5610499 19.3800393,11.5026561 L19.2476755,11.4967648 L14.5527817,11.4967648 C14.1385682,11.4967648 13.8027817,11.1609784 13.8027817,10.7467648 C13.8027817,10.367069 14.0849356,10.0532738 14.4510112,10.0036114 L14.5527817,9.9967648 L19.2476755,9.9967648 C20.707307,9.9967648 21.923682,11.0633848 22.0150901,12.4427255 L22.0206028,12.6096991 L22.000007,17.3862243 C22.000007,18.7862668 20.8397587,19.9067347 19.4009975,19.9908534 L19.2270658,19.9959248 L4.77293425,19.9959248 C3.3133028,19.9959248 2.09692776,18.9293047 2.00551967,17.5499641 L2.00000697,17.3829904 L2.02060979,12.6064652 C2.02060979,11.2064227 3.1808516,10.0859549 4.61961229,10.0018361 L4.79354404,9.9967648 L9.49194198,9.9967648 L4.79354404,9.9967648 Z M12.4462117,3.14705176 L12.5303301,3.21966991 L16.4553927,7.14473252 C16.7482859,7.43762574 16.7482859,7.91249947 16.4553927,8.20539269 C16.1891261,8.47165926 15.7724624,8.49586531 15.478851,8.27801085 L15.3947325,8.20539269 L12.7383007,5.54580816 L12.7397098,15.2538857 C12.7397098,15.6680993 12.4039234,16.0038857 11.9897098,16.0038857 C11.5754962,16.0038857 11.2397098,15.6680993 11.2397098,15.2538857 L11.2409374,5.569 L8.60526748,8.20539269 C8.33900092,8.47165926 7.92233723,8.49586531 7.62872574,8.27801085 L7.54460731,8.20539269 C7.27834074,7.93912613 7.25413469,7.52246245 7.47198915,7.22885095 L7.54460731,7.14473252 L11.4696699,3.21966991 C11.7359365,2.95340335 12.1526002,2.9291973 12.4462117,3.14705176 Z");
+    public static readonly PathGeometry Layout = PathGeometry.Parse("M9.28168207,8 C10.2481804,8 11.0316821,8.78350169 11.0316821,9.75 L11.0316821,14.25 C11.0316821,15.2164983 10.2481804,16 9.28168207,16 L3.75,16 C2.78350169,16 2,15.2164983 2,14.25 L2,9.75 C2,8.8318266 2.70711027,8.07880766 3.60647279,8.0058012 L3.75,8 L9.28168207,8 Z M20.25,8 C21.2164983,8 22,8.78350169 22,9.75 L22,14.25 C22,15.2164983 21.2164983,16 20.25,16 L14.7183179,16 C13.7518196,16 12.9683179,15.2164983 12.9683179,14.25 L12.9683179,9.75 C12.9683179,8.78350169 13.7518196,8 14.7183179,8 L20.25,8 Z M9.28168207,9.5 L3.75,9.5 L3.69267729,9.50660268 C3.58223341,9.53251318 3.5,9.63165327 3.5,9.75 L3.5,14.25 C3.5,14.3880712 3.61192881,14.5 3.75,14.5 L9.28168207,14.5 C9.41975326,14.5 9.53168207,14.3880712 9.53168207,14.25 L9.53168207,9.75 C9.53168207,9.61192881 9.41975326,9.5 9.28168207,9.5 Z M20.25,9.5 L14.7183179,9.5 C14.5802467,9.5 14.4683179,9.61192881 14.4683179,9.75 L14.4683179,14.25 C14.4683179,14.3880712 14.5802467,14.5 14.7183179,14.5 L20.25,14.5 C20.3880712,14.5 20.5,14.3880712 20.5,14.25 L20.5,9.75 C20.5,9.61192881 20.3880712,9.5 20.25,9.5 Z");
+    public static readonly PathGeometry Shapes = PathGeometry.Parse("M18.75,9 C20.4830069,9 21.8992442,10.3564785 21.9948551,12.0655785 L22,12.25 L22,18.75 C22,20.4830069 20.6435215,21.8992442 18.9344215,21.9948551 L18.75,22 L12.25,22 C10.5169931,22 9.10075577,20.6435215 9.00514488,18.9344215 L9,18.75 L9,12.25 C9,10.5169931 10.3564785,9.10075577 12.0655785,9.00514488 L12.25,9 L18.75,9 Z M18.75,10.5 L12.25,10.5 C11.331825,10.5 10.5788075,11.2071088 10.5058012,12.1064726 L10.5,12.25 L10.5,18.75 C10.5,19.668175 11.2071087,20.4211925 12.1064726,20.4941988 L12.25,20.5 L18.75,20.5 C19.668175,20.5 20.4211925,19.7928913 20.4941988,18.8935274 L20.5,18.75 L20.5,12.25 C20.5,11.331825 19.7928912,10.5788075 18.8935274,10.5058012 L18.75,10.5 Z M8.75,2 C12.2244,2 15.0857,4.62504 15.4588,8 L13.9468,8 C13.5829,5.45578 11.3949,3.5 8.75,3.5 C5.85051,3.5 3.5,5.85051 3.5,8.75 C3.5,11.3949 5.45578,13.5829 8,13.9468 L8,15.4588 C4.62504,15.0857 2,12.2244 2,8.75 C2,5.02208 5.02208,2 8.75,2 Z");
+    public static readonly PathGeometry Media = PathGeometry.Parse("M22.9932158,6.00782415 C23.8987635,6.58284797 24.5,7.59621083 24.5,8.75 L24.5,19.25 C24.5,22.1494949 22.1494949,24.5 19.25,24.5 L8.75,24.5 C7.59621083,24.5 6.58284797,23.8987635 6.00612306,22.9925021 L6.12827706,22.9982072 L6.25,23 L19.25,23 C21.3210678,23 23,21.3210678 23,19.25 L23,6.25 C23,6.16872164 22.9977184,6.08797617 22.9932158,6.00782415 Z M18.75,3 C20.5449254,3 22,4.45507456 22,6.25 L22,18.75 C22,20.5449254 20.5449254,22 18.75,22 L6.25,22 C4.45507456,22 3,20.5449254 3,18.75 L3,6.25 C3,4.45507456 4.45507456,3 6.25,3 L18.75,3 Z M19.331549,20.4010512 L13.024576,14.2231154 C12.7595029,13.963499 12.3499409,13.9398975 12.0585971,14.1523109 L11.9750032,14.2231154 L5.66845098,20.4010512 C5.85040089,20.4651384 6.04612926,20.5 6.25,20.5 L18.75,20.5 C18.9538707,20.5 19.1495991,20.4651384 19.331549,20.4010512 L13.024576,14.2231154 L19.331549,20.4010512 Z M18.75,4.5 L6.25,4.5 C5.28350169,4.5 4.5,5.28350169 4.5,6.25 L4.5,18.75 C4.5,18.9580237 4.53629637,19.1575698 4.60290153,19.342651 L10.9254305,13.1514825 C11.7585174,12.3355452 13.0673362,12.296691 13.9457309,13.03492 L14.0741487,13.1514825 L20.3967355,19.3436585 C20.4635718,19.1582941 20.5,18.9584012 20.5,18.75 L20.5,6.25 C20.5,5.28350169 19.7164983,4.5 18.75,4.5 Z M16.0004478,7.75115873 C16.6904111,7.75115873 17.2497368,8.3104845 17.2497368,9.00044779 C17.2497368,9.69041108 16.6904111,10.2497368 16.0004478,10.2497368 C15.3104845,10.2497368 14.7511587,9.69041108 14.7511587,9.00044779 C14.7511587,8.3104845 15.3104845,7.75115873 16.0004478,7.75115873 Z");
+    public static readonly PathGeometry Icons = PathGeometry.Parse("M13 3.5C11.067 3.5 9.5 5.067 9.5 7C9.5 7.86428 9.8123 8.65369 10.3311 9.26444C10.5204 9.48721 10.5629 9.79962 10.4402 10.0649C10.3175 10.3302 10.0518 10.5 9.75952 10.5H3.75C3.61193 10.5 3.5 10.6119 3.5 10.75V11.75C3.5 14.6495 5.8505 17 8.75 17H11.9682C12.1177 17.1091 12.2869 17.196 12.4723 17.2545C12.1892 17.6624 11.9467 18.0803 11.7448 18.5H8.75C5.02208 18.5 2 15.4779 2 11.75V10.75C2 9.7835 2.7835 9 3.75 9H8.41626C8.1486 8.38736 8 7.71071 8 7C8 4.23858 10.2386 2 13 2C15.0503 2 16.8124 3.2341 17.584 5H19.25C20.2165 5 21 5.7835 21 6.75C21 8.26878 19.7688 9.5 18.25 9.5H17.3309C17.1948 9.7353 17.0401 9.95846 16.8689 10.1674C17.0257 10.3041 17.1735 10.4509 17.3113 10.6069C17.1351 10.6259 16.9548 10.6475 16.7702 10.6719C16.3015 10.734 15.8604 10.8387 15.4476 10.978C15.4151 10.958 15.3821 10.9385 15.3488 10.9197C15.1345 10.7983 14.9935 10.5794 14.9714 10.3342C14.9494 10.0889 15.0492 9.84841 15.2384 9.69079C15.7624 9.2543 16.1562 8.66903 16.3552 8H18.25C18.9404 8 19.5 7.44036 19.5 6.75C19.5 6.61193 19.3881 6.5 19.25 6.5H16.4646C16.2219 4.80385 14.7632 3.5 13 3.5Z M16.9015 11.6634C19.7024 11.2925 21.4398 11.6025 22.4644 11.8905C22.7467 11.9699 22.9569 12.2065 23.0024 12.4962C23.0479 12.7859 22.9203 13.0756 22.6759 13.2376C22.6186 13.2757 22.5268 13.3675 22.4157 13.5778C22.3059 13.7855 22.2028 14.0589 22.0963 14.4028C22.0082 14.6872 21.9253 14.9939 21.835 15.3281L21.7777 15.5399C21.6664 15.9497 21.5435 16.3898 21.3957 16.826C21.1036 17.6883 20.6917 18.6078 19.999 19.3139C19.2798 20.0471 18.3037 20.5037 16.9999 20.5037C15.671 20.5037 14.7425 19.9653 14.1496 19.3454C13.746 20.0852 13.5356 20.7821 13.5042 21.2963C13.479 21.7097 13.1234 22.0244 12.71 21.9992C12.2965 21.974 11.9818 21.6184 12.007 21.205C12.0765 20.0655 12.6715 18.6313 13.669 17.3613C14.678 16.0767 16.1497 14.8938 18.05 14.3212C18.4466 14.2017 18.865 14.4263 18.9845 14.8229C19.104 15.2195 18.8794 15.6379 18.4828 15.7574C17.0355 16.1935 15.8731 17.0688 15.0307 18.0646C15.3417 18.5067 15.9532 19.0037 16.9999 19.0037C17.9113 19.0037 18.4983 18.7017 18.9282 18.2635C19.3846 17.7983 19.7078 17.1336 19.9751 16.3447C20.107 15.9552 20.2198 15.553 20.3301 15.1468L20.3845 14.9457C20.4749 14.6111 20.5664 14.2721 20.6635 13.9589C20.7537 13.6677 20.8553 13.376 20.9775 13.1062C20.0845 12.9754 18.8272 12.9215 17.0984 13.1504C15.0995 13.4151 13.9738 14.8731 13.7231 15.7848C13.6133 16.1842 13.2005 16.419 12.8011 16.3092C12.4017 16.1994 12.167 15.7866 12.2768 15.3872C12.6734 13.9447 14.255 12.0138 16.9015 11.6634Z");
+    public static readonly PathGeometry Transitions = PathGeometry.Parse("M12,2 C17.5228,2 22,6.47715 22,12 C22,17.5228 17.5228,22 12,22 C6.47715,22 2,17.5228 2,12 C2,6.47715 6.47715,2 12,2 Z M12,3.5 C7.30558,3.5 3.5,7.30558 3.5,12 C3.5,16.6944 7.30558,20.5 12,20.5 C16.6944,20.5 20.5,16.6944 20.5,12 C20.5,7.30558 16.6944,3.5 12,3.5 Z M16.75,12 C17.1296833,12 17.4434889,12.2821653 17.4931531,12.6482323 L17.5,12.75 L17.5,15.75 C17.5,16.1642 17.1642,16.5 16.75,16.5 C16.3703167,16.5 16.0565111,16.2178347 16.0068469,15.8517677 L16,15.75 L16,15 C15.0881,16.2143 13.6362,17 11.9999,17 C10.4748,17 9.09587,16.316 8.17857,15.237 C7.91028,14.9214 7.94862,14.4481 8.2642,14.1798 C8.57979,13.9115 9.05311,13.9499 9.3214,14.2655 C9.96322,15.0204 10.9293,15.5 11.9999,15.5 C13.32553,15.5 14.4803167,14.7625672 15.0742404,13.6746351 L15.1633,13.5 L14,13.5 C13.5858,13.5 13.25,13.1642 13.25,12.75 C13.25,12.3703167 13.5321653,12.0565111 13.8982323,12.0068469 L14,12 L16.75,12 Z M11.9999,7 C13.5368,7 14.9041,7.66036 15.8268,8.77062 C16.0915,9.08918 16.0479,9.56205 15.7294,9.8268 C15.4108,10.0916 14.9379,10.0479 14.6732,9.72938 C14.0368,8.96361 13.093,8.5 11.9999,8.5 C10.5754318,8.5 9.34895806,9.35140335 8.80281957,10.5730172 L8.72948,10.75 L10,10.75 C10.4142,10.75 10.75,11.0858 10.75,11.5 C10.75,11.8796833 10.4678347,12.1934889 10.1017677,12.2431531 L10,12.25 L7.25,12.25 C6.8703075,12.25 6.55650958,11.9678347 6.50684668,11.6017677 L6.5,11.5 L6.5,8.25 C6.5,7.83579 6.83579,7.5 7.25,7.5 C7.6296925,7.5 7.94349042,7.78215688 7.99315332,8.14823019 L8,8.25 L8,8.99955 C8.9121,7.78531 10.364,7 11.9999,7 Z");
+    public static readonly PathGeometry WindowMenu = PathGeometry.Parse("M2.99707 5.5C2.99707 4.11929 4.11636 3 5.49707 3H14.4971C15.8778 3 16.9971 4.11929 16.9971 5.5V6H17V7H16.9971V14.5C16.9971 15.8807 15.8778 17 14.4971 17H5.49707C4.11636 17 2.99707 15.8807 2.99707 14.5V5.5ZM15.9971 6V5.5C15.9971 4.67157 15.3255 4 14.4971 4H5.49707C4.66864 4 3.99707 4.67157 3.99707 5.5V6H15.9971ZM3.99707 7V14.5C3.99707 15.3284 4.66864 16 5.49707 16H14.4971C15.3255 16 15.9971 15.3284 15.9971 14.5V7H3.99707Z");
+    public static readonly PathGeometry MessageBox = PathGeometry.Parse("M12,1.99622391 C16.0499218,1.99622391 19.3566662,5.19096617 19.4958079,9.24527692 L19.5,9.49622391 L19.5,13.5931945 L20.8800025,16.7492056 C20.949058,16.9071328 20.9847056,17.0776351 20.9847056,17.25 C20.9847056,17.9403559 20.4250615,18.5 19.7347056,18.5 L15,18.5014962 C15,20.1583504 13.6568542,21.5014962 12,21.5014962 C10.4023191,21.5014962 9.09633912,20.2525762 9.00509269,18.6777689 L8.99954674,18.4992239 L4.27486429,18.5 C4.10352557,18.5 3.93401618,18.4647755 3.7768624,18.3965139 C3.14366026,18.121475 2.85331154,17.3852002 3.1283504,16.7519981 L4.5,13.594148 L4.50000001,9.4961162 C4.50059668,5.34132493 7.85208744,1.99622391 12,1.99622391 Z M13.4995467,18.4992239 L10.5,18.5014962 C10.5,19.3299233 11.1715729,20.0014962 12,20.0014962 C12.7796961,20.0014962 13.4204487,19.4066081 13.4931334,18.6459562 L13.4995467,18.4992239 Z M12,3.49622391 C8.67983848,3.49622391 6.00047762,6.17047646 6,9.49622391 L6,13.905852 L4.65602014,17 L19.3525351,17 L18,13.9068055 L18.0001102,9.5090803 L17.9963601,9.28387824 C17.8853006,6.05040449 15.2415749,3.49622391 12,3.49622391 Z M21,8.25 L23,8.25 C23.4142136,8.25 23.75,8.58578644 23.75,9 C23.75,9.37969577 23.4678461,9.69349096 23.1017706,9.74315338 L23,9.75 L21,9.75 C20.5857864,9.75 20.25,9.41421356 20.25,9 C20.25,8.62030423 20.5321539,8.30650904 20.8982294,8.25684662 L21,8.25 Z M1,8.25 L3,8.25 C3.41421356,8.25 3.75,8.58578644 3.75,9 C3.75,9.37969577 3.46784612,9.69349096 3.10177056,9.74315338 L3,9.75 L1,9.75 C0.585786438,9.75 0.25,9.41421356 0.25,9 C0.25,8.62030423 0.532153882,8.30650904 0.898229443,8.25684662 L1,8.25 Z M22.6,2.55 C22.8259347,2.85124623 22.7909723,3.26714548 22.5337844,3.52699676 L22.45,3.6 L20.45,5.1 C20.1186292,5.34852814 19.6485281,5.28137085 19.4,4.95 C19.1740653,4.64875377 19.2090277,4.23285452 19.4662156,3.97300324 L19.55,3.9 L21.55,2.4 C21.8813708,2.15147186 22.3514719,2.21862915 22.6,2.55 Z M2.45,2.4 L4.45,3.9 C4.78137085,4.14852814 4.84852814,4.61862915 4.6,4.95 C4.35147186,5.28137085 3.88137085,5.34852814 3.55,5.1 L1.55,3.6 C1.21862915,3.35147186 1.15147186,2.88137085 1.4,2.55 C1.64852814,2.21862915 2.11862915,2.15147186 2.45,2.4 Z");
+    public static readonly PathGeometry Overlay = PathGeometry.Parse("M20.0256266,12.1919251 C19.8772338,12.4293536 19.6806426,12.6329794 19.4485757,12.7896246 L13.3986821,16.8733027 C12.5534904,17.4438072 11.4465096,17.4438072 10.6013179,16.8733027 L4.55142428,12.7896246 C3.79043588,12.2759574 3.49533538,11.3303569 3.77229147,10.5 L10.6132495,15.0595795 C11.4005138,15.5844224 12.4112447,15.617225 13.2264422,15.1579876 L13.3867505,15.0595795 L20.2270621,10.4994959 C20.4087649,11.0456562 20.3545192,11.665697 20.0256266,12.1919251 Z M20.2270621,13.7494959 C20.4087649,14.2956562 20.3545192,14.915697 20.0256266,15.4419251 C19.8772338,15.6793536 19.6806426,15.8829794 19.4485757,16.0396246 L13.3986821,20.1233027 C12.5534904,20.6938072 11.4465096,20.6938072 10.6013179,20.1233027 L4.55142428,16.0396246 C3.79043588,15.5259574 3.49533538,14.5803569 3.77229147,13.75 L10.6132495,18.3095795 C11.4005138,18.8344224 12.4112447,18.867225 13.2264422,18.4079876 L13.3867505,18.3095795 L20.2270621,13.7494959 Z M13.3867505,3.42450033 L19.7519246,7.66794971 C20.2114532,7.97430216 20.3356271,8.59517151 20.0292747,9.0547002 C19.9560398,9.16455248 19.8617768,9.25881544 19.7519246,9.33205029 L13.3867505,13.5754997 C12.547002,14.135332 11.452998,14.135332 10.6132495,13.5754997 L4.24807544,9.33205029 C3.78854675,9.02569784 3.66437288,8.40482849 3.97072534,7.9452998 C4.0439602,7.83544752 4.13822315,7.74118456 4.24807544,7.66794971 L10.6132495,3.42450033 C11.452998,2.86466797 12.547002,2.86466797 13.3867505,3.42450033 Z M11.560754,4.60622527 L11.4452998,4.67257577 L5.705,8.5 L11.4452998,12.3274242 C11.7438771,12.5264757 12.1228116,12.5485926 12.439246,12.3937747 L12.5547002,12.3274242 L18.294,8.5 L12.5547002,4.67257577 C12.2561229,4.47352427 11.8771884,4.45140743 11.560754,4.60622527 Z");
+    public static readonly PathGeometry Settings = PathGeometry.Parse("M14 9.50006C11.5147 9.50006 9.5 11.5148 9.5 14.0001C9.5 16.4853 11.5147 18.5001 14 18.5001C15.3488 18.5001 16.559 17.9066 17.3838 16.9666C18.0787 16.1746 18.5 15.1365 18.5 14.0001C18.5 13.5401 18.431 13.0963 18.3028 12.6784C17.7382 10.8381 16.0253 9.50006 14 9.50006ZM11 14.0001C11 12.3432 12.3431 11.0001 14 11.0001C15.6569 11.0001 17 12.3432 17 14.0001C17 15.6569 15.6569 17.0001 14 17.0001C12.3431 17.0001 11 15.6569 11 14.0001Z M21.7093 22.3948L19.9818 21.6364C19.4876 21.4197 18.9071 21.4515 18.44 21.7219C17.9729 21.9924 17.675 22.4693 17.6157 23.0066L17.408 24.8855C17.3651 25.273 17.084 25.5917 16.7055 25.682C14.9263 26.1061 13.0725 26.1061 11.2933 25.682C10.9148 25.5917 10.6336 25.273 10.5908 24.8855L10.3834 23.0093C10.3225 22.4731 10.0112 21.9976 9.54452 21.7281C9.07783 21.4586 8.51117 21.4269 8.01859 21.6424L6.29071 22.4009C5.93281 22.558 5.51493 22.4718 5.24806 22.1859C4.00474 20.8536 3.07924 19.2561 2.54122 17.5137C2.42533 17.1384 2.55922 16.7307 2.8749 16.4977L4.40219 15.3703C4.83721 15.0501 5.09414 14.5415 5.09414 14.0007C5.09414 13.4598 4.83721 12.9512 4.40162 12.6306L2.87529 11.5051C2.55914 11.272 2.42513 10.8638 2.54142 10.4882C3.08038 8.74734 4.00637 7.15163 5.24971 5.82114C5.51684 5.53528 5.93492 5.44941 6.29276 5.60691L8.01296 6.36404C8.50793 6.58168 9.07696 6.54881 9.54617 6.27415C10.0133 6.00264 10.3244 5.52527 10.3844 4.98794L10.5933 3.11017C10.637 2.71803 10.9245 2.39704 11.3089 2.31138C12.19 2.11504 13.0891 2.01071 14.0131 2.00006C14.9147 2.01047 15.8128 2.11485 16.6928 2.31149C17.077 2.39734 17.3643 2.71823 17.4079 3.11017L17.617 4.98937C17.7116 5.85221 18.4387 6.50572 19.3055 6.50663C19.5385 6.507 19.769 6.45838 19.9843 6.36294L21.7048 5.60568C22.0626 5.44818 22.4807 5.53405 22.7478 5.81991C23.9912 7.1504 24.9172 8.74611 25.4561 10.487C25.5723 10.8623 25.4386 11.2703 25.1228 11.5035L23.5978 12.6297C23.1628 12.95 22.9 13.4586 22.9 13.9994C22.9 14.5403 23.1628 15.0489 23.5988 15.3698L25.1251 16.4965C25.441 16.7296 25.5748 17.1376 25.4586 17.5131C24.9198 19.2536 23.9944 20.8492 22.7517 22.1799C22.4849 22.4657 22.0671 22.5518 21.7093 22.3948ZM16.263 22.1966C16.4982 21.4685 16.9889 20.8288 17.6884 20.4238C18.5702 19.9132 19.6536 19.8547 20.5841 20.2627L21.9281 20.8526C22.791 19.8538 23.4593 18.7013 23.8981 17.4552L22.7095 16.5778L22.7086 16.5771C21.898 15.98 21.4 15.0277 21.4 13.9994C21.4 12.9719 21.8974 12.0195 22.7073 11.4227L22.7085 11.4218L23.8957 10.545C23.4567 9.2988 22.7881 8.14636 21.9248 7.1477L20.5922 7.73425L20.5899 7.73527C20.1844 7.91463 19.7472 8.00722 19.3039 8.00663C17.6715 8.00453 16.3046 6.77431 16.1261 5.15465L16.1259 5.15291L15.9635 3.69304C15.3202 3.57328 14.6677 3.50872 14.013 3.50017C13.3389 3.50891 12.6821 3.57367 12.0377 3.69328L11.8751 5.15452C11.7625 6.16272 11.1793 7.05909 10.3019 7.56986C9.41937 8.0856 8.34453 8.14844 7.40869 7.73694L6.07273 7.14893C5.20949 8.14751 4.54092 9.29983 4.10196 10.5459L5.29181 11.4233C6.11115 12.0269 6.59414 12.9837 6.59414 14.0007C6.59414 15.0173 6.11142 15.9742 5.29237 16.5776L4.10161 17.4566C4.54002 18.7044 5.2085 19.8585 6.07205 20.8587L7.41742 20.2682C8.34745 19.8613 9.41573 19.9215 10.2947 20.4292C11.174 20.937 11.7593 21.832 11.8738 22.84L11.8744 22.8445L12.0362 24.3088C13.3326 24.5638 14.6662 24.5638 15.9626 24.3088L16.1247 22.8418C16.1491 22.6217 16.1955 22.4055 16.263 22.1966Z");
+}
+
+sealed record NavEntry(NavigationItemKind Kind, string Title, PathGeometry? Icon, Func<FrameworkElement>? Page);
 sealed record DemoUser(int Id, string Name, string Role, bool IsOnline);
 sealed record SimpleGridRow(int Id, string Name, string Status);
 sealed record ChatMessage(long Id, string Sender, string Text, bool Mine, DateTimeOffset Time);
@@ -2062,8 +2221,8 @@ class NativeCustomWindow : Window
         base.Padding = new Thickness(0);
 
         StyleSheet = new StyleSheet();
-        StyleSheet.Define("chrome", ChromeButtonStyle);
-        StyleSheet.Define("close", CloseButtonStyle);
+        StyleSheet.Define("chrome", () => ChromeButtonStyle);
+        StyleSheet.Define("close", () => CloseButtonStyle);
 
         var titleText = new TextBlock
         {
@@ -2120,7 +2279,9 @@ class NativeCustomWindow : Window
 
         _titleBar.MouseDoubleClick += e =>
         {
-            if (e.Button == MouseButton.Left && CanMaximize)
+            if (e.Button == MouseButton.Left
+                && CanMaximize
+                && !IsInTitleBarSideArea(e.GetPosition(_titleBar)))
             {
                 if (WindowState == WindowState.Maximized) Restore();
                 else Maximize();
@@ -2194,6 +2355,22 @@ class NativeCustomWindow : Window
         _titleBar.Padding = NativeChromeButtonInset;
     }
 
+    bool IsInTitleBarSideArea(Point pointInTitleBar)
+    {
+        return GetBoundsInTitleBar(_leftArea).Contains(pointInTitleBar)
+            || GetBoundsInTitleBar(_rightArea).Contains(pointInTitleBar);
+    }
+
+    Rect GetBoundsInTitleBar(FrameworkElement element)
+    {
+        if (element.Bounds.Width <= 0 || element.Bounds.Height <= 0)
+        {
+            return Rect.Empty;
+        }
+
+        return element.TranslateRect(new Rect(0, 0, element.Bounds.Width, element.Bounds.Height), _titleBar);
+    }
+
     void OnWindowStateVisualUpdate()
     {
         bool maximized = WindowState == WindowState.Maximized;
@@ -2245,7 +2422,7 @@ internal static class NativeCustomWindowExtensions
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// ConfettiOverlay (from Gallery - port of WpfConfetti by caefale)
+// ConfettiOverlay (from Gallery — port of WpfConfetti by caefale)
 // ═══════════════════════════════════════════════════════════════════════
 
 sealed class ConfettiOverlay : FrameworkElement
