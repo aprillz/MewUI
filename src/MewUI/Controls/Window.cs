@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 using Aprillz.MewUI.Animation;
 using Aprillz.MewUI.Controls;
@@ -1965,6 +1966,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         const int maxPasses = 8;
         bool converged = false;
         ulong cleanGeneration = 0;
+        // Populated only in the final rounds of a run that is failing to settle, so a non-convergence
+        // report can show which elements keep re-invalidating across passes rather than a lone final
+        // snapshot. A layout that converges in the usual one or two passes never allocates this.
+        List<string>? passDiagnostics = null;
 
         for (int pass = 0; pass < maxPasses; pass++)
         {
@@ -2012,6 +2017,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 break;
             }
 
+            if (pass >= maxPasses - 2)
+            {
+                (passDiagnostics ??= new List<string>()).Add(
+                    $"pass {pass}: {DescribeDirtyElements(visualRoot)}");
+            }
+
             // Consume visual-state invalidations that arrived mid-round before the next round
             // reads state-dependent properties.
             UpdateVisualStates();
@@ -2039,7 +2050,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // dispatcher exactly one continuation; chaining passes from inside is what spun (#199).
             if (!converged)
             {
-                LogNonConvergedLayout(visualRoot);
+                LogNonConvergedLayout(visualRoot, passDiagnostics);
             }
 
             PostUpdatePass();
@@ -2093,18 +2104,68 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     // Diagnostic only - runs when the convergence loop exhausts its pass budget. Dirty flags are
     // not a convergence criterion (overlay chrome and hidden elements stay legitimately dirty).
     [Conditional("DEBUG")]
-    private static void LogNonConvergedLayout(Element root)
+    private static void LogNonConvergedLayout(Element root, List<string>? passDiagnostics)
     {
-        int logged = 0;
+        Debug.WriteLine("[MewUI] layout did not converge within the pass budget");
+        if (passDiagnostics != null)
+        {
+            foreach (var pass in passDiagnostics)
+            {
+                Debug.WriteLine($"[MewUI]   {pass}");
+            }
+        }
+
+        Debug.WriteLine($"[MewUI]   still dirty: {DescribeDirtyElements(root)}");
+    }
+
+    // Lists the still-dirty elements with their ancestor path so a non-convergence report identifies
+    // the re-invalidating subtree. Bounded so a large thrashing tree stays readable.
+    private static string DescribeDirtyElements(Element root)
+    {
+        var builder = new StringBuilder();
+        int count = 0;
         VisualTree.Visit(root, e =>
         {
-            if (logged < 8 && (e.IsMeasureDirty || e.IsArrangeDirty))
+            if (count >= 12 || (!e.IsMeasureDirty && !e.IsArrangeDirty))
             {
-                Debug.WriteLine(
-                    $"[MewUI] layout did not converge: {e.GetType().Name} measureDirty={e.IsMeasureDirty} arrangeDirty={e.IsArrangeDirty}");
-                logged++;
+                return;
             }
+
+            if (count > 0)
+            {
+                builder.Append("; ");
+            }
+
+            builder.Append(DescribeElementPath(e));
+            if (e.IsMeasureDirty && e.IsArrangeDirty)
+            {
+                builder.Append(" (measure,arrange)");
+            }
+            else if (e.IsMeasureDirty)
+            {
+                builder.Append(" (measure)");
+            }
+            else
+            {
+                builder.Append(" (arrange)");
+            }
+
+            count++;
         });
+
+        return count == 0 ? "none" : builder.ToString();
+    }
+
+    private static string DescribeElementPath(Element element)
+    {
+        var builder = new StringBuilder(element.GetType().Name);
+        int depth = 0;
+        for (Element? parent = element.Parent; parent != null && depth < 4; parent = parent.Parent, depth++)
+        {
+            builder.Append('<').Append(parent.GetType().Name);
+        }
+
+        return builder.ToString();
     }
 
     public void Invalidate() => RequestRender();
