@@ -528,7 +528,10 @@ public abstract partial class UIElement : Element
 
     protected virtual UIElement? OnHitTest(Point point)
     {
-        if (!IsVisible || !IsHitTestVisible || !IsEffectivelyEnabled)
+        // A disabled element still participates in hit testing so it absorbs the pointer instead of
+        // letting it fall through to whatever is behind it; controls gate their own input on
+        // IsEffectivelyEnabled, which propagates to the whole disabled subtree.
+        if (!IsVisible || !IsHitTestVisible)
         {
             return null;
         }
