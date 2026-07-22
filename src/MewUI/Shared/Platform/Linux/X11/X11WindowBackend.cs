@@ -678,6 +678,7 @@ internal sealed class X11WindowBackend : IWindowBackend
             X11EventMask.ExposureMask | X11EventMask.StructureNotifyMask |
             X11EventMask.KeyPressMask | X11EventMask.KeyReleaseMask |
             X11EventMask.ButtonPressMask | X11EventMask.ButtonReleaseMask |
+            X11EventMask.EnterWindowMask | X11EventMask.LeaveWindowMask |
             X11EventMask.PointerMotionMask | X11EventMask.FocusChangeMask |
             X11EventMask.PropertyChangeMask;
 
@@ -1334,12 +1335,15 @@ internal sealed class X11WindowBackend : IWindowBackend
         const int ButtonPress = 4;
         const int ButtonRelease = 5;
         const int MotionNotify = 6;
+        const int EnterNotify = 7;
+        const int LeaveNotify = 8;
         const int FocusIn = 9;
         const int FocusOut = 10;
         const int SelectionNotify = 31;
         const int PropertyNotify = 28;
 
-        if (!_enabled && (ev.type == KeyPress || ev.type == KeyRelease || ev.type == ButtonPress || ev.type == ButtonRelease || ev.type == MotionNotify))
+        if (!_enabled && (ev.type == KeyPress || ev.type == KeyRelease || ev.type == ButtonPress || ev.type == ButtonRelease
+            || ev.type == MotionNotify || ev.type == EnterNotify || ev.type == LeaveNotify))
         {
             return;
         }
@@ -1487,6 +1491,18 @@ internal sealed class X11WindowBackend : IWindowBackend
 
             case MotionNotify:
                 HandleMotion(ev.xmotion);
+                break;
+
+            case LeaveNotify:
+                // Pointer grabs synthesize crossing events when the grab starts and ends even if
+                // the pointer never crossed this window's boundary. Ignore those transitions so
+                // an inner TextBox capture does not flash its popup hover state. NotifyNormal (0)
+                // and NotifyWhileGrabbed (3) represent actual crossings; NotifyInferior (2) only
+                // moves into a native child that is still part of this window.
+                if (ev.xcrossing.mode is 0 or 3 && ev.xcrossing.detail != 2)
+                {
+                    Window.ClearMouseOverState();
+                }
                 break;
 
             case FocusIn:

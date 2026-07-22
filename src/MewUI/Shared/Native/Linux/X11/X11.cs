@@ -419,6 +419,26 @@ internal struct XMotionEvent
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct XCrossingEvent
+{
+    public int type;
+    public ulong serial;
+    public int send_event;
+    public nint display;
+    public nint window;
+    public nint root;
+    public nint subwindow;
+    public ulong time;
+    public int x, y;
+    public int x_root, y_root;
+    public int mode;
+    public int detail;
+    public int same_screen;
+    public int focus;
+    public uint state;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct XColor
 {
     public ulong pixel;
@@ -455,6 +475,9 @@ internal struct XEvent
 
     [FieldOffset(0)]
     public XMotionEvent xmotion;
+
+    [FieldOffset(0)]
+    public XCrossingEvent xcrossing;
 
     [FieldOffset(0)]
     public XPropertyEvent xproperty;
