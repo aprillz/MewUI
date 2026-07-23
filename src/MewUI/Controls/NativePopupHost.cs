@@ -34,12 +34,13 @@ internal sealed class NativePopupHost : IPopupHost
             entry.Bounds = PopupHostSupport.ResizeToContentWidth(entry.Element, entry.Bounds, MAX_POPUP_EXTENT);
         }
 
-        var initialChromeBounds = entry.Bounds.Inflate(PopupChrome.ShadowPadding);
+        var initialChromeBounds = SnapRectToDevice(entry.Bounds.Inflate(PopupChrome.ShadowPadding));
         var popupWindow = new PopupWindow(chrome, new Size(initialChromeBounds.Width, initialChromeBounds.Height));
         // The portal subtree is arranged at the chrome's owner-client position, so element bounds
         // inside the popup stay in the owner's coordinate space (identical to in-surface hosting);
         // the popup window translates by this origin at its render/input edges.
-        popupWindow.HostedPortalOrigin = new Point(initialChromeBounds.X, initialChromeBounds.Y);
+        var initialOrigin = new Point(initialChromeBounds.X, initialChromeBounds.Y);
+        popupWindow.HostedPortalOrigin = initialOrigin;
         chrome.HostSurface = popupWindow;
         entry.NativeWindow = popupWindow;
 
@@ -55,19 +56,33 @@ internal sealed class NativePopupHost : IPopupHost
                 _ownerWindow.RequestClosePopups(PopupCloseRequest.PointerDown(null));
         }
 
-        popupWindow.ShowSurface(_ownerWindow, ResolveScreenPosition(initialChromeBounds));
+        popupWindow.ShowSurface(_ownerWindow, ResolveScreenPosition(initialOrigin));
     }
 
-    private Point? ResolveScreenPosition(Rect chromeBounds)
+    private Point? ResolveScreenPosition(Point origin)
     {
         if (_ownerWindow.Handle == 0)
         {
             return null;
         }
 
-        var screenPx = _ownerWindow.ClientToScreen(new Point(chromeBounds.X, chromeBounds.Y));
+        var screenPx = _ownerWindow.ClientToScreen(origin);
         double scale = ResolveScreenScale(screenPx);
         return new Point(screenPx.X / scale, screenPx.Y / scale);
+    }
+
+    // The popup content snaps to device pixels in the owner's coordinate space, so the surface it lives on
+    // must too: a fractional origin (at e.g. 125% DPI) translates the whole surface onto a fractional device
+    // pixel and blurs it, and a fractional size rounds the client area a pixel off the content and leaves a
+    // seam at the bottom/right. Snap all four edges so origin and size stay whole device pixels together.
+    private Rect SnapRectToDevice(Rect rect)
+    {
+        double dpiScale = _ownerWindow.DpiScale;
+        double x = LayoutRounding.RoundToPixel(rect.X, dpiScale);
+        double y = LayoutRounding.RoundToPixel(rect.Y, dpiScale);
+        double right = LayoutRounding.RoundToPixel(rect.X + rect.Width, dpiScale);
+        double bottom = LayoutRounding.RoundToPixel(rect.Y + rect.Height, dpiScale);
+        return new Rect(x, y, right - x, bottom - y);
     }
 
     private bool IsPopupSurfaceHandle(nint handle)
@@ -100,15 +115,16 @@ internal sealed class NativePopupHost : IPopupHost
         // starts above-left of it. Size the popup window exactly to the chrome and place it so the
         // content lands at the same screen position it would occupy in-surface; the portal layout
         // arranges the chrome at that same owner-client position (HostedPortalOrigin).
-        var chromeBounds = entry.Bounds.Inflate(PopupChrome.ShadowPadding);
-        popupWindow.HostedPortalOrigin = new Point(chromeBounds.X, chromeBounds.Y);
+        var chromeBounds = SnapRectToDevice(entry.Bounds.Inflate(PopupChrome.ShadowPadding));
+        var origin = new Point(chromeBounds.X, chromeBounds.Y);
+        popupWindow.HostedPortalOrigin = origin;
         var currentSize = popupWindow.WindowSize;
         if (currentSize.Width != chromeBounds.Width || currentSize.Height != chromeBounds.Height)
         {
             popupWindow.WindowSize = WindowSize.Fixed(Math.Max(1, chromeBounds.Width), Math.Max(1, chromeBounds.Height));
         }
 
-        var screenPx = _ownerWindow.ClientToScreen(new Point(chromeBounds.X, chromeBounds.Y));
+        var screenPx = _ownerWindow.ClientToScreen(origin);
         double scale = ResolveScreenScale(screenPx);
         popupWindow.MoveTo(screenPx.X / scale, screenPx.Y / scale);
     }
