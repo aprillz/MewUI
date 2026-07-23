@@ -12,7 +12,7 @@ internal static class HotReloadGate
     // (the assembly attribute is baked into MewUI.dll and cannot be removed by MSBuild).
     private const string ENABLED_SWITCH = "Aprillz.MewUI.HotReload.Enabled";
 
-    public static bool IsActive
+    internal static bool IsActive
     {
         get
         {

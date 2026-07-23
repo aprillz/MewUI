@@ -10,15 +10,15 @@ internal enum HotReloadReactionKind
 
 internal readonly struct HotReloadReaction
 {
-    public HotReloadReaction(Element owner, HotReloadReactionKind kind)
+    internal HotReloadReaction(Element owner, HotReloadReactionKind kind)
     {
         Owner = owner;
         Kind = kind;
     }
 
-    public Element Owner { get; }
+    internal Element Owner { get; }
 
-    public HotReloadReactionKind Kind { get; }
+    internal HotReloadReactionKind Kind { get; }
 }
 
 /// <summary>
@@ -28,7 +28,7 @@ internal readonly struct HotReloadReaction
 /// </summary>
 internal static class HotReloadPlanner
 {
-    public static List<HotReloadReaction> Plan(List<HotReloadEntry> entries)
+    internal static List<HotReloadReaction> Plan(List<HotReloadEntry> entries)
     {
         var reactions = new List<HotReloadReaction>();
 

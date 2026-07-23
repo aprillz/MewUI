@@ -16,13 +16,13 @@ internal enum HotReloadRole
 /// </summary>
 internal sealed class HotReloadEntry
 {
-    public required MethodBase Method { get; init; }
+    internal required MethodBase Method { get; init; }
 
-    public required HotReloadRole Role { get; init; }
+    internal required HotReloadRole Role { get; init; }
 
-    public required WeakReference<Element> Owner { get; init; }
+    internal required WeakReference<Element> Owner { get; init; }
 
-    public byte[]? Baseline { get; set; }
+    internal byte[]? Baseline { get; set; }
 }
 
 /// <summary>
@@ -34,16 +34,16 @@ internal static class HotReloadRegistry
     private static readonly List<HotReloadEntry> _entries = new();
     private static readonly object _lock = new();
 
-    public static void RegisterBuild(Element owner, MethodBase? method) => Register(owner, method, HotReloadRole.Build);
+    internal static void RegisterBuild(Element owner, MethodBase? method) => Register(owner, method, HotReloadRole.Build);
 
-    public static void RegisterBuild(Element owner, Delegate? source) => Register(owner, source?.Method, HotReloadRole.Build);
+    internal static void RegisterBuild(Element owner, Delegate? source) => Register(owner, source?.Method, HotReloadRole.Build);
 
-    public static void RegisterTemplate(Element owner, Delegate? build) => Register(owner, build?.Method, HotReloadRole.Template);
+    internal static void RegisterTemplate(Element owner, Delegate? build) => Register(owner, build?.Method, HotReloadRole.Template);
 
     /// <summary>Registers a UserControl's overriding <c>OnBuild</c> method as its build source.</summary>
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2075",
         Justification = "Reached only under Hot Reload (JIT/debug); trimmed out of AOT/trimmed builds.")]
-    public static void RegisterUserControl(UserControl owner)
+    internal static void RegisterUserControl(UserControl owner)
     {
         if (!HotReloadGate.IsActive)
         {
@@ -87,7 +87,7 @@ internal static class HotReloadRegistry
     }
 
     /// <summary>Returns the live entries, dropping any whose owner has been collected.</summary>
-    public static List<HotReloadEntry> SnapshotAndSweep()
+    internal static List<HotReloadEntry> SnapshotAndSweep()
     {
         lock (_lock)
         {

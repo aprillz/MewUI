@@ -23,7 +23,7 @@ internal static class IlNormalizer
     /// </summary>
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2026",
         Justification = "Reached only under MetadataUpdater.IsSupported (JIT/debug Hot Reload); trimmed out of AOT/trimmed builds.")]
-    public static byte[]? Hash(MethodBase? method)
+    internal static byte[]? Hash(MethodBase? method)
     {
         if (method == null)
         {

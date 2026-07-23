@@ -11,10 +11,9 @@ using Aprillz.MewUI.Controls;
 namespace Aprillz.MewUI.HotReload;
 
 /// <summary>
-/// Minimal opt-in Hot Reload bridge for apps using C# markup.
-/// Apps register a rebuild callback, and a MetadataUpdateHandler can request a UI reload.
+/// Coalesces Hot Reload deltas onto the UI thread and rebuilds the affected nodes.
 /// </summary>
-public static class MewUiHotReload
+internal static class MewUiHotReload
 {
     private static readonly DispatcherMergeKey mergeKey = new(DispatcherPriority.Background);
     private static readonly object _pendingLock = new();
@@ -25,19 +24,11 @@ public static class MewUiHotReload
     private static bool _pendingUnknownScope;
     private static bool reloading;
 
-    public static bool IsEnabled
-    {
-        get
-        {
-            return Application.IsRunning && Application.Current.Dispatcher != null;
-        }
-    }
-
     /// <summary>
     /// Accumulates a Hot Reload delta and schedules a coalesced UI-thread reload.
     /// </summary>
     /// <param name="updatedTypes">Changed types from the runtime; <see langword="null"/> means unknown scope.</param>
-    public static void RequestReload(Type[]? updatedTypes)
+    internal static void RequestReload(Type[]? updatedTypes)
     {
         lock (_pendingLock)
         {
@@ -224,10 +215,12 @@ public static class MewUiHotReload
 /// <summary>
 /// Runtime Hot Reload callback entrypoint. Registered automatically by MewUI; apps need no
 /// declaration and can opt out with <c>&lt;MewUIHotReload&gt;false&lt;/MewUIHotReload&gt;</c>.
+/// The runtime invokes these methods by reflection (including non-public), so the type and
+/// members stay internal.
 /// </summary>
-public static class MewUiMetadataUpdateHandler
+internal static class MewUiMetadataUpdateHandler
 {
-    public static void ClearCache(Type[]? updatedTypes)
+    internal static void ClearCache(Type[]? updatedTypes)
     {
         if (!HotReloadGate.IsActive)
         {
@@ -239,7 +232,7 @@ public static class MewUiMetadataUpdateHandler
         DefaultStyles.ClearInstantiatedStyles();
     }
 
-    public static void UpdateApplication(Type[]? updatedTypes)
+    internal static void UpdateApplication(Type[]? updatedTypes)
     {
         if (!HotReloadGate.IsActive)
         {
