@@ -6,6 +6,7 @@
 #:package Aprillz.MewUI@0.19.1
 
 using System.Collections.ObjectModel;
+using System.Numerics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 
@@ -43,6 +44,7 @@ var resourceStallToastShown = false;
 
 var logoResource = new ObservableValue<IImageSource?>(null);
 var aprilResource = new ObservableValue<IImageSource?>(null);
+var soondukResource = new ObservableValue<IImageSource?>(null);
 var iconFolderOpenResource = new ObservableValue<IImageSource?>(null);
 var iconFolderCloseResource = new ObservableValue<IImageSource?>(null);
 var iconFileResource = new ObservableValue<IImageSource?>(null);
@@ -54,6 +56,7 @@ var imageResources = new ImageResourceEntry[]
 {
     new("logo_h-1280.png", AssetsBase + "logo/logo_h-1280.png", logoResource),
     new("april.jpg", AssetsBase + "images/april.jpg", aprilResource),
+    new("soonduk.jpg", AssetsBase + "images/soonduk.jpg", soondukResource),
     new("folder-horizontal-open.png", SampleResourcesBase + "folder-horizontal-open.png", iconFolderOpenResource),
     new("folder-horizontal.png", SampleResourcesBase + "folder-horizontal.png", iconFolderCloseResource),
     new("document.png", SampleResourcesBase + "document.png", iconFileResource),
@@ -91,6 +94,7 @@ Application
     .Run(new Window()
         .Ref(out window)
         .Padding(0)
+        .Apply(_ => window.AllowDrop = true)
         .Apply(_ => window.Drop += e =>
         {
             if (e.Data.TryGetData<IReadOnlyList<string>>(StandardDataFormats.StorageItems, out var items) && items is not null)
@@ -275,26 +279,34 @@ NavEntry[] NavEntries()
         Group("Basics"),
         Page("Buttons", ButtonsPage, NavigationIcons.Buttons),
         Page("Inputs", InputsPage, NavigationIcons.Inputs),
+        Page("Drag & Drop", DragDropPage, AdditionalNavigationIcons.DragDrop),
         Page("Selection", SelectionPage, NavigationIcons.Selection),
         Page("Typography", TypographyPage, NavigationIcons.Typography),
 
         Group("Collections"),
         Page("Lists", ListsPage, NavigationIcons.Lists),
+        Page("TreeView", TreeViewPage, AdditionalNavigationIcons.TreeView),
         Page("GridView", GridViewPage, NavigationIcons.GridView),
+        Page("ItemsControl", ItemsControlPage, AdditionalNavigationIcons.ItemsControl),
 
         Group("Layout"),
         Page("Panels", PanelsPage, NavigationIcons.Panels),
         Page("Layout", LayoutPage, NavigationIcons.Layout),
+        Page("Transform", TransformPage, AdditionalNavigationIcons.Transform),
 
         Group("Graphics"),
         Page("Shapes", ShapesPage, NavigationIcons.Shapes),
-        Page("Media", MediaPage, NavigationIcons.Media),
         Page("Icons", IconsPage, NavigationIcons.Icons),
+        Page("Media", MediaPage, NavigationIcons.Media),
+        Page("Custom Rendering", CustomRenderingPage, AdditionalNavigationIcons.CustomRendering),
         Page("Transitions", TransitionsPage, NavigationIcons.Transitions),
 
         Group("Windowing"),
-        Page("Window / Menu", WindowMenuPage, NavigationIcons.WindowMenu),
+        Page("Window", WindowPage, NavigationIcons.WindowMenu),
+        Page("Menu", MenuPage, AdditionalNavigationIcons.Menu),
         Page("MessageBox", MessageBoxPage, NavigationIcons.MessageBox),
+        Page("File Dialog", FileDialogPage, AdditionalNavigationIcons.FileDialog),
+        Page("ShowDialog", ShowDialogPage, AdditionalNavigationIcons.ShowDialog),
         Page("Overlay", OverlayPage, NavigationIcons.Overlay),
     ];
 }
@@ -485,6 +497,32 @@ FrameworkElement ButtonsPage() =>
             new ToggleButton().Content("Disabled").Disable(),
             new ToggleButton().Content("Disabled (Checked)").IsChecked(true).Disable())),
 
+        Card("ButtonGroup", new StackPanel().Vertical().Spacing(8).Children(
+            SegmentRow("Text", new ButtonGroup().Items("Cut", "Copy", "Paste").Left()),
+            SegmentRow("Text + Icon", SegmentIconTextGroup(
+                new SegmentItem("cut_regular", "Cut"),
+                new SegmentItem("copy_regular", "Copy"),
+                new SegmentItem("clipboard_paste_regular", "Paste")).Left()),
+            SegmentRow("Icon", SegmentIconGroup(
+                new SegmentItem("text_align_left_regular", "Left"),
+                new SegmentItem("text_align_center_regular", "Center"),
+                new SegmentItem("text_align_right_regular", "Right")).Left()),
+            SegmentRow("Toggle", new ButtonGroup()
+                .Items("Bold", "Italic", "Underline")
+                .PrepareContainer<string>((segment, name, _) =>
+                {
+                    segment.IsCheckable = true;
+                    if (name == "Italic") segment.IsChecked = true;
+                }).Left()),
+            SegmentRow("Uniform", new ButtonGroup()
+                .Sizing(SegmentSizing.Uniform)
+                .Items("Left", "Center", "Right").Left()),
+            SegmentRow("Disabled", SegmentIconGroup(
+                new SegmentItem("text_align_left_regular", "Left"),
+                new SegmentItem("text_align_center_regular", "Center"),
+                new SegmentItem("text_align_right_regular", "Right"))
+                .Disable().Left()))),
+
         Card("Toggle / Switch", new StackPanel().Vertical().Spacing(8).Children(
             new ToggleSwitch().IsChecked(true),
             new ToggleSwitch().IsChecked(false),
@@ -535,6 +573,14 @@ FrameworkElement InputsPage()
                     new NumericUpDown().Width(140).Minimum(0).Maximum(100).Step(0.1).Format("0.##").BindValue(doubleBinding).CenterVertical(),
                     new TextBlock().BindText(doubleBinding, v => $"Value: {v:0.##}").CenterVertical())),
 
+        Card("Emoji", new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("🍫 😀 🎉 🚀 🌈 🐍 🎵 ❤️ 🔥 💡").FontSize(24),
+            new TextBlock().Text("🍫 😀 🎉 🚀 🌈 🐍 🎵 ❤️ 🔥 💡").FontSize(20),
+            new TextBlock().Text("🍫 😀 🎉 🚀 🌈 🐍 🎵 ❤️ 🔥 💡").FontSize(16),
+            new TextBlock().Text("🍫 😀 🎉 🚀 🌈 🐍 🎵 ❤️ 🔥 💡").FontSize(12),
+            new TextBox().Placeholder("Type or paste emoji here...").Text("🍫😀🎉"),
+            new TextBlock().Text("Mixed: Hello 🌍 World 🚀!").FontSize(14))),
+
         Card("MultiLineTextBox",
             new MultiLineTextBox()
                 .Height(120)
@@ -561,14 +607,192 @@ FrameworkElement InputsPage()
                             .Item("Zoom Out", new KeyGesture(Key.Subtract, ModifierKeys.Primary))
                             .Item("Reset Zoom", new KeyGesture(Key.D0, ModifierKeys.Primary)))
                         .Separator()
-                        .Item("Disabled", isEnabled: false)))),
-
-        Card("Drag and Drop",
-            new DockPanel().Height(220).Spacing(8).Children(
-                new TextBlock().FontSize(11).DockTop()
-                    .Text("Window-level drag and drop. Drop files anywhere on the gallery window."),
-                new MultiLineTextBox().BindText(_dropSummary)))
+                        .Item("Disabled", isEnabled: false))))
     );
+}
+
+FrameworkElement DragDropPage()
+{
+    const string dragFormat = "application/x-mewui-gallery.drag-card";
+    var dragLog = new ObservableValue<string>("(no drag yet)");
+
+    Border DragChip(string label)
+    {
+        var chip = new Border()
+            .Padding(8, 4)
+            .CornerRadius(4)
+            .WithTheme((theme, border) => border.Background(
+                theme.Palette.ButtonFace.Lerp(theme.Palette.Accent, 0.5)))
+            .Child(new TextBlock().Text(label).FontSize(11));
+        chip.CanDrag = true;
+        chip.DragStarting += e =>
+        {
+            var data = new DataObject();
+            data.SetData(dragFormat, label);
+            data.SetText(label);
+            e.Data = data;
+            e.AllowedEffects = DragDropEffects.Move | DragDropEffects.Copy;
+            e.Preview = new DragPreviewContent
+            {
+                Scope = DragPreviewScope.CrossWindow,
+                Element = chip,
+                Opacity = 0.7,
+            };
+            dragLog.Value = $"Starting drag for '{label}'";
+        };
+        chip.DragCompleted += e =>
+        {
+            dragLog.Value = $"Drag of '{label}' completed: {e.FinalEffect}" +
+                (e.WasCanceled ? " (canceled)" : "");
+            if (e.FinalEffect == DragDropEffects.Move && !e.WasCanceled && chip.Parent is StackPanel parent)
+            {
+                parent.Remove(chip);
+            }
+        };
+        return chip;
+    }
+
+    Border DragSlot(string title, StackPanel content)
+    {
+        var insertionLine = new Border()
+            .Height(2)
+            .CornerRadius(1)
+            .WithTheme((theme, border) => border.Background(theme.Palette.Accent));
+        insertionLine.IsVisible = false;
+        Canvas.SetLeft(insertionLine, 0);
+        Canvas.SetRight(insertionLine, 0);
+
+        Canvas.SetLeft(content, 0);
+        Canvas.SetTop(content, 0);
+        Canvas.SetRight(content, 0);
+
+        var dropCanvas = new Canvas().MinHeight(100);
+        dropCanvas.Add(content);
+        dropCanvas.Add(insertionLine);
+        var pendingInsertIndex = 0;
+
+        var slot = new Border()
+            .MinWidth(140)
+            .Padding(8)
+            .CornerRadius(6)
+            .BorderThickness(1)
+            .WithTheme((theme, border) => border
+                .Background(theme.Palette.ContainerBackground)
+                .BorderBrush(theme.Palette.ControlBorder))
+            .Child(new StackPanel().Vertical().Spacing(6).Children(
+                new TextBlock().Text(title).Bold().FontSize(11),
+                dropCanvas));
+        slot.AllowDrop = true;
+
+        void UpdateInsertionLine(Point cursorInWindow)
+        {
+            pendingInsertIndex = ComputeInsertIndex(content, cursorInWindow.Y);
+            var lineY = ResolveInsertionLineY(content, dropCanvas, pendingInsertIndex);
+            Canvas.SetTop(insertionLine, lineY - 1);
+            insertionLine.IsVisible = true;
+        }
+
+        slot.DragEnter += e =>
+        {
+            e.Accepted = true;
+            e.Effect = DragDropEffects.Move;
+            UpdateInsertionLine(e.Position);
+        };
+        slot.DragOver += e =>
+        {
+            e.Accepted = true;
+            e.Effect = DragDropEffects.Move;
+            UpdateInsertionLine(e.Position);
+        };
+        slot.DragLeave += _ => insertionLine.IsVisible = false;
+        slot.Drop += e =>
+        {
+            insertionLine.IsVisible = false;
+            if (e.Data.TryGetData<string>(dragFormat, out var label) && label is not null)
+            {
+                var index = Math.Clamp(pendingInsertIndex, 0, content.Children.Count);
+                content.Insert(index, DragChip(label));
+                e.Accepted = true;
+                e.Effect = DragDropEffects.Move;
+                e.Handled = true;
+                dragLog.Value = $"Dropped '{label}' on {title} at index {index}";
+            }
+        };
+        return slot;
+    }
+
+    static int ComputeInsertIndex(StackPanel content, double cursorY)
+    {
+        var children = content.Children;
+        for (var i = 0; i < children.Count; i++)
+        {
+            if (children[i] is UIElement child && cursorY < child.Bounds.Y + child.Bounds.Height / 2)
+                return i;
+        }
+        return children.Count;
+    }
+
+    static double ResolveInsertionLineY(StackPanel content, Canvas canvas, int insertIndex)
+    {
+        var children = content.Children;
+        var halfSpacing = content.Spacing / 2;
+        double windowY;
+        if (children.Count == 0)
+            windowY = content.Bounds.Y;
+        else if (insertIndex <= 0)
+            windowY = ((UIElement)children[0]).Bounds.Y - halfSpacing;
+        else if (insertIndex >= children.Count)
+        {
+            var last = (UIElement)children[^1];
+            windowY = last.Bounds.Y + last.Bounds.Height + halfSpacing;
+        }
+        else
+        {
+            var above = (UIElement)children[insertIndex - 1];
+            var below = (UIElement)children[insertIndex];
+            windowY = (above.Bounds.Y + above.Bounds.Height + below.Bounds.Y) / 2;
+        }
+        return windowY - canvas.Bounds.Y;
+    }
+
+    var source = new StackPanel().Vertical().Spacing(4);
+    foreach (var label in new[] { "Alpha", "Bravo", "Charlie" }) source.Add(DragChip(label));
+    var target = new StackPanel().Vertical().Spacing(4);
+
+    void OpenCrossWindowTarget()
+    {
+        var crossTarget = new StackPanel().Vertical().Spacing(4);
+        crossTarget.Add(DragChip("Yellow"));
+        Window second = null!;
+        new Window().Ref(out second)
+            .Resizable(360, 300)
+            .StartCenterOwner()
+            .Title("Cross-Window Drag & Drop")
+            .Padding(16)
+            .Content(new StackPanel().Vertical().Spacing(8).Children(
+                new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+                    .Text("Drag chips here from the main window - or drag 'Yellow' back."),
+                DragSlot("Drop here", crossTarget)))
+            .Show(window);
+    }
+
+    var crossSource = new StackPanel().Vertical().Spacing(4);
+    foreach (var label in new[] { "Red", "Green", "Blue" }) crossSource.Add(DragChip(label));
+
+    return CardGrid(
+        Card("Window Drag and Drop", new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().Text("Window-level file drop:").FontSize(11),
+            new MultiLineTextBox().Height(80).BindText(_dropSummary)), minWidth: 360),
+        Card("Element Drag and Drop", new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().FontSize(11)
+                .Text("Internal element drag (drag a chip between the two slots):"),
+            new StackPanel().Horizontal().Spacing(8).Children(DragSlot("Slot A", source), DragSlot("Slot B", target)),
+            new TextBlock().BindText(dragLog).FontSize(11)), minWidth: 360),
+        Card("Cross-Window Drag and Drop", new StackPanel().Width(320).Vertical().Spacing(8).Children(
+            new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+                .Text("Open a second window, then drag a chip from here into its slot (and back). Same-process routing - no OS clipboard, the .NET payload is passed by reference."),
+            new Button().Content("Open second window").OnClick(OpenCrossWindowTarget),
+            DragSlot("Drag from here", crossSource)), minWidth: 320));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -579,6 +803,31 @@ FrameworkElement SelectionPage()
 {
     var items = Enumerable.Range(1, 20).Select(i => $"Item {i}").Append("Item Long Long Long Long Long Long Long").ToArray();
     Calendar calendar = null!;
+    var doneEnabled = new ObservableValue<bool>(false);
+
+    FrameworkElement TabPlacementSample(string title, TabPlacement placement, Rotation? headerRotation = null)
+    {
+        Element Header(string text)
+        {
+            var label = new TextBlock().Text(text);
+            return headerRotation is { } rotation
+                ? new RotationDecorator().Rotation(rotation).Child(label)
+                : label;
+        }
+
+        return new StackPanel().Vertical().Spacing(4).Children(
+            new TextBlock().Text(title).FontSize(11),
+            new TabControl()
+                .Height(headerRotation is null ? 140 : 180)
+                .TabPlacement(placement)
+                .TabItems(
+                    new TabItem().Header(Header("Home"))
+                        .Content(new TextBlock().Text("Home tab content")),
+                    new TabItem().Header(Header("Settings"))
+                        .Content(new TextBlock().Text("Settings tab content")),
+                    new TabItem().Header(Header("About"))
+                        .Content(new TextBlock().Text("About tab content"))));
+    }
 
     return CardGrid(
         Card("CheckBox", new Grid().Columns("Auto,Auto").Rows("Auto,Auto,Auto").Spacing(8).Children(
@@ -600,6 +849,66 @@ FrameworkElement SelectionPage()
             new ComboBox().Placeholder("Select an item...").Items(items),
             new ComboBox().Items(items).SelectedIndex(1).Disable()), minWidth: 250),
 
+        Card("SegmentedControl", new StackPanel().Vertical().Spacing(12).Children(
+            new StackPanel().Vertical().Spacing(4).Children(
+                new TextBlock().Text("Text").FontSize(11),
+                new SegmentedControl().Items("Day", "Week", "Month").SelectedIndex(0)),
+
+            new StackPanel().Vertical().Spacing(4).Children(
+                new TextBlock().Text("Text + Icon").FontSize(11),
+                new SegmentedControl()
+                    .Items(new[]
+                    {
+                        new SegmentItem("apps_list_regular", "List"),
+                        new SegmentItem("table_regular", "Table"),
+                        new SegmentItem("data_pie_regular", "Chart"),
+                    }, item => item.Label)
+                    .ItemTemplate<SegmentItem>(
+                        build: context =>
+                        {
+                            var icon = SegmentIconShape(16).CenterVertical();
+                            var label = new TextBlock().CenterVertical();
+                            context.Register("icon", icon);
+                            context.Register("label", label);
+                            return new StackPanel().Horizontal().Spacing(6).Center().Children(icon, label);
+                        },
+                        bind: (_, item, _, context) =>
+                        {
+                            context.Get<PathShape>("icon").Data = SegmentIcon(item.Icon);
+                            context.Get<TextBlock>("label").Text = item.Label;
+                        })
+                    .SelectedIndex(0)),
+
+            new StackPanel().Vertical().Spacing(4).Children(
+                new TextBlock().Text("Icon").FontSize(11),
+                new SegmentedControl()
+                    .Items(new[]
+                    {
+                        new SegmentItem("home_regular", "Home"),
+                        new SegmentItem("settings_regular", "Settings"),
+                        new SegmentItem("calendar_regular", "Calendar"),
+                    }, item => item.Label)
+                    .ItemTemplate<SegmentItem>(
+                        build: _ => SegmentIconShape(18).Center(),
+                        bind: (view, item, _, _) => ((PathShape)view).Data = SegmentIcon(item.Icon))
+                    .SelectedIndex(1)),
+
+            new StackPanel().Vertical().Spacing(4).Children(
+                new TextBlock().Text("Disabled segment (bound)").FontSize(11),
+                new SegmentedControl()
+                    .Items("All", "Active", "Done")
+                    .PrepareContainer<string>((segment, item, _) =>
+                    {
+                        if (item == "Done") segment.BindIsEnabled(doneEnabled);
+                    })
+                    .SelectedIndex(0),
+                new CheckBox().Content("Enable ‘Done’").BindIsChecked(doneEnabled)),
+
+            new StackPanel().Vertical().Spacing(4).Children(
+                new TextBlock().Text("Disabled").FontSize(11),
+                new SegmentedControl().Items("Day", "Week", "Month")
+                    .SelectedIndex(0).Disable())), minWidth: 320),
+
         Card("Calendar", new StackPanel().Vertical().Spacing(8).Children(
             new Calendar().Ref(out calendar),
             new TextBlock().Bind(TextBlock.TextProperty, calendar, Calendar.SelectedDateProperty, x => $"Selected: {x:yyyy-MM-dd}"))),
@@ -609,15 +918,38 @@ FrameworkElement SelectionPage()
             new DatePicker { SelectedDate = DateTime.Today },
             new DatePicker { Placeholder = "Disabled" }.Disable()), minWidth: 250),
 
+        Card("ColorPicker", new Grid()
+            .Rows("Auto,Auto,Auto,Auto,Auto").Columns("Auto,*").Spacing(8).Children(
+                new TextBlock().Text("Both"),
+                new ColorPicker().SelectedColor(Color.FromRgb(255, 0, 0)),
+                new TextBlock().Text("Wheel"),
+                new ColorPicker().SelectedColor(Color.FromRgb(0, 128, 255)).Kind(ColorPickerKind.Wheel),
+                new TextBlock().Text("Panel"),
+                new ColorPicker().SelectedColor(Color.FromRgb(0, 200, 100)).Kind(ColorPickerKind.Panel),
+                new TextBlock().Text("Alpha"),
+                new ColorPicker().SelectedColor(Color.FromArgb(180, 255, 128, 0)).ShowAlpha(),
+                new TextBlock().Text("Disabled"),
+                new ColorPicker().SelectedColor(Color.FromRgb(80, 80, 80)).Disable()), minWidth: 250),
+
         Card("TabControl", new UniformGrid().Columns(2).Spacing(8).Children(
-            new TabControl().Height(120).TabItems(
-                new TabItem().Header("_Home").Content(new TextBlock().Text("Home tab content")),
-                new TabItem().Header("Se_ttings").Content(new TextBlock().Text("Settings tab content")),
-                new TabItem().Header("A_bout").Content(new TextBlock().Text("About tab content"))),
-            new TabControl().Height(120).Disable().TabItems(
-                new TabItem().Header("Home").Content(new TextBlock().Text("Home tab content")),
-                new TabItem().Header("Settings").Content(new TextBlock().Text("Settings tab content")),
-                new TabItem().Header("About").Content(new TextBlock().Text("About tab content")))))
+            TabPlacementSample("Top", TabPlacement.Top),
+            TabPlacementSample("Bottom", TabPlacement.Bottom),
+            TabPlacementSample("Left", TabPlacement.Left),
+            TabPlacementSample("Right", TabPlacement.Right)), minWidth: 700),
+
+        Card("TabControl Overflow", new TabControl().Width(260).Height(140).TabItems(
+            new TabItem().Header("Overview").Content(new TextBlock().Text("Overview content")),
+            new TabItem().Header("Rendering Pipeline").Content(new TextBlock().Text("Rendering Pipeline content")),
+            new TabItem().Header("Input Routing").Content(new TextBlock().Text("Input Routing content")),
+            new TabItem().Header("Property Binding").Content(new TextBlock().Text("Property Binding content")),
+            new TabItem().Header("Disabled Diagnostics")
+                .Content(new TextBlock().Text("Disabled Diagnostics content")).IsEnabled(false),
+            new TabItem().Header("Final Review").Content(new TextBlock().Text("Final Review content")))
+            .SelectedIndex(5), minWidth: 340),
+
+        Card("TabControl + RotationDecorator", new UniformGrid().Columns(2).Spacing(8).Children(
+            TabPlacementSample("Left", TabPlacement.Left, Rotation.CounterClockwise90),
+            TabPlacementSample("Right", TabPlacement.Right, Rotation.Clockwise90)), minWidth: 700)
     );
 }
 
@@ -721,6 +1053,15 @@ FrameworkElement LayoutPage()
                 new TextBlock().Text("GroupBox content"),
                 new Button().Content("Action")))),
 
+        Card("Expander", new StackPanel().Vertical().Spacing(8).Children(
+            new Expander().Header("Details").Content(
+                new StackPanel().Vertical().Spacing(6).Children(
+                    new TextBlock().Text("Click the header to collapse."),
+                    new Button().Content("Action"))),
+            new Expander { IsExpanded = false }
+                .Header("More options")
+                .Content(new TextBlock().Text("Hidden until expanded.")))),
+
         Card("Border + Alignment", new Border().Height(120)
             .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
             .BorderThickness(1).CornerRadius(12)
@@ -735,6 +1076,39 @@ FrameworkElement LayoutPage()
             LabelBox("Left/Top + NoWrap", TextAlignment.Left, TextAlignment.Top, TextWrapping.NoWrap),
             LabelBox("Right/Top + NoWrap", TextAlignment.Right, TextAlignment.Top, TextWrapping.NoWrap))),
 
+        Card("Border Top + Wrap Growth", new Border()
+            .Width(260).Top().Padding(8).BorderThickness(1).CornerRadius(8)
+            .WithTheme((theme, border) => border
+                .Background(theme.Palette.ContainerBackground)
+                .BorderBrush(theme.Palette.ControlBorder))
+            .Child(new TextBlock().TextWrapping(TextWrapping.Wrap)
+                .Text("Top-aligned border should grow with wrapped text. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."))),
+
+        Card("StackPanel Wrap Growth", new Border()
+            .Width(260).Top().Padding(8).BorderThickness(1).CornerRadius(8)
+            .WithTheme((theme, border) => border
+                .Background(theme.Palette.ContainerBackground)
+                .BorderBrush(theme.Palette.ControlBorder))
+            .Child(new StackPanel().Vertical().Spacing(6).Children(
+                new TextBlock().TextWrapping(TextWrapping.Wrap)
+                    .Text("First wrapped label. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."),
+                new TextBlock().TextWrapping(TextWrapping.Wrap)
+                    .Text("Second wrapped label. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")))),
+
+        Card("Wrap + Button", new Border()
+            .Width(260).Top().Padding(8).BorderThickness(1).CornerRadius(8)
+            .WithTheme((theme, border) => border
+                .Background(theme.Palette.ContainerBackground)
+                .BorderBrush(theme.Palette.ControlBorder))
+            .Child(new StackPanel().Vertical().Spacing(6).Children(
+                new TextBlock().TextWrapping(TextWrapping.Wrap)
+                    .Text("Wrapped label followed by a button. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."),
+                new Border()
+                    .WithTheme((theme, border) => border
+                        .Background(theme.Palette.ContainerBackground)
+                        .BorderBrush(theme.Palette.ControlBorder))
+                    .Child(new TextBlock().Center().Text("After Wrap"))))),
+
         Card("TextTrimming", new StackPanel().Vertical().Spacing(8).Children(
             new Border().Width(200).Padding(6).BorderThickness(1).CornerRadius(6)
                 .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
@@ -742,6 +1116,10 @@ FrameworkElement LayoutPage()
             new Border().Width(200).Padding(6).BorderThickness(1).CornerRadius(6)
                 .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
                 .Child(new TextBlock().Text("CharacterEllipsis: The quick brown fox jumps over the lazy dog").TextTrimming(TextTrimming.CharacterEllipsis)),
+            new Border().Width(200).Padding(6).BorderThickness(1).CornerRadius(6)
+                .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+                .Child(new TextBlock().Text("Ellipsis + Center: The quick brown fox jumps over the lazy dog")
+                    .TextTrimming(TextTrimming.CharacterEllipsis).TextAlignment(TextAlignment.Center)),
             new Border().Width(200).Height(50).Padding(6).BorderThickness(1).CornerRadius(6)
                 .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
                 .Child(new TextBlock().Text("Wrap + Ellipsis: The quick brown fox jumps over the lazy dog. The quick brown fox jumps.")
@@ -752,6 +1130,131 @@ FrameworkElement LayoutPage()
             .Content(new StackPanel().Vertical().Spacing(6)
                 .Children(Enumerable.Range(1, 15).Select(i => new TextBlock().Text($"Line {i} - The quick brown fox jumps over the lazy dog.")).ToArray())))
     );
+}
+
+FrameworkElement TransformPage()
+{
+    Image DemoImage(double width = 120, double height = 120) => BindResourceImage(
+        new Image().Width(width).Height(height).StretchMode(Stretch.Uniform)
+            .ImageScaleQuality(ImageScaleQuality.HighQuality),
+        aprilResource);
+
+    TextBlock ValueLabel(MewObject source, MewProperty<double> property, string format) =>
+        new TextBlock().Bind(TextBlock.TextProperty, source, property, value => value.ToString(format))
+            .Width(54).CenterVertical();
+
+    var translate = new TransformBox().Center().Child(DemoImage());
+    var tx = new Slider().Range(-100, 100).Width(160);
+    var ty = new Slider().Range(-100, 100).Width(160);
+    translate.Bind(TransformBox.TranslateXProperty, tx, RangeBase.ValueProperty);
+    translate.Bind(TransformBox.TranslateYProperty, ty, RangeBase.ValueProperty);
+
+    var rotate = new TransformBox().Center().Child(DemoImage());
+    var angle = new Slider().Range(-180, 180).Width(180);
+    rotate.Bind(TransformBox.RotationDegreesProperty, angle, RangeBase.ValueProperty);
+
+    var scale = new TransformBox().Center().Child(DemoImage());
+    var scaleValue = new Slider().Range(10, 300).Value(100).Width(180);
+    scale.Bind(TransformBox.ScaleXProperty, scaleValue, RangeBase.ValueProperty,
+        value => value / 100.0, value => value * 100.0);
+    scale.Bind(TransformBox.ScaleYProperty, scaleValue, RangeBase.ValueProperty,
+        value => value / 100.0, value => value * 100.0);
+
+    var combined = new TransformBox().Center().Child(BindResourceImage(
+        new Image().Width(200).Height(90).StretchMode(Stretch.Uniform), logoResource));
+    var combinedAngle = new Slider().Range(-180, 180).Width(150);
+    var combinedScale = new Slider().Range(10, 300).Value(100).Width(150);
+    combined.Bind(TransformBox.RotationDegreesProperty, combinedAngle, RangeBase.ValueProperty);
+    combined.Bind(TransformBox.ScaleXProperty, combinedScale, RangeBase.ValueProperty,
+        value => value / 100.0, value => value * 100.0);
+    combined.Bind(TransformBox.ScaleYProperty, combinedScale, RangeBase.ValueProperty,
+        value => value / 100.0, value => value * 100.0);
+
+    var origin = new TransformBox().Center().Child(DemoImage());
+    var originX = new Slider().Range(0, 100).Value(50).Width(120);
+    var originY = new Slider().Range(0, 100).Value(50).Width(120);
+    var originAngle = new Slider().Range(-180, 180).Value(30).Width(120);
+    origin.Bind(TransformBox.OriginXProperty, originX, RangeBase.ValueProperty,
+        value => value / 100.0, value => value * 100.0);
+    origin.Bind(TransformBox.OriginYProperty, originY, RangeBase.ValueProperty,
+        value => value / 100.0, value => value * 100.0);
+    origin.Bind(TransformBox.RotationDegreesProperty, originAngle, RangeBase.ValueProperty);
+
+    void OpenZoomPanWindow()
+    {
+        var image = BindResourceImage(
+            new Image().StretchMode(Stretch.None).ImageScaleQuality(ImageScaleQuality.HighQuality),
+            soondukResource);
+        var canvas = new ZoomPanCanvas { Child = image, CenterContent = true };
+        var viewer = new ScrollViewer()
+            .Padding(0)
+            .HorizontalScroll(ScrollMode.Auto)
+            .VerticalScroll(ScrollMode.Auto);
+        viewer.Content = canvas;
+
+        var logRatio = Math.Log(ZoomPanCanvas.MaxZoom / ZoomPanCanvas.MinZoom);
+        var zoom = new Slider().Width(150).CenterVertical().Range(0, 1).SmallChange(0.01)
+            .Value(Math.Log(1.0 / ZoomPanCanvas.MinZoom) / logRatio)
+            .Bind(Slider.ValueProperty, canvas, ZoomPanCanvas.ZoomProperty,
+                value => Math.Log(value / ZoomPanCanvas.MinZoom) / logRatio,
+                value => ZoomPanCanvas.MinZoom * Math.Exp(value * logRatio));
+        var zoomLabel = new TextBlock().Text("100%").CenterVertical().Width(70);
+        canvas.ZoomChanged += value => zoomLabel.Text = $"{value * 100:0}%";
+
+        new Window()
+            .Resizable(900, 650)
+            .Title("Zoom & Pan Canvas")
+            .Content(new DockPanel().Children(
+                new StackPanel().DockTop().Horizontal().Margin(8).Spacing(8).Children(
+                    new TextBlock().Text("Zoom:").CenterVertical(),
+                    zoom,
+                    zoomLabel,
+                    new Button().Content("Reset").Width(70)
+                        .OnClick(() => canvas.AnimateZoomWithViewCenter(viewer, 1.0)),
+                    new Button().Content("Fit").Width(70).OnClick(() =>
+                    {
+                        if (viewer.ViewportWidth <= 0 || viewer.ViewportHeight <= 0) return;
+                        var size = canvas.ChildNaturalSize;
+                        if (size.Width <= 0 || size.Height <= 0) return;
+                        var fit = Math.Min(viewer.ViewportWidth / size.Width, viewer.ViewportHeight / size.Height);
+                        canvas.AnimateZoomWithViewCenter(viewer,
+                            Math.Clamp(fit, ZoomPanCanvas.MinZoom, ZoomPanCanvas.MaxZoom));
+                    }),
+                    new CheckBox().Content("Center").Check().CenterVertical()
+                        .OnCheckedChanged(value => canvas.CenterContent = value),
+                    new TextBlock().Text("Wheel to zoom, Drag or Scrollbar to pan")
+                        .Foreground(Color.FromRgb(120, 120, 120)).CenterVertical()),
+                viewer))
+            .Show(window);
+    }
+
+    FrameworkElement TransformSurface(FrameworkElement content) =>
+        new Border().Height(170).ClipToBounds(true).StretchHorizontal().Child(content);
+
+    return CardGrid(
+        Card("Translate", new StackPanel().Vertical().Spacing(8).Children(
+            TransformSurface(translate),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("X:").Width(48), tx, ValueLabel(translate, TransformBox.TranslateXProperty, "F0")),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Y:").Width(48), ty, ValueLabel(translate, TransformBox.TranslateYProperty, "F0")))),
+        Card("Rotate", new StackPanel().Vertical().Spacing(8).Children(
+            TransformSurface(rotate),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Angle:").Width(48), angle, ValueLabel(rotate, TransformBox.RotationDegreesProperty, "F0")))),
+        Card("Scale", new StackPanel().Vertical().Spacing(8).Children(
+            TransformSurface(scale),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Scale:").Width(48), scaleValue, ValueLabel(scale, TransformBox.ScaleXProperty, "F2")))),
+        Card("Rotate + Scale", new StackPanel().Vertical().Spacing(8).Children(
+            TransformSurface(combined),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Angle:").Width(48), combinedAngle, ValueLabel(combined, TransformBox.RotationDegreesProperty, "F0")),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Scale:").Width(48), combinedScale, ValueLabel(combined, TransformBox.ScaleXProperty, "F2")))),
+        Card("Transform Origin", new StackPanel().Vertical().Spacing(8).Children(
+            TransformSurface(origin),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("X:").Width(48), originX, ValueLabel(origin, TransformBox.OriginXProperty, "F2")),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Y:").Width(48), originY, ValueLabel(origin, TransformBox.OriginYProperty, "F2")),
+            new StackPanel().Horizontal().Spacing(8).Children(new TextBlock().Text("Angle:").Width(48), originAngle, ValueLabel(origin, TransformBox.RotationDegreesProperty, "F0")))),
+        Card("Zoom & Pan Canvas", new StackPanel().Vertical().Spacing(8).Children(
+            new Button().Content("Open Zoom & Pan Window").OnClick(OpenZoomPanWindow),
+            new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+                .Text("Wheel to zoom (anchored to cursor),\ndrag to pan. Animated zoom with\nReset/Fit controls."))));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -875,6 +1378,21 @@ FrameworkElement TransitionsPage()
         Color.FromArgb(255, 70, 130, 220), Color.FromArgb(255, 220, 90, 70),
         Color.FromArgb(255, 70, 190, 120), Color.FromArgb(255, 200, 160, 50)];
 
+    FrameworkElement ImageBlock(int colorIndex)
+    {
+        var color = colors[colorIndex % colors.Length];
+        const int width = 80, height = 50;
+        var bgra = new byte[width * height * 4];
+        for (var i = 0; i < width * height; i++)
+        {
+            bgra[i * 4] = color.B;
+            bgra[i * 4 + 1] = color.G;
+            bgra[i * 4 + 2] = color.R;
+            bgra[i * 4 + 3] = 255;
+        }
+        return new Image().Source(ImageSource.FromBgraPixels(width, height, bgra)).StretchMode(Stretch.Fill);
+    }
+
     FrameworkElement Block(string text, int ci) =>
         new Border().Background(colors[ci % colors.Length]).CornerRadius(6).Padding(12, 8)
             .Child(new TextBlock().Text(text).Foreground(Color.White).Bold().Center());
@@ -884,6 +1402,11 @@ FrameworkElement TransitionsPage()
     string[] fadeItems = ["Hello, World!", "MewUI Transitions", "Fade Effect", "Smooth & Simple"];
     var fadeView = new TransitionContentControl { Transition = ContentTransition.CreateFade(durationMs: 300) };
     fadeView.Content = Block(fadeItems[0], 0);
+
+    int fadeImageIndex = 0;
+    var fadeImageView = new TransitionContentControl
+        { Transition = ContentTransition.CreateFade(durationMs: 300) };
+    fadeImageView.Content = ImageBlock(0);
 
     // Slide Left
     int slideIdx = 0;
@@ -928,6 +1451,14 @@ FrameworkElement TransitionsPage()
             {
                 fadeIdx = (fadeIdx + 1) % fadeItems.Length;
                 fadeView.Content = Block(fadeItems[fadeIdx], fadeIdx);
+            }))),
+
+        Card("Fade (Image)", new StackPanel().Vertical().Spacing(8).Children(
+            new Border().Height(60).Child(fadeImageView),
+            new Button().Content("Next").OnClick(() =>
+            {
+                fadeImageIndex = (fadeImageIndex + 1) % colors.Length;
+                fadeImageView.Content = ImageBlock(fadeImageIndex);
             }))),
 
         Card("Slide Left", new StackPanel().Vertical().Spacing(8).Children(
@@ -1040,6 +1571,9 @@ FrameworkElement MediaPage()
                     .FontSize(11)))
     );
 }
+
+FrameworkElement CustomRenderingPage() =>
+    CardGrid(Card("Offscreen", new SampleOffscreenControl { Height = 300, Width = 280 }));
 
 FrameworkElement IconsPage()
 {
@@ -1276,7 +1810,225 @@ FrameworkElement ListsPage()
                     }))
                 .Apply(_ => CSt()).Apply(_ => CScr())), minWidth: 420);
 
-    return CardGrid(simpleList, classList, templateCard, treeCard, wrapCard, itemsControlWrapCard, chatCard);
+    return CardGrid(simpleList, classList, templateCard, wrapCard);
+}
+
+FrameworkElement TreeViewPage()
+{
+    TreeViewNode[] Nodes(params string[] labels) => labels.Select(text => new TreeViewNode(text)).ToArray();
+    var treeItems = new[]
+    {
+        new TreeViewNode("src", [
+            new TreeViewNode("MewUI", [
+                new TreeViewNode("Controls", Nodes("Button.cs", "TextBox.cs", "TreeView.cs"))]),
+            new TreeViewNode("Rendering", [
+                new TreeViewNode("Gdi", Nodes("GdiMeasurementContext.cs", "GdiGrapchisContext.cs", "GdiGraphicsFactory.cs")),
+                new TreeViewNode("Direct2D", Nodes("Direct2DMeasurementContext.cs", "Direct2DGrapchisContext.cs", "Direct2DGraphicsFactory.cs")),
+                new TreeViewNode("OpenGL", Nodes("OpenGLMeasurementContext.cs", "OpenGLGrapchisContext.cs", "OpenGLGraphicsFactory.cs"))])]),
+        new TreeViewNode("README.md"),
+        new TreeViewNode("assets", Nodes("logo.png", "icon.ico")),
+    };
+    TextBlock selectedNode = null!;
+    var treeView = new TreeView()
+        .Width(200)
+        .ItemsSource(treeItems)
+        .ExpandTrigger(TreeViewExpandTrigger.DoubleClickNode)
+        .OnSelectionChanged(item => selectedNode.Text = item is TreeViewNode node
+            ? $"Selected: {node.Text}" : "Selected: (none)");
+    treeView.ItemTemplate<TreeViewNode>(
+        build: context => new StackPanel().Horizontal().Spacing(6).Children(
+            new Image().Register(context, "Icon").Size(16, 16).StretchMode(Stretch.None).CenterVertical(),
+            new TextBlock().Register(context, "Text").CenterVertical()),
+        bind: (_, item, _, context) =>
+        {
+            var source = item.HasChildren
+                ? (treeView.IsExpanded(item) ? iconFolderOpenResource : iconFolderCloseResource)
+                : iconFileResource;
+            context.Get<Image>("Icon").SetBinding(Image.SourceProperty, source, BindingMode.OneWay);
+            context.Get<TextBlock>("Text").Text(item.Text);
+        });
+    treeView.Expand(treeItems[0]);
+    treeView.Expand(treeItems[0].Children[0]);
+
+    var remoteRoot = new LazyTreeNode("remote", 0, true);
+    void CancelAndClear(LazyTreeNode node)
+    {
+        foreach (var child in node.Children) CancelAndClear(child);
+        node.LoadCancellation?.Cancel();
+        node.IsLoading.Value = false;
+        node.IsLoaded = false;
+        node.Children.Clear();
+    }
+
+    var asyncTree = new TreeView().Width(240)
+        .Items([remoteRoot], node => node.Children, node => node.Name, node => node,
+            node => node.Children.Count > 0 || node.CanLoadChildren)
+        .OnExpanding(async e =>
+        {
+            if (e.Item is not LazyTreeNode node || !node.CanLoadChildren ||
+                node.IsLoaded || node.LoadCancellation is not null) return;
+            var cancellation = new CancellationTokenSource();
+            node.LoadCancellation = cancellation;
+            node.IsLoading.Value = true;
+            try
+            {
+                await Task.Delay(1200 + node.Depth * 300, cancellation.Token);
+                if (node.Depth < 3)
+                    for (var i = 1; i <= 6; i++)
+                        node.Children.Add(new LazyTreeNode($"folder-{node.Depth + 1}-{i:00}", node.Depth + 1, true));
+                for (var i = 1; i <= 18; i++)
+                    node.Children.Add(new LazyTreeNode($"file-{node.Depth}-{i:00}.dat", node.Depth + 1, false));
+                node.IsLoaded = true;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            finally
+            {
+                if (ReferenceEquals(node.LoadCancellation, cancellation)) node.LoadCancellation = null;
+                node.IsLoading.Value = false;
+                cancellation.Dispose();
+            }
+        })
+        .OnCollapsing(e => { if (e.Item is LazyTreeNode node) CancelAndClear(node); });
+
+    asyncTree.ItemTemplate<LazyTreeNode>(
+        build: context => new StackPanel().Horizontal().Spacing(6).Children(
+            new Grid().Width(16).Height(16).CenterVertical().Children(
+                new Image().Register(context, "Icon").Size(16, 16).StretchMode(Stretch.None),
+                new ProgressRing().Register(context, "Loading").Size(16, 16)
+                    .WithTheme((theme, control) => control.Foreground(theme.Palette.Accent))),
+            new TextBlock().Register(context, "Text").CenterVertical()),
+        bind: (_, item, index, context) =>
+        {
+            var isFolder = item.Children.Count > 0 || item.CanLoadChildren;
+            var source = isFolder
+                ? (asyncTree.ItemsSource.GetIsExpanded(index) ? iconFolderOpenResource : iconFolderCloseResource)
+                : iconFileResource;
+            var icon = context.Get<Image>("Icon");
+            icon.SetBinding(Image.SourceProperty, source, BindingMode.OneWay);
+            context.Get<TextBlock>("Text").Text(item.Name);
+            var loading = context.Get<ProgressRing>("Loading");
+            icon.BindIsVisible(item.IsLoading, value => !value);
+            loading.Bind(ProgressRing.IsActiveProperty, item.IsLoading);
+            loading.BindIsVisible(item.IsLoading);
+        });
+
+    return CardGrid(
+        Card("TreeView", new DockPanel().Height(240).Spacing(6).Children(
+            new TextBlock().DockBottom().Ref(out selectedNode).FontSize(11).Text("Selected: (none)"),
+            treeView)),
+        Card("TreeView (Async children)", new DockPanel().Height(240).Children(asyncTree)));
+}
+
+FrameworkElement ItemsControlPage()
+{
+    var colors = new[]
+    {
+        Color.FromRgb(230, 100, 100), Color.FromRgb(100, 180, 230),
+        Color.FromRgb(100, 200, 130), Color.FromRgb(220, 180, 80),
+        Color.FromRgb(180, 120, 220), Color.FromRgb(240, 140, 100),
+        Color.FromRgb(130, 200, 200), Color.FromRgb(200, 140, 170),
+    };
+    var tiles = Enumerable.Range(0, 4800).Select(i => $"Tile {i + 1}").ToArray();
+
+    return CardGrid(
+        Card("ItemsControl (WrapPresenter)", new ItemsControl()
+            .ItemPadding(new(2))
+            .Height(240)
+            .Width(402)
+            .WrapPresenter(80, 80)
+            .ItemsSource(ItemsView.Create(tiles))
+            .ItemTemplate(new DelegateTemplate<string>(
+                build: context => new Border().Register(context, "Bg").CornerRadius(6)
+                    .Child(new TextBlock().Register(context, "Label").Center().FontSize(11)),
+                bind: (_, item, index, context) =>
+                {
+                    context.Get<Border>("Bg").Background(colors[index % colors.Length].WithAlpha(120));
+                    context.Get<TextBlock>("Label").Text(item ?? string.Empty);
+                }))),
+        ChatVariableHeightCard());
+}
+
+FrameworkElement ChatVariableHeightCard()
+{
+    long nextId = 1;
+    var messages = new ObservableCollection<ChatMessage>();
+    void Add(bool mine, string sender, string text) =>
+        messages.Add(new ChatMessage(nextId++, sender, text, mine, DateTimeOffset.Now));
+    static string SampleText(int seed) => (seed % 7) switch
+    {
+        0 => "Short.",
+        1 => "A longer message that wraps across multiple lines in a narrow bubble.",
+        2 => "Multi-line:\n- first item\n- second item",
+        3 => "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+        4 => "Symbols: !@#$%^&*() and 한글/日本語/emoji 🙂",
+        5 => "The quick brown fox jumps over the lazy dog.",
+        _ => "superlongword_superlongword_superlongword_superlongword"
+    };
+
+    Add(false, "Bot", "This is a chat-style ItemsControl sample.\nVariable-height virtualization is enabled.");
+    Add(true, "You", "Try scrolling, then click 'Prepend 20' to insert older messages at the top.");
+    for (var i = 0; i < 47; i++) Add(i % 3 == 0, i % 3 == 0 ? "You" : "Bot", SampleText(i));
+
+    var view = new ItemsView<ChatMessage>(messages, message => message.Text, message => message.Id);
+    ItemsControl list = null!;
+    var input = new ObservableValue<string>(string.Empty);
+    var status = new ObservableValue<string>($"Messages: {messages.Count}");
+    void UpdateStatus() => status.Value = $"Messages: {messages.Count}";
+    void ScrollToBottom() => list.ScrollIntoView(messages.Count - 1);
+    void Send()
+    {
+        var text = input.Value.Trim();
+        if (text.Length == 0) return;
+        Add(true, "You", text);
+        input.Value = string.Empty;
+        UpdateStatus();
+        Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render, ScrollToBottom);
+    }
+
+    return Card("ItemsControl (chat / variable height)",
+        new DockPanel().MinWidth(640).MaxWidth(960).Height(320).Spacing(6).Children(
+            new StackPanel().DockTop().Horizontal().Spacing(8).Children(
+                new Button().Content("Prepend 20").OnClick(() =>
+                {
+                    for (var i = 19; i >= 0; i--)
+                        messages.Insert(0, new ChatMessage(nextId++, "Bot", SampleText(i), false, DateTimeOffset.Now.AddMinutes(-i)));
+                    UpdateStatus();
+                }),
+                new Button().Content("To bottom").OnClick(ScrollToBottom),
+                new TextBlock().BindText(status).FontSize(11).CenterVertical()),
+            new DockPanel().DockBottom().Spacing(6).Children(
+                new Button().DockRight().Content("Send").OnClick(Send),
+                new TextBox().Placeholder("Message...").BindText(input).OnKeyDown(e =>
+                {
+                    if (e.Key == Key.Enter) { e.Handled = true; Send(); }
+                })),
+            new ItemsControl().Ref(out list).HorizontalAlignment(HorizontalAlignment.Stretch)
+                .VariableHeightPresenter().ItemPadding(Thickness.Zero).ItemsSource(view)
+                .WithTheme((theme, _) => list.BorderBrush(theme.Palette.ControlBorder)
+                    .BorderThickness(theme.Metrics.ControlBorderThickness))
+                .ItemTemplate(new DelegateTemplate<ChatMessage>(
+                    build: context => new Border().Register(context, "Bubble")
+                        .BorderThickness(1).CornerRadius(10).Margin(16, 8).Padding(10, 6)
+                        .Child(new StackPanel().Vertical().Spacing(2).Children(
+                            new TextBlock().Register(context, "Sender").FontSize(10).Bold(),
+                            new TextBlock().Register(context, "Text").TextWrapping(TextWrapping.Wrap))),
+                    bind: (_, message, _, context) =>
+                    {
+                        var bubble = context.Get<Border>("Bubble");
+                        context.Get<TextBlock>("Sender").Text = message.Sender;
+                        context.Get<TextBlock>("Sender").IsVisible = !message.Mine;
+                        context.Get<TextBlock>("Text").Text = message.Text;
+                        bubble.HorizontalAlignment = message.Mine ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+                        bubble.WithTheme((theme, border) =>
+                        {
+                            border.Background(message.Mine
+                                ? theme.Palette.Accent.Lerp(theme.Palette.WindowBackground, 0.85)
+                                : theme.Palette.ControlBackground);
+                            border.BorderBrush(message.Mine
+                                ? theme.Palette.Accent.Lerp(theme.Palette.WindowText, 0.15)
+                                : theme.Palette.ControlBorder);
+                        });
+                    }))), minWidth: 420);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1346,7 +2098,95 @@ FrameworkElement GridViewPage()
             new ComboBox().Width(80).Items(["Id", "Name", "Amount"]).BindSelectedIndex(sKey), new CheckBox().Content("Desc").BindIsChecked(sDesc)),
         new StackPanel().DockBottom().Vertical().Spacing(2).Children(new TextBlock().BindText(sumText).FontSize(11), new TextBlock().BindText(selText).FontSize(11)), cg), minWidth: 520);
 
-    return CardGrid(simpleCard, complexCard);
+    return CardGrid(simpleCard, complexCard, TemplateGridViewCard(), VariableHeightGridViewCard());
+}
+
+FrameworkElement TemplateGridViewCard()
+{
+    var users = Enumerable.Range(1, 250).Select(i => new TemplateComplexPersonRow(
+        $"User {i:0000}", i % 3, i % 5 != 0, i % 101, (i * 7.3) % 100)).ToList();
+
+    var grid = new GridView().RowHeight(44).ZebraStriping().ItemsSource(users).Columns(
+        new GridViewColumn<TemplateComplexPersonRow>().Header("").Width(36).Bind(
+            build: _ => new CheckBox().Padding(0).Center(),
+            bind: (view, item) => ((CheckBox)view).BindIsChecked(item.IsSelected)),
+        new GridViewColumn<TemplateComplexPersonRow>().Header("User").Width(240).Bind(
+            build: context => new StackPanel().Vertical().Spacing(2).Padding(6, 2).Children(
+                new TextBlock().Register(context, "Name").Bold(),
+                new StackPanel().Horizontal().Spacing(8).Children(
+                    new TextBlock().Register(context, "Role").FontSize(11),
+                    new TextBlock().Register(context, "Online").FontSize(11),
+                    new TextBlock().Register(context, "Score").FontSize(11))),
+            bind: (_, item, _, context) =>
+            {
+                context.Get<TextBlock>("Name").BindText(item.Name);
+                context.Get<TextBlock>("Role").BindText(item.RoleIndex,
+                    role => role switch { 1 => "Admin", 2 => "Guest", _ => "User" });
+                context.Get<TextBlock>("Online").BindText(item.IsOnline,
+                    value => value ? "Online" : "Offline");
+                context.Get<TextBlock>("Score").BindText(item.Score, value => $"Score: {value:0.#}");
+            }),
+        new GridViewColumn<TemplateComplexPersonRow>().Header("Role").Width(120).Bind(
+            build: _ => new ComboBox().Items(["User", "Admin", "Guest"]).CenterVertical(),
+            bind: (view, item) => ((ComboBox)view).BindSelectedIndex(item.RoleIndex)),
+        new GridViewColumn<TemplateComplexPersonRow>().Header("Progress").Width(200).Bind(
+            build: _ => new ProgressBar().Minimum(0).Maximum(100).Height(10).Margin(6, 0).CenterVertical(),
+            bind: (view, item) => ((ProgressBar)view).BindValue(item.Progress)),
+        new GridViewColumn<TemplateComplexPersonRow>().Header("Online").Width(80).Bind(
+            build: _ => new ToggleSwitch().Center(),
+            bind: (view, item) => ((ToggleSwitch)view).BindIsChecked(item.IsOnline)));
+
+    return Card("GridView (complex cell templates)",
+        new DockPanel().Width(600).Height(240).Spacing(8).Children(
+            new TextBlock().DockTop()
+                .Text("Shows delegate-based complex cell templates (nested layout + multiple bound controls)")
+                .TextWrapping(TextWrapping.Wrap),
+            grid));
+}
+
+FrameworkElement VariableHeightGridViewCard()
+{
+    static string SampleNoteText(int seed)
+    {
+        var length = 30 + (seed * 37) % 240;
+        const string lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. " +
+            "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi.";
+        return $"#{seed}: " + lorem[..Math.Min(length, lorem.Length)];
+    }
+
+    var notes = new ObservableCollection<VariableHeightGridRow>(
+        Enumerable.Range(1, 200).Select(i =>
+            new VariableHeightGridRow(i, $"User {i:000}", SampleNoteText(i))));
+    long nextId = notes.Count + 1;
+    void Prepend(int count)
+    {
+        for (var i = count - 1; i >= 0; i--)
+        {
+            var id = (int)(nextId + i);
+            notes.Insert(0, new VariableHeightGridRow(id, $"Bot {id}", SampleNoteText(id * 3)));
+        }
+        nextId += count;
+    }
+
+    return Card("GridView (variable row height + scroll anchor)",
+        new DockPanel().Width(640).Height(320).Spacing(6).Children(
+            new TextBlock().DockTop()
+                .Text("Each row sizes to the tallest cell. Scroll into the list, then 'Prepend 20' to verify the viewport stays anchored on the same content.")
+                .TextWrapping(TextWrapping.Wrap).FontSize(11),
+            new StackPanel().DockTop().Horizontal().Spacing(8).Children(
+                new Button().Content("Prepend 20").OnClick(() => Prepend(20)),
+                new Button().Content("Add to end").OnClick(() =>
+                {
+                    var id = (int)nextId++;
+                    notes.Add(new VariableHeightGridRow(id, $"User {id}", SampleNoteText(id)));
+                })),
+            new GridView().VariableHeightPresenter().ItemsSource(notes).ZebraStriping().Columns(
+                new GridViewColumn<VariableHeightGridRow>().Header("#").Width(50).Text(row => row.Id.ToString()),
+                new GridViewColumn<VariableHeightGridRow>().Header("Author").Width(110).Text(row => row.Author),
+                new GridViewColumn<VariableHeightGridRow>().Header("Note").Width(440).Bind(
+                    build: _ => new TextBlock().TextWrapping(TextWrapping.Wrap),
+                    bind: (view, row) => ((TextBlock)view).Text(row.Note)))));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1460,60 +2300,244 @@ FrameworkElement OverlayPage()
 // Window / Menu
 // ═══════════════════════════════════════════════════════════════════════
 
-FrameworkElement WindowMenuPage()
+FrameworkElement WindowPage() => CardGrid(
+    Card("Native Custom Chrome", new StackPanel().Vertical().Spacing(8).Children(
+        new Button().Content("Open Native Chrome Window")
+            .OnClick(() => new NativeCustomWindowSample().Show(window)),
+        new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+            .Text("Hides the default title bar while keeping\nthe native frame (rounded corners, shadow)."))),
+    CustomChromeWindowCard(),
+    Card("Hot-reload", new StackPanel().Vertical().Spacing(8).Children(
+        new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+            .Text("Modify the code and save to see hot-reload in action.\nThis card will update with the current time."),
+        new TextBlock().Text($"Loaded: {DateTime.Now}"))),
+    WindowShowDialogCard(),
+    TransparentWindowCard(),
+    ManualPositionCard(),
+    AsyncCloseCard(),
+    PromptDialogCard(),
+    NativeMessageHookCard(),
+    DevToolsCard());
+
+FrameworkElement MenuPage()
 {
-    var dialogStatus = new ObservableValue<string>("Dialog: -");
-
-    async void ShowDialogSample()
-    {
-        dialogStatus.Value = "Dialog: opening...";
-        var dlg = new Window()
-            .Resizable(420, 220)
-            .StartCenterScreen()
-            .OnBuild(x => x
-                .Title("ShowDialog sample")
-                .Padding(16)
-                .Content(new StackPanel().Vertical().Spacing(10).Children(
-                    new TextBlock().Text("This is a modal window."),
-                    new StackPanel().Horizontal().Spacing(8).Children(
-                        new Button().Content("Open dialog").OnClick(ShowDialogSample),
-                        new Button().Content("Close").OnClick(() => x.Close())))));
-        try
-        {
-            await dlg.ShowDialogAsync(window);
-            dialogStatus.Value = "Dialog: closed";
-        }
-        catch (Exception ex) { dialogStatus.Value = $"Dialog: error ({ex.GetType().Name})"; }
-    }
-
     var shortcutLog = new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
         .Text("Press a shortcut key (e.g. Ctrl+N, Ctrl+S, ...)");
     void OnShortcut(string action) => shortcutLog.Text = $"[{DateTime.Now:HH:mm:ss.fff}] {action}";
 
     return CardGrid(
-        Card("MenuBar", new StackPanel().Width(290).Vertical().Spacing(8).Children(
+        Card("MenuBar (Multi-depth, AccessKeys + Shortcuts)", new StackPanel().Width(290).Vertical().Spacing(8).Children(
             CreateMenu(OnShortcut),
             new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
                 .Text("Hover to switch menus while a popup is open. Submenus supported."),
             shortcutLog)),
+        Card("AccessKey & Shortcuts", AccessKeyCard()));
+}
 
-        Card("Native Custom Chrome", new StackPanel().Vertical().Spacing(8).Children(
-            new Button().Content("Open Native Chrome Window")
-                .OnClick(() => new NativeCustomWindowSample().Show(window)),
+FrameworkElement CustomChromeWindowCard() =>
+    Card("Custom Chrome Window", new StackPanel().Vertical().Spacing(8).Children(
+        new Button().Content("Open CustomWindow").OnClick(() =>
+        {
+            Window custom = null!;
+            new Window().Ref(out custom).Resizable(640, 420).StartCenterOwner()
+                .OnBuild(x =>
+                {
+                    x.Title = "CustomWindow";
+                    x.AllowsTransparency = true;
+                    x.Background = Color.Transparent;
+                    x.Padding = Thickness.Zero;
+                    x.Content = new Border().CornerRadius(12).BorderThickness(1)
+                        .WithTheme((theme, border) => border
+                            .Background(theme.Palette.WindowBackground)
+                            .BorderBrush(theme.Palette.ControlBorder))
+                        .Child(new DockPanel().Children(
+                            new Border().DockTop().Height(42).Padding(12, 0)
+                                .WithTheme((theme, border) => border.Background(theme.Palette.ControlBackground))
+                                .Apply(element => EnableWindowDrag(custom, element))
+                                .Child(new DockPanel().Children(
+                                    new Button().DockRight().Content("Close").OnClick(() => custom.Close()),
+                                    new TextBlock().Text("CustomWindow").Bold().CenterVertical())),
+                            new TextBlock().Text("AllowsTransparency-based custom chrome.").Center()));
+                })
+                .Show(window);
+        }),
+        new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+            .Text("AllowsTransparency-based custom chrome.\nProvides rounded borders on Win10 and earlier.\nWin32: higher overhead. Prefer NativeCustomWindow.")));
+
+FrameworkElement WindowShowDialogCard()
+{
+    var status = new ObservableValue<string>("Dialog: -");
+    async void ShowDialogSample()
+    {
+        status.Value = "Dialog: opening...";
+        Window dialog = null!;
+        new Window().Ref(out dialog).Resizable(420, 220).StartCenterScreen()
+            .OnBuild(x => x.Title("ShowDialog sample").Padding(16)
+                .Content(new StackPanel().Vertical().Spacing(10).Children(
+                    new TextBlock().Text("This is a modal window."),
+                    new Button().Content("Close").OnClick(() => dialog.Close()))));
+        await dialog.ShowDialogAsync(window);
+        status.Value = "Dialog: closed";
+    }
+    return Card("ShowDialogAsync", new StackPanel().Vertical().Spacing(8).Children(
+        new Button().Content("Open dialog").OnClick(ShowDialogSample),
+        new TextBlock().BindText(status).FontSize(11)));
+}
+
+FrameworkElement AsyncCloseCard()
+{
+    var status = new ObservableValue<string>("CloseAsync: -");
+    Window? sample = null;
+    void OpenSample()
+    {
+        if (sample is not null) { sample.Activate(); return; }
+        var count = new ObservableValue<int>(3);
+        var sampleWindow = new Window().Title("Async close sample")
+            .FitContentHeight(340, 300).Padding(12)
+            .Content(new StackPanel().Vertical().Spacing(8).Children(
+                new TextBlock().TextWrapping(TextWrapping.Wrap)
+                    .Text("Closing takes a deferral and asks for confirmation asynchronously. Try the title-bar close button too - close requests made while the confirmation is open join the pending decision."),
+                new TextBlock().BindText(count, value => $"Countdown: {value}")));
+        sampleWindow.Closing += async args =>
+        {
+            using (args.GetDeferral())
+            {
+                if (!await MessageBox.ConfirmAsync("Close this window?", owner: sampleWindow)) args.Cancel = true;
+                else while (count.Value > 0) { await Task.Delay(1000); count.Value--; }
+            }
+        };
+        sampleWindow.Closed += () => sample = null;
+        sample = sampleWindow;
+        sampleWindow.Show(window);
+    }
+    return Card("Async Close (CloseAsync + Closing deferral)",
+        new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().FontSize(11)
+                .Text("The sample window defers its Closing decision to an async confirmation.\nCloseAsync reports whether it actually closed."),
+            new WrapPanel().Spacing(6).Children(
+                new Button().Content("Open sample window").OnClick(OpenSample),
+                new Button().Content("CloseAsync").OnClick(async () =>
+                {
+                    if (sample is null) { status.Value = "CloseAsync: no sample window"; return; }
+                    var closed = await sample.CloseAsync();
+                    status.Value = closed ? "CloseAsync: closed" : "CloseAsync: cancelled";
+                })),
+            new TextBlock().BindText(status).FontSize(11)));
+}
+
+FrameworkElement DevToolsCard()
+{
+    var shortcuts = new TextBlock().FontSize(11)
+        .Text("Shortcuts:\n- Inspector: Ctrl/Cmd+Shift+I\n- Visual Tree: Ctrl/Cmd+Shift+T");
+    return Card("DevTools", new StackPanel().Vertical().Spacing(8).Children(
+        new TextBlock().FontSize(11)
+            .Text("DevTools are available only when the MewUI library itself is built in Debug mode."),
+        shortcuts));
+}
+
+FrameworkElement FileDialogPage()
+{
+    var filters = new[]
+    {
+        new FileFilter("Text/Markdown", "*.txt", "*.md"),
+        new FileFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"),
+        new FileFilter("All files", "*.*"),
+    };
+
+    FrameworkElement BackendCard(string title, FileDialogBackend backend)
+    {
+        var status = new ObservableValue<string>("Result: -");
+        void OpenFile()
+        {
+            var path = FileDialog.OpenFile(new OpenFileDialogOptions
+            {
+                Owner = window, Title = "Open File", Filters = filters, Backend = backend,
+            });
+            status.Value = path is null ? "Result: canceled" : $"Result: {path}";
+        }
+        void OpenFiles()
+        {
+            var files = FileDialog.OpenFiles(new OpenFileDialogOptions
+            {
+                Owner = window, Title = "Open Files", Filters = filters, Backend = backend,
+            });
+            status.Value = files is null || files.Length == 0
+                ? "Result: canceled"
+                : $"Result: {files.Length} selected\n{string.Join("\n", files)}";
+        }
+        void SaveFile()
+        {
+            var path = FileDialog.SaveFile(new SaveFileDialogOptions
+            {
+                Owner = window, Title = "Save File", Filters = filters,
+                FileName = "untitled.txt", DefaultExtension = "txt", Backend = backend,
+            });
+            status.Value = path is null ? "Result: canceled" : $"Result: {path}";
+        }
+        void SelectFolder()
+        {
+            var folder = FileDialog.SelectFolder(new FolderDialogOptions
+            {
+                Owner = window, Title = "Select Folder", Backend = backend,
+            });
+            status.Value = folder is null ? "Result: canceled" : $"Result: {folder}";
+        }
+
+        return Card(title, new StackPanel().Vertical().Spacing(8).Children(
+            new Button().Content("Open File...").OnClick(OpenFile),
+            new Button().Content("Open Files...").OnClick(OpenFiles),
+            new Button().Content("Save File...").OnClick(SaveFile),
+            new Button().Content("Select Folder...").OnClick(SelectFolder),
+            new TextBlock().BindText(status).FontSize(11).TextWrapping(TextWrapping.Wrap)));
+    }
+
+    return CardGrid(
+        BackendCard("Managed", FileDialogBackend.Managed),
+        BackendCard("Native", FileDialogBackend.Native));
+}
+
+FrameworkElement ShowDialogPage()
+{
+    var syncStatus = new ObservableValue<string>("Result: -");
+    var asyncStatus = new ObservableValue<string>("Result: -");
+
+    Window CreateDialog(string title)
+    {
+        Window dialog = null!;
+        return new Window()
+            .Ref(out dialog)
+            .Resizable(420, 220)
+            .StartCenterScreen()
+            .OnBuild(x => x
+                .Title(title)
+                .Padding(16)
+                .Content(new StackPanel().Vertical().Spacing(10).Children(
+                    new TextBlock().Text("This is a modal window."),
+                    new StackPanel().Horizontal().Spacing(8).Children(
+                        new Button().Content("Close").OnClick(() => dialog.Close())))));
+    }
+
+    return CardGrid(
+        Card("Synchronous ShowDialog", new StackPanel().Vertical().Spacing(8).Children(
             new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
-                .Text("Hides the default title bar while keeping\nthe native frame (rounded corners, shadow)."))),
-
-        Card("ShowDialogAsync", new StackPanel().Vertical().Spacing(8).Children(
-            new Button().Content("Open dialog").OnClick(ShowDialogSample),
-            new TextBlock().BindText(dialogStatus).FontSize(11))),
-
-        TransparentWindowCard(),
-        ManualPositionCard(),
-        FileDialogsCard(),
-        PromptDialogCard(),
-        NativeMessageHookCard(),
-        Card("AccessKey & Shortcuts", AccessKeyCard())
-    );
+                .Text("ShowDialog() blocks this click handler while a nested loop keeps the UI responsive."),
+            new Button().Content("Show (sync)").OnClick(() =>
+            {
+                syncStatus.Value = "Result: opening...";
+                try { CreateDialog("Synchronous ShowDialog").ShowDialog(window); syncStatus.Value = "Result: closed"; }
+                catch (Exception ex) { syncStatus.Value = $"Result: error ({ex.GetType().Name})"; }
+            }),
+            new TextBlock().BindText(syncStatus).FontSize(11))),
+        Card("Asynchronous ShowDialogAsync", new StackPanel().Vertical().Spacing(8).Children(
+            new TextBlock().FontSize(11).TextWrapping(TextWrapping.Wrap)
+                .Text("ShowDialogAsync() returns a Task and is awaited on the same UI loop."),
+            new Button().Content("Show (async)").OnClick(async () =>
+            {
+                asyncStatus.Value = "Result: opening...";
+                try { await CreateDialog("Asynchronous ShowDialogAsync").ShowDialogAsync(window); asyncStatus.Value = "Result: closed"; }
+                catch (Exception ex) { asyncStatus.Value = $"Result: error ({ex.GetType().Name})"; }
+            }),
+            new TextBlock().BindText(asyncStatus).FontSize(11))));
 }
 
 FrameworkElement TransparentWindowCard()
@@ -1572,34 +2596,6 @@ FrameworkElement ManualPositionCard()
             catch (Exception ex) { status.Value = $"Manual: error ({ex.GetType().Name})"; }
         }),
         new TextBlock().BindText(status).FontSize(11)));
-}
-
-FrameworkElement FileDialogsCard()
-{
-    var openStatus = new ObservableValue<string>("Open Files: -");
-    var saveStatus = new ObservableValue<string>("Save File: -");
-    var folderStatus = new ObservableValue<string>("Select Folder: -");
-    return Card("File Dialogs", new StackPanel().Vertical().Spacing(8).Children(
-        new WrapPanel().Spacing(6).Children(
-            new Button().Content("Open Files...").OnClick(() =>
-            {
-                var files = FileDialog.OpenFiles(new OpenFileDialogOptions { Owner = window, Filters = FileFilter.Parse("All Files (*.*)|*.*") });
-                openStatus.Value = files is null || files.Length == 0 ? "Open Files: canceled"
-                    : files.Length == 1 ? $"Open Files: {files[0]}" : $"Open Files: {files.Length} files";
-            }),
-            new Button().Content("Save File...").OnClick(() =>
-            {
-                var file = FileDialog.SaveFile(new SaveFileDialogOptions { Owner = window, Filters = FileFilter.Parse("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"), FileName = "demo.txt" });
-                saveStatus.Value = file is null ? "Save File: canceled" : $"Save File: {file}";
-            }),
-            new Button().Content("Select Folder...").OnClick(() =>
-            {
-                var folder = FileDialog.SelectFolder(new FolderDialogOptions { Owner = window });
-                folderStatus.Value = folder is null ? "Select Folder: canceled" : $"Select Folder: {folder}";
-            })),
-        new TextBlock().BindText(openStatus).FontSize(11).TextWrapping(TextWrapping.Wrap),
-        new TextBlock().BindText(saveStatus).FontSize(11).TextWrapping(TextWrapping.Wrap),
-        new TextBlock().BindText(folderStatus).FontSize(11).TextWrapping(TextWrapping.Wrap)));
 }
 
 FrameworkElement PromptDialogCard()
@@ -1807,10 +2803,510 @@ async void ShowBusyDemo(bool cancellable)
     }
 }
 
+FrameworkElement SegmentRow(string name, FrameworkElement content) =>
+    new StackPanel().Vertical().Spacing(4).Children(
+        new TextBlock().Text(name).FontSize(11), content);
+
+ButtonGroup SegmentIconTextGroup(params SegmentItem[] items) =>
+    new ButtonGroup()
+        .Items(items, item => item.Label)
+        .ItemTemplate<SegmentItem>(
+            build: context =>
+            {
+                var icon = SegmentIconShape(16).CenterVertical();
+                var label = new TextBlock().CenterVertical();
+                context.Register("icon", icon);
+                context.Register("label", label);
+                return new StackPanel().Horizontal().Spacing(6).Center().Children(icon, label);
+            },
+            bind: (_, item, _, context) =>
+            {
+                context.Get<PathShape>("icon").Data = SegmentIcon(item.Icon);
+                context.Get<TextBlock>("label").Text = item.Label;
+            });
+
+ButtonGroup SegmentIconGroup(params SegmentItem[] items) =>
+    new ButtonGroup()
+        .Items(items, item => item.Label)
+        .ItemTemplate<SegmentItem>(
+            build: _ => SegmentIconShape(18).Center(),
+            bind: (view, item, _, _) => ((PathShape)view).Data = SegmentIcon(item.Icon));
+
+PathShape SegmentIconShape(double size)
+{
+    var shape = new PathShape().Stretch(Stretch.Uniform).Width(size).Height(size);
+    shape.Bind(Shape.FillProperty, shape, Control.ForegroundProperty,
+        (Color color) => new SolidColorBrush(color));
+    return shape;
+}
+
+PathGeometry SegmentIcon(string name)
+{
+    var entry = Array.Find(IconResource.GetAll(iconsXamlResource.Value), icon => icon.Name == name);
+    return entry is null ? NavigationIcons.Buttons : PathGeometry.Parse(entry.PathData);
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Custom classes
 // ═══════════════════════════════════════════════════════════════════════
 
+sealed class TransformBox : FrameworkElement, IVisualTreeHost
+{
+    public static readonly MewProperty<UIElement?> ChildProperty =
+        MewProperty<UIElement?>.Register<TransformBox>(nameof(Child), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) => self.OnChildChanged(oldValue, newValue));
+    public static readonly MewProperty<double> TranslateXProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(TranslateX), 0.0, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<double> TranslateYProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(TranslateY), 0.0, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<double> RotationDegreesProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(RotationDegrees), 0.0, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<double> ScaleXProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(ScaleX), 1.0, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<double> ScaleYProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(ScaleY), 1.0, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<double> OriginXProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(OriginX), 0.5, MewPropertyOptions.AffectsRender);
+    public static readonly MewProperty<double> OriginYProperty =
+        MewProperty<double>.Register<TransformBox>(nameof(OriginY), 0.5, MewPropertyOptions.AffectsRender);
+
+    public UIElement? Child { get => GetValue(ChildProperty); set => SetValue(ChildProperty, value); }
+    public double TranslateX { get => GetValue(TranslateXProperty); set => SetValue(TranslateXProperty, value); }
+    public double TranslateY { get => GetValue(TranslateYProperty); set => SetValue(TranslateYProperty, value); }
+    public double RotationDegrees { get => GetValue(RotationDegreesProperty); set => SetValue(RotationDegreesProperty, value); }
+    public double ScaleX { get => GetValue(ScaleXProperty); set => SetValue(ScaleXProperty, value); }
+    public double ScaleY { get => GetValue(ScaleYProperty); set => SetValue(ScaleYProperty, value); }
+    public double OriginX { get => GetValue(OriginXProperty); set => SetValue(OriginXProperty, value); }
+    public double OriginY { get => GetValue(OriginYProperty); set => SetValue(OriginYProperty, value); }
+
+    void OnChildChanged(UIElement? oldValue, UIElement? newValue)
+    {
+        if (oldValue is not null) DetachChild(oldValue);
+        if (newValue is not null) AttachChild(newValue);
+    }
+
+    protected override Size MeasureContent(Size availableSize)
+    {
+        if (Child is null) return Size.Empty;
+        Child.Measure(availableSize);
+        return Child.DesiredSize;
+    }
+
+    protected override void ArrangeContent(Rect bounds) => Child?.Arrange(bounds);
+
+    protected override UIElement? OnHitTest(Point point)
+    {
+        if (!IsVisible || !IsHitTestVisible) return null;
+        if (Child?.HitTest(point) is UIElement hit) return hit;
+        return Bounds.Contains(point) ? this : null;
+    }
+
+    Matrix3x2 BuildTransformMatrix()
+    {
+        var bounds = Bounds;
+        var cx = (float)(bounds.X + bounds.Width * OriginX);
+        var cy = (float)(bounds.Y + bounds.Height * OriginY);
+        var matrix = Matrix3x2.CreateTranslation(-cx, -cy);
+        if (ScaleX != 1 || ScaleY != 1)
+            matrix *= Matrix3x2.CreateScale((float)ScaleX, (float)ScaleY);
+        if (RotationDegrees != 0)
+            matrix *= Matrix3x2.CreateRotation((float)(RotationDegrees * Math.PI / 180.0));
+        return matrix * Matrix3x2.CreateTranslation(cx + (float)TranslateX, cy + (float)TranslateY);
+    }
+
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        if (Child is null) return;
+        var transformed = TranslateX != 0 || TranslateY != 0 || RotationDegrees != 0 || ScaleX != 1 || ScaleY != 1;
+        if (!transformed)
+        {
+            Child.Render(context);
+            return;
+        }
+        var combined = BuildTransformMatrix() * context.GetTransform();
+        context.Save();
+        context.SetTransform(combined);
+        Child.Render(context);
+        context.Restore();
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => Child is null || visitor(Child);
+}
+
+static class TransformBoxExtensions
+{
+    public static TransformBox Child(this TransformBox box, UIElement? child)
+    {
+        box.Child = child;
+        return box;
+    }
+}
+
+sealed class ZoomPanCanvas : FrameworkElement, IVisualTreeHost
+{
+    public const double MinZoom = 0.1;
+    public const double MaxZoom = 20.0;
+
+    public static readonly MewProperty<UIElement?> ChildProperty =
+        MewProperty<UIElement?>.Register<ZoomPanCanvas>(nameof(Child), null,
+            MewPropertyOptions.AffectsLayout,
+            static (self, oldValue, newValue) =>
+            {
+                if (oldValue is not null)
+                {
+                    oldValue.SkipViewportCull = false;
+                    self.DetachChild(oldValue);
+                }
+                if (newValue is not null)
+                {
+                    self.AttachChild(newValue);
+                    newValue.SkipViewportCull = true;
+                }
+            });
+
+    public static readonly MewProperty<double> ZoomProperty =
+        MewProperty<double>.Register<ZoomPanCanvas>(nameof(Zoom), 1.0,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
+            static (self, oldZoom, newZoom) =>
+            {
+                self.ZoomChanged?.Invoke(self.Zoom);
+                if (!self.isAnimatingZoom) self.ScrollToKeepViewCenter(oldZoom, newZoom);
+            });
+
+    public static readonly MewProperty<bool> CenterContentProperty =
+        MewProperty<bool>.Register<ZoomPanCanvas>(nameof(CenterContent), false,
+            MewPropertyOptions.AffectsRender);
+
+    bool isPanning;
+    bool isAnimatingZoom;
+    Point panStart;
+    double panStartScrollX;
+    double panStartScrollY;
+    AnimationClock? zoomClock;
+    Tween<double>? zoomTween;
+    Action<double>? scrollOnZoomTick;
+    ImageScaleQuality? savedImageQuality;
+
+    public event Action<double>? ZoomChanged;
+    public UIElement? Child { get => GetValue(ChildProperty); set => SetValue(ChildProperty, value); }
+    public double Zoom { get => GetValue(ZoomProperty); set => SetValue(ZoomProperty, Math.Clamp(value, MinZoom, MaxZoom)); }
+    public bool CenterContent { get => GetValue(CenterContentProperty); set => SetValue(CenterContentProperty, value); }
+
+    public Size ChildNaturalSize
+    {
+        get
+        {
+            if (Child is null) return Size.Empty;
+            Child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Child.DesiredSize;
+        }
+    }
+
+    public void AnimateZoomWithViewCenter(ScrollViewer viewer, double targetZoom, int durationMs = 250)
+    {
+        if (!CenterContent || viewer.ViewportWidth <= 0)
+        {
+            AnimateZoomTo(targetZoom, durationMs);
+            return;
+        }
+        var viewportWidth = viewer.ViewportWidth;
+        var viewportHeight = viewer.ViewportHeight;
+        var startZoom = Zoom;
+        var natural = Child?.DesiredSize ?? Size.Empty;
+        var oldCenterX = Math.Max(0, (viewportWidth - natural.Width * startZoom) * 0.5);
+        var oldCenterY = Math.Max(0, (viewportHeight - natural.Height * startZoom) * 0.5);
+        var worldCenterX = (viewer.HorizontalOffset + viewportWidth * 0.5 - oldCenterX) / startZoom;
+        var worldCenterY = (viewer.VerticalOffset + viewportHeight * 0.5 - oldCenterY) / startZoom;
+        scrollOnZoomTick = zoom =>
+        {
+            var centerX = Math.Max(0, (viewportWidth - natural.Width * zoom) * 0.5);
+            var centerY = Math.Max(0, (viewportHeight - natural.Height * zoom) * 0.5);
+            viewer.SetScrollOffsets(
+                Math.Max(0, worldCenterX * zoom + centerX - viewportWidth * 0.5),
+                Math.Max(0, worldCenterY * zoom + centerY - viewportHeight * 0.5));
+        };
+        AnimateZoomTo(targetZoom, durationMs);
+    }
+
+    public void AnimateZoomTo(double targetZoom, int durationMs = 250)
+    {
+        targetZoom = Math.Clamp(targetZoom, MinZoom, MaxZoom);
+        zoomClock?.Stop();
+        isAnimatingZoom = true;
+        var image = Child as Image;
+        if (image is not null && savedImageQuality is null)
+        {
+            savedImageQuality = image.ImageScaleQuality;
+            image.ImageScaleQuality = ImageScaleQuality.Fast;
+        }
+        var scrollAction = scrollOnZoomTick;
+        zoomClock = new AnimationClock(TimeSpan.FromMilliseconds(durationMs), Easing.EaseOutCubic);
+        zoomClock.CompletedCallback = () =>
+        {
+            isAnimatingZoom = false;
+            scrollOnZoomTick = null;
+            if (image is not null && savedImageQuality.HasValue)
+            {
+                image.ImageScaleQuality = savedImageQuality.Value;
+                savedImageQuality = null;
+            }
+            scrollAction?.Invoke(targetZoom);
+        };
+        zoomTween = new Tween<double>(Zoom, targetZoom, Lerp.Double);
+        zoomTween.ValueChanged += value =>
+        {
+            Zoom = value;
+            Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render, () => scrollAction?.Invoke(value));
+        };
+        zoomTween.Bind(zoomClock);
+        zoomClock.Start();
+    }
+
+    protected override Size MeasureContent(Size availableSize)
+    {
+        if (Child is null) return Size.Empty;
+        Child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var natural = Child.DesiredSize;
+        var dpiScale = GetDpi() / 96.0;
+        return new Size(
+            Math.Floor(natural.Width * Zoom * dpiScale) / dpiScale,
+            Math.Floor(natural.Height * Zoom * dpiScale) / dpiScale);
+    }
+
+    protected override void ArrangeContent(Rect bounds)
+    {
+        if (Child is not null)
+            Child.Arrange(new Rect(bounds.X, bounds.Y, Child.DesiredSize.Width, Child.DesiredSize.Height));
+    }
+
+    protected override void RenderSubtree(IGraphicsContext context)
+    {
+        if (Child is null) return;
+        var bounds = Bounds;
+        var zoom = (float)Zoom;
+        var natural = Child.DesiredSize;
+        var centerX = CenterContent ? (float)Math.Max(0, (bounds.Width - natural.Width * zoom) * 0.5) : 0;
+        var centerY = CenterContent ? (float)Math.Max(0, (bounds.Height - natural.Height * zoom) * 0.5) : 0;
+        context.Save();
+        context.SetClip(bounds);
+        context.SetTransform(
+            Matrix3x2.CreateTranslation(-(float)bounds.X, -(float)bounds.Y) *
+            Matrix3x2.CreateScale(zoom) *
+            Matrix3x2.CreateTranslation((float)bounds.X + centerX, (float)bounds.Y + centerY) *
+            context.GetTransform());
+        Child.Render(context);
+        context.Restore();
+    }
+
+    protected override UIElement? OnHitTest(Point point) =>
+        IsVisible && IsHitTestVisible && Bounds.Contains(point) ? this : null;
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (e.Handled || e.Delta.Y == 0 || Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y)) return;
+        var viewer = FindParentScrollViewer();
+        if (viewer is null || Child is null) return;
+        var oldZoom = Zoom;
+        var newZoom = Math.Clamp(oldZoom * Math.Pow(1.15, e.Delta.Y), MinZoom, MaxZoom);
+        if (Math.Abs(newZoom - oldZoom) < 1e-9) { e.Handled = true; return; }
+
+        var position = e.GetPosition(this);
+        var viewportX = position.X - viewer.HorizontalOffset;
+        var viewportY = position.Y - viewer.VerticalOffset;
+        var natural = Child.DesiredSize;
+        var oldCenterX = CenterContent ? Math.Max(0, (Bounds.Width - natural.Width * oldZoom) * 0.5) : 0;
+        var oldCenterY = CenterContent ? Math.Max(0, (Bounds.Height - natural.Height * oldZoom) * 0.5) : 0;
+        var ratio = newZoom / oldZoom;
+        var newCenterX = CenterContent ? Math.Max(0, (viewer.ViewportWidth - natural.Width * newZoom) * 0.5) : 0;
+        var newCenterY = CenterContent ? Math.Max(0, (viewer.ViewportHeight - natural.Height * newZoom) * 0.5) : 0;
+        var scrollX = Math.Max(0, (position.X - oldCenterX) * ratio + newCenterX - viewportX);
+        var scrollY = Math.Max(0, (position.Y - oldCenterY) * ratio + newCenterY - viewportY);
+        isAnimatingZoom = true;
+        Zoom = newZoom;
+        isAnimatingZoom = false;
+        viewer.SetScrollOffsets(scrollX, scrollY);
+        e.Handled = true;
+        Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render,
+            () => viewer.SetScrollOffsets(scrollX, scrollY));
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        var viewer = FindParentScrollViewer();
+        var root = FindVisualRoot() as UIElement;
+        if (e.Handled || e.Button != MouseButton.Left || viewer is null || root is null) return;
+        isPanning = true;
+        panStart = e.GetPosition(root);
+        panStartScrollX = viewer.HorizontalOffset;
+        panStartScrollY = viewer.VerticalOffset;
+        if (root is Window rootWindow) rootWindow.CaptureMouse(this);
+        e.Handled = true;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var viewer = FindParentScrollViewer();
+        var root = FindVisualRoot() as UIElement;
+        if (!isPanning || viewer is null || root is null) return;
+        var position = e.GetPosition(root);
+        viewer.SetScrollOffsets(
+            Math.Max(0, panStartScrollX - (position.X - panStart.X)),
+            Math.Max(0, panStartScrollY - (position.Y - panStart.Y)));
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (!isPanning) return;
+        isPanning = false;
+        if (FindVisualRoot() is Window rootWindow) rootWindow.ReleaseMouseCapture();
+    }
+
+    void ScrollToKeepViewCenter(double oldZoom, double newZoom)
+    {
+        var viewer = FindParentScrollViewer();
+        if (!CenterContent || viewer is null || Child is null ||
+            viewer.ViewportWidth <= 0 || viewer.ViewportHeight <= 0) return;
+        var natural = Child.DesiredSize;
+        var oldCenterX = Math.Max(0, (viewer.ViewportWidth - natural.Width * oldZoom) * 0.5);
+        var oldCenterY = Math.Max(0, (viewer.ViewportHeight - natural.Height * oldZoom) * 0.5);
+        var worldCenterX = (viewer.HorizontalOffset + viewer.ViewportWidth * 0.5 - oldCenterX) / oldZoom;
+        var worldCenterY = (viewer.VerticalOffset + viewer.ViewportHeight * 0.5 - oldCenterY) / oldZoom;
+        var newCenterX = Math.Max(0, (viewer.ViewportWidth - natural.Width * newZoom) * 0.5);
+        var newCenterY = Math.Max(0, (viewer.ViewportHeight - natural.Height * newZoom) * 0.5);
+        var scrollX = Math.Max(0, worldCenterX * newZoom + newCenterX - viewer.ViewportWidth * 0.5);
+        var scrollY = Math.Max(0, worldCenterY * newZoom + newCenterY - viewer.ViewportHeight * 0.5);
+        viewer.SetScrollOffsets(scrollX, scrollY);
+        Application.Current.Dispatcher?.BeginInvoke(DispatcherPriority.Render,
+            () => viewer.SetScrollOffsets(scrollX, scrollY));
+    }
+
+    ScrollViewer? FindParentScrollViewer()
+    {
+        var current = Parent;
+        while (current is not null)
+        {
+            if (current is ScrollViewer viewer) return viewer;
+            current = current.Parent;
+        }
+        return null;
+    }
+
+    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor) => Child is null || visitor(Child);
+}
+
+abstract class OffscreenControl : Control
+{
+    IRenderSurface? surface;
+    IGraphicsContext? offscreenContext;
+    IImage? view;
+    int surfaceWidth;
+    int surfaceHeight;
+    double surfaceDpiScale;
+    bool dirty = true;
+
+    protected abstract void RenderOffscreen(IGraphicsContext context, Rect bounds);
+
+    protected void InvalidateOffscreen()
+    {
+        dirty = true;
+        InvalidateVisual();
+    }
+
+    void EnsureSurface()
+    {
+        var dpiScale = GetDpi() / 96.0;
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(ActualWidth * dpiScale));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(ActualHeight * dpiScale));
+
+        if (surface is not null && surfaceWidth == pixelWidth &&
+            surfaceHeight == pixelHeight && surfaceDpiScale == dpiScale)
+            return;
+
+        offscreenContext?.Dispose();
+        view?.Dispose();
+        surface?.Dispose();
+
+        var factory = GetGraphicsFactory();
+        surface = factory.CreateSurface(RenderSurfaceDescriptor.Offscreen(pixelWidth, pixelHeight, dpiScale));
+        view = factory.CreateImageView(surface);
+        offscreenContext = factory.CreateContext(surface);
+        surfaceWidth = pixelWidth;
+        surfaceHeight = pixelHeight;
+        surfaceDpiScale = dpiScale;
+        dirty = true;
+    }
+
+    protected override void OnRender(IGraphicsContext context)
+    {
+        base.OnRender(context);
+        EnsureSurface();
+        if (surface is null || offscreenContext is null || view is null)
+            return;
+
+        if (dirty)
+        {
+            offscreenContext.BeginFrame(surface);
+            RenderOffscreen(offscreenContext, new Rect(0, 0, ActualWidth, ActualHeight));
+            offscreenContext.EndFrame();
+            dirty = false;
+        }
+        context.DrawImage(view, Bounds);
+    }
+
+    protected override void OnDispose()
+    {
+        base.OnDispose();
+        offscreenContext?.Dispose();
+        view?.Dispose();
+        surface?.Dispose();
+    }
+}
+
+sealed class SampleOffscreenControl : OffscreenControl
+{
+    bool alternate;
+
+    protected override void RenderOffscreen(IGraphicsContext context, Rect bounds)
+    {
+        Point firstStart, firstEnd, secondStart, secondEnd;
+        if (alternate)
+        {
+            (firstStart, firstEnd, secondStart, secondEnd) =
+                (bounds.TopLeft, bounds.BottomRight, bounds.TopRight, bounds.BottomLeft);
+        }
+        else
+        {
+            (firstStart, firstEnd, secondStart, secondEnd) =
+                (bounds.TopRight, bounds.BottomLeft, bounds.TopLeft, bounds.BottomRight);
+        }
+        context.DrawLine(firstStart, firstEnd, Color.Green, 1);
+        context.DrawLine(secondStart, secondEnd, Color.Blue, 3);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        alternate = !alternate;
+        InvalidateOffscreen();
+    }
+}
+
+static class AdditionalNavigationIcons
+{
+    public static readonly PathGeometry DragDrop = PathGeometry.Parse("M12,16.5 C12.3796958,16.5 12.693491,16.7821539 12.7431534,17.1482294 L12.75,17.25 L12.75,19.438 L13.4696699,18.7196699 C13.7359365,18.4534034 14.1526002,18.4291973 14.4462117,18.6470518 L14.5303301,18.7196699 C14.7965966,18.9859365 14.8208027,19.4026002 14.6029482,19.6962117 L14.5303301,19.7803301 L12.5303301,21.7803301 L12.4921785,21.8159302 L12.4921785,21.8159302 L12.42005,21.8715034 L12.42005,21.8715034 L12.3251715,21.9260696 L12.3251715,21.9260696 L12.2386647,21.9611871 L12.2386647,21.9611871 L12.136298,21.9875819 L12.136298,21.9875819 L12.0514189,21.9982462 L12.0514189,21.9982462 L11.9484646,21.9982462 L11.9484646,21.9982462 L11.828633,21.9802653 L11.828633,21.9802653 L11.7607164,21.9610197 L11.7607164,21.9610197 L11.7018614,21.9383984 L11.7018614,21.9383984 L11.6309547,21.9031392 L11.6309547,21.9031392 L11.5796709,21.8712371 L11.5796709,21.8712371 L11.5483807,21.8488352 C11.5205706,21.8278288 11.4942698,21.8049299 11.4696699,21.7803301 L9.46966991,19.7803301 C9.1767767,19.4874369 9.1767767,19.0125631 9.46966991,18.7196699 C9.73593648,18.4534034 10.1526002,18.4291973 10.4462117,18.6470518 L10.5303301,18.7196699 L11.25,19.439 L11.25,17.25 C11.25,16.8703042 11.5321539,16.556509 11.8982294,16.5068466 L12,16.5 Z M12,9 C13.6568542,9 15,10.3431458 15,12 C15,13.6568542 13.6568542,15 12,15 C10.3431458,15 9,13.6568542 9,12 C9,10.3431458 10.3431458,9 12,9 Z M18.7196699,9.46966991 C18.9859365,9.20340335 19.4026002,9.1791973 19.6962117,9.39705176 L19.7803301,9.46966991 L21.7803301,11.4696699 L21.8159302,11.5078215 L21.8159302,11.5078215 L21.8715034,11.57995 L21.8715034,11.57995 L21.9260696,11.6748285 L21.9260696,11.6748285 L21.9611871,11.7613353 L21.9611871,11.7613353 L21.9875819,11.863702 L21.9875819,11.863702 L21.9982462,11.9485764 L21.9982462,11.9485764 L21.9982462,12.0514422 L21.9982462,12.0514422 L21.9802653,12.171367 L21.9802653,12.171367 L21.9610197,12.2392836 L21.9610197,12.2392836 L21.9383984,12.2981386 L21.9383984,12.2981386 L21.9031392,12.3690453 L21.9031392,12.3690453 L21.8712371,12.4203291 L21.8712371,12.4203291 L21.8437281,12.4583026 L21.8437281,12.4583026 L21.7803301,12.5303301 L19.7803301,14.5303301 C19.4874369,14.8232233 19.0125631,14.8232233 18.7196699,14.5303301 C18.4534034,14.2640635 18.4291973,13.8473998 18.6470518,13.5537883 L18.7196699,13.4696699 L19.438,12.75 L17.25,12.75 C16.8703042,12.75 16.556509,12.4678461 16.5068466,12.1017706 L16.5,12 C16.5,11.6203042 16.7821539,11.306509 17.1482294,11.2568466 L17.25,11.25 L19.439,11.25 L18.7196699,10.5303301 C18.4534034,10.2640635 18.4291973,9.84739984 18.6470518,9.55378835 L18.7196699,9.46966991 Z M4.21966991,9.46966991 C4.51256313,9.1767767 4.98743687,9.1767767 5.28033009,9.46966991 C5.54659665,9.73593648 5.5708027,10.1526002 5.35294824,10.4462117 L5.28033009,10.5303301 L4.56,11.25 L6.75,11.25 C7.12969577,11.25 7.44349096,11.5321539 7.49315338,11.8982294 L7.5,12 C7.5,12.3796958 7.21784612,12.693491 6.85177056,12.7431534 L6.75,12.75 L4.561,12.75 L5.28033009,13.4696699 C5.54659665,13.7359365 5.5708027,14.1526002 5.35294824,14.4462117 L5.28033009,14.5303301 C5.01406352,14.7965966 4.59739984,14.8208027 4.30378835,14.6029482 L4.21966991,14.5303301 L2.21966991,12.5303301 L2.12849655,12.42005 L2.12849655,12.42005 L2.0739304,12.3251715 L2.0739304,12.3251715 L2.03881291,12.2386647 L2.03881291,12.2386647 L2.01241813,12.136298 L2.01241813,12.136298 L2.00136967,12.0454463 L2.00136967,12.0454463 L2.00146424,11.952946 L2.00146424,11.952946 L2.01973472,11.828633 L2.01973472,11.828633 L2.03898031,11.7607164 L2.03898031,11.7607164 L2.06160159,11.7018614 L2.06160159,11.7018614 L2.09686081,11.6309547 L2.09686081,11.6309547 L2.1287629,11.5796709 L2.1287629,11.5796709 L2.15116475,11.5483807 C2.17217116,11.5205706 2.19507007,11.4942698 2.21966991,11.4696699 L4.21966991,9.46966991 Z M12,10.5 C11.1715729,10.5 10.5,11.1715729 10.5,12 C10.5,12.8284271 11.1715729,13.5 12,13.5 C12.8284271,13.5 13.5,12.8284271 13.5,12 C13.5,11.1715729 12.8284271,10.5 12,10.5 Z M11.863702,2.01241813 L11.9306376,2.00316285 L11.9306376,2.00316285 L12.0173828,2.00019748 L12.0173828,2.00019748 L12.077404,2.0039807 L12.077404,2.0039807 L12.171367,2.01973472 L12.171367,2.01973472 L12.2392836,2.03898031 L12.2392836,2.03898031 L12.2981386,2.06160159 L12.2981386,2.06160159 L12.3690453,2.09686081 L12.3690453,2.09686081 L12.4203291,2.1287629 L12.4203291,2.1287629 L12.4583026,2.15627192 L12.4583026,2.15627192 L12.5303301,2.21966991 L14.5303301,4.21966991 C14.8232233,4.51256313 14.8232233,4.98743687 14.5303301,5.28033009 C14.2640635,5.54659665 13.8473998,5.5708027 13.5537883,5.35294824 L13.4696699,5.28033009 L12.75,4.561 L12.75,6.75 C12.75,7.12969577 12.4678461,7.44349096 12.1017706,7.49315338 L12,7.5 C11.6203042,7.5 11.306509,7.21784612 11.2568466,6.85177056 L11.25,6.75 L11.25,4.56 L10.5303301,5.28033009 C10.2640635,5.54659665 9.84739984,5.5708027 9.55378835,5.35294824 L9.46966991,5.28033009 C9.20340335,5.01406352 9.1791973,4.59739984 9.39705176,4.30378835 L9.46966991,4.21966991 L11.4696699,2.21966991 L11.57995,2.12849655 L11.57995,2.12849655 L11.6748285,2.0739304 L11.6748285,2.0739304 L11.7613353,2.03881291 L11.7613353,2.03881291 L11.863702,2.01241813 L11.863702,2.01241813 Z");
+    public static readonly PathGeometry TreeView = PathGeometry.Parse("M7.24924 16C7.93921 16 8.49853 16.5593 8.49853 17.2493C8.49853 17.9393 7.93921 18.4986 7.24924 18.4986C6.55928 18.4986 5.99995 17.9393 5.99995 17.2493C5.99995 16.5593 6.55928 16 7.24924 16ZM10.75 16.5H21.25C21.6642 16.5 22 16.8358 22 17.25C22 17.6297 21.7178 17.9435 21.3517 17.9932L21.25 18H10.75C10.3357 18 9.99995 17.6642 9.99995 17.25C9.99995 16.8703 10.2821 16.5565 10.6482 16.5068L10.75 16.5ZM3.24904 11C3.93901 11 4.49833 11.5593 4.49833 12.2493C4.49833 12.9393 3.93901 13.4986 3.24904 13.4986C2.55908 13.4986 1.99976 12.9393 1.99976 12.2493C1.99976 11.5593 2.55908 11 3.24904 11ZM6.74976 11.5H21.25C21.6642 11.5 22 11.8358 22 12.25C22 12.6297 21.7178 12.9435 21.3517 12.9932L21.25 13H6.74976C6.33554 13 5.99976 12.6642 5.99976 12.25C5.99976 11.8703 6.28191 11.5565 6.64799 11.5068L6.74976 11.5ZM3.24924 6C3.93921 6 4.49853 6.55933 4.49853 7.24929C4.49853 7.93925 3.93921 8.49858 3.24924 8.49858C2.55928 8.49858 1.99995 7.93925 1.99995 7.24929C1.99995 6.55933 2.55928 6 3.24924 6ZM6.74995 6.5H21.25C21.6642 6.5 22 6.83579 22 7.25C22 7.6297 21.7178 7.94349 21.3517 7.99315L21.25 8H6.74995C6.33574 8 5.99995 7.66421 5.99995 7.25C5.99995 6.8703 6.28211 6.55651 6.64818 6.50685L6.74995 6.5Z");
+    public static readonly PathGeometry ItemsControl = PathGeometry.Parse("M11.0656 8.00389L11.25 7.99875H18.75C20.483 7.99875 21.8992 9.3552 21.9949 11.0643L22 11.2487V18.7487C22 20.4818 20.6435 21.898 18.9344 21.9936L18.75 21.9987H11.25C9.51697 21.9987 8.10075 20.6423 8.00515 18.9332L8 18.7487V11.2487C8 9.51571 9.35646 8.0995 11.0656 8.00389ZM18.75 9.49875H11.25C10.3318 9.49875 9.57881 10.2059 9.5058 11.1052L9.5 11.2487V18.7487C9.5 19.6669 10.2071 20.4199 11.1065 20.4929L11.25 20.4987H18.75C19.6682 20.4987 20.4212 19.7916 20.4942 18.8923L20.5 18.7487V11.2487C20.5 10.2822 19.7165 9.49875 18.75 9.49875ZM15 11C15.4142 11 15.75 11.3358 15.75 11.75V14.248L18.25 14.2487C18.6642 14.2487 19 14.5845 19 14.9987C19 15.413 18.6642 15.7487 18.25 15.7487L15.75 15.748V18.25C15.75 18.6642 15.4142 19 15 19C14.5858 19 14.25 18.6642 14.25 18.25V15.748L11.75 15.7487C11.3358 15.7487 11 15.413 11 14.9987C11 14.5845 11.3358 14.2487 11.75 14.2487L14.25 14.248V11.75C14.25 11.3358 14.5858 11 15 11ZM15.5818 4.23284L15.6345 4.40964L16.327 6.998H14.774L14.1856 4.79787C13.9355 3.86431 12.9759 3.31029 12.0423 3.56044L4.79787 5.50158C3.91344 5.73856 3.36966 6.61227 3.52756 7.49737L3.56044 7.64488L5.50158 14.8893C5.69372 15.6064 6.30445 16.0996 7.00045 16.1764L7.00056 17.6816C5.69932 17.6051 4.52962 16.7445 4.10539 15.4544L4.05269 15.2776L2.11155 8.03311C1.66301 6.35913 2.6067 4.6401 4.23284 4.10539L4.40964 4.05269L11.6541 2.11155C13.3281 1.66301 15.0471 2.6067 15.5818 4.23284Z");
+    public static readonly PathGeometry Transform = PathGeometry.Parse("M2.5,11 C2.77614,11 3,11.2239 3,11.5 L3,15 C3,16.1046 3.89543,17 5,17 L8.5,17 C8.77614,17 9,17.2239 9,17.5 C9,17.7761 8.77614,18 8.5,18 L5,18 C3.34315,18 2,16.6569 2,15 L2,11.5 C2,11.2239 2.22386,11 2.5,11 Z M17.5,11 C17.7454222,11 17.9496,11.1769086 17.9919429,11.4101355 L18,11.5 L18,15 C18,16.597725 16.7511226,17.903664 15.1762773,17.9949075 L15,18 L11.5,18 C11.2239,18 11,17.7761 11,17.5 C11,17.2545778 11.1769086,17.0504 11.4101355,17.0080571 L11.5,17 L15,17 C16.0543909,17 16.9181678,16.18415 16.9945144,15.1492661 L17,15 L17,11.5 C17,11.2239 17.2239,11 17.5,11 Z M8.5,2 C8.77614,2 9,2.22386 9,2.5 C9,2.74545778 8.82312296,2.9496079 8.58987501,2.99194425 L8.5,3 L5,3 C3.94563773,3 3.08183483,3.81587733 3.00548573,4.85073759 L3,5 L3,8.5 C3,8.77614 2.77614,9 2.5,9 C2.25454222,9 2.0503921,8.82312296 2.00805575,8.58987501 L2,8.5 L2,5 C2,3.40232321 3.24892392,2.09633941 4.82372764,2.00509271 L5,2 L8.5,2 Z M15,2 C16.597725,2 17.903664,3.24892392 17.9949075,4.82372764 L18,5 L18,8.5 C18,8.77614 17.7761,9 17.5,9 C17.2545778,9 17.0504,8.82312296 17.0080571,8.58987501 L17,8.5 L17,5 C17,3.94563773 16.18415,3.08183483 15.1492661,3.00548573 L15,3 L11.5,3 C11.2239,3 11,2.77614 11,2.5 C11,2.25454222 11.1769086,2.0503921 11.4101355,2.00805575 L11.5,2 L15,2 Z");
+    public static readonly PathGeometry CustomRendering = PathGeometry.Parse("M5.75024 2C5.33603 2 5.00024 2.33579 5.00024 2.75V14.2505C5.00024 15.4932 6.0076 16.5005 7.25024 16.5005H9.5V19.5C9.5 20.8807 10.6193 22 12 22C13.3807 22 14.5 20.8807 14.5 19.5V16.5005H16.7502C17.9929 16.5005 19.0002 15.4932 19.0002 14.2505V2.75C19.0002 2.33579 18.6645 2 18.2502 2H5.75024ZM6.50024 11.0003V3.5H12.5V5.25154C12.5 5.66576 12.8358 6.00154 13.25 6.00154C13.6642 6.00154 14 5.66576 14 5.25154V3.5H15V6.25112C15 6.66534 15.3358 7.00112 15.75 7.00112C16.1642 7.00112 16.5 6.66534 16.5 6.25112V3.5H17.5002V11.0003H6.50024ZM6.50024 14.2505V12.5003H17.5002V14.2505C17.5002 14.6647 17.1645 15.0005 16.7502 15.0005H13.75C13.3358 15.0005 13 15.3363 13 15.7505V19.5C13 20.0523 12.5523 20.5 12 20.5C11.4477 20.5 11 20.0523 11 19.5V15.7505C11 15.3363 10.6642 15.0005 10.25 15.0005H7.25024C6.83603 15.0005 6.50024 14.6647 6.50024 14.2505Z");
+    public static readonly PathGeometry Menu = PathGeometry.Parse("M8.75 13.5C10.2862 13.5 11.5735 14.5658 11.9126 15.9983L21.25 16C21.6642 16 22 16.3358 22 16.75C22 17.1297 21.7178 17.4435 21.3518 17.4932L21.25 17.5L11.9129 17.5007C11.5741 18.9337 10.2866 20 8.75 20C7.21345 20 5.92594 18.9337 5.58712 17.5007L2.75 17.5C2.33579 17.5 2 17.1642 2 16.75C2 16.3703 2.28215 16.0565 2.64823 16.0068L2.75 16L5.58712 15.9993C5.92594 14.5663 7.21345 13.5 8.75 13.5ZM8.75 15C7.98586 15 7.33611 15.4898 7.09753 16.1725L7.07696 16.2352L7.03847 16.3834C7.01326 16.5016 7 16.6242 7 16.75C7 16.9048 7.02011 17.055 7.05785 17.1979L7.09766 17.3279L7.12335 17.3966C7.38055 18.0431 8.01191 18.5 8.75 18.5C9.51376 18.5 10.1632 18.0107 10.4021 17.3285L10.4422 17.1978L10.4251 17.2581C10.4738 17.0973 10.5 16.9267 10.5 16.75C10.5 16.6452 10.4908 16.5425 10.4731 16.4428L10.4431 16.3057L10.4231 16.2353L10.3763 16.1024C10.1188 15.4565 9.48771 15 8.75 15ZM15.25 4C16.7866 4 18.0741 5.06632 18.4129 6.49934L21.25 6.5C21.6642 6.5 22 6.83579 22 7.25C22 7.6297 21.7178 7.94349 21.3518 7.99315L21.25 8L18.4129 8.00066C18.0741 9.43368 16.7866 10.5 15.25 10.5C13.7134 10.5 12.4259 9.43368 12.0871 8.00066L2.75 8C2.33579 8 2 7.66421 2 7.25C2 6.8703 2.28215 6.55651 2.64823 6.50685L2.75 6.5L12.0874 6.49833C12.4265 5.06582 13.7138 4 15.25 4ZM15.25 5.5C14.4859 5.5 13.8361 5.98976 13.5975 6.6725L13.577 6.73515L13.5385 6.88337C13.5133 7.0016 13.5 7.12425 13.5 7.25C13.5 7.40483 13.5201 7.55497 13.5579 7.69794L13.5977 7.82787L13.6234 7.89664C13.8805 8.54307 14.5119 9 15.25 9C16.0138 9 16.6632 8.51073 16.9021 7.82852L16.9422 7.69781L16.9251 7.75808C16.9738 7.59729 17 7.4267 17 7.25C17 7.14518 16.9908 7.0425 16.9731 6.94275L16.9431 6.80565L16.9231 6.73529L16.8763 6.60236C16.6188 5.95647 15.9877 5.5 15.25 5.5Z");
+    public static readonly PathGeometry FileDialog = PathGeometry.Parse("M20 9.50195V8.74985C20 7.50721 18.9926 6.49985 17.75 6.49985H12.0247L9.64368 4.51995C9.23959 4.18393 8.73063 3.99997 8.20509 3.99997H4.24957C3.00724 3.99997 2 5.00686 1.99957 6.24919L1.99561 17.7492C1.99518 18.9921 3.00266 20 4.24561 20H4.27196C4.27607 20 4.28019 20 4.28431 20H18.4693C19.2723 20 19.9723 19.4535 20.167 18.6745L21.9169 11.6765C22.1931 10.5719 21.3577 9.50195 20.2192 9.50195H20ZM4.24957 5.49997H8.20509C8.38027 5.49997 8.54993 5.56129 8.68462 5.6733L11.2741 7.82652C11.4088 7.93852 11.5784 7.99985 11.7536 7.99985H17.75C18.1642 7.99985 18.5 8.33563 18.5 8.74985V9.50195H6.42385C5.39136 9.50195 4.49137 10.2047 4.241 11.2064L3.49684 14.1837L3.49957 6.24971C3.49971 5.8356 3.83546 5.49997 4.24957 5.49997ZM5.69623 11.5701C5.77969 11.2362 6.07969 11.002 6.42385 11.002H20.2192C20.3819 11.002 20.5012 11.1548 20.4617 11.3126L18.7119 18.3107C18.684 18.4219 18.584 18.5 18.4693 18.5H4.28431C4.12167 18.5 4.00233 18.3472 4.04177 18.1894L5.69623 11.5701Z");
+    public static readonly PathGeometry ShowDialog = PathGeometry.Parse("M11.2716 7.25C11.2716 6.83579 11.6073 6.5 12.0216 6.5H16.75C17.1642 6.5 17.5 6.83579 17.5 7.25V11.9785C17.5 12.3927 17.1642 12.7285 16.75 12.7285C16.3358 12.7285 16 12.3927 16 11.9785V9.06066L10.7803 14.2803C10.4874 14.5732 10.0126 14.5732 9.71967 14.2803C9.42678 13.9874 9.42678 13.5126 9.71967 13.2197L14.9393 8H12.0216C11.6073 8 11.2716 7.66421 11.2716 7.25Z M6.15675 5.25C6.57853 3.94437 7.80398 3 9.25 3H17.75C19.5449 3 21 4.45507 21 6.25V14.8382C21 16.1902 20.1745 17.3494 19 17.8392V17.9751C19 19.0247 18.4705 19.82 17.6913 20.3191C16.9414 20.7995 15.9737 21.0045 14.9977 20.9999L14.9963 20.9999L10.9191 20.9952L7 20.9951C5.84332 20.9951 4.83555 20.6327 4.11066 19.9496C3.38287 19.2639 3 18.3103 3 17.25V8.5C3 7.63484 3.21573 6.81725 3.73399 6.20358C4.26793 5.57135 5.04354 5.25 5.95588 5.25H6.15675ZM6 6.75H5.95588C5.41235 6.75 5.08501 6.92865 4.87998 7.17142C4.65927 7.43275 4.5 7.86516 4.5 8.5V17.25C4.5 17.9397 4.74213 18.4837 5.13934 18.8579C5.53944 19.2349 6.15669 19.4951 7 19.4951L10.9191 19.4952L15.0009 19.4999L15.0037 19.4999C15.7919 19.5038 16.4486 19.3338 16.8822 19.0561C17.254 18.8179 17.4641 18.5061 17.4958 18.0882H9.25C7.45508 18.0882 6 16.6332 6 14.8382V6.75ZM9.25 4.5C8.2835 4.5 7.5 5.2835 7.5 6.25V14.8382C7.5 15.8047 8.2835 16.5882 9.25 16.5882H17.75C18.7165 16.5882 19.5 15.8047 19.5 14.8382V6.25C19.5 5.2835 18.7165 4.5 17.75 4.5H9.25Z");
+}
 static class NavigationIcons
 {
     public static readonly PathGeometry Buttons = PathGeometry.Parse("M11.75,6 C13.098658,6 13.9287944,6.96910845 13.995631,8.32894133 L14,8.50847912 L14,10.6239658 L16.2191671,11.0269265 C16.3059934,11.0426926 16.3921415,11.0619885 16.4773973,11.0847662 C18.1517032,11.5320892 19.1698052,13.2081266 18.8210232,14.8840108 L18.7783909,15.0635133 L17.7302473,18.9866586 C17.5121898,19.8028361 16.8573252,20.4232391 16.0413431,20.6030664 L15.8760801,20.6330849 L13.4578534,20.9800873 C12.5332557,21.1127621 11.6296196,20.6605333 11.1775403,19.856652 L11.0981723,19.7018603 L11.0690771,19.6393109 C10.834274,19.1345269 10.4818276,18.6948369 10.0427315,18.3563662 L9.84933278,18.2176097 L7.96560087,16.9617884 L7.87170895,16.903392 L7.87170895,16.903392 L7.77431661,16.8510415 L5.41140295,15.6755814 C5.16192093,15.5514735 5.00180973,15.2992831 4.99563339,15.0207048 C4.97105537,13.9121345 5.46115528,13.0567901 6.4145898,12.5800728 C7.11643491,12.2291503 8.04963171,12.2489716 9.24079301,12.5967061 L9.5,12.6762241 L9.5,8.50847912 C9.5,7.05521072 10.3427047,6 11.75,6 Z M11.75,7.5 C11.290032,7.5 11.0376066,7.77493989 11.0038926,8.36636053 L11,8.50847912 L11,13.7525154 C11,14.2865066 10.4577823,14.6494397 9.96410876,14.4458885 C8.50347817,13.843642 7.52268831,13.7030746 7.0854102,13.9217136 C6.83140559,14.0487159 6.66519107,14.2126417 6.57561324,14.4407321 L6.53715909,14.5602504 L8.44240897,15.5080402 L8.62328046,15.6052624 L8.62328046,15.6052624 L8.79765116,15.713713 L10.6813831,16.9695342 C11.3640898,17.424672 11.9221531,18.041075 12.3072464,18.7624149 L12.4291383,19.0066708 L12.4582335,19.0692202 C12.5822556,19.3358453 12.8485386,19.5022497 13.1361683,19.5029349 L13.2447939,19.4952959 L15.6630206,19.1482935 C15.9231839,19.1109615 16.1419003,18.9409604 16.2444544,18.7046345 L16.2810763,18.5994847 L17.32922,14.6763394 C17.5786886,13.7425919 17.0239709,12.7834058 16.0902234,12.5339372 L16.021017,12.5169491 L16.021017,12.5169491 L13.1160046,11.9879766 C12.7949778,11.9296839 12.5528355,11.672241 12.5076173,11.3570515 L12.5,11.2500435 L12.5,8.50847912 C12.5,7.8188652 12.2453502,7.5 11.75,7.5 Z M11.7488353,2.50021005 C14.924699,2.50021005 17.4992452,5.07475626 17.4992452,8.25061996 C17.4992452,8.95339473 17.3731759,9.62672444 17.142419,10.2492275 L16.9982668,10.196565 C16.8536359,10.1457147 16.6487249,10.0802277 16.3908844,10.0209198 C16.1502332,9.96556576 15.9077844,9.92827869 15.663538,9.9090586 C15.8796867,9.3994824 15.9992452,8.83901337 15.9992452,8.25061996 C15.9992452,5.90318338 14.0962719,4.00021005 11.7488353,4.00021005 C9.40139873,4.00021005 7.4984254,5.90318338 7.4984254,8.25061996 C7.4984254,9.2948245 7.87496974,10.2510824 8.49968221,10.9910174 C8.17617954,11.0189235 7.90146959,11.0600799 7.67555237,11.1144867 C7.32454793,11.1990177 7.08752441,11.2842255 6.92334742,11.3768722 C6.33817909,10.47867 5.9984254,9.40432184 5.9984254,8.25061996 C5.9984254,5.07475626 8.57297161,2.50021005 11.7488353,2.50021005 Z");
@@ -1832,6 +3328,7 @@ static class NavigationIcons
 }
 
 sealed record NavEntry(NavigationItemKind Kind, string Title, PathGeometry? Icon, Func<FrameworkElement>? Page);
+sealed record SegmentItem(string Icon, string Label);
 sealed record DemoUser(int Id, string Name, string Role, bool IsOnline);
 sealed record SimpleGridRow(int Id, string Name, string Status);
 sealed record ChatMessage(long Id, string Sender, string Text, bool Mine, DateTimeOffset Time);
@@ -1982,6 +3479,45 @@ sealed class ComplexGridRow
     public ObservableValue<bool> HasError { get; }
     public ObservableValue<bool> IsActive { get; }
     public ObservableValue<string> StatusText { get; }
+}
+
+sealed class TemplateComplexPersonRow
+{
+    public TemplateComplexPersonRow(string name, int roleIndex, bool isOnline, double progress, double score)
+    {
+        Name = new ObservableValue<string>(name);
+        RoleIndex = new ObservableValue<int>(roleIndex, value => Math.Clamp(value, 0, 2));
+        IsOnline = new ObservableValue<bool>(isOnline);
+        IsSelected = new ObservableValue<bool>(false);
+        Progress = new ObservableValue<double>(progress,
+            value => double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 0);
+        Score = new ObservableValue<double>(score,
+            value => double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 0);
+    }
+    public ObservableValue<bool> IsSelected { get; }
+    public ObservableValue<string> Name { get; }
+    public ObservableValue<int> RoleIndex { get; }
+    public ObservableValue<bool> IsOnline { get; }
+    public ObservableValue<double> Progress { get; }
+    public ObservableValue<double> Score { get; }
+}
+
+sealed class VariableHeightGridRow(int id, string author, string note)
+{
+    public int Id { get; } = id;
+    public string Author { get; } = author;
+    public string Note { get; } = note;
+}
+
+sealed class LazyTreeNode(string name, int depth, bool canLoadChildren)
+{
+    public string Name { get; } = name;
+    public int Depth { get; } = depth;
+    public bool CanLoadChildren { get; } = canLoadChildren;
+    public ObservableCollection<LazyTreeNode> Children { get; } = [];
+    public ObservableValue<bool> IsLoading { get; } = new(false);
+    public bool IsLoaded { get; set; }
+    public CancellationTokenSource? LoadCancellation { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
