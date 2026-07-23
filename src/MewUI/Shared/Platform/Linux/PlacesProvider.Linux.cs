@@ -7,16 +7,16 @@ internal sealed class LinuxPlacesProvider : IPlacesProvider
     {
         var items = new List<PlaceItem>();
 
-        PlacesBuilder.AddHeader(items, "Places");
-        PlacesBuilder.AddFolder(items, "Home", PlacesBuilder.SpecialFolder(Environment.SpecialFolder.UserProfile), ShellPlaceKind.Home);
-        PlacesBuilder.AddFolder(items, "Desktop", PlacesBuilder.SpecialFolder(Environment.SpecialFolder.Desktop), ShellPlaceKind.Desktop);
-        PlacesBuilder.AddFolder(items, "Documents", PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyDocuments), ShellPlaceKind.Documents);
-        PlacesBuilder.AddFolder(items, "Downloads", DownloadsPath(), ShellPlaceKind.Downloads);
-        PlacesBuilder.AddFolder(items, "Music", PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyMusic), ShellPlaceKind.Music);
-        PlacesBuilder.AddFolder(items, "Pictures", PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyPictures), ShellPlaceKind.Pictures);
-        PlacesBuilder.AddFolder(items, "Videos", PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyVideos), ShellPlaceKind.Videos);
+        PlacesBuilder.AddHeader(items, MewUIStrings.SidebarPlaces.Value);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderHome.Value, PlacesBuilder.SpecialFolder(Environment.SpecialFolder.UserProfile), ShellPlaceKind.Home);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderDesktop.Value, PlacesBuilder.SpecialFolder(Environment.SpecialFolder.Desktop), ShellPlaceKind.Desktop);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderDocuments.Value, PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyDocuments), ShellPlaceKind.Documents);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderDownloads.Value, DownloadsPath(), ShellPlaceKind.Downloads);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderMusic.Value, PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyMusic), ShellPlaceKind.Music);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderPictures.Value, PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyPictures), ShellPlaceKind.Pictures);
+        PlacesBuilder.AddFolder(items, MewUIStrings.FolderVideos.Value, PlacesBuilder.SpecialFolder(Environment.SpecialFolder.MyVideos), ShellPlaceKind.Videos);
 
-        PlacesBuilder.AddHeader(items, "Devices");
+        PlacesBuilder.AddHeader(items, MewUIStrings.SidebarDevices.Value);
         PlacesBuilder.AddVolumes(items);
 
         return items;

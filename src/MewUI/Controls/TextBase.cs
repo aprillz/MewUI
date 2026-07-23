@@ -1071,14 +1071,14 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
         }
 
         var p = ModifierKeys.Primary;
-        menu.AddItem("Undo", () => Undo(), !IsReadOnly && CanUndo, new KeyGesture(Key.Z, p));
-        menu.AddItem("Redo", () => Redo(), !IsReadOnly && CanRedo, new KeyGesture(Key.Y, p));
+        menu.AddItem(MewUIStrings.TextBoxContextMenuUndo.Value, () => Undo(), !IsReadOnly && CanUndo, new KeyGesture(Key.Z, p));
+        menu.AddItem(MewUIStrings.TextBoxContextMenuRedo.Value, () => Redo(), !IsReadOnly && CanRedo, new KeyGesture(Key.Y, p));
         menu.AddSeparator();
-        menu.AddItem("Cut", () => Cut(), !IsReadOnly && HasSelection, new KeyGesture(Key.X, p));
-        menu.AddItem("Copy", () => Copy(), HasSelection, new KeyGesture(Key.C, p));
-        menu.AddItem("Paste", () => Paste(), canPaste, new KeyGesture(Key.V, p));
+        menu.AddItem(MewUIStrings.TextBoxContextMenuCut.Value, () => Cut(), !IsReadOnly && HasSelection, new KeyGesture(Key.X, p));
+        menu.AddItem(MewUIStrings.TextBoxContextMenuCopy.Value, () => Copy(), HasSelection, new KeyGesture(Key.C, p));
+        menu.AddItem(MewUIStrings.TextBoxContextMenuPaste.Value, () => Paste(), canPaste, new KeyGesture(Key.V, p));
         menu.AddSeparator();
-        menu.AddItem("Select All", () => SelectAll(), GetTextLengthCore() > 0, new KeyGesture(Key.A, p));
+        menu.AddItem(MewUIStrings.TextBoxContextMenuSelectAll.Value, () => SelectAll(), GetTextLengthCore() > 0, new KeyGesture(Key.A, p));
 
         menu.ShowAt(this, positionInWindow);
     }

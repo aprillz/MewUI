@@ -43,16 +43,16 @@ public sealed class MessageBoxWindow : Window
     public bool? DialogResult { get; private set; }
 
     internal static IReadOnlyList<MessageButton> ButtonsOk =>
-        [new(MewUIStrings.OK.Value, MessageButtonRole.Accept)];
+        [new(MewUIStrings.CommonOK.Value, MessageButtonRole.Accept)];
 
     internal static IReadOnlyList<MessageButton> ButtonsOkCancel =>
-        [new(MewUIStrings.OK.Value, MessageButtonRole.Accept), new(MewUIStrings.Cancel.Value, MessageButtonRole.Reject)];
+        [new(MewUIStrings.CommonOK.Value, MessageButtonRole.Accept), new(MewUIStrings.CommonCancel.Value, MessageButtonRole.Reject)];
 
     internal static IReadOnlyList<MessageButton> ButtonsYesNo =>
-        [new(MewUIStrings.Yes.Value, MessageButtonRole.Accept), new(MewUIStrings.No.Value, MessageButtonRole.Destructive)];
+        [new(MewUIStrings.CommonYes.Value, MessageButtonRole.Accept), new(MewUIStrings.CommonNo.Value, MessageButtonRole.Destructive)];
 
     internal static IReadOnlyList<MessageButton> ButtonsYesNoCancel =>
-        [new(MewUIStrings.Yes.Value, MessageButtonRole.Accept), new(MewUIStrings.No.Value, MessageButtonRole.Destructive), new(MewUIStrings.Cancel.Value, MessageButtonRole.Reject)];
+        [new(MewUIStrings.CommonYes.Value, MessageButtonRole.Accept), new(MewUIStrings.CommonNo.Value, MessageButtonRole.Destructive), new(MewUIStrings.CommonCancel.Value, MessageButtonRole.Reject)];
 
     public MessageBoxWindow(
         string message,
@@ -126,7 +126,7 @@ public sealed class MessageBoxWindow : Window
             };
 
             var detailAt = new AccessText();
-            detailAt.SetRawText(MewUIStrings.ShowDetail.Value);
+            detailAt.SetRawText(MewUIStrings.PromptShowDetail.Value);
             var detailCheckBox = new CheckBox
             {
                 Content = detailAt,
@@ -237,13 +237,13 @@ public sealed class MessageBoxWindow : Window
 
     private static string IconToTitle(PromptIconKind icon) => icon switch
     {
-        PromptIconKind.Info => MewUIStrings.Information.Value,
-        PromptIconKind.Warning => MewUIStrings.Warning.Value,
-        PromptIconKind.Error => MewUIStrings.Error.Value,
-        PromptIconKind.Question => MewUIStrings.Question.Value,
-        PromptIconKind.Success => MewUIStrings.Success.Value,
-        PromptIconKind.Shield => MewUIStrings.Shield.Value,
-        PromptIconKind.Crash => MewUIStrings.Crash.Value,
+        PromptIconKind.Info => MewUIStrings.PromptInformation.Value,
+        PromptIconKind.Warning => MewUIStrings.PromptWarning.Value,
+        PromptIconKind.Error => MewUIStrings.PromptError.Value,
+        PromptIconKind.Question => MewUIStrings.PromptQuestion.Value,
+        PromptIconKind.Success => MewUIStrings.PromptSuccess.Value,
+        PromptIconKind.Shield => MewUIStrings.PromptShield.Value,
+        PromptIconKind.Crash => MewUIStrings.PromptCrash.Value,
         _ => string.Empty,
     };
 
