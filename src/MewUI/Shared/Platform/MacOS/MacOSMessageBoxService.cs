@@ -143,27 +143,27 @@ internal sealed class MacOSMessageBoxService : IMessageBoxService
         switch (buttons)
         {
             case NativeMessageBoxButtons.Ok:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.OK.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonOK.Value));
                 break;
 
             case NativeMessageBoxButtons.OkCancel:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.OK.Value));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.Cancel.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonOK.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonCancel.Value));
                 break;
 
             case NativeMessageBoxButtons.YesNo:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.Yes.Value));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.No.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonYes.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonNo.Value));
                 break;
 
             case NativeMessageBoxButtons.YesNoCancel:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.Yes.Value));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.No.Value));
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.Cancel.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonYes.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonNo.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonCancel.Value));
                 break;
 
             default:
-                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.OK.Value));
+                ObjC.MsgSend_nint_nint(alert, SelAddButtonWithTitle, GetNSString(MewUIStrings.CommonOK.Value));
                 break;
         }
     }

@@ -39,7 +39,7 @@ internal sealed class ManagedFileDialogWindow : Window
     public ManagedFileDialogWindow(FileDialogMode mode, string? initialDirectory, IReadOnlyList<FileFilter>? filters, ManagedDialogExtras? extras = null)
     {
         _mode = mode;
-        _filters = filters?.ToList() ?? new List<FileFilter> { new("All files", "*.*") };
+        _filters = filters?.ToList() ?? new List<FileFilter> { new(MewUIStrings.FileDialogAllFiles.Value, "*.*") };
         _browser.ActiveFilter = _filters[0];
         _browser.DirectoriesOnly = mode == FileDialogMode.SelectFolder;
         if (extras != null)
@@ -80,10 +80,10 @@ internal sealed class ManagedFileDialogWindow : Window
         if (mode is FileDialogMode.OpenSingle or FileDialogMode.OpenMultiple or FileDialogMode.Save)
         {
             bottom.Add(new DockPanel().Spacing(8).Children(
-                new TextBlock().Text("File name:").Width(70).CenterVertical().DockLeft(),
+                new TextBlock().Text(MewUIStrings.FileDialogFileNameLabel.Value).Width(70).CenterVertical().DockLeft(),
                 _fileName.CenterVertical()));
             bottom.Add(new DockPanel().Spacing(8).Children(
-                new TextBlock().Text("File type:").Width(70).CenterVertical().DockLeft(),
+                new TextBlock().Text(MewUIStrings.FileDialogFileTypeLabel.Value).Width(70).CenterVertical().DockLeft(),
                 filterCombo.CenterVertical()));
         }
         else
@@ -92,7 +92,7 @@ internal sealed class ManagedFileDialogWindow : Window
         }
 
         var acceptButton = new Button().Content(AcceptText(mode)).Width(80).OnClick(OnAccept);
-        var cancelButton = new Button().Content("Cancel").Width(80).OnClick(OnCancel);
+        var cancelButton = new Button().Content(MewUIStrings.CommonCancel.Value).Width(80).OnClick(OnCancel);
 
         var buttons = new StackPanel().Horizontal().Spacing(8).Right();
         if (PlatformConventions.Current.ReverseButtonOrder)
@@ -113,9 +113,9 @@ internal sealed class ManagedFileDialogWindow : Window
         // PrepareContainer. Back/forward segments are captured so their enabled state can track history.
         var navItems = new[]
         {
-            new NavAction("back", GlyphKind.ChevronLeft, "Back", () => _browser.GoBack()),
-            new NavAction("forward", GlyphKind.ChevronRight, "Forward", () => _browser.GoForward()),
-            new NavAction("up", GlyphKind.ChevronUp, "Up", () => _browser.GoParent()),
+            new NavAction("back", GlyphKind.ChevronLeft, MewUIStrings.FileDialogNavBack.Value, () => _browser.GoBack()),
+            new NavAction("forward", GlyphKind.ChevronRight, MewUIStrings.FileDialogNavForward.Value, () => _browser.GoForward()),
+            new NavAction("up", GlyphKind.ChevronUp, MewUIStrings.FileDialogNavUp.Value, () => _browser.GoParent()),
         };
 
         var navGroup = new ButtonGroup()
@@ -205,7 +205,7 @@ internal sealed class ManagedFileDialogWindow : Window
                 build: _ => new ViewModeIcon(),
                 bind: (view, mode, _, _) => ((ViewModeIcon)view).IsGrid = mode == FileDialogViewMode.Icons)
             .PrepareContainer<FileDialogViewMode>((container, mode, _) =>
-                container.TabIndex(3).ToolTip(mode == FileDialogViewMode.Icons ? "Grid" : "List")
+                container.TabIndex(3).ToolTip(mode == FileDialogViewMode.Icons ? MewUIStrings.FileDialogViewGrid.Value : MewUIStrings.FileDialogViewList.Value)
                 .WithTheme((t, c) => c.Width(t.Metrics.BaseControlHeight)))
             .SelectedIndex(_viewMode == FileDialogViewMode.Icons ? 1 : 0)
             .OnSelectionChanged(item => SetViewMode((FileDialogViewMode)item!));
@@ -257,18 +257,18 @@ internal sealed class ManagedFileDialogWindow : Window
 
     private static string ModeTitle(FileDialogMode mode) => mode switch
     {
-        FileDialogMode.OpenSingle => "Open File",
-        FileDialogMode.OpenMultiple => "Open Files",
-        FileDialogMode.Save => "Save File",
-        FileDialogMode.SelectFolder => "Select Folder",
-        _ => "File Dialog",
+        FileDialogMode.OpenSingle => MewUIStrings.FileDialogTitleOpenSingle.Value,
+        FileDialogMode.OpenMultiple => MewUIStrings.FileDialogTitleOpenMultiple.Value,
+        FileDialogMode.Save => MewUIStrings.FileDialogTitleSave.Value,
+        FileDialogMode.SelectFolder => MewUIStrings.FileDialogTitleSelectFolder.Value,
+        _ => MewUIStrings.FileDialogTitleFallback.Value,
     };
 
     private static string AcceptText(FileDialogMode mode) => mode switch
     {
-        FileDialogMode.Save => "_Save",
-        FileDialogMode.SelectFolder => "_Select",
-        _ => "_Open",
+        FileDialogMode.Save => MewUIStrings.FileDialogAcceptSave.Value,
+        FileDialogMode.SelectFolder => MewUIStrings.FileDialogAcceptSelect.Value,
+        _ => MewUIStrings.FileDialogAcceptOpen.Value,
     };
 
     private GridView BuildGrid()
@@ -282,7 +282,7 @@ internal sealed class ManagedFileDialogWindow : Window
             .ZebraStriping()
             .Columns(
                 new GridViewColumn<FileSystemEntry>()
-                    .Header("Name")
+                    .Header(MewUIStrings.FileDialogColumnName.Value)
                     .Width(340)
                     .Bind(
                         build: ctx => new DockPanel()
@@ -298,13 +298,13 @@ internal sealed class ManagedFileDialogWindow : Window
                             ctx.Get<TextBlock>("Text").Text = item.Name;
                         }),
                 new GridViewColumn<FileSystemEntry>()
-                    .Header("Size")
+                    .Header(MewUIStrings.FileDialogColumnSize.Value)
                     .Width(80)
                     .Bind(
                         build: _ => new TextBlock().Margin(6, 0).CenterVertical().Right(),
                         bind: (view, item) => ((TextBlock)view).Text = item.IsDirectory ? string.Empty : FileSystemBrowser.FormatSize(item.Size)),
                 new GridViewColumn<FileSystemEntry>()
-                    .Header("Modified")
+                    .Header(MewUIStrings.FileDialogColumnModified.Value)
                     .Width(130)
                     .Bind(
                         build: _ => new TextBlock().Margin(6, 0).CenterVertical().TextTrimming(TextTrimming.CharacterEllipsis),

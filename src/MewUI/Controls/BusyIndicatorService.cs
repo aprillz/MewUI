@@ -222,9 +222,11 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             _abortButton = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Content = new TextBlock
+                Content = new Label
                 {
-                    Text = MewUIStrings.Abort.Value
+                    Text = MewUIStrings.CommonAbort.Value,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
                 },
             };
             ApplyFlatButtonStyle(_abortButton);
@@ -235,16 +237,17 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             _confirmLabel = new TextBlock
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Text = MewUIStrings.AbortConfirmation.Value
+                Text = MewUIStrings.BusyIndicatorAbortConfirmation.Value
             };
             _confirmLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
 
             _yesButton = new Button
             {
-                Content = new TextBlock
+                Content = new Label
                 {
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Text = StripAccessKey(MewUIStrings.Yes.Value)
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Text = MewUIStrings.CommonYes.Value
                 },
             };
             ApplyFlatButtonStyle(_yesButton);
@@ -252,10 +255,11 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
 
             _noButton = new Button
             {
-                Content = new TextBlock
+                Content = new Label
                 {
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Text = StripAccessKey(MewUIStrings.No.Value)
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Text = MewUIStrings.CommonNo.Value
                 },
             };
             ApplyFlatButtonStyle(_noButton);
@@ -274,7 +278,7 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
             // Aborting state label
             _abortingLabel = new TextBlock
             {
-                Text = MewUIStrings.Aborting.Value,
+                Text = MewUIStrings.BusyIndicatorAborting.Value,
                 IsVisible = false
             };
             _abortingLabel.WithTheme((t, c) => c.Foreground = t.Palette.WindowText);
@@ -421,8 +425,6 @@ internal sealed class BusyIndicatorPresenter : Control, IVisualTreeHost
     }
 
 
-
-    private static string StripAccessKey(string text) => text.Replace("_", "");
 
     private void OnAbortClicked()
     {
