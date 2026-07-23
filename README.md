@@ -94,7 +94,7 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
   - Install: `dotnet add package Aprillz.MewUI`
   - See: [Installation & Packages](docs/Installation.md)
 
-- Single-file app (VS Code friendly)
+- File-Based App (FBA), VS Code friendly (.NET 10+)
   - See: [samples/FBASample/fba_calculator.cs](samples/FBASample/fba_calculator.cs)
   - Minimal header (without AOT/Trim options):
 
@@ -103,7 +103,7 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
     #:property OutputType=Exe
     #:property TargetFramework=net10.0
 
-    #:package Aprillz.MewUI
+    #:package Aprillz.MewUI@0.19.1
 
     // ...
     ```
@@ -118,7 +118,7 @@ https://github.com/user-attachments/assets/fc2d6ad8-3317-4784-a6e5-a00c68e9ed3b
    ```csharp
     var window = new Window()
         .Title("Hello MewUI")
-        .Size(520, 360)
+        .Resizable(520, 360)
         .Padding(12)
         .Content(
             new StackPanel()
@@ -152,7 +152,7 @@ MewUI is a code-first GUI framework with a small, explicit core and platform-spe
 - Full XAML/WPF compatibility
 - A drop-in replacement for WPF or Avalonia with identical APIs and behavior
 - Designer-first development workflows
-- Complex path-based data binding
+- Reflection-based path binding
 - An exhaustive, all-in-one control catalog
 
 The core covers common desktop UI patterns; specialized features such as charts and docking ship as extension packages.
@@ -202,6 +202,38 @@ var slider = new Slider()
 var label  = new Label()
             .BindText(percent, v => $"Percent ({v:P0})");
 ```
+
+**Nested sources** - `BindingPath<TRoot, TValue>` binds through a chain of nested sources without property-name strings, reflection, or generated code. Each `Then` appends a segment; observed segments rewire automatically when an intermediate is replaced.
+
+```csharp
+// binds [source].Customer.City
+var city = new TextBlock().Bind(
+    TextBlock.TextProperty,
+    order,
+    BindingPath
+        .From<OrderViewModel>()
+        .Then(order => order.Customer)      // observed segment: rewires when replaced
+        .Then(customer => customer!.City),  // leaf
+    mode: BindingMode.OneWay,
+    fallbackValue: "-");
+```
+
+A `MewProperty<T>` also works as a segment:
+
+```csharp
+// binds [source].Padding.Left
+var readout = new TextBlock().Bind(
+    TextBlock.TextProperty,
+    source,
+    BindingPath
+        .From<Control>()
+        .Then(Control.PaddingProperty)   // MewProperty segment: observed
+        .Then(padding => padding.Left),  // leaf
+    convert: left => $"{left}px",
+    mode: BindingMode.OneWay);
+```
+
+See [Binding](docs/Binding.md) for observed vs snapshot segments, null/fallback, TwoWay, and lifetime rules.
 
 ---
 ## 🧱 Controls / Panels
