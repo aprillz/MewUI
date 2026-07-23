@@ -232,10 +232,24 @@ public sealed class ContextMenu : Control, IPopupOwner
     {
         if (entry is MenuSeparator)
         {
-            return MenuSeparator.MenuSeparatorHeight;
+            return ResolveSeparatorHeight();
         }
 
         return ResolveItemHeight();
+    }
+
+    // Odd device-pixel height so a centered 1px separator line keeps equal top and bottom margins at any
+    // scale: an even band cannot center a single pixel symmetrically (e.g. 2/1/1 at 125%).
+    private double ResolveSeparatorHeight()
+    {
+        double dpiScale = GetDpi() / 96.0;
+        int px = Math.Max(1, LayoutRounding.RoundToPixelInt(MenuSeparator.MenuSeparatorHeight, dpiScale));
+        if ((px & 1) == 0)
+        {
+            px = Math.Max(1, px - 1);
+        }
+
+        return px / dpiScale;
     }
 
     private void UpdateScrollFromBar(double valueDip)
@@ -289,7 +303,7 @@ public sealed class ContextMenu : Control, IPopupOwner
         {
             if (entry is MenuSeparator)
             {
-                height += MenuSeparator.MenuSeparatorHeight;
+                height += ResolveSeparatorHeight();
                 continue;
             }
 
@@ -806,7 +820,12 @@ public sealed class ContextMenu : Control, IPopupOwner
         {
             var entry = Items[i];
             double h = GetEntryHeight(entry);
-            var row = new Rect(contentBounds.X, y, contentBounds.Width, h);
+            // Snap each row to the device pixel grid so highlight, separator and text stay crisp at
+            // fractional scales (e.g. 125%). y keeps the true unsnapped running position, so a row's
+            // snapped bottom equals the next row's snapped top and rows tile without a seam.
+            double rowTop = LayoutRounding.RoundToPixel(y, dpiScale);
+            double rowBottom = LayoutRounding.RoundToPixel(y + h, dpiScale);
+            var row = new Rect(contentBounds.X, rowTop, contentBounds.Width, rowBottom - rowTop);
             if (row.Bottom < contentBounds.Y)
             {
                 y += h;
