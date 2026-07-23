@@ -276,6 +276,20 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         // but we can scroll based on cached/estimated heights and then refine once the item gets measured.
         if (_pendingScrollIntoViewIndex >= 0 && !_isRequestingOffsetCorrection)
         {
+            // Measure the target before computing the initial offset. Appending a short item while
+            // pinned to the bottom otherwise scrolls using the running-height estimate, then discovers
+            // the smaller real height later in this same arrange pass. The owner accepts the corrected
+            // offset, but the containers have already been positioned with the estimated offset, leaving
+            // a one-frame blank strip at the bottom until another scroll triggers layout.
+            double targetMeasureWidth = UseHorizontalExtentForLayout
+                ? Math.Max(contentBounds.Width, Extent.Width)
+                : contentBounds.Width;
+            if (MeasureAndCacheItemHeight(_pendingScrollIntoViewIndex, targetMeasureWidth, dpiScale))
+            {
+                InvalidatePrefix();
+                RecomputeExtent();
+            }
+
             EnsurePrefix();
             double top = _prefix![_pendingScrollIntoViewIndex];
             double bottom = top + Math.Max(1, GetEstimatedHeightDip(_pendingScrollIntoViewIndex));
@@ -353,34 +367,12 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         for (int i = first; i < lastExclusive; i++)
         {
             var element = GetOrCreate(i, ItemBindingGeneration);
-
-            // Measure with ItemPadding-deflated width so the child measures within
-            // the actual space it will receive after Arrange Deflate.
-            var padding = ItemPadding;
-            double measureW = padding != default ? Math.Max(0, width - padding.HorizontalThickness) : width;
-            element.Measure(new Size(Math.Max(0, measureW), double.PositiveInfinity));
-
-            // Include ItemPadding in the slot height so Arrange's Deflate
-            // doesn't shrink below the child's DesiredSize.
-            double desiredH = Math.Max(0, element.DesiredSize.Height);
-            if (padding != default)
-                desiredH += padding.VerticalThickness;
-            double alignedH = LayoutRounding.RoundToPixel(desiredH, dpiScale);
-            if (alignedH <= 0 || double.IsNaN(alignedH) || double.IsInfinity(alignedH))
-            {
-                alignedH = Math.Max(1, LayoutRounding.RoundToPixel(GetEstimatedHeightDip(i), dpiScale));
-            }
-
-            if (!HeightsEqual(_heights[i], alignedH))
-            {
-                RemoveMeasuredHeight(_heights[i]);
-                _heights[i] = alignedH;
-                AddMeasuredHeight(alignedH);
-                anyHeightChanged = true;
-            }
+            anyHeightChanged |= MeasureAndCacheItemHeight(i, width, dpiScale);
+            double alignedH = _heights[i];
 
             var itemRect = new Rect(x, y, width, alignedH);
             var containerRect = GetContainerRect != null ? GetContainerRect(i, itemRect) : itemRect;
+            var padding = ItemPadding;
             if (padding != default)
             {
                 containerRect = containerRect.Deflate(padding);
@@ -689,6 +681,41 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         // grid consistent for both measured and unmeasured items, eliminating sub-pixel
         // drift across rapid INCC bursts where many unmeasured items are inserted.
         return Math.Max(1, GetRunningEstimateOrDefault());
+    }
+
+    private bool MeasureAndCacheItemHeight(int index, double width, double dpiScale)
+    {
+        var element = GetOrCreate(index, ItemBindingGeneration);
+
+        // Measure with ItemPadding-deflated width so the child measures within
+        // the actual space it will receive after Arrange Deflate.
+        var padding = ItemPadding;
+        double measureW = padding != default ? Math.Max(0, width - padding.HorizontalThickness) : width;
+        element.Measure(new Size(Math.Max(0, measureW), double.PositiveInfinity));
+
+        // Include ItemPadding in the slot height so Arrange's Deflate
+        // doesn't shrink below the child's DesiredSize.
+        double desiredH = Math.Max(0, element.DesiredSize.Height);
+        if (padding != default)
+        {
+            desiredH += padding.VerticalThickness;
+        }
+
+        double alignedH = LayoutRounding.RoundToPixel(desiredH, dpiScale);
+        if (alignedH <= 0 || double.IsNaN(alignedH) || double.IsInfinity(alignedH))
+        {
+            alignedH = Math.Max(1, LayoutRounding.RoundToPixel(GetEstimatedHeightDip(index), dpiScale));
+        }
+
+        if (HeightsEqual(_heights[index], alignedH))
+        {
+            return false;
+        }
+
+        RemoveMeasuredHeight(_heights[index]);
+        _heights[index] = alignedH;
+        AddMeasuredHeight(alignedH);
+        return true;
     }
 
     private double GetRunningEstimateOrDefault()
