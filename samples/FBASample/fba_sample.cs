@@ -10,7 +10,7 @@
 #:property DebugType=none
 #:property StripSymbols=true
 
-#:package Aprillz.MewUI@0.15.0
+#:package Aprillz.MewUI@0.19.1
 
 using System.Diagnostics;
 
@@ -385,8 +385,8 @@ Element NormalControls()
                                                 {
                                                     var file = FileDialog.OpenFile(new OpenFileDialogOptions
                                                     {
-                                                        Owner = window.Handle,
-                                                        Filter = "All Files (*.*)|*.*"
+                                                        Owner = window,
+                                                        Filters = FileFilter.Parse("All Files (*.*)|*.*")
                                                     });
 
                                                     if (file is not null)
@@ -401,8 +401,8 @@ Element NormalControls()
                                                 {
                                                     var file = FileDialog.SaveFile(new SaveFileDialogOptions
                                                     {
-                                                        Owner = window.Handle,
-                                                        Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                                                        Owner = window,
+                                                        Filters = FileFilter.Parse("Text Files (*.txt)|*.txt|All Files (*.*)|*.*"),
                                                         FileName = "demo.txt"
                                                     });
 
@@ -418,7 +418,7 @@ Element NormalControls()
                                                 {
                                                     var folder = FileDialog.SelectFolder(new FolderDialogOptions
                                                     {
-                                                        Owner = window.Handle
+                                                        Owner = window
                                                     });
 
                                                     if (folder is not null)
