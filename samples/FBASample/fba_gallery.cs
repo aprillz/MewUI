@@ -2841,10 +2841,7 @@ PathShape SegmentIconShape(double size)
 }
 
 PathGeometry SegmentIcon(string name)
-{
-    var entry = Array.Find(IconResource.GetAll(iconsXamlResource.Value), icon => icon.Name == name);
-    return entry is null ? NavigationIcons.Buttons : PathGeometry.Parse(entry.PathData);
-}
+    => SegmentIcons.Get(name);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Custom classes
@@ -3294,6 +3291,51 @@ sealed class SampleOffscreenControl : OffscreenControl
         alternate = !alternate;
         InvalidateOffscreen();
     }
+}
+
+static class SegmentIcons
+{
+    // ButtonGroup / SegmentedControl icons are intentionally code-owned PathGeometry values.
+    // They do not depend on the asynchronously downloaded Icons.xaml resource.
+    static readonly PathGeometry Cut = PathGeometry.Parse(
+        "M4.5 3C3.12 3 2 4.12 2 5.5S3.12 8 4.5 8C5.05 8 5.56 7.82 5.97 7.51L8.46 10L5.97 12.49C5.56 12.18 5.05 12 4.5 12C3.12 12 2 13.12 2 14.5S3.12 17 4.5 17S7 15.88 7 14.5C7 14.16 6.93 13.84 6.81 13.55L9.52 10.84L11.68 13C11.24 13.43 11 13.96 11 14.5C11 15.88 12.12 17 13.5 17S16 15.88 16 14.5S14.88 12 13.5 12C13.25 12 13.01 12.04 12.79 12.11L6.81 6.13C6.93 5.84 7 5.52 7 5.5C7 4.12 5.88 3 4.5 3ZM4.5 4.5C5.05 4.5 5.5 4.95 5.5 5.5S5.05 6.5 4.5 6.5S3.5 6.05 3.5 5.5S3.95 4.5 4.5 4.5ZM4.5 13.5C5.05 13.5 5.5 13.95 5.5 14.5S5.05 15.5 4.5 15.5S3.5 15.05 3.5 14.5S3.95 13.5 4.5 13.5ZM13.5 13.5C14.05 13.5 14.5 13.95 14.5 14.5S14.05 15.5 13.5 15.5S12.5 15.05 12.5 14.5S12.95 13.5 13.5 13.5Z");
+    static readonly PathGeometry Copy = PathGeometry.Parse(
+        "M6 2H15C16.1 2 17 2.9 17 4V13H15.5V4C15.5 3.72 15.28 3.5 15 3.5H6V2ZM4 5H13C14.1 5 15 5.9 15 7V16C15 17.1 14.1 18 13 18H4C2.9 18 2 17.1 2 16V7C2 5.9 2.9 5 4 5ZM4 6.5C3.72 6.5 3.5 6.72 3.5 7V16C3.5 16.28 3.72 16.5 4 16.5H13C13.28 16.5 13.5 16.28 13.5 16V7C13.5 6.72 13.28 6.5 13 6.5H4Z");
+    static readonly PathGeometry Paste = PathGeometry.Parse(
+        "M7 2H11C11.55 2 12 2.45 12 3H14C15.1 3 16 3.9 16 5V17C16 18.1 15.1 19 14 19H4C2.9 19 2 18.1 2 17V5C2 3.9 2.9 3 4 3H6C6 2.45 6.45 2 7 2ZM7.5 3.5V5H10.5V3.5H7.5ZM4 4.5C3.72 4.5 3.5 4.72 3.5 5V17C3.5 17.28 3.72 17.5 4 17.5H14C14.28 17.5 14.5 17.28 14.5 17V5C14.5 4.72 14.28 4.5 14 4.5H12V5.5C12 6.05 11.55 6.5 11 6.5H7C6.45 6.5 6 6.05 6 5.5V4.5H4Z");
+    static readonly PathGeometry AlignLeft = PathGeometry.Parse(
+        "M2 4H18V5.5H2V4ZM2 8H13V9.5H2V8ZM2 12H18V13.5H2V12ZM2 16H11V17.5H2V16Z");
+    static readonly PathGeometry AlignCenter = PathGeometry.Parse(
+        "M2 4H18V5.5H2V4ZM5 8H15V9.5H5V8ZM2 12H18V13.5H2V12ZM6 16H14V17.5H6V16Z");
+    static readonly PathGeometry AlignRight = PathGeometry.Parse(
+        "M2 4H18V5.5H2V4ZM7 8H18V9.5H7V8ZM2 12H18V13.5H2V12ZM9 16H18V17.5H9V16Z");
+    static readonly PathGeometry AppsList = PathGeometry.Parse(
+        "M2 3H6V7H2V3ZM3.5 4.5V5.5H4.5V4.5H3.5ZM8 4H18V5.5H8V4ZM2 9H6V13H2V9ZM3.5 10.5V11.5H4.5V10.5H3.5ZM8 10H18V11.5H8V10ZM2 15H6V19H2V15ZM3.5 16.5V17.5H4.5V16.5H3.5ZM8 16H18V17.5H8V16Z");
+    static readonly PathGeometry Table = PathGeometry.Parse(
+        "M3 3H17C18.1 3 19 3.9 19 5V17C19 18.1 18.1 19 17 19H3C1.9 19 1 18.1 1 17V5C1 3.9 1.9 3 3 3ZM2.5 7H6.5V4.5H3C2.72 4.5 2.5 4.72 2.5 5V7ZM8 7H12V4.5H8V7ZM13.5 7H17.5V5C17.5 4.72 17.28 4.5 17 4.5H13.5V7ZM2.5 12H6.5V8.5H2.5V12ZM8 12H12V8.5H8V12ZM13.5 12H17.5V8.5H13.5V12ZM2.5 13.5V17C2.5 17.28 2.72 17.5 3 17.5H6.5V13.5H2.5ZM8 17.5H12V13.5H8V17.5ZM13.5 17.5H17C17.28 17.5 17.5 17.28 17.5 17V13.5H13.5V17.5Z");
+    static readonly PathGeometry DataPie = PathGeometry.Parse(
+        "M9 2C4.58 2 1 5.58 1 10S4.58 18 9 18C13.08 18 16.44 14.95 16.93 11H9V2ZM7.5 3.69V9.5H2.51C2.75 6.63 4.78 4.27 7.5 3.69ZM9 16.5C5.67 16.5 2.92 14.02 2.51 11H8.38L12.53 15.15C11.51 16 10.27 16.5 9 16.5ZM10.5 1V9.5H19C19 4.81 15.19 1 10.5 1ZM12 2.69C14.72 3.27 16.73 5.28 17.31 8H12V2.69Z");
+    static readonly PathGeometry Home = PathGeometry.Parse(
+        "M10 2L18 8.5V18H12.5V12H7.5V18H2V8.5L10 2ZM10 3.93L3.5 9.21V16.5H6V10.5H14V16.5H16.5V9.21L10 3.93Z");
+    static readonly PathGeometry Calendar = PathGeometry.Parse(
+        "M5 2H6.5V4H13.5V2H15V4H16C17.1 4 18 4.9 18 6V17C18 18.1 17.1 19 16 19H4C2.9 19 2 18.1 2 17V6C2 4.9 2.9 4 4 4H5V2ZM3.5 8H16.5V6C16.5 5.72 16.28 5.5 16 5.5H4C3.72 5.5 3.5 5.72 3.5 6V8ZM3.5 9.5V17C3.5 17.28 3.72 17.5 4 17.5H16C16.28 17.5 16.5 17.28 16.5 17V9.5H3.5ZM5 11H7V13H5V11ZM9 11H11V13H9V11ZM13 11H15V13H13V11ZM5 14H7V16H5V14ZM9 14H11V16H9V14Z");
+
+    public static PathGeometry Get(string name) => name switch
+    {
+        "cut_regular" => Cut,
+        "copy_regular" => Copy,
+        "clipboard_paste_regular" => Paste,
+        "text_align_left_regular" => AlignLeft,
+        "text_align_center_regular" => AlignCenter,
+        "text_align_right_regular" => AlignRight,
+        "apps_list_regular" => AppsList,
+        "table_regular" => Table,
+        "data_pie_regular" => DataPie,
+        "home_regular" => Home,
+        "settings_regular" => NavigationIcons.Settings,
+        "calendar_regular" => Calendar,
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "Unknown segment icon."),
+    };
 }
 
 static class AdditionalNavigationIcons
