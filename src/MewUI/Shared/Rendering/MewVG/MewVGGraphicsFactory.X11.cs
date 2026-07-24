@@ -7,6 +7,8 @@ using Aprillz.MewUI.Rendering.FreeType;
 using Aprillz.MewUI.Rendering.OpenGL;
 using Aprillz.MewUI.Resources;
 
+using NativeX11 = Aprillz.MewUI.Native.X11;
+
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 public sealed partial class MewVGX11GraphicsFactory
@@ -90,9 +92,14 @@ public sealed partial class MewVGX11GraphicsFactory
             if (_worker != null || _workerInitFailed) return;
             if (!_workerHasVisualInfo)
             {
-                // No window has been created yet - can't initialize without a
-                // visual. Caller should retry after a window exists.
-                return;
+                // No window has been created yet - can't initialize without a visual. Editor
+                // preview sessions never create one, so they fall back to a self-owned display;
+                // normal apps keep the retry-after-first-window behavior so the worker shares
+                // the window's display connection.
+                if (!Design.IsPreviewMode || !TryCaptureWindowlessGLInfo())
+                {
+                    return;
+                }
             }
 
             try
@@ -105,6 +112,72 @@ public sealed partial class MewVGX11GraphicsFactory
                 _workerInitFailed = true;
                 throw;
             }
+        }
+    }
+
+    /// <summary>
+    /// Captures worker GL info without any application window: opens a self-owned display and
+    /// creates a never-mapped 1x1 window with the backend-chosen visual, which gives GLX a valid
+    /// drawable for make-current (EGL is surfaceless and ignores it). The display, colormap, and
+    /// drawable intentionally live for the process lifetime alongside the worker context.
+    /// </summary>
+    private bool TryCaptureWindowlessGLInfo()
+    {
+        try
+        {
+            nint display = NativeX11.XOpenDisplay(0);
+            if (display == 0)
+            {
+                return false;
+            }
+
+            int screen = NativeX11.XDefaultScreen(display);
+            if (!GLBackend.VisualChooser.TryChooseVisual(display, screen, allowsTransparency: false, out var visual))
+            {
+                NativeX11.XCloseDisplay(display);
+                return false;
+            }
+
+            const int ALLOC_NONE = 0;
+            const ulong CW_BORDER_PIXEL = 1UL << 3;
+            const ulong CW_COLORMAP = 1UL << 13;
+            const uint INPUT_OUTPUT = 1;
+
+            nint root = NativeX11.XRootWindow(display, screen);
+            nint colormap = NativeX11.XCreateColormap(display, root, visual.Visual, ALLOC_NONE);
+            if (colormap == 0)
+            {
+                NativeX11.XCloseDisplay(display);
+                return false;
+            }
+
+            var attributes = new XSetWindowAttributes
+            {
+                colormap = colormap,
+                // A visual depth differing from the parent's needs an explicit border pixel,
+                // otherwise XCreateWindow fails with BadMatch.
+                border_pixel = 0,
+            };
+            nint drawable = NativeX11.XCreateWindow(
+                display, root, 0, 0, 1, 1, 0,
+                visual.Depth, INPUT_OUTPUT, visual.Visual,
+                CW_COLORMAP | CW_BORDER_PIXEL, ref attributes);
+            if (drawable == 0)
+            {
+                NativeX11.XFreeColormap(display, colormap);
+                NativeX11.XCloseDisplay(display);
+                return false;
+            }
+
+            _workerDisplay = display;
+            _workerDrawable = drawable;
+            _workerVisualInfo = visual;
+            _workerHasVisualInfo = true;
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -254,6 +327,10 @@ public sealed partial class MewVGX11GraphicsFactory
             {
                 throw new InvalidOperationException("MakeCurrent (worker) failed.");
             }
+
+            // Windowless sessions reach this scope before any window resources ran the GL
+            // function bootstrap; it is interlocked-guarded, so this is a no-op afterwards.
+            MewVGGLBootstrapX11.EnsureInitialized();
         }
         catch
         {
