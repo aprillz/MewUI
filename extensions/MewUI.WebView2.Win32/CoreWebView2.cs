@@ -234,12 +234,12 @@ public sealed class CoreWebView2
         CoreWebView2HostResourceAccessKind accessKind)
     {
         if (_coreWebView2.IsDisposed) return;
-        if (_coreWebView2.Object is not ICoreWebView2_4 webView24)
+        if (_coreWebView2.Object is not ICoreWebView2_3 webView23)
         {
             throw new NotSupportedException("SetVirtualHostNameToFolderMapping is not available on this WebView2 instance.");
         }
 
-        webView24.SetVirtualHostNameToFolderMapping(
+        webView23.SetVirtualHostNameToFolderMapping(
             PWSTR.From(hostName),
             PWSTR.From(folderPath),
             (COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND)accessKind).ThrowOnError();
@@ -252,12 +252,12 @@ public sealed class CoreWebView2
     public void ClearVirtualHostNameToFolderMapping(string hostName)
     {
         if (_coreWebView2.IsDisposed) return;
-        if (_coreWebView2.Object is not ICoreWebView2_4 webView24)
+        if (_coreWebView2.Object is not ICoreWebView2_3 webView23)
         {
             throw new NotSupportedException("ClearVirtualHostNameToFolderMapping is not available on this WebView2 instance.");
         }
 
-        webView24.ClearVirtualHostNameToFolderMapping(PWSTR.From(hostName)).ThrowOnError();
+        webView23.ClearVirtualHostNameToFolderMapping(PWSTR.From(hostName)).ThrowOnError();
     }
 
     /// <summary>

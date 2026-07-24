@@ -289,6 +289,7 @@ public sealed partial class WebView2 : FrameworkElement
 
     /// <summary>
     /// Gets or sets the default background color used by the WebView controller.
+    /// When null, the WebView2 default background is used; setting null after a color was applied does not restore that default.
     /// </summary>
     public Color? DefaultBackgroundColor
     {
@@ -460,7 +461,6 @@ public sealed partial class WebView2 : FrameworkElement
         base.OnParentChanged();
 
         UpdateWebViewVisibility();
-        UpdateWebViewBackground();
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)
@@ -475,7 +475,6 @@ public sealed partial class WebView2 : FrameworkElement
     {
         base.OnVisualRootChanged(oldRoot, newRoot);
         UpdateWebViewVisibility();
-        UpdateWebViewBackground();
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -484,7 +483,6 @@ public sealed partial class WebView2 : FrameworkElement
         _ = EnsureWebView2LoadedAsync();
         UpdateWebViewBounds();
         UpdateWebViewVisibility();
-        UpdateWebViewBackground();
     }
 
     protected override void OnVisibilityChanged()
@@ -732,12 +730,15 @@ public sealed partial class WebView2 : FrameworkElement
                 try
                 {
                     _controller = new ComObject<ICoreWebView2Controller>(controller);
+                    // Apply the background before the controller becomes visible to avoid a default-background flash.
+                    UpdateWebViewBackground();
                     _controller.Object.get_CoreWebView2(out var webView).ThrowOnError();
 
 
                     _webView2 = new ComObject<ICoreWebView2>(webView);
                     CoreWebView2 = new CoreWebView2(_webView2);
                     ApplyPendingVirtualHostNameToFolderMappings();
+
                     // Configure defaults.
                     _webView2.Object.get_Settings(out var settingsObj).ThrowOnError();
                     using (var settings = new ComObject<ICoreWebView2Settings3>(settingsObj))
@@ -819,7 +820,6 @@ public sealed partial class WebView2 : FrameworkElement
 
                     UpdateWebViewBounds();
                     UpdateWebViewVisibility();
-                    UpdateWebViewBackground();
                     tcs.TrySetResult(_webView2);
                 }
                 catch (Exception ex)
@@ -918,12 +918,10 @@ public sealed partial class WebView2 : FrameworkElement
 
     private void UpdateWebViewBackground()
     {
-        if (_defaultBackgroundColor is null)
+        if (_disposed || _defaultBackgroundColor is null)
         {
             return;
         }
-
-        var color = _defaultBackgroundColor.Value;
 
         var controller = _controller;
         if (controller == null || controller.IsDisposed)
@@ -931,12 +929,13 @@ public sealed partial class WebView2 : FrameworkElement
             return;
         }
 
-        if (controller.Object is not ICoreWebView2Controller3 controller3)
+        if (controller.Object is not ICoreWebView2Controller2 controller2)
         {
             throw new NotSupportedException(
                 "DefaultBackgroundColor is not supported by this WebView2 controller.");
         }
 
+        var color = _defaultBackgroundColor.Value;
         var webView2Color = new COREWEBVIEW2_COLOR()
         {
             A = color.A,
@@ -944,7 +943,7 @@ public sealed partial class WebView2 : FrameworkElement
             G = color.G,
             R = color.R
         };
-        controller3.put_DefaultBackgroundColor(webView2Color).ThrowOnError();
+        controller2.put_DefaultBackgroundColor(webView2Color).ThrowOnError();
     }
 
     private void ApplyPendingVirtualHostNameToFolderMappings()
@@ -960,7 +959,7 @@ public sealed partial class WebView2 : FrameworkElement
             coreWebView2.SetVirtualHostNameToFolderMapping(hostName, folderPath, accessKind);
         }
     }
-    
+
     private void EnsureHostWindow(Window window)
     {
         if (_hostHandle != 0)
