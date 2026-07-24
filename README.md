@@ -357,6 +357,7 @@ Set `PreferNative` to `false` to use the managed dialog directly.
 - [Layout](docs/Layout.md)
 - [RenderLoop](docs/RenderLoop.md)
 - [Hot Reload](docs/HotReload.md)
+- [Editor Preview](docs/Preview.md)
 - [Custom Controls](docs/CustomControls.md)
 - [Control Template](docs/ControlTemplate.md)
 
