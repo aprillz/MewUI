@@ -12,6 +12,7 @@ export interface PanelCallbacks {
     onRendered(seq: number): void;
     onViewport(width: number, height: number, dpi: number): void;
     onSetTheme(mode: string): void;
+    onInput(kind: string, body: object): void;
     onDisposed(): void;
 }
 
@@ -56,6 +57,7 @@ export class PreviewPanel {
             width: header.width,
             height: header.height,
             stride: header.stride,
+            dpiScale: header.dpiScale,
             pixels: pixels.buffer.slice(pixels.byteOffset, pixels.byteOffset + pixels.byteLength),
         });
     }
@@ -138,6 +140,9 @@ export class PreviewPanel {
             case "setTheme":
                 this.callbacks.onSetTheme(message.mode as string);
                 break;
+            case "input":
+                this.callbacks.onInput(message.kind as string, message.body as object);
+                break;
         }
     }
 }
@@ -170,6 +175,7 @@ function createHtml(): string {
              overflow: auto; padding: 8px; }
   canvas { border: 1px solid var(--vscode-panel-border); flex: none; }
   canvas.fit { max-width: 100%; max-height: 100%; }
+  canvas:focus { outline: 1px solid var(--vscode-focusBorder); }
   #detail { flex: none; max-height: 30%; overflow: auto; display: none; margin: 0; padding: 6px 8px;
             border-top: 1px solid var(--vscode-panel-border);
             color: var(--vscode-errorForeground); white-space: pre-wrap;
@@ -191,7 +197,7 @@ function createHtml(): string {
     <button id="restart" title="Restart the preview session (full state reset)">Restart</button>
     <span id="state">Starting...</span>
   </div>
-  <div id="surface"><canvas id="canvas" width="1" height="1"></canvas></div>
+  <div id="surface"><canvas id="canvas" width="1" height="1" tabindex="0"></canvas></div>
   <pre id="detail"></pre>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
@@ -204,6 +210,7 @@ function createHtml(): string {
   const detailPre = document.getElementById("detail");
   let imageData = null;
   let themeMode = "";
+  let lastDpiScale = 1;
 
   // Zoom is display-only (plan.md 4.5): 100% maps one frame pixel to one device pixel.
   function applyZoom() {
@@ -263,6 +270,7 @@ function createHtml(): string {
 
   function drawFrame(message) {
     const { width, height, stride } = message;
+    lastDpiScale = message.dpiScale > 0 ? message.dpiScale : 1;
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
@@ -303,7 +311,7 @@ function createHtml(): string {
     vscode.postMessage({ type: "restart" });
   });
 
-  new ResizeObserver(() => {
+  function postViewport() {
     const surface = document.getElementById("surface");
     vscode.postMessage({
       type: "viewport",
@@ -311,7 +319,99 @@ function createHtml(): string {
       height: Math.max(1, surface.clientHeight - 16),
       dpi: 96 * window.devicePixelRatio,
     });
-  }).observe(document.getElementById("surface"));
+  }
+
+  new ResizeObserver(() => postViewport()).observe(document.getElementById("surface"));
+
+  // Interactive preview: canvas events are forwarded to the running app. Coordinates convert
+  // from CSS pixels to window DIPs via the canvas backing size and the frame's DPI scale.
+  function inputModifiers(event) {
+    return (event.ctrlKey ? 1 : 0) | (event.shiftKey ? 2 : 0) | (event.altKey ? 4 : 0) | (event.metaKey ? 8 : 0);
+  }
+
+  function toDip(event) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = rect.width > 0 ? canvas.width / rect.width : 1;
+    return {
+      x: (event.clientX - rect.left) * scale / lastDpiScale,
+      y: (event.clientY - rect.top) * scale / lastDpiScale,
+    };
+  }
+
+  function postInput(kind, body) {
+    vscode.postMessage({ type: "input", kind, body });
+  }
+
+  function postPointer(kind, event) {
+    const point = toDip(event);
+    postInput(kind, {
+      x: point.x,
+      y: point.y,
+      button: event.button,
+      buttons: event.buttons,
+      clickCount: event.detail > 0 ? event.detail : 1,
+      modifiers: inputModifiers(event),
+    });
+  }
+
+  canvas.addEventListener("pointerdown", (event) => {
+    canvas.focus();
+    canvas.setPointerCapture(event.pointerId);
+    postPointer("pointerPressed", event);
+    event.preventDefault();
+  });
+  canvas.addEventListener("pointermove", (event) => postPointer("pointerMoved", event));
+  canvas.addEventListener("pointerup", (event) => {
+    canvas.releasePointerCapture(event.pointerId);
+    postPointer("pointerReleased", event);
+  });
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  canvas.addEventListener("wheel", (event) => {
+    const point = toDip(event);
+    // Browser +deltaY = scroll down, +deltaX = scroll right; the app wheel convention is
+    // +Y = scroll-up intent, +X = scroll-left intent (~100 CSS px per notch).
+    postInput("scroll", {
+      x: point.x,
+      y: point.y,
+      deltaX: -event.deltaX / 100,
+      deltaY: -event.deltaY / 100,
+      modifiers: inputModifiers(event),
+    });
+    event.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener("keydown", (event) => {
+    postInput("key", { code: event.code, isDown: true, modifiers: inputModifiers(event) });
+    // Mirror the native key-then-character sequence for printable input.
+    if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+      if (event.key.length === 1) {
+        postInput("textInput", { text: event.key });
+      } else if (event.key === "Enter") {
+        postInput("textInput", { text: "\\r" });
+      } else if (event.key === "Tab") {
+        postInput("textInput", { text: "\\t" });
+      }
+    }
+    if (event.key === "Tab" || event.key.startsWith("Arrow") || event.key === " ") {
+      event.preventDefault();
+    }
+  });
+  canvas.addEventListener("keyup", (event) => {
+    postInput("key", { code: event.code, isDown: false, modifiers: inputModifiers(event) });
+  });
+
+  // ResizeObserver misses DPR-only changes (moving the window to a monitor with a different
+  // scale); a resolution media query fires exactly then. Re-armed each time because the query
+  // string embeds the current DPR.
+  function watchDevicePixelRatio() {
+    window.matchMedia("(resolution: " + window.devicePixelRatio + "dppx)")
+      .addEventListener("change", () => {
+        postViewport();
+        applyZoom();
+        watchDevicePixelRatio();
+      }, { once: true });
+  }
+  watchDevicePixelRatio();
 
   vscode.postMessage({ type: "ready" });
 </script>

@@ -5,7 +5,7 @@
 import { Socket } from "net";
 
 export const PROTOCOL_MAJOR = 1;
-export const PROTOCOL_MINOR = 1;
+export const PROTOCOL_MINOR = 2;
 export const MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
 
 export const enum MessageType {
@@ -21,7 +21,23 @@ export const enum MessageType {
     RefreshTarget = 10,
     SessionRejected = 11,
     SetTheme = 12,
+    PointerMoved = 13,
+    PointerPressed = 14,
+    PointerReleased = 15,
+    Scroll = 16,
+    Key = 17,
+    TextInput = 18,
 }
+
+/** Input kinds forwarded from the preview canvas, keyed to their message type ids. */
+export const INPUT_MESSAGE_TYPES: Record<string, MessageType> = {
+    pointerMoved: MessageType.PointerMoved,
+    pointerPressed: MessageType.PointerPressed,
+    pointerReleased: MessageType.PointerReleased,
+    scroll: MessageType.Scroll,
+    key: MessageType.Key,
+    textInput: MessageType.TextInput,
+};
 
 export interface PreviewTargetInfo {
     id: string;

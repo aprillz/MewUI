@@ -16,6 +16,7 @@ import * as net from "net";
 import * as path from "path";
 import {
     FrameHeader,
+    INPUT_MESSAGE_TYPES,
     MessageDecoder,
     MessageType,
     PreviewTargetInfo,
@@ -54,16 +55,22 @@ export class PreviewSession {
     private effectiveProjectPath: string;
     private usingShim = false;
     private everConnected = false;
+    private skipRestore = true;
     private server: net.Server | undefined;
     private socket: net.Socket | undefined;
     private childProcess: ChildProcess | undefined;
     private startTimer: NodeJS.Timeout | undefined;
     private rebuildTimer: NodeJS.Timeout | undefined;
     private stopped = false;
+    // Last-known state, replayed when a recreated panel rebinds to a kept-alive session.
+    private lastState: { state: SessionState; detail?: string } | undefined;
+    private lastTargets: { targets: PreviewTargetInfo[]; activeId: string } | undefined;
+    private lastStatus: StatusInfo | undefined;
+    private lastFrame: { header: FrameHeader; pixels: Buffer } | undefined;
 
     constructor(
         public readonly projectPath: string,
-        private readonly callbacks: SessionCallbacks,
+        private callbacks: SessionCallbacks,
         options?: SessionOptions,
     ) {
         const requested = options?.reloadDriver ?? "auto";
@@ -81,11 +88,52 @@ export class PreviewSession {
         return this.usingShim;
     }
 
+    public get isStopped(): boolean {
+        return this.stopped;
+    }
+
+    /** Rebinds a recreated panel to this running session and replays the last-known state. */
+    public rebind(callbacks: SessionCallbacks): void {
+        this.callbacks = callbacks;
+        if (this.lastState !== undefined) {
+            callbacks.onState(this.lastState.state, this.lastState.detail);
+        }
+        if (this.lastTargets !== undefined) {
+            callbacks.onTargets(this.lastTargets.targets, this.lastTargets.activeId);
+        }
+        if (this.lastStatus !== undefined) {
+            callbacks.onStatus(this.lastStatus);
+        }
+        if (this.lastFrame !== undefined) {
+            callbacks.onFrame(this.lastFrame.header, this.lastFrame.pixels);
+        }
+    }
+
+    private emitState(state: SessionState, detail?: string): void {
+        this.lastState = { state, detail };
+        this.callbacks.onState(state, detail);
+    }
+
+    private emitTargets(targets: PreviewTargetInfo[], activeId: string): void {
+        this.lastTargets = { targets, activeId };
+        this.callbacks.onTargets(targets, activeId);
+    }
+
+    private emitStatus(status: StatusInfo): void {
+        this.lastStatus = status;
+        this.callbacks.onStatus(status);
+    }
+
+    private emitFrame(header: FrameHeader, pixels: Buffer): void {
+        this.lastFrame = { header, pixels };
+        this.callbacks.onFrame(header, pixels);
+    }
+
     public async start(): Promise<void> {
         const port = await this.listen();
         this.spawnProcess(port);
         this.armStartTimeout();
-        this.callbacks.onState("starting");
+        this.emitState("starting");
     }
 
     public stop(): void {
@@ -97,7 +145,7 @@ export class PreviewSession {
         this.killProcess();
         this.socket?.destroy();
         this.server?.close();
-        this.callbacks.onState("stopped");
+        this.emitState("stopped");
     }
 
     /** Restarts the driver process (full state reset); the server keeps listening for the reconnect. */
@@ -108,7 +156,7 @@ export class PreviewSession {
         this.killProcess();
         const address = this.server.address() as net.AddressInfo;
         this.spawnProcess(address.port);
-        this.callbacks.onState("starting", detail);
+        this.emitState("starting", detail);
     }
 
     /**
@@ -148,6 +196,14 @@ export class PreviewSession {
         this.send(MessageType.SetTheme, { mode });
     }
 
+    /** Forwards a canvas input event; unknown kinds are dropped. */
+    public sendInput(kind: string, body: unknown): void {
+        const typeId = INPUT_MESSAGE_TYPES[kind];
+        if (typeId !== undefined) {
+            this.send(typeId, body);
+        }
+    }
+
     private send(typeId: number, body: unknown): void {
         if (this.socket && !this.socket.destroyed) {
             sendMessage(this.socket, typeId, body);
@@ -177,21 +233,21 @@ export class PreviewSession {
                 case MessageType.SessionStarted:
                     this.everConnected = true;
                     this.clearStartTimer();
-                    this.callbacks.onState("connected", this.usingShim ? "shim session (low fidelity: app Main not executed)" : undefined);
+                    this.emitState("connected", this.usingShim ? "shim session (low fidelity: app Main not executed)" : undefined);
                     break;
                 case MessageType.SessionRejected:
-                    this.callbacks.onState("failed", JSON.stringify(message.json));
+                    this.emitState("failed", JSON.stringify(message.json));
                     break;
                 case MessageType.PreviewTargets: {
                     const body = message.json as { targets: PreviewTargetInfo[]; activeId: string };
-                    this.callbacks.onTargets(body.targets, body.activeId);
+                    this.emitTargets(body.targets, body.activeId);
                     break;
                 }
                 case MessageType.Frame:
-                    this.callbacks.onFrame(message.json as FrameHeader, message.binary);
+                    this.emitFrame(message.json as FrameHeader, message.binary);
                     break;
                 case MessageType.Status:
-                    this.callbacks.onStatus(message.json as StatusInfo);
+                    this.emitStatus(message.json as StatusInfo);
                     break;
                 default:
                     // Unknown message ids are ignored for forward compatibility.
@@ -211,7 +267,7 @@ export class PreviewSession {
             if (this.socket === socket) {
                 this.socket = undefined;
                 if (!this.stopped) {
-                    this.callbacks.onState("disconnected");
+                    this.emitState("disconnected");
                 }
             }
         });
@@ -226,9 +282,15 @@ export class PreviewSession {
     }
 
     private spawnProcess(port: number): void {
+        // Skipping the restore evaluation saves 2-3s per start; only safe once assets exist,
+        // and a pre-connect failure retries with restore (e.g. after a PackageReference change).
+        const noRestore = this.skipRestore
+            && fs.existsSync(path.join(path.dirname(this.effectiveProjectPath), "obj", "project.assets.json"))
+            ? ["--no-restore"]
+            : [];
         const args = this.driver === "watch"
-            ? ["watch", "--non-interactive", "--project", this.effectiveProjectPath, "run"]
-            : ["run", "--project", this.effectiveProjectPath];
+            ? ["watch", "--non-interactive", "--project", this.effectiveProjectPath, "run", ...noRestore]
+            : ["run", "--project", this.effectiveProjectPath, ...noRestore];
         const child = spawn("dotnet", args, {
             cwd: path.dirname(this.effectiveProjectPath),
             env: {
@@ -245,13 +307,23 @@ export class PreviewSession {
 
         child.stdout?.on("data", (data: Buffer) => this.forwardLog(data));
         child.stderr?.on("data", (data: Buffer) => this.forwardLog(data));
-        child.on("error", (error) => this.callbacks.onState("failed", `dotnet failed to start: ${error.message}`));
+        child.on("error", (error) => this.emitState("failed", `dotnet failed to start: ${error.message}`));
         child.on("exit", (code) => {
             if (this.childProcess !== child) {
                 return;
             }
             this.childProcess = undefined;
             if (this.stopped) {
+                return;
+            }
+
+            // A pre-connect failure with --no-restore may just be a stale restore (new package
+            // reference); retry once with the restore enabled before any driver fallback.
+            if (!this.everConnected && code !== 0 && this.skipRestore && this.server) {
+                this.skipRestore = false;
+                this.callbacks.onLog("build failed before connecting; retrying with restore enabled");
+                const address = this.server.address() as net.AddressInfo;
+                this.spawnProcess(address.port);
                 return;
             }
 
@@ -262,11 +334,11 @@ export class PreviewSession {
                 this.callbacks.onLog(`dotnet watch exited with code ${code} before connecting; falling back to the buildRestart driver`);
                 const address = this.server.address() as net.AddressInfo;
                 this.spawnProcess(address.port);
-                this.callbacks.onState("starting", "buildRestart driver fallback");
+                this.emitState("starting", "buildRestart driver fallback");
                 return;
             }
 
-            this.callbacks.onState("failed", `dotnet ${this.driver === "watch" ? "watch " : ""}exited with code ${code}`);
+            this.emitState("failed", `dotnet ${this.driver === "watch" ? "watch " : ""}exited with code ${code}`);
         });
     }
 
@@ -284,7 +356,7 @@ export class PreviewSession {
         }
 
         if (this.usingShim) {
-            this.callbacks.onState("failed", "session start timed out (shim fallback also failed)");
+            this.emitState("failed", "session start timed out (shim fallback also failed)");
             this.killProcess();
             return;
         }
@@ -295,7 +367,7 @@ export class PreviewSession {
         try {
             this.effectiveProjectPath = this.generateShimProject();
         } catch (error) {
-            this.callbacks.onState("failed", `session start timed out and shim generation failed: ${error}`);
+            this.emitState("failed", `session start timed out and shim generation failed: ${error}`);
             return;
         }
         this.usingShim = true;

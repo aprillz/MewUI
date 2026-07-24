@@ -4,6 +4,11 @@
   "description": "Live preview for Aprillz.MewUI components and windows",
   "version": "0.1.0",
   "publisher": "aprillz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aprillz/MewUI"
+  },
   "private": true,
   "engines": {
     "vscode": "^1.90.0"
@@ -67,17 +72,25 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically previews the component declared in the active editor file."
+        },
+        "mewui.preview.keepSessionMinutes": {
+          "type": "number",
+          "default": 10,
+          "description": "Minutes to keep the preview session running after the panel closes, so reopening reattaches instantly. 0 stops the session with the panel."
         }
       }
     }
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.0.0",
     "typescript": "^5.5.0"
   }
 }

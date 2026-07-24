@@ -3,7 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { PreviewPanel } from "./panel";
 import { PreviewSession, SessionOptions } from "./session";
-import { PreviewTargetInfo } from "./protocol";
+import { FrameHeader, PreviewTargetInfo, StatusInfo } from "./protocol";
 
 let session: PreviewSession | undefined;
 let panel: PreviewPanel | undefined;
@@ -11,6 +11,9 @@ let outputChannel: vscode.OutputChannel;
 let sessionSubscriptions: vscode.Disposable[] = [];
 let lastTargets: PreviewTargetInfo[] = [];
 let activeTargetId = "";
+// Sessions kept warm after their panel closed, so reopening the preview reattaches instantly
+// instead of paying the full build-and-launch cost again.
+const keptSessions = new Map<string, { session: PreviewSession; timer: NodeJS.Timeout }>();
 
 export function activate(context: vscode.ExtensionContext): void {
     outputChannel = vscode.window.createOutputChannel("MewUI Preview");
@@ -38,7 +41,7 @@ async function startPreview(): Promise<void> {
         return;
     }
 
-    stopPreview();
+    detachPanel();
 
     const configuration = vscode.workspace.getConfiguration("mewui.preview");
     const options: SessionOptions = {
@@ -59,20 +62,21 @@ async function startPreview(): Promise<void> {
             session?.setViewport(width, height, dpi);
         }, 250),
         onSetTheme: (mode) => session?.setTheme(mode as "light" | "dark" | "system"),
+        onInput: (kind, body) => session?.sendInput(kind, body),
         onDisposed: () => {
             panel = undefined;
-            stopPreview();
+            detachPanel();
         },
     });
     panel = newPanel;
 
-    const newSession = new PreviewSession(projectPath, {
-        onLog: (line) => outputChannel.appendLine(`${timestamp()} ${line}`),
-        onState: (state, detail) => {
+    const callbacks = {
+        onLog: (line: string) => outputChannel.appendLine(`${timestamp()} ${line}`),
+        onState: (state: string, detail?: string) => {
             outputChannel.appendLine(`${timestamp()} [session] ${state}${detail ? `: ${detail}` : ""}`);
             newPanel.showSessionState(state, detail);
         },
-        onTargets: (targets, activeId) => {
+        onTargets: (targets: PreviewTargetInfo[], activeId: string) => {
             lastTargets = targets;
             activeTargetId = activeId;
             newPanel.showTargets(targets, activeId);
@@ -80,15 +84,28 @@ async function startPreview(): Promise<void> {
                 autoMatchTarget(vscode.window.activeTextEditor);
             }
         },
-        onFrame: (header, pixels) => newPanel.showFrame(header, pixels),
-        onStatus: (status) => newPanel.showStatus(status),
-    }, options);
-    session = newSession;
+        onFrame: (header: FrameHeader, pixels: Buffer) => newPanel.showFrame(header, pixels),
+        onStatus: (status: StatusInfo) => newPanel.showStatus(status),
+    };
+
+    const kept = keptSessions.get(projectPath);
+    let activeSession: PreviewSession;
+    if (kept !== undefined && !kept.session.isStopped) {
+        clearTimeout(kept.timer);
+        keptSessions.delete(projectPath);
+        activeSession = kept.session;
+        session = activeSession;
+        outputChannel.appendLine(`${timestamp()} [session] reattached to the kept-alive session`);
+        activeSession.rebind(callbacks);
+    } else {
+        activeSession = new PreviewSession(projectPath, callbacks, options);
+        session = activeSession;
+    }
 
     // The buildRestart driver relies on IDE save events (watch owns detection otherwise, and
     // notifySourceChanged is a no-op there). Auto-match follows the active editor (plan.md 4.5).
     sessionSubscriptions.push(
-        vscode.workspace.onDidSaveTextDocument((document) => newSession.notifySourceChanged(document.uri.fsPath)),
+        vscode.workspace.onDidSaveTextDocument((document) => activeSession.notifySourceChanged(document.uri.fsPath)),
     );
     if (autoSelectTarget) {
         sessionSubscriptions.push(
@@ -96,11 +113,13 @@ async function startPreview(): Promise<void> {
         );
     }
 
-    try {
-        await newSession.start();
-    } catch (error) {
-        void vscode.window.showErrorMessage(`MewUI Preview failed to start: ${error}`);
-        stopPreview();
+    if (kept === undefined || kept.session.isStopped) {
+        try {
+            await activeSession.start();
+        } catch (error) {
+            void vscode.window.showErrorMessage(`MewUI Preview failed to start: ${error}`);
+            stopPreview();
+        }
     }
 }
 
@@ -130,6 +149,41 @@ function samePath(left: string, right: string): boolean {
     return normalizedLeft === normalizedRight;
 }
 
+/**
+ * Closes the panel and either keeps the session warm for reattachment (per the keep-alive
+ * setting) or stops it.
+ */
+function detachPanel(): void {
+    for (const subscription of sessionSubscriptions) {
+        subscription.dispose();
+    }
+    sessionSubscriptions = [];
+
+    const currentSession = session;
+    session = undefined;
+    if (currentSession !== undefined && !currentSession.isStopped) {
+        const keepMinutes = vscode.workspace.getConfiguration("mewui.preview").get<number>("keepSessionMinutes", 10);
+        if (keepMinutes > 0) {
+            outputChannel.appendLine(`${timestamp()} [session] keeping the session warm for ${keepMinutes} minute(s)`);
+            keptSessions.set(currentSession.projectPath, {
+                session: currentSession,
+                timer: setTimeout(() => {
+                    keptSessions.delete(currentSession.projectPath);
+                    currentSession.stop();
+                    outputChannel.appendLine(`${timestamp()} [session] kept-alive session expired`);
+                }, keepMinutes * 60_000),
+            });
+        } else {
+            currentSession.stop();
+        }
+    }
+
+    const currentPanel = panel;
+    panel = undefined;
+    currentPanel?.dispose();
+}
+
+/** Stops everything: the active session, all kept-alive sessions, and the panel. */
 function stopPreview(): void {
     for (const subscription of sessionSubscriptions) {
         subscription.dispose();
@@ -137,6 +191,11 @@ function stopPreview(): void {
     sessionSubscriptions = [];
     lastTargets = [];
     activeTargetId = "";
+    for (const kept of keptSessions.values()) {
+        clearTimeout(kept.timer);
+        kept.session.stop();
+    }
+    keptSessions.clear();
     session?.stop();
     session = undefined;
     const currentPanel = panel;
