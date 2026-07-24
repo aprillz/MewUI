@@ -27,7 +27,7 @@ var april = ImageSource.FromFile("april.jpg");
 
 var root = new Window()
     .Resizable(744, 700)
-    .OnBuild(x => x
+    .Build(x => x
         .WithTheme((_, _) => x.Background(new Color()))
         .Ref(out window)
         .Title("Aprillz.MewUI Demo")

@@ -228,7 +228,7 @@ void EnsureLogWindow()
     MultiLineTextBox textBox = null!;
     window = new Window()
         .Resizable(720, 420)
-        .OnBuild(x => x
+        .Build(x => x
             .Ref(out window)
             .Title("Aprillz.MewUI Video Sample Log")
             .Content(

@@ -200,6 +200,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     private bool _firstFrameRenderedRaised;
     private bool _firstFrameRenderedPending;
     private bool _subscribedToDispatcherChanged;
+    private bool _buildHookRan;
     private WindowLifetimeState _lifetimeState;
     private WindowClosePhase _closePhase;
     private int _modalDisableCount;
@@ -212,6 +213,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal IWindowBackend? Backend => _backend;
 
     internal Action<Window>? BuildCallback { get; private set; }
+
+    // Set by the hot reload registry when an OnBuild override was registered; lets the reload
+    // and preview paths pick the virtual hook as the rebuild owner without reflection.
+    internal bool HasBuildHookRegistered { get; set; }
 
     internal Point LastMousePositionDip => _lastMousePositionDip;
 
@@ -1264,6 +1269,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             Owner = owner;
             owner.RegisterOwnedChild(this);
         }
+
+        // Before the backend exists, so OnBuild-set specs (WindowSize, transparency) apply to
+        // surface creation.
+        RunBuildHookBeforeShow();
 
         EnsureBackend();
         Application.Current.RegisterWindow(this);
@@ -2801,6 +2810,54 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         // Register the original user build delegate (not the wrapping callback) so Hot Reload
         // detects edits to the actual build lambda.
         HotReload.HotReloadRegistry.RegisterBuild(this, buildSource);
+    }
+
+    /// <summary>
+    /// Builds this window's content and configuration. Runs once before the first
+    /// <see cref="Show"/> when no composition-site build callback owns the build; override in
+    /// subclasses instead of calling the fluent Build extension from the constructor.
+    /// </summary>
+    protected virtual void OnBuild()
+    {
+    }
+
+    internal void RunBuildHookBeforeShow()
+    {
+        if (_buildHookRan)
+        {
+            return;
+        }
+        _buildHookRan = true;
+
+        // Build ownership: a composition-site callback owns the build; the virtual hook only
+        // runs when no callback was set (mirrors UserControl, where external Content wins).
+        if (BuildCallback != null)
+        {
+            return;
+        }
+
+        HotReload.HotReloadRegistry.RegisterWindow(this);
+        OnBuild();
+    }
+
+    /// <summary>Re-runs the virtual build hook for hot reload / preview rebuilds.</summary>
+    internal void InvokeOnBuildHook() => OnBuild();
+
+    /// <summary>
+    /// Development-only misuse check: a window that overrides <see cref="OnBuild"/> owns its
+    /// build, so attaching a composition-site build callback would silently shadow it.
+    /// Compiled out of release builds, so no reflection reaches AOT.
+    /// </summary>
+    [Conditional("DEBUG")]
+    internal void GuardBuildOwnership()
+    {
+        Action probe = OnBuild;
+        if (probe.Method.DeclaringType != typeof(Window))
+        {
+            throw new InvalidOperationException(
+                $"{GetType().Name} overrides OnBuild(), so the type owns its build. " +
+                "Use fluent property setters for composition-site tweaks instead of Build(...).");
+        }
     }
 
     private void SubscribeToDispatcherChanged()

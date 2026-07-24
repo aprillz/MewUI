@@ -121,7 +121,7 @@ partial class WindowSizeTestView
         new Window()
             .Ref(out tw)
             .Title($"[{id}] {desc}")
-            .OnBuild(x => x
+            .Build(x => x
                 .Padding(12)
                 .Content(content)
             );

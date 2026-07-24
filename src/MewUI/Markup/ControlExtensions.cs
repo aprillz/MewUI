@@ -4265,17 +4265,20 @@ public static class ControlExtensions
     }
 
     /// <summary>
-    /// Sets the build callback.
+    /// Defines and immediately runs the window's build at the composition site. The callback
+    /// becomes the build owner (a virtual <c>OnBuild</c> override is then not invoked) and is
+    /// re-run by Hot Reload when edited.
     /// </summary>
     /// <typeparam name="TWindow">Window type.</typeparam>
     /// <param name="window">Target window.</param>
     /// <param name="build">Build callback.</param>
     /// <returns>The window for chaining.</returns>
-    public static TWindow OnBuild<TWindow>(this TWindow window, Action<TWindow> build) where TWindow : Window
+    public static TWindow Build<TWindow>(this TWindow window, Action<TWindow> build) where TWindow : Window
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(build);
 
+        window.GuardBuildOwnership();
         window.SetBuildCallback(x => build((TWindow)x), build);
 
         build(window);

@@ -24,7 +24,7 @@ partial class GalleryView
             var dialog = new Window()
                 .Resizable(420, 220)
                 .StartCenterScreen()
-                .OnBuild(x => x
+                .Build(x => x
                     .Title("ShowDialog sample")
                     .Padding(16)
                     .Content(
@@ -72,7 +72,7 @@ partial class GalleryView
                 .FitContentHeight(520)
                 .Background(Color.Pink.WithAlpha(64))
                 .StartCenterOwner()
-                .OnBuild(x =>
+                .Build(x =>
                 {
                     x.Title = "Transparent window sample";
                     x.AllowsTransparency = true;
@@ -145,7 +145,7 @@ partial class GalleryView
                 .OnClosed(() => Console.WriteLine("Window closed"))
                 .OnClosing(e => { e.Cancel = cancelClose.Value; Console.WriteLine($"Window closing"); })
                 .StartManualPosition(left, top)
-                .OnBuild(x => x
+                .Build(x => x
                     .Title("StartupManualPosition sample")
                     .Padding(16)
                     .Content(

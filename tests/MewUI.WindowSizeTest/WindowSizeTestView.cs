@@ -46,7 +46,7 @@ partial class WindowSizeTestView : UserControl
     private static Window CreateTestWindow(string id, string desc, FrameworkElement? extraContent = null) =>
         new Window()
             .Title($"[{id}] {desc}")
-            .OnBuild(x => x
+            .Build(x => x
                 .Padding(12)
                 .Content(
                     new StackPanel()

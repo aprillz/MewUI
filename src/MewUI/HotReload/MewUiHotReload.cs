@@ -143,9 +143,18 @@ internal static class MewUiHotReload
 
     private static void Rebuild(Element target)
     {
-        if (target is Window window && window.BuildCallback is Action<Window> build)
+        if (target is Window window)
         {
-            build(window);
+            // Build ownership: the composition-site callback owns the build when set; otherwise
+            // the window's virtual OnBuild hook does.
+            if (window.BuildCallback is Action<Window> build)
+            {
+                build(window);
+            }
+            else if (window.HasBuildHookRegistered)
+            {
+                window.InvokeOnBuildHook();
+            }
             return;
         }
 
@@ -159,7 +168,7 @@ internal static class MewUiHotReload
     {
         for (Element? current = element; current != null; current = current.Parent)
         {
-            if (current is Window window && window.BuildCallback != null)
+            if (current is Window window && (window.BuildCallback != null || window.HasBuildHookRegistered))
             {
                 return window;
             }

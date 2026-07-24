@@ -38,6 +38,6 @@ Startup();
 var window = new Window()
     .Title("Grid Layout Test")
     .Resizable(1200, 860)
-    .OnBuild(w => w.Content(new GridLayoutTestView(w)));
+    .Build(w => w.Content(new GridLayoutTestView(w)));
 
 Application.Run(window);

@@ -89,7 +89,7 @@ internal sealed partial class GridLayoutTestView : UserControl
     private Window CreateCaseWindow(string title, FrameworkElement content, WindowSize? size = null) =>
         new Window()
             .Title(title)
-            .OnBuild(w =>
+            .Build(w =>
             {
                 if (size.HasValue)
                 {

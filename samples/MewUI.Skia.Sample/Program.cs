@@ -74,7 +74,7 @@ float sBackgroundShaderHeight = -1f;
 var root = new Window()
     .Resizable(1080, 760)
     .StartCenterScreen()
-    .OnBuild(x => x
+    .Build(x => x
         .Ref(out window)
         .Title("Aprillz.MewUI Skia Sample")
         .Content(

@@ -43,7 +43,7 @@ Application.DispatcherUnhandledException += e =>
 };
 var root = new Window()
     .Resizable(1180, 760)
-    .OnBuild(x => x
+    .Build(x => x
         .Ref(out window)
         .Title("Aprillz.MewUI.Svg Sample")
         .Content(
