@@ -302,6 +302,10 @@ export class PreviewSession {
                 DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "1",
             },
             stdio: ["ignore", "pipe", "pipe"],
+            // Unix: own process group, so killProcess can signal watch AND its child app.
+            // Killing only the watch process leaves an orphaned app that keeps reconnecting
+            // to this session's port and fights the replacement for the connection.
+            detached: process.platform !== "win32",
         });
         this.childProcess = child;
 
@@ -424,6 +428,13 @@ export class PreviewSession {
     }
 
     private forwardLog(data: Buffer): void {
+        // Process output counts as startup progress: a slow cold build must not trigger the
+        // shim fallback, which exists for a Main that never reaches Application.Run. The
+        // timeout now measures silence, so it only fires after the output has gone quiet
+        // (an app that logs forever while blocking Main defeats it - acceptable trade-off).
+        if (!this.everConnected && this.startTimer !== undefined) {
+            this.armStartTimeout();
+        }
         for (const line of data.toString("utf8").split(/\r?\n/)) {
             if (line.length > 0) {
                 this.callbacks.onLog(line);
@@ -457,7 +468,12 @@ export class PreviewSession {
             // Kill the whole tree: watch's child app process must not outlive the session.
             spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
         } else {
-            child.kill("SIGTERM");
+            // Negative pid signals the detached process group (watch + app together).
+            try {
+                process.kill(-child.pid, "SIGTERM");
+            } catch {
+                child.kill("SIGTERM");
+            }
         }
     }
 }
