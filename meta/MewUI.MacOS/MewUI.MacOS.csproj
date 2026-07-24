@@ -14,4 +14,19 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\build\$(MewUITitle).MacOS.targets" Link="buildTransitive\$(MewUITitle).MacOS.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Editor preview session support: the preview assembly ships inside this package (never as
+         a package dependency) so the framework/previewer pair cannot version-skew. Referenced by
+         MewUIPreview.targets only when the MEWUI_PREVIEW environment variable is set. -->
+    <ProjectReference Include="..\..\src\MewUI.Preview\MewUI.Preview.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <None Include="..\..\build\MewUIPreview.targets" Link="buildTransitive\MewUIPreview.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="..\..\build\MewUIPreviewInit.cs" Link="buildTransitive\MewUIPreviewInit.cs" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="..\..\src\MewUI.Preview\bin\$(Configuration)\net8.0\Aprillz.MewUI.Preview.dll" Pack="true" PackagePath="buildTransitive\preview\net8.0\" Visible="false" />
+    <None Include="..\..\src\MewUI.Preview\bin\$(Configuration)\net10.0\Aprillz.MewUI.Preview.dll" Pack="true" PackagePath="buildTransitive\preview\net10.0\" Visible="false" />
+  </ItemGroup>
+
 </Project>

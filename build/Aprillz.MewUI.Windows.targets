@@ -44,4 +44,8 @@
 
   </Target>
 
+  <!-- Editor preview session composition (shared with the all-in-one metapackage targets). -->
+  <Import Project="$(MSBuildThisFileDirectory)MewUIPreview.targets"
+          Condition="'$(_MewUIPreviewTargetsImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)MewUIPreview.targets')" />
+
 </Project>

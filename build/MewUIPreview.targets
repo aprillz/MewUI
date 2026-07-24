@@ -1,0 +1,53 @@
+<Project>
+
+  <!--
+    Editor preview session composition, shared by the metapackage targets (imported from
+    Aprillz.MewUI.targets and Aprillz.MewUI.Windows.targets with a re-entry guard).
+
+    The IDE extension declares a session by setting the MEWUI_PREVIEW=1 environment variable
+    (visible to MSBuild as a property) before launching `dotnet watch run`; only then is the
+    version-matched preview assembly referenced and the module-initializer entry point injected
+    into the app compilation. Production builds never see either.
+
+    Two layouts resolve the preview assembly:
+      - repo:    the MewUI.Preview project sits next to this file's parent folder
+      - package: the prebuilt assembly ships under buildTransitive\preview\<tfm>\ in the same
+                 package as the framework, so the pair can never version-skew
+  -->
+
+  <PropertyGroup>
+    <_MewUIPreviewTargetsImported>true</_MewUIPreviewTargetsImported>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MEWUI_PREVIEW)' == '1'">
+    <_MewUIPreviewProjectPath>$(MSBuildThisFileDirectory)..\src\MewUI.Preview\MewUI.Preview.csproj</_MewUIPreviewProjectPath>
+    <!-- TargetFrameworkVersion is empty when this file is imported from a project body (repo
+         layout); the folder pick only matters for the package layout, whose buildTransitive
+         import happens after the SDK computed the version. -->
+    <_MewUIPreviewTfmFolder Condition="'$(TargetFrameworkVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(TargetFrameworkVersion)', '10.0'))">net10.0</_MewUIPreviewTfmFolder>
+    <_MewUIPreviewTfmFolder Condition="'$(_MewUIPreviewTfmFolder)' == ''">net8.0</_MewUIPreviewTfmFolder>
+    <!-- PublishAot defaults StartupHookSupport off, which makes dotnet watch fall back to
+         restart-on-every-save. Preview sessions run under the JIT anyway, so re-enable the hook
+         to restore Hot Reload; publish behavior is unaffected (no MEWUI_PREVIEW there). -->
+    <StartupHookSupport>true</StartupHookSupport>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MEWUI_PREVIEW)' == '1' and Exists('$(_MewUIPreviewProjectPath)')">
+    <ProjectReference Include="$(_MewUIPreviewProjectPath)" />
+  </ItemGroup>
+
+  <!-- Package layout: copy the bundled assembly beside the app. It is loaded by path from the
+       injected module initializer; a Reference item would not land in deps.json, which makes the
+       host's assembly resolution ignore the file even when it sits in the output folder. -->
+  <ItemGroup Condition="'$(MEWUI_PREVIEW)' == '1' and !Exists('$(_MewUIPreviewProjectPath)')">
+    <None Include="$(MSBuildThisFileDirectory)preview\$(_MewUIPreviewTfmFolder)\Aprillz.MewUI.Preview.dll"
+          Link="Aprillz.MewUI.Preview.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MEWUI_PREVIEW)' == '1'">
+    <Compile Include="$(MSBuildThisFileDirectory)MewUIPreviewInit.cs" LinkBase="MewUIPreview" />
+  </ItemGroup>
+
+</Project>
