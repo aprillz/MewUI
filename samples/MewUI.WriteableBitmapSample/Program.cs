@@ -25,7 +25,7 @@ var chartData = GenerateRandomData(20);
 
 var root = new Window()
     .Resizable(900, 700)
-    .OnBuild(x => x
+    .Build(x => x
         .Ref(out window)
         .Title("WriteableBitmap Sample - Custom Control Development")
         .Padding(0)

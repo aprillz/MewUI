@@ -28,7 +28,7 @@ internal class CustomWindowSample : CustomWindow
 
     public CustomWindowSample()
     {
-        this.OnBuild(OnBuild)
+        this.Build(OnBuild)
             .Resizable(624, 436, minWidth: 400, minHeight: 250)
             .OnActivated(UpdateStateLabel)
             .OnDeactivated(UpdateStateLabel)
@@ -72,7 +72,7 @@ internal class CustomWindowSample : CustomWindow
 
         window
             .Title("Custom Chrome Demo")
-            .OnBuild(x => x
+            .Build(x => x
                 .Content(new StackPanel()
                     .Vertical()
                     .Spacing(8)

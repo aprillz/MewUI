@@ -296,7 +296,7 @@ partial class GalleryView
             .Ref(out second)
             .Resizable(340, 280)
             .StartCenterOwner()
-            .OnBuild(x =>
+            .Build(x =>
             {
                 x.Title = "Cross-Window D&D";
                 x.Padding = new Thickness(16);

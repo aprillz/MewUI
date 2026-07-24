@@ -53,7 +53,7 @@ Application
     new Window()
         .Resizable(1356, 720)
         .StartCenterScreen()
-        .OnBuild(x => x
+        .Build(x => x
             .Ref(out window)
             .Icon(icon)
             .Padding(0)

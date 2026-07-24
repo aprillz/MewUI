@@ -28,7 +28,7 @@ internal class NativeCustomWindowSample : NativeCustomWindow
 
     public NativeCustomWindowSample()
     {
-        this.OnBuild(OnBuild)
+        this.Build(OnBuild)
             .Resizable(600, 400, minWidth: 400, minHeight: 250)
             .OnActivated(UpdateStateLabel)
             .OnDeactivated(UpdateStateLabel)
@@ -72,7 +72,7 @@ internal class NativeCustomWindowSample : NativeCustomWindow
 
         window
             .Title("Native Chrome Demo")
-            .OnBuild(x => x
+            .Build(x => x
                 .Content(new StackPanel()
                     .Vertical()
                     .Spacing(8)

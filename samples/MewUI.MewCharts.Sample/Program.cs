@@ -116,7 +116,7 @@ Window window = null!;
 var root = new Window()
     .Resizable(1280, 760)
     .StartCenterScreen()
-    .OnBuild(x => x
+    .Build(x => x
         .Ref(out window)
         .Title("Aprillz.MewUI.MewCharts Sample")
         .OnLoaded(() =>
