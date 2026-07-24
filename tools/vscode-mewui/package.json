@@ -1,0 +1,83 @@
+{
+  "name": "mewui-preview",
+  "displayName": "MewUI Preview",
+  "description": "Live preview for Aprillz.MewUI components and windows",
+  "version": "0.1.0",
+  "publisher": "aprillz",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "MewUI Preview builds and runs project code."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "mewui.preview.start",
+        "title": "MewUI: Start Preview",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "mewui.preview.stop",
+        "title": "MewUI: Stop Preview"
+      },
+      {
+        "command": "mewui.preview.refreshTarget",
+        "title": "MewUI: Refresh Preview Target",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "mewui.preview.restart",
+        "title": "MewUI: Restart Preview Session"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mewui.preview.start",
+          "when": "resourceExtname == .cs",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "MewUI Preview",
+      "properties": {
+        "mewui.preview.reloadDriver": {
+          "type": "string",
+          "enum": ["auto", "watch", "buildRestart"],
+          "default": "auto",
+          "description": "Reload driver. 'watch' uses dotnet watch hot reload; 'buildRestart' restarts dotnet run on save; 'auto' uses watch and falls back to buildRestart if watch fails to start."
+        },
+        "mewui.preview.sessionStartTimeoutSeconds": {
+          "type": "number",
+          "default": 60,
+          "description": "Seconds to wait for the preview handshake before retrying with a shim session that skips the app entry point (low fidelity). 0 disables the fallback."
+        },
+        "mewui.preview.autoSelectTarget": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically previews the component declared in the active editor file."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}
