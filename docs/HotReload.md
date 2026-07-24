@@ -38,7 +38,7 @@ What you edit determines **how much is rebuilt** and **which state survives**.
 
 | What you edit | When it shows | Rebuild scope | State preserved |
 | --- | --- | --- | --- |
-| Window `.OnBuild(...)` / UserControl `OnBuild()` body | on save | that one window/control | everything **outside** that node (siblings, other windows) |
+| Window `.Build(...)`/`OnBuild()` / UserControl `OnBuild()` body | on save | that one window/control | everything **outside** that node (siblings, other windows) |
 | Event handler body (`.OnClick(...)`, etc.) | on next event | **none** | **all** state |
 | Item template build function (`ItemTemplate`, etc.) | on save | the control using that template | everything outside that control |
 | Default style definition | on next rebuild | (rides along a rebuild) | — |
@@ -74,15 +74,48 @@ The same principles imply these limits:
 
 ## 3. Registering build code
 
-Hot Reload rebuilds nodes whose build function is registered. The following two are registered
+Hot Reload rebuilds nodes whose build function is registered. The following are registered
 automatically:
 
-- **A Window's `.OnBuild(...)`**: registers the callback and runs the initial build.
+- **A Window's `.Build(...)`**: registers the callback and runs the initial build.
+- **A Window's `OnBuild()` override**: runs right before the first show and is registered then.
 - **A UserControl's `OnBuild()` override**: registered when the control builds its content.
+
+### Build ownership
+
+Exactly one place owns a window's build: **the `Build(...)` callback when set, otherwise the virtual `OnBuild()` hook.** The hook is not invoked on windows that have a callback, and attaching a callback to a window that overrides `OnBuild()` throws in debug builds. Rebuilds always re-run the current owner only.
+
+Choosing an idiom: named reusable windows (dialogs) override `OnBuild()`; one-off windows at the composition site (the main window in `Main`) use the fluent `Build(...)`.
+
+### Re-runnability rule
+
+Build code (callback or override alike) is **re-run repeatedly** by Hot Reload and the editor preview. It must therefore contain only re-runnable configuration:
+
+- Window specs that cannot change after the window is shown (`StartupLocation`, ...) throw on rebuild.
+- Event subscriptions (`OnClosed(...)`, ...) get duplicated on every re-run.
+
+Keep one-shot specs and subscriptions in the constructor or the composition-site chain (outside the build callback).
+
+```csharp
+public class AboutDialog : Window
+{
+    public AboutDialog()
+    {
+        // One-shot: window specs and event subscriptions
+        this.Fixed(400, 340).StartCenterOwner().OnClosed(SaveState);
+    }
+
+    protected override void OnBuild()
+    {
+        // Re-runnable: same result no matter how often it runs
+        this.Title("About").Padding(new Thickness(20)).Content(BuildUI());
+    }
+}
+```
 
 ```csharp
 var window = new Window()
-    .OnBuild(w => w
+    .Build(w => w
         .Title("Hot Reload Demo")
         .Content(new StackPanel()
             .Spacing(8)
@@ -107,7 +140,7 @@ using Aprillz.MewUI.Markup;
 using Aprillz.MewUI.Controls;
 
 var window = new Window()
-    .OnBuild(w => w
+    .Build(w => w
         .Title("Hot Reload Demo")
         .Content(new StackPanel()
             .Spacing(8)

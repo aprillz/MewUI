@@ -39,7 +39,7 @@ dotnet watch run
 
 | 편집한 것 | 화면 반영 | 다시 빌드하는 범위 | 유지되는 상태 |
 | --- | --- | --- | --- |
-| Window `.OnBuild(...)` / UserControl `OnBuild()` 본문 | 저장 즉시 | 그 창/컨트롤 하나 | 그 노드 **바깥**(형제·다른 창) |
+| Window `.Build(...)`/`OnBuild()` / UserControl `OnBuild()` 본문 | 저장 즉시 | 그 창/컨트롤 하나 | 그 노드 **바깥**(형제·다른 창) |
 | 이벤트 핸들러 `.OnClick(...)` 등의 본문 | 다음 이벤트부터 | **없음** | **전부** 유지 |
 | 아이템 템플릿 `ItemTemplate` 등의 빌드 함수 | 저장 즉시 | 그 템플릿을 쓰는 컨트롤 | 그 컨트롤 바깥 |
 | 기본 스타일 정의 | 다음 재빌드 때 | (재빌드에 편승) | — |
@@ -74,15 +74,48 @@ dotnet watch run
 
 ## 3. 빌드 코드 등록
 
-Hot Reload가 다시 빌드하는 대상은 빌드 함수가 등록된 노드입니다. 다음 두 가지가 자동으로
+Hot Reload가 다시 빌드하는 대상은 빌드 함수가 등록된 노드입니다. 다음이 자동으로
 등록됩니다.
 
-- **Window의 `.OnBuild(...)`**: 콜백을 등록하고 초기 빌드도 실행합니다.
+- **Window의 `.Build(...)`**: 콜백을 등록하고 초기 빌드도 실행합니다.
+- **Window의 `OnBuild()` override**: 첫 표시 직전에 실행되며 그때 등록됩니다.
 - **UserControl의 `OnBuild()` override**: 컨트롤이 콘텐츠를 빌드할 때 등록됩니다.
+
+### 빌드 소유권
+
+창의 빌드는 정확히 한 곳이 소유합니다: **`Build(...)` 콜백이 설정되어 있으면 콜백, 없으면 가상 `OnBuild()`.** 콜백이 있는 창에서는 가상 후크가 호출되지 않으며, `OnBuild()`를 오버라이드한 창에 콜백을 붙이면 디버그 빌드에서 예외로 알려줍니다. 재빌드도 항상 현재 소유자 하나만 재실행됩니다.
+
+관용구 선택 기준: 명명된 재사용 창(다이얼로그 등)은 `OnBuild()` 오버라이드, 조합 지점의 일회성 창(Main의 메인 창 등)은 fluent `Build(...)`가 맞습니다.
+
+### 재실행 가능성 규칙
+
+빌드 코드(콜백/오버라이드 공통)는 Hot Reload와 에디터 프리뷰가 **반복 재실행**합니다. 따라서 재실행 가능한 구성만 담아야 합니다:
+
+- 표시 후 변경 불가인 창 스펙(`StartupLocation` 등)은 재빌드에서 예외를 냅니다.
+- 이벤트 구독(`OnClosed(...)` 등)은 재실행마다 중복 등록됩니다.
+
+1회성 스펙과 구독은 생성자나 조합 지점 체인(빌드 콜백 바깥)에 두세요.
+
+```csharp
+public class AboutDialog : Window
+{
+    public AboutDialog()
+    {
+        // 1회성: 창 스펙과 이벤트 구독
+        this.Fixed(400, 340).StartCenterOwner().OnClosed(SaveState);
+    }
+
+    protected override void OnBuild()
+    {
+        // 재실행 가능: 언제 다시 실행돼도 같은 결과
+        this.Title("About").Padding(new Thickness(20)).Content(BuildUI());
+    }
+}
+```
 
 ```csharp
 var window = new Window()
-    .OnBuild(w => w
+    .Build(w => w
         .Title("Hot Reload Demo")
         .Content(new StackPanel()
             .Spacing(8)
@@ -107,7 +140,7 @@ using Aprillz.MewUI.Markup;
 using Aprillz.MewUI.Controls;
 
 var window = new Window()
-    .OnBuild(w => w
+    .Build(w => w
         .Title("Hot Reload Demo")
         .Content(new StackPanel()
             .Spacing(8)

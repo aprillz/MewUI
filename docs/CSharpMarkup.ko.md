@@ -834,7 +834,7 @@ new DockPanel()
 
 | 메서드 | 용도 |
 |--------|------|
-| `Icon(...)`, `OnBuild(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | 창 설정 및 수명 주기 |
+| `Icon(...)`, `Build(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | 창 설정 및 수명 주기 |
 | `OnWindowStateChanged(...)`, `Minimized()`, `Maximized()`, `Topmost(...)` | 창 상태 |
 | `StartCenterScreen()`, `StartCenterOwner()`, `StartManualPosition(...)` | 초기 창 위치 |
 | `ShowToast(...)`, `CreateBusyIndicator(...)` | 창 서비스 |

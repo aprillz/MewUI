@@ -834,7 +834,7 @@ The tables below index the remaining public markup extensions. Some methods have
 
 | Methods | Purpose |
 |---------|---------|
-| `Icon(...)`, `OnBuild(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | Window configuration and lifecycle |
+| `Icon(...)`, `Build(...)`, `OnClosing(...)`, `OnFrameRendered(...)` | Window configuration and lifecycle |
 | `OnWindowStateChanged(...)`, `Minimized()`, `Maximized()`, `Topmost(...)` | Window state |
 | `StartCenterScreen()`, `StartCenterOwner()`, `StartManualPosition(...)` | Initial window position |
 | `ShowToast(...)`, `CreateBusyIndicator(...)` | Window services |
