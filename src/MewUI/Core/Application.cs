@@ -207,13 +207,24 @@ public sealed class Application
         }
     }
 
+    // Tooling assemblies decorate the platform host through this seam, registered from their own
+    // composition entry point before the first host access. Registration can precede the platform
+    // Register() call in Main; the wrap is applied when the host is finally resolved.
+    internal static Func<IPlatformHost, IPlatformHost>? PlatformHostInterceptor { get; set; }
+
     internal static IPlatformHost DefaultPlatformHost
     {
         get
         {
             if (_defaultPlatformHost == null)
             {
-                _defaultPlatformHost = MaybeTracePlatformHost(ResolvePlatformHost());
+                var host = MaybeTracePlatformHost(ResolvePlatformHost());
+                var interceptor = PlatformHostInterceptor;
+                if (interceptor != null)
+                {
+                    host = interceptor(host);
+                }
+                _defaultPlatformHost = host;
                 ApplyPlatformFontDefaults(_defaultPlatformHost);
             }
 

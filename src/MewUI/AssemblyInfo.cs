@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.MewVG.X11")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Backend.MewVG.MacOS")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Platform.Win32")]
+[assembly: InternalsVisibleTo("Aprillz.MewUI.Preview")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Platform.X11")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Platform.MacOS")]
 [assembly: InternalsVisibleTo("Aprillz.MewUI.Test")]
