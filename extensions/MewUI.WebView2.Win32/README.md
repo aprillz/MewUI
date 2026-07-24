@@ -31,6 +31,9 @@ This package is AOT-compatible (`IsAotCompatible=true`).
 var webView = new WebView2();
 webView.Source = new Uri("https://example.com");
 
+// Default background color (opaque or fully transparent only)
+webView.DefaultBackgroundColor = Color.Black;
+
 // Virtual host folder mapping
 webView.SetVirtualHostNameToFolderMapping(
     "local.folder",

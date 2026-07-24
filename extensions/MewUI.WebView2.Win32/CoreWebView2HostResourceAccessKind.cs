@@ -20,4 +20,3 @@ public enum CoreWebView2HostResourceAccessKind
     /// </summary>
     DenyCors = 2,
 }
-
