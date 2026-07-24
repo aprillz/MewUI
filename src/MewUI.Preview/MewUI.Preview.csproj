@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <AssemblyName>$(MewUITitle).Preview</AssemblyName>
+    <PackageId>$(MewUITitle).Preview</PackageId>
+    <Description>Editor preview session host for $(MewUITitle). Referenced only during IDE preview sessions; never ships in production builds.</Description>
+    <!-- Preview sessions always run untrimmed under the JIT (hot reload requires it), so
+         reflection trimming diagnostics do not apply to this assembly. -->
+    <NoWarn>$(NoWarn);IL2026;IL2070</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MewUI\MewUI.csproj" />
+  </ItemGroup>
+
+</Project>
