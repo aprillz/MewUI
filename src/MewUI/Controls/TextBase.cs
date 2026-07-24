@@ -51,6 +51,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
 
     private DispatcherTimer? _caretTimer;
     private bool _caretVisible = true;
+    private int _lastSyncedCaretPosition;
 
     /// <summary>
     /// Gets whether the caret is currently visible (toggles during blink).
@@ -221,7 +222,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
             SyncSelectionProperties();
             if (old != _editor.CaretPosition)
             {
-                ResetCaretBlink();
                 InvalidateVisual();
             }
         }
@@ -279,9 +279,18 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     // no-op when unchanged, so callers that end up not actually moving anything cost nothing.
     private void SyncSelectionProperties()
     {
+        int caretPosition = _editor.CaretPosition;
+        bool caretMoved = caretPosition != _lastSyncedCaretPosition;
+        _lastSyncedCaretPosition = caretPosition;
+
         var (start, end) = _editor.GetSelectionRange();
         SetValue(SelectionStartPropertyKey, start);
         SetValue(SelectionLengthPropertyKey, end - start);
+
+        if (caretMoved)
+        {
+            ResetCaretBlink();
+        }
     }
 
     // Platform text services (IME) sometimes report a replacement range (e.g. AppKit insertText/setMarkedText).
@@ -1360,7 +1369,6 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextI
     {
         _editor.SetCaretAndSelection(newPos, extendSelection);
         SyncSelectionProperties();
-        ResetCaretBlink();
     }
 
     protected void MoveCaretHorizontal(int direction, bool extendSelection, bool word)
