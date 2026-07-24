@@ -11,7 +11,7 @@ namespace Aprillz.MewUI.Preview;
 internal static class PreviewProtocol
 {
     internal const int PROTOCOL_MAJOR = 1;
-    internal const int PROTOCOL_MINOR = 1;
+    internal const int PROTOCOL_MINOR = 2;
 
     // Sanity cap for inbound messages; Frame (outbound) is bounded by the negotiated viewport.
     internal const int MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
@@ -28,6 +28,12 @@ internal static class PreviewProtocol
     internal const int REFRESH_TARGET = 10;
     internal const int SESSION_REJECTED = 11;
     internal const int SET_THEME = 12;
+    internal const int POINTER_MOVED = 13;
+    internal const int POINTER_PRESSED = 14;
+    internal const int POINTER_RELEASED = 15;
+    internal const int SCROLL = 16;
+    internal const int KEY = 17;
+    internal const int TEXT_INPUT = 18;
 }
 
 internal sealed class HelloMessage
@@ -119,6 +125,44 @@ internal sealed class SetThemeMessage
     public string Mode { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Pointer state in window DIPs. Button uses the W3C convention (0 left, 1 middle, 2 right);
+/// Buttons is the W3C bitmask (1 left, 2 right, 4 middle) after the event; Modifiers matches
+/// the framework's ModifierKeys flags.
+/// </summary>
+internal sealed class PointerMessage
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public int Button { get; set; }
+    public int Buttons { get; set; }
+    public int ClickCount { get; set; } = 1;
+    public int Modifiers { get; set; }
+}
+
+internal sealed class ScrollMessage
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    // Notches: +Y = scroll-up intent, +X = scroll-left intent (framework wheel convention).
+    public double DeltaX { get; set; }
+    public double DeltaY { get; set; }
+    public int Modifiers { get; set; }
+}
+
+internal sealed class KeyMessage
+{
+    // W3C KeyboardEvent.code (physical key), e.g. "KeyA", "ArrowLeft".
+    public string Code { get; set; } = string.Empty;
+    public bool IsDown { get; set; }
+    public int Modifiers { get; set; }
+}
+
+internal sealed class TextInputMessage
+{
+    public string Text { get; set; } = string.Empty;
+}
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(HelloMessage))]
 [JsonSerializable(typeof(SessionStartedMessage))]
@@ -131,6 +175,10 @@ internal sealed class SetThemeMessage
 [JsonSerializable(typeof(FrameAckMessage))]
 [JsonSerializable(typeof(StatusMessage))]
 [JsonSerializable(typeof(SetThemeMessage))]
+[JsonSerializable(typeof(PointerMessage))]
+[JsonSerializable(typeof(ScrollMessage))]
+[JsonSerializable(typeof(KeyMessage))]
+[JsonSerializable(typeof(TextInputMessage))]
 internal sealed partial class PreviewJsonContext : JsonSerializerContext
 {
 }

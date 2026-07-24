@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.HotReload;
+using Aprillz.MewUI.Input;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Preview;
@@ -130,6 +131,10 @@ internal sealed class PreviewSession : IDisposable
 
     private void SendFrame(Window window, PreviewChannel channel)
     {
+        // GPU backends (MewVG GL) need a current context on this thread for surface creation,
+        // rendering, and pixel readback; CPU backends return a no-op scope.
+        using var renderScope = window.GraphicsFactory.AcquireBackgroundRenderScope();
+
         double dpiScale = window.DpiScale > 0 ? window.DpiScale : 1.0;
         var clientSize = window.ClientSize;
         int widthPx = Math.Max(1, (int)Math.Round(clientSize.Width * dpiScale));
@@ -253,9 +258,124 @@ internal sealed class PreviewSession : IDisposable
                 RebuildActiveTarget("refresh");
                 break;
 
+            case PreviewProtocol.POINTER_MOVED:
+            case PreviewProtocol.POINTER_PRESSED:
+            case PreviewProtocol.POINTER_RELEASED:
+                var pointer = json.Deserialize(PreviewJsonContext.Default.PointerMessage);
+                if (pointer != null)
+                {
+                    HandlePointer(typeId, pointer);
+                }
+                break;
+
+            case PreviewProtocol.SCROLL:
+                var scroll = json.Deserialize(PreviewJsonContext.Default.ScrollMessage);
+                if (scroll != null && _activeWindow is Window scrollWindow)
+                {
+                    WindowInputRouter.MouseWheel(scrollWindow,
+                        new Point(scroll.X, scroll.Y), new Point(scroll.X, scroll.Y),
+                        new Vector(scroll.DeltaX, scroll.DeltaY),
+                        modifiers: PreviewInputMapper.MapModifiers(scroll.Modifiers));
+                }
+                break;
+
+            case PreviewProtocol.KEY:
+                var key = json.Deserialize(PreviewJsonContext.Default.KeyMessage);
+                if (key != null && _activeWindow is Window keyWindow)
+                {
+                    HandleKey(keyWindow, key);
+                }
+                break;
+
+            case PreviewProtocol.TEXT_INPUT:
+                var text = json.Deserialize(PreviewJsonContext.Default.TextInputMessage);
+                if (text != null && _activeWindow is Window textWindow)
+                {
+                    HandleTextInput(textWindow, text.Text);
+                }
+                break;
+
             default:
                 // Unknown message ids are ignored for forward compatibility.
                 break;
+        }
+    }
+
+    private void HandlePointer(int typeId, PointerMessage pointer)
+    {
+        var window = _activeWindow;
+        if (window == null)
+        {
+            return;
+        }
+
+        var position = new Point(pointer.X, pointer.Y);
+        bool leftDown = (pointer.Buttons & 1) != 0;
+        bool rightDown = (pointer.Buttons & 2) != 0;
+        bool middleDown = (pointer.Buttons & 4) != 0;
+        var modifiers = PreviewInputMapper.MapModifiers(pointer.Modifiers);
+
+        try
+        {
+            if (typeId == PreviewProtocol.POINTER_MOVED)
+            {
+                WindowInputRouter.MouseMove(window, position, position, leftDown, rightDown, middleDown, modifiers);
+            }
+            else
+            {
+                WindowInputRouter.MouseButton(window, position, position,
+                    PreviewInputMapper.MapButton(pointer.Button),
+                    isDown: typeId == PreviewProtocol.POINTER_PRESSED,
+                    leftDown, rightDown, middleDown,
+                    Math.Max(1, pointer.ClickCount),
+                    modifiers);
+            }
+        }
+        catch (Exception ex)
+        {
+            SendStatus($"Input dispatch failed: {ex.Message}", hasError: true, exceptionDetail: ex.ToString());
+        }
+    }
+
+    private void HandleKey(Window window, KeyMessage message)
+    {
+        var key = PreviewInputMapper.MapKey(message.Code);
+        if (key == Key.None)
+        {
+            return;
+        }
+
+        var args = new KeyEventArgs(key, platformKey: 0, PreviewInputMapper.MapModifiers(message.Modifiers));
+        if (message.IsDown)
+        {
+            WindowInputRouter.KeyDown(window, args);
+        }
+        else
+        {
+            WindowInputRouter.KeyUp(window, args);
+        }
+    }
+
+    /// <summary>Mirrors the native WM_CHAR dispatch: preview text goes to the focused text client.</summary>
+    private static void HandleTextInput(Window window, string text)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+        foreach (char character in text)
+        {
+            if (char.IsControl(character) && character != '\r' && character != '\t')
+            {
+                return;
+            }
+        }
+
+        var args = new TextInputEventArgs(text);
+        window.RaisePreviewTextInput(args);
+        if (!args.Handled && window.FocusManager.FocusedElement is ITextInputClient client)
+        {
+            client.HandleTextInput(args);
         }
     }
 
