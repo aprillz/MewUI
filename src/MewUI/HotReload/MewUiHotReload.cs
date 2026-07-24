@@ -96,7 +96,17 @@ public static class MewUiHotReload
         {
             reloading = false;
         }
+
+        // Observers may react to deltas the IL-hash filter above ignores (it only checks
+        // registered build methods), so this fires even when zero nodes were rebuilt.
+        DeltaApplied?.Invoke();
     }
+
+    /// <summary>
+    /// Raised on the UI thread after each Hot Reload delta drain, regardless of whether any
+    /// registered node was rebuilt.
+    /// </summary>
+    internal static event Action? DeltaApplied;
 
     private static void ExecuteReactions(List<HotReloadReaction> reactions, Type[]? scope)
     {
