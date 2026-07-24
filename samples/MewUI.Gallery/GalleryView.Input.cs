@@ -22,6 +22,10 @@ partial class GalleryView
             .Vertical()
             .Spacing(6)
             .Children(
+                new CheckBox()
+                    .Content("Wrap")
+                    .IsChecked(box.Wrap)
+                    .OnCheckedChanged(isChecked => box.Wrap = isChecked == true),
                 box,
                 new TextBlock()
                     .FontSize(11)
