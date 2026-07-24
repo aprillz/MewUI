@@ -23,7 +23,9 @@ Commit messages must be written in English.
     distinguishes the change.
   * Avoid abstract benefits such as consistency or simplicity unless the
     change directly demonstrates them.
-  * Wrap lines at approximately 72 characters.
+  * Keep each bullet on a single physical line without hard wrapping.
+  * Prefer bullets short enough to span at most two 72-character lines
+    when soft-wrapped.
   * Omit the body unless it provides important context not already
     expressed by the subject.
   * Do not add a body merely because multiple files or lines changed.
