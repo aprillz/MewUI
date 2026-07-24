@@ -32,6 +32,12 @@ public sealed class MultiLineTextBox : TextBase
     private double _pendingViewAnchorYOffset;
     private double _pendingViewAnchorXOffset;
 
+    private int _wrapNavigationDocumentVersion = -1;
+    private int _wrapNavigationCaretPosition = -1;
+    private int _wrapNavigationLine = -1;
+    private double _wrapNavigationWidth;
+    private double _wrapNavigationX;
+
 
     public MultiLineTextBox()
     {
@@ -199,6 +205,8 @@ public sealed class MultiLineTextBox : TextBase
 
     protected override void OnWrapChanged(bool oldValue, bool newValue)
     {
+        ResetWrapNavigationX();
+
         if (FindVisualRoot() != null)
         {
             CaptureViewAnchor();
@@ -485,6 +493,16 @@ public sealed class MultiLineTextBox : TextBase
     protected override void MoveCaretToLineEdge(bool start, bool extendSelection)
         => MoveToLineEdge(start, extendSelection);
 
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key is not Key.Up and not Key.Down)
+        {
+            ResetWrapNavigationX();
+        }
+
+        base.OnKeyDown(e);
+    }
+
     // Key handling is centralized in TextBase.
     protected override void MoveCaretVerticalKey(int deltaLines, bool extendSelection)
         => MoveCaretVertical(deltaLines, extendSelection);
@@ -686,6 +704,8 @@ public sealed class MultiLineTextBox : TextBase
 
     private void SetCaretFromPointCore(Point p, Rect contentBounds)
     {
+        ResetWrapNavigationX();
+
         double lineHeight = GetLineHeight();
         if (!WrapEnabled)
         {
@@ -729,7 +749,24 @@ public sealed class MultiLineTextBox : TextBase
 
     private void MoveCaretVertical(int deltaLines, bool extendSelection)
     {
+        if (deltaLines == 0)
+        {
+            return;
+        }
+
         GetLineFromIndex(CaretPosition, out int line, out int lineStart, out int lineEnd);
+
+        if (WrapEnabled)
+        {
+            MoveCaretVerticalWrapped(
+                deltaLines < 0 ? -1 : 1,
+                extendSelection,
+                line,
+                lineStart,
+                lineEnd);
+            return;
+        }
+
         int newLine = Math.Clamp(line + deltaLines, 0, _lineStarts.Count - 1);
         if (newLine == line)
         {
@@ -752,6 +789,159 @@ public sealed class MultiLineTextBox : TextBase
         var newCache = _textView.EnsureLineMeasureCache(newLine, ns, ne, measure.Context, measure.Font);
         int newPos = ns + MultiLineTextView.GetCharIndexFromXCached(newCache, x, measure.Context, measure.Font);
         SetCaretAndSelection(newPos, extendSelection);
+    }
+
+    private void MoveCaretVerticalWrapped(
+        int direction,
+        bool extendSelection,
+        int line,
+        int lineStart,
+        int lineEnd)
+    {
+        using var measure = BeginTextMeasurement();
+        double wrapWidth = Math.Max(1, GetViewportContentBounds().Width);
+        var lineMeasure = _textView.EnsureLineMeasureCache(line, lineStart, lineEnd, measure.Context, measure.Font);
+        var layout = _wrapVirtualizer.GetWrapLayout(line, lineMeasure.Text, wrapWidth, measure.Context, measure.Font);
+        int caretCol = Math.Clamp(CaretPosition - lineStart, 0, lineMeasure.Text.Length);
+        int currentRow = TextWrapVirtualizer.GetWrapRowFromColumn(layout, caretCol);
+
+        int targetLine = line;
+        int targetRow = currentRow + direction;
+        MultiLineTextView.CachedLineMeasure targetMeasure = lineMeasure;
+        var targetLayout = layout;
+        int targetLineStart = lineStart;
+
+        if (targetRow < 0)
+        {
+            if (line == 0)
+            {
+                return;
+            }
+
+            targetLine = line - 1;
+            GetLineSpan(targetLine, out targetLineStart, out int targetLineEnd);
+            targetMeasure = _textView.EnsureLineMeasureCache(
+                targetLine,
+                targetLineStart,
+                targetLineEnd,
+                measure.Context,
+                measure.Font);
+            targetLayout = _wrapVirtualizer.GetWrapLayout(
+                targetLine,
+                targetMeasure.Text,
+                wrapWidth,
+                measure.Context,
+                measure.Font);
+            targetRow = targetLayout.SegmentStarts.Length - 1;
+        }
+        else if (targetRow >= layout.SegmentStarts.Length)
+        {
+            if (line >= _lineStarts.Count - 1)
+            {
+                return;
+            }
+
+            targetLine = line + 1;
+            GetLineSpan(targetLine, out targetLineStart, out int targetLineEnd);
+            targetMeasure = _textView.EnsureLineMeasureCache(
+                targetLine,
+                targetLineStart,
+                targetLineEnd,
+                measure.Context,
+                measure.Font);
+            targetLayout = _wrapVirtualizer.GetWrapLayout(
+                targetLine,
+                targetMeasure.Text,
+                wrapWidth,
+                measure.Context,
+                measure.Font);
+            targetRow = 0;
+        }
+
+        bool stayInLogicalLine = targetLine == line;
+        bool continueNavigation =
+            stayInLogicalLine &&
+            _wrapNavigationDocumentVersion == DocumentVersion &&
+            _wrapNavigationCaretPosition == CaretPosition &&
+            _wrapNavigationLine == line &&
+            Math.Abs(_wrapNavigationWidth - wrapWidth) < 0.01;
+        int currentSegmentStart = layout.SegmentStarts[currentRow];
+        double targetX = continueNavigation
+            ? _wrapNavigationX
+            : MultiLineTextView.GetSpanWidthCached(
+                lineMeasure,
+                currentSegmentStart,
+                caretCol,
+                measure.Context,
+                measure.Font);
+
+        int targetSegmentStart = targetLayout.SegmentStarts[targetRow];
+        int targetSegmentEnd = targetRow + 1 < targetLayout.SegmentStarts.Length
+            ? targetLayout.SegmentStarts[targetRow + 1]
+            : targetMeasure.Text.Length;
+        double targetSegmentX = MultiLineTextView.GetPrefixWidthCached(
+            targetMeasure,
+            targetSegmentStart,
+            measure.Context,
+            measure.Font);
+        int targetCol = GetClosestColumnFromX(
+            targetMeasure,
+            targetSegmentX + targetX,
+            targetSegmentStart,
+            targetSegmentEnd,
+            measure.Context,
+            measure.Font);
+        if (targetRow + 1 < targetLayout.SegmentStarts.Length && targetCol == targetSegmentEnd)
+        {
+            // A soft-wrap boundary belongs to the following row in the current caret model.
+            // Keep vertical navigation on the requested row instead of visually skipping it.
+            targetCol = Math.Max(targetSegmentStart, targetSegmentEnd - 1);
+        }
+
+        int targetPosition = targetLineStart + targetCol;
+        SetCaretAndSelection(targetPosition, extendSelection);
+
+        if (stayInLogicalLine)
+        {
+            _wrapNavigationDocumentVersion = DocumentVersion;
+            _wrapNavigationCaretPosition = targetPosition;
+            _wrapNavigationLine = targetLine;
+            _wrapNavigationWidth = wrapWidth;
+            _wrapNavigationX = targetX;
+        }
+        else
+        {
+            ResetWrapNavigationX();
+        }
+    }
+
+    private static int GetClosestColumnFromX(
+        MultiLineTextView.CachedLineMeasure measure,
+        double x,
+        int segmentStart,
+        int segmentEnd,
+        IGraphicsContext context,
+        IFont font)
+    {
+        int column = MultiLineTextView.GetCharIndexFromXCached(measure, x, context, font);
+        column = Math.Clamp(column, segmentStart, segmentEnd);
+        if (column <= segmentStart)
+        {
+            return column;
+        }
+
+        double atColumn = MultiLineTextView.GetPrefixWidthCached(measure, column, context, font);
+        double beforeColumn = MultiLineTextView.GetPrefixWidthCached(measure, column - 1, context, font);
+        return Math.Abs(x - beforeColumn) < Math.Abs(atColumn - x) ? column - 1 : column;
+    }
+
+    private void ResetWrapNavigationX()
+    {
+        _wrapNavigationDocumentVersion = -1;
+        _wrapNavigationCaretPosition = -1;
+        _wrapNavigationLine = -1;
+        _wrapNavigationWidth = 0;
+        _wrapNavigationX = 0;
     }
 
     private void MoveToLineEdge(bool start, bool extendSelection)
@@ -1103,6 +1293,14 @@ public sealed class MultiLineTextBox : TextBase
         }
     }
 
+    internal static bool IsCaretOwnedByWrappedRow(
+        int caretColumn,
+        int segmentStart,
+        int segmentEnd,
+        bool isLastRow)
+        => caretColumn >= segmentStart &&
+           (caretColumn < segmentEnd || (isLastRow && caretColumn == segmentEnd));
+
     private void DrawCaretForWrappedRow(
         IGraphicsContext context,
         Rect contentBounds,
@@ -1121,13 +1319,17 @@ public sealed class MultiLineTextBox : TextBase
         }
 
         int caret = CaretPosition;
-        int rowStart = lineStart + segStart;
-        int rowEnd = lineStart + segEnd;
-        if (caret < rowStart || caret > rowEnd)
+        int caretColumn = caret - lineStart;
+        if (!IsCaretOwnedByWrappedRow(
+                caretColumn,
+                segStart,
+                segEnd,
+                segEnd == lineMeasure.Text.Length))
         {
             return;
         }
 
+        int rowStart = lineStart + segStart;
         int rel = Math.Clamp(caret - rowStart, 0, rowText.Length);
         double x = contentBounds.X +
                    (rel <= 0
