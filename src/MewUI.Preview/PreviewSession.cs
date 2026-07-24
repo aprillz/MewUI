@@ -77,6 +77,7 @@ internal sealed class PreviewSession : IDisposable
             _activeTargetId = PreviewTargetScanner.MAIN_WINDOW_ID;
             if (_activeWindow != null)
             {
+                ApplyClientDpi(_activeWindow);
                 MarkDirty(_activeWindow);
             }
         }
@@ -549,6 +550,12 @@ internal sealed class PreviewSession : IDisposable
             if (string.Equals(id, PreviewTargetScanner.MAIN_WINDOW_ID, StringComparison.Ordinal))
             {
                 _activeWindow = _mainWindow;
+                if (_activeWindow != null)
+                {
+                    // The main window may have missed viewport DPI updates while another
+                    // target was active; reapply on every activation.
+                    ApplyClientDpi(_activeWindow);
+                }
             }
             else
             {
@@ -632,9 +639,15 @@ internal sealed class PreviewSession : IDisposable
 
         try
         {
+            // Build ownership mirrors the framework rule: composition-site callback first,
+            // then the window's virtual OnBuild hook.
             if (window.BuildCallback is Action<Window> build)
             {
                 build(window);
+            }
+            else if (window.HasBuildHookRegistered)
+            {
+                window.InvokeOnBuildHook();
             }
             else if (!string.Equals(_activeTargetId, PreviewTargetScanner.MAIN_WINDOW_ID, StringComparison.Ordinal)
                 && ReferenceEquals(window, _wrapperWindow) && window.Content != null)
