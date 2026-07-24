@@ -112,23 +112,8 @@
     <RuntimeHostConfigurationOption Include="Aprillz.MewUI.HotReload.Enabled" Value="false" Trim="false" />
   </ItemGroup>
 
-  <!--
-    Editor preview session composition. The IDE extension declares a session by setting the
-    MEWUI_PREVIEW=1 environment variable (visible to MSBuild as a property) before launching
-    `dotnet watch run`; only then is the version-matched preview assembly referenced and the
-    module-initializer entry point injected into the app compilation. Production builds never
-    see either. See agent/preview-tooling/plan.md section 4.2.
-  -->
-  <ItemGroup Condition="'$(MEWUI_PREVIEW)' == '1'">
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\MewUI.Preview\MewUI.Preview.csproj" />
-    <Compile Include="$(MSBuildThisFileDirectory)MewUIPreviewInit.cs" LinkBase="MewUIPreview" />
-  </ItemGroup>
-
-  <!-- PublishAot defaults StartupHookSupport off, which makes dotnet watch fall back to
-       restart-on-every-save. Preview sessions run under the JIT anyway, so re-enable the hook
-       to restore Hot Reload; publish behavior is unaffected (no MEWUI_PREVIEW there). -->
-  <PropertyGroup Condition="'$(MEWUI_PREVIEW)' == '1'">
-    <StartupHookSupport>true</StartupHookSupport>
-  </PropertyGroup>
+  <!-- Editor preview session composition (see agent/preview-tooling/plan.md section 4.2). -->
+  <Import Project="$(MSBuildThisFileDirectory)MewUIPreview.targets"
+          Condition="'$(_MewUIPreviewTargetsImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)MewUIPreview.targets')" />
 
 </Project>
