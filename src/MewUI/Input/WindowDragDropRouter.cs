@@ -70,6 +70,15 @@ internal static class WindowDragDropRouter
 
             if (_candidate == null) return false;
 
+            // A layout rebuild between the press and this move can take the recorded source out of
+            // the tree, or root it under another window. Promoting it would measure the grab point
+            // against a tree the source no longer belongs to.
+            if (!IsCandidateSourceLive(_candidate))
+            {
+                _candidate = null;
+                return false;
+            }
+
             var dx = positionInWindow.X - _candidate.StartPositionInWindow.X;
             var dy = positionInWindow.Y - _candidate.StartPositionInWindow.Y;
             if (dx * dx + dy * dy < DragGestureThresholdDip * DragGestureThresholdDip)
@@ -156,10 +165,20 @@ internal static class WindowDragDropRouter
         }
     }
 
+    /// <summary>
+    /// Whether the recorded source still hangs in the window it was pressed in. Its grab point is
+    /// resolved against that window, and <see cref="Element.TransformToVisual"/> rejects a source
+    /// rooted anywhere else.
+    /// </summary>
+    private static bool IsCandidateSourceLive(DragCandidate candidate)
+        => ReferenceEquals(candidate.Source.FindVisualRoot(), candidate.SourceWindow);
+
     private static bool TryPromoteCandidate()
     {
         var candidate = _candidate!;
         _candidate = null;
+
+        if (!IsCandidateSourceLive(candidate)) return false;
 
         var sourceWindow = candidate.SourceWindow;
         var source = candidate.Source;
