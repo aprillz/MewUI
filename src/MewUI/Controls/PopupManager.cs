@@ -76,8 +76,15 @@ internal sealed class PopupManager
 
     internal void Dispose()
     {
-        foreach (var entry in _popups)
+        // Detaching closes the popup surface, whose close policy re-enters this manager and removes
+        // entries; take each one out before running its side effects, the way CloseAndDetachEntry
+        // does. Draining from the end also closes submenus before the popups that opened them.
+        while (_popups.Count > 0)
         {
+            int last = _popups.Count - 1;
+            var entry = _popups[last];
+            _popups.RemoveAt(last);
+
             if (entry.Element is IDisposable disposable)
             {
                 disposable.Dispose();
@@ -86,7 +93,6 @@ internal sealed class PopupManager
             entry.Host?.Detach(entry);
         }
 
-        _popups.Clear();
         _toolTipOwner = null;
         _toolTip = null;
     }
