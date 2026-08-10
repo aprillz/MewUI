@@ -1737,6 +1737,28 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         return result;
     }
 
+    /// <summary>
+    /// Whether input to this surface belongs to <paramref name="modal"/>: the modal window itself,
+    /// or a popup/overlay it owns. Platforms without an OS-level disabled window emulate modality by
+    /// dropping input aimed elsewhere, and a menu the modal opened is a surface of the modal, not a
+    /// window competing with it.
+    /// </summary>
+    internal bool IsInModalScope(Window modal)
+    {
+        for (Window? current = this; current != null; current = current.Owner)
+        {
+            if (ReferenceEquals(current, modal))
+            {
+                return true;
+            }
+            if (!current.IsNonActivatingSurface)
+            {
+                break;
+            }
+        }
+        return false;
+    }
+
     internal void NotifyInputWhenDisabled()
     {
         var child = GetTopModalChild();

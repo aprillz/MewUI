@@ -337,7 +337,8 @@ public sealed class X11PlatformHost : IPlatformHost
             if (window != 0 && _windows.TryGetValue(window, out var backend))
             {
                 var topModal = GetTopModalBackend();
-                if (topModal != null && (IsMouseEvent(ev.type) || IsFocusIn(ev.type)) && backend != topModal)
+                if (topModal != null && (IsMouseEvent(ev.type) || IsFocusIn(ev.type)) &&
+                    !backend.Window.IsInModalScope(topModal.Window))
                 {
                     topModal.Activate();
                     continue;
@@ -508,7 +509,8 @@ public sealed class X11PlatformHost : IPlatformHost
                 if (window != 0 && _windows.TryGetValue(window, out var backend))
                 {
                     var topModal = GetTopModalBackend();
-                    if (topModal != null && (IsMouseEvent(ev.type) || IsFocusIn(ev.type)) && backend != topModal)
+                    if (topModal != null && (IsMouseEvent(ev.type) || IsFocusIn(ev.type)) &&
+                        !backend.Window.IsInModalScope(topModal.Window))
                     {
                         topModal.Activate();
                         continue;

@@ -688,7 +688,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
                 _windows.TryGetValue(windowKey, out var backend);
                 var topModalBackend = GetTopModalBackend();
-                if (topModalBackend != null && IsMouseEvent(type) && backend != topModalBackend)
+                if (topModalBackend != null && IsMouseEvent(type) &&
+                    (backend == null || !backend.Window.IsInModalScope(topModalBackend.Window)))
                 {
                     topModalBackend.Activate();
                     continue;
@@ -794,7 +795,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
             _windows.TryGetValue(windowKey, out var backend);
             var topModalBackend = GetTopModalBackend();
-            if (topModalBackend != null && IsMouseEvent(type) && backend != topModalBackend)
+            if (topModalBackend != null && IsMouseEvent(type) &&
+                (backend == null || !backend.Window.IsInModalScope(topModalBackend.Window)))
             {
                 topModalBackend.Activate();
                 continue;
@@ -888,7 +890,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
         _windows.TryGetValue(windowKey, out var backend);
         var topModalBackend = GetTopModalBackend();
-        if (topModalBackend != null && IsMouseEvent(type) && backend != topModalBackend)
+        if (topModalBackend != null && IsMouseEvent(type) &&
+            (backend == null || !backend.Window.IsInModalScope(topModalBackend.Window)))
         {
             topModalBackend.Activate();
             return;
