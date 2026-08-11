@@ -122,7 +122,7 @@ internal static class Program
                 timer.Dispose();
                 if (Application.IsRunning)
                 {
-                    Application.Current.PlatformHost.Quit(Application.Current);
+                    Application.Shutdown();
                 }
             };
 
@@ -309,7 +309,6 @@ internal static class Program
                     build: _ => new ProgressBar()
                         .Minimum(0)
                         .Maximum(100)
-                        .Height(10)
                         .Margin(6, 0)
                         .CenterVertical(),
                     bind: (view, item) => ((ProgressBar)view).BindValue(item.Progress)),

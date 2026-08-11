@@ -55,7 +55,7 @@ internal static class MinTrackReleaseTest
         window = new Window()
             .Title($"Min-track: {label}")
             .Resizable(320, 220, minWidth, minHeight)
-            .OnBuild(x =>
+            .Build(x =>
             {
                 x.AllowsTransparency = true;
                 x.Background = Color.Transparent;
@@ -81,7 +81,7 @@ internal static class MinTrackReleaseTest
         window = new Window()
             .Title($"Min-track: {label}")
             .Resizable(320, 220)
-            .OnBuild(x =>
+            .Build(x =>
             {
                 x.Borderless = true;
                 x.Padding = new Thickness(0);

@@ -12,7 +12,7 @@ namespace Aprillz.MewUI.Concept
 
             var root = new Window()
                 .Resizable(1200, 800)
-                .OnBuild(x => x
+                .Build(x => x
                     .Title("Async Image Loader")
                     .Content(
                         new DockPanel()
