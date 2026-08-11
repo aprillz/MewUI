@@ -15,7 +15,7 @@ partial class GalleryView
                 "A PathGeometry wrapped in a PathShape. The fill follows the inherited foreground."),
             new NavigationIconEntry(
                 "Emoji",
-                DimWhenDisabled(new TextBlock().Text("😀").FontSize(14).Center()),
+                DimWhenDisabled(new TextBlock().Text("😀").FontSize(12).Center()),
                 "An emoji rendered by a TextBlock, demonstrating that an icon can be any Element."),
             new NavigationIconEntry(
                 "Image",

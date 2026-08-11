@@ -269,8 +269,8 @@ partial class GalleryView
         // card, so the swatch states the size it wants instead.
         return new Image()
             .Source(ImageSource.FromBgraPixels(w, h, bgra))
-            .Width(w)
-            .Height(h);
+            .Size(320,60)
+            .StretchMode(Stretch.Fill);
     }
 
     private static FrameworkElement MakeTransitionBlock(string text, int colorIndex)
