@@ -30,7 +30,7 @@ public sealed record class ThemeMetrics
     {
         BaseControlHeight = 28,
         ControlCornerRadius = 4,
-        ControlBorderThickness = 1,
+        ControlBorderThickness = 0.5,
         ItemPadding = new Thickness(8, 2, 8, 2),
         ContainerPadding = new Thickness(8),
         FontFamily = SystemFontFamily,
