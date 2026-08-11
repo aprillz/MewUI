@@ -10,7 +10,7 @@
     <Project Path="src/MewUI.Concept/MewUI.Concept.csproj" />
   </Folder>
   <Folder Name="/samples/">
-    <Project Path="samples/MewDock.Sample/MewDock.Sample.csproj" />
+    <Project Path="samples/MewUI.MewDock.Sample/MewUI.MewDock.Sample.csproj" />
     <Project Path="samples/MewUI.Concept/MewUI.Concept.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
     <Project Path="samples/MewUI.ImeTest/MewUI.ImeTest.csproj" />
