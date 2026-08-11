@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -137,6 +140,67 @@ public static class BindingExtensions
     {
         ArgumentNullException.ThrowIfNull(element);
         element.SetBinding(property, source, path, convert, convertBack, mode, fallbackValue);
+        return element;
+    }
+
+    /// <summary>
+    /// Binds a property to a single notifying property of <paramref name="source"/> and returns
+    /// the target for chaining. Omitting <paramref name="setter"/> makes the binding OneWay.
+    /// </summary>
+    public static TElement Bind<TElement, TSource, T>(
+        this TElement element,
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, T> getter,
+        Action<TSource, T>? setter = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TElement : MewObject
+        where TSource : class, INotifyPropertyChanged
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(property, source, getter, setter, mode, getterExpression);
+        return element;
+    }
+
+    /// <summary>
+    /// Binds a property to a single notifying property of <paramref name="source"/> with type
+    /// conversion and returns the target for chaining.
+    /// </summary>
+    public static TElement Bind<TElement, TProp, TSource, TValue>(
+        this TElement element,
+        MewProperty<TProp> property,
+        TSource source,
+        Func<TSource, TValue> getter,
+        Func<TValue, TProp> convert,
+        Action<TSource, TValue>? setter = null,
+        Func<TProp, TValue>? convertBack = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TElement : MewObject
+        where TSource : class, INotifyPropertyChanged
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(
+            property, source, getter, convert, setter, convertBack, mode, getterExpression);
+        return element;
+    }
+
+    /// <summary>
+    /// Binds a property to an <see cref="ObservableValue{T}"/> reached through
+    /// <paramref name="source"/> and returns the target for chaining.
+    /// </summary>
+    public static TElement Bind<TElement, TSource, T>(
+        this TElement element,
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, ObservableValue<T>> selector,
+        BindingMode? mode = null)
+        where TElement : MewObject
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(property, source, selector, mode);
         return element;
     }
 }

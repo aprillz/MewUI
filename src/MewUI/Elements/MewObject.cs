@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
@@ -627,6 +630,103 @@ public abstract class MewObject : IPropertyOwner
             resolvedMode,
             fallbackValue);
         ActivatePropertyBinding(property.Id, binding);
+    }
+
+    /// <summary>
+    /// Binds a property to a single notifying property of <paramref name="source"/>. Omitting
+    /// <paramref name="setter"/> makes the binding OneWay. Replaces any existing binding for the
+    /// same property.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="getter"/> is not a single member access such as
+    /// <c>x =&gt; x.Name</c>.
+    /// </exception>
+    public void SetBinding<TSource, T>(
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, T> getter,
+        Action<TSource, T>? setter = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TSource : class, INotifyPropertyChanged
+    {
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+
+        var path = BindingPath.From<TSource>().ThenNotifying(getter, setter, getterExpression);
+
+        // The path overload throws instead of degrading, so settle the mode before delegating.
+        var resolvedMode = mode ?? (property.BindsTwoWayByDefault
+            ? BindingMode.TwoWay
+            : BindingMode.OneWay);
+        if (resolvedMode == BindingMode.TwoWay && setter == null)
+        {
+            resolvedMode = BindingMode.OneWay;
+        }
+
+        SetBinding(property, source, path, resolvedMode, fallbackValue: default!);
+    }
+
+    /// <summary>
+    /// Binds a property to a single notifying property of <paramref name="source"/> with type
+    /// conversion. The binding is TwoWay only when both <paramref name="setter"/> and
+    /// <paramref name="convertBack"/> are supplied.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="getter"/> is not a single member access such as
+    /// <c>x =&gt; x.Name</c>.
+    /// </exception>
+    public void SetBinding<TProp, TSource, TValue>(
+        MewProperty<TProp> property,
+        TSource source,
+        Func<TSource, TValue> getter,
+        Func<TValue, TProp> convert,
+        Action<TSource, TValue>? setter = null,
+        Func<TProp, TValue>? convertBack = null,
+        BindingMode? mode = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where TSource : class, INotifyPropertyChanged
+    {
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(convert);
+
+        var path = BindingPath.From<TSource>().ThenNotifying(getter, setter, getterExpression);
+
+        var resolvedMode = mode ?? (property.BindsTwoWayByDefault
+            ? BindingMode.TwoWay
+            : BindingMode.OneWay);
+        if (resolvedMode == BindingMode.TwoWay && (setter == null || convertBack == null))
+        {
+            resolvedMode = BindingMode.OneWay;
+        }
+
+        SetBinding(
+            property, source, path, convert, convertBack, resolvedMode, fallbackValue: default!);
+    }
+
+    /// <summary>
+    /// Binds a property to an <see cref="ObservableValue{T}"/> reached through
+    /// <paramref name="source"/>. The wrapper supplies the change notification, so
+    /// <paramref name="source"/> need not raise property change events.
+    /// </summary>
+    public void SetBinding<TSource, T>(
+        MewProperty<T> property,
+        TSource source,
+        Func<TSource, ObservableValue<T>> selector,
+        BindingMode? mode = null)
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(selector);
+
+        SetBinding(
+            property,
+            source,
+            BindingPath.From<TSource>().Then(selector),
+            mode,
+            fallbackValue: default!);
     }
 
     /// <summary>

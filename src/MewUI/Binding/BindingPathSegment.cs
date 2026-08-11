@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI;
@@ -86,6 +87,51 @@ internal sealed class ObservableBindingPathSegment<TSource, TValue>(
 
     public void Write(object endpoint, object? value)
         => ((ObservableValue<TValue>)endpoint).Value = (TValue)value!;
+}
+
+internal sealed class InpcBindingPathSegment<TSource, TValue>(
+    Func<TSource, TValue> getter,
+    Action<TSource, TValue>? setter,
+    string propertyName) : IBindingPathSegment
+    where TSource : class, INotifyPropertyChanged
+{
+    public bool IsObservable => true;
+
+    public bool CanWrite => setter != null;
+
+    public BindingPathSegmentValue Attach(object owner, BindingPathSubscription? subscription)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+
+        var typedOwner = (TSource)owner;
+        var value = getter(typedOwner);
+
+        WeakEventManager.AddHandler<INotifyPropertyChanged, BindingPathSubscription>(
+            InpcWeakEvents.PropertyChanged,
+            typedOwner,
+            subscription,
+            propertyName,
+            static value => value.OnChanged());
+
+        return new BindingPathSegmentValue(value, typedOwner);
+    }
+
+    public object? Read(object endpoint) => getter((TSource)endpoint);
+
+    public void Detach(object endpoint, BindingPathSubscription subscription)
+    {
+        WeakEventManager.RemoveHandler(
+            InpcWeakEvents.PropertyChanged,
+            (INotifyPropertyChanged)endpoint,
+            subscription);
+    }
+
+    public void ValidateWrite(object endpoint, object? value)
+    {
+    }
+
+    public void Write(object endpoint, object? value)
+        => setter!((TSource)endpoint, (TValue)value!);
 }
 
 internal sealed class MewPropertyBindingPathSegment<TOwner, TValue> : IBindingPathSegment
