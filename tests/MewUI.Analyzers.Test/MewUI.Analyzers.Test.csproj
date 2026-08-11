@@ -6,8 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseVSTest>true</UseVSTest>
-    <!-- MSTEST0001: parallelism preference nag, not relevant to analyzer tests. -->
-    <NoWarn>$(NoWarn);MSTEST0001</NoWarn>
+    <!-- MSTEST0001: parallelism preference nag, not relevant to analyzer tests.
+         RS1036/RS2008: this project declares analyzer and generator test doubles that are
+         instantiated directly and never shipped, so packaging rules do not apply. -->
+    <NoWarn>$(NoWarn);MSTEST0001;RS1036;RS2008</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
