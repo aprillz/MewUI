@@ -11,6 +11,6 @@ public enum ShutdownMode
     /// <summary>Shut down when the main window (the one passed to <see cref="Application.Run(Window)"/>) closes.</summary>
     OnMainWindowClose,
 
-    /// <summary>Never shut down automatically; the loop ends only via <see cref="Application.Shutdown"/>.</summary>
+    /// <summary>Never shut down automatically; the loop ends only via <see cref="Application.Shutdown()"/>.</summary>
     OnExplicitShutdown,
 }

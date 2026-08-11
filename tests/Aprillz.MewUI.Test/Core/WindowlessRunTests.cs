@@ -322,6 +322,54 @@ public sealed class WindowlessRunTests
     }
 
     [TestMethod]
+    public void Shutdown_WithoutARunStillReportsTheExitCode()
+    {
+        var previous = Environment.ExitCode;
+
+        try
+        {
+            // A request that raced the end of the loop must not lose the code it asked for.
+            Application.Shutdown(4);
+
+            Assert.IsFalse(Application.IsRunning);
+            Assert.AreEqual(4, Environment.ExitCode);
+        }
+        finally
+        {
+            Environment.ExitCode = previous;
+        }
+    }
+
+    [TestMethod]
+    public void Run_ResetsTheExitCodeFromThePreviousRun()
+    {
+        EnsureRegistered();
+        var previous = Environment.ExitCode;
+
+        try
+        {
+            Hosts.Enqueue(new LifecyclePlatformHost());
+            Application.Run(() => Application.Shutdown(5));
+            Assert.AreEqual(5, Environment.ExitCode);
+
+            Hosts.Enqueue(new LifecyclePlatformHost());
+            int observed = -1;
+            Application.Run(() =>
+            {
+                observed = Environment.ExitCode;
+                Application.Shutdown();
+            });
+
+            Assert.AreEqual(0, observed);
+            Assert.AreEqual(0, Environment.ExitCode);
+        }
+        finally
+        {
+            Environment.ExitCode = previous;
+        }
+    }
+
+    [TestMethod]
     public void DefaultShutdownMode_WindowlessLastWindowCloseRequestsQuit()
     {
         EnsureRegistered();

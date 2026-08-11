@@ -294,6 +294,15 @@ public sealed class Win32PlatformHost : IPlatformHost
 
     public void Quit(Application app)
     {
+        var dispatcher = _dispatcher;
+        if (dispatcher != null && !dispatcher.IsOnUIThread)
+        {
+            // PostQuitMessage targets the calling thread's own queue, and the loop can be parked in an
+            // infinite wait, so the request is marshalled instead of being posted from here.
+            dispatcher.BeginInvoke(() => Quit(app));
+            return;
+        }
+
         _running = false;
         User32.PostQuitMessage(0);
     }

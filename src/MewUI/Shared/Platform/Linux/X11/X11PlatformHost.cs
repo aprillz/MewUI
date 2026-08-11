@@ -366,7 +366,19 @@ public sealed class X11PlatformHost : IPlatformHost
         return false;
     }
 
-    public void Quit(Application app) => _running = false;
+    public void Quit(Application app)
+    {
+        var dispatcher = _dispatcher;
+        if (dispatcher != null && !dispatcher.IsOnUIThread)
+        {
+            // The loop parks in poll with a finite timeout, so marshalling signals the wake pipe and the
+            // request is observed at once instead of at the next timeout.
+            dispatcher.BeginInvoke(() => Quit(app));
+            return;
+        }
+
+        _running = false;
+    }
 
     public Point GetCursorScreenPosition()
     {
@@ -1020,6 +1032,13 @@ public sealed class X11PlatformHost : IPlatformHost
             {
                 return;
             }
+        }
+
+        if (!_running)
+        {
+            // Pumped work can request shutdown. Blocking in poll here would hold the loop for the whole
+            // timeout before it re-checks and exits.
+            return;
         }
 
         // If poll-based waiting isn't available, fall back to a modest sleep to avoid a busy loop.

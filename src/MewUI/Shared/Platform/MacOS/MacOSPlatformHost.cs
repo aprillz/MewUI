@@ -648,6 +648,14 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
     public void Quit(Application app)
     {
+        var dispatcher = _dispatcher;
+        if (dispatcher != null && !dispatcher.IsOnUIThread)
+        {
+            // NSApplication must be touched from the main thread, so the request is marshalled there.
+            dispatcher.BeginInvoke(() => Quit(app));
+            return;
+        }
+
         _running = false;
         MacOSInterop.TrySetThemeChangedCallback(null);
         MacOSInterop.RequestTerminate();
