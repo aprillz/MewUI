@@ -106,6 +106,8 @@ public sealed class BindingPathGeneratorTests
             {
                 public static readonly Aprillz.MewUI.MewProperty<string> TextProperty = null;
 
+                public static readonly Aprillz.MewUI.MewProperty<int> CountProperty = null;
+
                 public string Text { get; set; }
             }
         }
@@ -133,6 +135,7 @@ public sealed class BindingPathGeneratorTests
             public Room Room { get; set; }
             public Aprillz.MewUI.ObservableValue<string> Caption { get; set; }
             public Aprillz.MewUI.Controls.Label Header { get; set; }
+            public System.Collections.ObjectModel.ObservableCollection<string> Names { get; set; }
             public string Compute() => null;
         }
         """;
@@ -213,6 +216,16 @@ public sealed class BindingPathGeneratorTests
     }
 
     [TestMethod]
+    public void InheritedMember_UsesTheReceiverTypeToChooseTheSegment()
+    {
+        // Count is declared on Collection<T>, which does not notify, but the receiver is an
+        // ObservableCollection<T>, which does.
+        string generated = RunExpectingSuccess("x => x.Names.Count", "Label.CountProperty");
+
+        StringAssert.Contains(generated, ".ThenNotifying(static value => value.Count");
+    }
+
+    [TestMethod]
     public void ComputedGetter_IsReported()
     {
         var diagnostics = Run("x => x.Compute().Trim()", out _);
@@ -238,9 +251,9 @@ public sealed class BindingPathGeneratorTests
         Assert.IsEmpty(single);
     }
 
-    private static string RunExpectingSuccess(string getter)
+    private static string RunExpectingSuccess(string getter, string property = "Label.TextProperty")
     {
-        var diagnostics = Run(getter, out string generated);
+        var diagnostics = Run(getter, out string generated, property);
 
         var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         Assert.IsEmpty(
@@ -252,7 +265,10 @@ public sealed class BindingPathGeneratorTests
         return generated;
     }
 
-    private static ImmutableArray<Diagnostic> Run(string getter, out string generated)
+    private static ImmutableArray<Diagnostic> Run(
+        string getter,
+        out string generated,
+        string property = "Label.TextProperty")
     {
         string source = $$"""
             using Aprillz.MewUI.Controls;
@@ -267,7 +283,7 @@ public sealed class BindingPathGeneratorTests
                 {
                     var label = new Label();
                     var model = new ViewModel();
-                    label.Bind(Label.TextProperty, model, {{getter}});
+                    label.Bind({{property}}, model, {{getter}});
                 }
             }
             """ + BINDING_API;

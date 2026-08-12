@@ -261,8 +261,14 @@ internal static class BindingChain
             return null;
         }
 
+        // The receiver decides, not the declaring type: Count lives on Collection<T>, which does
+        // not notify, while the receiver may be an ObservableCollection<T>, which does.
+        if (GetReceiverType(semanticModel, step.Node) is not INamedTypeSymbol owner)
+        {
+            return null;
+        }
+
         string expression = $"value.{property.Name}";
-        var owner = property.ContainingType;
         bool canSet = property.SetMethod != null
             && property.SetMethod.DeclaredAccessibility == Accessibility.Public;
 
@@ -284,6 +290,29 @@ internal static class BindingChain
 
         string? setter = isLeaf && canSet ? $"value.{property.Name} = newValue" : null;
         return new BindingSegment(BindingSegmentKind.Notifying, expression, setter, null);
+    }
+
+    /// <summary>
+    /// Type of the expression a member is read from, following a conditional access back to the
+    /// expression that precedes the question mark.
+    /// </summary>
+    private static ITypeSymbol? GetReceiverType(SemanticModel semanticModel, ExpressionSyntax node)
+    {
+        if (node is MemberAccessExpressionSyntax access)
+        {
+            return semanticModel.GetTypeInfo(access.Expression).Type;
+        }
+
+        for (SyntaxNode? current = node; current != null; current = current.Parent)
+        {
+            if (current.Parent is ConditionalAccessExpressionSyntax conditional
+                && conditional.WhenNotNull == current)
+            {
+                return semanticModel.GetTypeInfo(conditional.Expression).Type;
+            }
+        }
+
+        return null;
     }
 
     private static bool Implements(ITypeSymbol type, INamedTypeSymbol notifyInterface)
