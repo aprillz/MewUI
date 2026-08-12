@@ -227,7 +227,7 @@ partial class GalleryView
                     "NumericUpDown (int/double)",
                     new Grid()
                         .Columns("Auto,Auto,Auto")
-                        .Rows("Auto,Auto")
+                        .Rows("Auto,Auto,Auto")
                         .Spacing(8)
                         .AutoIndexing()
                         .Children(
@@ -263,6 +263,20 @@ partial class GalleryView
 
                             new TextBlock()
                                 .BindText(doubleBinding, value => $"Value: {value:0.##}")
+                                .CenterVertical(),
+
+                            new TextBlock()
+                                .Text("Disabled")
+                                .CenterVertical(),
+
+                            new NumericUpDown()
+                                .Disable()
+                                .Width(140)
+                                .Minimum(0)
+                                .Maximum(100)
+                                .Step(0.1)
+                                .Format("0.##")
+                                .BindValue(doubleBinding)
                                 .CenterVertical()
                         )
                 ),
