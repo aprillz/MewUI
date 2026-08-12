@@ -107,18 +107,39 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
         }
 
         int count = 0;
-        var current = Unwrap(body);
-        while (current is MemberAccessExpressionSyntax access
-            && access.IsKind(SyntaxKind.SimpleMemberAccessExpression))
-        {
-            count++;
-            current = Unwrap(access.Expression);
-        }
+        return Count(body, parameterName, ref count) ? count : 0;
+    }
 
-        return current is IdentifierNameSyntax receiver
-            && receiver.Identifier.ValueText == parameterName
-            ? count
-            : 0;
+    // Mirrors the shapes the generator accepts: members, null-conditional access, indexers, casts
+    // and the null-forgiving operator.
+    private static bool Count(ExpressionSyntax expression, string parameterName, ref int count)
+    {
+        switch (Unwrap(expression))
+        {
+            case IdentifierNameSyntax identifier:
+                return identifier.Identifier.ValueText == parameterName;
+
+            case MemberBindingExpressionSyntax:
+            case ElementBindingExpressionSyntax:
+                count++;
+                return true;
+
+            case MemberAccessExpressionSyntax access
+                when access.IsKind(SyntaxKind.SimpleMemberAccessExpression):
+                count++;
+                return Count(access.Expression, parameterName, ref count);
+
+            case ElementAccessExpressionSyntax element:
+                count++;
+                return Count(element.Expression, parameterName, ref count);
+
+            case ConditionalAccessExpressionSyntax conditional:
+                return Count(conditional.WhenNotNull, parameterName, ref count)
+                    && Count(conditional.Expression, parameterName, ref count);
+
+            default:
+                return false;
+        }
     }
 
     private static void AnalyzeNotifyingSegment(
@@ -303,6 +324,15 @@ public sealed class BindingPathSegmentAnalyzer : DiagnosticAnalyzer
                 && postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression))
             {
                 expression = postfix.Operand;
+            }
+            else if (expression is CastExpressionSyntax cast)
+            {
+                expression = cast.Expression;
+            }
+            else if (expression is BinaryExpressionSyntax binary
+                && binary.IsKind(SyntaxKind.AsExpression))
+            {
+                expression = binary.Left;
             }
             else
             {

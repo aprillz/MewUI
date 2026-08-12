@@ -277,6 +277,22 @@ public sealed class BindingPathSegmentTests
     }
 
     [TestMethod]
+    public async Task ReportsDottedGetter_WhenItUsesNullConditionalAccess()
+    {
+        var source = """
+            using Aprillz.MewUI.Controls;
+
+            class C
+            {
+                object M(Label label, Person person)
+                    => label.Bind(Label.TextProperty, person, {|MEW1203:x => x.Profile?.DisplayName|});
+            }
+            """ + BindingApi;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
     public async Task NoDiagnostic_WhenTheGetterIsASingleMember()
     {
         var source = """
