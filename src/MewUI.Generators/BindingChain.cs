@@ -12,6 +12,7 @@ internal enum BindingSegmentKind
     Notifying,
     Observable,
     MewProperty,
+    Indexed,
 }
 
 internal sealed class BindingSegment(
@@ -55,6 +56,7 @@ internal static class BindingChain
 {
     private const string MEW_OBJECT = "Aprillz.MewUI.Controls.MewObject";
     private const string NOTIFY_INTERFACE = "System.ComponentModel.INotifyPropertyChanged";
+    private const string COLLECTION_INTERFACE = "System.Collections.Specialized.INotifyCollectionChanged";
     private const string OBSERVABLE_VALUE = "Aprillz.MewUI.ObservableValue<T>";
     private const string MEW_PROPERTY = "Aprillz.MewUI.MewProperty<T>";
 
@@ -226,8 +228,8 @@ internal static class BindingChain
                     BindingSegmentKind.Getter, $"({step.Text})value", null, null),
                 BindingStepKind.AsCast => new BindingSegment(
                     BindingSegmentKind.Getter, $"value as {step.Text}", null, null),
-                BindingStepKind.Indexer => new BindingSegment(
-                    BindingSegmentKind.Getter, $"value[{step.Text}]", null, null),
+                BindingStepKind.Indexer => ResolveIndexer(
+                    compilation, semanticModel, notifyInterface, step),
                 _ => ResolveMember(semanticModel, mewObject, notifyInterface, step, isLeaf),
             };
 
@@ -240,6 +242,34 @@ internal static class BindingChain
         }
 
         return segments;
+    }
+
+    /// <summary>
+    /// Indexers observe only when the receiver announces changes, either as a collection or
+    /// through the conventional indexer property notification.
+    /// </summary>
+    private static BindingSegment ResolveIndexer(
+        Compilation compilation,
+        SemanticModel semanticModel,
+        INamedTypeSymbol notifyInterface,
+        BindingStep step)
+    {
+        string expression = $"value[{step.Text}]";
+        var receiver = GetReceiverType(semanticModel, step.Node);
+        if (receiver == null)
+        {
+            return new BindingSegment(BindingSegmentKind.Getter, expression, null, null);
+        }
+
+        var collectionInterface = compilation.GetTypeByMetadataName(COLLECTION_INTERFACE);
+        bool observes = (collectionInterface != null && Implements(receiver, collectionInterface))
+            || Implements(receiver, notifyInterface);
+
+        return new BindingSegment(
+            observes ? BindingSegmentKind.Indexed : BindingSegmentKind.Getter,
+            expression,
+            null,
+            null);
     }
 
     private static BindingSegment? ResolveMember(
@@ -301,6 +331,11 @@ internal static class BindingChain
         if (node is MemberAccessExpressionSyntax access)
         {
             return semanticModel.GetTypeInfo(access.Expression).Type;
+        }
+
+        if (node is ElementAccessExpressionSyntax element)
+        {
+            return semanticModel.GetTypeInfo(element.Expression).Type;
         }
 
         for (SyntaxNode? current = node; current != null; current = current.Parent)

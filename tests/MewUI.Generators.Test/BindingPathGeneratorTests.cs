@@ -47,6 +47,15 @@ public sealed class BindingPathGeneratorTests
                     where TOwner : Aprillz.MewUI.Controls.MewObject => null;
             }
 
+            public static class IndexedBindingPathExtensions
+            {
+                public static BindingPath<TRoot, TNext> ThenIndexed<TRoot, TOwner, TNext>(
+                    this BindingPath<TRoot, TOwner> path,
+                    System.Func<TOwner, TNext> getter)
+                    where TRoot : class
+                    where TOwner : class => null;
+            }
+
             public static class InpcBindingPathExtensions
             {
                 public static BindingPath<TRoot, TNext> ThenNotifying<TRoot, TOwner, TNext>(
@@ -136,6 +145,7 @@ public sealed class BindingPathGeneratorTests
             public Aprillz.MewUI.ObservableValue<string> Caption { get; set; }
             public Aprillz.MewUI.Controls.Label Header { get; set; }
             public System.Collections.ObjectModel.ObservableCollection<string> Names { get; set; }
+            public System.Collections.ObjectModel.ObservableCollection<Profile> Profiles { get; set; }
             public string Compute() => null;
         }
         """;
@@ -184,11 +194,19 @@ public sealed class BindingPathGeneratorTests
     }
 
     [TestMethod]
-    public void ConstantIndexer_BecomesANonObservingSegment()
+    public void ConstantIndexer_OnAPlainArrayBecomesANonObservingSegment()
     {
         string generated = RunExpectingSuccess("x => x.Items[0].DisplayName");
 
         StringAssert.Contains(generated, ".Then(static value => value[0])");
+    }
+
+    [TestMethod]
+    public void ConstantIndexer_OnANotifyingCollectionBecomesAnIndexedSegment()
+    {
+        string generated = RunExpectingSuccess("x => x.Profiles[0].DisplayName");
+
+        StringAssert.Contains(generated, ".ThenIndexed(static value => value[0])");
     }
 
     [TestMethod]

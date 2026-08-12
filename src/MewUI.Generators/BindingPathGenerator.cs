@@ -362,6 +362,11 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
             return $".Then({segment.MewPropertyReference})";
         }
 
+        if (segment.Kind == BindingSegmentKind.Indexed)
+        {
+            return $".ThenIndexed(static value => {segment.Expression})";
+        }
+
         if (segment.Kind != BindingSegmentKind.Notifying)
         {
             return $".Then(static value => {segment.Expression})";
