@@ -19,6 +19,7 @@
     <Project Path="samples/MewUI.MewCharts.Sample/MewUI.MewCharts.Sample.csproj" />
     <Project Path="samples/MewUI.Skia.Sample/MewUI.Skia.Sample.csproj" />
     <Project Path="samples/MewUI.Svg.Sample/MewUI.Svg.Sample.csproj" />
+    <Project Path="samples/MewUI.TaskManager.Sample/MewUI.TaskManager.Sample.csproj" />
     <Project Path="samples/MewUI.Video.Sample/MewUI.Video.Sample.csproj" />
     <Project Path="samples/MewUI.Windowless.Sample/MewUI.Windowless.Sample.csproj" />
     <Project Path="samples/MewUI.WebView2.Win32.Sample/MewUI.WebView2.Win32.Sample.csproj" />
