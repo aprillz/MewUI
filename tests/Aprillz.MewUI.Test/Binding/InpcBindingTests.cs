@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -145,6 +146,29 @@ public sealed class InpcBindingTests
         source.Profile = null;
 
         Assert.AreEqual("(none)", target.Text);
+    }
+
+    [TestMethod]
+    public void ObservableCollectionCount_UpdatesThroughNotifyingSegments()
+    {
+        var source = new CollectionViewModel();
+        var target = new TestObject();
+        var path = BindingPath
+            .From<CollectionViewModel>()
+            .ThenNotifying(static value => value.Items)
+            .ThenNotifying(static value => value.Count);
+
+        target.SetBinding(TestObject.ValueProperty, source, path, BindingMode.OneWay);
+        Assert.AreEqual(0, target.Value);
+
+        source.Items.Add("first");
+        Assert.AreEqual(1, target.Value);
+
+        source.Items.Add("second");
+        Assert.AreEqual(2, target.Value);
+
+        source.Items.Clear();
+        Assert.AreEqual(0, target.Value);
     }
 
     [TestMethod]
@@ -356,5 +380,10 @@ public sealed class InpcBindingTests
     private sealed class PlainSettings
     {
         public ObservableValue<int> Zoom { get; } = new(1);
+    }
+
+    private sealed class CollectionViewModel : NotifyingObject
+    {
+        public ObservableCollection<string> Items { get; } = [];
     }
 }
