@@ -13,8 +13,8 @@ Unlike WPF/WinUI, MewUI does not use Reflection:
 | WPF Approach | MewUI Approach |
 |--------------|----------------|
 | `{Binding PropertyName}` | `.BindText(vm.Name)` or `.Bind(property, source)` |
-| `INotifyPropertyChanged` | `ObservableValue<T>` |
-| PropertyPath strings | Direct property references |
+| `INotifyPropertyChanged` | `ObservableValue<T>` or `INotifyPropertyChanged` (section 3.5) |
+| PropertyPath strings | Direct property references or lambdas (section 3.5) |
 
 Benefits:
 - **Native AOT Compatible**: safe for trimming/AOT
@@ -169,6 +169,7 @@ var city = new TextBlock().Bind(
 | `Func<TCurrent, TNext>` getter | No | No |
 | `Func<TCurrent, ObservableValue<TNext>>` | Yes | Yes |
 | `MewProperty<TNext>` on a `MewObject` | Yes | Unless the property is read-only |
+| `ThenNotifying` getter (owner implements `INotifyPropertyChanged`) | Yes | When a setter is supplied |
 
 An ordinary getter is evaluated during initial attachment and when an observed upstream segment
 rebuilds the downstream path. Changing only the getter result does not notify the binding.
@@ -220,6 +221,98 @@ The target owns the active binding and therefore keeps its root and active path 
 
 `static` lambdas are recommended but not required. A path descriptor stores its delegates, so a
 captured object remains alive as long as the descriptor or an active binding that uses it.
+
+### 3.5 INotifyPropertyChanged sources
+
+A view model that raises `INotifyPropertyChanged` binds directly, without wrapping its properties in `ObservableValue<T>`. The subscription is weak, so a long-lived view model does not keep the view alive.
+
+```csharp
+sealed class UserViewModel : INotifyPropertyChanged
+{
+    private string _name = "";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            _name = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+        }
+    }
+}
+```
+
+```csharp
+// OneWay
+new Label().Bind(Label.TextProperty, vm, x => x.Name);
+
+// TwoWay takes a setter as well. Without one the binding stays OneWay.
+new TextBox().Bind(TextBox.TextProperty, vm,
+    x => x.Name,
+    (owner, value) => owner.Name = value);
+
+// With conversion
+new Label().Bind(Label.TextProperty, vm,
+    x => x.Temperature,
+    value => $"{value:0.0} C");
+
+// When the owner exposes an ObservableValue. This overload does not require INotifyPropertyChanged.
+new Label().Bind(Label.TextProperty, settings, x => x.Caption);
+```
+
+The getter must read **exactly one member**, because the observed property name comes from that expression. No parameter is offered for passing the name directly, so the name and the value cannot drift apart.
+
+A `PropertyChanged` notification whose name is null or empty means "everything changed" and refreshes the segment.
+
+#### Nested paths: one dotted line
+
+```csharp
+new Label().Bind(Label.TextProperty, vm, x => x.CurrentUser.Profile.DisplayName);
+```
+
+This is split into a segment chain at compile time. Each step picks how to observe from the member's type: `PropertyChanged` for `INotifyPropertyChanged`, the wrapper's notification for `ObservableValue<T>`, the matching `{Name}Property` for a `MewObject`, and a non-observing segment otherwise.
+
+Six syntax forms are accepted.
+
+| Form | Example |
+|------|---------|
+| Member access | `x.A.B` |
+| Null-conditional | `x.A?.B` |
+| Cast | `((User)x.Current).Name` |
+| `as` cast | `(x.Current as User).Name` |
+| Null-forgiving | `x.A!.B` |
+| Constant indexer | `x.Items[0].Name` |
+
+Computed expressions, method calls and conditional operators are not paths and produce a compile error. Move computation into `convert`. Indexer arguments must be constants, because the generated path is a static field and cannot hold a local from the call site.
+
+The dotted form requires **.NET 9 SDK or newer** to build. Below Roslyn 4.12 the source generator cannot load, multi-step access becomes a compile error, and the explicit chain below is used instead. Only the syntax is lost, not the capability. The target framework you build for does not matter, only the SDK you build with.
+
+#### Nested paths: explicit chain
+
+```csharp
+static readonly BindingPath<AppViewModel, string> DisplayNamePath = BindingPath
+    .From<AppViewModel>()
+    .ThenNotifying(x => x.CurrentUser!)
+    .ThenNotifying(x => x.DisplayName);
+
+new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
+```
+
+Add `!` to a nullable intermediate so the next segment's owner type is non-nullable. The operator does not disable the runtime null checks.
+
+`ThenNotifying` mixes freely with `ObservableValue` and `MewProperty` segments in one path.
+
+#### Diagnostics
+
+| ID | Severity | Meaning |
+|----|----------|---------|
+| MEW1201 | Warning | A non-observing `Then` whose owner implements `INotifyPropertyChanged`. Offers a fix to `ThenNotifying` |
+| MEW1202 | Error | A `ThenNotifying` getter that is not a single member access |
+| MEW1203 | Error | A dotted multi-step getter in a build where the generator does not run |
+| MEWG001 | Error | A getter that cannot be split into path segments |
 
 ---
 
@@ -407,21 +500,26 @@ counter.Unsubscribe(OnChanged);  // manual unsubscribe
 
 ## 8. Best Practices
 
-### Use ObservableValue in ViewModels
+### Use a source that raises notifications
 
 ```csharp
-// Good — bindable
+// Good — ObservableValue
 class ViewModel
 {
     public ObservableValue<string> Name { get; } = new("");
 }
 
-// Bad — not bindable
+// Good — INotifyPropertyChanged (section 3.5)
+class ViewModel : INotifyPropertyChanged { public string Name { get; set; } }
+
+// Bad — nothing notifies, so the binding never updates
 class ViewModel
 {
     public string Name { get; set; }
 }
 ```
+
+Choose between them by whether the view model is shared. `ObservableValue<T>` removes notification boilerplate when the view model is MewUI-only; `INotifyPropertyChanged` fits an existing MVVM view model or one shared with another framework.
 
 ### Use Coerce for validation
 

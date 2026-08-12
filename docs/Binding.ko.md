@@ -13,8 +13,8 @@ WPF/WinUI와 달리 MewUI는 Reflection을 사용하지 않습니다:
 | WPF 방식 | MewUI 방식 |
 |----------|-----------|
 | `{Binding PropertyName}` | `.BindText(vm.Name)` 또는 `.Bind(property, source)` |
-| `INotifyPropertyChanged` | `ObservableValue<T>` |
-| PropertyPath 문자열 | 직접 속성 참조 |
+| `INotifyPropertyChanged` | `ObservableValue<T>` 또는 `INotifyPropertyChanged` (3.5절) |
+| PropertyPath 문자열 | 직접 속성 참조 또는 람다 (3.5절) |
 
 장점:
 - **Native AOT 호환**: 트리밍/AOT 안전
@@ -169,6 +169,7 @@ var city = new TextBlock().Bind(
 | `Func<TCurrent, TNext>` getter | 안 함 | 불가능 |
 | `Func<TCurrent, ObservableValue<TNext>>` | 함 | 가능 |
 | `MewObject`의 `MewProperty<TNext>` | 함 | read-only가 아니면 가능 |
+| `ThenNotifying`의 getter (소유자가 `INotifyPropertyChanged`) | 함 | setter를 넘기면 가능 |
 
 일반 getter는 최초 attach와 관찰 가능한 upstream segment가 downstream 경로를 다시 구성할
 때 평가합니다. getter 결과만 바뀌어도 알림이 없으므로 binding은 자동으로 갱신되지 않습니다.
@@ -220,6 +221,98 @@ source 값이 fallback 또는 임시 target 값을 덮어씁니다.
 
 `static` lambda는 필수가 아니라 권장 사항입니다. path descriptor가 delegate를 보관하므로
 capture된 객체는 descriptor 또는 이를 사용하는 활성 binding의 수명만큼 유지됩니다.
+
+### 3.5 INotifyPropertyChanged 소스
+
+`ObservableValue<T>`로 감싸지 않은 뷰모델도 `INotifyPropertyChanged`를 구현하면 그대로 바인딩할 수 있습니다. 구독은 약참조이므로 오래 사는 뷰모델이 화면을 살려두지 않습니다.
+
+```csharp
+sealed class UserViewModel : INotifyPropertyChanged
+{
+    private string _name = "";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            _name = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+        }
+    }
+}
+```
+
+```csharp
+// 단방향
+new Label().Bind(Label.TextProperty, vm, x => x.Name);
+
+// 양방향은 setter를 함께 넘깁니다. 생략하면 OneWay로 동작합니다.
+new TextBox().Bind(TextBox.TextProperty, vm,
+    x => x.Name,
+    (owner, value) => owner.Name = value);
+
+// 변환
+new Label().Bind(Label.TextProperty, vm,
+    x => x.Temperature,
+    value => $"{value:0.0} C");
+
+// 소유자가 ObservableValue를 노출하는 경우. 이 오버로드는 INotifyPropertyChanged를 요구하지 않습니다.
+new Label().Bind(Label.TextProperty, settings, x => x.Caption);
+```
+
+getter는 **멤버 하나만** 읽어야 합니다. 구독할 속성 이름을 그 식에서 얻기 때문입니다. 이름이 어긋날 수 없도록 이름을 직접 넘기는 매개변수는 제공하지 않습니다.
+
+`PropertyChanged`의 이름이 null이거나 빈 문자열이면 전체 변경으로 보고 해당 세그먼트를 다시 읽습니다.
+
+#### 중첩 경로: 점 표기 한 줄
+
+```csharp
+new Label().Bind(Label.TextProperty, vm, x => x.CurrentUser.Profile.DisplayName);
+```
+
+컴파일 타임에 세그먼트 체인으로 분해됩니다. 단계마다 타입을 보고 관찰 방식을 고릅니다. `INotifyPropertyChanged`면 `PropertyChanged`, `ObservableValue<T>`면 그 알림, `MewObject`의 `{이름}Property`면 그 속성, 어느 것도 아니면 비관찰 세그먼트입니다.
+
+받는 문법은 여섯 가지입니다.
+
+| 문법 | 예 |
+|------|-----|
+| 멤버 접근 | `x.A.B` |
+| 널 조건 | `x.A?.B` |
+| 하드 캐스팅 | `((User)x.Current).Name` |
+| `as` 캐스팅 | `(x.Current as User).Name` |
+| 널 관용 | `x.A!.B` |
+| 상수 인덱서 | `x.Items[0].Name` |
+
+계산식, 메서드 호출, 삼항 연산자는 경로가 아니므로 컴파일 에러입니다. 계산은 `convert`로 분리하세요. 인덱스는 상수여야 합니다. 생성되는 경로가 정적 필드라 호출부 지역 변수를 담을 수 없기 때문입니다.
+
+이 한 줄 문법은 **.NET 9 이상 SDK로 빌드할 때** 동작합니다. Roslyn 4.12 미만에서는 소스 제너레이터를 적재할 수 없으므로 다단 접근이 컴파일 에러가 되고, 아래 명시적 체인을 사용합니다. 잃는 것은 문법이지 기능이 아닙니다. 겨냥하는 타깃 프레임워크는 무관하며 빌드에 쓰는 SDK만 영향을 줍니다.
+
+#### 중첩 경로: 명시적 체인
+
+```csharp
+static readonly BindingPath<AppViewModel, string> DisplayNamePath = BindingPath
+    .From<AppViewModel>()
+    .ThenNotifying(x => x.CurrentUser!)
+    .ThenNotifying(x => x.DisplayName);
+
+new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
+```
+
+중간 노드가 널 허용이면 `!`를 붙여 다음 단계 소유자 타입을 비널로 맞춥니다. 이 표기는 런타임 null 검사를 끄지 않습니다.
+
+`ThenNotifying`은 `ObservableValue`나 `MewProperty` 세그먼트와 한 경로에서 섞어 쓸 수 있습니다.
+
+#### 진단
+
+| ID | 수준 | 내용 |
+|----|------|------|
+| MEW1201 | 경고 | 소유자가 `INotifyPropertyChanged`인데 비관찰 `Then`을 사용. `ThenNotifying`으로 바꾸는 코드 수정 제공 |
+| MEW1202 | 에러 | `ThenNotifying`의 getter가 단일 멤버 접근이 아님 |
+| MEW1203 | 에러 | 점 표기 다단 접근인데 이 빌드에서 제너레이터가 돌지 않음 |
+| MEWG001 | 에러 | 경로로 분해할 수 없는 getter |
 
 ---
 
@@ -407,21 +500,26 @@ counter.Unsubscribe(OnChanged);  // 수동 해제
 
 ## 8. 모범 사례
 
-### ViewModel에서 ObservableValue 사용
+### 알림을 내는 소스를 쓰세요
 
 ```csharp
-// 좋음 — 바인딩 가능
+// 좋음 — ObservableValue
 class ViewModel
 {
     public ObservableValue<string> Name { get; } = new("");
 }
 
-// 나쁨 — 바인딩 불가
+// 좋음 — INotifyPropertyChanged (3.5절)
+class ViewModel : INotifyPropertyChanged { public string Name { get; set; } }
+
+// 나쁨 — 알림이 없어 갱신되지 않음
 class ViewModel
 {
     public string Name { get; set; }
 }
 ```
+
+둘 중 무엇을 고를지는 뷰모델을 다른 곳과 공유하는지로 정합니다. MewUI 전용이면 `ObservableValue<T>`가 알림 코드를 줄여주고, 기존 MVVM 뷰모델을 그대로 쓰거나 다른 프레임워크와 공유한다면 `INotifyPropertyChanged`가 낫습니다.
 
 ### Coerce로 유효성 검증
 
