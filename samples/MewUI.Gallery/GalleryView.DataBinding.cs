@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 using Aprillz.MewUI.Controls;
 
 namespace Aprillz.MewUI.Gallery;
@@ -11,6 +14,8 @@ partial class GalleryView
             BindingValidationCard(),
             MewPropertyBindingCard(),
             BindingPathCard(),
+            InpcBindingCard(),
+            InpcNestedPathCard(),
             BindingLifetimeCard());
 
     private FrameworkElement ObservableValueBindingCard()
@@ -296,6 +301,94 @@ partial class GalleryView
             minWidth: 440);
     }
 
+    private FrameworkElement InpcBindingCard()
+    {
+        var viewModel = new InpcDemoViewModel { UserName = "Alice", Temperature = 21.5 };
+        var nextName = 1;
+
+        return Card(
+            "INotifyPropertyChanged source",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    BindingDescription(
+                        "Source: INotifyPropertyChanged viewmodel; Target: TextBox.Text; Mode: TwoWay"),
+                    new TextBlock()
+                        .Text("A plain viewmodel that raises PropertyChanged binds without an ObservableValue wrapper. The subscription is weak, so the viewmodel does not keep the view alive.")
+                        .TextWrapping(TextWrapping.Wrap),
+                    BindingDescription("TwoWay target (edit this):"),
+                    new TextBox()
+                        .Width(280)
+                        .Bind(
+                            TextBox.TextProperty,
+                            viewModel,
+                            static value => value.UserName,
+                            static (owner, value) => owner.UserName = value),
+                    new TextBlock()
+                        .Bind(
+                            TextBlock.TextProperty,
+                            viewModel,
+                            static value => value.Temperature,
+                            static value => $"Temperature: {value:0.0} C"),
+                    new Button()
+                        .Content("Change from the viewmodel")
+                        .HorizontalAlignment(HorizontalAlignment.Left)
+                        .OnClick(() =>
+                        {
+                            viewModel.UserName = $"User {nextName++}";
+                            viewModel.Temperature += 0.5;
+                        })),
+            minWidth: 380);
+    }
+
+    private FrameworkElement InpcNestedPathCard()
+    {
+        var firstProfile = new InpcDemoProfile("Profile A", "Alice");
+        var secondProfile = new InpcDemoProfile("Profile B", "Bob");
+        var root = new InpcDemoRoot(firstProfile);
+
+        return Card(
+            "INotifyPropertyChanged nested path",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    BindingDescription(
+                        "Path: root.CurrentProfile.DisplayName; Target: TextBox.Text; Mode: TwoWay"),
+                    new TextBlock()
+                        .Text("The dotted lambda is split into observed segments at compile time. Replacing CurrentProfile rewires the downstream subscription, and edits follow the selected profile.")
+                        .TextWrapping(TextWrapping.Wrap),
+                    BindingDescription("Nested path target (edit to write the selected profile):"),
+                    new TextBox()
+                        .Width(280)
+                        .Bind(
+                            TextBox.TextProperty,
+                            root,
+                            static value => value.CurrentProfile.DisplayName),
+                    new TextBlock()
+                        .Bind(
+                            TextBlock.TextProperty,
+                            root,
+                            static value => value.CurrentProfile,
+                            static profile => $"root.CurrentProfile = {profile.Id}"),
+                    new StackPanel()
+                        .Horizontal()
+                        .Spacing(6)
+                        .Children(
+                            new Button()
+                                .Content("Select A")
+                                .OnClick(() => root.CurrentProfile = firstProfile),
+                            new Button()
+                                .Content("Select B")
+                                .OnClick(() => root.CurrentProfile = secondProfile)),
+                    new TextBlock()
+                        .Text("Select B, then edit the text: Profile A must keep its own name.")
+                        .FontSize(ThemeFontSize.Small)
+                        .TextWrapping(TextWrapping.Wrap)),
+            minWidth: 420);
+    }
+
     private static TextBlock BindingDescription(string text) =>
         new TextBlock()
             .Text(text)
@@ -313,5 +406,68 @@ partial class GalleryView
         public string Id { get; } = id;
 
         public ObservableValue<string> Name { get; } = new(name);
+    }
+
+}
+
+// The generated interceptors name these types, so they cannot be private members of GalleryView.
+internal abstract class InpcDemoObject : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void SetField<T>(
+        ref T field,
+        T value,
+        [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+internal sealed class InpcDemoViewModel : InpcDemoObject
+{
+    private string _userName = string.Empty;
+    private double _temperature;
+
+    public string UserName
+    {
+        get => _userName;
+        set => SetField(ref _userName, value);
+    }
+
+    public double Temperature
+    {
+        get => _temperature;
+        set => SetField(ref _temperature, value);
+    }
+}
+
+internal sealed class InpcDemoRoot(InpcDemoProfile profile) : InpcDemoObject
+{
+    private InpcDemoProfile _currentProfile = profile;
+
+    public InpcDemoProfile CurrentProfile
+    {
+        get => _currentProfile;
+        set => SetField(ref _currentProfile, value);
+    }
+}
+
+internal sealed class InpcDemoProfile(string id, string displayName) : InpcDemoObject
+{
+    private string _displayName = displayName;
+
+    public string Id { get; } = id;
+
+    public string DisplayName
+    {
+        get => _displayName;
+        set => SetField(ref _displayName, value);
     }
 }
