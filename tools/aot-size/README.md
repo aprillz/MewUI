@@ -64,8 +64,8 @@ When release-size documentation needs refreshing, run the manual cross-platform 
   -MacUser your-user
 ```
 
-The command measures Windows locally, Linux through WSL using the same `/mnt` checkout, and macOS through SSH using the synchronized `~/Dev/MewUI` checkout. It requires matching source manifests and .NET SDK versions, writes byte-accurate values to `release-sizes.json`, and regenerates both SVG files. The MewUI version is read from `build/MewUI.Common.props` and displayed in each SVG.
+The command measures Windows locally, Linux through WSL using the same `/mnt` checkout, and macOS through SSH using the synchronized `~/Dev/MewUI` checkout. It requires matching source manifests, writes byte-accurate values to `release-sizes.json`, and regenerates both SVG files. The MewUI version is read from `build/MewUI.Common.props` and displayed in each SVG.
 
 This command is not part of CI or the release workflow. Run it explicitly only when the committed size assets need a new measurement.
 
-Use `-SkipLinux`, `-SkipMacOS`, or `-SkipWindows` only for an intentionally partial refresh. `-AllowSdkMismatch` exists for investigation; release-facing numbers should use the same SDK on every platform.
+Use `-SkipLinux`, `-SkipMacOS`, or `-SkipWindows` only for an intentionally partial refresh. The platform-specific .NET SDK version is neither compared nor recorded because NativeAOT SDK and runtime packs differ by operating system.

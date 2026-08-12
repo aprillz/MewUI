@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "mewUIVersion": "0.20.0",
   "measuredAtUtc": "2026-08-12",
-  "dotnetSdk": "10.0.301",
   "entries": [
     { "sample": "Hello World", "platformBackend": "Windows x64 / GDI", "executableMiB": 2.907, "compressedMiB": 1.324 },
     { "sample": "Hello World", "platformBackend": "Windows x64 / Direct2D", "executableMiB": 3.046, "compressedMiB": 1.381 },

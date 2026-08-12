@@ -11,8 +11,7 @@ param(
     [string] $MacSandbox,
     [switch] $SkipWindows,
     [switch] $SkipLinux,
-    [switch] $SkipMacOS,
-    [switch] $AllowSdkMismatch
+    [switch] $SkipMacOS
 )
 
 $ErrorActionPreference = 'Stop'
@@ -105,38 +104,29 @@ function Invoke-MacChecked([string] $Command) {
 $localManifest = Invoke-Captured dotnet @(
     'run', '--project', $toolProject, '-c', 'Release', '--',
     '--repo', $repoRoot, '--manifest-only')
-$localSdk = Invoke-Captured dotnet @('--version')
 $commonProps = [xml](Get-Content (Join-Path $repoRoot 'build\MewUI.Common.props') -Raw)
 $version = $commonProps.SelectSingleNode('/Project/PropertyGroup/MewUIVersion').InnerText.Trim()
 $preflight = [Collections.Generic.List[object]]::new()
 
 if (-not $SkipWindows) {
-    $preflight.Add([pscustomobject]@{ Platform = 'Windows'; Manifest = $localManifest; Sdk = $localSdk })
+    $preflight.Add([pscustomobject]@{ Platform = 'Windows'; Manifest = $localManifest })
 }
 
 if (-not $SkipLinux) {
     $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
     $linuxManifest = Invoke-WslCaptured "dotnet run --project $(Quote-Sh $linuxTool) -c Release -- --repo $(Quote-Sh $WslRepo) --manifest-only"
-    $linuxSdk = Invoke-WslCaptured 'dotnet --version'
-    $preflight.Add([pscustomobject]@{ Platform = 'Linux'; Manifest = $linuxManifest; Sdk = $linuxSdk })
+    $preflight.Add([pscustomobject]@{ Platform = 'Linux'; Manifest = $linuxManifest })
 }
 
 if (-not $SkipMacOS) {
     $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
     $macManifest = Invoke-MacCaptured "$MacDotNet run --project $(Quote-Sh $macTool) -c Release -- --repo $(Quote-Sh $MacRepo) --manifest-only"
-    $macSdk = Invoke-MacCaptured "$MacDotNet --version"
-    $preflight.Add([pscustomobject]@{ Platform = 'macOS'; Manifest = $macManifest; Sdk = $macSdk })
+    $preflight.Add([pscustomobject]@{ Platform = 'macOS'; Manifest = $macManifest })
 }
 
 $badManifest = @($preflight | Where-Object Manifest -ne $localManifest)
 if ($badManifest.Count -ne 0) {
     throw "Synchronized source differs on: $($badManifest.Platform -join ', '). Synchronize MewUI and retry."
-}
-
-$sdkVersions = @($preflight.Sdk | Sort-Object -Unique)
-if ($sdkVersions.Count -ne 1 -and -not $AllowSdkMismatch) {
-    $sdkSummary = ($preflight | ForEach-Object { "$($_.Platform)=$($_.Sdk)" }) -join ', '
-    throw "The measurement SDKs differ: $sdkSummary. Install matching SDKs or explicitly pass -AllowSdkMismatch."
 }
 
 $reports = [Collections.Generic.List[string]]::new()
@@ -217,7 +207,6 @@ $measuredRids = @($platformReports.RuntimeIdentifier)
 $platforms = @($retainedPlatforms | Where-Object runtimeIdentifier -notin $measuredRids) + @($platformReports | ForEach-Object {
     [ordered]@{
         runtimeIdentifier = $_.RuntimeIdentifier
-        dotnetSdk = $_.DotnetSdk
         measuredAtUtc = ([DateTime]$_.MeasuredAtUtc).ToUniversalTime().ToString('O')
         sourceManifest = $_.SourceManifest
     }

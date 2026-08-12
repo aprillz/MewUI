@@ -30,7 +30,6 @@ string rid = platform switch
 };
 
 string version = ReadVersion(repo);
-string sdk = RunCapture(options.DotNet, "--version", repo).Trim();
 var backends = platform == "windows" ? new[] { "Gdi", "Direct2D", "MewVG" } : new[] { "MewVG" };
 var entries = new List<Measurement>();
 
@@ -40,7 +39,7 @@ foreach (string backend in backends)
     entries.Add(Measure(repo, output, options.DotNet, rid, platform, backend, "Gallery"));
 }
 
-var report = new PlatformReport(1, version, DateTime.UtcNow, sdk, rid, ComputeManifest(repo), entries);
+var report = new PlatformReport(1, version, DateTime.UtcNow, rid, ComputeManifest(repo), entries);
 WriteJson(reportPath, report);
 Console.WriteLine(reportPath);
 
@@ -156,13 +155,13 @@ static string ComputeManifest(string repo)
         .Where(path => !Path.GetExtension(path).Equals(".user", StringComparison.OrdinalIgnoreCase))
         .Where(path => !Path.GetFileName(path).Equals(".DS_Store", StringComparison.OrdinalIgnoreCase))
         .Where(path => !Path.GetFileName(path).Equals("Thumbs.db", StringComparison.OrdinalIgnoreCase))
-        .OrderBy(path => Path.GetRelativePath(repo, path).Replace('\\', '/'), StringComparer.Ordinal)
+        .OrderBy(path => Path.GetRelativePath(repo, path).Replace('\\', '/').ToLowerInvariant(), StringComparer.Ordinal)
         .ToArray();
 
     using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     foreach (string file in files)
     {
-        string relative = Path.GetRelativePath(repo, file).Replace('\\', '/');
+        string relative = Path.GetRelativePath(repo, file).Replace('\\', '/').ToLowerInvariant();
         hash.AppendData(Encoding.UTF8.GetBytes(relative + "\n"));
         hash.AppendData(File.ReadAllBytes(file));
     }
@@ -192,20 +191,6 @@ static void Run(string fileName, IEnumerable<string> arguments, string workingDi
     }
 }
 
-static string RunCapture(string fileName, string argument, string workingDirectory)
-{
-    using var process = CreateProcess(fileName, [argument], workingDirectory, redirect: true);
-    process.Start();
-    string output = process.StandardOutput.ReadToEnd();
-    string error = process.StandardError.ReadToEnd();
-    process.WaitForExit();
-    if (process.ExitCode != 0)
-    {
-        throw new InvalidOperationException(error);
-    }
-    return output;
-}
-
 static Process CreateProcess(string fileName, IEnumerable<string> arguments, string workingDirectory, bool redirect)
 {
     var info = new ProcessStartInfo(fileName) { WorkingDirectory = workingDirectory, UseShellExecute = false };
@@ -226,7 +211,7 @@ static void WriteJson<T>(string path, T value)
 }
 
 sealed record Measurement(string Sample, string PlatformBackend, string Backend, long ExecutableBytes, long CompressedBytes);
-sealed record PlatformReport(int SchemaVersion, string MewUIVersion, DateTime MeasuredAtUtc, string DotnetSdk, string RuntimeIdentifier, string SourceManifest, IReadOnlyList<Measurement> Entries);
+sealed record PlatformReport(int SchemaVersion, string MewUIVersion, DateTime MeasuredAtUtc, string RuntimeIdentifier, string SourceManifest, IReadOnlyList<Measurement> Entries);
 
 sealed record Options(string Repo, string? Output, string? Report, string DotNet, bool ManifestOnly)
 {
