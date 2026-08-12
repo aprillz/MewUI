@@ -175,7 +175,7 @@ if (-not $SkipMacOS) {
     $remoteRoot = $MacSandbox
     $remoteReport = "$remoteRoot/report.json"
     $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    Invoke-MacChecked "mkdir -p $(Quote-Sh $remoteRoot) && $(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$remoteRoot/tool") -- --repo $(Quote-Sh $MacRepo) --output $(Quote-Sh "$remoteRoot/output") --report $(Quote-Sh $remoteReport)"
+    Invoke-MacChecked "mkdir -p $(Quote-Sh $remoteRoot) && $(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$remoteRoot/tool") -- --repo $(Quote-Sh $MacRepo) --output $(Quote-Sh "$remoteRoot/output") --report $(Quote-Sh $remoteReport) --dotnet $(Quote-Sh $MacDotNet)"
     $localMacReport = Join-Path $reportRoot 'macos.json'
     Invoke-Checked scp @('-P', $MacPort, "$MacUser@$MacHost`:$remoteReport", $localMacReport)
     $reports.Add($localMacReport)
