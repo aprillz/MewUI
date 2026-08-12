@@ -305,6 +305,19 @@ Add `!` to a nullable intermediate so the next segment's owner type is non-nulla
 
 `ThenNotifying` mixes freely with `ObservableValue` and `MewProperty` segments in one path.
 
+#### Collections
+
+`ObservableCollection<T>` also implements `INotifyPropertyChanged`, so a collection's own properties are observed through a path.
+
+```csharp
+// Updates when items are added or removed
+new Label().Bind(Label.TextProperty, vm, x => x.Items.Count, count => $"{count} items");
+```
+
+Indexers are **not** observed. `x => x.Items[0].Name` updates when the whole collection is replaced or when the leaf property changes, but not when the element at index 0 is swapped for another.
+
+Use `ItemsSource` for list UI; list controls observe additions and removals themselves.
+
 #### Diagnostics
 
 | ID | Severity | Meaning |

@@ -305,6 +305,19 @@ new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
 
 `ThenNotifying`은 `ObservableValue`나 `MewProperty` 세그먼트와 한 경로에서 섞어 쓸 수 있습니다.
 
+#### 컬렉션
+
+`ObservableCollection<T>`는 `INotifyPropertyChanged`도 구현하므로 컬렉션 자신의 속성은 경로로 관찰됩니다.
+
+```csharp
+// 항목이 추가되거나 삭제되면 갱신됩니다
+new Label().Bind(Label.TextProperty, vm, x => x.Items.Count, count => $"{count}개");
+```
+
+반면 **인덱서는 관찰하지 않습니다.** `x => x.Items[0].Name`은 컬렉션 참조가 통째로 바뀌거나 리프 속성이 바뀔 때는 갱신되지만, 0번 원소만 다른 것으로 교체되는 것은 감지하지 못합니다.
+
+목록 화면에는 `ItemsSource`를 쓰세요. 항목 추가와 삭제는 목록 컨트롤이 직접 관찰합니다.
+
 #### 진단
 
 | ID | 수준 | 내용 |
