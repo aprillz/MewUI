@@ -85,15 +85,6 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
             ? windowsFamily
             : fallbackFamily;
 
-    public IImage CreateImageFromFile(string path) =>
-        CreateImageFromBytes(File.ReadAllBytes(path));
-
-    public IImage CreateImageFromBytes(byte[] data) =>
-        ImageDecoders.TryDecode(data, out var bmp)
-            ? CreateImage(bmp.WidthPx, bmp.HeightPx, bmp.Data)
-            : throw new NotSupportedException(
-                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
-
     /// <summary>
     /// Creates an empty 32-bit ARGB image.
     /// </summary>
@@ -215,7 +206,7 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
 
     public void Dispose()
     {
-        TextServices.ReleaseEngine(this);
+        TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
 
         lock (_layeredLock)

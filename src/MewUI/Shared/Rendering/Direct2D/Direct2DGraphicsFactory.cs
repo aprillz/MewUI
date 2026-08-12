@@ -63,7 +63,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     public void Dispose()
     {
-        TextServices.ReleaseEngine(this);
+        TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
         DisposeLayeredTargets();
 
@@ -455,15 +455,6 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
             ? parsed
             : Path.GetFileNameWithoutExtension(path);
     }
-
-    public IImage CreateImageFromFile(string path) =>
-        CreateImageFromBytes(File.ReadAllBytes(path));
-
-    public IImage CreateImageFromBytes(byte[] data) =>
-        ImageDecoders.TryDecode(data, out var bmp)
-            ? new Direct2DImage(bmp)
-            : throw new NotSupportedException(
-                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
 
     /// <summary>
     /// Wraps an externally-created native <c>ID2D1Bitmap*</c> as an <see cref="IImage"/>.

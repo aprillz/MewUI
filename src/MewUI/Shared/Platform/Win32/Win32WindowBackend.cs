@@ -1368,13 +1368,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
 
     private static nint TryCreateIcon(IconSource icon, int desiredSizePx)
     {
-        var src = icon.Pick(desiredSizePx);
-        if (src == null)
-        {
-            return 0;
-        }
-
-        if (!ImageDecoders.TryDecode(src.EncodedBytes.Span, out var bmp))
+        if (!icon.TryGetPixels(desiredSizePx, out var bmp))
         {
             return 0;
         }

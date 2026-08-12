@@ -13,9 +13,7 @@ namespace Aprillz.MewUI;
 /// sampling (e.g. <c>Image.TryPeekColor</c>) reuse a single buffer. After a successful
 /// decode the encoded bytes are released - see <see cref="EncodedBytes"/>.
 ///
-/// If the built-in decoders cannot decode the payload, creation falls back to
-/// <see cref="IGraphicsFactory.CreateImageFromBytes(byte[])"/> so custom factories can
-/// handle additional formats. Sources created from raw pixels skip the decoder path entirely.
+/// Sources created from raw pixels skip the decoder path entirely.
 /// </summary>
 public sealed class ImageSource : IOrientedImageSource
 {
@@ -325,8 +323,6 @@ public sealed class ImageSource : IOrientedImageSource
         ArgumentNullException.ThrowIfNull(factory);
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
-        // Fall back to the factory's byte-based creation so custom factories can handle formats not supported
-        // by the built-in decoders or don't support pixel sources.
         if (TryEnsureDecoded(out var pixels))
         {
             try
@@ -343,6 +339,14 @@ public sealed class ImageSource : IOrientedImageSource
         {
             throw new InvalidOperationException("Cannot create image: decode failed and no encoded bytes available.");
         }
-        return factory.CreateImageFromBytes(_encoded);
+
+        if (factory is IEncodedImageFactory encodedFactory)
+        {
+            return encodedFactory.CreateImageFromBytes(_encoded);
+        }
+
+        throw new NotSupportedException(
+            $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. " +
+            $"Detected: {ImageDecoders.DetectFormatId(_encoded) ?? "unknown"}.");
     }
 }

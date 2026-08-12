@@ -73,15 +73,6 @@ public sealed partial class MewVGWin32GraphicsFactory
 
     private partial IFont CreateFontCore(string family, double size, uint dpi, FontWeight weight, bool italic, bool underline, bool strikethrough);
 
-    public IImage CreateImageFromFile(string path) =>
-        CreateImageFromBytes(File.ReadAllBytes(path));
-
-    public IImage CreateImageFromBytes(byte[] data) =>
-        ImageDecoders.TryDecode(data, out var bmp)
-            ? new MewVGImage(bmp.WidthPx, bmp.HeightPx, bmp.Data, GetImageDisposeHandler())
-            : throw new NotSupportedException(
-                $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. Detected: {ImageDecoders.DetectFormatId(data) ?? "unknown"}.");
-
     public IImage CreateImageView(IPixelBufferSource source)
     {
         if (UseAsyncPboUpload && QualifiesForPboUpload(source))
@@ -233,7 +224,7 @@ public sealed partial class MewVGWin32GraphicsFactory
 
     public void Dispose()
     {
-        TextServices.ReleaseEngine(this);
+        TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
 
         foreach (var (_, resources) in _windows)

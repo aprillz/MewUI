@@ -1211,13 +1211,7 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     private static void AppendNetWmIconPayload(List<nint> dst, IconSource icon, int desiredSizePx)
     {
-        var src = icon.Pick(desiredSizePx);
-        if (src == null)
-        {
-            return;
-        }
-
-        if (!ImageDecoders.TryDecode(src.EncodedBytes.Span, out var bmp))
+        if (!icon.TryGetPixels(desiredSizePx, out var bmp))
         {
             return;
         }

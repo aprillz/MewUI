@@ -216,6 +216,19 @@ public sealed class IconSource
         return best.Source;
     }
 
+    internal bool TryGetPixels(int desiredSizePx, out Bgra32PixelBuffer bitmap)
+    {
+        var source = Pick(desiredSizePx);
+        if (source == null)
+        {
+            bitmap = default;
+            return false;
+        }
+
+        source.EnsureDecode();
+        return source.TryGetBgra32PixelBuffer(out bitmap);
+    }
+
     /// <summary>
     /// Converts a DIB (BITMAPINFOHEADER + pixel data + AND mask) from an ICO entry
     /// into a standalone 32-bit BGRA BMP with AND mask applied as alpha.

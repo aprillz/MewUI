@@ -5,30 +5,70 @@ namespace Aprillz.MewUI.Text;
 
 internal static class TextServices
 {
-    private static readonly ConditionalWeakTable<IGraphicsFactory, ManagedTextEngine> Engines = new();
-    private static readonly ConditionalWeakTable<IGraphicsContext, ITextRenderContext> RenderContexts = new();
+    private static readonly ConditionalWeakTable<IGraphicsFactory, EngineEntry> Engines = new();
+    private static readonly ConditionalWeakTable<IGraphicsContext, RenderContextEntry> RenderContexts = new();
 
     public static ITextEngine GetEngine(IGraphicsFactory factory)
-        => Engines.GetValue(factory, static value => new ManagedTextEngine(value));
+        => Engines.GetValue(factory, static value => new EngineEntry(value)).GetOrCreate();
 
     public static ITextRenderContext GetRenderContext(IGraphicsContext context)
-        => RenderContexts.GetValue(context, static value => new ManagedTextRenderContext(value));
+        => RenderContexts.GetValue(context, static value => new RenderContextEntry(value)).GetOrCreate();
 
     public static void ReleaseRenderContext(IGraphicsContext context)
+        => RenderContexts.GetValue(context, static value => new RenderContextEntry(value)).DisposeIfCreated();
+
+    public static void ReleaseIfCreated(IGraphicsFactory factory)
+        => Engines.GetValue(factory, static value => new EngineEntry(value)).DisposeIfCreated();
+
+    private sealed class EngineEntry(IGraphicsFactory owner)
     {
-        if (RenderContexts.TryGetValue(context, out var renderContext))
+        private readonly object _sync = new();
+        private ManagedTextEngine? _value;
+        private bool _disposed;
+
+        internal ManagedTextEngine GetOrCreate()
         {
-            RenderContexts.Remove(context);
-            (renderContext as IDisposable)?.Dispose();
+            lock (_sync)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, owner);
+                return _value ??= new ManagedTextEngine(owner);
+            }
+        }
+
+        internal void DisposeIfCreated()
+        {
+            lock (_sync)
+            {
+                _value?.Dispose();
+                _value = null;
+                _disposed = true;
+            }
         }
     }
 
-    public static void ReleaseEngine(IGraphicsFactory factory)
+    private sealed class RenderContextEntry(IGraphicsContext owner)
     {
-        if (Engines.TryGetValue(factory, out var engine))
+        private readonly object _sync = new();
+        private ManagedTextRenderContext? _value;
+        private bool _disposed;
+
+        internal ManagedTextRenderContext GetOrCreate()
         {
-            Engines.Remove(factory);
-            engine.Dispose();
+            lock (_sync)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, owner);
+                return _value ??= new ManagedTextRenderContext(owner);
+            }
+        }
+
+        internal void DisposeIfCreated()
+        {
+            lock (_sync)
+            {
+                _value?.Dispose();
+                _value = null;
+                _disposed = true;
+            }
         }
     }
 }
