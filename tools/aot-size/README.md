@@ -69,3 +69,5 @@ The command measures Windows locally, Linux through WSL using the same `/mnt` ch
 This command is not part of CI or the release workflow. Run it explicitly only when the committed size assets need a new measurement.
 
 Use `-SkipLinux`, `-SkipMacOS`, or `-SkipWindows` only for an intentionally partial refresh. The platform-specific .NET SDK version is neither compared nor recorded because NativeAOT SDK and runtime packs differ by operating system.
+
+To rebuild only the JSON and SVG assets from existing reports under `.artifacts/release-size/reports`, run `Update-ReleaseSizes.ps1 -StartAt 3`. The selected platform reports must exist and share the current MewUI version and source manifest; combine it with a skip switch for an intentionally partial update.

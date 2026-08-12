@@ -9,6 +9,8 @@ param(
     [string] $MacRepo,
     [string] $MacDotNet = '/usr/local/share/dotnet/dotnet',
     [string] $MacSandbox,
+    [ValidateSet(1, 3)]
+    [int] $StartAt = 1,
     [switch] $SkipWindows,
     [switch] $SkipLinux,
     [switch] $SkipMacOS
@@ -65,7 +67,7 @@ if ([string]::IsNullOrWhiteSpace($WslRepo)) {
     $WslRepo = Convert-ToPosixPath $repoRoot
 }
 $linuxToolArtifacts = "$WslRepo/.artifacts/release-size/tool/linux"
-if (-not $SkipMacOS) {
+if ($StartAt -ne 3 -and -not $SkipMacOS) {
     if ([string]::IsNullOrWhiteSpace($MacHost)) {
         throw '-MacHost is required unless -SkipMacOS is specified.'
     }
@@ -103,87 +105,117 @@ function Invoke-MacChecked([string] $Command) {
     Invoke-Checked ssh @('-p', $MacPort, "$MacUser@$MacHost", $Command)
 }
 
-Write-Host '[1/3] Checking synchronized sources'
-Write-Host '  Windows: computing manifest...'
-$localManifest = Invoke-Captured dotnet @(
-    'run', '--project', $toolProject, '-c', 'Release',
-    '--artifacts-path', $windowsToolArtifacts, '--',
-    '--repo', $repoRoot, '--manifest-only')
 $commonProps = [xml](Get-Content (Join-Path $repoRoot 'build\MewUI.Common.props') -Raw)
 $version = $commonProps.SelectSingleNode('/Project/PropertyGroup/MewUIVersion').InnerText.Trim()
-$preflight = [Collections.Generic.List[object]]::new()
-
-if (-not $SkipWindows) {
-    $preflight.Add([pscustomobject]@{ Platform = 'Windows'; Manifest = $localManifest })
-    Write-Host '  Windows: ready'
-}
-
-if (-not $SkipLinux) {
-    Write-Host '  Linux: computing manifest through WSL...'
-    $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    $linuxManifest = Invoke-WslCaptured "dotnet run --project $(Quote-Sh $linuxTool) -c Release --artifacts-path $(Quote-Sh $linuxToolArtifacts) -- --repo $(Quote-Sh $WslRepo) --manifest-only"
-    $preflight.Add([pscustomobject]@{ Platform = 'Linux'; Manifest = $linuxManifest })
-    Write-Host '  Linux: ready'
-}
-
-if (-not $SkipMacOS) {
-    Write-Host '  macOS: computing manifest through SSH...'
-    $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    $macManifest = Invoke-MacCaptured "$(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$MacSandbox/tool") -- --repo $(Quote-Sh $MacRepo) --manifest-only"
-    $preflight.Add([pscustomobject]@{ Platform = 'macOS'; Manifest = $macManifest })
-    Write-Host '  macOS: ready'
-}
-
-$badManifest = @($preflight | Where-Object Manifest -ne $localManifest)
-if ($badManifest.Count -ne 0) {
-    throw "Synchronized source differs on: $($badManifest.Platform -join ', '). Synchronize MewUI and retry."
-}
-Write-Host '  Source manifests match.'
-
 $reports = [Collections.Generic.List[string]]::new()
-$platformCount = @($preflight).Count
-$platformIndex = 0
-Write-Host '[2/3] Measuring NativeAOT executables'
-if (-not $SkipWindows) {
-    $platformIndex++
-    Write-Host "Platform [$platformIndex/$platformCount] Windows"
-    $report = Join-Path $reportRoot 'windows.json'
-    Invoke-Checked dotnet @(
+
+if ($StartAt -eq 3) {
+    Write-Host '[1/3] Skipped source synchronization check'
+    Write-Host '[2/3] Reusing existing measurement reports'
+    $selectedReports = @()
+    if (-not $SkipWindows) { $selectedReports += [pscustomobject]@{ Platform = 'Windows'; Rid = 'win-x64'; File = 'windows.json' } }
+    if (-not $SkipLinux) { $selectedReports += [pscustomobject]@{ Platform = 'Linux'; Rid = 'linux-x64'; File = 'linux.json' } }
+    if (-not $SkipMacOS) { $selectedReports += [pscustomobject]@{ Platform = 'macOS'; Rid = 'osx-arm64'; File = 'macos.json' } }
+
+    foreach ($selected in $selectedReports) {
+        $report = Join-Path $reportRoot $selected.File
+        if (-not (Test-Path -LiteralPath $report)) {
+            throw "$($selected.Platform) report was not found: $report. Run measurement first or skip that platform."
+        }
+        $reportData = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+        if ($reportData.RuntimeIdentifier -ne $selected.Rid) {
+            throw "$($selected.Platform) report has runtime identifier '$($reportData.RuntimeIdentifier)', expected '$($selected.Rid)'."
+        }
+        if ($reportData.MewUIVersion -ne $version) {
+            throw "$($selected.Platform) report is for MewUI v$($reportData.MewUIVersion), expected v$version."
+        }
+        $reports.Add($report)
+        Write-Host "  $($selected.Platform): $($selected.File)"
+    }
+} else {
+    Write-Host '[1/3] Checking synchronized sources'
+    Write-Host '  Windows: computing manifest...'
+    $localManifest = Invoke-Captured dotnet @(
         'run', '--project', $toolProject, '-c', 'Release',
         '--artifacts-path', $windowsToolArtifacts, '--',
-        '--repo', $repoRoot,
-        '--output', (Join-Path $artifactRoot 'windows'),
-        '--report', $report)
-    $reports.Add($report)
-    Write-Host "Platform [$platformIndex/$platformCount] Windows complete"
-}
+        '--repo', $repoRoot, '--manifest-only')
+    $preflight = [Collections.Generic.List[object]]::new()
 
-if (-not $SkipLinux) {
-    $platformIndex++
-    Write-Host "Platform [$platformIndex/$platformCount] Linux"
-    $linuxArtifactRoot = Convert-ToPosixPath (Join-Path $artifactRoot 'linux')
-    $linuxReport = Convert-ToPosixPath (Join-Path $reportRoot 'linux.json')
-    $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    Invoke-WslChecked "dotnet run --project $(Quote-Sh $linuxTool) -c Release --artifacts-path $(Quote-Sh $linuxToolArtifacts) -- --repo $(Quote-Sh $WslRepo) --output $(Quote-Sh $linuxArtifactRoot) --report $(Quote-Sh $linuxReport)"
-    $reports.Add((Join-Path $reportRoot 'linux.json'))
-    Write-Host "Platform [$platformIndex/$platformCount] Linux complete"
-}
+    if (-not $SkipWindows) {
+        $preflight.Add([pscustomobject]@{ Platform = 'Windows'; Manifest = $localManifest })
+        Write-Host '  Windows: ready'
+    }
 
-if (-not $SkipMacOS) {
-    $platformIndex++
-    Write-Host "Platform [$platformIndex/$platformCount] macOS"
-    $remoteRoot = $MacSandbox
-    $remoteReport = "$remoteRoot/report.json"
-    $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    Invoke-MacChecked "mkdir -p $(Quote-Sh $remoteRoot) && $(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$remoteRoot/tool") -- --repo $(Quote-Sh $MacRepo) --output $(Quote-Sh "$remoteRoot/output") --report $(Quote-Sh $remoteReport) --dotnet $(Quote-Sh $MacDotNet)"
-    $localMacReport = Join-Path $reportRoot 'macos.json'
-    Invoke-Checked scp @('-P', $MacPort, "$MacUser@$MacHost`:$remoteReport", $localMacReport)
-    $reports.Add($localMacReport)
-    Write-Host "Platform [$platformIndex/$platformCount] macOS complete"
+    if (-not $SkipLinux) {
+        Write-Host '  Linux: computing manifest through WSL...'
+        $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
+        $linuxManifest = Invoke-WslCaptured "dotnet run --project $(Quote-Sh $linuxTool) -c Release --artifacts-path $(Quote-Sh $linuxToolArtifacts) -- --repo $(Quote-Sh $WslRepo) --manifest-only"
+        $preflight.Add([pscustomobject]@{ Platform = 'Linux'; Manifest = $linuxManifest })
+        Write-Host '  Linux: ready'
+    }
+
+    if (-not $SkipMacOS) {
+        Write-Host '  macOS: computing manifest through SSH...'
+        $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
+        $macManifest = Invoke-MacCaptured "$(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$MacSandbox/tool") -- --repo $(Quote-Sh $MacRepo) --manifest-only"
+        $preflight.Add([pscustomobject]@{ Platform = 'macOS'; Manifest = $macManifest })
+        Write-Host '  macOS: ready'
+    }
+
+    $badManifest = @($preflight | Where-Object Manifest -ne $localManifest)
+    if ($badManifest.Count -ne 0) {
+        throw "Synchronized source differs on: $($badManifest.Platform -join ', '). Synchronize MewUI and retry."
+    }
+    Write-Host '  Source manifests match.'
+
+    $platformCount = @($preflight).Count
+    $platformIndex = 0
+    Write-Host '[2/3] Measuring NativeAOT executables'
+    if (-not $SkipWindows) {
+        $platformIndex++
+        Write-Host "Platform [$platformIndex/$platformCount] Windows"
+        $report = Join-Path $reportRoot 'windows.json'
+        Invoke-Checked dotnet @(
+            'run', '--project', $toolProject, '-c', 'Release',
+            '--artifacts-path', $windowsToolArtifacts, '--',
+            '--repo', $repoRoot,
+            '--output', (Join-Path $artifactRoot 'windows'),
+            '--report', $report)
+        $reports.Add($report)
+        Write-Host "Platform [$platformIndex/$platformCount] Windows complete"
+    }
+
+    if (-not $SkipLinux) {
+        $platformIndex++
+        Write-Host "Platform [$platformIndex/$platformCount] Linux"
+        $linuxArtifactRoot = Convert-ToPosixPath (Join-Path $artifactRoot 'linux')
+        $linuxReport = Convert-ToPosixPath (Join-Path $reportRoot 'linux.json')
+        $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
+        Invoke-WslChecked "dotnet run --project $(Quote-Sh $linuxTool) -c Release --artifacts-path $(Quote-Sh $linuxToolArtifacts) -- --repo $(Quote-Sh $WslRepo) --output $(Quote-Sh $linuxArtifactRoot) --report $(Quote-Sh $linuxReport)"
+        $reports.Add((Join-Path $reportRoot 'linux.json'))
+        Write-Host "Platform [$platformIndex/$platformCount] Linux complete"
+    }
+
+    if (-not $SkipMacOS) {
+        $platformIndex++
+        Write-Host "Platform [$platformIndex/$platformCount] macOS"
+        $remoteRoot = $MacSandbox
+        $remoteReport = "$remoteRoot/report.json"
+        $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
+        Invoke-MacChecked "mkdir -p $(Quote-Sh $remoteRoot) && $(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$remoteRoot/tool") -- --repo $(Quote-Sh $MacRepo) --output $(Quote-Sh "$remoteRoot/output") --report $(Quote-Sh $remoteReport) --dotnet $(Quote-Sh $MacDotNet)"
+        $localMacReport = Join-Path $reportRoot 'macos.json'
+        Invoke-Checked scp @('-P', $MacPort, "$MacUser@$MacHost`:$remoteReport", $localMacReport)
+        $reports.Add($localMacReport)
+        Write-Host "Platform [$platformIndex/$platformCount] macOS complete"
+    }
 }
 
 Write-Host '[3/3] Updating measurement data and SVG assets'
 $platformReports = @($reports | ForEach-Object { Get-Content $_ -Raw | ConvertFrom-Json })
+$reportManifests = @($platformReports.SourceManifest | Sort-Object -Unique)
+if ($reportManifests.Count -ne 1) {
+    throw 'Selected reports were measured from different source manifests.'
+}
 $measuredEntries = @($platformReports.Entries | ForEach-Object {
     [ordered]@{
         sample = $_.Sample
