@@ -10,4 +10,14 @@
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!-- The generator must stay loaded under AOT publish: unlike the analyzer, dropping it changes
+       what compiles, so a published sample would take the runtime fallback and throw where the
+       Debug build worked. Interceptors also need the generated namespace allow-listed, which
+       build/Aprillz.MewUI.targets injects for samples that import it. -->
+  <ItemGroup Condition="'$(MewUIAnalyzers)' != 'false'
+                        and '@(ProjectReference->WithMetadataValue('Filename', 'MewUI'))' != ''">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\MewUI.Generators\MewUI.Generators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

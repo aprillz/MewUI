@@ -19,6 +19,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM --- Build the generator; it is bundled into Core's analyzers/dotnet/roslyn4.12/cs ---
+echo Building generator ...
+dotnet build "%ROOT%\src\MewUI.Generators\MewUI.Generators.csproj" -c Release /nr:false
+if errorlevel 1 (
+  echo FAILED: generator build
+  exit /b 1
+)
+
 REM --- Individual packages (src) ---
 set PROJECTS=^
   src\MewUI\MewUI.csproj^

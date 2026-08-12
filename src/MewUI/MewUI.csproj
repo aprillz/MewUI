@@ -18,12 +18,22 @@
           Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
+  <!-- The generator needs Roslyn 4.12+ for GetInterceptableLocation. The roslyn4.12 folder keeps
+       older hosts from loading it, which would otherwise fail with CS8032 and take the analyzer
+       in the sibling folder down with it. -->
+  <ItemGroup>
+    <None Include="..\MewUI.Generators\bin\$(Configuration)\netstandard2.0\Aprillz.MewUI.Generators.dll"
+          Pack="true" PackagePath="analyzers/dotnet/roslyn4.12/cs" Visible="false" />
+  </ItemGroup>
+
   <!-- Build-order only: keeps the packed analyzer DLL above fresh even when packing outside
        pack_mewui.cmd. Not loaded into this compilation (no OutputItemType) and not a package
        dependency (PrivateAssets=all). Skipped under AOT publish (known publish bug with
        netstandard2.0 analyzer projects in the publish graph). -->
   <ItemGroup Condition="'$(PublishAot)' != 'true'">
     <ProjectReference Include="..\MewUI.Analyzers\MewUI.Analyzers.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="..\MewUI.Generators\MewUI.Generators.csproj"
                       ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
 

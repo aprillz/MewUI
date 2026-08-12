@@ -112,6 +112,18 @@
     <RuntimeHostConfigurationOption Include="Aprillz.MewUI.HotReload.Enabled" Value="false" Trim="false" />
   </ItemGroup>
 
+  <!--
+    Binding path generator interceptors. The compiler only honours interceptors whose namespace is
+    allow-listed, so opt the generated namespace in here rather than asking every app to do it.
+    This must live in targets, not props: nuget.g.props is imported before the project body, where
+    $(TargetFramework) is not yet set. Csc reads both properties, and MS first-party generators
+    still use the Preview one, so setting both covers every SDK and Roslyn combination.
+  -->
+  <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Aprillz.MewUI.Generated</InterceptorsPreviewNamespaces>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
   <!-- Editor preview session composition (see agent/preview-tooling/plan.md section 4.2). -->
   <Import Project="$(MSBuildThisFileDirectory)MewUIPreview.targets"
           Condition="'$(_MewUIPreviewTargetsImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)MewUIPreview.targets')" />

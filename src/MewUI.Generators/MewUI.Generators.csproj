@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Source generators run inside the compiler/IDE host: netstandard2.0 only, no
+       MewUI.Common.props (which forces net8/net10 + trimming + packaging). Roslyn 4.12 is the
+       floor because GetInterceptableLocation() does not exist earlier, so this cannot live in
+       MewUI.Analyzers, which stays pinned at 4.8 for broad IDE / CI host compatibility. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Aprillz.MewUI.Generators</AssemblyName>
+    <RootNamespace>Aprillz.MewUI.Generators</RootNamespace>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- RS2008: analyzer release tracking not warranted yet. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

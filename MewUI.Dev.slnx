@@ -31,6 +31,7 @@
     <Project Path="src/MewUI.Backend.MewVG.MacOS/MewUI.Backend.MewVG.MacOS.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.Win32/MewUI.Backend.MewVG.Win32.csproj" />
     <Project Path="src/MewUI.Backend.MewVG.X11/MewUI.Backend.MewVG.X11.csproj" />
+    <Project Path="src/MewUI.Generators/MewUI.Generators.csproj" />
     <Project Path="src/MewUI.Platform.MacOS/MewUI.Platform.MacOS.csproj" />
     <Project Path="src/MewUI.Platform.Win32/MewUI.Platform.Win32.csproj" />
     <Project Path="src/MewUI.Platform.X11/MewUI.Platform.X11.csproj" />
