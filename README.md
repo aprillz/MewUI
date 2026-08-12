@@ -167,7 +167,7 @@ The core covers common desktop UI patterns; specialized features such as charts 
 
 NativeAOT executable size depends on the platform host, rendering backend, resources, and publish options. The table below measures the **main executable only**; ZIP is the same executable compressed with the default measurement settings. Sizes use binary units: **1 MB = 1024 KB**.
 
-For reproducible size probes, regression budgets, and NativeAOT map analysis, see [NativeAOT size discipline](docs/NativeAotSize.md).
+For reproducible size probes, regression budgets, and NativeAOT map analysis, see the [NativeAOT size tools](tools/aot-size/README.md).
 
 ![MewUI publish size comparison](docs/assets/nativeaot-size.svg)
 

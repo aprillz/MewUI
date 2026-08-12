@@ -58,8 +58,10 @@ for ($section = 0; $section -lt $samples.Count; $section++) {
             $y = $bottom - $barHeight
             [void]$svg.AppendLine("<rect x=`"$x`" y=`"$y`" width=`"$barWidth`" height=`"$barHeight`" fill=`"$($bar[1])`"/><text x=`"$($x + $barWidth / 2)`" y=`"$($y - 7)`" text-anchor=`"middle`" font-size=`"12`">$(Format-Size $bar[0])</text>")
         }
-        $label = Escape-Xml $item.platformBackend
-        [void]$svg.AppendLine("<text x=`"$center`" y=`"$($bottom + 24)`" text-anchor=`"end`" font-size=`"13`" transform=`"rotate(-32 $center $($bottom + 24))`">$label</text>")
+        $labelParts = @($item.platformBackend -split ' / ', 2)
+        $platformLabel = Escape-Xml $labelParts[0]
+        $backendLabel = if ($labelParts.Count -gt 1) { Escape-Xml $labelParts[1] } else { '' }
+        [void]$svg.AppendLine("<text x=`"$center`" y=`"$($bottom + 28)`" text-anchor=`"middle`" font-size=`"15`" font-weight=`"600`"><tspan x=`"$center`">$platformLabel</tspan><tspan x=`"$center`" dy=`"20`">$backendLabel</tspan></text>")
     }
 }
 [void]$svg.AppendLine('</g></svg>')
