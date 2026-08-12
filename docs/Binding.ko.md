@@ -14,17 +14,21 @@ WPF/WinUI는 무엇에 바인딩할지를 **문자열**로 적고 런타임에 �
 <!-- WPF -->
 <TextBlock Text="{Binding UserName}" />
 <TextBlock Text="{Binding Customer.City}" />
-<TextBlock Text="{Binding Orders[0].Total}" />
+<TextBlock Text="{Binding Orders[0].Title}" />
+<TextBlock Text="{Binding Total, StringFormat=N0}" />
 ```
 
 ```csharp
 // MewUI
 new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.UserName);
 new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.Customer.City);
-new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.Orders[0].Total, total => $"{total:N0}");
+new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.Orders[0].Title);
+new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.Total, total => $"{total:N0}");
 ```
 
 중첩 경로도 문자열이 아니라 코드입니다. 점을 따라가는 각 단계를 컴파일러가 검사하고, 변경 알림도 단계마다 붙습니다. 중간 객체가 통째로 교체되면 그 아래가 다시 연결됩니다(4절).
+
+마지막 줄이 보여주듯 WPF의 `StringFormat`과 `Converter`는 MewUI에서 하나로 합쳐집니다. 값을 바꾸는 일은 전부 `convert` 델리게이트가 맡습니다(3.3절).
 
 문자열이 코드가 되면서 따라오는 것:
 
