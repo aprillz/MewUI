@@ -114,6 +114,5 @@ __MACOSX/
 .vscode/
 *.code-workspace
 /agent
-/agents
 /.claude
 /.agents
