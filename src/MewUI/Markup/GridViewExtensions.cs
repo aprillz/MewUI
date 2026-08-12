@@ -399,6 +399,16 @@ public static class GridViewExtensions
         return column;
     }
 
+    /// <summary>Sets the horizontal alignment of the column header text.</summary>
+    public static GridViewColumn<TItem> HeaderTextAlignment<TItem>(
+        this GridViewColumn<TItem> column,
+        TextAlignment alignment)
+    {
+        ArgumentNullException.ThrowIfNull(column);
+        column.HeaderTextAlignment = alignment;
+        return column;
+    }
+
     /// <summary>
     /// Sets the column width.
     /// </summary>

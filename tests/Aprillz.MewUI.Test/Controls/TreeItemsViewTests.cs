@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 
 using Aprillz.MewUI;
+using Aprillz.MewUI.Controls;
 
 namespace MewUI.Test.Controls;
 
@@ -153,6 +154,25 @@ public sealed class TreeItemsViewTests
 
         Assert.AreEqual(3, view.Count);
         Assert.AreEqual(2, changes);
+    }
+
+    [TestMethod]
+    public void GridViewSort_SortsEachSiblingSetWithoutFlatteningHierarchy()
+    {
+        var branch = new TestNode("branch");
+        branch.Children.Add(new TestNode("z-child"));
+        branch.Children.Add(new TestNode("a-child"));
+        var view = CreateView([branch, new TestNode("alpha")]);
+        view.SetIsExpanded(0, true);
+
+        ((IGridViewSortTarget)view).SetGridViewSort(
+            (left, right) => StringComparer.Ordinal.Compare(((TestNode)left!).Name, ((TestNode)right!).Name),
+            GridViewSortDirection.Ascending);
+
+        CollectionAssert.AreEqual(
+            new[] { "alpha", "branch", "a-child", "z-child" },
+            Enumerable.Range(0, view.Count).Select(i => ((TestNode)view.GetItem(i)!).Name).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 0, 1, 1 }, Enumerable.Range(0, view.Count).Select(view.GetDepth).ToArray());
     }
 
     private static TreeItemsView<TestNode> CreateView(

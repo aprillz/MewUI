@@ -122,6 +122,9 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
     public event Action<object?>? SelectionChanged;
 
+    /// <summary>Occurs when a row is double-clicked with the primary mouse button.</summary>
+    public event Action<object?>? ItemDoubleClicked;
+
     /// <summary>Occurs when the active single-column sort changes.</summary>
     public event Action<GridViewSortChange>? SortChanged;
 
@@ -235,6 +238,11 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
         else
         {
             CommitTargetValue(SelectedIndexProperty, rowIndex);
+        }
+
+        if (e.ClickCount >= 2)
+        {
+            ItemDoubleClicked?.Invoke(_core.ItemsSource.GetItem(rowIndex));
         }
     }
 
@@ -797,7 +805,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 c.CellTemplate,
                 sortComparer == null
                     ? null
-                    : (left, right) => sortComparer.Compare((TItem)left!, (TItem)right!)));
+                    : (left, right) => sortComparer.Compare((TItem)left!, (TItem)right!),
+                c.HeaderTextAlignment));
         }
 
         return list;
@@ -1364,6 +1373,7 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             for (int i = 0; i < columns.Count; i++)
             {
                 _cells[i].Text = columns[i].Header;
+                _cells[i].TextAlignment = columns[i].HeaderTextAlignment;
                 _cells[i].Margin = columns[i].IsSortable
                     ? new Thickness(6, 0, SortIndicatorSlotWidth, 0)
                     : new Thickness(6, 0, 6, 0);
@@ -2042,9 +2052,11 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
                 double maxWidth,
                 bool isResizable,
                 IDataTemplate cellTemplate,
-                Comparison<object?>? sortComparison = null)
+                Comparison<object?>? sortComparison = null,
+                TextAlignment headerTextAlignment = TextAlignment.Left)
             {
                 Header = header;
+                HeaderTextAlignment = headerTextAlignment;
                 Width = width;
                 MinWidth = minWidth;
                 MaxWidth = maxWidth;
@@ -2054,6 +2066,8 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             }
 
             public string Header { get; }
+
+            public TextAlignment HeaderTextAlignment { get; }
 
             public GridLength Width { get; set; }
 
@@ -2181,7 +2195,12 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             Comparison<object?>? comparison = SortColumnIndex >= 0
                 ? _columns[SortColumnIndex].SortComparison
                 : null;
-            var next = GridViewSortedItemsView.Create(itemsView, comparison, SortDirection);
+            if (itemsView is IGridViewSortTarget sortTarget)
+                sortTarget.SetGridViewSort(comparison, SortDirection);
+            var next = GridViewSortedItemsView.Create(
+                itemsView,
+                itemsView is IGridViewSortTarget ? null : comparison,
+                itemsView is IGridViewSortTarget ? GridViewSortDirection.None : SortDirection);
             if (itemsView is IMultiSelectableItemsView newMulti)
             {
                 newMulti.ClearSelection();
@@ -2245,7 +2264,10 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
             SortDirection = direction;
             try
             {
-                _itemsView.SetSort(comparison, direction);
+                if (_sourceItemsView is IGridViewSortTarget sortTarget)
+                    sortTarget.SetGridViewSort(comparison, direction);
+                else
+                    _itemsView.SetSort(comparison, direction);
             }
             catch
             {
@@ -2266,7 +2288,10 @@ public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtual
 
             SortColumnIndex = -1;
             SortDirection = GridViewSortDirection.None;
-            _itemsView.SetSort(null, GridViewSortDirection.None);
+            if (_sourceItemsView is IGridViewSortTarget sortTarget)
+                sortTarget.SetGridViewSort(null, GridViewSortDirection.None);
+            else
+                _itemsView.SetSort(null, GridViewSortDirection.None);
             SortChanged?.Invoke(new GridViewSortChange(-1, GridViewSortDirection.None));
         }
 

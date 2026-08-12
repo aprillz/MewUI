@@ -13,6 +13,11 @@ public enum GridViewSortDirection
 /// <param name="Direction">The new sort direction.</param>
 public readonly record struct GridViewSortChange(int ColumnIndex, GridViewSortDirection Direction);
 
+internal interface IGridViewSortTarget
+{
+    void SetGridViewSort(Comparison<object?>? comparison, GridViewSortDirection direction);
+}
+
 internal static class GridViewSortPermutation
 {
     public static int[] Build(

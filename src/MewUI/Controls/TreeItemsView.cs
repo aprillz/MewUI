@@ -104,7 +104,7 @@ public static class TreeItemsView
 /// Default <see cref="ITreeItemsView"/> implementation for a hierarchical data source.
 /// </summary>
 /// <typeparam name="T">Item type.</typeparam>
-public sealed class TreeItemsView<T> : ITreeItemsView, IMultiSelectableItemsView
+public sealed class TreeItemsView<T> : ITreeItemsView, IMultiSelectableItemsView, IGridViewSortTarget
 {
     private readonly Func<T, IReadOnlyList<T>> _childrenSelector;
     private readonly Func<T, string> _textSelector;
@@ -128,6 +128,8 @@ public sealed class TreeItemsView<T> : ITreeItemsView, IMultiSelectableItemsView
     private object? _selectedKey;
     private bool _isRefreshing;
     private bool _refreshPending;
+    private Comparison<object?>? _sortComparison;
+    private GridViewSortDirection _sortDirection;
 
     public TreeItemsView(
         IReadOnlyList<T> roots,
@@ -583,10 +585,7 @@ public sealed class TreeItemsView<T> : ITreeItemsView, IMultiSelectableItemsView
         _visible.Clear();
         _requiredChildCollections.Clear();
 
-        for (int i = 0; i < Roots.Count; i++)
-        {
-            AddVisible(Roots[i], depth: 0);
-        }
+        AddVisibleRange(Roots, depth: 0);
 
         UpdateChildCollectionSubscriptions();
 
@@ -622,10 +621,33 @@ public sealed class TreeItemsView<T> : ITreeItemsView, IMultiSelectableItemsView
             return;
         }
 
-        for (int i = 0; i < children.Count; i++)
+        AddVisibleRange(children, depth + 1);
+    }
+
+    private void AddVisibleRange(IReadOnlyList<T> items, int depth)
+    {
+        if (_sortDirection == GridViewSortDirection.None || _sortComparison == null || items.Count < 2)
         {
-            AddVisible(children[i], depth + 1);
+            for (int i = 0; i < items.Count; i++) AddVisible(items[i], depth);
+            return;
         }
+
+        var indices = Enumerable.Range(0, items.Count).ToArray();
+        Array.Sort(indices, (left, right) =>
+        {
+            int result = _sortDirection == GridViewSortDirection.Ascending
+                ? _sortComparison(items[left], items[right])
+                : _sortComparison(items[right], items[left]);
+            return result != 0 ? (result < 0 ? -1 : 1) : left.CompareTo(right);
+        });
+        foreach (int index in indices) AddVisible(items[index], depth);
+    }
+
+    void IGridViewSortTarget.SetGridViewSort(Comparison<object?>? comparison, GridViewSortDirection direction)
+    {
+        _sortComparison = comparison;
+        _sortDirection = direction;
+        RefreshAndNotify();
     }
 
     private void UpdateChildCollectionSubscriptions()

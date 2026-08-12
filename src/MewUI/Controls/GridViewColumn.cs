@@ -4,6 +4,9 @@ public sealed class GridViewColumn<TItem>
 {
     public string Header { get; set; } = string.Empty;
 
+    /// <summary>Gets or sets the horizontal alignment of the header text.</summary>
+    public TextAlignment HeaderTextAlignment { get; set; } = TextAlignment.Left;
+
     /// <summary>
     /// Gets or sets the column width. Numeric values are treated as fixed pixel widths.
     /// </summary>
