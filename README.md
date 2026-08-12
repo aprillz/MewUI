@@ -169,7 +169,9 @@ NativeAOT executable size depends on the platform host, rendering backend, resou
 
 For reproducible size probes, regression budgets, and NativeAOT map analysis, see the [NativeAOT size tools](tools/aot-size/README.md).
 
-![MewUI publish size comparison](docs/assets/nativeaot-size.svg)
+![MewUI publish size comparison](docs/assets/nativeaot-size-chart.svg)
+
+![MewUI publish size table](docs/assets/nativeaot-size-table.svg)
 
 [Measurement data](tools/aot-size/release-sizes.json)
 

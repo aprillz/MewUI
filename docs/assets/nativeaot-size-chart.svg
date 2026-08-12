@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720" viewBox="0 0 1600 720" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="640" viewBox="0 0 1600 640" role="img" aria-labelledby="title description">
 <title id="title">MewUI publish size comparison</title>
 <desc id="description">Original and compressed NativeAOT executable sizes for Hello World and Gallery across supported platforms and rendering backends.</desc>
 <rect width="100%" height="100%" fill="#fff"/><g font-family="Segoe UI,Arial,sans-serif" fill="#202020">
@@ -13,7 +13,7 @@
 <line x1="70" y1="186.25" x2="1570" y2="186.25" stroke="#ddd"/><text x="58" y="191.25" text-anchor="end" font-size="14">6</text>
 <line x1="70" y1="128.125" x2="1570" y2="128.125" stroke="#ddd"/><text x="58" y="133.125" text-anchor="end" font-size="14">7</text>
 <line x1="70" y1="70" x2="1570" y2="70" stroke="#ddd"/><text x="58" y="75" text-anchor="end" font-size="14">8</text>
-<text x="20" y="300" text-anchor="middle" font-size="16" transform="rotate(-90 20 300)">Size (MiB)</text>
+<text x="20" y="300" text-anchor="middle" font-size="16" transform="rotate(-90 20 300)">Size (MB)</text>
 <rect x="82" y="45" width="18" height="12" fill="#287db2"/><text x="108" y="56" font-size="14">Original</text><rect x="180" y="45" width="18" height="12" fill="#ff7f0e"/><text x="206" y="56" font-size="14">Compressed</text>
 <text x="427.5" y="62" text-anchor="middle" font-size="20">Hello World</text>
 <rect x="101.5" y="366.030625" width="40" height="168.969375" fill="#287db2"/><text x="121.5" y="359.030625" text-anchor="middle" font-size="12">2.907</text>

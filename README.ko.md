@@ -146,7 +146,9 @@ NativeAOT 실행 파일 크기는 플랫폼 호스트, 렌더링 백엔드, 리�
 
 재현 가능한 크기 probe, 회귀 예산, NativeAOT map 분석 방법은 [NativeAOT 크기 도구](tools/aot-size/README.md)를 참고하세요.
 
-![MewUI publish size comparison](docs/assets/nativeaot-size.svg)
+![MewUI publish size comparison](docs/assets/nativeaot-size-chart.svg)
+
+![MewUI publish size table](docs/assets/nativeaot-size-table.svg)
 
 [측정 데이터](tools/aot-size/release-sizes.json)
 
