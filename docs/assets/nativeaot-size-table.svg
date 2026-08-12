@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="535" viewBox="0 0 1000 535" role="img" aria-labelledby="title description">
-<title id="title">MewUI publish size table</title>
+<title id="title">MewUI v0.20.0 publish size table</title>
 <desc id="description">NativeAOT executable and compressed sizes for Hello World and Gallery across supported platforms and rendering backends.</desc>
 <rect width="100%" height="100%" fill="#fff"/><g font-family="Segoe UI,Arial,sans-serif" fill="#202020">
-<text x="20" y="34" font-size="24" font-weight="600">Measured sizes</text>
+<text x="20" y="34" font-size="24" font-weight="600">MewUI v0.20.0 measured sizes</text>
 <rect x="20" y="62" width="960" height="46" fill="#f1f3f5" stroke="#b8b8b8"/>
 <text x="36" y="92" text-anchor="start" font-size="18" font-weight="600">Sample</text>
 <text x="201" y="92" text-anchor="start" font-size="18" font-weight="600">Platform / backend</text>

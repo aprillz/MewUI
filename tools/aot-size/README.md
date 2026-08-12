@@ -55,10 +55,17 @@ Compare two NativeAOT maps:
 
 Generated executables, maps, and reports are written below `.artifacts/aot-size/`.
 
-Before a release, update `release-sizes.json` from matching Hello World and Gallery publishes and run:
+When release-size documentation needs refreshing, run the manual cross-platform measurement from Windows:
 
 ```powershell
-./tools/aot-size/Update-ReleaseSizeAssets.ps1
+./tools/aot-size/Update-ReleaseSizes.ps1 `
+  -MacHost your-mac-host `
+  -MacPort 22 `
+  -MacUser your-user
 ```
 
-Commit the JSON and generated SVG together. README links stay unchanged. CI uses `-Check` to reject stale generated output.
+The command measures Windows locally, Linux through WSL using the same `/mnt` checkout, and macOS through SSH using the synchronized `~/Dev/MewUI` checkout. It requires matching source manifests and .NET SDK versions, writes byte-accurate values to `release-sizes.json`, and regenerates both SVG files. The MewUI version is read from `build/MewUI.Common.props` and displayed in each SVG.
+
+This command is not part of CI or the release workflow. Run it explicitly only when the committed size assets need a new measurement.
+
+Use `-SkipLinux`, `-SkipMacOS`, or `-SkipWindows` only for an intentionally partial refresh. `-AllowSdkMismatch` exists for investigation; release-facing numbers should use the same SDK on every platform.

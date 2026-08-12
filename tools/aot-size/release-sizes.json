@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "mewUIVersion": "0.20.0",
   "measuredAtUtc": "2026-08-12",
   "dotnetSdk": "10.0.301",
   "entries": [
