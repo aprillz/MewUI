@@ -101,13 +101,16 @@ public static class IndexedBindingPathExtensions
     /// </summary>
     public static BindingPath<TRoot, TNext> ThenIndexed<TRoot, TOwner, TNext>(
         this BindingPath<TRoot, TOwner> path,
-        Func<TOwner, TNext> getter)
+        Func<TOwner, TNext> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TRoot : class
         where TOwner : class
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(getter);
-        return path.Append<TNext>(new IndexedBindingPathSegment<TOwner, TNext>(getter));
+
+        int index = BindingGetterExpression.ReadConstantIndex(getterExpression);
+        return path.Append<TNext>(new IndexedBindingPathSegment<TOwner, TNext>(getter, index));
     }
 }
 

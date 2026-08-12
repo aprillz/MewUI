@@ -248,6 +248,32 @@ public sealed class InpcBindingTests
     }
 
     [TestMethod]
+    public void IndexedSegment_DoesNotThrowWhenTheCollectionIsEmpty()
+    {
+        var source = new CollectionViewModel();
+        source.Items.Add("first");
+        var target = new TestObject();
+        int reads = 0;
+        var path = BindingPath
+            .From<CollectionViewModel>()
+            .ThenNotifying(static value => value.Items)
+            .ThenIndexed(value =>
+            {
+                reads++;
+                return value[0];
+            });
+
+        target.SetBinding(TestObject.TextProperty, source, path, BindingMode.OneWay, fallbackValue: string.Empty);
+        int readsWhilePopulated = reads;
+
+        source.Items.Clear();
+
+        // A range check replaces the getter call, so an emptied collection throws nothing.
+        Assert.AreEqual(readsWhilePopulated, reads);
+        Assert.IsNull(target.Text);
+    }
+
+    [TestMethod]
     public void IndexedSegment_ObservesAnIndexerOnlyNotifier()
     {
         var source = new SettingsViewModel();

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Aprillz.MewUI.Controls;
@@ -136,7 +137,8 @@ internal sealed class InpcBindingPathSegment<TSource, TValue>(
 }
 
 internal sealed class IndexedBindingPathSegment<TSource, TValue>(
-    Func<TSource, TValue> getter) : IBindingPathSegment
+    Func<TSource, TValue> getter,
+    int index) : IBindingPathSegment
     where TSource : class
 {
     public bool IsObservable => true;
@@ -171,8 +173,14 @@ internal sealed class IndexedBindingPathSegment<TSource, TValue>(
 
     public object? Read(object endpoint)
     {
-        // An index that no longer exists makes the path unavailable rather than faulted, so the
-        // binding falls back instead of reporting an error.
+        // An index that no longer exists makes the path unavailable rather than faulted. Range
+        // check first so an emptied collection does not throw on every read.
+        if (endpoint is ICollection collection
+            && (collection.Count == 0 || (index >= 0 && index >= collection.Count)))
+        {
+            return null;
+        }
+
         try
         {
             return getter((TSource)endpoint);

@@ -38,6 +38,41 @@ internal static class BindingGetterExpression
         return member.ToString();
     }
 
+    /// <summary>
+    /// Reads the constant index from a getter expression such as <c>x =&gt; x[2]</c>, so an indexed
+    /// segment can range check instead of catching the resulting exception.
+    /// </summary>
+    /// <returns>The index, or -1 when the expression does not end in a constant index.</returns>
+    internal static int ReadConstantIndex(string? getterExpression)
+    {
+        if (string.IsNullOrWhiteSpace(getterExpression))
+        {
+            return -1;
+        }
+
+        var body = getterExpression.AsSpan();
+        int arrow = body.IndexOf("=>".AsSpan(), StringComparison.Ordinal);
+        if (arrow < 0)
+        {
+            return -1;
+        }
+
+        body = TrimSuppressions(body[(arrow + 2)..]);
+        if (body.Length < 3 || body[^1] != ']')
+        {
+            return -1;
+        }
+
+        int open = body.LastIndexOf('[');
+        if (open < 0)
+        {
+            return -1;
+        }
+
+        var argument = body[(open + 1)..^1].Trim();
+        return int.TryParse(argument, out int index) && index >= 0 ? index : -1;
+    }
+
     private static ReadOnlySpan<char> TrimSuppressions(ReadOnlySpan<char> text)
     {
         text = text.Trim();
