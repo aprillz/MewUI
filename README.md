@@ -145,7 +145,7 @@ MewUI is a code-first GUI framework with a small, explicit core and platform-spe
 - **NativeAOT + trimming friendliness**
 - **Small footprint, fast startup, low memory usage**
 - **Fluent C# markup** for building UI trees (no XAML)
-- **AOT-friendly explicit binding**
+- **AOT-friendly explicit binding** (including nested paths)
 - **Thin core, optional extensions** for larger features
 
 ### Non-goals (by design):
@@ -180,7 +180,7 @@ The Gallery is a full-featured showcase sample. Use the Hello World rows as the 
 ---
 ## 🔗 State & Binding (AOT-friendly)
 
-Bindings are explicit and delegate-based (no reflection):
+Bindings are explicit and delegate-based, with no reflection. Three kinds of source are supported: `ObservableValue<T>`, a view model implementing `INotifyPropertyChanged`, and another element's `MewProperty<T>`. You can mix them within a single path, and `INotifyCollectionChanged` notifications are picked up as well.
 
 ```csharp
 using Aprillz.MewUI.Binding;
@@ -196,37 +196,30 @@ var label  = new Label()
             .BindText(percent, v => $"Percent ({v:P0})");
 ```
 
-**Nested sources** - `BindingPath<TRoot, TValue>` binds through a chain of nested sources without property-name strings, reflection, or generated code. Each `Then` appends a segment; observed segments rewire automatically when an intermediate is replaced.
+**INotifyPropertyChanged** - an ordinary MVVM view model is used as-is, with no wrapper. Subscriptions are held weakly, so a view model never keeps UI objects alive in memory.
 
 ```csharp
-// binds [source].Customer.City
-var city = new TextBlock().Bind(
-    TextBlock.TextProperty,
-    order,
-    BindingPath
-        .From<OrderViewModel>()
-        .Then(order => order.Customer)      // observed segment: rewires when replaced
-        .Then(customer => customer!.City),  // leaf
-    mode: BindingMode.OneWay,
-    fallbackValue: "-");
+new Label().Bind(Label.TextProperty, vm, x => x.UserName);
+
+// TextBox is two-way by default, so typed text is written back to the view model
+new TextBox().Bind(TextBox.TextProperty, vm, x => x.UserName);
 ```
 
-A `MewProperty<T>` also works as a segment:
+**Nested paths** - a dotted expression is decomposed into per-step segments at compile time. No strings, no reflection, and when an intermediate value is replaced, every step after it is rewired automatically.
 
 ```csharp
-// binds [source].Padding.Left
-var readout = new TextBlock().Bind(
-    TextBlock.TextProperty,
-    source,
-    BindingPath
-        .From<Control>()
-        .Then(Control.PaddingProperty)   // MewProperty segment: observed
-        .Then(padding => padding.Left),  // leaf
-    convert: left => $"{left}px",
-    mode: BindingMode.OneWay);
+// order.Customer.City
+var city = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Customer.City);
+
+// Indexer. Updates when item 0 changes, or when items are inserted or removed before it
+var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].ProductName);
 ```
 
-See [Binding](docs/Binding.md) for observed vs snapshot segments, null/fallback, TwoWay, and lifetime rules.
+Each step picks how to observe from the member's type: `PropertyChanged` for `INotifyPropertyChanged`, its own notification for `ObservableValue<T>`, the matching `MewProperty` for a `MewObject`, and `CollectionChanged` for a notifying collection.
+
+This one-line syntax works when building with a .NET 9 or later SDK. Below that, the same path is written out explicitly with `BindingPath` and `ThenNotifying`; what you lose is the syntax, not the capability.
+
+See [Binding](docs/Binding.md) for segment kinds, null/fallback, TwoWay, collections, and lifetime rules.
 
 ---
 ## 🧱 Controls / Panels

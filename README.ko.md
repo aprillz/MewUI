@@ -118,7 +118,7 @@ MewUI는 작고 명시적인 코어 위에 플랫폼 호스트와 렌더링 백�
 - **NativeAOT + Trim 친화**
 - 작은 크기, 빠른 시작시간, 적은 메모리 사용
 - **XAML 없이 Fluent한 C# 마크업**으로 UI 트리 구성
-- **AOT 친화적인 명시적 바인딩** (`INotifyPropertyChanged`, `INotifyCollectionChanged`, 중첩 경로를 리플렉션 없이)
+- **AOT 친화적인 명시적 바인딩** (중첩 경로 지원)
 - 코어는 얇게 유지하고 큰 기능은 선택형 확장 패키지로 분리
 
 ### 지향하지 않는 것
