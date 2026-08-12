@@ -189,7 +189,7 @@ partial class GalleryView
                             .BindValue(lineSpacing),
                         new Button()
                             .Content("Reset")
-                            .OnClick(() => sample.LineSpacing = 0),
+                            .OnClick(() => lineSpacing.Value = 0),
                         spacingLabel),
                 new TextBlock()
                     .FontSize(ThemeFontSize.Small)
