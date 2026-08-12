@@ -13,14 +13,18 @@ WPF/WinUI는 무엇에 바인딩할지를 **문자열**로 적고 런타임에 �
 ```xml
 <!-- WPF -->
 <TextBlock Text="{Binding UserName}" />
+<TextBlock Text="{Binding Customer.City}" />
+<TextBlock Text="{Binding Orders[0].Total}" />
 ```
 
 ```csharp
 // MewUI
 new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.UserName);
+new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.Customer.City);
+new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.Orders[0].Total, total => $"{total:N0}");
 ```
 
-중첩 경로도 마찬가지입니다. WPF의 `{Binding Customer.City}`는 MewUI에서 `x => x.Customer.City`가 되며, 이쪽은 컴파일러가 읽는 진짜 코드입니다(4절).
+중첩 경로도 문자열이 아니라 코드입니다. 점을 따라가는 각 단계를 컴파일러가 검사하고, 변경 알림도 단계마다 붙습니다. 중간 객체가 통째로 교체되면 그 아래가 다시 연결됩니다(4절).
 
 문자열이 코드가 되면서 따라오는 것:
 
