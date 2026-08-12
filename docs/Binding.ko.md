@@ -314,7 +314,24 @@ new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
 new Label().Bind(Label.TextProperty, vm, x => x.Items.Count, count => $"{count}개");
 ```
 
-반면 **인덱서는 관찰하지 않습니다.** `x => x.Items[0].Name`은 컬렉션 참조가 통째로 바뀌거나 리프 속성이 바뀔 때는 갱신되지만, 0번 원소만 다른 것으로 교체되는 것은 감지하지 못합니다.
+인덱서도 관찰합니다. 소유자가 `INotifyCollectionChanged`를 구현하면 컬렉션 변경을, 그렇지 않고 `INotifyPropertyChanged`만 구현하면 `"Item[]"` 형태의 인덱서 알림을 구독합니다.
+
+```csharp
+// 0번 원소가 교체되거나 앞에 항목이 끼어들면 갱신됩니다
+new Label().Bind(Label.TextProperty, vm, x => x.Items[0].Name);
+```
+
+명시적 체인에서는 `ThenIndexed`를 씁니다.
+
+```csharp
+BindingPath.From<AppViewModel>()
+    .ThenNotifying(x => x.Items)
+    .ThenIndexed(x => x[0]);
+```
+
+점 표기에서는 **선언된 정적 타입**으로 관찰 여부가 정해집니다. `IReadOnlyList<T>`로 선언된 속성은 실제 인스턴스가 `ObservableCollection<T>`여도 관찰 세그먼트가 되지 않습니다. `ThenIndexed`를 직접 쓰면 실제 인스턴스를 보므로 그 제한이 없습니다.
+
+인덱스가 범위를 벗어나면 경로가 unavailable이 되어 `fallbackValue`가 적용됩니다. 다만 인덱서가 마지막 세그먼트면 다른 leaf와 마찬가지로 null이 실제 소스 값으로 전달됩니다. 인덱서 세그먼트는 읽기 전용이라 TwoWay의 마지막 세그먼트가 될 수 없습니다.
 
 목록 화면에는 `ItemsSource`를 쓰세요. 항목 추가와 삭제는 목록 컨트롤이 직접 관찰합니다.
 

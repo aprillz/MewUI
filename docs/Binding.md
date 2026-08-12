@@ -314,7 +314,24 @@ Add `!` to a nullable intermediate so the next segment's owner type is non-nulla
 new Label().Bind(Label.TextProperty, vm, x => x.Items.Count, count => $"{count} items");
 ```
 
-Indexers are **not** observed. `x => x.Items[0].Name` updates when the whole collection is replaced or when the leaf property changes, but not when the element at index 0 is swapped for another.
+Indexers are observed too. When the owner implements `INotifyCollectionChanged` the segment subscribes to collection changes; when it only implements `INotifyPropertyChanged` it subscribes to the conventional `Item[]` indexer notification.
+
+```csharp
+// Updates when the element at index 0 is replaced or an item is inserted before it
+new Label().Bind(Label.TextProperty, vm, x => x.Items[0].Name);
+```
+
+The explicit chain uses `ThenIndexed`.
+
+```csharp
+BindingPath.From<AppViewModel>()
+    .ThenNotifying(x => x.Items)
+    .ThenIndexed(x => x[0]);
+```
+
+In the dotted form the **declared static type** decides. A property declared as `IReadOnlyList<T>` does not become an observing segment even when the instance is an `ObservableCollection<T>`. Calling `ThenIndexed` directly checks the instance instead, so it has no such limit.
+
+An index that no longer exists makes the path unavailable and applies `fallbackValue`. As with any other leaf, an indexer in the last position reports null as the source value instead. Indexed segments are read-only, so they cannot end a TwoWay path.
 
 Use `ItemsSource` for list UI; list controls observe additions and removals themselves.
 
