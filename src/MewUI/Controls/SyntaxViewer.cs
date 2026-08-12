@@ -568,7 +568,7 @@ public sealed class SyntaxViewer : Control, IVisualTreeHost, ITextViewHost
             // their colors and only SelectionForeground opts into the cost.
             ? [span with { Foreground = SelectionForeground }]
             : [];
-        return new TextDrawOptions(Theme.Palette.WindowText, paint, Owner: line);
+        return new TextDrawOptions(Foreground, paint, Owner: line);
     }
 
     /// <summary>

@@ -84,6 +84,22 @@ public sealed class SelectionRenderingTests
     }
 
     [TestMethod]
+    public void TextBoxForegroundRepaintsTheGlyphs()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("GDI backend is Windows-only.");
+            return;
+        }
+
+        byte[] dark = RenderTextBox(selectionLength: 0, foreground: Color.FromRgb(0x10, 0x10, 0x10));
+        byte[] disabled = RenderTextBox(selectionLength: 0, foreground: Color.FromRgb(0x80, 0x80, 0x80));
+
+        Assert.IsGreaterThan(0, CountDifferingPixels(dark, disabled),
+            "TextBox.Foreground painted nothing: disabled styles cannot recolor the text glyphs.");
+    }
+
+    [TestMethod]
     public void SyntaxViewerSelectionForegroundRepaintsTheSelectedGlyphs()
     {
         if (!OperatingSystem.IsWindows())
@@ -117,13 +133,20 @@ public sealed class SelectionRenderingTests
         return Render(textBox);
     }
 
-    private static byte[] RenderTextBox(int selectionLength, Color? selectionForeground = null)
+    private static byte[] RenderTextBox(
+        int selectionLength,
+        Color? selectionForeground = null,
+        Color? foreground = null)
     {
         var textBox = new TextBox
         {
             Text = "select this line",
             SelectionForeground = selectionForeground
         };
+        if (foreground is { } value)
+        {
+            textBox.Foreground = value;
+        }
         textBox.Measure(new Size(WIDTH, HEIGHT));
         textBox.Arrange(new Rect(0, 0, WIDTH, HEIGHT));
         if (selectionLength > 0)

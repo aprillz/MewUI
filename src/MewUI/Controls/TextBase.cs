@@ -381,7 +381,7 @@ public abstract class TextBase : Control, ITextCompositionClient, ITextCompositi
             return;
         }
 
-        var color = Theme.Palette.WindowText;
+        var color = Foreground;
         int index = 0;
         while (index < _compositionLength)
         {

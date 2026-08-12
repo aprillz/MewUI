@@ -329,7 +329,7 @@ public sealed class MultiLineTextBox : TextBase, IVisualTreeHost, ITextViewHost
         }
         var caret = GetCharRectInWindow(_editor.CaretPosition);
         _graphics!.FillRectangle(
-            new Rect(caret.X, caret.Y, 1, Math.Max(1, caret.Height)), Theme.Palette.WindowText);
+            new Rect(caret.X, caret.Y, 1, Math.Max(1, caret.Height)), Foreground);
     }
 
     /// <summary>

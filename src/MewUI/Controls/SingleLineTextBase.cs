@@ -378,7 +378,7 @@ public abstract class SingleLineTextBase : TextBase
             double top = _contentBounds.Y + Math.Max(0, (_contentBounds.Height - lineHeight) / 2);
             var origin = new Point(_contentBounds.X - _horizontalOffset, top);
             var options = new TextDrawOptions(
-                Theme.Palette.WindowText,
+                Foreground,
                 paint,
                 Owner: line);
             line.Draw(context.Text, origin, in options);
@@ -389,7 +389,7 @@ public abstract class SingleLineTextBase : TextBase
         if (IsFocused && CaretVisible)
         {
             var caret = GetCharRectInWindow(_editor.CaretPosition);
-            context.FillRectangle(new Rect(caret.X, caret.Y, 1, Math.Max(1, caret.Height)), Theme.Palette.WindowText);
+            context.FillRectangle(new Rect(caret.X, caret.Y, 1, Math.Max(1, caret.Height)), Foreground);
         }
     }
 
