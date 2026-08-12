@@ -170,6 +170,7 @@ var city = new TextBlock().Bind(
 | `Func<TCurrent, ObservableValue<TNext>>` | 함 | 가능 |
 | `MewObject`의 `MewProperty<TNext>` | 함 | read-only가 아니면 가능 |
 | `ThenNotifying`의 getter (소유자가 `INotifyPropertyChanged`) | 함 | setter를 넘기면 가능 |
+| `ThenIndexed`의 getter (소유자가 통지하는 컬렉션 또는 인덱서) | 함 | 불가능 |
 
 일반 getter는 최초 attach와 관찰 가능한 upstream segment가 downstream 경로를 다시 구성할
 때 평가합니다. getter 결과만 바뀌어도 알림이 없으므로 binding은 자동으로 갱신되지 않습니다.
@@ -405,6 +406,12 @@ BindingPath.From<AppViewModel>()
 |--------|------|------|
 | `Bind<TElement, T>(MewProperty<T>, ObservableValue<T>)` | 기본 | 직접 속성 바인딩 |
 | `Bind<TElement, TProp, TSource>(MewProperty<TProp>, ObservableValue<TSource>, convert, convertBack?)` | 기본 | 변환 속성 바인딩 |
+| `Bind<TElement, TSource, T>(MewProperty<T>, TSource, getter, setter?)` | setter 있으면 양방향 | INPC 소스 바인딩 (3.5절) |
+| `Bind<TElement, TProp, TSource, TValue>(MewProperty<TProp>, TSource, getter, convert, setter?, convertBack?)` | 둘 다 있으면 양방향 | INPC 변환 바인딩 |
+| `Bind<TElement, TSource, T>(MewProperty<T>, TSource, Func<TSource, ObservableValue<T>>)` | 기본 | 소유자를 통해 도달하는 `ObservableValue` |
+| `Bind<TElement, TRoot, T>(MewProperty<T>, TRoot, BindingPath<TRoot, T>, mode?, fallbackValue?)` | 기본 | 경로 바인딩 (3.4절) |
+
+`SetBinding`도 같은 오버로드 조합을 제공합니다. `Bind`는 그 위의 플루언트 래퍼입니다.
 
 ---
 

@@ -170,6 +170,7 @@ var city = new TextBlock().Bind(
 | `Func<TCurrent, ObservableValue<TNext>>` | Yes | Yes |
 | `MewProperty<TNext>` on a `MewObject` | Yes | Unless the property is read-only |
 | `ThenNotifying` getter (owner implements `INotifyPropertyChanged`) | Yes | When a setter is supplied |
+| `ThenIndexed` getter (owner is a notifying collection or indexer) | Yes | No |
 
 An ordinary getter is evaluated during initial attachment and when an observed upstream segment
 rebuilds the downstream path. Changing only the getter result does not notify the binding.
@@ -405,6 +406,12 @@ Use `ItemsSource` for list UI; list controls observe additions and removals them
 |--------|-----------|-------------|
 | `Bind<TElement, T>(MewProperty<T>, ObservableValue<T>)` | Default | Direct property binding |
 | `Bind<TElement, TProp, TSource>(MewProperty<TProp>, ObservableValue<TSource>, convert, convertBack?)` | Default | Conversion property binding |
+| `Bind<TElement, TSource, T>(MewProperty<T>, TSource, getter, setter?)` | TwoWay with a setter | INotifyPropertyChanged source (section 3.5) |
+| `Bind<TElement, TProp, TSource, TValue>(MewProperty<TProp>, TSource, getter, convert, setter?, convertBack?)` | TwoWay with both | Converted INotifyPropertyChanged source |
+| `Bind<TElement, TSource, T>(MewProperty<T>, TSource, Func<TSource, ObservableValue<T>>)` | Default | `ObservableValue` reached through an owner |
+| `Bind<TElement, TRoot, T>(MewProperty<T>, TRoot, BindingPath<TRoot, T>, mode?, fallbackValue?)` | Default | Path binding (section 3.4) |
+
+`SetBinding` offers the same set of overloads; `Bind` is the fluent wrapper over it.
 
 ---
 
