@@ -6,8 +6,13 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollable items host without built-in selection semantics.
 /// </summary>
-public sealed class ItemsControl : ScrollableItemsBase
+public sealed partial class ItemsControl : ScrollableItemsBase
 {
+    static ItemsControl() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ItemsControl>(DefaultStyles.CreateItemsControlStyle);
+
     private IItemsPresenter _presenter;
     private IDataTemplate _itemTemplate;
 

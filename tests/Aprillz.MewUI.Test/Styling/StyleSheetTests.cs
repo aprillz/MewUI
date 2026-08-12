@@ -294,6 +294,19 @@ public sealed class StyleSheetTests
     }
 
     [TestMethod]
+    public void FrameworkNamedStyleKeys_RegisterFactoriesForCustomControls()
+    {
+        string flatButton = BuiltInStyles.FlatButton;
+        string comboBoxPopup = BuiltInStyles.ComboBoxPopup;
+        string datePickerPopup = BuiltInStyles.DatePickerPopup;
+        var sheet = new StyleSheet { UsesFrameworkNamedStyles = true };
+
+        Assert.AreEqual(typeof(Button), sheet.Get(flatButton)!.BasedOn!.TargetType);
+        Assert.AreEqual(typeof(ListBox), sheet.Get(comboBoxPopup)!.BasedOn!.TargetType);
+        Assert.AreEqual(typeof(Calendar), sheet.Get(datePickerPopup)!.BasedOn!.TargetType);
+    }
+
+    [TestMethod]
     public void ControlBasedDefaults_ShareTheTriggerlessControlBase()
     {
         var controlBase = Style.ForType<Control>();

@@ -6,8 +6,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A horizontal menu bar control for application menus.
 /// </summary>
-public sealed class MenuBar : Control, IPopupOwner
+public sealed partial class MenuBar : Control, IPopupOwner
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<MenuBar>(DefaultStyles.CreateMenuBarStyle);
+
     private const double ItemHorizontalPadding = 10;
     private const double ItemVerticalPadding = 4;
 

@@ -5,8 +5,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A toggle switch control with optional content label.
 /// </summary>
-public sealed class ToggleSwitch : ToggleBase
+public sealed partial class ToggleSwitch : ToggleBase
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ToggleSwitch>(DefaultStyles.CreateToggleSwitchStyle);
+
     private const double SPACING = 8;
 
     public static readonly MewProperty<Color> ThumbBrushProperty =

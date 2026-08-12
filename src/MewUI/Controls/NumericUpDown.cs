@@ -2,8 +2,11 @@ using Aprillz.MewUI.Input;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class NumericUpDown : RangeBase
+public sealed partial class NumericUpDown : RangeBase
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<NumericUpDown>(DefaultStyles.CreateNumericUpDownStyle);
+
     /// <summary>Template part name for the editable text box; register a TextBox under this name to receive the edit pipeline.</summary>
     public const string PART_TEXT_BOX = "PART_TextBox";
 

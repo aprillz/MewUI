@@ -7,6 +7,13 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class Button : Control, IVisualTreeHost, ICommandSource
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Button>(DefaultStyles.CreateButtonStyle);
+    private static readonly bool _flatStyleRegistered =
+        FrameworkNamedStyles.Register("flat-button", BuiltInStyles.CreateFlatButtonStyle);
+    private static readonly bool _accentStyleRegistered =
+        FrameworkNamedStyles.Register("accent-button", BuiltInStyles.CreateAccentButtonStyle);
+
     public static readonly MewProperty<Element?> ContentProperty =
         MewProperty<Element?>.Register<Button>(nameof(Content), null,
             MewPropertyOptions.AffectsLayout,

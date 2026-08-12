@@ -15,8 +15,13 @@ namespace Aprillz.MewUI.Controls;
 /// <see cref="ButtonGroup"/> segment flips it per-click when checkable. Independent action segments
 /// can invoke a semantic <see cref="Command"/> and may also raise <see cref="Click"/>.
 /// </summary>
-public sealed class SegmentButton : ContentControl, ICommandSource
+public sealed partial class SegmentButton : ContentControl, ICommandSource
 {
+    static SegmentButton() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<SegmentButton>(DefaultStyles.CreateSegmentButtonStyle);
+
     public static readonly MewProperty<Command?> CommandProperty =
         MewProperty<Command?>.Register<SegmentButton>(nameof(Command), null,
             MewPropertyOptions.None,

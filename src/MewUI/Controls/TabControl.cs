@@ -6,10 +6,13 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A tabbed control with header buttons and content display.
 /// </summary>
-public sealed class TabControl : Control, ISelector, IIndexedSelector, ILogicalTreeHost
+public sealed partial class TabControl : Control, ISelector, IIndexedSelector, ILogicalTreeHost
     , IVisualTreeHost
     , IFocusTraversalScope
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<TabControl>(DefaultStyles.CreateTabControlStyle);
+
     private const double HeaderSpacing = 2.0;
 
     private readonly List<TabItem> _tabs = new();

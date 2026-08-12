@@ -7,8 +7,11 @@ namespace Aprillz.MewUI.Controls;
 /// <see cref="RadioButton"/> group too large. For independent segments (toolbar / toggle cluster) use
 /// <see cref="ButtonGroup"/>.
 /// </summary>
-public sealed class SegmentedControl : SegmentedBase, ISelector, IIndexedSelector
+public sealed partial class SegmentedControl : SegmentedBase, ISelector, IIndexedSelector
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<SegmentedControl>(DefaultStyles.CreateSegmentedControlStyle);
+
     private readonly SelectionSync _selection;
 
     public static readonly MewProperty<int> SelectedIndexProperty =

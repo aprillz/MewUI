@@ -1,3 +1,4 @@
+#if DEBUG
 namespace Aprillz.MewUI.Platform;
 
 internal sealed class TracingPlatformHost : IPlatformHost
@@ -312,3 +313,4 @@ internal sealed class TracingPlatformHost : IPlatformHost
         public void ProcessWorkItems() => _innerCore!.ProcessWorkItems();
     }
 }
+#endif

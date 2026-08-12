@@ -103,12 +103,7 @@ public sealed class Application
     }
 
     private static StyleSheet CreateDefaultStyleSheet()
-    {
-        var sheet = new StyleSheet();
-        BuiltInStyles.Register(sheet);
-        FileDialogStyles.Register(sheet);
-        return sheet;
-    }
+        => new() { UsesFrameworkNamedStyles = true };
 
     /// <summary>
     /// Gets the render loop settings controlling frame scheduling.
@@ -303,7 +298,10 @@ public sealed class Application
         {
             if (_defaultPlatformHost == null)
             {
-                var host = MaybeTracePlatformHost(ResolvePlatformHost());
+                var host = ResolvePlatformHost();
+#if DEBUG
+                host = MaybeTracePlatformHost(host);
+#endif
                 var interceptor = PlatformHostInterceptor;
                 if (interceptor != null)
                 {
@@ -716,6 +714,7 @@ public sealed class Application
         Rendering.FontFallback.ApplyPlatformDefaults(host.DefaultFontFallbacks);
     }
 
+#if DEBUG
     private static IPlatformHost MaybeTracePlatformHost(IPlatformHost host)
     {
         if (!DiagLog.Enabled)
@@ -725,4 +724,5 @@ public sealed class Application
 
         return host is TracingPlatformHost ? host : new TracingPlatformHost(host);
     }
+#endif
 }

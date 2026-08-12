@@ -5,8 +5,13 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A radio button control with optional content label.
 /// </summary>
-public class RadioButton : ToggleBase
+public partial class RadioButton : ToggleBase
 {
+    static RadioButton() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<RadioButton>(DefaultStyles.CreateRadioButtonStyle);
+
     private Window? _registeredWindow;
     private string? _registeredGroupName;
     private Element? _registeredParentScope;

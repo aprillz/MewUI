@@ -5,8 +5,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A container control that draws a border with a header (WinForms-style GroupBox).
 /// </summary>
-public sealed class GroupBox : HeaderedContentControl
+public sealed partial class GroupBox : HeaderedContentControl
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<GroupBox>(DefaultStyles.CreateGroupBoxStyle);
+
     public static readonly MewProperty<double> HeaderInsetProperty =
         MewProperty<double>.Register<GroupBox>(nameof(HeaderInset), 0.0,
             MewPropertyOptions.AffectsLayout);

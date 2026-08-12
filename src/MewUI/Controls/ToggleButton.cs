@@ -7,6 +7,11 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class ToggleButton : ToggleBase
 {
+    static ToggleButton() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ToggleButton>(DefaultStyles.CreateToggleButtonStyle);
+
     private readonly PressCaptureHelper _pressCapture;
 
     public ToggleButton()

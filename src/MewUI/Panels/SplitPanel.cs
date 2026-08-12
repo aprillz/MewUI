@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A two-pane layout panel with a draggable splitter.
 /// </summary>
-public sealed class SplitPanel : Panel
+public sealed partial class SplitPanel : Panel
 {
     public static readonly MewProperty<Orientation> OrientationProperty =
         MewProperty<Orientation>.Register<SplitPanel>(nameof(Orientation), Orientation.Horizontal, MewPropertyOptions.AffectsLayout,
@@ -514,8 +514,13 @@ public sealed class SplitPanel : Panel
         }
     }
 
-    internal sealed class SplitterThumb : Control
+    internal sealed partial class SplitterThumb : Control
     {
+        static SplitterThumb() { }
+
+        private static readonly bool _defaultStyleRegistered =
+            DefaultStyles.Register<SplitterThumb>(DefaultStyles.CreateSplitterThumbStyle);
+
         private static readonly MewProperty<bool> IsDraggingProperty =
             MewProperty<bool>.Register<SplitterThumb>(nameof(IsDragging), false,
                 MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState);

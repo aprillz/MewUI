@@ -7,8 +7,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A context menu popup control for displaying menu items.
 /// </summary>
-public sealed class ContextMenu : Control, IPopupOwner, ICommandSource, IVisualTreeHost
+public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, IVisualTreeHost
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ContextMenu>(DefaultStyles.CreateContextMenuStyle);
+
     // Owner context captured at ShowAt (or inherited from the parent menu / preset by MenuBar):
     // command items resolve CanExecute, execution and shortcut labels against it so popup focus
     // never changes the semantic target.

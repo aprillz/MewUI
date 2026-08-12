@@ -77,6 +77,11 @@ public sealed class ClosingDeferral : IDisposable
 /// </summary>
 public partial class Window : ContentControl, ILayoutRoundingHost
 {
+    static Window() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Window>(DefaultStyles.CreateWindowStyle);
+
     private readonly DispatcherMergeKey _updatePassMergeKey = new(DispatcherPriority.Layout);
     private readonly DispatcherMergeKey _renderMergeKey = new(DispatcherPriority.Render);
 

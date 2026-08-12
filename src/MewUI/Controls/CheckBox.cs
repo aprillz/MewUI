@@ -5,8 +5,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A checkbox control with optional content label.
 /// </summary>
-public class CheckBox : ContentControl
+public partial class CheckBox : ContentControl
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<CheckBox>(DefaultStyles.CreateCheckBoxStyle);
+
     public static readonly MewProperty<bool?> IsCheckedProperty =
         MewProperty<bool?>.Register<CheckBox>(nameof(IsChecked), (bool?)false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState | MewPropertyOptions.BindsTwoWayByDefault,

@@ -9,8 +9,11 @@ namespace Aprillz.MewUI.Controls;
 /// A calendar control that displays a month/year/decade view for date selection.
 /// Can be used standalone or as popup content for a DatePicker.
 /// </summary>
-public sealed class Calendar : Control, IVisualTreeHost
+public sealed partial class Calendar : Control, IVisualTreeHost
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Calendar>(DefaultStyles.CreateCalendarStyle);
+
     private const int DaysPerWeek = 7;
     private const int MonthRows = 6;
     private const int MonthCells = DaysPerWeek * MonthRows;

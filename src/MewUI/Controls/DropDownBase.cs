@@ -9,8 +9,13 @@ namespace Aprillz.MewUI.Controls;
 /// (open state, placement, focus, dismissal) comes from <see cref="PopupOwnerBase"/>; this class
 /// adds the header-and-arrow chrome.
 /// </summary>
-public abstract class DropDownBase : PopupOwnerBase
+public abstract partial class DropDownBase : PopupOwnerBase
 {
+    static DropDownBase() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<DropDownBase>(DefaultStyles.CreateDropDownBaseStyle);
+
     /// <summary>
     /// Gets or sets the arrow (chevron) color for the current frame.
     /// Derived controls can update this inside <see cref="RenderHeaderContent"/>.

@@ -9,28 +9,58 @@ namespace Aprillz.MewUI;
 public static class BuiltInStyles
 {
     /// <summary>StyleName key for a flat (borderless) button.</summary>
-    public const string FlatButton = "flat-button";
+    public static string FlatButton
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("flat-button", CreateFlatButtonStyle);
+            return "flat-button";
+        }
+    }
 
     /// <summary>StyleName key for an accent-colored button.</summary>
-    public const string AccentButton = "accent-button";
+    public static string AccentButton
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("accent-button", CreateAccentButtonStyle);
+            return "accent-button";
+        }
+    }
 
     /// <summary>StyleName key for a ComboBox dropdown list popup.</summary>
-    public const string ComboBoxPopup = "combobox-popup";
+    public static string ComboBoxPopup
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("combobox-popup", CreateComboBoxPopupStyle);
+            return "combobox-popup";
+        }
+    }
 
     /// <summary>StyleName key for a DatePicker calendar popup.</summary>
-    public const string DatePickerPopup = "datepicker-popup";
+    public static string DatePickerPopup
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("datepicker-popup", CreateDatePickerPopupStyle);
+            return "datepicker-popup";
+        }
+    }
 
     internal static void Register(StyleSheet sheet)
     {
-        sheet.Define(FlatButton, CreateFlatButtonStyle);
-        sheet.Define(AccentButton, CreateAccentButtonStyle);
-        sheet.Define(ComboBoxPopup, CreateComboBoxPopupStyle);
-        sheet.Define(DatePickerPopup, CreateDatePickerPopupStyle);
+        sheet.Define("flat-button", CreateFlatButtonStyle);
+        sheet.Define("accent-button", CreateAccentButtonStyle);
+        sheet.Define("combobox-popup", CreateComboBoxPopupStyle);
+        sheet.Define("datepicker-popup", CreateDatePickerPopupStyle);
     }
 
-    private static Style CreateFlatButtonStyle()
+    internal static Style CreateFlatButtonStyle()
     {
-        return Style.DeriveFromDefault<Button>(
+        DefaultStyles.EnsureRegistered<Control>(DefaultStyles.CreateControlBaseStyle);
+        DefaultStyles.EnsureRegistered<Button>(DefaultStyles.CreateButtonStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(Button),
             transitions:
             [
                 Transition.Create(Control.BackgroundProperty),
@@ -89,27 +119,34 @@ public static class BuiltInStyles
             ]);
     }
 
-    private static Style CreateComboBoxPopupStyle()
+    internal static Style CreateComboBoxPopupStyle()
     {
-        return Style.DeriveFromDefault<ListBox>(
+        DefaultStyles.EnsureRegistered<Control>(DefaultStyles.CreateControlBaseStyle);
+        DefaultStyles.EnsureRegistered<ScrollableItemsBase>(DefaultStyles.CreateScrollableItemsBaseStyle);
+        DefaultStyles.EnsureRegistered<ListBox>(DefaultStyles.CreateListBoxStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(ListBox),
             setters:
             [
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),
             ]);
     }
 
-    private static Style CreateDatePickerPopupStyle()
+    internal static Style CreateDatePickerPopupStyle()
     {
-        return Style.DeriveFromDefault<Calendar>(
+        DefaultStyles.EnsureRegistered<Control>(DefaultStyles.CreateControlBaseStyle);
+        DefaultStyles.EnsureRegistered<Calendar>(DefaultStyles.CreateCalendarStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(Calendar),
             setters:
             [
                 Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder.Lerp(t.Palette.Accent, 0.5)),
             ]);
     }
 
-    private static Style CreateAccentButtonStyle()
+    internal static Style CreateAccentButtonStyle()
     {
-        return Style.DeriveFromDefault<Button>(
+        DefaultStyles.EnsureRegistered<Control>(DefaultStyles.CreateControlBaseStyle);
+        DefaultStyles.EnsureRegistered<Button>(DefaultStyles.CreateButtonStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(Button),
             transitions:
             [
                 Transition.Create(Control.BackgroundProperty),

@@ -8,8 +8,13 @@ namespace Aprillz.MewUI.Controls;
 /// and/or configuring <see cref="SegmentButton.IsCheckable"/> (independent toggle). For a single
 /// mutually exclusive choice use <see cref="SegmentedControl"/>.
 /// </summary>
-public sealed class ButtonGroup : SegmentedBase
+public sealed partial class ButtonGroup : SegmentedBase
 {
+    static ButtonGroup() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ButtonGroup>(DefaultStyles.CreateButtonGroupStyle);
+
     public ButtonGroup() : base(SegmentSizing.Auto)
     {
         // Segments take their own content width (toolbar-like); a slightly larger padding gives a

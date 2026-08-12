@@ -6,8 +6,13 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A drop-down control that allows selecting a date via an embedded <see cref="Calendar"/>.
 /// </summary>
-public sealed class DatePicker : DropDownBase
+public sealed partial class DatePicker : DropDownBase
 {
+    static DatePicker() { }
+
+    private static readonly bool _popupStyleRegistered =
+        FrameworkNamedStyles.Register("datepicker-popup", BuiltInStyles.CreateDatePickerPopupStyle);
+
     private Calendar? _calendar;
     private bool _syncingCalendar;
     private DateTime? _cachedHeaderDate;

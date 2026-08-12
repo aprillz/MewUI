@@ -7,8 +7,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A scrollbar control used to represent and change a scroll offset.
 /// </summary>
-public sealed class ScrollBar : RangeBase
+public sealed partial class ScrollBar : RangeBase
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ScrollBar>(DefaultStyles.CreateScrollBarStyle);
+
     private static readonly MewProperty<bool> IsDraggingProperty =
         MewProperty<bool>.Register<ScrollBar>(nameof(IsDragging), false,
             MewPropertyOptions.AffectsRender | MewPropertyOptions.AffectsVisualState);

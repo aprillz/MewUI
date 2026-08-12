@@ -1,4 +1,6 @@
 using Aprillz.MewUI.Controls;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI;
 
@@ -18,6 +20,8 @@ public sealed class Style
     /// <summary>
     /// Gets the default theme style for the specified control type.
     /// </summary>
+    [RequiresUnreferencedCode(
+        "Dynamic style lookup runs the target control's static constructor. Use ForType<T>() when the control type is known statically.")]
     public static Style? ForType(Type controlType)
     {
         ArgumentNullException.ThrowIfNull(controlType);
@@ -28,26 +32,43 @@ public sealed class Style
                 nameof(controlType));
         }
 
+        RuntimeHelpers.RunClassConstructor(controlType.TypeHandle);
         return DefaultStyles.GetStyle(controlType);
     }
 
     /// <summary>
     /// Gets the default theme style for the specified control type.
     /// </summary>
-    public static Style? ForType<T>() where T : Control
-        => ForType(typeof(T));
+    public static Style? ForType<T>()
+        where T : Control
+    {
+        EnsureDefaultStyleRegistration<T>();
+        return DefaultStyles.GetStyle(typeof(T));
+    }
 
     /// <summary>
     /// Creates a style that explicitly extends the nearest framework default style for
     /// <typeparamref name="T"/>. This does not change ordinary Style or StyleSheet lookup.
     /// </summary>
-    public static Style DeriveFromDefault<T>(
+    public static Style DeriveFromDefault<
+        T>(
         IReadOnlyList<SetterBase>? setters = null,
         IReadOnlyList<StateTrigger>? triggers = null,
         IReadOnlyList<Transition>? transitions = null)
         where T : Control
     {
         Type targetType = typeof(T);
+        EnsureDefaultStyleRegistration<T>();
+        DefaultStyles.EnsureRegistered<Control>(DefaultStyles.CreateControlBaseStyle);
+        return DeriveFromRegisteredDefault(targetType, setters, triggers, transitions);
+    }
+
+    internal static Style DeriveFromRegisteredDefault(
+        Type targetType,
+        IReadOnlyList<SetterBase>? setters = null,
+        IReadOnlyList<StateTrigger>? triggers = null,
+        IReadOnlyList<Transition>? transitions = null)
+    {
         Style? defaultStyle = null;
         for (Type? candidate = targetType;
              candidate != null && typeof(Control).IsAssignableFrom(candidate);
@@ -74,6 +95,13 @@ public sealed class Style
             Transitions = transitions ?? [],
         };
     }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2059",
+        Justification = "The generic control type is statically reachable and owns its default-style registration in its static constructor.")]
+    private static void EnsureDefaultStyleRegistration<T>() where T : Control
+        => RuntimeHelpers.RunClassConstructor(typeof(T).TypeHandle);
 
     /// <summary>
     /// Gets the target control type this style applies to.

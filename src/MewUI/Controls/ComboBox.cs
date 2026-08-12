@@ -9,6 +9,11 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public sealed partial class ComboBox : DropDownBase, ISelector, IIndexedSelector
 {
+    static ComboBox() { }
+
+    private static readonly bool _popupStyleRegistered =
+        FrameworkNamedStyles.Register("combobox-popup", BuiltInStyles.CreateComboBoxPopupStyle);
+
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<ComboBox>(nameof(SelectedIndex), -1,
             MewPropertyOptions.BindsTwoWayByDefault,

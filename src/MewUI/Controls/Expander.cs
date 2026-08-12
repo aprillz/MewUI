@@ -6,8 +6,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A control with a clickable header that expands/collapses its content.
 /// </summary>
-public class Expander : HeaderedContentControl, IVisualTreeHost
+public partial class Expander : HeaderedContentControl, IVisualTreeHost
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Expander>(DefaultStyles.CreateExpanderStyle);
+
     public static readonly MewProperty<bool> IsExpandedProperty =
         MewProperty<bool>.Register<Expander>(nameof(IsExpanded), true,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsVisualState | MewPropertyOptions.BindsTwoWayByDefault,

@@ -1,3 +1,4 @@
+#if DEBUG
 using System.Reflection;
 
 using Aprillz.MewUI;
@@ -120,3 +121,4 @@ public sealed class TracingPlatformHostTests
         public void Dispose() { }
     }
 }
+#endif

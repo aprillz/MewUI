@@ -6,9 +6,14 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for all controls.
 /// </summary>
-public abstract class Control : TextElement
+public abstract partial class Control : TextElement
     , IVisualTreeHost
 {
+    static Control() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Control>(DefaultStyles.CreateControlBaseStyle);
+
     #region MewProperty Declarations
 
     /// <summary>Background color property.</summary>
@@ -581,7 +586,7 @@ public abstract class Control : TextElement
             var type = GetType();
             while (type != null && type != typeof(UIElement))
             {
-                resolved = Style.ForType(type);
+                resolved = DefaultStyles.GetStyle(type);
                 if (resolved != null) break;
                 type = type.BaseType;
             }

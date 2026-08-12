@@ -9,6 +9,11 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 public partial class ListBox : ScrollableItemsBase, IVirtualizedTabNavigationHost, ISelector, IIndexedSelector, IMultiSelector
 {
+    static ListBox() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ListBox>(DefaultStyles.CreateListBoxStyle);
+
     public static readonly MewProperty<int> SelectedIndexProperty =
         MewProperty<int>.Register<ListBox>(nameof(SelectedIndex), -1,
             MewPropertyOptions.BindsTwoWayByDefault,

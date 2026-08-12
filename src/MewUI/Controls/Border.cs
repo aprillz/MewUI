@@ -5,8 +5,13 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// WPF-like decorator that draws background/border and hosts a single child element.
 /// </summary>
-public sealed class Border : Control, IVisualTreeHost, ILogicalTreeHost
+public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
 {
+    static Border() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Border>(DefaultStyles.CreateBorderStyle);
+
     private PathGeometry? _cachedOuterPath;
     private PathGeometry? _cachedBgPath;
 

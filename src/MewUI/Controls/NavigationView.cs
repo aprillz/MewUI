@@ -11,8 +11,13 @@ namespace Aprillz.MewUI.Controls;
 /// collapses/expands the inline pane between Expanded and Compact. In Minimal the top-bar hamburger opens
 /// the pane as an overlay flyout (item pick or outside click dismisses it).
 /// </summary>
-public sealed class NavigationView : Control, IVisualTreeHost
+public sealed partial class NavigationView : Control, IVisualTreeHost
 {
+    static NavigationView() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<NavigationView>(DefaultStyles.CreateNavigationViewStyle);
+
     // One square slot size shared by the item height, the compact rail width, the Minimal top bar, and the
     // toggle, so compact rows are square and the hamburger has an identical footprint across modes.
     private const double CompactSlot = 40;

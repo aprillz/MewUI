@@ -5,8 +5,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A slider control for selecting a numeric value within a range.
 /// </summary>
-public sealed class Slider : RangeBase
+public sealed partial class Slider : RangeBase
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<Slider>(DefaultStyles.CreateSliderStyle);
+
     private bool _isDragging;
 
     public static readonly MewProperty<Color> ThumbBrushProperty =

@@ -8,8 +8,15 @@ namespace Aprillz.MewUI;
 /// Managed file/folder dialog prototype (pure MewUI). 2-panel: places sidebar + breadcrumb + file list.
 /// Shown synchronously via <see cref="Window.ShowDialog"/>; result read from <see cref="Accepted"/>/<see cref="SelectedPaths"/>.
 /// </summary>
-internal sealed class ManagedFileDialogWindow : Window
+internal sealed partial class ManagedFileDialogWindow : Window
 {
+    static ManagedFileDialogWindow() { }
+
+    private static readonly bool _nullTextBoxStyleRegistered =
+        FrameworkNamedStyles.Register("null-textbox", FileDialogStyles.CreateNullTextBoxStyle);
+    private static readonly bool _addressBarStyleRegistered =
+        FrameworkNamedStyles.Register("address-bar", FileDialogStyles.CreateAddressBarStyle);
+
     private readonly FileDialogMode _mode;
     private readonly FileSystemBrowser _browser = new();
     private readonly List<FileFilter> _filters;
@@ -834,14 +841,13 @@ internal static class FileDialogStyles
 
     internal static void Register(StyleSheet sheet)
     {
-        sheet.Define(NullTextBox, () => Style.DeriveFromDefault<TextBox>(
-            setters:
-            [
-                Setter.Create(Control.BorderThicknessProperty, 0.0),
-                Setter.Create(Control.BackgroundProperty,  Color.Transparent),
-            ]));
+        sheet.Define(NullTextBox, CreateNullTextBoxStyle);
 
-        sheet.Define(AddressBar, () => new Style(typeof(ContentControl))
+        sheet.Define(AddressBar, CreateAddressBarStyle);
+    }
+
+    internal static Style CreateAddressBarStyle() =>
+        new(typeof(ContentControl))
         {
             Transitions = [Transition.Create(Control.BorderBrushProperty)],
             Setters =
@@ -860,6 +866,17 @@ internal static class FileDialogStyles
                     Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
                 },
             ],
-        });
+        };
+
+    internal static Style CreateNullTextBoxStyle()
+    {
+        DefaultStyles.EnsureRegistered<Control>(DefaultStyles.CreateControlBaseStyle);
+        DefaultStyles.EnsureRegistered<TextBase>(DefaultStyles.CreateTextBaseStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(TextBox),
+            setters:
+            [
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.BackgroundProperty, Color.Transparent),
+            ]);
     }
 }

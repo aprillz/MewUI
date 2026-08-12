@@ -5,8 +5,13 @@ using Aprillz.MewUI.Text;
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>Read-only, virtualized text surface for syntax and diagnostic extensions.</summary>
-public sealed class SyntaxViewer : Control, IVisualTreeHost, ITextViewHost
+public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHost
 {
+    static SyntaxViewer() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<SyntaxViewer>(DefaultStyles.CreateSyntaxViewerStyle);
+
     public static readonly MewProperty<string> TextProperty =
         MewProperty<string>.Register<SyntaxViewer>(nameof(Text), string.Empty,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,

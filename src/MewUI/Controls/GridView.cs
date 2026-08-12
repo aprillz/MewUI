@@ -3,8 +3,13 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Controls;
 
-public sealed class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtualizedTabNavigationHost, ISelector, IIndexedSelector, IMultiSelector
+public sealed partial class GridView : ScrollableItemsBase, IFocusIntoViewHost, IVirtualizedTabNavigationHost, ISelector, IIndexedSelector, IMultiSelector
 {
+    static GridView() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<GridView>(DefaultStyles.CreateGridViewStyle);
+
     public static readonly MewProperty<bool> ZebraStripingProperty =
         MewProperty<bool>.Register<GridView>(nameof(ZebraStriping), true, MewPropertyOptions.AffectsRender);
 

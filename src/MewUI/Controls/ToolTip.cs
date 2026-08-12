@@ -6,8 +6,11 @@ namespace Aprillz.MewUI.Controls;
 /// A tooltip popup control. Content is set via <see cref="ContentControl.Content"/>.
 /// For simple text tooltips, use the <c>ToolTip(string)</c> extension method which creates a TextBlock.
 /// </summary>
-public sealed class ToolTip : ContentControl
+public sealed partial class ToolTip : ContentControl
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ToolTip>(DefaultStyles.CreateToolTipStyle);
+
     static ToolTip()
     {
         IsHitTestVisibleProperty.OverrideDefaultValue<ToolTip>(false);

@@ -18,6 +18,8 @@ public sealed class StyleSheet
     private (Type Type, Style Style)[]? _frozenTypeRules;
     private bool _isFrozen;
 
+    internal bool UsesFrameworkNamedStyles { get; init; }
+
     /// <summary>Gets whether this sheet has been frozen for live style lookup.</summary>
     public bool IsFrozen
     {
@@ -119,7 +121,8 @@ public sealed class StyleSheet
                 failure.Throw();
             }
 
-            if (!_namedStyleFactories.TryGetValue(name, out var factory))
+            if (!_namedStyleFactories.TryGetValue(name, out var factory) &&
+                (!UsesFrameworkNamedStyles || !FrameworkNamedStyles.TryGetFactory(name, out factory)))
             {
                 return null;
             }
@@ -132,6 +135,11 @@ public sealed class StyleSheet
 
             try
             {
+                if (factory is null)
+                {
+                    return null;
+                }
+
                 style = factory() ?? throw new InvalidOperationException(
                     $"Named style factory '{name}' returned null.");
                 if (_isFrozen)

@@ -7,8 +7,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A hierarchical tree view control with expand/collapse functionality.
 /// </summary>
-public sealed class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost, ISelector, IMultiSelector
+public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocusIntoViewHost, IVirtualizedTabNavigationHost, ISelector, IMultiSelector
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<TreeView>(DefaultStyles.CreateTreeViewStyle);
+
     private readonly FixedHeightItemsPresenter _presenter;
     private readonly ScrollViewer _scrollViewer;
     private uint _itemBindingGeneration;

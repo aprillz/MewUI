@@ -6,8 +6,13 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Tab header presenter used by <see cref="TabControl"/> to render and interact with individual tab headers.
 /// </summary>
-internal sealed class TabHeaderButton : ContentControl
+internal sealed partial class TabHeaderButton : ContentControl
 {
+    static TabHeaderButton() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<TabHeaderButton>(DefaultStyles.CreateTabHeaderButtonStyle);
+
     private TabPlacement _placement;
 
     public static readonly MewProperty<bool> IsSelectedProperty =

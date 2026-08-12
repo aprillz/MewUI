@@ -13,8 +13,11 @@ namespace Aprillz.MewUI.Controls;
 /// </summary>
 // Rebuilt hierarchy (agent/textBase/plan.md). Text-surface exposure is deferred to leaves:
 // the base owns document/session/IME/clipboard machinery but no public Text/SelectedText.
-public abstract class TextBase : Control, ITextCompositionClient, ITextCompositionEditor, ITextInputClient
+public abstract partial class TextBase : Control, ITextCompositionClient, ITextCompositionEditor, ITextInputClient
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<TextBase>(DefaultStyles.CreateTextBaseStyle);
+
     public static readonly MewProperty<ImeMode> ImeModeProperty =
         MewProperty<ImeMode>.Register<TextBase>(nameof(ImeMode), ImeMode.Auto);
 

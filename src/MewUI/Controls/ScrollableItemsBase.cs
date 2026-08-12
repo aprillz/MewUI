@@ -5,8 +5,11 @@ namespace Aprillz.MewUI.Controls;
 /// <see cref="IItemsPresenter"/> and provides item-binding generation, deferred scroll-into-view,
 /// a pending tab-focus helper, and shared list chrome. Virtualization is a presenter concern, not this base.
 /// </summary>
-public abstract class ScrollableItemsBase : Control, ISubtreeInvalidationHost
+public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidationHost
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ScrollableItemsBase>(DefaultStyles.CreateScrollableItemsBaseStyle);
+
     protected readonly ScrollViewer _scrollViewer;
 
     /// <summary>

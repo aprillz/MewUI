@@ -6,8 +6,11 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A progress bar control for displaying completion percentage.
 /// </summary>
-public sealed class ProgressBar : RangeBase
+public sealed partial class ProgressBar : RangeBase
 {
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ProgressBar>(DefaultStyles.CreateProgressBarStyle);
+
     public static readonly MewProperty<bool> IsIndeterminateProperty =
         MewProperty<bool>.Register<ProgressBar>(
             nameof(IsIndeterminate),
