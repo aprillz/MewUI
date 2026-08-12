@@ -10,19 +10,19 @@
     <Project Path="src/MewUI.Concept/MewUI.Concept.csproj" />
   </Folder>
   <Folder Name="/samples/">
-    <Project Path="samples/MewUI.MewDock.Sample/MewUI.MewDock.Sample.csproj" />
     <Project Path="samples/MewUI.Concept/MewUI.Concept.csproj" />
     <Project Path="samples/MewUI.Gallery/MewUI.Gallery.csproj" />
     <Project Path="samples/MewUI.ImeTest/MewUI.ImeTest.csproj" />
-    <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
-    <Project Path="samples/MewUI.MewvalonEdit.Sample/MewUI.MewvalonEdit.Sample.csproj" />
     <Project Path="samples/MewUI.MewCharts.Sample/MewUI.MewCharts.Sample.csproj" />
+    <Project Path="samples/MewUI.MewDock.Sample/MewUI.MewDock.Sample.csproj" />
+    <Project Path="samples/MewUI.MewvalonEdit.Sample/MewUI.MewvalonEdit.Sample.csproj" />
+    <Project Path="samples/MewUI.Sample/MewUI.Sample.csproj" />
     <Project Path="samples/MewUI.Skia.Sample/MewUI.Skia.Sample.csproj" />
     <Project Path="samples/MewUI.Svg.Sample/MewUI.Svg.Sample.csproj" />
     <Project Path="samples/MewUI.TaskManager.Sample/MewUI.TaskManager.Sample.csproj" />
     <Project Path="samples/MewUI.Video.Sample/MewUI.Video.Sample.csproj" />
-    <Project Path="samples/MewUI.Windowless.Sample/MewUI.Windowless.Sample.csproj" />
     <Project Path="samples/MewUI.WebView2.Win32.Sample/MewUI.WebView2.Win32.Sample.csproj" />
+    <Project Path="samples/MewUI.Windowless.Sample/MewUI.Windowless.Sample.csproj" />
     <Project Path="samples/MewUI.WriteableBitmapSample/MewUI.WriteableBitmapSample.csproj" />
   </Folder>
   <Folder Name="/src/">
@@ -40,9 +40,9 @@
     <Project Path="src/MewUI/MewUI.csproj" />
   </Folder>
   <Folder Name="/extensions/">
-    <Project Path="extensions/MewUI.MewvalonEdit/MewUI.MewvalonEdit.csproj" />
     <Project Path="extensions/MewUI.MewCharts/MewUI.MewCharts.csproj" />
     <Project Path="extensions/MewUI.MewDock/MewUI.MewDock.csproj" />
+    <Project Path="extensions/MewUI.MewvalonEdit/MewUI.MewvalonEdit.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.Direct2D/MewUI.Skia.Interop.Direct2D.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.Gdi/MewUI.Skia.Interop.Gdi.csproj" />
     <Project Path="extensions/MewUI.Skia.Interop.MewVG.MacOS/MewUI.Skia.Interop.MewVG.MacOS.csproj" />
@@ -68,12 +68,12 @@
     <Project Path="meta/MewUI.Windows/MewUI.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj" />
     <Project Path="tests/Aprillz.MewUI.Benchmarks/Aprillz.MewUI.Benchmarks.csproj" />
+    <Project Path="tests/Aprillz.MewUI.Test/Aprillz.MewUI.Test.csproj" />
+    <Project Path="tests/MewUI.Analyzers.Test/MewUI.Analyzers.Test.csproj" />
     <Project Path="tests/MewUI.Generators.Test/MewUI.Generators.Test.csproj" />
     <Project Path="tests/MewUI.GraphicsBackendTest/MewUI.GraphicsBackendTest.csproj" />
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
-    <Project Path="tests/Aprillz.MewUI.Test/Aprillz.MewUI.Test.csproj" />
     <Project Path="tests/MewUI.MewvalonEdit.Test/MewUI.MewvalonEdit.Test.csproj" />
     <Project Path="tests/MewUI.TextBoxPerformance/MewUI.TextBoxPerformance.csproj" />
   </Folder>
