@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 using Aprillz.MewUI.Controls;
 
@@ -132,6 +133,83 @@ internal sealed class InpcBindingPathSegment<TSource, TValue>(
 
     public void Write(object endpoint, object? value)
         => setter!((TSource)endpoint, (TValue)value!);
+}
+
+internal sealed class IndexedBindingPathSegment<TSource, TValue>(
+    Func<TSource, TValue> getter) : IBindingPathSegment
+    where TSource : class
+{
+    public bool IsObservable => true;
+
+    public bool CanWrite => false;
+
+    public BindingPathSegmentValue Attach(object owner, BindingPathSubscription? subscription)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+
+        // A collection reports every change through one event, so re-reading the index is both
+        // simpler and cheaper than deciding whether this index moved.
+        if (owner is INotifyCollectionChanged collection)
+        {
+            WeakEventManager.AddHandler<INotifyCollectionChanged, BindingPathSubscription>(
+                CollectionWeakEvents.CollectionChanged,
+                collection,
+                subscription,
+                static (value, _, _) => value.OnChanged());
+        }
+        else if (owner is INotifyPropertyChanged notifier)
+        {
+            WeakEventManager.AddIndexerHandler<INotifyPropertyChanged, BindingPathSubscription>(
+                InpcWeakEvents.PropertyChanged,
+                notifier,
+                subscription,
+                static value => value.OnChanged());
+        }
+
+        return new BindingPathSegmentValue(Read(owner), owner);
+    }
+
+    public object? Read(object endpoint)
+    {
+        // An index that no longer exists makes the path unavailable rather than faulted, so the
+        // binding falls back instead of reporting an error.
+        try
+        {
+            return getter((TSource)endpoint);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return null;
+        }
+        catch (KeyNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    public void Detach(object endpoint, BindingPathSubscription subscription)
+    {
+        if (endpoint is INotifyCollectionChanged collection)
+        {
+            WeakEventManager.RemoveHandler(
+                CollectionWeakEvents.CollectionChanged, collection, subscription);
+        }
+        else if (endpoint is INotifyPropertyChanged notifier)
+        {
+            WeakEventManager.RemoveHandler(
+                InpcWeakEvents.PropertyChanged, notifier, subscription);
+        }
+    }
+
+    public void ValidateWrite(object endpoint, object? value)
+        => throw new InvalidOperationException("An indexed path segment is not writable.");
+
+    public void Write(object endpoint, object? value)
+        => throw new InvalidOperationException("An indexed path segment is not writable.");
 }
 
 internal sealed class MewPropertyBindingPathSegment<TOwner, TValue> : IBindingPathSegment

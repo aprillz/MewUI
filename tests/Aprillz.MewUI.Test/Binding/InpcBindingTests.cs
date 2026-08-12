@@ -172,6 +172,113 @@ public sealed class InpcBindingTests
     }
 
     [TestMethod]
+    public void IndexedSegment_FollowsElementReplacement()
+    {
+        var source = new CollectionViewModel();
+        source.Items.Add("first");
+        var target = new TestObject();
+
+        target.SetBinding(TestObject.TextProperty, source, CreateFirstItemPath(), BindingMode.OneWay, fallbackValue: string.Empty);
+        Assert.AreEqual("first", target.Text);
+
+        source.Items[0] = "replaced";
+
+        Assert.AreEqual("replaced", target.Text);
+    }
+
+    [TestMethod]
+    public void IndexedSegment_FollowsInsertionAndRemoval()
+    {
+        var source = new CollectionViewModel();
+        source.Items.Add("first");
+        var target = new TestObject();
+
+        target.SetBinding(TestObject.TextProperty, source, CreateFirstItemPath(), BindingMode.OneWay, fallbackValue: string.Empty);
+
+        source.Items.Insert(0, "inserted");
+        Assert.AreEqual("inserted", target.Text);
+
+        source.Items.RemoveAt(0);
+        Assert.AreEqual("first", target.Text);
+    }
+
+    [TestMethod]
+    public void IntermediateIndex_UsesFallbackWhenOutOfRange()
+    {
+        var source = new CollectionViewModel();
+        source.Items.Add("first");
+        var target = new TestObject();
+        var path = BindingPath
+            .From<CollectionViewModel>()
+            .ThenNotifying(static value => value.Items)
+            .ThenIndexed(static value => value[0])
+            .Then(static value => value.Length);
+
+        target.SetBinding(TestObject.ValueProperty, source, path, BindingMode.OneWay, fallbackValue: -1);
+        Assert.AreEqual(5, target.Value);
+
+        source.Items.Clear();
+        Assert.AreEqual(-1, target.Value);
+
+        source.Items.Add("back");
+        Assert.AreEqual(4, target.Value);
+    }
+
+    [TestMethod]
+    public void LeafIndex_ReadsAsNullWhenOutOfRange()
+    {
+        // The observer treats a null from the last segment as the source value, so fallbackValue
+        // does not apply there.
+        var source = new CollectionViewModel();
+        source.Items.Add("first");
+        var target = new TestObject();
+
+        target.SetBinding(
+            TestObject.TextProperty,
+            source,
+            CreateFirstItemPath(),
+            BindingMode.OneWay,
+            fallbackValue: "(empty)");
+
+        source.Items.Clear();
+        Assert.IsNull(target.Text);
+
+        source.Items.Add("back");
+        Assert.AreEqual("back", target.Text);
+    }
+
+    [TestMethod]
+    public void IndexedSegment_ObservesAnIndexerOnlyNotifier()
+    {
+        var source = new SettingsViewModel();
+        var target = new TestObject();
+        var path = BindingPath
+            .From<SettingsViewModel>()
+            .ThenNotifying(static value => value.Entries)
+            .ThenIndexed(static value => value["theme"]);
+
+        target.SetBinding(TestObject.TextProperty, source, path, BindingMode.OneWay, fallbackValue: string.Empty);
+        Assert.AreEqual(string.Empty, target.Text);
+
+        source.Entries["theme"] = "dark";
+
+        Assert.AreEqual("dark", target.Text);
+    }
+
+    [TestMethod]
+    public void IndexedSegment_DoesNotKeepTargetAlive()
+    {
+        var source = new CollectionViewModel();
+        source.Items.Add("first");
+        var targetReference = CreateIndexedBinding(source);
+
+        Collect(targetReference);
+
+        Assert.IsFalse(targetReference.IsAlive);
+        source.Items[0] = "replaced";
+    }
+
+    [TestMethod]
     public void MultiStepGetter_IsRejected()
     {
         Assert.ThrowsExactly<ArgumentException>(() =>
@@ -257,6 +364,20 @@ public sealed class InpcBindingTests
         Assert.IsFalse(oldProfileReference.IsAlive);
         GC.KeepAlive(source);
         GC.KeepAlive(target);
+    }
+
+    private static BindingPath<CollectionViewModel, string> CreateFirstItemPath()
+        => BindingPath
+            .From<CollectionViewModel>()
+            .ThenNotifying(static value => value.Items)
+            .ThenIndexed(static value => value[0]);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference CreateIndexedBinding(CollectionViewModel source)
+    {
+        var target = new TestObject();
+        target.SetBinding(TestObject.TextProperty, source, CreateFirstItemPath(), BindingMode.OneWay, fallbackValue: string.Empty);
+        return new WeakReference(target);
     }
 
     private static BindingPath<PersonViewModel, string> CreateDisplayNamePath()
@@ -385,5 +506,29 @@ public sealed class InpcBindingTests
     private sealed class CollectionViewModel : NotifyingObject
     {
         public ObservableCollection<string> Items { get; } = [];
+    }
+
+    private sealed class SettingsViewModel : NotifyingObject
+    {
+        public SettingsMap Entries { get; } = new();
+    }
+
+    /// <summary>
+    /// An indexer owner that reports changes the way the framework convention expects, without
+    /// implementing INotifyCollectionChanged.
+    /// </summary>
+    private sealed class SettingsMap : NotifyingObject
+    {
+        private readonly Dictionary<string, string> _values = [];
+
+        public string this[string key]
+        {
+            get => _values.TryGetValue(key, out var value) ? value : string.Empty;
+            set
+            {
+                _values[key] = value;
+                RaisePropertyChanged("Item[]");
+            }
+        }
     }
 }

@@ -90,6 +90,28 @@ public static class MewPropertyBindingPathExtensions
 }
 
 /// <summary>
+/// Adds indexed segments to binding paths whose current owner exposes an indexer.
+/// </summary>
+public static class IndexedBindingPathExtensions
+{
+    /// <summary>
+    /// Appends a segment that reads an indexer and observes the owner's collection change or
+    /// indexer change notifications. An index that no longer exists makes the path unavailable
+    /// rather than faulted. The segment is read-only.
+    /// </summary>
+    public static BindingPath<TRoot, TNext> ThenIndexed<TRoot, TOwner, TNext>(
+        this BindingPath<TRoot, TOwner> path,
+        Func<TOwner, TNext> getter)
+        where TRoot : class
+        where TOwner : class
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(getter);
+        return path.Append<TNext>(new IndexedBindingPathSegment<TOwner, TNext>(getter));
+    }
+}
+
+/// <summary>
 /// Adds <see cref="INotifyPropertyChanged"/> segments to binding paths whose current owner raises
 /// property change notifications.
 /// </summary>

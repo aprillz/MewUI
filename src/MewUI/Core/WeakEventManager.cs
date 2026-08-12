@@ -92,7 +92,24 @@ internal static class WeakEventManager
         Validate(eventKey, source, target, invoke);
         ArgumentException.ThrowIfNullOrEmpty(propertyName);
         Add(source, new PropertyChangedRegistration<TSource, TTarget>(
-            eventKey, source, target, propertyName, invoke));
+            eventKey, source, target, propertyName, matchPrefix: false, invoke));
+    }
+
+    /// <summary>
+    /// Subscribes to indexer change notifications, which name the property <c>Item[]</c> for every
+    /// indexer or <c>Item[0]</c> for one.
+    /// </summary>
+    internal static void AddIndexerHandler<TSource, TTarget>(
+        WeakEventKey<TSource, PropertyChangedEventHandler> eventKey,
+        TSource source,
+        TTarget target,
+        Action<TTarget> invoke)
+        where TSource : class
+        where TTarget : class
+    {
+        Validate(eventKey, source, target, invoke);
+        Add(source, new PropertyChangedRegistration<TSource, TTarget>(
+            eventKey, source, target, "Item[", matchPrefix: true, invoke));
     }
 
     internal static void RemoveHandler<TSource, THandler, TTarget>(
@@ -421,6 +438,7 @@ internal static class WeakEventManager
         where TTarget : class
     {
         private readonly string _propertyName;
+        private readonly bool _matchPrefix;
         private readonly Action<TTarget> _invoke;
         private readonly PropertyChangedEventHandler _handler;
 
@@ -429,10 +447,12 @@ internal static class WeakEventManager
             TSource source,
             TTarget target,
             string propertyName,
+            bool matchPrefix,
             Action<TTarget> invoke)
             : base(eventKey, source, target)
         {
             _propertyName = propertyName;
+            _matchPrefix = matchPrefix;
             _invoke = invoke;
             _handler = OnEvent;
         }
@@ -445,8 +465,7 @@ internal static class WeakEventManager
             {
                 // A null or empty name is the conventional "every property changed" signal.
                 string? changedName = args.PropertyName;
-                if (string.IsNullOrEmpty(changedName) ||
-                    string.Equals(changedName, _propertyName, StringComparison.Ordinal))
+                if (string.IsNullOrEmpty(changedName) || Matches(changedName!))
                 {
                     _invoke(target);
                 }
@@ -456,6 +475,11 @@ internal static class WeakEventManager
                 RemoveDeadTarget();
             }
         }
+
+        private bool Matches(string changedName)
+            => _matchPrefix
+                ? changedName.StartsWith(_propertyName, StringComparison.Ordinal)
+                : string.Equals(changedName, _propertyName, StringComparison.Ordinal);
     }
 }
 
