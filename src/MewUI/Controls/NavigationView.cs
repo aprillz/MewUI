@@ -513,7 +513,7 @@ public sealed partial class NavigationView : Control, IVisualTreeHost
             return;
         }
         double x = _paneRect.Right;
-        context.DrawLine(new Point(x, _paneRect.Top), new Point(x, _paneRect.Bottom), Theme.Palette.ControlBorder, 1.0, true);
+        context.DrawLine(new Point(x, _paneRect.Top), new Point(x, _paneRect.Bottom), Theme.Palette.ControlBorder, Theme.Metrics.ControlBorderThickness, true);
     }
 
     protected override UIElement? OnHitTest(Point point)
