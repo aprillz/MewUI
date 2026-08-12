@@ -163,14 +163,30 @@ INPC 소스의 getter는 **멤버 하나만** 읽어야 합니다. 구독할 속
 소스 타입과 대상 타입이 다르면 `convert`를 넘깁니다. TwoWay에는 `convertBack`도 필요합니다.
 
 ```csharp
+// 숫자를 표시 문자열로
 new Label().Bind(Label.TextProperty, vm,
     x => x.Temperature,
     value => $"{value:0.0} C");
 
+// bool 반전. 로딩 중에는 결과 영역을 숨깁니다
+results.Bind(UIElement.IsVisibleProperty, vm,
+    x => x.IsLoading,
+    loading => !loading);
+
+// 값의 유무를 표시 여부로
+banner.Bind(UIElement.IsVisibleProperty, vm,
+    x => x.ErrorMessage,
+    message => !string.IsNullOrEmpty(message));
+
+// 양방향에는 convertBack이 필요합니다
 textBox.Bind(TextBase.TextProperty, intSource,
     convert: i => i.ToString(),
     convertBack: s => int.TryParse(s, out var v) ? v : 0);
 ```
+
+`ObservableValue`가 소스이고 대상이 표시/활성화 상태라면 `BindIsVisible(source, convert)`와 `BindIsEnabled(source, convert)` 단축 메서드도 같은 일을 합니다.
+
+WPF에서 `BooleanToVisibilityConverter`나 그 역변환 클래스를 따로 만들던 자리가 여기서는 람다 한 줄입니다. 변환기 클래스를 정의하고 리소스에 등록하는 단계가 없습니다.
 
 계산은 전부 `convert`에서 합니다. getter에 계산을 넣으면 무엇을 구독해야 할지 판정할 수 없습니다.
 
