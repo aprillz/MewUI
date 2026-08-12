@@ -64,7 +64,7 @@ for ($section = 0; $section -lt $samples.Count; $section++) {
 }
 [void]$svg.AppendLine('</g></svg>')
 
-$outputs = @{$imagePath = $svg.ToString()}
+$outputs = @{$imagePath = $svg.ToString().Replace("`r`n", "`n")}
 
 $stale = @()
 foreach ($output in $outputs.GetEnumerator()) {
