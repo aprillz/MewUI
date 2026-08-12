@@ -48,7 +48,7 @@ public enum BindingMode
 
 기본 모드는 대상 속성이 정합니다. 입력 속성(`TextBox.TextProperty` 등)은 TwoWay, 표시 속성(`Label.TextProperty` 등)은 OneWay입니다. 명시적으로 `mode`를 넘기면 그 값이 우선합니다.
 
-TwoWay로 해석됐는데 소스에 쓸 수단이 없으면(setter 미지정, 읽기 전용 리프) OneWay로 내려갑니다. 경로 바인딩은 예외이며, 조용히 내려가지 않고 예외를 던집니다.
+TwoWay로 해석됐는데 소스에 쓸 수단이 없을 때의 처리는 API마다 다릅니다. `ObservableValue` 변환 바인딩은 `convertBack`이 없으면 OneWay가 됩니다. **INPC 소스와 경로 바인딩은 예외를 던집니다.** 입력 컨트롤이 조용히 단방향이 되는 것보다 즉시 알려주는 편이 낫기 때문입니다.
 
 ---
 
@@ -79,7 +79,7 @@ percent.Value = -10;  // 0
 
 ### 2.2 INotifyPropertyChanged 뷰모델
 
-평범한 속성을 가진 뷰모델도 `INotifyPropertyChanged`를 구현하면 그대로 소스가 됩니다. 구독은 약참조라 오래 사는 뷰모델이 화면을 살려두지 않습니다.
+평범한 속성을 가진 뷰모델도 `INotifyPropertyChanged`를 구현하면 그대로 소스가 됩니다. 구독은 약한 참조로 걸리므로, 뷰모델이 오래 유지되어도 그 때문에 화면 객체가 메모리에 남지는 않습니다.
 
 ```csharp
 sealed class UserViewModel : INotifyPropertyChanged
@@ -114,7 +114,7 @@ new ProgressBar().Bind(RangeBase.ValueProperty, slider, RangeBase.ValueProperty)
 
 `ObservableValue<T>`는 알림 코드를 대신 써주므로 **MewUI 전용 뷰모델**에 편합니다. `INotifyPropertyChanged`는 **이미 있는 MVVM 뷰모델이나 다른 프레임워크와 공유하는 모델**에 맞습니다. 둘을 한 뷰모델 안에 섞어도 되고, 4절의 한 경로 안에서 섞어도 됩니다.
 
-알림이 없는 평범한 속성은 소스가 될 수 없습니다. 값을 한 번 읽고 그대로 멈춥니다.
+알림이 없는 평범한 속성은 소스가 될 수 없습니다. 처음 값만 한 번 읽고 이후로는 갱신되지 않습니다.
 
 ---
 
@@ -141,13 +141,16 @@ new Button().BindIsVisible(isVisible).BindIsEnabled(isEnabled)
 // ObservableValue
 element.Bind(Control.BackgroundProperty, colorSource);
 
-// INotifyPropertyChanged 뷰모델, 단방향
+// INotifyPropertyChanged 뷰모델
 new Label().Bind(Label.TextProperty, vm, x => x.Name);
 
-// 양방향은 setter를 함께 넘깁니다. 생략하면 OneWay입니다.
+// 대상이 TwoWay면 그대로 양방향입니다. 되돌려 쓰는 코드는 getter 식을 보고 만듭니다.
+new TextBox().Bind(TextBox.TextProperty, vm, x => x.Name);
+
+// 쓰기 방식을 직접 정하고 싶을 때만 setter를 넘깁니다
 new TextBox().Bind(TextBox.TextProperty, vm,
     x => x.Name,
-    (owner, value) => owner.Name = value);
+    (owner, value) => owner.Name = value.Trim());
 
 // 소유자를 통해 도달하는 ObservableValue. 이 오버로드는 INotifyPropertyChanged를 요구하지 않습니다.
 new Label().Bind(Label.TextProperty, settings, x => x.Caption);
@@ -155,6 +158,10 @@ new Label().Bind(Label.TextProperty, settings, x => x.Caption);
 // 다른 MewObject의 속성
 element.Bind(TextBlock.TextProperty, otherElement, Window.TitleProperty);
 ```
+
+`setter`는 선택입니다. 넘기지 않으면 getter 식을 보고 값을 되돌려 쓰는 코드를 컴파일 타임에 만듭니다. 정규화나 검증을 거쳐 쓰려면 직접 넘기고, 그때는 그쪽이 우선합니다.
+
+제너레이터가 돌지 않는 빌드(4.1절의 SDK 조건)에서는 이 합성이 없습니다. 그 경우 TwoWay 대상에 `setter` 없이 걸면 **예외가 납니다.** `setter`를 넘기거나 `mode: BindingMode.OneWay`를 명시하세요.
 
 INPC 소스의 getter는 **멤버 하나만** 읽어야 합니다. 구독할 속성 이름을 그 식에서 얻기 때문입니다. 이름과 읽는 값이 어긋날 수 없도록 이름을 직접 넘기는 매개변수는 제공하지 않습니다. 멤버를 여러 단계 지나야 하면 4절을 보세요.
 
@@ -240,13 +247,13 @@ new StackPanel()
 
 ## 4. 중첩 경로
 
-소스가 한 단계 안쪽에 있으면 경로를 씁니다. 경로는 **세그먼트의 사슬**이며, 단계마다 그 단계의 소유자를 구독합니다. 중간 객체가 통째로 교체되면 하류를 다시 연결합니다.
+소스가 한 단계 안쪽에 있으면 경로를 씁니다. 경로는 **단계별 세그먼트가 이어진 형태**이며, 단계마다 그 단계의 소유자를 구독합니다. 중간 객체가 통째로 교체되면 그 뒤의 단계를 다시 연결합니다.
 
 경로는 소스 종류를 가리지 않습니다. 한 경로 안에 `ObservableValue`, `MewProperty`, INPC 속성이 섞여도 됩니다.
 
 ### 4.1 점 표기 한 줄
 
-권장 형태입니다. 점으로 이어 쓰면 컴파일 타임에 세그먼트 사슬로 분해됩니다.
+권장 형태입니다. 점으로 이어 쓰면 컴파일 타임에 단계별 세그먼트로 분해됩니다.
 
 ```csharp
 new Label().Bind(Label.TextProperty, vm, x => x.CurrentUser.Profile.DisplayName);
@@ -286,7 +293,7 @@ new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
 
 ### 4.3 세그먼트 종류
 
-| 붙이는 방법 | 소유자 | 변경 관찰 | TwoWay 리프 |
+| 붙이는 방법 | 소유자 | 변경 관찰 | TwoWay 마지막 단계 |
 |------------|--------|-----------|-------------|
 | `Then(getter)` | 아무거나 | 안 함 | 불가능 |
 | `Then(selector)` | `ObservableValue<T>`를 내놓는 소유자 | 함 | 가능 |
@@ -294,22 +301,22 @@ new Label().Bind(Label.TextProperty, vm, DisplayNamePath, fallbackValue: "-");
 | `ThenNotifying(getter, setter?)` | `INotifyPropertyChanged` | 함 | setter를 넘기면 가능 |
 | `ThenIndexed(getter)` | 통지하는 컬렉션 또는 인덱서 | 함 | 불가능 |
 
-비관찰 `Then(getter)`은 최초 연결과 상류가 하류를 다시 만들 때만 평가합니다. getter 결과만 바뀌는 것은 알림이 없으므로 갱신되지 않습니다. 중간값이 생성 후 바뀌지 않는 경우에는 이것이 옳은 선택입니다.
+비관찰 `Then(getter)`은 처음 연결할 때와 앞 단계가 뒤쪽을 다시 만들 때만 값을 읽습니다. getter 결과만 바뀌는 것은 알림이 없으므로 갱신되지 않습니다. 중간값이 생성 후 바뀌지 않는 경우에는 이것이 옳은 선택입니다.
 
 ### 4.4 null과 fallback
 
-- 중간 값이 null이면 경로가 unavailable이 되고 `fallbackValue`를 적용합니다.
+- 중간 값이 null이면 경로를 값 없음 상태로 보고 `fallbackValue`를 씁니다.
 - 관찰 가능한 중간 값이 다시 non-null이 되면 경로를 자동으로 다시 연결합니다.
 - **마지막 세그먼트의 null은 실제 소스 값**이며 fallback으로 대체하지 않습니다.
 - selector가 null `ObservableValue`를 반환하면 잘못된 경로이므로 예외를 던집니다.
 
-관찰자는 null 소유자로 하류 selector를 호출하지 않습니다. C#은 이 런타임 보장을 제네릭 시그니처로 표현할 수 없으므로, 널 허용 중간 매개변수에는 예제처럼 `!`를 씁니다.
+소유자가 null이면 그 뒤 단계의 selector를 아예 호출하지 않습니다. C#은 이 런타임 보장을 제네릭 시그니처로 표현할 수 없으므로, 널 허용 중간 매개변수에는 예제처럼 `!`를 씁니다.
 
 ### 4.5 TwoWay 경로
 
 마지막 세그먼트가 쓰기 가능해야 합니다. 4.3 표의 마지막 열을 보세요. 변환 TwoWay 경로에는 `convertBack`이 필요하며, **경로 바인딩은 OneWay로 조용히 내려가지 않고 예외를 던집니다.**
 
-경로가 unavailable인 동안 대상 변경은 보관하지 않습니다. 다시 연결되면 현재 소스 값이 fallback이나 임시 값을 덮어씁니다.
+경로가 값 없음 상태인 동안에는 대상에서 바뀐 값을 담아두지 않습니다. 다시 연결되면 현재 소스 값이 fallback이나 임시 값을 덮어씁니다.
 
 ### 4.6 컬렉션
 
@@ -333,7 +340,7 @@ BindingPath.From<AppViewModel>()
 
 점 표기에서는 **선언된 정적 타입**으로 관찰 여부가 정해집니다. `IReadOnlyList<T>`로 선언된 속성은 실제 인스턴스가 `ObservableCollection<T>`여도 관찰 세그먼트가 되지 않습니다. `ThenIndexed`를 직접 쓰면 실제 인스턴스를 보므로 그 제한이 없습니다.
 
-인덱스가 범위를 벗어나면 경로가 unavailable이 되어 `fallbackValue`가 적용됩니다. 인덱서가 마지막 세그먼트면 4.4의 규칙대로 null이 실제 값으로 전달됩니다.
+인덱스가 범위를 벗어나면 경로가 값 없음 상태가 되어 `fallbackValue`를 씁니다. 인덱서가 마지막 세그먼트면 4.4의 규칙대로 null이 실제 값으로 전달됩니다.
 
 **목록 화면 자체는 `ItemsSource`를 쓰세요.** 항목 추가와 삭제는 목록 컨트롤이 직접 관찰합니다. 경로의 인덱서는 "특정 위치의 항목 하나"를 볼 때 쓰는 것입니다.
 
@@ -350,7 +357,7 @@ BindingPath.From<AppViewModel>()
 
 ## 5. 여러 소스 결합
 
-하나의 표시 값이 소스 둘 이상에 의존하면 경로로 표현할 수 없습니다. 경로는 한 단계에 구독 하나인 사슬이기 때문입니다. **뷰모델이 결합해서 알리는 것**이 답입니다.
+하나의 표시 값이 소스 둘 이상에 의존하면 경로로 표현할 수 없습니다. 경로는 한 단계에 구독이 하나씩만 붙기 때문입니다. **뷰모델이 결합해서 알리는 것**이 답입니다.
 
 ```csharp
 // 좋음: 뷰모델이 FullName을 계산해 알리고, 뷰는 하나만 봅니다
@@ -376,7 +383,7 @@ new Label()
 
 ## 6. 수명과 메모리
 
-관찰하는 세그먼트는 모두 약구독입니다. 오래 사는 소스가 대상을 살려두지 않습니다. 반대로 대상은 활성 바인딩을 소유하므로 `ClearBinding`, 대상 dispose, `TemplateContext.Reset` 전까지 루트와 현재 경로 객체를 유지합니다.
+관찰하는 세그먼트는 모두 약한 참조로 구독합니다. 소스가 오래 유지되어도 그 때문에 대상이 메모리에 남지는 않습니다. 반대 방향은 성립하지 않습니다. 대상이 바인딩을 소유하므로 `ClearBinding`, 대상 dispose, `TemplateContext.Reset` 중 하나가 일어나기 전까지는 대상이 루트와 경로 객체를 함께 붙잡고 있습니다.
 
 바인딩은 컨트롤이 dispose될 때 자동으로 정리됩니다.
 
@@ -450,8 +457,8 @@ counter.Unsubscribe(OnChanged);
 |--------|------|------|
 | `Bind(MewProperty<T>, ObservableValue<T>)` | 기본 | 직접 |
 | `Bind(MewProperty<TProp>, ObservableValue<TSource>, convert, convertBack?)` | 기본 | 변환 |
-| `Bind(MewProperty<T>, TSource, getter, setter?)` | setter 있으면 양방향 | INPC 소스 (2.2절) |
-| `Bind(MewProperty<TProp>, TSource, getter, convert, setter?, convertBack?)` | 둘 다 있으면 양방향 | INPC 변환 |
+| `Bind(MewProperty<T>, TSource, getter, setter?)` | 대상 기본값 | INPC 소스 (2.2절). setter는 선택 |
+| `Bind(MewProperty<TProp>, TSource, getter, convert, setter?, convertBack?)` | convertBack 있으면 양방향 | INPC 변환 |
 | `Bind(MewProperty<T>, TSource, Func<TSource, ObservableValue<T>>)` | 기본 | 소유자를 통해 도달하는 `ObservableValue` |
 | `Bind(MewProperty<T>, MewObject, MewProperty<T>)` | 기본 | 다른 요소의 속성 (2.3절) |
 | `Bind(MewProperty<T>, TRoot, BindingPath<TRoot, T>, mode?, fallbackValue?)` | 기본 | 경로 (4절) |

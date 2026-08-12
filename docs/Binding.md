@@ -48,7 +48,7 @@ public enum BindingMode
 
 The target property decides the default. Input properties such as `TextBox.TextProperty` default to TwoWay, display properties such as `Label.TextProperty` default to OneWay. An explicit `mode` argument wins.
 
-When a binding resolves to TwoWay but has no way to write back, such as a missing setter or a read-only leaf, it degrades to OneWay. Path bindings are the exception: they throw instead of degrading silently.
+What happens when a binding resolves to TwoWay but has no way to write back depends on the API. A converted `ObservableValue` binding without `convertBack` degrades to OneWay. **An INotifyPropertyChanged source and a path binding throw.** Telling you immediately beats leaving an input control silently one-way.
 
 ---
 
@@ -141,13 +141,16 @@ The general API works with any `MewProperty<T>`. `Bind` returns the element for 
 // ObservableValue
 element.Bind(Control.BackgroundProperty, colorSource);
 
-// INotifyPropertyChanged view model, one-way
+// INotifyPropertyChanged view model
 new Label().Bind(Label.TextProperty, vm, x => x.Name);
 
-// Two-way takes a setter as well. Without one the binding stays one-way.
+// A TwoWay target is two-way as written; the write path comes from the getter expression
+new TextBox().Bind(TextBox.TextProperty, vm, x => x.Name);
+
+// Pass a setter only to decide how the write happens
 new TextBox().Bind(TextBox.TextProperty, vm,
     x => x.Name,
-    (owner, value) => owner.Name = value);
+    (owner, value) => owner.Name = value.Trim());
 
 // An ObservableValue reached through an owner. This overload does not require INotifyPropertyChanged.
 new Label().Bind(Label.TextProperty, settings, x => x.Caption);
@@ -155,6 +158,10 @@ new Label().Bind(Label.TextProperty, settings, x => x.Caption);
 // Another element's property
 element.Bind(TextBlock.TextProperty, otherElement, Window.TitleProperty);
 ```
+
+`setter` is optional. Without one, the write path is built from the getter expression at compile time. Pass one to normalize or validate on the way in, and it takes precedence.
+
+A build where the generator does not run (see the SDK requirement in 4.1) has no such synthesis. There, binding a TwoWay target without a `setter` **throws**. Pass a `setter` or state `mode: BindingMode.OneWay`.
 
 A getter over an `INotifyPropertyChanged` source must read **exactly one member**, because the observed property name comes from that expression. No parameter is offered for passing the name directly, so the name and the value it reads cannot drift apart. To walk more than one member, see section 4.
 
@@ -450,8 +457,8 @@ counter.Unsubscribe(OnChanged);
 |--------|-----------|-------------|
 | `Bind(MewProperty<T>, ObservableValue<T>)` | Default | Direct |
 | `Bind(MewProperty<TProp>, ObservableValue<TSource>, convert, convertBack?)` | Default | Converted |
-| `Bind(MewProperty<T>, TSource, getter, setter?)` | Two-way with a setter | INotifyPropertyChanged source (2.2) |
-| `Bind(MewProperty<TProp>, TSource, getter, convert, setter?, convertBack?)` | Two-way with both | Converted INotifyPropertyChanged source |
+| `Bind(MewProperty<T>, TSource, getter, setter?)` | Target default | INotifyPropertyChanged source (2.2); setter optional |
+| `Bind(MewProperty<TProp>, TSource, getter, convert, setter?, convertBack?)` | Two-way with convertBack | Converted INotifyPropertyChanged source |
 | `Bind(MewProperty<T>, TSource, Func<TSource, ObservableValue<T>>)` | Default | `ObservableValue` reached through an owner |
 | `Bind(MewProperty<T>, MewObject, MewProperty<T>)` | Default | Another element's property (2.3) |
 | `Bind(MewProperty<T>, TRoot, BindingPath<TRoot, T>, mode?, fallbackValue?)` | Default | Path (section 4) |

@@ -157,7 +157,7 @@ Gallery는 full-featured showcase 샘플입니다. 최소 배포 크기의 기�
 ---
 ## 🔗 상태/바인딩(AOT 친화)
 
-바인딩은 리플렉션 없이, 명시적/델리게이트 기반입니다. 소스는 세 가지를 지원합니다. `ObservableValue<T>`, `INotifyPropertyChanged`를 구현한 뷰모델, 다른 요소의 `MewProperty<T>`입니다. 한 경로 안에서 섞어 써도 되고 컬렉션 변경(`INotifyCollectionChanged`)도 따라갑니다.
+바인딩은 리플렉션 없이, 명시적/델리게이트 기반입니다. 소스는 세 가지를 지원합니다. `ObservableValue<T>`, `INotifyPropertyChanged`를 구현한 뷰모델, 다른 요소의 `MewProperty<T>`입니다. 한 경로 안에 섞어 쓸 수 있고, `INotifyCollectionChanged` 알림도 받습니다.
 
 ```csharp
 var percent = new ObservableValue<double>(
@@ -173,24 +173,22 @@ var label  = new Label()
                     convert: v => $"Percent ({v:P0})"); 
 ```
 
-**INotifyPropertyChanged** - 평범한 MVVM 뷰모델을 감싸지 않고 그대로 씁니다. 구독은 약참조라 오래 사는 뷰모델이 화면을 살려두지 않습니다.
+**INotifyPropertyChanged** - 평범한 MVVM 뷰모델을 감싸지 않고 그대로 씁니다. 구독은 약한 참조로 걸리므로 뷰모델 때문에 화면 객체가 메모리에 남지 않습니다.
 
 ```csharp
 new Label().Bind(Label.TextProperty, vm, x => x.UserName);
 
-// setter를 함께 주면 TwoWay
-new TextBox().Bind(TextBox.TextProperty, vm,
-    x => x.UserName,
-    (owner, value) => owner.UserName = value);
+// TextBox는 기본이 양방향이라 입력한 값이 뷰모델에 반영됩니다
+new TextBox().Bind(TextBox.TextProperty, vm, x => x.UserName);
 ```
 
-**중첩 경로** - 점으로 이어 쓰면 컴파일 타임에 세그먼트 사슬로 분해됩니다. 문자열도 리플렉션도 없고, 중간 값이 교체되면 그 아래가 자동으로 다시 연결됩니다.
+**중첩 경로** - 점으로 이어 쓰면 컴파일 타임에 단계별 세그먼트로 분해됩니다. 문자열도 리플렉션도 없고, 중간 값이 교체되면 그 뒤 단계가 자동으로 다시 연결됩니다.
 
 ```csharp
 // order.Customer.City
 var city = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Customer.City);
 
-// 인덱서. 원소 교체와 앞쪽 삽입/삭제까지 따라갑니다
+// 인덱서. 0번 항목이 바뀌거나 앞에 항목이 추가/삭제되면 함께 갱신됩니다
 var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].ProductName);
 ```
 
