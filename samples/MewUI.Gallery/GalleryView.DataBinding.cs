@@ -317,16 +317,12 @@ partial class GalleryView
                     BindingDescription(
                         "Source: INotifyPropertyChanged viewmodel; Target: TextBox.Text; Mode: TwoWay"),
                     new TextBlock()
-                        .Text("A plain viewmodel that raises PropertyChanged binds without an ObservableValue wrapper. The subscription is weak, so the viewmodel does not keep the view alive.")
+                        .Text("A plain viewmodel that raises PropertyChanged binds without an ObservableValue wrapper. The getter alone is enough for TwoWay: the generator writes the setter from it. The subscription is weak, so the viewmodel does not keep the view alive.")
                         .TextWrapping(TextWrapping.Wrap),
                     BindingDescription("TwoWay target (edit this):"),
                     new TextBox()
                         .Width(280)
-                        .Bind(
-                            TextBox.TextProperty,
-                            viewModel,
-                            static value => value.UserName,
-                            static (owner, value) => owner.UserName = value),
+                        .Bind(TextBox.TextProperty, viewModel, value => value.UserName),
                     new TextBlock()
                         .Bind(
                             TextBlock.TextProperty,
