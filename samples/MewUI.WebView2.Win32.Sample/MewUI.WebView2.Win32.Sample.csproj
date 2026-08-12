@@ -19,4 +19,6 @@
     <ProjectReference Include="..\..\extensions\MewUI.WebView2.Win32\MewUI.WebView2.Win32.csproj" />
   </ItemGroup>
 
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
 </Project>

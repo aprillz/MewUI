@@ -35,4 +35,6 @@
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.0.0" />
   </ItemGroup>
 
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
 </Project>

@@ -25,4 +25,6 @@
     <ProjectReference Include="..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
 
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
 </Project>

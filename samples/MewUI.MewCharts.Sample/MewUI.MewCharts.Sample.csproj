@@ -49,4 +49,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\extensions\MewUI.MewCharts\MewUI.MewCharts.csproj" />
   </ItemGroup>
+
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
 </Project>

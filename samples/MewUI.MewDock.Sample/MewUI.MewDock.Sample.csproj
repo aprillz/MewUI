@@ -39,4 +39,7 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\icon\appicon.ico"  />
   </ItemGroup>
+
+  <Import Project="..\..\build\Aprillz.MewUI.targets" />
+
 </Project>
