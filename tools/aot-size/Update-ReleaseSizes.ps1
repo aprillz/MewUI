@@ -23,6 +23,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $toolProject = Join-Path $PSScriptRoot 'MewUI.ReleaseSizeTool\MewUI.ReleaseSizeTool.csproj'
 $artifactRoot = Join-Path $repoRoot '.artifacts\release-size'
 $reportRoot = Join-Path $artifactRoot 'reports'
+$windowsToolArtifacts = Join-Path $artifactRoot 'tool\windows'
 $dataPath = Join-Path $PSScriptRoot 'release-sizes.json'
 [IO.Directory]::CreateDirectory($reportRoot) | Out-Null
 
@@ -63,6 +64,7 @@ function Quote-Sh([string] $Value) {
 if ([string]::IsNullOrWhiteSpace($WslRepo)) {
     $WslRepo = Convert-ToPosixPath $repoRoot
 }
+$linuxToolArtifacts = "$WslRepo/.artifacts/release-size/tool/linux"
 if (-not $SkipMacOS) {
     if ([string]::IsNullOrWhiteSpace($MacHost)) {
         throw '-MacHost is required unless -SkipMacOS is specified.'
@@ -101,8 +103,11 @@ function Invoke-MacChecked([string] $Command) {
     Invoke-Checked ssh @('-p', $MacPort, "$MacUser@$MacHost", $Command)
 }
 
+Write-Host '[1/3] Checking synchronized sources'
+Write-Host '  Windows: computing manifest...'
 $localManifest = Invoke-Captured dotnet @(
-    'run', '--project', $toolProject, '-c', 'Release', '--',
+    'run', '--project', $toolProject, '-c', 'Release',
+    '--artifacts-path', $windowsToolArtifacts, '--',
     '--repo', $repoRoot, '--manifest-only')
 $commonProps = [xml](Get-Content (Join-Path $repoRoot 'build\MewUI.Common.props') -Raw)
 $version = $commonProps.SelectSingleNode('/Project/PropertyGroup/MewUIVersion').InnerText.Trim()
@@ -110,54 +115,74 @@ $preflight = [Collections.Generic.List[object]]::new()
 
 if (-not $SkipWindows) {
     $preflight.Add([pscustomobject]@{ Platform = 'Windows'; Manifest = $localManifest })
+    Write-Host '  Windows: ready'
 }
 
 if (-not $SkipLinux) {
+    Write-Host '  Linux: computing manifest through WSL...'
     $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    $linuxManifest = Invoke-WslCaptured "dotnet run --project $(Quote-Sh $linuxTool) -c Release -- --repo $(Quote-Sh $WslRepo) --manifest-only"
+    $linuxManifest = Invoke-WslCaptured "dotnet run --project $(Quote-Sh $linuxTool) -c Release --artifacts-path $(Quote-Sh $linuxToolArtifacts) -- --repo $(Quote-Sh $WslRepo) --manifest-only"
     $preflight.Add([pscustomobject]@{ Platform = 'Linux'; Manifest = $linuxManifest })
+    Write-Host '  Linux: ready'
 }
 
 if (-not $SkipMacOS) {
+    Write-Host '  macOS: computing manifest through SSH...'
     $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    $macManifest = Invoke-MacCaptured "$MacDotNet run --project $(Quote-Sh $macTool) -c Release -- --repo $(Quote-Sh $MacRepo) --manifest-only"
+    $macManifest = Invoke-MacCaptured "$(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$MacSandbox/tool") -- --repo $(Quote-Sh $MacRepo) --manifest-only"
     $preflight.Add([pscustomobject]@{ Platform = 'macOS'; Manifest = $macManifest })
+    Write-Host '  macOS: ready'
 }
 
 $badManifest = @($preflight | Where-Object Manifest -ne $localManifest)
 if ($badManifest.Count -ne 0) {
     throw "Synchronized source differs on: $($badManifest.Platform -join ', '). Synchronize MewUI and retry."
 }
+Write-Host '  Source manifests match.'
 
 $reports = [Collections.Generic.List[string]]::new()
+$platformCount = @($preflight).Count
+$platformIndex = 0
+Write-Host '[2/3] Measuring NativeAOT executables'
 if (-not $SkipWindows) {
+    $platformIndex++
+    Write-Host "Platform [$platformIndex/$platformCount] Windows"
     $report = Join-Path $reportRoot 'windows.json'
     Invoke-Checked dotnet @(
-        'run', '--project', $toolProject, '-c', 'Release', '--',
+        'run', '--project', $toolProject, '-c', 'Release',
+        '--artifacts-path', $windowsToolArtifacts, '--',
         '--repo', $repoRoot,
         '--output', (Join-Path $artifactRoot 'windows'),
         '--report', $report)
     $reports.Add($report)
+    Write-Host "Platform [$platformIndex/$platformCount] Windows complete"
 }
 
 if (-not $SkipLinux) {
+    $platformIndex++
+    Write-Host "Platform [$platformIndex/$platformCount] Linux"
     $linuxArtifactRoot = Convert-ToPosixPath (Join-Path $artifactRoot 'linux')
     $linuxReport = Convert-ToPosixPath (Join-Path $reportRoot 'linux.json')
     $linuxTool = "$WslRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    Invoke-WslChecked "dotnet run --project $(Quote-Sh $linuxTool) -c Release -- --repo $(Quote-Sh $WslRepo) --output $(Quote-Sh $linuxArtifactRoot) --report $(Quote-Sh $linuxReport)"
+    Invoke-WslChecked "dotnet run --project $(Quote-Sh $linuxTool) -c Release --artifacts-path $(Quote-Sh $linuxToolArtifacts) -- --repo $(Quote-Sh $WslRepo) --output $(Quote-Sh $linuxArtifactRoot) --report $(Quote-Sh $linuxReport)"
     $reports.Add((Join-Path $reportRoot 'linux.json'))
+    Write-Host "Platform [$platformIndex/$platformCount] Linux complete"
 }
 
 if (-not $SkipMacOS) {
+    $platformIndex++
+    Write-Host "Platform [$platformIndex/$platformCount] macOS"
     $remoteRoot = $MacSandbox
     $remoteReport = "$remoteRoot/report.json"
     $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
-    Invoke-MacChecked "mkdir -p $(Quote-Sh $remoteRoot) && $(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release -- --repo $(Quote-Sh $MacRepo) --output $(Quote-Sh "$remoteRoot/output") --report $(Quote-Sh $remoteReport)"
+    Invoke-MacChecked "mkdir -p $(Quote-Sh $remoteRoot) && $(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$remoteRoot/tool") -- --repo $(Quote-Sh $MacRepo) --output $(Quote-Sh "$remoteRoot/output") --report $(Quote-Sh $remoteReport)"
     $localMacReport = Join-Path $reportRoot 'macos.json'
     Invoke-Checked scp @('-P', $MacPort, "$MacUser@$MacHost`:$remoteReport", $localMacReport)
     $reports.Add($localMacReport)
+    Write-Host "Platform [$platformIndex/$platformCount] macOS complete"
 }
 
+Write-Host '[3/3] Updating measurement data and SVG assets'
 $platformReports = @($reports | ForEach-Object { Get-Content $_ -Raw | ConvertFrom-Json })
 $measuredEntries = @($platformReports.Entries | ForEach-Object {
     [ordered]@{

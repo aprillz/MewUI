@@ -32,11 +32,24 @@ string rid = platform switch
 string version = ReadVersion(repo);
 var backends = platform == "windows" ? new[] { "Gdi", "Direct2D", "MewVG" } : new[] { "MewVG" };
 var entries = new List<Measurement>();
+int measurementCount = backends.Length * 2;
+int measurementIndex = 0;
 
 foreach (string backend in backends)
 {
-    entries.Add(Measure(repo, output, options.DotNet, rid, platform, backend, "Hello World"));
-    entries.Add(Measure(repo, output, options.DotNet, rid, platform, backend, "Gallery"));
+    foreach (string sample in new[] { "Hello World", "Gallery" })
+    {
+        measurementIndex++;
+        Console.WriteLine($"  [{measurementIndex}/{measurementCount}] {sample} / {backend}: publishing...");
+        var stopwatch = Stopwatch.StartNew();
+        Measurement measurement = Measure(repo, output, options.DotNet, rid, platform, backend, sample);
+        stopwatch.Stop();
+        entries.Add(measurement);
+        Console.WriteLine(
+            $"  [{measurementIndex}/{measurementCount}] {sample} / {backend}: " +
+            $"{FormatMB(measurement.ExecutableBytes)} MB, compressed {FormatMB(measurement.CompressedBytes)} MB " +
+            $"({stopwatch.Elapsed:mm\\:ss})");
+    }
 }
 
 var report = new PlatformReport(1, version, DateTime.UtcNow, rid, ComputeManifest(repo), entries);
@@ -63,6 +76,12 @@ static Measurement Measure(
     string project = sample == "Gallery"
         ? Path.Combine(repo, "samples", "MewUI.Gallery", "MewUI.Gallery.csproj")
         : Path.Combine(repo, "tools", "aot-size", "MewUI.AotSizeProbe", "MewUI.AotSizeProbe.csproj");
+    string buildArtifacts = Path.Combine(outputRoot, "build", slug);
+    if (sample == "Gallery")
+    {
+        string generatorProject = Path.Combine(repo, "src", "MewUI.Generators", "MewUI.Generators.csproj");
+        Run(dotnet, ["restore", generatorProject, "--artifacts-path", buildArtifacts], repo);
+    }
     string platformDefine = platform switch
     {
         "windows" => "MEWUI_PLATFORM_WIN32",
@@ -79,6 +98,9 @@ static Measurement Measure(
     var arguments = new List<string>
     {
         "publish", project,
+        "--nologo",
+        "--verbosity", "minimal",
+        "--artifacts-path", buildArtifacts,
         "-c", "Release",
         "-r", rid,
         "--self-contained", "true",
@@ -127,6 +149,8 @@ static Measurement Measure(
     };
     return new Measurement(sample, platformBackend, backend, executableBytes, compressedBytes);
 }
+
+static string FormatMB(long bytes) => ((double)bytes / 1_048_576).ToString("0.000");
 
 static long MeasureZip(string executable)
 {
