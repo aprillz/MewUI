@@ -63,6 +63,53 @@ public sealed class BindingPathSegmentTests
         {
             public int Level { get; set; }
         }
+
+        namespace Aprillz.MewUI.Controls
+        {
+            public class MewObject
+            {
+                public void SetBinding<TSource, T>(
+                    Aprillz.MewUI.MewProperty<T> property,
+                    TSource source,
+                    System.Func<TSource, T> getter)
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged
+                {
+                }
+            }
+
+            public static class BindingExtensions
+            {
+                public static TElement Bind<TElement, TSource, T>(
+                    this TElement element,
+                    Aprillz.MewUI.MewProperty<T> property,
+                    TSource source,
+                    System.Func<TSource, T> getter)
+                    where TElement : MewObject
+                    where TSource : class, System.ComponentModel.INotifyPropertyChanged => element;
+            }
+
+            public sealed class Label : MewObject
+            {
+                public static readonly Aprillz.MewUI.MewProperty<string> TextProperty = null;
+            }
+        }
+
+        namespace Aprillz.MewUI
+        {
+            public sealed class MewProperty<T>
+            {
+            }
+        }
+        """;
+
+    private const string GeneratorMarker = """
+
+        namespace Aprillz.MewUI.Generated
+        {
+            internal static class BindingPathGeneratorMarker
+            {
+            }
+        }
         """;
 
     [TestMethod]
@@ -191,6 +238,54 @@ public sealed class BindingPathSegmentTests
             class C
             {
                 object M() => BindingPath.From<Person>().ThenNotifying(x => x.Profile!);
+            }
+            """ + BindingApi;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
+    public async Task ReportsDottedGetter_WhenTheGeneratorDidNotRun()
+    {
+        var source = """
+            using Aprillz.MewUI.Controls;
+
+            class C
+            {
+                object M(Label label, Person person)
+                    => label.Bind(Label.TextProperty, person, {|MEW1203:x => x.Profile.DisplayName|});
+            }
+            """ + BindingApi;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
+    public async Task NoDiagnostic_WhenTheGeneratorMarkerIsPresent()
+    {
+        var source = """
+            using Aprillz.MewUI.Controls;
+
+            class C
+            {
+                object M(Label label, Person person)
+                    => label.Bind(Label.TextProperty, person, x => x.Profile.DisplayName);
+            }
+            """ + BindingApi + GeneratorMarker;
+
+        await VerifyAsync(source, source);
+    }
+
+    [TestMethod]
+    public async Task NoDiagnostic_WhenTheGetterIsASingleMember()
+    {
+        var source = """
+            using Aprillz.MewUI.Controls;
+
+            class C
+            {
+                object M(Label label, Person person)
+                    => label.Bind(Label.TextProperty, person, x => x.Name);
             }
             """ + BindingApi;
 
