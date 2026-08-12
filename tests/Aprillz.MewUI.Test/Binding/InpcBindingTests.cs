@@ -66,7 +66,22 @@ public sealed class InpcBindingTests
     }
 
     [TestMethod]
-    public void TwoWayWithoutSetter_DegradesToOneWayInsteadOfThrowing()
+    public void TwoWayWithoutSetter_IsRejected()
+    {
+        // The generator writes the setter from the getter syntax. Where it does not run, the
+        // caller has to supply one rather than end up with a silently one-way binding.
+        var source = new PersonViewModel { Name = "first" };
+        var target = new TestObject();
+
+        Assert.ThrowsExactly<ArgumentException>(() => target.SetBinding(
+            TestObject.TextProperty,
+            source,
+            static value => value.Name,
+            mode: BindingMode.TwoWay));
+    }
+
+    [TestMethod]
+    public void OneWayWithoutSetter_IsAccepted()
     {
         var source = new PersonViewModel { Name = "first" };
         var target = new TestObject();
@@ -75,10 +90,10 @@ public sealed class InpcBindingTests
             TestObject.TextProperty,
             source,
             static value => value.Name,
-            mode: BindingMode.TwoWay);
-        target.Commit("typed");
+            mode: BindingMode.OneWay);
+        source.Name = "second";
 
-        Assert.AreEqual("first", source.Name);
+        Assert.AreEqual("second", target.Text);
     }
 
     [TestMethod]

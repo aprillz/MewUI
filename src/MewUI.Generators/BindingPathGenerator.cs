@@ -129,16 +129,19 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
                 : BindingCall.Unsupported(getter.GetLocation(), getter.ToString());
         }
 
-        if (steps.Count == 1 && steps[0].Kind == BindingStepKind.Member)
-        {
-            return null;
-        }
-
         var segments = BindingChain.TryResolveSegments(
             context.SemanticModel.Compilation, context.SemanticModel, steps);
         if (segments == null)
         {
             return BindingCall.Unsupported(getter.GetLocation(), getter.ToString());
+        }
+
+        // A single member is what the runtime reads on its own. Intercepting is only worth it when
+        // a setter can be synthesized, which is what lets a TwoWay target write back without one.
+        if (steps.Count == 1
+            && (segments[0].Kind != BindingSegmentKind.Notifying || segments[0].SetterBody == null))
+        {
+            return null;
         }
 
         var location = context.SemanticModel.GetInterceptableLocation(invocation, cancellationToken);

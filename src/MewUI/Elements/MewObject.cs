@@ -655,13 +655,12 @@ public abstract class MewObject : IPropertyOwner
 
         var path = BindingPath.From<TSource>().ThenNotifying(getter, setter, getterExpression);
 
-        // The path overload throws instead of degrading, so settle the mode before delegating.
         var resolvedMode = mode ?? (property.BindsTwoWayByDefault
             ? BindingMode.TwoWay
             : BindingMode.OneWay);
         if (resolvedMode == BindingMode.TwoWay && setter == null)
         {
-            resolvedMode = BindingMode.OneWay;
+            throw new ArgumentException(BuildMissingSetterMessage(property), nameof(setter));
         }
 
         SetBinding(property, source, path, resolvedMode, fallbackValue: default!);
@@ -696,7 +695,12 @@ public abstract class MewObject : IPropertyOwner
         var resolvedMode = mode ?? (property.BindsTwoWayByDefault
             ? BindingMode.TwoWay
             : BindingMode.OneWay);
-        if (resolvedMode == BindingMode.TwoWay && (setter == null || convertBack == null))
+        if (resolvedMode == BindingMode.TwoWay && setter == null)
+        {
+            throw new ArgumentException(BuildMissingSetterMessage(property), nameof(setter));
+        }
+
+        if (resolvedMode == BindingMode.TwoWay && convertBack == null)
         {
             resolvedMode = BindingMode.OneWay;
         }
@@ -728,6 +732,11 @@ public abstract class MewObject : IPropertyOwner
             mode,
             fallbackValue: default!);
     }
+
+    private static string BuildMissingSetterMessage(MewProperty property)
+        => $"A TwoWay binding to '{property.Name}' needs a way to write back. Pass a setter, "
+            + "bind with BindingMode.OneWay, or build with an SDK new enough to run the MewUI "
+            + "binding path generator, which writes the setter for you.";
 
     /// <summary>
     /// Removes the binding and its target value from the specified property, revealing the next
