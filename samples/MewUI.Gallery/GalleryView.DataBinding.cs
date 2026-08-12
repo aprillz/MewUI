@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -16,6 +17,7 @@ partial class GalleryView
             BindingPathCard(),
             InpcBindingCard(),
             InpcNestedPathCard(),
+            CollectionPathCard(),
             BindingLifetimeCard());
 
     private FrameworkElement ObservableValueBindingCard()
@@ -389,6 +391,64 @@ partial class GalleryView
             minWidth: 420);
     }
 
+    private FrameworkElement CollectionPathCard()
+    {
+        var root = new InpcDemoLibrary();
+        var nextTitle = 1;
+
+        return Card(
+            "Collection path",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    BindingDescription(
+                        "Paths: library.Books.Count and library.Books[0].Title; Mode: OneWay"),
+                    new TextBlock()
+                        .Text("A collection reports its own Count through PropertyChanged, and an indexed segment follows the element at a fixed position as the collection changes.")
+                        .TextWrapping(TextWrapping.Wrap),
+                    new TextBlock()
+                        .Bind(
+                            TextBlock.TextProperty,
+                            root,
+                            value => value.Books.Count,
+                            count => $"Books.Count = {count}"),
+                    BindingDescription("Books[0].Title (empty when the list is empty):"),
+                    new TextBlock()
+                        .Bind(TextBlock.TextProperty, root, value => value.Books[0].Title),
+                    new StackPanel()
+                        .Horizontal()
+                        .Spacing(6)
+                        .Children(
+                            new Button()
+                                .Content("Insert at front")
+                                .OnClick(() => root.Books.Insert(
+                                    0, new InpcDemoBook($"Book {nextTitle++}"))),
+                            new Button()
+                                .Content("Rename first")
+                                .OnClick(() =>
+                                {
+                                    if (root.Books.Count > 0)
+                                    {
+                                        root.Books[0] = new InpcDemoBook($"Book {nextTitle++}");
+                                    }
+                                }),
+                            new Button()
+                                .Content("Remove first")
+                                .OnClick(() =>
+                                {
+                                    if (root.Books.Count > 0)
+                                    {
+                                        root.Books.RemoveAt(0);
+                                    }
+                                })),
+                    new TextBlock()
+                        .Text("Insert at front shifts the observed element, so the title follows the new first book. Removing the last book leaves the target empty rather than reporting an error.")
+                        .FontSize(ThemeFontSize.Small)
+                        .TextWrapping(TextWrapping.Wrap)),
+            minWidth: 420);
+    }
+
     private static TextBlock BindingDescription(string text) =>
         new TextBlock()
             .Text(text)
@@ -456,6 +516,22 @@ internal sealed class InpcDemoRoot(InpcDemoProfile profile) : InpcDemoObject
     {
         get => _currentProfile;
         set => SetField(ref _currentProfile, value);
+    }
+}
+
+internal sealed class InpcDemoLibrary : InpcDemoObject
+{
+    public ObservableCollection<InpcDemoBook> Books { get; } = [];
+}
+
+internal sealed class InpcDemoBook(string title) : InpcDemoObject
+{
+    private string _title = title;
+
+    public string Title
+    {
+        get => _title;
+        set => SetField(ref _title, value);
     }
 }
 
