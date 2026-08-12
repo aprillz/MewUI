@@ -14,8 +14,10 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <!-- RS2008: analyzer release tracking not warranted yet. -->
-    <NoWarn>$(NoWarn);RS2008</NoWarn>
+    <!-- RS2008: analyzer release tracking not warranted yet.
+         RSEXPERIMENTAL002: GetInterceptableLocation is the supported way to author interceptors
+         and is opt-in only because interceptors themselves are still experimental. -->
+    <NoWarn>$(NoWarn);RS2008;RSEXPERIMENTAL002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

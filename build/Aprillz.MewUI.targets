@@ -118,8 +118,12 @@
     This must live in targets, not props: nuget.g.props is imported before the project body, where
     $(TargetFramework) is not yet set. Csc reads both properties, and MS first-party generators
     still use the Preview one, so setting both covers every SDK and Roslyn combination.
+
+    The property is set unconditionally. Repo samples import this file from the project body, which
+    runs before the SDK infers $(TargetFrameworkIdentifier), so testing that value here silently
+    skips the injection and the build fails with CS9137.
   -->
-  <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
+  <PropertyGroup>
     <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Aprillz.MewUI.Generated</InterceptorsPreviewNamespaces>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
   </PropertyGroup>
