@@ -9,6 +9,44 @@ namespace MewUI.Test.Controls;
 [DoNotParallelize]
 public sealed class ProgressBarThemeTests
 {
+    private sealed class ThemeTrackingElement : ContentControl
+    {
+        public int ThemeChangeCount { get; private set; }
+        public Theme? LastTheme { get; private set; }
+
+        protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
+        {
+            base.OnThemeChanged(oldTheme, newTheme);
+            ThemeChangeCount++;
+            LastTheme = newTheme;
+        }
+    }
+
+    [TestMethod]
+    public void PrecreatedDetachedElement_ReceivesCurrentThemeOnFirstAttach()
+    {
+        TestPlatformHosts.EnsureRegistered();
+
+        var detached = new ThemeTrackingElement();
+        var window = new Window { Content = new Border() };
+        window.AttachBackend(new HeadlessWindowBackend());
+        window.SetClientSizeDip(400, 300);
+        Theme? darkTheme = null;
+
+        TestPlatformHosts.Queue.Enqueue(new ThemeSwitchHost(onRun: (app, mainWindow) =>
+        {
+            app.SetTheme(ThemeVariant.Dark);
+            darkTheme = app.Theme;
+            mainWindow.Content = detached;
+            mainWindow.PerformLayout();
+        }));
+
+        Application.Run(window);
+
+        Assert.AreEqual(1, detached.ThemeChangeCount);
+        Assert.AreEqual(darkTheme!.Palette.WindowBackground, detached.LastTheme!.Palette.WindowBackground);
+    }
+
     [TestMethod]
     public void ProgressBar_RefreshesThemeAfterDetachedThemeSwitch()
     {

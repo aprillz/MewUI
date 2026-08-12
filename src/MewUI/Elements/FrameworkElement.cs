@@ -374,10 +374,22 @@ public abstract class FrameworkElement : UIElement, IDisposable
         }
 
         var newTheme = Application.Current.Theme;
-        var oldTheme = ThemeInternal;
+        // Read the stored value directly. ThemeInternal's getter initializes a null value from the
+        // current application theme, which would make oldTheme == newTheme and suppress the
+        // OnThemeChanged notification for a detached element that rendered with the startup theme.
+        var oldTheme = GetValue(ThemeProperty);
+        if (oldTheme is null)
+        {
+            oldTheme = ThemeManager.GetDefaultTheme(
+                ThemeManager.ResolveVariantForStartup(ThemeManager.Default));
+        }
         if (oldTheme != newTheme)
         {
             NotifyThemeChanged(oldTheme, newTheme);
+        }
+        else
+        {
+            ThemeInternal = newTheme;
         }
     }
 
