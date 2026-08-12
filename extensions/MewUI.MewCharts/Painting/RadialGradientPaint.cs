@@ -48,6 +48,7 @@ public class RadialGradientPaint : MewPaint
             IsAntialias = IsAntialias,
             StrokeThickness = StrokeThickness,
             ZIndex = ZIndex,
+            PixelSnap = PixelSnap,
         };
 
     internal override void OnPaintStarted(DrawingContext drawingContext, IDrawnElement? drawnElement)
@@ -68,6 +69,7 @@ public class RadialGradientPaint : MewPaint
         context.ActiveColor = _stops[_stops.Length / 2].Color;
         context.ActiveStyle = PaintStyle;
         context.ActiveStrokeThickness = thickness;
+        context.ActivePixelSnap = PixelSnap;
 
         if (PaintStyle.HasFlag(PaintStyle.Stroke))
         {

@@ -40,6 +40,7 @@ public class SolidColorPaint : MewPaint
             ZIndex = ZIndex,
             DashArray = DashArray,
             DashOffset = DashOffset,
+            PixelSnap = PixelSnap,
         };
         return clone;
     }
@@ -52,6 +53,7 @@ public class SolidColorPaint : MewPaint
         context.ActiveColor = Color;
         context.ActiveStyle = PaintStyle;
         context.ActiveStrokeThickness = thickness;
+        context.ActivePixelSnap = PixelSnap;
         context.ActiveBrush = null;
 
         if (DashArray is { Length: > 0 } && PaintStyle.HasFlag(PaintStyle.Stroke))

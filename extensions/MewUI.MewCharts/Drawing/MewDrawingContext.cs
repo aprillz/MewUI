@@ -40,6 +40,7 @@ public sealed class MewDrawingContext : DrawingContext
     internal Color ActiveColor { get; set; }
     internal PaintStyle ActiveStyle { get; set; }
     internal float ActiveStrokeThickness { get; set; } = 1f;
+    internal bool ActivePixelSnap { get; set; }
 
     // Optional gradient/image fill brush and dashed/styled stroke pen; when set they take
     // precedence over ActiveColor. Set by gradient/dashed paints in OnPaintStarted.
@@ -145,6 +146,7 @@ public sealed class MewDrawingContext : DrawingContext
         var savedColor = ActiveColor;
         var savedStyle = ActiveStyle;
         var savedThickness = ActiveStrokeThickness;
+        var savedPixelSnap = ActivePixelSnap;
         var savedBrush = ActiveBrush;
         var savedPen = ActivePen;
         var savedLvcPaint = ActiveLvcPaint;
@@ -161,6 +163,7 @@ public sealed class MewDrawingContext : DrawingContext
         ActiveColor = savedColor;
         ActiveStyle = savedStyle;
         ActiveStrokeThickness = savedThickness;
+        ActivePixelSnap = savedPixelSnap;
         ActiveBrush = savedBrush;
         ActivePen = savedPen;
         ActiveLvcPaint = savedLvcPaint;
@@ -184,7 +187,7 @@ public sealed class MewDrawingContext : DrawingContext
         if (IsStroke)
         {
             if (ActivePen is not null) G.DrawRectangle(rect, ActivePen);
-            else G.DrawRectangle(rect, ActiveColor, ActiveStrokeThickness);
+            else G.DrawRectangle(rect, ActiveColor, ActiveStrokeThickness, strokeInset: ActivePixelSnap);
         }
         else if (ActiveBrush is not null) G.FillRectangle(rect, ActiveBrush);
         else G.FillRectangle(rect, ActiveColor);
@@ -215,7 +218,7 @@ public sealed class MewDrawingContext : DrawingContext
     public void DrawLine(Point start, Point end)
     {
         if (ActivePen is not null) G.DrawLine(start, end, ActivePen);
-        else G.DrawLine(start, end, ActiveColor, ActiveStrokeThickness);
+        else G.DrawLine(start, end, ActiveColor, ActiveStrokeThickness, pixelSnap: ActivePixelSnap);
     }
 
     public void DrawPath(PathGeometry path)

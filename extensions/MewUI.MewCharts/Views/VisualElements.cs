@@ -1,7 +1,9 @@
 using Aprillz.MewUI.MewCharts.Drawing.Geometries;
+using Aprillz.MewUI.MewCharts.Painting;
 
 using LiveChartsCore;
 using LiveChartsCore.Drawing;
+using LiveChartsCore.Painting;
 using LiveChartsCore.VisualElements;
 
 namespace Aprillz.MewUI.MewCharts.Views;
@@ -12,8 +14,38 @@ public class RectangularSection : CoreSection<RoundedRectangleGeometry, LabelGeo
 }
 
 /// <summary>A frame drawn around the chart's draw margin, rendered with the MewUI backend.</summary>
-public class DrawMarginFrame : CoreDrawMarginFrame<RoundedRectangleGeometry>
+public class DrawMarginFrame : CoreDrawMarginFrame<RectangleGeometry>
 {
+    private bool _pixelSnap;
+
+    /// <summary>
+    /// Gets or sets whether the frame stroke is inset and aligned to device pixels.
+    /// </summary>
+    public bool PixelSnap
+    {
+        get => _pixelSnap;
+        set
+        {
+            _pixelSnap = value;
+            ApplyPixelSnap(base.Stroke);
+        }
+    }
+
+    /// <summary>Gets or sets the frame stroke.</summary>
+    public new Paint? Stroke
+    {
+        get => base.Stroke;
+        set
+        {
+            base.Stroke = value;
+            ApplyPixelSnap(value);
+        }
+    }
+
+    private void ApplyPixelSnap(Paint? paint)
+    {
+        if (paint is MewPaint mewPaint) mewPaint.PixelSnap = _pixelSnap;
+    }
 }
 
 /// <summary>A standalone text visual (chart titles, annotations) rendered with the MewUI backend.</summary>

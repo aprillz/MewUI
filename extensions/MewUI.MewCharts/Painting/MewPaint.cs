@@ -15,6 +15,12 @@ public abstract class MewPaint : Paint
         : base(strokeThickness, strokeMiter)
     { }
 
+    /// <summary>
+    /// Gets or sets whether axis-aligned strokes should be aligned to device pixels.
+    /// Keep this disabled for data series; enable it for chart frames, axes and grid lines.
+    /// </summary>
+    public bool PixelSnap { get; set; }
+
     internal override void OnPaintFinished(DrawingContext drawingContext, IDrawnElement? drawnElement) { }
 
     internal override void ApplyOpacityMask(DrawingContext context, float opacity, IDrawnElement? drawnElement) =>
