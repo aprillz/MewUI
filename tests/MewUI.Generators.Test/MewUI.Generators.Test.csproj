@@ -1,0 +1,23 @@
+<Project Sdk="MSTest.Sdk/4.0.1">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseVSTest>true</UseVSTest>
+    <!-- MSTEST0001: parallelism preference nag, not relevant here. -->
+    <NoWarn>$(NoWarn);MSTEST0001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Match the generator's Roslyn floor so GetInterceptableLocation is available. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the generator as a normal library so tests can drive it directly. -->
+    <ProjectReference Include="..\..\src\MewUI.Generators\MewUI.Generators.csproj" />
+  </ItemGroup>
+
+</Project>

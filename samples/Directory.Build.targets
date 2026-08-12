@@ -12,12 +12,25 @@
 
   <!-- The generator must stay loaded under AOT publish: unlike the analyzer, dropping it changes
        what compiles, so a published sample would take the runtime fallback and throw where the
-       Debug build worked. Interceptors also need the generated namespace allow-listed, which
+       Debug build worked. A ProjectReference cannot be used because publish properties flow into
+       the netstandard2.0 generator project and fail it with NETSDK1207, and UndefineProperties
+       does not stop that. Building it through the MSBuild task with RemoveProperties does, and
+       feeding TargetOutputs into @(Analyzer) keeps ordering correct without a project reference.
+       Interceptors also need the generated namespace allow-listed, which
        build/Aprillz.MewUI.targets injects for samples that import it. -->
-  <ItemGroup Condition="'$(MewUIAnalyzers)' != 'false'
-                        and '@(ProjectReference->WithMetadataValue('Filename', 'MewUI'))' != ''">
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\MewUI.Generators\MewUI.Generators.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-  </ItemGroup>
+  <Target Name="_MewUIAddBindingPathGenerator"
+          BeforeTargets="CoreCompile"
+          Condition="'$(MewUIAnalyzers)' != 'false'
+                     and '@(ProjectReference->WithMetadataValue('Filename', 'MewUI'))' != ''">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\src\MewUI.Generators\MewUI.Generators.csproj"
+             Targets="Build"
+             RemoveProperties="PublishAot;RuntimeIdentifier;SelfContained;TrimMode;PublishTrimmed;TargetFramework;RuntimeIdentifiers">
+      <Output TaskParameter="TargetOutputs" ItemName="_MewUIBindingPathGenerator" />
+    </MSBuild>
+
+    <ItemGroup>
+      <Analyzer Include="@(_MewUIBindingPathGenerator)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

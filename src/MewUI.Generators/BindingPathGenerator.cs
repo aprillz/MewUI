@@ -20,6 +20,15 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
     private const string ATTRIBUTE_HINT_NAME = "InterceptsLocationAttribute.g.cs";
     private const string INTERCEPTOR_HINT_NAME = "BindingPathInterceptors.g.cs";
 
+    internal static readonly DiagnosticDescriptor UnsupportedGetter = new(
+        id: "MEWG001",
+        title: "Binding getter cannot be split into path segments",
+        messageFormat: "'{0}' is not a binding path",
+        category: "MewUI.Binding",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A binding getter must walk members, indexers with constant arguments, and casts. Move computation into a convert delegate, or build the path with an explicit ThenNotifying chain.");
+
     // MewUI.Analyzers probes this type to tell whether this generator ran in the compilation, so
     // the fully qualified name is a contract between the two assemblies.
     private const string MARKER_SOURCE = """
@@ -93,8 +102,7 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         }
 
         var parameters = method.ReducedFrom?.Parameters ?? method.Parameters;
-        int getterIndex = IndexOfParameter(parameters, "getter");
-        if (getterIndex < 0)
+        if (IndexOfParameter(parameters, "getter") < 0)
         {
             return null;
         }
@@ -111,17 +119,26 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
             return null;
         }
 
-        var chain = BindingChain.TryReadMemberChain(getter);
-        if (chain == null || chain.Count < 2)
+        var steps = BindingChain.TryReadSteps(context.SemanticModel, getter);
+        if (steps == null)
+        {
+            // A single member access is what the runtime infers on its own; anything else that is
+            // not a readable path would fail at runtime, so surface it now.
+            return IsSingleMemberAccess(getter)
+                ? null
+                : BindingCall.Unsupported(getter.GetLocation(), getter.ToString());
+        }
+
+        if (steps.Count == 1 && steps[0].Kind == BindingStepKind.Member)
         {
             return null;
         }
 
         var segments = BindingChain.TryResolveSegments(
-            context.SemanticModel.Compilation, context.SemanticModel, chain);
+            context.SemanticModel.Compilation, context.SemanticModel, steps);
         if (segments == null)
         {
-            return null;
+            return BindingCall.Unsupported(getter.GetLocation(), getter.ToString());
         }
 
         var location = context.SemanticModel.GetInterceptableLocation(invocation, cancellationToken);
@@ -130,45 +147,33 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
             return null;
         }
 
-        var typeArguments = method.ReducedFrom?.TypeArguments ?? method.TypeArguments;
-        bool hasConvert = IndexOfParameter(parameters, "convert") >= 0;
-
-        string? receiverType = null;
-        if (isExtension)
+        var receiver = ((MemberAccessExpressionSyntax)invocation.Expression).Expression;
+        if (context.SemanticModel.GetTypeInfo(receiver, cancellationToken).Type is not ITypeSymbol
+            receiverType)
         {
-            var receiver = ((MemberAccessExpressionSyntax)invocation.Expression).Expression;
-            var receiverSymbol = context.SemanticModel.GetTypeInfo(receiver, cancellationToken).Type;
-            if (receiverSymbol == null)
-            {
-                return null;
-            }
-
-            receiverType = Display(receiverSymbol);
-        }
-        else
-        {
-            var receiver = ((MemberAccessExpressionSyntax)invocation.Expression).Expression;
-            var receiverSymbol = context.SemanticModel.GetTypeInfo(receiver, cancellationToken).Type;
-            receiverType = receiverSymbol == null
-                ? "global::Aprillz.MewUI.Controls.MewObject"
-                : Display(receiverSymbol);
+            return null;
         }
 
         var sourceType = parameters[IndexOfParameter(parameters, "source")].Type;
-        var getterDelegate = (INamedTypeSymbol)parameters[getterIndex].Type;
+        var getterDelegate = (INamedTypeSymbol)parameters[IndexOfParameter(parameters, "getter")].Type;
         var propertyType = (INamedTypeSymbol)parameters[IndexOfParameter(parameters, "property")].Type;
 
-        return new BindingCall(
+        return BindingCall.Interception(
             location.Version,
             location.Data,
             isExtension,
-            hasConvert,
-            receiverType!,
+            IndexOfParameter(parameters, "convert") >= 0,
+            Display(receiverType),
             Display(Substitute(sourceType, method)),
             Display(Substitute(propertyType.TypeArguments[0], method)),
             Display(Substitute(getterDelegate.TypeArguments[1], method)),
             segments);
     }
+
+    private static bool IsSingleMemberAccess(AnonymousFunctionExpressionSyntax lambda)
+        => lambda.Body is MemberAccessExpressionSyntax access
+            && access.IsKind(SyntaxKind.SimpleMemberAccessExpression)
+            && access.Expression is IdentifierNameSyntax;
 
     private static ITypeSymbol Substitute(ITypeSymbol type, IMethodSymbol method)
     {
@@ -235,8 +240,25 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
 
     private static void Emit(SourceProductionContext context, ImmutableArray<BindingCall?> calls)
     {
-        var resolved = calls.Where(static call => call != null).Select(static call => call!).ToList();
-        if (resolved.Count == 0)
+        var interceptions = new List<BindingCall>();
+        foreach (var call in calls)
+        {
+            if (call == null)
+            {
+                continue;
+            }
+
+            if (call.UnsupportedLocation != null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    UnsupportedGetter, call.UnsupportedLocation, call.UnsupportedText));
+                continue;
+            }
+
+            interceptions.Add(call);
+        }
+
+        if (interceptions.Count == 0)
         {
             return;
         }
@@ -250,9 +272,21 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         builder.AppendLine("    internal static class BindingPathInterceptors");
         builder.AppendLine("    {");
 
-        for (int index = 0; index < resolved.Count; index++)
+        // Paths live in a nullable-oblivious region so a nullable intermediate does not trip the
+        // class constraint on the next segment. Suppressing per expression is not an option: a
+        // parenthesized member access followed by ! parses as a cast.
+        builder.AppendLine("#nullable disable");
+        for (int index = 0; index < interceptions.Count; index++)
         {
-            AppendCall(builder, resolved[index], index);
+            AppendPath(builder, interceptions[index], index);
+        }
+
+        builder.AppendLine("#nullable restore");
+        builder.AppendLine();
+
+        for (int index = 0; index < interceptions.Count; index++)
+        {
+            AppendInterceptor(builder, interceptions[index], index);
         }
 
         builder.AppendLine("    }");
@@ -261,21 +295,26 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         context.AddSource(INTERCEPTOR_HINT_NAME, SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
-    private static void AppendCall(StringBuilder builder, BindingCall call, int index)
+    private static void AppendPath(StringBuilder builder, BindingCall call, int index)
     {
-        string path = $"_path{index}";
         builder.AppendLine(
-            $"        private static readonly global::Aprillz.MewUI.BindingPath<{call.SourceType}, {call.ValueType}> {path} =");
+            $"        private static readonly global::Aprillz.MewUI.BindingPath<{call.SourceType}, {call.ValueType}> _path{index} =");
         builder.AppendLine(
             $"            global::Aprillz.MewUI.BindingPath.From<{call.SourceType}>()");
-        for (int segment = 0; segment < call.Segments.Count; segment++)
+        for (int segment = 0; segment < call.Segments!.Count; segment++)
         {
+            bool isLeaf = segment == call.Segments.Count - 1;
             builder.AppendLine(
-                "                " + FormatSegment(call.Segments[segment], segment == call.Segments.Count - 1)
-                    + (segment == call.Segments.Count - 1 ? ";" : string.Empty));
+                "                " + FormatSegment(call.Segments[segment])
+                    + (isLeaf ? ";" : string.Empty));
         }
 
         builder.AppendLine();
+    }
+
+    private static void AppendInterceptor(StringBuilder builder, BindingCall call, int index)
+    {
+        string path = $"_path{index}";
         builder.AppendLine(
             $"        [global::System.Runtime.CompilerServices.InterceptsLocation({call.Version}, \"{call.Data}\")]");
 
@@ -316,49 +355,75 @@ public sealed class BindingPathGenerator : IIncrementalGenerator
         builder.AppendLine();
     }
 
-    private static string FormatSegment(BindingSegment segment, bool isLeaf)
+    private static string FormatSegment(BindingSegment segment)
     {
-        string suppression = isLeaf ? string.Empty : "!";
-        return segment.Kind switch
+        if (segment.Kind == BindingSegmentKind.MewProperty)
         {
-            BindingSegmentKind.MewProperty
-                => $".Then({segment.MewPropertyOwner}.{segment.MemberName}Property)",
-            BindingSegmentKind.Notifying when isLeaf && segment.CanSetMember
-                => $".ThenNotifying(static value => value.{segment.MemberName}, "
-                    + $"static (value, newValue) => value.{segment.MemberName} = newValue)",
-            BindingSegmentKind.Notifying
-                => $".ThenNotifying(static value => value.{segment.MemberName}{suppression})",
-            _ => $".Then(static value => value.{segment.MemberName}{suppression})",
-        };
+            return $".Then({segment.MewPropertyReference})";
+        }
+
+        if (segment.Kind != BindingSegmentKind.Notifying)
+        {
+            return $".Then(static value => {segment.Expression})";
+        }
+
+        return segment.SetterBody == null
+            ? $".ThenNotifying(static value => {segment.Expression})"
+            : $".ThenNotifying(static value => {segment.Expression}, static (value, newValue) => {segment.SetterBody})";
     }
 
-    private sealed class BindingCall(
-        int version,
-        string data,
-        bool isExtension,
-        bool hasConvert,
-        string receiverType,
-        string sourceType,
-        string propertyType,
-        string valueType,
-        List<BindingSegment> segments)
+    private sealed class BindingCall
     {
-        public int Version => version;
+        private BindingCall()
+        {
+        }
 
-        public string Data => data;
+        public int Version { get; private set; }
 
-        public bool IsExtension => isExtension;
+        public string Data { get; private set; } = string.Empty;
 
-        public bool HasConvert => hasConvert;
+        public bool IsExtension { get; private set; }
 
-        public string ReceiverType => receiverType;
+        public bool HasConvert { get; private set; }
 
-        public string SourceType => sourceType;
+        public string ReceiverType { get; private set; } = string.Empty;
 
-        public string PropertyType => propertyType;
+        public string SourceType { get; private set; } = string.Empty;
 
-        public string ValueType => valueType;
+        public string PropertyType { get; private set; } = string.Empty;
 
-        public List<BindingSegment> Segments => segments;
+        public string ValueType { get; private set; } = string.Empty;
+
+        public List<BindingSegment>? Segments { get; private set; }
+
+        public Location? UnsupportedLocation { get; private set; }
+
+        public string? UnsupportedText { get; private set; }
+
+        public static BindingCall Unsupported(Location location, string text)
+            => new() { UnsupportedLocation = location, UnsupportedText = text };
+
+        public static BindingCall Interception(
+            int version,
+            string data,
+            bool isExtension,
+            bool hasConvert,
+            string receiverType,
+            string sourceType,
+            string propertyType,
+            string valueType,
+            List<BindingSegment> segments)
+            => new()
+            {
+                Version = version,
+                Data = data,
+                IsExtension = isExtension,
+                HasConvert = hasConvert,
+                ReceiverType = receiverType,
+                SourceType = sourceType,
+                PropertyType = propertyType,
+                ValueType = valueType,
+                Segments = segments,
+            };
     }
 }

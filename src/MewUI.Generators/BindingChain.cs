@@ -16,17 +16,36 @@ internal enum BindingSegmentKind
 
 internal sealed class BindingSegment(
     BindingSegmentKind kind,
-    string memberName,
-    bool canSetMember,
-    string? mewPropertyOwner)
+    string expression,
+    string? setterBody,
+    string? mewPropertyReference)
 {
     public BindingSegmentKind Kind => kind;
 
-    public string MemberName => memberName;
+    /// <summary>Lambda body emitted for this segment, written against a parameter named value.</summary>
+    public string Expression => expression;
 
-    public bool CanSetMember => canSetMember;
+    public string? SetterBody => setterBody;
 
-    public string? MewPropertyOwner => mewPropertyOwner;
+    public string? MewPropertyReference => mewPropertyReference;
+}
+
+internal enum BindingStepKind
+{
+    Member,
+    Indexer,
+    Cast,
+    AsCast,
+}
+
+internal sealed class BindingStep(BindingStepKind kind, ExpressionSyntax node, string? text)
+{
+    public BindingStepKind Kind => kind;
+
+    public ExpressionSyntax Node => node;
+
+    /// <summary>Index arguments for an indexer, or the target type for a cast.</summary>
+    public string? Text => text;
 }
 
 /// <summary>
@@ -34,16 +53,18 @@ internal sealed class BindingSegment(
 /// </summary>
 internal static class BindingChain
 {
-    private const string OBSERVABLE_VALUE = "Aprillz.MewUI.ObservableValue`1";
     private const string MEW_OBJECT = "Aprillz.MewUI.Controls.MewObject";
-    private const string MEW_PROPERTY = "Aprillz.MewUI.MewProperty`1";
     private const string NOTIFY_INTERFACE = "System.ComponentModel.INotifyPropertyChanged";
+    private const string OBSERVABLE_VALUE = "Aprillz.MewUI.ObservableValue<T>";
+    private const string MEW_PROPERTY = "Aprillz.MewUI.MewProperty<T>";
 
     /// <summary>
-    /// Reads the member names a lambda body walks through, or returns null when the body uses
-    /// syntax that is not a path.
+    /// Reads the steps a lambda body walks through, or returns null when the body uses syntax
+    /// that is not a path.
     /// </summary>
-    internal static List<SimpleNameSyntax>? TryReadMemberChain(AnonymousFunctionExpressionSyntax lambda)
+    internal static List<BindingStep>? TryReadSteps(
+        SemanticModel semanticModel,
+        AnonymousFunctionExpressionSyntax lambda)
     {
         string? parameterName = lambda switch
         {
@@ -59,45 +80,133 @@ internal static class BindingChain
             return null;
         }
 
-        var chain = new List<SimpleNameSyntax>();
-        var current = Unwrap(body);
-        while (true)
+        var steps = new List<BindingStep>();
+        return Walk(semanticModel, body, parameterName, steps) ? steps : null;
+    }
+
+    private static bool Walk(
+        SemanticModel semanticModel,
+        ExpressionSyntax expression,
+        string parameterName,
+        List<BindingStep> steps)
+    {
+        switch (expression)
         {
-            if (current is MemberAccessExpressionSyntax access
-                && access.IsKind(SyntaxKind.SimpleMemberAccessExpression)
-                && access.Name is IdentifierNameSyntax member)
-            {
-                chain.Insert(0, member);
-                current = Unwrap(access.Expression);
-                continue;
-            }
+            case ParenthesizedExpressionSyntax parenthesized:
+                return Walk(semanticModel, parenthesized.Expression, parameterName, steps);
 
-            if (current is MemberBindingExpressionSyntax binding
-                && binding.Name is IdentifierNameSyntax conditionalMember)
-            {
-                chain.Insert(0, conditionalMember);
-                return null;
-            }
+            case PostfixUnaryExpressionSyntax postfix
+                when postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression):
+                return Walk(semanticModel, postfix.Operand, parameterName, steps);
 
-            break;
+            case IdentifierNameSyntax identifier:
+                return identifier.Identifier.ValueText == parameterName;
+
+            case MemberBindingExpressionSyntax memberBinding:
+                steps.Add(new BindingStep(BindingStepKind.Member, memberBinding, null));
+                return true;
+
+            case ElementBindingExpressionSyntax elementBinding:
+                return TryAddIndexer(semanticModel, elementBinding, elementBinding.ArgumentList, steps);
+
+            case MemberAccessExpressionSyntax access
+                when access.IsKind(SyntaxKind.SimpleMemberAccessExpression):
+                if (!Walk(semanticModel, access.Expression, parameterName, steps))
+                {
+                    return false;
+                }
+
+                steps.Add(new BindingStep(BindingStepKind.Member, access, null));
+                return true;
+
+            case ElementAccessExpressionSyntax element:
+                if (!Walk(semanticModel, element.Expression, parameterName, steps))
+                {
+                    return false;
+                }
+
+                return TryAddIndexer(semanticModel, element, element.ArgumentList, steps);
+
+            case ConditionalAccessExpressionSyntax conditional:
+                return Walk(semanticModel, conditional.Expression, parameterName, steps)
+                    && Walk(semanticModel, conditional.WhenNotNull, parameterName, steps);
+
+            case CastExpressionSyntax cast:
+                if (!Walk(semanticModel, cast.Expression, parameterName, steps))
+                {
+                    return false;
+                }
+
+                return TryAddCast(semanticModel, cast.Type, BindingStepKind.Cast, cast, steps);
+
+            case BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.AsExpression):
+                if (!Walk(semanticModel, binary.Left, parameterName, steps))
+                {
+                    return false;
+                }
+
+                return binary.Right is TypeSyntax asType
+                    && TryAddCast(semanticModel, asType, BindingStepKind.AsCast, binary, steps);
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryAddCast(
+        SemanticModel semanticModel,
+        TypeSyntax type,
+        BindingStepKind kind,
+        ExpressionSyntax node,
+        List<BindingStep> steps)
+    {
+        if (semanticModel.GetTypeInfo(type).Type is not ITypeSymbol target)
+        {
+            return false;
         }
 
-        if (current is not IdentifierNameSyntax root || root.Identifier.ValueText != parameterName)
-        {
-            return null;
-        }
-
-        return chain.Count == 0 ? null : chain;
+        steps.Add(new BindingStep(kind, node, Display(target)));
+        return true;
     }
 
     /// <summary>
-    /// Classifies every member of the chain, or returns null when a member cannot be expressed as
-    /// a path segment.
+    /// Accepts an indexer only when every argument is a constant, because the generated path is a
+    /// static field and a lambda there cannot capture anything from the call site.
+    /// </summary>
+    private static bool TryAddIndexer(
+        SemanticModel semanticModel,
+        ExpressionSyntax node,
+        BracketedArgumentListSyntax arguments,
+        List<BindingStep> steps)
+    {
+        if (arguments.Arguments.Count == 0)
+        {
+            return false;
+        }
+
+        var literals = new List<string>(arguments.Arguments.Count);
+        foreach (var argument in arguments.Arguments)
+        {
+            var constant = semanticModel.GetConstantValue(argument.Expression);
+            if (!constant.HasValue)
+            {
+                return false;
+            }
+
+            literals.Add(argument.Expression.ToString());
+        }
+
+        steps.Add(new BindingStep(BindingStepKind.Indexer, node, string.Join(", ", literals)));
+        return true;
+    }
+
+    /// <summary>
+    /// Classifies every step, or returns null when a step cannot be expressed as a path segment.
     /// </summary>
     internal static List<BindingSegment>? TryResolveSegments(
         Compilation compilation,
         SemanticModel semanticModel,
-        List<SimpleNameSyntax> chain)
+        List<BindingStep> steps)
     {
         var notifyInterface = compilation.GetTypeByMetadataName(NOTIFY_INTERFACE);
         var mewObject = compilation.GetTypeByMetadataName(MEW_OBJECT);
@@ -106,48 +215,76 @@ internal static class BindingChain
             return null;
         }
 
-        var segments = new List<BindingSegment>(chain.Count);
-        for (int index = 0; index < chain.Count; index++)
+        var segments = new List<BindingSegment>(steps.Count);
+        for (int index = 0; index < steps.Count; index++)
         {
-            var member = chain[index];
-            if (semanticModel.GetSymbolInfo(member).Symbol is not IPropertySymbol property)
+            var step = steps[index];
+            bool isLeaf = index == steps.Count - 1;
+            var segment = step.Kind switch
+            {
+                BindingStepKind.Cast => new BindingSegment(
+                    BindingSegmentKind.Getter, $"({step.Text})value", null, null),
+                BindingStepKind.AsCast => new BindingSegment(
+                    BindingSegmentKind.Getter, $"value as {step.Text}", null, null),
+                BindingStepKind.Indexer => new BindingSegment(
+                    BindingSegmentKind.Getter, $"value[{step.Text}]", null, null),
+                _ => ResolveMember(semanticModel, mewObject, notifyInterface, step, isLeaf),
+            };
+
+            if (segment == null)
             {
                 return null;
             }
 
-            var owner = property.ContainingType;
-            bool canSet = property.SetMethod != null
-                && property.SetMethod.DeclaredAccessibility == Accessibility.Public;
-
-            if (IsObservableValue(property.Type))
-            {
-                segments.Add(new BindingSegment(
-                    BindingSegmentKind.Observable, property.Name, canSet, null));
-                continue;
-            }
-
-            string? mewPropertyOwner = FindMewPropertyOwner(mewObject, owner, property);
-            if (mewPropertyOwner != null)
-            {
-                segments.Add(new BindingSegment(
-                    BindingSegmentKind.MewProperty, property.Name, canSet, mewPropertyOwner));
-                continue;
-            }
-
-            var kind = Implements(owner, notifyInterface)
-                ? BindingSegmentKind.Notifying
-                : BindingSegmentKind.Getter;
-            segments.Add(new BindingSegment(kind, property.Name, canSet, null));
+            segments.Add(segment);
         }
 
         return segments;
     }
 
-    private static bool IsObservableValue(ITypeSymbol type)
-        => type is INamedTypeSymbol named
-            && named.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                == "global::Aprillz.MewUI.ObservableValue<T>"
-            || type.OriginalDefinition.ToDisplayString() == "Aprillz.MewUI.ObservableValue<T>";
+    private static BindingSegment? ResolveMember(
+        SemanticModel semanticModel,
+        INamedTypeSymbol? mewObject,
+        INamedTypeSymbol notifyInterface,
+        BindingStep step,
+        bool isLeaf)
+    {
+        var name = step.Node switch
+        {
+            MemberAccessExpressionSyntax access => access.Name,
+            MemberBindingExpressionSyntax binding => binding.Name,
+            _ => null,
+        };
+
+        if (name == null || semanticModel.GetSymbolInfo(name).Symbol is not IPropertySymbol property)
+        {
+            return null;
+        }
+
+        string expression = $"value.{property.Name}";
+        var owner = property.ContainingType;
+        bool canSet = property.SetMethod != null
+            && property.SetMethod.DeclaredAccessibility == Accessibility.Public;
+
+        if (property.Type.OriginalDefinition.ToDisplayString() == OBSERVABLE_VALUE)
+        {
+            return new BindingSegment(BindingSegmentKind.Observable, expression, null, null);
+        }
+
+        string? mewProperty = FindMewProperty(mewObject, owner, property);
+        if (mewProperty != null)
+        {
+            return new BindingSegment(BindingSegmentKind.MewProperty, expression, null, mewProperty);
+        }
+
+        if (!Implements(owner, notifyInterface))
+        {
+            return new BindingSegment(BindingSegmentKind.Getter, expression, null, null);
+        }
+
+        string? setter = isLeaf && canSet ? $"value.{property.Name} = newValue" : null;
+        return new BindingSegment(BindingSegmentKind.Notifying, expression, setter, null);
+    }
 
     private static bool Implements(ITypeSymbol type, INamedTypeSymbol notifyInterface)
     {
@@ -168,10 +305,10 @@ internal static class BindingChain
     }
 
     /// <summary>
-    /// Finds the declaring type of a <c>{member}Property</c> static field, following the framework
-    /// convention that pairs a CLR property with its MewProperty.
+    /// Finds a <c>{member}Property</c> static field, following the framework convention that pairs
+    /// a CLR property with its MewProperty.
     /// </summary>
-    private static string? FindMewPropertyOwner(
+    private static string? FindMewProperty(
         INamedTypeSymbol? mewObject,
         INamedTypeSymbol owner,
         IPropertySymbol property)
@@ -188,10 +325,10 @@ internal static class BindingChain
             {
                 if (symbol is IFieldSymbol { IsStatic: true } field
                     && field.Type is INamedTypeSymbol fieldType
-                    && fieldType.OriginalDefinition.ToDisplayString() == "Aprillz.MewUI.MewProperty<T>"
+                    && fieldType.OriginalDefinition.ToDisplayString() == MEW_PROPERTY
                     && SymbolEqualityComparer.Default.Equals(fieldType.TypeArguments[0], property.Type))
                 {
-                    return candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    return $"{Display(candidate)}.{fieldName}";
                 }
             }
         }
@@ -212,32 +349,7 @@ internal static class BindingChain
         return false;
     }
 
-    private static ExpressionSyntax Unwrap(ExpressionSyntax expression)
-    {
-        while (true)
-        {
-            if (expression is ParenthesizedExpressionSyntax parenthesized)
-            {
-                expression = parenthesized.Expression;
-            }
-            else if (expression is PostfixUnaryExpressionSyntax postfix
-                && postfix.IsKind(SyntaxKind.SuppressNullableWarningExpression))
-            {
-                expression = postfix.Operand;
-            }
-            else if (expression is CastExpressionSyntax cast)
-            {
-                expression = cast.Expression;
-            }
-            else if (expression is BinaryExpressionSyntax binary
-                && binary.IsKind(SyntaxKind.AsExpression))
-            {
-                expression = binary.Left;
-            }
-            else
-            {
-                return expression;
-            }
-        }
-    }
+    private static string Display(ITypeSymbol type)
+        => type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 }
