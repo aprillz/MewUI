@@ -8,19 +8,25 @@ MewUI의 데이터 바인딩은 Native AOT와 호환되도록 리플렉션 없�
 
 ### 리플렉션 없는 바인딩
 
-WPF/WinUI와 달리 속성 이름 문자열을 런타임에 해석하지 않습니다.
+WPF/WinUI는 무엇에 바인딩할지를 **문자열**로 적고 런타임에 리플렉션으로 찾습니다. MewUI는 같은 것을 **코드**로 적습니다.
 
-| WPF 방식 | MewUI 방식 |
-|----------|-----------|
-| `{Binding PropertyName}` | `.BindText(vm.Name)` 또는 `.Bind(property, vm, x => x.Name)` |
-| PropertyPath 문자열 | 람다 또는 직접 속성 참조 |
-| 런타임 리플렉션 | 델리게이트, 필요하면 컴파일 타임 생성 |
+```xml
+<!-- WPF -->
+<TextBlock Text="{Binding UserName}" />
+```
 
-얻는 것:
+```csharp
+// MewUI
+new TextBlock().Bind(TextBlock.TextProperty, vm, x => x.UserName);
+```
 
-- **Native AOT 호환**: 트리밍/AOT 안전
-- **컴파일 타임 검증**: 속성명 오타가 빌드에서 걸림
-- **IntelliSense와 리팩터링**: 이름 변경이 자동 반영
+중첩 경로도 마찬가지입니다. WPF의 `{Binding Customer.City}`는 MewUI에서 `x => x.Customer.City`가 되며, 이쪽은 컴파일러가 읽는 진짜 코드입니다(4절).
+
+문자열이 코드가 되면서 따라오는 것:
+
+- **Native AOT 호환**: 리플렉션이 없으므로 트리밍해도 안전합니다
+- **컴파일 타임 검증**: 속성명 오타나 타입 불일치가 빌드에서 걸립니다
+- **IntelliSense와 리팩터링**: 자동 완성이 되고 이름을 바꾸면 바인딩도 함께 바뀝니다
 
 ### 바인딩 모드
 
