@@ -12,53 +12,53 @@
 <rect x="20" y="108" width="960" height="40" fill="#fff" stroke="#ddd"/>
 <text x="36" y="135" text-anchor="start" font-size="17">Hello World</text>
 <text x="201" y="135" text-anchor="start" font-size="17">Windows x64 / GDI</text>
-<text x="779" y="135" text-anchor="end" font-size="17">2.907 MB</text>
-<text x="964" y="135" text-anchor="end" font-size="17">1.324 MB</text>
+<text x="779" y="135" text-anchor="end" font-size="17">3.254 MB</text>
+<text x="964" y="135" text-anchor="end" font-size="17">1.437 MB</text>
 <rect x="20" y="148" width="960" height="40" fill="#fafafa" stroke="#ddd"/>
 <text x="36" y="175" text-anchor="start" font-size="17">Hello World</text>
 <text x="201" y="175" text-anchor="start" font-size="17">Windows x64 / Direct2D</text>
-<text x="779" y="175" text-anchor="end" font-size="17">3.046 MB</text>
-<text x="964" y="175" text-anchor="end" font-size="17">1.381 MB</text>
+<text x="779" y="175" text-anchor="end" font-size="17">3.407 MB</text>
+<text x="964" y="175" text-anchor="end" font-size="17">1.495 MB</text>
 <rect x="20" y="188" width="960" height="40" fill="#fff" stroke="#ddd"/>
 <text x="36" y="215" text-anchor="start" font-size="17">Hello World</text>
 <text x="201" y="215" text-anchor="start" font-size="17">Windows x64 / MewVG</text>
-<text x="779" y="215" text-anchor="end" font-size="17">3.211 MB</text>
-<text x="964" y="215" text-anchor="end" font-size="17">1.458 MB</text>
+<text x="779" y="215" text-anchor="end" font-size="17">3.524 MB</text>
+<text x="964" y="215" text-anchor="end" font-size="17">1.558 MB</text>
 <rect x="20" y="228" width="960" height="40" fill="#fafafa" stroke="#ddd"/>
 <text x="36" y="255" text-anchor="start" font-size="17">Hello World</text>
 <text x="201" y="255" text-anchor="start" font-size="17">macOS arm64 / MewVG</text>
-<text x="779" y="255" text-anchor="end" font-size="17">2.635 MB</text>
-<text x="964" y="255" text-anchor="end" font-size="17">1.186 MB</text>
+<text x="779" y="255" text-anchor="end" font-size="17">3.316 MB</text>
+<text x="964" y="255" text-anchor="end" font-size="17">1.492 MB</text>
 <rect x="20" y="268" width="960" height="40" fill="#fff" stroke="#ddd"/>
 <text x="36" y="295" text-anchor="start" font-size="17">Hello World</text>
 <text x="201" y="295" text-anchor="start" font-size="17">Linux x64 / X11 + MewVG</text>
-<text x="779" y="295" text-anchor="end" font-size="17">4.414 MB</text>
-<text x="964" y="295" text-anchor="end" font-size="17">2.126 MB</text>
+<text x="779" y="295" text-anchor="end" font-size="17">4.367 MB</text>
+<text x="964" y="295" text-anchor="end" font-size="17">2.078 MB</text>
 <rect x="20" y="308" width="960" height="40" fill="#fafafa" stroke="#ddd"/>
 <text x="36" y="335" text-anchor="start" font-size="17">Gallery</text>
 <text x="201" y="335" text-anchor="start" font-size="17">Windows x64 / GDI</text>
-<text x="779" y="335" text-anchor="end" font-size="17">5.838 MB</text>
-<text x="964" y="335" text-anchor="end" font-size="17">2.564 MB</text>
+<text x="779" y="335" text-anchor="end" font-size="17">7.329 MB</text>
+<text x="964" y="335" text-anchor="end" font-size="17">3.142 MB</text>
 <rect x="20" y="348" width="960" height="40" fill="#fff" stroke="#ddd"/>
 <text x="36" y="375" text-anchor="start" font-size="17">Gallery</text>
 <text x="201" y="375" text-anchor="start" font-size="17">Windows x64 / Direct2D</text>
-<text x="779" y="375" text-anchor="end" font-size="17">5.959 MB</text>
-<text x="964" y="375" text-anchor="end" font-size="17">2.612 MB</text>
+<text x="779" y="375" text-anchor="end" font-size="17">7.455 MB</text>
+<text x="964" y="375" text-anchor="end" font-size="17">3.188 MB</text>
 <rect x="20" y="388" width="960" height="40" fill="#fafafa" stroke="#ddd"/>
 <text x="36" y="415" text-anchor="start" font-size="17">Gallery</text>
 <text x="201" y="415" text-anchor="start" font-size="17">Windows x64 / MewVG</text>
-<text x="779" y="415" text-anchor="end" font-size="17">6.176 MB</text>
-<text x="964" y="415" text-anchor="end" font-size="17">2.707 MB</text>
+<text x="779" y="415" text-anchor="end" font-size="17">7.623 MB</text>
+<text x="964" y="415" text-anchor="end" font-size="17">3.269 MB</text>
 <rect x="20" y="428" width="960" height="40" fill="#fff" stroke="#ddd"/>
 <text x="36" y="455" text-anchor="start" font-size="17">Gallery</text>
 <text x="201" y="455" text-anchor="start" font-size="17">macOS arm64 / MewVG</text>
-<text x="779" y="455" text-anchor="end" font-size="17">5.625 MB</text>
-<text x="964" y="455" text-anchor="end" font-size="17">2.555 MB</text>
+<text x="779" y="455" text-anchor="end" font-size="17">6.844 MB</text>
+<text x="964" y="455" text-anchor="end" font-size="17">3.071 MB</text>
 <rect x="20" y="468" width="960" height="40" fill="#fafafa" stroke="#ddd"/>
 <text x="36" y="495" text-anchor="start" font-size="17">Gallery</text>
 <text x="201" y="495" text-anchor="start" font-size="17">Linux x64 / X11 + MewVG</text>
-<text x="779" y="495" text-anchor="end" font-size="17">7.420 MB</text>
-<text x="964" y="495" text-anchor="end" font-size="17">3.518 MB</text>
+<text x="779" y="495" text-anchor="end" font-size="17">8.681 MB</text>
+<text x="964" y="495" text-anchor="end" font-size="17">4.074 MB</text>
 <line x1="185" y1="62" x2="185" y2="508" stroke="#ddd"/>
 <line x1="605" y1="62" x2="605" y2="508" stroke="#ddd"/>
 <line x1="795" y1="62" x2="795" y2="508" stroke="#ddd"/>

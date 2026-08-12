@@ -1,17 +1,84 @@
 {
-  "schemaVersion": 1,
-  "mewUIVersion": "0.20.0",
-  "measuredAtUtc": "2026-08-12",
-  "entries": [
-    { "sample": "Hello World", "platformBackend": "Windows x64 / GDI", "executableMiB": 2.907, "compressedMiB": 1.324 },
-    { "sample": "Hello World", "platformBackend": "Windows x64 / Direct2D", "executableMiB": 3.046, "compressedMiB": 1.381 },
-    { "sample": "Hello World", "platformBackend": "Windows x64 / MewVG", "executableMiB": 3.211, "compressedMiB": 1.458 },
-    { "sample": "Hello World", "platformBackend": "macOS arm64 / MewVG", "executableMiB": 2.635, "compressedMiB": 1.186 },
-    { "sample": "Hello World", "platformBackend": "Linux x64 / X11 + MewVG", "executableMiB": 4.414, "compressedMiB": 2.126 },
-    { "sample": "Gallery", "platformBackend": "Windows x64 / GDI", "executableMiB": 5.838, "compressedMiB": 2.564 },
-    { "sample": "Gallery", "platformBackend": "Windows x64 / Direct2D", "executableMiB": 5.959, "compressedMiB": 2.612 },
-    { "sample": "Gallery", "platformBackend": "Windows x64 / MewVG", "executableMiB": 6.176, "compressedMiB": 2.707 },
-    { "sample": "Gallery", "platformBackend": "macOS arm64 / MewVG", "executableMiB": 5.625, "compressedMiB": 2.555 },
-    { "sample": "Gallery", "platformBackend": "Linux x64 / X11 + MewVG", "executableMiB": 7.420, "compressedMiB": 3.518 }
-  ]
+    "schemaVersion":  2,
+    "mewUIVersion":  "0.20.0",
+    "generatedAtUtc":  "2026-08-12T14:44:23.7939031Z",
+    "platforms":  [
+                      {
+                          "runtimeIdentifier":  "win-x64",
+                          "measuredAtUtc":  "2026-08-12T14:12:34.6840531Z",
+                          "sourceManifest":  "cef0ccc945afa5c4cd52bc9bc95ec2c31508f288ff4c6b98fa407651c7918107"
+                      },
+                      {
+                          "runtimeIdentifier":  "linux-x64",
+                          "measuredAtUtc":  "2026-08-12T14:14:15.0153129Z",
+                          "sourceManifest":  "cef0ccc945afa5c4cd52bc9bc95ec2c31508f288ff4c6b98fa407651c7918107"
+                      },
+                      {
+                          "runtimeIdentifier":  "osx-arm64",
+                          "measuredAtUtc":  "2026-08-12T14:36:53.2082010Z",
+                          "sourceManifest":  "cef0ccc945afa5c4cd52bc9bc95ec2c31508f288ff4c6b98fa407651c7918107"
+                      }
+                  ],
+    "entries":  [
+                    {
+                        "sample":  "Hello World",
+                        "platformBackend":  "Windows x64 / GDI",
+                        "executableBytes":  3412480,
+                        "compressedBytes":  1506914
+                    },
+                    {
+                        "sample":  "Hello World",
+                        "platformBackend":  "Windows x64 / Direct2D",
+                        "executableBytes":  3572736,
+                        "compressedBytes":  1567649
+                    },
+                    {
+                        "sample":  "Hello World",
+                        "platformBackend":  "Windows x64 / MewVG",
+                        "executableBytes":  3695616,
+                        "compressedBytes":  1633713
+                    },
+                    {
+                        "sample":  "Hello World",
+                        "platformBackend":  "macOS arm64 / MewVG",
+                        "executableBytes":  3476672,
+                        "compressedBytes":  1564581
+                    },
+                    {
+                        "sample":  "Hello World",
+                        "platformBackend":  "Linux x64 / X11 + MewVG",
+                        "executableBytes":  4578976,
+                        "compressedBytes":  2178965
+                    },
+                    {
+                        "sample":  "Gallery",
+                        "platformBackend":  "Windows x64 / GDI",
+                        "executableBytes":  7684608,
+                        "compressedBytes":  3294467
+                    },
+                    {
+                        "sample":  "Gallery",
+                        "platformBackend":  "Windows x64 / Direct2D",
+                        "executableBytes":  7816704,
+                        "compressedBytes":  3343280
+                    },
+                    {
+                        "sample":  "Gallery",
+                        "platformBackend":  "Windows x64 / MewVG",
+                        "executableBytes":  7992832,
+                        "compressedBytes":  3428235
+                    },
+                    {
+                        "sample":  "Gallery",
+                        "platformBackend":  "macOS arm64 / MewVG",
+                        "executableBytes":  7176632,
+                        "compressedBytes":  3220285
+                    },
+                    {
+                        "sample":  "Gallery",
+                        "platformBackend":  "Linux x64 / X11 + MewVG",
+                        "executableBytes":  9103192,
+                        "compressedBytes":  4271876
+                    }
+                ]
 }

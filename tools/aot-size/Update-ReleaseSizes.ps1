@@ -275,11 +275,11 @@ $result = [ordered]@{
     platforms = $platforms
     entries = $entries
 }
-$json = $result | ConvertTo-Json -Depth 6
+$json = ($result | ConvertTo-Json -Depth 6).Replace("`r`n", "`n")
 [IO.File]::WriteAllText($dataPath, $json + "`n", [Text.UTF8Encoding]::new($false))
 
 & (Join-Path $PSScriptRoot 'Update-ReleaseSizeAssets.ps1')
-if ($LASTEXITCODE -ne 0) {
+if (-not $?) {
     throw 'Release size asset generation failed.'
 }
 
