@@ -20,25 +20,64 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         try
         {
             var face = FreeTypeFaceCache.Instance.Get(fontPath, pixelHeight, weight, italic);
-            var metrics = FreeTypeFaceCache.GetSizeMetrics(face.Face);
-            double ascentPx = (long)metrics.ascender / 64.0;
-            double descentPx = -(long)metrics.descender / 64.0; // FreeType descender is negative
-            double heightPx = (long)metrics.height / 64.0;
-            double dpiScale = pixelHeight > 0 ? pixelHeight / size : 1.0;
+            lock (face.SyncRoot)
+            {
+                var metrics = FreeTypeFaceCache.GetSizeMetrics(face.Face);
+                double ascentPx = (long)metrics.ascender / 64.0;
+                double descentPx = -(long)metrics.descender / 64.0; // FreeType descender is negative
+                double heightPx = (long)metrics.height / 64.0;
+                double dpiScale = pixelHeight > 0 ? pixelHeight / size : 1.0;
 
-            Ascent = ascentPx / dpiScale;
-            Descent = descentPx / dpiScale;
-            InternalLeading = Math.Max(0, (heightPx - ascentPx - descentPx) / dpiScale);
-            // FreeType doesn't expose cap height via FT_Size_Metrics.
-            // Approximate from ascent (pure typographic ascent from FreeType).
-            CapHeight = Ascent * 0.92;
+                Ascent = ascentPx / dpiScale;
+                Descent = descentPx / dpiScale;
+                InternalLeading = Math.Max(0, (heightPx - ascentPx - descentPx) / dpiScale);
+                CapHeight = ResolveCapHeight(face.Face, in metrics, dpiScale, Ascent);
+            }
         }
         catch
         {
             // Fallback: approximate from size.
             Ascent = size;
             Descent = size * 0.25;
+            CapHeight = size * 0.7;
         }
+    }
+
+    private static unsafe double ResolveCapHeight(
+        nint face,
+        in FT_Size_Metrics metrics,
+        double dpiScale,
+        double ascent)
+    {
+        var os2 = (TT_OS2*)FT.FT_Get_Sfnt_Table(face, FreeTypeSfntTags.FT_SFNT_OS2);
+        if (os2 != null && os2->version != ushort.MaxValue && os2->version >= 2 && os2->sCapHeight > 0)
+        {
+            // y_scale maps font units to 26.6 pixels. Preserve fractional precision instead
+            // of using the integer-rounded FT_Size_Metrics ascender.
+            double capHeightPx = os2->sCapHeight * (long)metrics.y_scale / 65536.0 / 64.0;
+            if (capHeightPx > 0)
+            {
+                return capHeightPx / dpiScale;
+            }
+        }
+
+        // Older and non-SFNT fonts have no sCapHeight. A flat-sided capital is a more faithful
+        // cap-line probe than an ascent ratio and reflects the active size's hinting.
+        if (FT.FT_Load_Char(face, 'H', FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_NO_BITMAP) == 0)
+        {
+            var faceRec = (FT_FaceRec*)face;
+            if (faceRec->glyph != 0)
+            {
+                var slot = (FT_GlyphSlotRec*)faceRec->glyph;
+                double capHeightPx = (long)slot->metrics.horiBearingY / 64.0;
+                if (capHeightPx > 0)
+                {
+                    return capHeightPx / dpiScale;
+                }
+            }
+        }
+
+        return ascent * 0.7;
     }
 
     public unsafe bool TryAppendGlyphOutline(PathGeometry path, char ch, Point baselineOrigin, out double advance)

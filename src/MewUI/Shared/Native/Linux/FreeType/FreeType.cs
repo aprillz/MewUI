@@ -37,6 +37,9 @@ internal static partial class FreeType
     public static partial uint FT_Get_Char_Index(nint face, uint charcode);
 
     [LibraryImport(LibraryName)]
+    public static partial nint FT_Get_Sfnt_Table(nint face, int tag);
+
+    [LibraryImport(LibraryName)]
     public static partial int FT_Get_Kerning(nint face, uint left_glyph, uint right_glyph, uint kern_mode, out FT_Vector akerning);
 
     [LibraryImport(LibraryName)]
@@ -303,4 +306,52 @@ internal static class FreeTypeVarAxisTags
     public const uint ITAL = ((uint)'i' << 24) | ((uint)'t' << 16) | ((uint)'a' << 8) | (uint)'l';
     // 'slnt' = 0x736C6E74
     public const uint SLNT = ((uint)'s' << 24) | ((uint)'l' << 16) | ((uint)'n' << 8) | (uint)'t';
+}
+
+internal static class FreeTypeSfntTags
+{
+    public const int FT_SFNT_OS2 = 2;
+}
+
+/// <summary>
+/// FreeType's parsed TT_OS2 table through sCapHeight. FT_ULong fields use nuint so this
+/// declaration follows the native ABI on both 32-bit and 64-bit Unix.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct TT_OS2
+{
+    public ushort version;
+    public short xAvgCharWidth;
+    public ushort usWeightClass;
+    public ushort usWidthClass;
+    public ushort fsType;
+    public short ySubscriptXSize;
+    public short ySubscriptYSize;
+    public short ySubscriptXOffset;
+    public short ySubscriptYOffset;
+    public short ySuperscriptXSize;
+    public short ySuperscriptYSize;
+    public short ySuperscriptXOffset;
+    public short ySuperscriptYOffset;
+    public short yStrikeoutSize;
+    public short yStrikeoutPosition;
+    public short sFamilyClass;
+    public fixed byte panose[10];
+    public nuint ulUnicodeRange1;
+    public nuint ulUnicodeRange2;
+    public nuint ulUnicodeRange3;
+    public nuint ulUnicodeRange4;
+    public fixed byte achVendID[4];
+    public ushort fsSelection;
+    public ushort usFirstCharIndex;
+    public ushort usLastCharIndex;
+    public short sTypoAscender;
+    public short sTypoDescender;
+    public short sTypoLineGap;
+    public ushort usWinAscent;
+    public ushort usWinDescent;
+    public nuint ulCodePageRange1;
+    public nuint ulCodePageRange2;
+    public short sxHeight;
+    public short sCapHeight;
 }

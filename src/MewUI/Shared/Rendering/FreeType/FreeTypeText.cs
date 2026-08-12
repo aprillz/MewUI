@@ -24,7 +24,7 @@ internal static unsafe class FreeTypeText
         }
 
         var face = FreeTypeFaceCache.Instance.Get(font.FontPath, font.PixelHeight, font.Weight, font.IsItalic);
-        int lineHeightPx = Math.Max(1, (int)Math.Round(font.PixelHeight * 1.25));
+        int lineHeightPx = GetLineHeightPx(font);
 
         int maxLineWidth = 0;
         int lines = 0;
@@ -72,7 +72,7 @@ internal static unsafe class FreeTypeText
 
         var buffer = new byte[widthPx * heightPx * 4];
 
-        int lineHeightPx = Math.Max(1, (int)Math.Round(font.PixelHeight * 1.25));
+        int lineHeightPx = GetLineHeightPx(font);
 
         var lines = new List<LineSegment>();
         int maxLineWidth = 0;
@@ -531,6 +531,24 @@ internal static unsafe class FreeTypeText
         }
     }
 
+    /// <summary>
+    /// Converts the layout engine's FreeType ascent back to device pixels. The requested
+    /// pixel height is the em size, not the baseline: fonts with tall ascenders (notably
+    /// Noto Sans) can place the baseline several pixels below it.
+    /// </summary>
+    private static int GetBaselinePx(FreeTypeFont font)
+    {
+        double dpiScale = font.Size > 0 ? font.PixelHeight / font.Size : 1.0;
+        return Math.Max(1, (int)Math.Round(font.Ascent * dpiScale));
+    }
+
+    private static int GetLineHeightPx(FreeTypeFont font)
+    {
+        double dpiScale = font.Size > 0 ? font.PixelHeight / font.Size : 1.0;
+        double height = (font.Ascent + font.Descent + font.InternalLeading) * dpiScale;
+        return Math.Max(1, (int)Math.Ceiling(height));
+    }
+
     private static void RenderShapedGlyphs(
         ShapedGlyph[] glyphs,
         FreeTypeFaceCache.FaceEntry face,
@@ -544,7 +562,7 @@ internal static unsafe class FreeTypeText
         ReadOnlySpan<char> sourceText = default)
     {
         long penX26_6 = (long)startPenX << 6;
-        int baseY = penY + font.PixelHeight;
+        int baseY = penY + GetBaselinePx(font);
         int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
 
         for (int i = 0; i < glyphs.Length; i++)
@@ -820,7 +838,7 @@ internal static unsafe class FreeTypeText
         uint prevGlyph = 0;
         FreeTypeFaceCache.FaceEntry prevFace = face;
         int flags = FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT;
-        int baseY = penY + font.PixelHeight;
+        int baseY = penY + GetBaselinePx(font);
 
         for (int i = 0; i < line.Length; i++)
         {
