@@ -118,7 +118,7 @@ MewUI는 작고 명시적인 코어 위에 플랫폼 호스트와 렌더링 백�
 - **NativeAOT + Trim 친화**
 - 작은 크기, 빠른 시작시간, 적은 메모리 사용
 - **XAML 없이 Fluent한 C# 마크업**으로 UI 트리 구성
-- **AOT 친화적인 명시적 바인딩**
+- **AOT 친화적인 명시적 바인딩** (`INotifyPropertyChanged`, `INotifyCollectionChanged`, 중첩 경로를 리플렉션 없이)
 - 코어는 얇게 유지하고 큰 기능은 선택형 확장 패키지로 분리
 
 ### 지향하지 않는 것
@@ -157,7 +157,7 @@ Gallery는 full-featured showcase 샘플입니다. 최소 배포 크기의 기�
 ---
 ## 🔗 상태/바인딩(AOT 친화)
 
-바인딩은 리플렉션 없이, 명시적/델리게이트 기반입니다:
+바인딩은 리플렉션 없이, 명시적/델리게이트 기반입니다. 소스는 세 가지를 지원합니다. `ObservableValue<T>`, `INotifyPropertyChanged`를 구현한 뷰모델, 다른 요소의 `MewProperty<T>`입니다. 한 경로 안에서 섞어 써도 되고 컬렉션 변경(`INotifyCollectionChanged`)도 따라갑니다.
 
 ```csharp
 var percent = new ObservableValue<double>(
@@ -173,37 +173,32 @@ var label  = new Label()
                     convert: v => $"Percent ({v:P0})"); 
 ```
 
-**중첩 소스** - `BindingPath<TRoot, TValue>`는 프로퍼티 이름 문자열, 리플렉션, 코드 생성 없이 중첩된 소스 체인을 따라 바인딩합니다. `Then` 하나마다 세그먼트를 덧붙이며, 관찰되는 세그먼트는 중간 값이 교체되면 자동으로 다시 연결됩니다.
+**INotifyPropertyChanged** - 평범한 MVVM 뷰모델을 감싸지 않고 그대로 씁니다. 구독은 약참조라 오래 사는 뷰모델이 화면을 살려두지 않습니다.
 
 ```csharp
-// [source].Customer.City 바인딩
-var city = new TextBlock().Bind(
-    TextBlock.TextProperty,
-    order,
-    BindingPath
-        .From<OrderViewModel>()
-        .Then(order => order.Customer)      // 관찰 세그먼트: 교체 시 재연결
-        .Then(customer => customer!.City),  // leaf
-    mode: BindingMode.OneWay,
-    fallbackValue: "-");
+new Label().Bind(Label.TextProperty, vm, x => x.UserName);
+
+// setter를 함께 주면 TwoWay
+new TextBox().Bind(TextBox.TextProperty, vm,
+    x => x.UserName,
+    (owner, value) => owner.UserName = value);
 ```
 
-`MewProperty<T>`도 세그먼트로 쓸 수 있습니다:
+**중첩 경로** - 점으로 이어 쓰면 컴파일 타임에 세그먼트 사슬로 분해됩니다. 문자열도 리플렉션도 없고, 중간 값이 교체되면 그 아래가 자동으로 다시 연결됩니다.
 
 ```csharp
-// [source].Padding.Left 바인딩
-var readout = new TextBlock().Bind(
-    TextBlock.TextProperty,
-    source,
-    BindingPath
-        .From<Control>()
-        .Then(Control.PaddingProperty)   // MewProperty 세그먼트: 관찰
-        .Then(padding => padding.Left),  // leaf
-    convert: left => $"{left}px",
-    mode: BindingMode.OneWay);
+// order.Customer.City
+var city = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Customer.City);
+
+// 인덱서. 원소 교체와 앞쪽 삽입/삭제까지 따라갑니다
+var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].ProductName);
 ```
 
-관찰/스냅샷 세그먼트, null/fallback, TwoWay, 수명 규칙은 [Binding](docs/Binding.ko.md) 문서를 참고하세요.
+단계마다 멤버의 타입을 보고 관찰 방식을 고릅니다. `INotifyPropertyChanged`면 `PropertyChanged`, `ObservableValue<T>`면 그 알림, `MewObject`면 대응하는 `MewProperty`, 통지하는 컬렉션이면 `CollectionChanged`입니다.
+
+이 한 줄 문법은 .NET 9 이상 SDK로 빌드할 때 동작합니다. 그 아래에서는 같은 경로를 `BindingPath`와 `ThenNotifying`으로 명시해 쓰며, 잃는 것은 문법이지 기능이 아닙니다.
+
+세그먼트 종류, null/fallback, TwoWay, 컬렉션, 수명 규칙은 [Binding](docs/Binding.ko.md) 문서를 참고하세요.
 
 ---
 ## 🧱 컨트롤 / 패널
