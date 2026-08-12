@@ -1,0 +1,47 @@
+name: NativeAOT size
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/MewUI/**"
+      - "src/MewUI.Platform.Win32/**"
+      - "src/MewUI.Backend.Gdi/**"
+      - "tools/aot-size/**"
+      - ".github/workflows/aot-size.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-gdi:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Measure and check Windows GDI probes
+        shell: pwsh
+        run: >-
+          ./tools/aot-size/Measure-AotSize.ps1
+          -BaselinePath ./tools/aot-size/baselines/win-x64-gdi.json
+
+      - name: Check release size chart
+        shell: pwsh
+        run: ./tools/aot-size/Update-ReleaseSizeAssets.ps1 -Check
+
+      - name: Upload reports and maps
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nativeaot-size-win-x64-gdi
+          path: .artifacts/aot-size/win-x64-gdi/
+          if-no-files-found: error

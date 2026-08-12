@@ -144,20 +144,11 @@ MewUI는 작고 명시적인 코어 위에 플랫폼 호스트와 렌더링 백�
 
 NativeAOT 실행 파일 크기는 플랫폼 호스트, 렌더링 백엔드, 리소스, publish 옵션에 따라 달라집니다. 아래 표는 **main executable만** 측정한 값이며, ZIP은 같은 실행 파일을 기본 측정 설정으로 압축한 보조값입니다. 크기는 **1 MB = 1024 KB** 기준입니다.
 
-| 샘플 | 플랫폼 / 백엔드 | 실행 파일 | ZIP |
-|---|---|---:|---:|
-| Hello World | Windows x64 / GDI | 2.907 MB | 1.324 MB |
-| Hello World | Windows x64 / Direct2D | 3.046 MB | 1.381 MB |
-| Hello World | Windows x64 / MewVG | 3.211 MB | 1.458 MB |
-| Hello World | Linux x64 / X11 + MewVG | 4.414 MB | 2.126 MB |
-| Hello World | macOS arm64 / MewVG | 2.635 MB | 1.186 MB |
-| Gallery | Windows x64 / GDI | 5.838 MB | 2.564 MB |
-| Gallery | Windows x64 / Direct2D | 5.959 MB | 2.612 MB |
-| Gallery | Windows x64 / MewVG | 6.176 MB | 2.707 MB |
-| Gallery | Linux x64 / X11 + MewVG | 7.420 MB | 3.518 MB |
-| Gallery | macOS arm64 / MewVG | 5.625 MB | 2.555 MB |
+재현 가능한 크기 probe, 회귀 예산, NativeAOT map 분석 방법은 [NativeAOT 크기 관리](docs/NativeAotSize.ko.md)를 참고하세요.
 
-<img src="https://github.com/user-attachments/assets/92dae0e7-6ecb-46f8-b405-2fcab629375b" />
+![MewUI publish size comparison](docs/assets/nativeaot-size.svg)
+
+[측정 데이터](tools/aot-size/release-sizes.json)
 
 Gallery는 full-featured showcase 샘플입니다. 최소 배포 크기의 기준은 Hello World 행을 참고하세요.
 

@@ -167,20 +167,11 @@ The core covers common desktop UI patterns; specialized features such as charts 
 
 NativeAOT executable size depends on the platform host, rendering backend, resources, and publish options. The table below measures the **main executable only**; ZIP is the same executable compressed with the default measurement settings. Sizes use binary units: **1 MB = 1024 KB**.
 
-| Sample | Platform / backend | Executable | ZIP |
-|---|---|---:|---:|
-| Hello World | Windows x64 / GDI | 2.907 MB | 1.324 MB |
-| Hello World | Windows x64 / Direct2D | 3.046 MB | 1.381 MB |
-| Hello World | Windows x64 / MewVG | 3.211 MB | 1.458 MB |
-| Hello World | Linux x64 / X11 + MewVG | 4.414 MB | 2.126 MB |
-| Hello World | macOS arm64 / MewVG | 2.635 MB | 1.186 MB |
-| Gallery | Windows x64 / GDI | 5.838 MB | 2.564 MB |
-| Gallery | Windows x64 / Direct2D | 5.959 MB | 2.612 MB |
-| Gallery | Windows x64 / MewVG | 6.176 MB | 2.707 MB |
-| Gallery | Linux x64 / X11 + MewVG | 7.420 MB | 3.518 MB |
-| Gallery | macOS arm64 / MewVG | 5.625 MB | 2.555 MB |
+For reproducible size probes, regression budgets, and NativeAOT map analysis, see [NativeAOT size discipline](docs/NativeAotSize.md).
 
-<img src="https://github.com/user-attachments/assets/92dae0e7-6ecb-46f8-b405-2fcab629375b" />
+![MewUI publish size comparison](docs/assets/nativeaot-size.svg)
+
+[Measurement data](tools/aot-size/release-sizes.json)
 
 The Gallery is a full-featured showcase sample. Use the Hello World rows as the minimum deployment-size baseline.
 

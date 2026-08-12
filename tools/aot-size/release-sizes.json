@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "measuredAtUtc": "2026-08-12",
+  "dotnetSdk": "10.0.301",
+  "entries": [
+    { "sample": "Hello World", "platformBackend": "Windows x64 / GDI", "executableMiB": 2.907, "compressedMiB": 1.324 },
+    { "sample": "Hello World", "platformBackend": "Windows x64 / Direct2D", "executableMiB": 3.046, "compressedMiB": 1.381 },
+    { "sample": "Hello World", "platformBackend": "Windows x64 / MewVG", "executableMiB": 3.211, "compressedMiB": 1.458 },
+    { "sample": "Hello World", "platformBackend": "macOS arm64 / MewVG", "executableMiB": 2.635, "compressedMiB": 1.186 },
+    { "sample": "Hello World", "platformBackend": "Linux x64 / X11 + MewVG", "executableMiB": 4.414, "compressedMiB": 2.126 },
+    { "sample": "Gallery", "platformBackend": "Windows x64 / GDI", "executableMiB": 5.838, "compressedMiB": 2.564 },
+    { "sample": "Gallery", "platformBackend": "Windows x64 / Direct2D", "executableMiB": 5.959, "compressedMiB": 2.612 },
+    { "sample": "Gallery", "platformBackend": "Windows x64 / MewVG", "executableMiB": 6.176, "compressedMiB": 2.707 },
+    { "sample": "Gallery", "platformBackend": "macOS arm64 / MewVG", "executableMiB": 5.625, "compressedMiB": 2.555 },
+    { "sample": "Gallery", "platformBackend": "Linux x64 / X11 + MewVG", "executableMiB": 7.420, "compressedMiB": 3.518 }
+  ]
+}

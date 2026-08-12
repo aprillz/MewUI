@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "status": "pay-for-play-reachability-baseline",
+  "measuredAtUtc": "2026-08-12",
+  "commit": "db51012a+working-tree-style-registration",
+  "dotnetSdk": "10.0.301",
+  "runtimeIdentifier": "win-x64",
+  "backend": "Gdi",
+  "probes": [
+    {
+      "probe": "Empty",
+      "executableBytes": 3022336,
+      "methodCodeBytes": 1218206,
+      "constructedTypeBytes": 390596,
+      "metadataBytes": 205983,
+      "methodCount": 7251,
+      "constructedTypeCount": 4031
+    },
+    {
+      "probe": "Text",
+      "executableBytes": 3412480,
+      "methodCodeBytes": 1416649,
+      "constructedTypeBytes": 441868,
+      "metadataBytes": 226487,
+      "methodCount": 8234,
+      "constructedTypeCount": 4565
+    },
+    {
+      "probe": "Button",
+      "executableBytes": 3479040,
+      "methodCodeBytes": 1443792,
+      "constructedTypeBytes": 454372,
+      "metadataBytes": 229725,
+      "methodCount": 8412,
+      "constructedTypeCount": 4679
+    },
+    {
+      "probe": "Image",
+      "executableBytes": 3433472,
+      "methodCodeBytes": 1415275,
+      "constructedTypeBytes": 417740,
+      "metadataBytes": 218647,
+      "methodCount": 7840,
+      "constructedTypeCount": 4321
+    }
+  ]
+}
