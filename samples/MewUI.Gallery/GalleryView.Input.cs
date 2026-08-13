@@ -183,11 +183,11 @@ partial class GalleryView
 
         return new StackPanel()
             .Vertical()
-            .Spacing(6)
+            .Spacing(8)
             .Children(
                 new StackPanel()
                     .Horizontal()
-                    .Spacing(4)
+                    .Spacing(8)
                     .Children(
                         searchBox,
                         ChevronButton(GlyphKind.ChevronUp, () => MoveCurrent(-1)),
