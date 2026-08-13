@@ -26,10 +26,18 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
             static (self, _, value) => self.OnWrapChanged(value));
 
+    public static readonly MewProperty<bool> SizeToDocumentProperty =
+        MewProperty<bool>.Register<MultiLineTextBox>(nameof(SizeToDocument), false,
+            MewPropertyOptions.AffectsLayout);
+
     public static readonly MewProperty<int> TabSizeProperty =
         MewProperty<int>.Register<MultiLineTextBox>(nameof(TabSize), 4,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
             static (self, _, _) => self.ResetView());
+
+    // Arrange snaps the viewport to the pixel grid, moving its width by less than one DIP; a
+    // measure that re-cut lines over that drift would re-wrap on every frame.
+    private const double WRAP_WIDTH_TOLERANCE = 1.0;
 
     // Guard against an offset that oscillates instead of settling. Measured convergence is 2-3
     // passes and does not grow with the document, since each pass measures the lines it lands on.
@@ -113,6 +121,17 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
         set => SetValue(WrapProperty, value);
     }
 
+    /// <summary>
+    /// Whether the desired size is the document's extent, clamped to the offered space, instead of
+    /// the offered space itself. Off by default: reporting the offered space is what an editor
+    /// filling a pane wants, and it costs no extent lookup.
+    /// </summary>
+    public bool SizeToDocument
+    {
+        get => GetValue(SizeToDocumentProperty);
+        set => SetValue(SizeToDocumentProperty, value);
+    }
+
     /// <summary>Tab width in space characters.</summary>
     public int TabSize
     {
@@ -178,11 +197,80 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     protected override Size MeasureContent(Size availableSize)
     {
         double lineHeight = Math.Max(16, FontSize * 1.4);
+        if (SizeToDocument && TryMeasureDocument(availableSize, out var documentSize))
+        {
+            return new Size(Math.Max(40, documentSize.Width), Math.Max(lineHeight, documentSize.Height));
+        }
+
         double width = double.IsPositiveInfinity(availableSize.Width) ? 240 : availableSize.Width;
         double height = double.IsPositiveInfinity(availableSize.Height)
             ? Math.Min(400, Math.Max(3, _document.LineCount) * lineHeight + Padding.VerticalThickness)
             : availableSize.Height;
         return new Size(Math.Max(40, width), Math.Max(lineHeight, height));
+    }
+
+    /// <summary>
+    /// Document extent at the offered width, or false when no view can be built yet.
+    /// </summary>
+    private bool TryMeasureDocument(Size availableSize, out Size documentSize)
+    {
+        documentSize = default;
+        EnsureView();
+        if (_view is null)
+        {
+            return false;
+        }
+
+        double chromeWidth = Padding.HorizontalThickness + (BorderThickness * 2);
+        double chromeHeight = Padding.VerticalThickness + (BorderThickness * 2);
+
+        double offeredWidth = double.IsPositiveInfinity(availableSize.Width)
+            ? _view.Viewport.Width
+            : Math.Max(0, availableSize.Width - chromeWidth);
+        ApplyMeasureWrapWidth(offeredWidth);
+
+        // Lines outside the viewport carry estimated sizes, and an extent with estimates in it
+        // drifts as arrange materializes them, flickering a scroll bar in over a control sized to
+        // the stale reading. Growing the viewport to the extent stands every line up, so the
+        // reported extent is measured, not estimated. A document already taller than the offer is
+        // exempt: its height gets clamped to the offer anyway, and standing all of it up would
+        // defeat virtualization.
+        double offeredHeight = double.IsPositiveInfinity(availableSize.Height)
+            ? double.PositiveInfinity
+            : Math.Max(0, availableSize.Height - chromeHeight);
+        for (int pass = 0; pass < SCROLL_SETTLE_PASSES; pass++)
+        {
+            var viewport = _view.Viewport;
+            double targetHeight = _view.ExtentHeight;
+            if (targetHeight > offeredHeight + WRAP_WIDTH_TOLERANCE
+                || Math.Abs(viewport.Height - targetHeight) <= WRAP_WIDTH_TOLERANCE)
+            {
+                break;
+            }
+            _view.SetViewport(viewport with { Height = targetHeight });
+        }
+
+        // Clamped to the offer, which is what keeps a virtualized document from oscillating: past
+        // the offer the answer is the offer itself. The tolerance is slack for sub-DIP measurement
+        // drift: a line whose refined width lands exactly on the reported size would otherwise
+        // re-wrap in arrange and flicker a scroll bar in.
+        documentSize = new Size(
+            Math.Min(Math.Ceiling(_view.ExtentWidth) + chromeWidth + WRAP_WIDTH_TOLERANCE, availableSize.Width),
+            Math.Min(Math.Ceiling(_view.ExtentHeight) + chromeHeight + WRAP_WIDTH_TOLERANCE, availableSize.Height));
+        return true;
+    }
+
+    /// <summary>
+    /// Points the view's wrap width at <paramref name="width"/>, tolerating the sub-DIP drift the
+    /// arrange pass introduces by snapping its viewport to the pixel grid.
+    /// </summary>
+    private void ApplyMeasureWrapWidth(double width)
+    {
+        var viewport = _view!.Viewport;
+        if (Math.Abs(viewport.Width - width) > WRAP_WIDTH_TOLERANCE)
+        {
+            _view.SetViewport(viewport with { Width = width });
+        }
     }
 
     protected override void ArrangeContent(Rect bounds)

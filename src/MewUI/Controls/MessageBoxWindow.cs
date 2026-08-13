@@ -39,6 +39,8 @@ public sealed class MessageBoxWindow : Window
 
     private readonly List<(MessageBoxCheckBox proxy, CheckBox control)> _checkBoxControls = [];
     private bool _pendingRecenter;
+    // Client size captured before the detail pane toggles, so the resize can grow around the center.
+    private Size _sizeBeforeDetailToggle;
 
     public bool? DialogResult { get; private set; }
 
@@ -87,6 +89,40 @@ public sealed class MessageBoxWindow : Window
         WindowSize = WindowSize.FitContentSize(800, maxHeight);
     }
 
+    /// <summary>
+    /// Keeps the window's center fixed across a resize, clamped to the work area it sits on.
+    /// </summary>
+    private void KeepCenterAfterResize(Size sizeBefore, Size sizeAfter)
+    {
+        if (Handle == 0 || sizeBefore.Width <= 0 || sizeBefore.Height <= 0)
+        {
+            return;
+        }
+
+        var position = Position;
+        double left = position.X - ((sizeAfter.Width - sizeBefore.Width) / 2);
+        double top = position.Y - ((sizeAfter.Height - sizeBefore.Height) / 2);
+
+        // Re-centering on the owner would drag a window the user moved back to the owner's monitor,
+        // and crossing monitors mid-resize restarts the fit at a different scale.
+        double scale = DpiScale <= 0 ? 1.0 : DpiScale;
+        var centerPx = new Point(
+            (left + (sizeAfter.Width / 2)) * scale,
+            (top + (sizeAfter.Height / 2)) * scale);
+        var workAreaPx = Application.Current.PlatformHost.GetWorkAreaForPoint(centerPx);
+        if (workAreaPx.Width > 0 && workAreaPx.Height > 0)
+        {
+            double minLeft = workAreaPx.X / scale;
+            double minTop = workAreaPx.Y / scale;
+            double maxLeft = (workAreaPx.Right / scale) - sizeAfter.Width;
+            double maxTop = (workAreaPx.Bottom / scale) - sizeAfter.Height;
+            left = Math.Clamp(left, minLeft, Math.Max(minLeft, maxLeft));
+            top = Math.Clamp(top, minTop, Math.Max(minTop, maxTop));
+        }
+
+        Position = new Point(left, top);
+    }
+
     private void BuildContent()
     {
         bool hasDetail = !string.IsNullOrEmpty(_detail);
@@ -123,6 +159,7 @@ public sealed class MessageBoxWindow : Window
                 IsReadOnly = true,
                 Wrap = true,
                 IsVisible = false,
+                SizeToDocument = true,
             };
 
             var detailAt = new AccessText();
@@ -134,6 +171,7 @@ public sealed class MessageBoxWindow : Window
             };
             detailCheckBox.CheckedChanged += isChecked =>
             {
+                _sizeBeforeDetailToggle = ClientSize;
                 detailTextBox.IsVisible = isChecked == true;
                 _pendingRecenter = true;
             };
@@ -141,12 +179,12 @@ public sealed class MessageBoxWindow : Window
             bodyPanel.Add(detailCheckBox);
             bodyPanel.Add(detailTextBox);
 
-            ClientSizeChanged += _ =>
+            ClientSizeChanged += newSize =>
             {
                 if (_pendingRecenter)
                 {
                     _pendingRecenter = false;
-                    CenterOnOwner();
+                    KeepCenterAfterResize(_sizeBeforeDetailToggle, newSize);
                 }
             };
         }

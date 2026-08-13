@@ -131,6 +131,9 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     // target once per change and accepts whatever client size the platform applies.
     private Size _requestedClientSize;
     private bool _hasRequestedClientSize;
+    // DPI the last client-size request was converted with; a request is stale once the window moves
+    // to a monitor with a different scale, even when the content's DIP size is unchanged.
+    private uint _requestedClientSizeDpi;
 
     private Size _clientSizeDip = new(DefaultWidth, DefaultHeight);
     private Size _lastLayoutClientSizeDip = Size.Empty;
@@ -1985,10 +1988,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             // applies - possibly clamped to an OS minimum. The fit contract is
             // max(content, OS minimum); a clamped result is never re-fought (issue #199).
             var target = new Size(fitWidth, fitHeight);
-            if (!_hasRequestedClientSize || target != _requestedClientSize)
+            if (!_hasRequestedClientSize || target != _requestedClientSize || Dpi != _requestedClientSizeDpi)
             {
                 _hasRequestedClientSize = true;
                 _requestedClientSize = target;
+                _requestedClientSizeDpi = Dpi;
                 _backend?.SetClientSize(target.Width, target.Height);
             }
         }
@@ -2453,6 +2457,24 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     }
 
     internal void SetDpi(uint dpi) => Dpi = dpi;
+
+    /// <summary>
+    /// Client size this window last asked the platform for, or null while no fit target stands.
+    /// A platform driving an OS-owned resize can hold its rectangle to this instead of letting the
+    /// window settle at a size layout already replaced.
+    /// </summary>
+    internal Size? RequestedClientSize => _hasRequestedClientSize ? _requestedClientSize : null;
+
+    /// <summary>
+    /// Forgets the client size this window last asked the platform for, so the next layout submits
+    /// its fit target again. Needed after something outside layout resizes the window, such as the
+    /// OS move loop stamping its own rectangle over a resize made while a drag was in flight.
+    /// </summary>
+    internal void InvalidateSizingTransaction()
+    {
+        _hasRequestedClientSize = false;
+        InvalidateMeasure();
+    }
 
     internal void SetClientSizeDip(double widthDip, double heightDip) => _clientSizeDip = new Size(widthDip, heightDip);
 

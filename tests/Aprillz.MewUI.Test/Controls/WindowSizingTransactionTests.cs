@@ -95,6 +95,39 @@ public sealed class WindowSizingTransactionTests
     }
 
     [TestMethod]
+    public void DpiChange_ResubmitsTheUnchangedTarget()
+    {
+        var backend = new ApplyingWindowBackend();
+        var window = CreateFitWindow(backend, new PlainElement { Width = 256, Height = 124 });
+        window.SetDpi(96);
+
+        backend.SetClientSizeCount = 0;
+        window.PerformLayout();
+        Assert.AreEqual(1, backend.SetClientSizeCount);
+
+        // The DIP target is DPI-independent, but the pixels the platform derives from it are not:
+        // a size submitted at the old scale stays wrong until it is submitted again.
+        window.SetDpi(144);
+        window.PerformLayout();
+
+        Assert.AreEqual(2, backend.SetClientSizeCount, "a scale change must re-submit the same DIP target");
+    }
+
+    [TestMethod]
+    public void SameDpiAndTarget_IsNotResubmitted()
+    {
+        var backend = new ApplyingWindowBackend();
+        var window = CreateFitWindow(backend, new PlainElement { Width = 256, Height = 124 });
+        window.SetDpi(96);
+
+        backend.SetClientSizeCount = 0;
+        window.PerformLayout();
+        window.PerformLayout();
+
+        Assert.AreEqual(1, backend.SetClientSizeCount);
+    }
+
+    [TestMethod]
     public void DegenerateContent_FloorsAtOnePixel()
     {
         var backend = new ApplyingWindowBackend();
