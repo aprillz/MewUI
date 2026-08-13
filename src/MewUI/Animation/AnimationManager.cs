@@ -142,7 +142,14 @@ public sealed class AnimationManager
     /// Updates all active animation clocks. Called once by the platform host before selecting and
     /// rendering the windows that consumed the pulse.
     /// </summary>
-    public void Update()
+    public void Update() => UpdateAt(Stopwatch.GetTimestamp());
+
+    /// <summary>
+    /// Ticks every active clock against <paramref name="timestamp"/>, in <see cref="Stopwatch"/> ticks.
+    /// A caller that supplies the timestamp can step a transition frame by frame, which reading the
+    /// wall clock cannot: a test would only ever sample progress zero.
+    /// </summary>
+    internal void UpdateAt(long timestamp)
     {
         lock (_sync)
         {
@@ -154,7 +161,7 @@ public sealed class AnimationManager
                 return;
             }
 
-            long now = Stopwatch.GetTimestamp();
+            long now = timestamp;
 
             // Capture demand before ticking. A clock may complete and unregister during Update, but
             // its final callback still needs one frame on the surface it updated.
