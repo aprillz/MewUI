@@ -736,7 +736,9 @@ public static class DefaultStyles
             transitions: [Transition.Create(Control.BackgroundProperty)],
             setters:
             [
-                Setter.Create(Control.BackgroundProperty, Color.Transparent),
+                // The hover hue at zero alpha, not Color.Transparent: that constant is white, so the fill
+                // would ramp from white and flash bright over dark chrome on the way in and out again.
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground.WithAlpha(0)),
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
             ],
             triggers:

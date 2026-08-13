@@ -112,7 +112,9 @@ public sealed class SplitButtonTests
         window.SetIsActive(true);
         var primary = PrimaryPart(button);
 
-        Assert.AreEqual(Color.Transparent, primary.Background,
+        // Zero alpha rather than a specific constant: the idle fill carries the hover hue so the
+        // transition only ramps alpha, and what matters is that it paints nothing.
+        Assert.AreEqual(0, primary.Background.A,
             "an idle face lets the owner's chrome show through");
 
         window.SendMouseMove(primary.CenterOf());
