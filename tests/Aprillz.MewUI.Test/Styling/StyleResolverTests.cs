@@ -138,6 +138,67 @@ public sealed class StyleResolverTests
     }
 
     [TestMethod]
+    public void StyleTransition_UsesApplicationThenFrameworkDefault()
+    {
+        var defaultTransition = Style.ForType<Button>()!
+            .FindTransition(Control.BackgroundProperty.Id);
+        Assert.IsNotNull(defaultTransition, "the Button default style supplies a background transition");
+
+        var applicationTransition = Transition.Create(Control.BackgroundProperty, 777);
+        var button = new Button();
+        button.SetStyle(new Style(typeof(Button))
+        {
+            Transitions = [applicationTransition],
+        });
+
+        Assert.AreSame(applicationTransition, button.FindStyleTransition(Control.BackgroundProperty.Id),
+            "the application layer wins when it defines the transition");
+
+        button.SetStyle(new Style(typeof(Button)));
+        Assert.AreSame(defaultTransition, button.FindStyleTransition(Control.BackgroundProperty.Id),
+            "an omitted application transition falls through to the framework default");
+
+        button.SetStyle(new Style(typeof(Button)) { OverridesDefaultStyle = true });
+        Assert.IsNull(button.FindStyleTransition(Control.BackgroundProperty.Id),
+            "a full replacement does not consult framework default transitions");
+    }
+
+    [TestMethod]
+    public void ApplicationUnset_RemovesFrameworkDefaultCandidate()
+    {
+        var button = new Button();
+        button.SetStyle(new Style(typeof(Button))
+        {
+            Setters = [Setter.Unset(Control.PaddingProperty)],
+        });
+
+        Assert.AreEqual(default, button.Padding,
+            "Unset removes the lower framework-default Style candidate");
+        Assert.AreEqual(ValueSource.Default,
+            button.PropertyStore.GetSource(Control.PaddingProperty.Id));
+    }
+
+    [TestMethod]
+    public void OverridesDefaultStyle_KeepsItsOwnBasedOnChain()
+    {
+        var baseStyle = new Style(typeof(Button))
+        {
+            Setters = [Setter.Create(Control.PaddingProperty, new Thickness(3))],
+        };
+        var button = new Button();
+        button.SetStyle(new Style(typeof(Button))
+        {
+            OverridesDefaultStyle = true,
+            BasedOn = baseStyle,
+        });
+
+        Assert.AreEqual(new Thickness(3), button.Padding,
+            "full replacement skips only the runtime framework default, not explicit BasedOn");
+        Assert.AreEqual(0.0, button.CornerRadius,
+            "unmentioned framework defaults do not leak into a full replacement");
+    }
+
+    [TestMethod]
     public void DisabledTriggerExit_RevealsInheritedValueWithoutDefaultSentinel()
     {
         var style = new Style(typeof(TestControl))
@@ -221,6 +282,38 @@ public sealed class StyleResolverTests
         Assert.AreEqual(30.0, trace.StyleValue);
         Assert.IsTrue(trace.HasStyleCandidate);
         Assert.IsTrue(trace.IsStyleEffective);
+    }
+
+    [TestMethod]
+    public void StyleCascadeTrace_DistinguishesNewDefaultFromExplicitBasedOn()
+    {
+        var control = new TestControl();
+        control.SetStyle(new Style(typeof(TestControl)));
+
+        var layered = control.TraceStyle(Control.CornerRadiusProperty);
+
+        Assert.IsTrue(layered.HasStyleCandidate);
+        Assert.AreEqual(StyleCascadeLayer.FrameworkDefault, layered.FinalEntry!.Value.Layer);
+        Assert.IsTrue(layered.FinalEntry!.Value.IsNewlyInherited);
+
+        control.SetStyle(new Style(typeof(TestControl))
+        {
+            BasedOn = Style.ForType<Control>(),
+        });
+
+        var explicitBasedOn = control.TraceStyle(Control.CornerRadiusProperty);
+
+        Assert.IsTrue(explicitBasedOn.HasStyleCandidate);
+        Assert.AreEqual(StyleCascadeLayer.Application, explicitBasedOn.FinalEntry!.Value.Layer);
+        Assert.IsFalse(explicitBasedOn.FinalEntry!.Value.IsNewlyInherited,
+            "a default style already reachable through BasedOn is not reported as newly inherited");
+        Assert.HasCount(1, explicitBasedOn.Entries,
+            "the shared default Style instance is visited only once");
+
+        control.SetStyle(null);
+        var ordinaryDefault = control.TraceStyle(Control.CornerRadiusProperty);
+        Assert.IsFalse(ordinaryDefault.FinalEntry!.Value.IsNewlyInherited,
+            "ordinary default styling is not reported as migration-induced inheritance");
     }
 
     [TestMethod]

@@ -18,6 +18,12 @@ public sealed class Style
     private bool _isFrozen;
 
     /// <summary>
+    /// Gets whether this application style completely replaces the framework default style.
+    /// The style's own <see cref="BasedOn"/> chain is still applied.
+    /// </summary>
+    public bool OverridesDefaultStyle { get; init; }
+
+    /// <summary>
     /// Gets the default theme style for the specified control type.
     /// </summary>
     [RequiresUnreferencedCode(

@@ -76,6 +76,8 @@ public sealed class StyleLookupTests
         var named = new LookupControl { StyleName = "application" };
         namedWindow.Content = named;
         Assert.AreEqual(ApplicationColor, named.Background);
+        Assert.IsTrue(double.IsNaN(named.Width),
+            "an explicit named style does not also pick up the matching type rule");
 
         var typedWindow = new Window();
         var typed = new LookupControl();

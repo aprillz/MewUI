@@ -217,8 +217,15 @@ internal sealed class DebugPropertyPanel : UserControl
                 {
                     outcome = styleTrace.IsAnimated ? "winner under animation" : "winner";
                 }
+                string layer = finalStyleEntry.Layer == StyleCascadeLayer.FrameworkDefault
+                    ? "framework default"
+                    : "application";
+                string newlyInherited = finalStyleEntry.IsNewlyInherited
+                    ? ", newly inherited through default layering"
+                    : string.Empty;
                 value +=
-                    $"  [Style {finalStyleEntry.DeclaringStyle.TargetType.Name}/{origin} {outcome}]";
+                    $"  [Style {finalStyleEntry.DeclaringStyle.TargetType.Name}/{origin} " +
+                    $"{outcome}, {layer}{newlyInherited}]";
             }
         }
 

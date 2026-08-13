@@ -7,9 +7,17 @@ internal readonly record struct PropertyValueCandidateTrace(
     object? RawValue);
 
 #if DEBUG
+internal enum StyleCascadeLayer
+{
+    FrameworkDefault,
+    Application,
+}
+
 internal readonly record struct StyleCascadeEntryTrace(
     Style DeclaringStyle,
     StateTrigger? Trigger,
+    StyleCascadeLayer Layer,
+    bool IsNewlyInherited,
     bool IsActive,
     bool IsUnset,
     bool HasResolvedValue,
