@@ -234,11 +234,20 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         // at render time, where the arranged bounds are known.
         var measured = GetOrCreateTextLayout(wrapping, maxWidth, double.PositiveInfinity).MeasuredSize;
 
-        // The desired width ceils to a device pixel: arrange snapping must never hand render a
-        // width below the measured content, or the render-time re-layout wraps against its own
-        // measurement and the last line clips.
+        // The desired width ceils to a device pixel, and wrapped text buys one more. Arrange snaps
+        // the left and right edges independently and can land the box a device pixel under the
+        // measured width; render then lays the text out again against that box, so the gap turns
+        // one line into two, paints over what sits below, and leaves hit-testing on the boxes
+        // layout handed out. Text that cannot wrap is clipped instead of re-flowed, so it takes no
+        // slack and keeps measuring like the single-line inputs it sits next to.
         double dpiScale = GetDpi() / 96.0;
-        return new Size(Math.Ceiling(measured.Width * dpiScale) / dpiScale, measured.Height);
+        double width = Math.Ceiling(measured.Width * dpiScale) / dpiScale;
+        if (wrapping != TextWrapping.NoWrap)
+        {
+            width += 1 / dpiScale;
+        }
+
+        return new Size(width, measured.Height);
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -261,6 +270,23 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
             _lastWrapMeasureWidth = contentWidth;
             InvalidateMeasure();
         }
+    }
+
+    /// <summary>
+    /// Line count and height of the layout the render pass would use for the arranged bounds. The
+    /// measure pass answers for an unbounded height, so only this reports the wrapping the user
+    /// actually sees.
+    /// </summary>
+    internal (int LineCount, double ContentHeight) GetRenderLayoutMetrics()
+    {
+        if (string.IsNullOrEmpty(DisplayText))
+        {
+            return (0, 0);
+        }
+
+        var bounds = Bounds;
+        var layout = GetOrCreateTextLayout(ResolveWrapping(), bounds.Width, bounds.Height);
+        return (layout.Lines.Count, layout.ContentHeight);
     }
 
     protected override void OnRender(IGraphicsContext context)
