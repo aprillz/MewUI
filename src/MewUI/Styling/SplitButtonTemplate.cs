@@ -36,7 +36,7 @@ internal static class SplitButtonTemplate
             IsTabStop = false,
             FaceCornerRadius = new CornerRadius(radius, 0, 0, radius),
             Content = new ContentPresenter().CenterVertical(),
-        }.Column(0);
+        }.Column(0).ColumnSpan(2);
         ctx.Register(SplitButton.PART_PRIMARY_BUTTON, primary);
         ctx.Bind(primary, Control.PaddingProperty);
 
