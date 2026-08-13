@@ -23,30 +23,36 @@ internal static class SplitButtonTemplate
         // the pair still reads as one button.
         double radius = owner.CornerRadius;
 
-        var theme = owner.ThemeInternal;
-        // Whole device pixels: a fractional column puts the boundary on a half pixel, where the
-        // hairline can collapse to nothing or render two pixels wide.
-        double dpiScale = owner.GetDpi() / 96.0;
-        double splitterWidth = LayoutRounding.SnapThicknessToPixels(
-            theme.Metrics.ControlBorderThickness, dpiScale, 1);
-
         var primary = new DropDownFaceButton
         {
             Focusable = false,
             IsTabStop = false,
             FaceCornerRadius = new CornerRadius(radius, 0, 0, radius),
             Content = new ContentPresenter().CenterVertical(),
-        }.Column(0).ColumnSpan(2);
+        }.Column(0);
         ctx.Register(SplitButton.PART_PRIMARY_BUTTON, primary);
         ctx.Bind(primary, Control.PaddingProperty);
 
         // The hairline is what tells a split button from a plain drop-down button: it marks where the
-        // primary action ends and the menu begins.
+        // primary action ends and the menu begins. It rides the right edge of the primary column rather
+        // than holding a column of its own, so neither its colour nor its width reaches the grid
+        // definition, where a value read at build time would freeze the theme and scale it was built at.
+        // Whole device pixels: a fractional width puts the hairline on a half pixel, where it can
+        // collapse to nothing or render two pixels wide.
         var splitter = new Border
         {
-            Background = theme.Palette.ControlBorder,
-            Margin = new (0,4)
-        }.Column(1);
+            Margin = new(0, 4),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            // It overlays the primary face, which owns the pointer along that edge.
+            IsHitTestVisible = false,
+        }
+            .WithTheme(static (t, border) =>
+            {
+                border.Background = t.Palette.ControlBorder;
+                border.Width = LayoutRounding.SnapThicknessToPixels(
+                    t.Metrics.ControlBorderThickness, border.GetDpi() / 96.0, 1);
+            })
+            .Column(0);
 
         var dropDown = new DropDownFaceButton
         {
@@ -55,16 +61,13 @@ internal static class SplitButtonTemplate
             FaceCornerRadius = new CornerRadius(0, radius, radius, 0),
             Padding = Thickness.Zero,
             Content = new GlyphElement { Kind = GlyphKind.ChevronDown }.Center(),
-        }.Column(2);
+        }.Column(1);
         ctx.Register(SplitButton.PART_DROP_DOWN_BUTTON, dropDown);
 
         var chrome = new Border
         {
             Child = new Grid()
-                .Columns(
-                    GridLength.Star,
-                    GridLength.Pixels(splitterWidth),
-                    GridLength.Pixels(GLYPH_AREA_WIDTH))
+                .Columns(GridLength.Star, GridLength.Pixels(GLYPH_AREA_WIDTH))
                 .Children(primary, splitter, dropDown),
             ClipToBounds = true,
         };
