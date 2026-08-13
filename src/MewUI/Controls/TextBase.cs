@@ -223,7 +223,7 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
             static textBase => !textBase.IsReadOnly && textBase._editor.Selection.Length > 0);
         Commands.Register(StandardCommands.Paste, this,
             static textBase => textBase.Paste(),
-            static textBase => !textBase.IsReadOnly);
+            static textBase => !textBase.IsReadOnly && textBase.ClipboardHasText());
         Commands.Register(StandardCommands.SelectAll, this,
             static textBase => textBase.SelectAll(),
             static textBase => textBase._document.TextLength > 0);
@@ -651,9 +651,18 @@ public abstract partial class TextBase : Control, ITextCompositionClient, ITextC
     private protected bool TryGetClipboardText(out string text)
     {
         text = string.Empty;
-        var clipboard = ClipboardService ?? (Application.IsRunning ? Application.Current.PlatformServices.Clipboard : null);
+        var clipboard = ResolveClipboard();
         return clipboard is not null && clipboard.TryGetText(out text);
     }
+
+    private bool ClipboardHasText()
+    {
+        var clipboard = ResolveClipboard();
+        return clipboard is not null && clipboard.HasText();
+    }
+
+    private IClipboardService? ResolveClipboard()
+        => ClipboardService ?? (Application.IsRunning ? Application.Current.PlatformServices.Clipboard : null);
 
     /// <summary>
     /// Returns the rectangle at the given character index in window coordinates (DIPs).

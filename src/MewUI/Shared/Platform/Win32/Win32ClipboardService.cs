@@ -54,12 +54,17 @@ internal sealed class Win32ClipboardService : IClipboardService
         }
     }
 
+    // CF_UNICODETEXT = 13
+    private const uint CF_UNICODETEXT = 13;
+
+    /// <inheritdoc/>
+    public bool HasText() => User32.IsClipboardFormatAvailable(CF_UNICODETEXT);
+
     public bool TryGetText(out string text)
     {
         text = string.Empty;
 
-        // CF_UNICODETEXT = 13
-        if (!User32.IsClipboardFormatAvailable(13))
+        if (!User32.IsClipboardFormatAvailable(CF_UNICODETEXT))
         {
             return false;
         }

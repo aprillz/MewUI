@@ -25,6 +25,23 @@ internal sealed class LinuxClipboardService : IClipboardService
         return ok || text.Length > 0;
     }
 
+    /// <inheritdoc/>
+    public bool HasText()
+    {
+        // Asking the external helper costs a process launch, which a command re-evaluating on every
+        // menu open cannot pay. Text this process copied is known locally; beyond that, report
+        // available and let the paste itself find out.
+        lock (_lock)
+        {
+            if (_localText.Length > 0)
+            {
+                return true;
+            }
+        }
+
+        return GetBackend().Kind != ClipboardBackendKind.None;
+    }
+
     public bool TryGetText(out string text)
     {
         var backend = GetBackend();

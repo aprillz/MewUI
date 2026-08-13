@@ -9,5 +9,7 @@ internal sealed class NoClipboardService : IClipboardService
         text = string.Empty;
         return false;
     }
+
+    public bool HasText() => false;
 }
 
