@@ -9,7 +9,6 @@ namespace Aprillz.MewUI;
 public sealed class RenderLoopSettings
 {
     private int _continuous;
-    private int _animationActive;
     private int _targetFps;
     private int _vsyncEnabled = 1;
 
@@ -49,11 +48,9 @@ public sealed class RenderLoopSettings
     /// Driven by the animation system: true while one or more animation clocks are active. Not a user knob - set the
     /// <see cref="Continuous"/> flag to force continuous rendering yourself.
     /// </summary>
-    internal bool AnimationActive
-    {
-        get => Volatile.Read(ref _animationActive) != 0;
-        set => Interlocked.Exchange(ref _animationActive, value ? 1 : 0);
-    }
+    // Pulled from the animation manager rather than pushed into here, so a clock started before this run
+    // existed still turns the loop continuous once the loop begins reading.
+    internal bool AnimationActive => Animation.AnimationManager.Instance.HasUnpausedClocks;
 
     /// <summary>
     /// True when the render loop should run continuously: VSync is off, the user <see cref="Continuous"/> flag is set,

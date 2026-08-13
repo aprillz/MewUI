@@ -11,6 +11,9 @@ public sealed class AnimationClock
 {
     private WeakReference<Element>? _owner;
     private long _startTimestamp;
+
+    // Set by Start, cleared by the first Update that ticks this clock.
+    private bool _awaitingFirstUpdate;
     private long _pauseTimestamp;
     private long _pauseAccumulated;
     private bool _isRunning;
@@ -117,6 +120,7 @@ public sealed class AnimationClock
     public void Start()
     {
         _startTimestamp = Stopwatch.GetTimestamp();
+        _awaitingFirstUpdate = true;
         _pauseAccumulated = 0;
         _isReversing = false;
         _currentIteration = 0;
@@ -188,6 +192,16 @@ public sealed class AnimationClock
         if (!_isRunning || _isPaused)
         {
             return;
+        }
+
+        if (_awaitingFirstUpdate)
+        {
+            // Start can precede the first pulse by an unbounded gap (a clock started before the
+            // application ran, or while its window was hidden). Timing from Start would report that gap
+            // as elapsed and skip a short animation outright, so the run begins at the first pulse.
+            _awaitingFirstUpdate = false;
+            _startTimestamp = currentTimestamp;
+            _pauseAccumulated = 0;
         }
 
         double durationMs = Duration.TotalMilliseconds;
