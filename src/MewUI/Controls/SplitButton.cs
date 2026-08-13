@@ -34,10 +34,9 @@ public sealed partial class SplitButton : Button, IPopupOwner
     private Button? _dropDownPart;
     private bool _isPrimaryEnabled = true;
 
-    static SplitButton()
-    {
-        CommandPresentationModeProperty.OverrideDefaultValue<SplitButton>(CommandPresentationMode.TextAndIcon);
-    }
+    // Removes beforefieldinit so the registration above runs on first instantiation rather than on
+    // first static field access, which instantiating alone does not guarantee.
+    static SplitButton() { }
 
     public SplitButton()
     {

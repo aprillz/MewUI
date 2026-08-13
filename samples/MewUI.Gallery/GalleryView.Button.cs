@@ -65,11 +65,9 @@ partial class GalleryView
         var print = new Command("gallery.print", "_Print");
         bool canSave = true;
 
-        var splitButton = new SplitButton
-        {
-            Command = save
-        }
+        var splitButton = new SplitButton()
             .DropDownMenu(new Menu().Item(saveAs).Item(saveAll))
+            .Command(save)
             .Left()
             .Content(new TextBlock().Text("Save"));
         splitButton.Commands.Register(save, () => _ = MessageBox.NotifyAsync("Save"), () => canSave);
@@ -108,6 +106,7 @@ partial class GalleryView
         var commandSplitButton = new SplitButton
         {
             Command = commandSave,
+            CommandPresentationMode = CommandPresentationMode.TextAndIcon,
         }
             .DropDownMenu(new Menu().Item(newDocument).Item(saveCopy).Separator().Item(commandPrint))
             .Left();

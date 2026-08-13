@@ -205,7 +205,7 @@ public sealed class SplitButtonTests
     }
 
     [TestMethod]
-    public void CommandPresentation_DefaultsToTextAndIcon()
+    public void CommandPresentation_IsOptInAsOnButton()
     {
         if (SkipOnNonWindows()) return;
 
@@ -215,8 +215,13 @@ public sealed class SplitButtonTests
         window.Content = button;
         window.PerformLayout();
 
-        Assert.AreEqual(CommandPresentationMode.TextAndIcon, button.CommandPresentationMode);
-        Assert.IsNotNull(button.EffectiveContent, "a command alone gives the split button its content");
+        Assert.AreEqual(CommandPresentationMode.None, button.CommandPresentationMode);
+        Assert.IsNull(button.EffectiveContent, "a command alone filled the content without a presentation mode");
+
+        button.CommandPresentationMode = CommandPresentationMode.TextAndIcon;
+        window.PerformLayout();
+
+        Assert.IsNotNull(button.EffectiveContent, "the presentation mode did not supply the primary content");
     }
 
     [TestMethod]
