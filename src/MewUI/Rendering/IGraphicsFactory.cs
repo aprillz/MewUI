@@ -19,6 +19,13 @@ public interface IGraphicsFactory : IRenderDevice, IDisposable
     string Backend { get; }
 
     /// <summary>
+    /// Whether presenting a frame is paced by the display's refresh. A backend that reports false leaves
+    /// <see cref="RenderLoopSettings.VSyncEnabled"/> with nothing to act on, so the render loop caps the
+    /// frame rate itself instead of spinning.
+    /// </summary>
+    bool SupportsVSync => true;
+
+    /// <summary>
     /// Creates a font resource.
     /// </summary>
     IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal,

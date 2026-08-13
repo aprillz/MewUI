@@ -92,6 +92,23 @@ internal static partial class Kernel32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseHandle(nint hObject);
 
+    // CREATE_WAITABLE_TIMER_HIGH_RESOLUTION needs Windows 10 1803; older systems fail the call and the
+    // caller falls back to a millisecond wait timeout.
+    public const uint CREATE_WAITABLE_TIMER_MANUAL_RESET = 0x00000001;
+    public const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002;
+    public const uint TIMER_ALL_ACCESS = 0x001F0003;
+
+    [LibraryImport(LibraryName, EntryPoint = "CreateWaitableTimerExW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint CreateWaitableTimerEx(nint lpTimerAttributes, string? lpTimerName, uint dwFlags, uint dwDesiredAccess);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWaitableTimer(nint hTimer, in long lpDueTime, int lPeriod, nint pfnCompletionRoutine, nint lpArgToCompletionRoutine, [MarshalAs(UnmanagedType.Bool)] bool fResume);
+
+    [LibraryImport(LibraryName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CancelWaitableTimer(nint hTimer);
+
     #endregion
 
     #region Console

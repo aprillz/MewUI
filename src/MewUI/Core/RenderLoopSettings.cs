@@ -60,4 +60,24 @@ public sealed class RenderLoopSettings
 
     /// <summary>Convenience toggle for the user <see cref="Continuous"/> flag.</summary>
     public void SetContinuous(bool enabled) => Continuous = enabled;
+
+    /// <summary>
+    /// Frame rate the loop should hold itself to, or 0 to leave pacing to the backend's presentation.
+    /// <see cref="TargetFps"/> wins when set; otherwise a backend that cannot pace on the display refresh
+    /// gets <see cref="VSyncFallbackFps"/> so an animating window does not render as fast as the CPU allows.
+    /// </summary>
+    internal int EffectiveFrameCap(bool backendSupportsVSync)
+    {
+        int target = TargetFps;
+        if (target > 0)
+        {
+            return target;
+        }
+
+        return VSyncEnabled && !backendSupportsVSync ? VSyncFallbackFps : 0;
+    }
+
+    // Chosen over a display-refresh query because no platform host exposes one, and 60 is the rate a
+    // backend without presentation pacing (GDI) is expected to hold.
+    internal const int VSyncFallbackFps = 60;
 }

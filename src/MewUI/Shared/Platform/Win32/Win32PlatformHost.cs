@@ -30,6 +30,8 @@ public sealed class Win32PlatformHost : IPlatformHost
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
     private int _renderRequested;
     private nint _renderEvent;
+    private nint _frameBudgetTimer;
+    private bool _frameBudgetTimerResolved;
 
     /// <summary>
     /// Gets the system UI font family, queried once so registration can report it without a host instance.
@@ -226,21 +228,21 @@ public sealed class Win32PlatformHost : IPlatformHost
                     if (!HandleLoopException(app, ex)) break;
                 }
 
-                int fps = scheduler.TargetFps;
+                int fps = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync);
                 if (fps > 0)
                 {
                     long frameTicks = ticksPerSecond / fps;
-                    long now = Stopwatch.GetTimestamp();
-                    long elapsed = now - lastFrameTicks;
-                    if (elapsed < frameTicks)
+                    WaitForFrameBudget(lastFrameTicks + frameTicks, ticksPerSecond);
+
+                    // Advance the deadline instead of restarting from now, so a frame that overran is not
+                    // paid for twice. A deadline further behind than one frame is abandoned rather than
+                    // chased, which would burst frames after a stall.
+                    lastFrameTicks += frameTicks;
+                    long lag = Stopwatch.GetTimestamp() - lastFrameTicks;
+                    if (lag > frameTicks)
                     {
-                        var waitMs = (frameTicks - elapsed) * 1000 / ticksPerSecond;
-                        if (waitMs > 0)
-                        {
-                            WaitForMessagesOrRender((uint)waitMs, renderOnSignal: false);
-                        }
+                        lastFrameTicks = Stopwatch.GetTimestamp();
                     }
-                    lastFrameTicks = Stopwatch.GetTimestamp();
                 }
                 else
                 {
@@ -548,9 +550,89 @@ public sealed class Win32PlatformHost : IPlatformHost
         }
     }
 
-    private void WaitForMessagesOrRender(uint timeoutMs, bool renderOnSignal)
+    /// <summary>
+    /// Waits out the remainder of a frame budget. A high-resolution waitable timer keeps the wait accurate
+    /// to well under a millisecond; where the system has none the wait falls back to the millisecond
+    /// timeout, whose ~15.6 ms granularity is the historical behaviour.
+    /// </summary>
+    private void WaitForFrameBudget(long deadlineTicks, long ticksPerSecond)
     {
-        if (_renderEvent == 0)
+        nint timer = EnsureFrameBudgetTimer();
+
+        // A pending render request must not cut the budget short: invalidation signals the render event on
+        // every animation tick, so waiting on it here would drop the cap entirely. Input still wakes the
+        // wait, and the loop re-enters until the deadline passes.
+        while (_running)
+        {
+            long remaining = deadlineTicks - Stopwatch.GetTimestamp();
+            if (remaining <= 0)
+            {
+                return;
+            }
+
+            if (timer == 0)
+            {
+                long waitMs = remaining * 1000 / ticksPerSecond;
+                WaitWithoutRenderEvent(waitMs > 0 ? (uint)waitMs : 1, 0);
+                continue;
+            }
+
+            // Negative due time is relative, in 100 ns units.
+            long dueTime = -(remaining * 10_000_000 / ticksPerSecond);
+            if (dueTime >= 0 || !Kernel32.SetWaitableTimer(timer, in dueTime, 0, 0, 0, false))
+            {
+                return;
+            }
+
+            WaitWithoutRenderEvent(0xFFFFFFFF, timer);
+            Kernel32.CancelWaitableTimer(timer);
+        }
+    }
+
+    private void WaitWithoutRenderEvent(uint timeoutMs, nint extraHandle)
+    {
+        unsafe
+        {
+            if (extraHandle == 0)
+            {
+                User32.MsgWaitForMultipleObjectsEx(0, null, timeoutMs, WaitConstants.QS_ALLINPUT, WaitConstants.MWMO_INPUTAVAILABLE);
+                return;
+            }
+
+            nint* handles = stackalloc nint[1];
+            handles[0] = extraHandle;
+            User32.MsgWaitForMultipleObjectsEx(1, handles, timeoutMs, WaitConstants.QS_ALLINPUT, WaitConstants.MWMO_INPUTAVAILABLE);
+        }
+    }
+
+    private nint EnsureFrameBudgetTimer()
+    {
+        if (_frameBudgetTimerResolved)
+        {
+            return _frameBudgetTimer;
+        }
+
+        _frameBudgetTimerResolved = true;
+        _frameBudgetTimer = Kernel32.CreateWaitableTimerEx(
+            0,
+            null,
+            Kernel32.CREATE_WAITABLE_TIMER_MANUAL_RESET | Kernel32.CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+            Kernel32.TIMER_ALL_ACCESS);
+
+        if (_frameBudgetTimer == 0)
+        {
+            DiagLog.Write("[win32] high-resolution frame timer unavailable; frame pacing uses millisecond waits");
+        }
+
+        return _frameBudgetTimer;
+    }
+
+    private void WaitForMessagesOrRender(uint timeoutMs, bool renderOnSignal)
+        => WaitForMessagesOrRender(timeoutMs, renderOnSignal, extraHandle: 0);
+
+    private void WaitForMessagesOrRender(uint timeoutMs, bool renderOnSignal, nint extraHandle)
+    {
+        if (_renderEvent == 0 && extraHandle == 0)
         {
             if (timeoutMs == 0)
             {
@@ -563,16 +645,27 @@ public sealed class Win32PlatformHost : IPlatformHost
 
         unsafe
         {
-            nint* handles = stackalloc nint[1];
-            handles[0] = _renderEvent;
+            nint* handles = stackalloc nint[2];
+            uint count = 0;
+            uint renderIndex = uint.MaxValue;
+            if (_renderEvent != 0)
+            {
+                renderIndex = count;
+                handles[count++] = _renderEvent;
+            }
+            if (extraHandle != 0)
+            {
+                handles[count++] = extraHandle;
+            }
+
             uint result = User32.MsgWaitForMultipleObjectsEx(
-                1,
+                count,
                 handles,
                 timeoutMs,
                 WaitConstants.QS_ALLINPUT,
                 WaitConstants.MWMO_INPUTAVAILABLE);
 
-            if (result == WaitConstants.WAIT_OBJECT_0)
+            if (result == WaitConstants.WAIT_OBJECT_0 + renderIndex)
             {
                 Interlocked.Exchange(ref _renderRequested, 0);
                 if (renderOnSignal)
@@ -698,6 +791,13 @@ public sealed class Win32PlatformHost : IPlatformHost
             Kernel32.CloseHandle(_renderEvent);
             _renderEvent = 0;
         }
+
+        if (_frameBudgetTimer != 0)
+        {
+            Kernel32.CloseHandle(_frameBudgetTimer);
+            _frameBudgetTimer = 0;
+        }
+        _frameBudgetTimerResolved = false;
 
         if (_classAtom != 0)
         {

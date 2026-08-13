@@ -19,6 +19,9 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
 
     public string Backend => BackendIdentifier;
 
+    // GDI blits to the window DC with no presentation queue, so nothing throttles a frame to the refresh.
+    public bool SupportsVSync => false;
+
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
     internal GdiGraphicsFactory() { }
