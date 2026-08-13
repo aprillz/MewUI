@@ -32,6 +32,12 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     private int _openSubMenuIndex = -1;
     private ContextMenu? _parentMenu;
     private double _maxTextWidth;
+
+    /// <summary>The caption width measure asked for; the render pass must not grant less.</summary>
+    internal double MeasuredCaptionWidth => _maxTextWidth;
+
+    /// <summary>The narrowest caption box the last render granted. Reset before a probe render.</summary>
+    internal double LastCaptionWidth { get; set; } = double.PositiveInfinity;
     private double _maxShortcutWidth;
     private bool _hasAnyShortcut;
     private readonly Dictionary<MenuItem, FrameworkElement> _materializedIcons = new();
@@ -318,6 +324,16 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         CloseDescendants(window);
         _parentMenu = null;
 
+        // Placement is measured inside ShowPopup, after the menu is rooted and its style resolves.
+        // Measuring here saw an unstyled zero border, so the width came out short by the border the
+        // arrange pass then deflated - and the caption is the only elastic column, so the whole loss
+        // landed on it and trimmed the last glyph.
+        window.ShowPopup(owner, this, w => MeasurePlacement(w, positionInWindow, anchorTopY));
+        window.FocusManager.SetFocus(this);
+    }
+
+    private Rect MeasurePlacement(Window window, Point positionInWindow, double? anchorTopY)
+    {
         // Measure without passing infinity into backends that may convert widths to ints.
         var region = window.GetPopupPlacementRegion(new Rect(positionInWindow.X, positionInWindow.Y, 0, 0));
         Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
@@ -343,8 +359,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             y = flippedY >= region.Y ? flippedY : Math.Max(region.Y, region.Bottom - height);
         }
 
-        window.ShowPopup(owner, this, new Rect(x, y, width, height));
-        window.FocusManager.SetFocus(this);
+        return new Rect(x, y, width, height);
     }
 
     // Whole device pixels, like ResolveSeparatorHeight: a row height that covers a fractional pixel
@@ -566,7 +581,14 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
         _viewportHeight = Math.Max(0, contentH - Padding.VerticalThickness);
 
-        return new Size(contentW, contentH).Inflate(new Thickness(borderInset));
+        var desired = new Size(contentW, contentH).Inflate(new Thickness(borderInset));
+
+        // Popup placement snaps the origin to a device pixel, so a fractional width puts the right
+        // edge off the grid and the arrange-time border snap rounds it back inward. The caption is the
+        // only elastic column, so it would pay that pixel; a whole-pixel width makes the snap a no-op.
+        double dpiScale = GetDpi() / 96.0;
+        double snappedW = LayoutRounding.CeilToPixelInt(desired.Width, dpiScale) / dpiScale;
+        return new Size(snappedW, desired.Height);
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -900,6 +922,14 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         subMenuPopup.UpdateCommandPresentation(window);
         subMenuPopup.PrepareMaterializedIcons();
 
+        // Deferred for the same reason as ShowAt: an unstyled pre-attach measure loses the border.
+        window.ShowPopup(this, subMenuPopup, w => MeasureSubMenuPlacement(w, subMenuPopup, ownerRowBounds));
+        _openSubMenu = subMenuPopup;
+        _openSubMenuIndex = index;
+    }
+
+    private Rect MeasureSubMenuPlacement(Window window, ContextMenu subMenuPopup, Rect ownerRowBounds)
+    {
         var region = window.GetPopupPlacementRegion(ownerRowBounds);
         subMenuPopup.Measure(new Size(Math.Max(0, region.Width), Math.Max(0, region.Height)));
         var desired = subMenuPopup.DesiredSize;
@@ -928,9 +958,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             y = Math.Max(region.Y, region.Bottom - height);
         }
 
-        window.ShowPopup(this, subMenuPopup, new Rect(x, y, width, height));
-        _openSubMenu = subMenuPopup;
-        _openSubMenuIndex = index;
+        return new Rect(x, y, width, height);
     }
 
     private void CloseSubMenu()
@@ -1149,6 +1177,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
                 }
 
                 var textRect = new Rect(textLeft, paddedRow.Y, Math.Max(0, textRight - textLeft), paddedRow.Height);
+                LastCaptionWidth = Math.Min(LastCaptionWidth, textRect.Width);
                 var showAccessKeys = GetValue(Window.ShowAccessKeysProperty);
                 var parsed = item.GetParsedText();
                 var textLayout = _textLayouts.GetOrCreate(
