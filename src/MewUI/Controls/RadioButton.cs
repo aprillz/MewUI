@@ -73,7 +73,7 @@ public partial class RadioButton : ToggleBase
 
     protected override void ToggleFromKeyboard()
     {
-        CommitIsChecked(true);
+        CommitIsCheckedFromUser(true);
     }
 
     protected override void OnParentChanged()
@@ -138,17 +138,23 @@ public partial class RadioButton : ToggleBase
     {
         EnsureGroupRegistered();
 
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         double width = BoxSize + SpacingValue;
         double height = BoxSize;
 
-        if (Content != null)
+        var displayed = EffectiveContent;
+        if (displayed != null)
         {
             var contentAvailable = new Size(
                 Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness),
                 double.PositiveInfinity);
-            Content.Measure(contentAvailable);
-            width += Content.DesiredSize.Width;
-            height = Math.Max(height, Content.DesiredSize.Height);
+            displayed.Measure(contentAvailable);
+            width += displayed.DesiredSize.Width;
+            height = Math.Max(height, displayed.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -156,7 +162,14 @@ public partial class RadioButton : ToggleBase
 
     protected override void ArrangeContent(Rect bounds)
     {
-        if (Content == null)
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
+        var displayed = EffectiveContent;
+        if (displayed == null)
         {
             return;
         }
@@ -167,12 +180,18 @@ public partial class RadioButton : ToggleBase
             contentBounds.Y,
             Math.Max(0, contentBounds.Width - BoxSize - SpacingValue),
             contentBounds.Height);
-        Content.Arrange(textBounds);
+        displayed.Arrange(textBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
         EnsureGroupRegistered();
+
+        // A template owns the control's entire visuals; the built-in indicator would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
 
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
@@ -225,7 +244,7 @@ public partial class RadioButton : ToggleBase
 
         if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
-            CommitIsChecked(true);
+            CommitIsCheckedFromUser(true);
         }
 
         e.Handled = true;

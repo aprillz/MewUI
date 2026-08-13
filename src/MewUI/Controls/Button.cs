@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A button control that responds to clicks.
 /// </summary>
-public partial class Button : Control, IVisualTreeHost, ICommandSource
+public partial class Button : CommandSourceControl
 {
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<Button>(DefaultStyles.CreateButtonStyle);
@@ -14,31 +14,21 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
     private static readonly bool _accentStyleRegistered =
         FrameworkNamedStyles.Register("accent-button", BuiltInStyles.CreateAccentButtonStyle);
 
-    public static readonly MewProperty<Element?> ContentProperty =
-        MewProperty<Element?>.Register<Button>(nameof(Content), null,
-            MewPropertyOptions.AffectsLayout,
-            static (self, oldValue, newValue) => self.OnContentChanged(oldValue, newValue));
+    /// <summary>
+    /// Compatibility alias for <see cref="ContentControl.ContentProperty"/>, which now owns the slot.
+    /// </summary>
+    public static new readonly MewProperty<Element?> ContentProperty = ContentControl.ContentProperty;
 
-    public static readonly MewProperty<Command?> CommandProperty =
-        MewProperty<Command?>.Register<Button>(nameof(Command), null,
-            MewPropertyOptions.None,
-            static (self, oldValue, newValue) => self.OnCommandChanged(oldValue, newValue));
+    /// <summary>
+    /// Compatibility alias for <see cref="CommandSourceControl.CommandProperty"/>, which now owns the slot.
+    /// </summary>
+    public static new readonly MewProperty<Command?> CommandProperty = CommandSourceControl.CommandProperty;
 
     public static readonly MewProperty<CommandPresentationMode> CommandPresentationModeProperty =
         MewProperty<CommandPresentationMode>.Register<Button>(nameof(CommandPresentationMode),
             CommandPresentationMode.None,
             MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.UpdateCommandPresentationContent());
-
-    /// <summary>
-    /// Gets or sets the semantic command this button invokes; its CanExecute query joins
-    /// <see cref="UIElement.IsEnabled"/> in the effective enabled state.
-    /// </summary>
-    public Command? Command
-    {
-        get => GetValue(CommandProperty);
-        set => SetValue(CommandProperty, value);
-    }
 
     /// <summary>
     /// Gets or sets which command presentation parts are used as generated content. The default is
@@ -51,81 +41,53 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
         set => SetValue(CommandPresentationModeProperty, value);
     }
 
-    private Window? _commandSourceWindow;
     private CommandContentPresenter? _commandPresentationContent;
 
-    private void OnCommandChanged(Command? oldCommand, Command? newCommand)
+    protected override void OnCommandChanged(Command? oldValue, Command? newValue)
     {
-        if (oldCommand != null)
+        if (oldValue != null)
         {
             WeakEventManager.RemoveHandler(
                 CommandPresentationWeakEvents.Changed,
-                oldCommand.Presentation,
+                oldValue.Presentation,
                 this);
         }
 
-        if (newCommand != null)
+        if (newValue != null)
         {
             WeakEventManager.AddHandler(
                 CommandPresentationWeakEvents.Changed,
-                newCommand.Presentation,
+                newValue.Presentation,
                 this,
                 static button => button.UpdateCommandPresentationContent());
         }
 
-        UpdateCommandSourceRegistration();
-        ReevaluateSuggestedIsEnabled();
+        base.OnCommandChanged(oldValue, newValue);
         UpdateCommandPresentationContent();
     }
 
-    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
+    protected override Element? SelectEffectiveContent()
+        => GetPropertyValueTrace(ContentControl.ContentProperty).EffectiveSource != ValueSource.Default
+            ? Content
+            : _commandPresentationContent;
+
+    protected override void OnContentChanged(Element? oldValue, Element? newValue)
     {
-        base.OnVisualRootChanged(oldRoot, newRoot);
-        UpdateCommandSourceRegistration();
-    }
+        base.OnContentChanged(oldValue, newValue);
 
-    private void UpdateCommandSourceRegistration()
-    {
-        var window = Command != null ? FindVisualRoot() as Window : null;
-        if (ReferenceEquals(_commandSourceWindow, window))
-        {
-            return;
-        }
-
-        _commandSourceWindow?.UnregisterCommandSource(this);
-        _commandSourceWindow = window;
-        window?.RegisterCommandSource(this);
-    }
-
-    void ICommandSource.EvaluateCommandState() => ReevaluateSuggestedIsEnabled();
-
-    /// <summary>
-    /// Gets or sets the content element.
-    /// </summary>
-    public Element? Content
-    {
-        get => GetValue(ContentProperty);
-        set => SetValue(ContentProperty, value);
-    }
-
-    protected virtual void OnContentChanged(Element? oldValue, Element? newValue)
-    {
-        if (oldValue != null) oldValue.Parent = null;
-        if (newValue != null) newValue.Parent = this;
+        // An explicit content value retires the generated one, and clearing it brings that back.
         UpdateCommandPresentationContent();
     }
 
-    private Element? EffectiveContent
+    protected override void OnValueSourceChanged(MewProperty property)
     {
-        get
-        {
-            if (GetPropertyValueTrace(ContentProperty).EffectiveSource != ValueSource.Default)
-            {
-                return Content;
-            }
+        base.OnValueSourceChanged(property);
 
-            EnsureCommandPresentationContent();
-            return _commandPresentationContent;
+        // Assigning null over an unset Content is an explicit choice, so it retires the generated
+        // content even though the value never changed.
+        if (property.Id == ContentControl.ContentProperty.Id)
+        {
+            UpdateCommandPresentationContent();
         }
     }
 
@@ -142,7 +104,7 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
             return;
         }
 
-        _commandPresentationContent = new CommandContentPresenter { Parent = this };
+        _commandPresentationContent = new CommandContentPresenter();
         RefreshCommandPresentationContent();
     }
 
@@ -161,7 +123,7 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
 
     private void UpdateCommandPresentationContent()
     {
-        if (GetPropertyValueTrace(ContentProperty).EffectiveSource != ValueSource.Default)
+        if (GetPropertyValueTrace(ContentControl.ContentProperty).EffectiveSource != ValueSource.Default)
         {
             DetachCommandPresentationContent();
         }
@@ -171,6 +133,7 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
             RefreshCommandPresentationContent();
         }
 
+        InvalidateEffectiveContent();
         InvalidateMeasure();
         InvalidateVisual();
     }
@@ -216,58 +179,34 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
     /// </summary>
     public event Action? Click;
 
-    protected override bool ComputeIsEnabledSuggestion()
-    {
-        if (GetValue(CommandProperty) is Command command && FindVisualRoot() is Window window)
-        {
-            return window.CommandRouter.CanExecute(command, CommandTarget.From(this));
-        }
-
-        return true;
-    }
+    protected override bool ComputeIsEnabledSuggestion() => QueryCommandCanExecute();
 
     protected override Size MeasureContent(Size availableSize)
     {
-        var borderInset = GetBorderVisualInset();
-        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
-
-        var content = EffectiveContent;
-        if (content == null)
+        if (HasTemplateInstance || EffectiveContent != null)
         {
-            return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10).Inflate(border);
-        }
-
-        var contentSize = availableSize.Deflate(Padding).Deflate(border);
-        content.Measure(contentSize);
-        return content.DesiredSize.Inflate(Padding).Inflate(border);
-    }
-
-    protected override void ArrangeContent(Rect bounds)
-    {
-        base.ArrangeContent(bounds);
-
-        var content = EffectiveContent;
-        if (content == null)
-        {
-            return;
+            return base.MeasureContent(availableSize);
         }
 
         var borderInset = GetBorderVisualInset();
-        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
-        var contentBounds = bounds.Deflate(Padding).Deflate(border);
-        content.Arrange(contentBounds);
+        return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10)
+            .Inflate(borderInset);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the built-in chrome would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bgColor = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
 
         var bounds = GetSnappedBorderBounds(Bounds);
         double radius = CornerRadius;
         DrawBackgroundAndBorder(context, bounds, bgColor, borderColor, BorderThickness, radius);
-
-        EffectiveContent?.Render(context);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -337,30 +276,14 @@ public partial class Button : Control, IVisualTreeHost, ICommandSource
         }
     }
 
-    bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
-    {
-        var content = EffectiveContent;
-        return content == null || visitor(content);
-    }
-
     protected virtual void OnClick()
     {
         Click?.Invoke();
         InvokeCommand();
     }
 
-    private void InvokeCommand()
-    {
-        if (GetValue(CommandProperty) is Command command && FindVisualRoot() is Window window)
-        {
-            window.CommandRouter.TryExecuteFromInput(command, CommandTarget.From(this), this);
-        }
-    }
-
     protected override void OnDispose()
     {
-        _commandSourceWindow?.UnregisterCommandSource(this);
-        _commandSourceWindow = null;
         if (Command is Command command)
         {
             WeakEventManager.RemoveHandler(

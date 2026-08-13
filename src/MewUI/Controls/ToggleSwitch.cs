@@ -47,19 +47,25 @@ public sealed partial class ToggleSwitch : ToggleBase
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         var (trackWidth, trackHeight) = GetTrackSize();
 
         double width = trackWidth;
         double height = trackHeight;
 
-        if (Content != null)
+        var displayed = EffectiveContent;
+        if (displayed != null)
         {
             var contentAvailable = new Size(
                 Math.Max(0, availableSize.Width - width - SPACING - Padding.HorizontalThickness),
                 double.PositiveInfinity);
-            Content.Measure(contentAvailable);
-            width += SPACING + Content.DesiredSize.Width;
-            height = Math.Max(height, Content.DesiredSize.Height);
+            displayed.Measure(contentAvailable);
+            width += SPACING + displayed.DesiredSize.Width;
+            height = Math.Max(height, displayed.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -67,7 +73,14 @@ public sealed partial class ToggleSwitch : ToggleBase
 
     protected override void ArrangeContent(Rect bounds)
     {
-        if (Content == null)
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
+        var displayed = EffectiveContent;
+        if (displayed == null)
         {
             return;
         }
@@ -86,11 +99,17 @@ public sealed partial class ToggleSwitch : ToggleBase
             contentBounds.Y,
             Math.Max(0, contentBounds.Width - trackRect.Width - SPACING),
             contentBounds.Height);
-        Content.Arrange(labelBounds);
+        displayed.Arrange(labelBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the built-in track would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bounds = GetSnappedBorderBounds(Bounds);
         var contentBounds = bounds.Deflate(Padding);
 
@@ -155,7 +174,7 @@ public sealed partial class ToggleSwitch : ToggleBase
             return;
         }
 
-        CommitIsChecked(!IsChecked);
+        CommitIsCheckedFromUser(!IsChecked);
 
         e.Handled = true;
     }

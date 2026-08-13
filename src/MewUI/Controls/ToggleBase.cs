@@ -3,7 +3,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// Base class for toggle controls like checkboxes and radio buttons.
 /// </summary>
-public abstract partial class ToggleBase : ContentControl
+public abstract partial class ToggleBase : CommandSourceControl
 {
     public static readonly MewProperty<bool> IsCheckedProperty =
         MewProperty<bool>.Register<ToggleBase>(nameof(IsChecked), false,
@@ -83,10 +83,23 @@ public abstract partial class ToggleBase : ContentControl
 
     protected virtual void ToggleFromKeyboard()
     {
-        CommitIsChecked(!IsChecked);
+        CommitIsCheckedFromUser(!IsChecked);
     }
 
     internal void CommitIsChecked(bool value) => CommitTargetValue(IsCheckedProperty, value);
+
+    /// <summary>
+    /// Commits a user-initiated toggle and invokes the command once. Plain
+    /// <see cref="CommitIsChecked"/> stays command-free so binding and group synchronization
+    /// never execute anything.
+    /// </summary>
+    private protected void CommitIsCheckedFromUser(bool value)
+    {
+        CommitIsChecked(value);
+        InvokeCommand();
+    }
+
+    protected override bool ComputeIsEnabledSuggestion() => QueryCommandCanExecute();
 
     protected override void OnDispose()
     {

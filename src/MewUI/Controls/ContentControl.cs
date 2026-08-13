@@ -15,6 +15,21 @@ public class ContentControl : Control
             static (self, oldValue, newValue) => self.OnContentChanged(oldValue, newValue),
             validate: static (self, value) => self.ValidateContent(value));
 
+    private static readonly MewPropertyKey<Element?> EffectiveContentPropertyKey =
+        MewProperty<Element?>.RegisterReadOnly<ContentControl>(nameof(EffectiveContent), null,
+            MewPropertyOptions.AffectsLayout);
+
+    /// <summary>
+    /// The element this control displays, which a derived class may substitute for
+    /// <see cref="Content"/>. A template's <see cref="ContentPresenter"/> projects this slot.
+    /// </summary>
+    public static readonly MewProperty<Element?> EffectiveContentProperty =
+        EffectiveContentPropertyKey.Property;
+
+    // SelectEffectiveContent is virtual, so the first evaluation is deferred out of the constructor
+    // to the first property change or measure, whichever comes first.
+    private bool _effectiveContentInitialized;
+
     /// <summary>
     /// Gets or sets the content element.
     /// </summary>
@@ -22,6 +37,72 @@ public class ContentControl : Control
     {
         get => GetValue(ContentProperty);
         set => SetValue(ContentProperty, value);
+    }
+
+    /// <summary>
+    /// Gets the element this control displays. Equals <see cref="Content"/> unless a derived class
+    /// substitutes another element.
+    /// </summary>
+    public Element? EffectiveContent => GetValue(EffectiveContentProperty);
+
+    private protected override MewProperty<Element?>? DefaultContentSource => EffectiveContentProperty;
+
+    /// <summary>
+    /// Chooses the element to display. The default is <see cref="Content"/>; override to supply a
+    /// substitute when the caller set no content.
+    /// </summary>
+    protected virtual Element? SelectEffectiveContent() => Content;
+
+    /// <summary>
+    /// Re-runs <see cref="SelectEffectiveContent"/> after one of its inputs changed.
+    /// </summary>
+    protected void InvalidateEffectiveContent()
+    {
+        _effectiveContentInitialized = true;
+        CommitEffectiveContent();
+    }
+
+    private void EnsureEffectiveContent()
+    {
+        if (!_effectiveContentInitialized)
+        {
+            InvalidateEffectiveContent();
+        }
+    }
+
+    private void CommitEffectiveContent()
+    {
+        var previous = EffectiveContent;
+        var next = SelectEffectiveContent();
+        if (ReferenceEquals(previous, next))
+        {
+            return;
+        }
+
+        // Exactly one host holds the visual link: a template's presenter, or this control.
+        // Release the outgoing element before the incoming one claims it.
+        if (previous != null && previous.Parent == this)
+        {
+            previous.Parent = null;
+        }
+
+        SetValue(EffectiveContentPropertyKey, next);
+
+        if (HasTemplateInstance)
+        {
+            RefreshTemplatePresenters(EffectiveContentProperty);
+        }
+        else if (next != null)
+        {
+            next.Parent = this;
+        }
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        // Before base: Control.ApplyTemplate wires presenters against the slot, so it must be filled.
+        EnsureEffectiveContent();
+        return base.MeasureOverride(availableSize);
     }
 
     /// <summary>
@@ -34,23 +115,40 @@ public class ContentControl : Control
 
     protected virtual void OnContentChanged(Element? oldValue, Element? newValue)
     {
-        if (HasTemplateInstance)
+        // Content is the logical slot only; the visual attach follows EffectiveContent, which may
+        // hold a substitute rather than this value.
+        if (oldValue != null)
         {
-            // Templated: the control keeps logical ownership only; a ContentPresenter
-            // in the template owns the visual attach.
-            if (oldValue != null)
-            {
-                DetachLogicalChild(oldValue);
-            }
-            if (newValue != null)
-            {
-                AttachLogicalChild(newValue);
-            }
-            RefreshTemplatePresenters(ContentProperty);
+            DetachLogicalChild(oldValue);
         }
-        else
+
+        if (newValue != null)
         {
-            ChangeLogicalChild(oldValue, newValue);
+            if (newValue.LogicalParent != this)
+            {
+                newValue.DetachFromCurrentLogicalOwner();
+            }
+
+            AttachLogicalChild(newValue);
+        }
+
+        InvalidateEffectiveContent();
+
+        // A template may project the raw slot instead of the displayed one.
+        RefreshTemplatePresenters(ContentProperty);
+    }
+
+    protected override void OnValueSourceChanged(MewProperty property)
+    {
+        base.OnValueSourceChanged(property);
+
+        // The displayed element can depend on whether anyone supplied Content at all, so a tier
+        // transition matters even when the value stayed equal (assigning null over an unset slot,
+        // or clearing that assignment again).
+        if (property.Id == ContentProperty.Id)
+        {
+            InvalidateEffectiveContent();
+            RefreshTemplatePresenters(ContentProperty);
         }
     }
 
@@ -72,10 +170,10 @@ public class ContentControl : Control
 
         // Release the compat visual link when no presenter took the content over;
         // the logical child stays owned without a visual position (invariant).
-        var content = Content;
-        if (content != null && content.Parent == this)
+        var displayed = EffectiveContent;
+        if (displayed != null && displayed.Parent == this)
         {
-            content.Parent = null;
+            displayed.Parent = null;
         }
     }
 
@@ -84,10 +182,10 @@ public class ContentControl : Control
         base.OnTemplateInstanceDetached();
 
         // Back on the non-template path: the control hosts its content visually again.
-        var content = Content;
-        if (content != null && content.Parent == null)
+        var displayed = EffectiveContent;
+        if (displayed != null && displayed.Parent == null)
         {
-            content.Parent = this;
+            displayed.Parent = this;
         }
     }
 
@@ -98,7 +196,8 @@ public class ContentControl : Control
             return base.MeasureContent(availableSize);
         }
 
-        if (Content == null)
+        var displayed = EffectiveContent;
+        if (displayed == null)
         {
             return Size.Empty;
         }
@@ -108,8 +207,8 @@ public class ContentControl : Control
         var borderInset = GetBorderVisualInset();
         var contentSize = availableSize.Deflate(Padding).Deflate(borderInset);
 
-        Content.Measure(contentSize);
-        return Content.DesiredSize.Inflate(Padding).Inflate(borderInset);
+        displayed.Measure(contentSize);
+        return displayed.DesiredSize.Inflate(Padding).Inflate(borderInset);
     }
 
     protected override void ArrangeContent(Rect bounds)
@@ -120,13 +219,14 @@ public class ContentControl : Control
             return;
         }
 
-        if (Content == null)
+        var displayed = EffectiveContent;
+        if (displayed == null)
         {
             return;
         }
 
         var contentBounds = bounds.Deflate(Padding).Deflate(GetBorderVisualInset());
-        Content.Arrange(contentBounds);
+        displayed.Arrange(contentBounds);
     }
 
     protected override void RenderSubtree(IGraphicsContext context)
@@ -137,7 +237,7 @@ public class ContentControl : Control
             return;
         }
 
-        Content?.Render(context);
+        EffectiveContent?.Render(context);
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
@@ -148,7 +248,8 @@ public class ContentControl : Control
             return visitor(templateRoot);
         }
 
-        return Content == null || visitor(Content);
+        var displayed = EffectiveContent;
+        return displayed == null || visitor(displayed);
     }
 
     bool ILogicalTreeHost.VisitLogicalChildren(Func<Element, bool> visitor)

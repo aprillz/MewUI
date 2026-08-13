@@ -409,6 +409,14 @@ public abstract partial class Control : TextElement
 
     internal bool HasTemplateInstance => _templateInstance != null;
 
+    /// <summary>
+    /// The slot a <see cref="ContentPresenter"/> projects when its ContentSource is not set.
+    /// Null leaves such a presenter empty.
+    /// </summary>
+    private protected virtual MewProperty<Element?>? DefaultContentSource => null;
+
+    internal MewProperty<Element?>? ResolveDefaultContentSource() => DefaultContentSource;
+
     internal void RefreshTemplatePresenters(MewProperty property)
     {
         var instance = _templateInstance;
@@ -419,7 +427,7 @@ public abstract partial class Control : TextElement
 
         for (int i = 0; i < instance.Presenters.Count; i++)
         {
-            if (instance.Presenters[i].ContentSource == property)
+            if (instance.Presenters[i].ResolvedContentSource == property)
             {
                 instance.Presenters[i].UpdateProjection();
             }

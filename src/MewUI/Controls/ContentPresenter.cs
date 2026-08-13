@@ -9,13 +9,33 @@ namespace Aprillz.MewUI.Controls;
 public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
 {
     private Element? _projected;
+    private MewProperty<Element?>? _contentSource;
 
     /// <summary>
-    /// Gets or sets which logical slot of the templated parent to display.
-    /// Defaults to <see cref="ContentControl.ContentProperty"/>; set to another
-    /// element-typed slot (e.g. Header) inside the template build.
+    /// Gets or sets which slot of the templated parent to display. Leaving it unset projects the
+    /// templated parent's own display slot; set it to another element-typed slot (e.g. Header)
+    /// inside the template build.
     /// </summary>
-    public MewProperty<Element?> ContentSource { get; set; } = ContentControl.ContentProperty;
+    public MewProperty<Element?> ContentSource
+    {
+        get => _contentSource ?? ContentControl.ContentProperty;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (ReferenceEquals(_contentSource, value))
+            {
+                return;
+            }
+
+            _contentSource = value;
+            UpdateProjection();
+        }
+    }
+
+    // An unset ContentSource follows the owner's slot, so a bare presenter works in any template
+    // without the author knowing which property that control displays.
+    internal MewProperty<Element?>? ResolvedContentSource
+        => _contentSource ?? TemplatedParent?.ResolveDefaultContentSource();
 
     internal Control? TemplatedParent { get; private set; }
 
@@ -44,8 +64,9 @@ public sealed class ContentPresenter : FrameworkElement, IVisualTreeHost
 
     internal void UpdateProjection()
     {
-        var content = TemplatedParent != null
-            ? TemplatedParent.PropertyStore.GetValue(ContentSource)
+        var source = ResolvedContentSource;
+        var content = TemplatedParent != null && source != null
+            ? TemplatedParent.PropertyStore.GetValue(source)
             : null;
         if (ReferenceEquals(_projected, content))
         {

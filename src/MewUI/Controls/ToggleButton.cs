@@ -21,36 +21,23 @@ public partial class ToggleButton : ToggleBase
 
     protected override Size MeasureContent(Size availableSize)
     {
-        var borderInset = GetBorderVisualInset();
-        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
-
-        if (Content == null)
+        if (HasTemplateInstance || EffectiveContent != null)
         {
-            return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10).Inflate(border);
+            return base.MeasureContent(availableSize);
         }
 
-        var contentSize = availableSize.Deflate(Padding).Deflate(border);
-        Content.Measure(contentSize);
-        return Content.DesiredSize.Inflate(Padding).Inflate(border);
-    }
-
-    protected override void ArrangeContent(Rect bounds)
-    {
-        base.ArrangeContent(bounds);
-
-        if (Content == null)
-        {
-            return;
-        }
-
-        var borderInset = GetBorderVisualInset();
-        var border = borderInset > 0 ? new Thickness(borderInset) : Thickness.Zero;
-        var contentBounds = bounds.Deflate(Padding).Deflate(border);
-        Content.Arrange(contentBounds);
+        return new Size(Padding.HorizontalThickness + 20, Padding.VerticalThickness + 10)
+            .Inflate(GetBorderVisualInset());
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the built-in chrome would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bgColor = GetValue(BackgroundProperty);
         var borderColor = GetValue(BorderBrushProperty);
 
@@ -86,7 +73,7 @@ public partial class ToggleButton : ToggleBase
 
         if (IsEffectivelyEnabled && Bounds.Contains(e.Position))
         {
-            CommitIsChecked(!IsChecked);
+            CommitIsCheckedFromUser(!IsChecked);
         }
 
         e.Handled = true;
@@ -129,7 +116,7 @@ public partial class ToggleButton : ToggleBase
 
             if (e.Key == Key.Enter)
             {
-                CommitIsChecked(!IsChecked);
+                CommitIsCheckedFromUser(!IsChecked);
                 e.Handled = true;
             }
         }

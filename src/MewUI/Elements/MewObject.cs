@@ -137,6 +137,26 @@ public abstract class MewObject : IPropertyOwner
     protected virtual void OnMewPropertyChanged(MewProperty property) { }
 
     /// <summary>
+    /// Called when a mutation through this object's API moved a property to a different value tier,
+    /// whether or not the effective value changed. Override for state that depends on which tier
+    /// supplies a value (e.g. "the caller supplied content" versus "nothing did") rather than on the
+    /// value itself.
+    /// </summary>
+    /// <param name="property">The property whose value source changed.</param>
+    protected virtual void OnValueSourceChanged(MewProperty property) { }
+
+    // A mutation can move a property between tiers while the effective value stays equal, and the
+    // change pipeline stays silent then (see PropertyValueStore.SetValueCore). Provenance-dependent
+    // state would go stale, so the tier transition itself is reported here.
+    private void NotifyIfValueSourceChanged(MewProperty property, ValueSource oldSource)
+    {
+        if (PropertyStore.GetSource(property.Id) != oldSource)
+        {
+            OnValueSourceChanged(property);
+        }
+    }
+
+    /// <summary>
     /// Gets the current (possibly interpolated) value of a visual property.
     /// For properties with <see cref="MewPropertyOptions.Inherits"/>, walks the parent chain
     /// when no local or style value exists on this element.
@@ -214,10 +234,13 @@ public abstract class MewObject : IPropertyOwner
                 $"Use SetValue(MewPropertyKey<T>, T) with the registered key.");
         }
 
+        var oldSource = PropertyStore.GetSource(property.Id);
+
         bool hadBinding = HasPropertyBinding(property.Id);
         if (!hadBinding)
         {
             PropertyStore.SetLocal(property, value);
+            NotifyIfValueSourceChanged(property, oldSource);
             return;
         }
 
@@ -226,6 +249,7 @@ public abstract class MewObject : IPropertyOwner
         DisposeExistingBinding(property.Id);
         PropertyStore.SetLocalPrevalidated(property, value);
         PropertyStore.ClearSource(property.Id, ValueSource.Binding);
+        NotifyIfValueSourceChanged(property, oldSource);
     }
 
     /// <summary>
@@ -458,7 +482,10 @@ public abstract class MewObject : IPropertyOwner
         {
             BindingDiagnostics.ReportLocalClear(this, property);
         }
+
+        var oldSource = PropertyStore.GetSource(property.Id);
         PropertyStore.ClearLocalValue(property);
+        NotifyIfValueSourceChanged(property, oldSource);
     }
 
     /// <summary>
@@ -749,8 +776,11 @@ public abstract class MewObject : IPropertyOwner
         {
             BindingDiagnostics.ReportBindingClear(this, property);
         }
+
+        var oldSource = PropertyStore.GetSource(property.Id);
         DisposeExistingBinding(property.Id);
         PropertyStore.ClearSource(property.Id, ValueSource.Binding);
+        NotifyIfValueSourceChanged(property, oldSource);
     }
 
     private static void ThrowIfReadOnly(MewProperty property)
@@ -941,6 +971,7 @@ public abstract class MewObject : IPropertyOwner
 
     private void ActivatePropertyBinding(int propertyId, IPropertyBinding binding)
     {
+        var oldSource = PropertyStore.GetSource(propertyId);
         StorePropertyBinding(propertyId, binding);
         try
         {
@@ -951,6 +982,11 @@ public abstract class MewObject : IPropertyOwner
             DisposeExistingBinding(propertyId);
             PropertyStore.ClearSource(propertyId, ValueSource.Binding);
             throw;
+        }
+
+        if (MewPropertyRegistry.GetProperty(propertyId) is MewProperty property)
+        {
+            NotifyIfValueSourceChanged(property, oldSource);
         }
     }
 

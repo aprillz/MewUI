@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Controls;
 /// <summary>
 /// A checkbox control with optional content label.
 /// </summary>
-public partial class CheckBox : ContentControl
+public partial class CheckBox : CommandSourceControl
 {
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<CheckBox>(DefaultStyles.CreateCheckBoxStyle);
@@ -79,7 +79,8 @@ public partial class CheckBox : ContentControl
     public event Action<bool?>? CheckedChanged;
 
     /// <summary>
-    /// Toggles the checked state, respecting three-state mode.
+    /// Toggles the checked state for a user activation, respecting three-state mode, and invokes
+    /// the command once. Setting <see cref="IsChecked"/> directly executes nothing.
     /// </summary>
     internal void Toggle()
     {
@@ -96,24 +97,34 @@ public partial class CheckBox : ContentControl
         {
             CommitTargetValue(IsCheckedProperty, IsChecked != true);
         }
+
+        InvokeCommand();
     }
+
+    protected override bool ComputeIsEnabledSuggestion() => QueryCommandCanExecute();
 
     private const double BoxSize = 14;
     private const double Spacing = 6;
 
     protected override Size MeasureContent(Size availableSize)
     {
+        if (HasTemplateInstance)
+        {
+            return base.MeasureContent(availableSize);
+        }
+
         double width = BoxSize + Spacing;
         double height = BoxSize;
 
-        if (Content != null)
+        var displayed = EffectiveContent;
+        if (displayed != null)
         {
             var contentAvailable = new Size(
                 Math.Max(0, availableSize.Width - width - Padding.HorizontalThickness),
                 double.PositiveInfinity);
-            Content.Measure(contentAvailable);
-            width += Content.DesiredSize.Width;
-            height = Math.Max(height, Content.DesiredSize.Height);
+            displayed.Measure(contentAvailable);
+            width += displayed.DesiredSize.Width;
+            height = Math.Max(height, displayed.DesiredSize.Height);
         }
 
         return new Size(width, height).Inflate(Padding);
@@ -121,7 +132,14 @@ public partial class CheckBox : ContentControl
 
     protected override void ArrangeContent(Rect bounds)
     {
-        if (Content == null)
+        if (HasTemplateInstance)
+        {
+            base.ArrangeContent(bounds);
+            return;
+        }
+
+        var displayed = EffectiveContent;
+        if (displayed == null)
         {
             return;
         }
@@ -132,11 +150,17 @@ public partial class CheckBox : ContentControl
             contentBounds.Y,
             Math.Max(0, contentBounds.Width - BoxSize - Spacing),
             contentBounds.Height);
-        Content.Arrange(textBounds);
+        displayed.Arrange(textBounds);
     }
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the built-in box would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bounds = Bounds;
         var contentBounds = bounds.Deflate(Padding);
         var state = CurrentVisualState;

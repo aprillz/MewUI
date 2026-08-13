@@ -15,17 +15,17 @@ namespace Aprillz.MewUI.Controls;
 /// <see cref="ButtonGroup"/> segment flips it per-click when checkable. Independent action segments
 /// can invoke a semantic <see cref="Command"/> and may also raise <see cref="Click"/>.
 /// </summary>
-public sealed partial class SegmentButton : ContentControl, ICommandSource
+public sealed partial class SegmentButton : CommandSourceControl
 {
     static SegmentButton() { }
 
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<SegmentButton>(DefaultStyles.CreateSegmentButtonStyle);
 
-    public static readonly MewProperty<Command?> CommandProperty =
-        MewProperty<Command?>.Register<SegmentButton>(nameof(Command), null,
-            MewPropertyOptions.None,
-            static (self, _, _) => self.OnCommandChanged());
+    /// <summary>
+    /// Compatibility alias for <see cref="CommandSourceControl.CommandProperty"/>, which now owns the slot.
+    /// </summary>
+    public static new readonly MewProperty<Command?> CommandProperty = CommandSourceControl.CommandProperty;
 
     public static readonly MewProperty<bool> IsCheckedProperty =
         MewProperty<bool>.Register<SegmentButton>(nameof(IsChecked), false,
@@ -33,7 +33,6 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
             static (self, _, _) => self.RefreshVisualState());
 
     private readonly PressCaptureHelper _pressCapture;
-    private Window? _commandSourceWindow;
 
     public SegmentButton()
     {
@@ -41,15 +40,6 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
         // horizontal StackPanel (Auto sizing) does not over-tall the strip.
         MinHeight = 0;
         _pressCapture = new PressCaptureHelper(this, SetPressed);
-    }
-
-    /// <summary>
-    /// Gets or sets the semantic command invoked when this segment is activated.
-    /// </summary>
-    public Command? Command
-    {
-        get => GetValue(CommandProperty);
-        set => SetValue(CommandProperty, value);
     }
 
     /// <summary>Gets or sets the active-fill visual state (selected or toggled-on).</summary>
@@ -93,42 +83,7 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
     /// </summary>
     internal Action<int>? ClickedCallback { get; set; }
 
-    private void OnCommandChanged()
-    {
-        UpdateCommandSourceRegistration();
-        ReevaluateSuggestedIsEnabled();
-    }
-
-    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
-    {
-        base.OnVisualRootChanged(oldRoot, newRoot);
-        UpdateCommandSourceRegistration();
-    }
-
-    private void UpdateCommandSourceRegistration()
-    {
-        var window = Command != null ? FindVisualRoot() as Window : null;
-        if (ReferenceEquals(_commandSourceWindow, window))
-        {
-            return;
-        }
-
-        _commandSourceWindow?.UnregisterCommandSource(this);
-        _commandSourceWindow = window;
-        window?.RegisterCommandSource(this);
-    }
-
-    void ICommandSource.EvaluateCommandState() => ReevaluateSuggestedIsEnabled();
-
-    protected override bool ComputeIsEnabledSuggestion()
-    {
-        if (Command is Command command && FindVisualRoot() is Window window)
-        {
-            return window.CommandRouter.CanExecute(command, CommandTarget.From(this));
-        }
-
-        return true;
-    }
+    protected override bool ComputeIsEnabledSuggestion() => QueryCommandCanExecute();
 
     private void RefreshVisualState()
     {
@@ -153,6 +108,12 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
 
     protected override void OnRender(IGraphicsContext context)
     {
+        // A template owns the control's entire visuals; the segment fill would double-render.
+        if (HasTemplateInstance)
+        {
+            return;
+        }
+
         var bg = GetValue(BackgroundProperty);
         if (bg.A == 0)
         {
@@ -182,18 +143,19 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
     {
         base.ArrangeContent(bounds);
 
-        if (Content == null)
+        var displayed = HasTemplateInstance ? null : EffectiveContent;
+        if (displayed == null)
         {
             return;
         }
 
         // Keep the label vertically centered within the segment.
         var contentBounds = bounds.Deflate(Padding);
-        var desired = Content.DesiredSize;
+        var desired = displayed.DesiredSize;
         if (desired.Height > 0 && contentBounds.Height > desired.Height + 0.5)
         {
             double y = contentBounds.Y + (contentBounds.Height - desired.Height) / 2;
-            Content.Arrange(new Rect(contentBounds.X, y, contentBounds.Width, desired.Height));
+            displayed.Arrange(new Rect(contentBounds.X, y, contentBounds.Width, desired.Height));
         }
     }
 
@@ -224,14 +186,6 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
         Click?.Invoke();
         InvokeCommand();
         ClickedCallback?.Invoke(Index);
-    }
-
-    private void InvokeCommand()
-    {
-        if (Command is Command command && FindVisualRoot() is Window window)
-        {
-            window.CommandRouter.TryExecuteFromInput(command, CommandTarget.From(this), this);
-        }
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
@@ -278,10 +232,4 @@ public sealed partial class SegmentButton : ContentControl, ICommandSource
         }
     }
 
-    protected override void OnDispose()
-    {
-        _commandSourceWindow?.UnregisterCommandSource(this);
-        _commandSourceWindow = null;
-        base.OnDispose();
-    }
 }
