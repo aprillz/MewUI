@@ -185,14 +185,14 @@ Element TopSection() => new DockPanel()
 Element MenuDemo()
 {
     var fileMenu = new Menu()
-        .Item(MenuCommand("file.new", "New", () => NativeMessageBox.Show(window.Handle, "New", "Menu")))
-        .Item(MenuCommand("file.open", "Open...", () => NativeMessageBox.Show(window.Handle, "Open", "Menu")))
+        .Item(MenuCommand("file.new", "New", () => MessageBox.Confirm("New", owner: window)))
+        .Item(MenuCommand("file.open", "Open...", () => MessageBox.Confirm("Open", owner: window)))
         .Separator()
         .Item(MenuCommand("file.exit", "Exit", Application.Shutdown));
 
     var deepMenu = new Menu()
-        .Item(MenuCommand("recent.deepA", "Deep A", () => NativeMessageBox.Show(window.Handle, "Deep A", "Menu")))
-        .Item(MenuCommand("recent.deepB", "Deep B", () => NativeMessageBox.Show(window.Handle, "Deep B", "Menu")));
+        .Item(MenuCommand("recent.deepA", "Deep A", () => MessageBox.Confirm("Deep A", owner: window)))
+        .Item(MenuCommand("recent.deepB", "Deep B", () => MessageBox.Confirm("Deep B", owner: window)));
 
     var recentMenu = new Menu()
         .Apply(x =>
@@ -200,7 +200,7 @@ Element MenuDemo()
             for (char letter = 'a'; letter <= 'z'; letter++)
             {
                 var text = letter + ".txt";
-                x.Item(MenuCommand($"recent.{letter}", text, () => NativeMessageBox.Show(window.Handle, text, "Recent")));
+                x.Item(MenuCommand($"recent.{letter}", text, () => MessageBox.Confirm(text, owner: window)));
             }
         })
         .Separator()
@@ -213,11 +213,11 @@ Element MenuDemo()
         .Item(MenuCommand("edit.paste", "Paste", () => { }, new KeyGesture(Key.V, ModifierKeys.Primary)));
 
     var helpAboutMenu = new Menu()
-        .Item(MenuCommand("help.about", "About", () => NativeMessageBox.Show(window.Handle, "Aprillz.MewUI", "About")));
+        .Item(MenuCommand("help.about", "About", () => MessageBox.Confirm("Aprillz.MewUI", owner: window)));
 
     var helpDocsMenu = new Menu()
-        .Item(MenuCommand("help.docs", "Docs", () => NativeMessageBox.Show(window.Handle, "docs/", "Help")))
-        .Item(MenuCommand("help.docs.ko", "Korean Docs", () => NativeMessageBox.Show(window.Handle, "ko/docs/", "Help")));
+        .Item(MenuCommand("help.docs", "Docs", () => MessageBox.Confirm("docs/", owner: window)))
+        .Item(MenuCommand("help.docs.ko", "Korean Docs", () => MessageBox.Confirm("ko/docs/", owner: window)));
 
     var helpMenu = new Menu()
         .SubMenu("Documentation", helpDocsMenu)
@@ -382,7 +382,7 @@ Element NormalControls()
                             new Button()
                                 .Content("Click!")
                                 .OnClick(() => new Window()
-                                    .Fixed(400, 600)
+                                    .FitContentSize(400, 600)
                                     .Title("New Window")
                                     .Content(
                                         BindSamples()
@@ -881,7 +881,7 @@ FrameworkElement BindSamples()
                         new Button()
                             .BindContent(vm.IsEnabled, x => x ? "Enabled action" : "Disabled action")
                             .BindIsEnabled(vm.IsEnabled)
-                            .OnClick(() => NativeMessageBox.Show(window.Handle, "Enabled button clicked", "Aprillz.MewUI Demo", NativeMessageBoxButtons.Ok, NativeMessageBoxIcon.Information))
+                            .OnClick(() => MessageBox.Confirm("Enabled button clicked", owner: window))
                     ),
 
                 new Label()
