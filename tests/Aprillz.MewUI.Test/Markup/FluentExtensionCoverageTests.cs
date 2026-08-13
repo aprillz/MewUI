@@ -43,6 +43,35 @@ public sealed class FluentExtensionCoverageTests
     }
 
     [TestMethod]
+    public void DropDownExtensions_PreserveConcreteTypes()
+    {
+        var dropDownMenu = new Menu();
+        var splitMenu = new Menu();
+
+        DropDownButton dropDown = new DropDownButton()
+            .DropDownMenu(dropDownMenu)
+            .IsDropDownOpen(false)
+            .MaxDropDownHeight(240)
+            .OnDropDownOpening(() => { })
+            .OnDropDownClosed(() => { });
+        SplitButton split = new SplitButton()
+            .DropDownMenu(splitMenu)
+            .IsDropDownOpen(false)
+            .MaxDropDownHeight(360)
+            .OnDropDownOpening(() => { })
+            .OnDropDownClosed(() => { });
+        ComboBox comboBox = new ComboBox()
+            .IsDropDownOpen(false)
+            .MaxDropDownHeight(480);
+
+        Assert.AreSame(dropDownMenu, dropDown.DropDownMenu);
+        Assert.AreEqual(240, dropDown.MaxDropDownHeight);
+        Assert.AreSame(splitMenu, split.DropDownMenu);
+        Assert.AreEqual(360, split.MaxDropDownHeight);
+        Assert.AreEqual(480, comboBox.MaxDropDownHeight);
+    }
+
+    [TestMethod]
     public void EventExtensions_SubscribeHandlers()
     {
         var value = 0;

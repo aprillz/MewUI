@@ -725,6 +725,109 @@ public static class DefaultStyles
             ],
         };
 
+    // A face lies on the owner's chrome, so it clears the base fill and border and paints only its
+    // own state. The triggers are declared here rather than inherited: a derived style's base setter
+    // outranks the BasedOn style's triggers, so the transparent base would otherwise swallow hover.
+    internal static Style CreateDropDownFaceStyle()
+    {
+        EnsureRegistered<Control>(CreateControlBaseStyle);
+        EnsureRegistered<Button>(CreateButtonStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(Button),
+            transitions: [Transition.Create(Control.BackgroundProperty)],
+            setters:
+            [
+                Setter.Create(Control.BackgroundProperty, Color.Transparent),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+            ],
+            triggers:
+            [
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground)],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Pressed,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.None,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
+                    ],
+                },
+            ]);
+    }
+
+    internal static Style CreateDropDownButtonStyle() =>
+        new(typeof(DropDownButton))
+        {
+            Transitions = ColorTransitions,
+            Setters = CreateDropDownButtonChromeSetters(DropDownButtonTemplate.Instance),
+            Triggers = CreateDropDownButtonChromeTriggers(),
+        };
+
+    internal static Style CreateSplitButtonStyle() =>
+        new(typeof(SplitButton))
+        {
+            Transitions = ColorTransitions,
+            Setters = CreateDropDownButtonChromeSetters(SplitButtonTemplate.Instance),
+            Triggers = CreateDropDownButtonChromeTriggers(),
+        };
+
+    // The owner owns the chrome (the template forwards it to a wrapping Border) and the face parts
+    // own their fill, so hover and press read per face while focus and the open state ring the whole
+    // control the way a ComboBox does.
+    private static SetterBase[] CreateDropDownButtonChromeSetters(ControlTemplate template) =>
+        [
+            Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonFace),
+            Setter.Create(Control.BorderBrushProperty, t => t.Palette.ControlBorder),
+            Setter.Create(Control.PaddingProperty, new Thickness(8, 4, 8, 4)),
+            Setter.Create(FrameworkElement.MinHeightProperty, t => t.Metrics.BaseControlHeight),
+            Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+            Setter.Create(Control.BorderThicknessProperty, t => t.Metrics.ControlBorderThickness),
+            Setter.Create(Control.TemplateProperty, (ControlTemplate?)template),
+        ];
+
+    private static StateTrigger[] CreateDropDownButtonChromeTriggers() =>
+        [
+            new StateTrigger
+            {
+                Match = VisualStateFlags.Hot,
+                Setters =
+                [
+                    Setter.Create(Control.BorderBrushProperty, t => Color.Composite(t.Palette.ControlBorder, t.Palette.AccentBorderHotOverlay)),
+                ],
+            },
+            new StateTrigger
+            {
+                Match = VisualStateFlags.Focused,
+                Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
+            },
+            // Focus moves into the menu while it is open, so the open state carries the same accent
+            // ring; without it the control would look unfocused for as long as the menu is up.
+            new StateTrigger
+            {
+                Match = VisualStateFlags.Active,
+                Setters = [Setter.Create(Control.BorderBrushProperty, t => t.Palette.Accent)],
+            },
+            new StateTrigger
+            {
+                Match = VisualStateFlags.None,
+                Exclude = VisualStateFlags.Enabled,
+                Setters =
+                [
+                    Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
+                    Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
+                ],
+            },
+        ];
+
     internal static Style CreateToggleButtonStyle() =>
         new(typeof(ToggleButton))
         {

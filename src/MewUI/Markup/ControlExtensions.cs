@@ -2865,7 +2865,7 @@ public static class ControlExtensions
 
     /// <summary>
     /// Configures each <see cref="ButtonGroup"/> segment container after its content is bound. Use it
-    /// to assign <see cref="SegmentButton.Command"/>, subscribe to <see cref="SegmentButton.Click"/>,
+    /// to assign <see cref="CommandSourceControl.Command"/>, subscribe to <see cref="SegmentButton.Click"/>,
     /// or configure <see cref="SegmentButton.IsCheckable"/> / <see cref="SegmentButton.IsChecked"/>
     /// (independent toggle), enabled state, or tooltip.
     /// </summary>
@@ -5289,6 +5289,134 @@ public static class ControlExtensions
 
         datePicker.SetBinding(DatePicker.SelectedDateProperty, source, convert, convertBack);
         return datePicker;
+    }
+
+    #endregion
+
+    #region DropDownButton
+
+    /// <summary>
+    /// Sets the menu opened by the dropdown button.
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="menu">Menu to open.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton DropDownMenu(this DropDownButton button, Menu? menu)
+    {
+        button.DropDownMenu = menu;
+        return button;
+    }
+
+    /// <summary>
+    /// Sets whether the dropdown button's menu is open.
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="value">Whether the menu is open.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton IsDropDownOpen(this DropDownButton button, bool value = true)
+    {
+        button.IsDropDownOpen = value;
+        return button;
+    }
+
+    /// <summary>
+    /// Sets the maximum dropdown menu height.
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="value">Maximum dropdown menu height.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton MaxDropDownHeight(this DropDownButton button, double value)
+    {
+        button.MaxDropDownHeight = value;
+        return button;
+    }
+
+    /// <summary>
+    /// Adds a handler invoked immediately before the dropdown menu opens.
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="handler">Opening handler.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton OnDropDownOpening(this DropDownButton button, Action handler)
+    {
+        button.DropDownOpening += handler;
+        return button;
+    }
+
+    /// <summary>
+    /// Adds a handler invoked after the dropdown menu closes.
+    /// </summary>
+    /// <param name="button">Target dropdown button.</param>
+    /// <param name="handler">Closed handler.</param>
+    /// <returns>The dropdown button for chaining.</returns>
+    public static DropDownButton OnDropDownClosed(this DropDownButton button, Action handler)
+    {
+        button.DropDownClosed += handler;
+        return button;
+    }
+
+    #endregion
+
+    #region SplitButton
+
+    /// <summary>
+    /// Sets the menu opened by the split button's dropdown face.
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="menu">Menu to open.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton DropDownMenu(this SplitButton button, Menu? menu)
+    {
+        button.DropDownMenu = menu;
+        return button;
+    }
+
+    /// <summary>
+    /// Sets whether the split button's dropdown menu is open.
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="value">Whether the menu is open.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton IsDropDownOpen(this SplitButton button, bool value = true)
+    {
+        button.IsDropDownOpen = value;
+        return button;
+    }
+
+    /// <summary>
+    /// Sets the maximum dropdown menu height.
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="value">Maximum dropdown menu height.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton MaxDropDownHeight(this SplitButton button, double value)
+    {
+        button.MaxDropDownHeight = value;
+        return button;
+    }
+
+    /// <summary>
+    /// Adds a handler invoked immediately before the dropdown menu opens.
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="handler">Opening handler.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton OnDropDownOpening(this SplitButton button, Action handler)
+    {
+        button.DropDownOpening += handler;
+        return button;
+    }
+
+    /// <summary>
+    /// Adds a handler invoked after the dropdown menu closes.
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="handler">Closed handler.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton OnDropDownClosed(this SplitButton button, Action handler)
+    {
+        button.DropDownClosed += handler;
+        return button;
     }
 
     #endregion
