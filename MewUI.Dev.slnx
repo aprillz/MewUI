@@ -76,5 +76,6 @@
     <Project Path="tests/MewUI.GridLayoutTest/MewUI.GridLayoutTest.csproj" />
     <Project Path="tests/MewUI.MewvalonEdit.Test/MewUI.MewvalonEdit.Test.csproj" />
     <Project Path="tests/MewUI.TextBoxPerformance/MewUI.TextBoxPerformance.csproj" />
+    <Project Path="tests/MewUI.WindowAutomationTest/MewUI.WindowAutomationTest.csproj" />
   </Folder>
 </Solution>

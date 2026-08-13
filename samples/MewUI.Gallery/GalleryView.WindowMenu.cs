@@ -18,7 +18,9 @@ partial class GalleryView
         var transparentStatus = new ObservableValue<string>("Transparent: -");
         var manualPositionStatus = new ObservableValue<string>("Manual: -");
 
-        async void ShowDialogSample()
+        // owner is the window the button lives in, so a dialog opened from a dialog stacks on it:
+        // the parent dialog is disabled and stays behind while the nested one is up.
+        async void ShowDialogSample(Window owner)
         {
             dialogStatus.Value = "Dialog: opening...";
 
@@ -42,7 +44,7 @@ partial class GalleryView
                                     .Children(
                                         new Button()
                                             .Content("Open dialog")
-                                            .OnClick(ShowDialogSample),
+                                            .OnClick(() => ShowDialogSample(x)),
                                         new Button()
                                             .Content("Close")
                                             .OnClick(() => x.Close())
@@ -53,7 +55,7 @@ partial class GalleryView
 
             try
             {
-                await dialog.ShowDialogAsync(window);
+                await dialog.ShowDialogAsync(owner);
                 dialogStatus.Value = "Dialog: closed";
             }
             catch (Exception ex)
@@ -235,7 +237,7 @@ partial class GalleryView
                     .Children(
                         new Button()
                             .Content("Open dialog")
-                            .OnClick(ShowDialogSample),
+                            .OnClick(() => ShowDialogSample(window)),
                         new TextBlock()
                             .BindText(dialogStatus)
                             .FontSize(ThemeFontSize.Small)

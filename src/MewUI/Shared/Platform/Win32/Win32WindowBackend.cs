@@ -46,6 +46,13 @@ internal sealed class Win32WindowBackend : IWindowBackend
     private const uint MonitorDefaultToPrimary = 1;
     private const uint MonitorDefaultToNearest = 2;
 
+    // Set while a DPI transition inside the OS move loop has left the loop's tracked rectangle a
+    // scale behind. The loop re-applies that rectangle after every mouse move, so a fit window
+    // stays at the old scale's size until the rectangle itself is corrected.
+    private bool _moveLoopRectIsStale;
+
+
+
     internal bool NeedsRender { get; private set; }
 
     public nint Handle { get; private set; }
@@ -762,15 +769,20 @@ internal sealed class Win32WindowBackend : IWindowBackend
                     // Return activation to the owner when an owned window that currently has the foreground is
                     // destroyed: Win32's default activation can pick the wrong top-level (especially for tool /
                     // owned windows when several are open), sending focus somewhere unexpected.
-                    var ownerHandle = Window.Owner?.Handle ?? 0;
-                    bool wasForeground = ownerHandle != 0 && User32.GetForegroundWindow() == Handle;
+                    var owner = Window.Owner;
+                    bool wasForeground = owner != null && User32.GetForegroundWindow() == Handle;
 
                     Window.RaiseClosed();
+
+                    // Resolved after RaiseClosed so this window is already out of the owner's modal list.
+                    // Raising the owner while it still has a live modal child would bury that child.
+                    nint activateHandle = owner != null ? (owner.GetTopModalChild() ?? owner).Handle : 0;
+
                     User32.DestroyWindow(Handle);
 
-                    if (wasForeground)
+                    if (wasForeground && activateHandle != 0)
                     {
-                        _ = User32.SetForegroundWindow(ownerHandle);
+                        _ = User32.SetForegroundWindow(activateHandle);
                     }
                 }
                 return 0;
@@ -800,7 +812,19 @@ internal sealed class Win32WindowBackend : IWindowBackend
                 RenderIfNeeded();
                 return 0;
 
+            case WindowMessages.WM_MOVING:
+                return HandleMoving(lParam);
+
             case WindowMessages.WM_EXITSIZEMOVE:
+                _moveLoopRectIsStale = false;
+                User32.KillTimer(Handle, 1);
+                // The move loop tracks its own rectangle and re-applies it after every DPI
+                // transition, overriding any resize the transition triggered. A fit window
+                // therefore leaves the loop at the size the old scale implied, and its layout has
+                // no reason to submit again, so the transaction is reopened here.
+                Window.InvalidateSizingTransaction();
+                return 0;
+
             case WindowMessages.WM_EXITMENULOOP:
                 User32.KillTimer(Handle, 1);
                 return 0;
@@ -2022,11 +2046,51 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return 0;
     }
 
+    /// <summary>
+    /// Corrects the rectangle the OS move loop is tracking after a DPI transition, so a fit window
+    /// follows the cursor at the size layout asked for instead of snapping to it on release. Only
+    /// a transition sets this path live; an ordinary move goes straight to DefWindowProc.
+    /// </summary>
+    private nint HandleMoving(nint lParam)
+    {
+        if (!_moveLoopRectIsStale || Window.RequestedClientSize is not Size requested)
+        {
+            return User32.DefWindowProc(Handle, WindowMessages.WM_MOVING, 0, lParam);
+        }
+
+        uint dpi = Window.Dpi == 0 ? GetDpiForWindow(Handle) : Window.Dpi;
+        double dpiScale = dpi / 96.0;
+        var target = new RECT(0, 0,
+            (int)Math.Round(requested.Width * dpiScale),
+            (int)Math.Round(requested.Height * dpiScale));
+        if (!_allowsTransparency && _extendTitleBarHeight <= 0)
+        {
+            Win32DpiApiResolver.AdjustWindowRectExForDpi(
+                ref target, GetWindowStyle(), false, GetWindowExStyle(), dpi);
+        }
+
+        var rect = Marshal.PtrToStructure<RECT>(lParam);
+        if (rect.Width == target.Width && rect.Height == target.Height)
+        {
+            _moveLoopRectIsStale = false;
+            return User32.DefWindowProc(Handle, WindowMessages.WM_MOVING, 0, lParam);
+        }
+
+        rect.right = rect.left + target.Width;
+        rect.bottom = rect.top + target.Height;
+        Marshal.StructureToPtr(rect, lParam, false);
+        return 1;
+    }
+
     private nint HandleDpiChanged(nint wParam, nint lParam)
     {
         uint newDpi = (uint)(wParam.ToInt64() & 0xFFFF);
         uint oldDpi = Window.Dpi;
         Window.SetDpi(newDpi);
+
+        // A transition during a drag leaves the move loop holding the old scale's rectangle, which
+        // it re-applies over the resize below on the next mouse move.
+        _moveLoopRectIsStale = true;
 
         var suggestedRect = Marshal.PtrToStructure<RECT>(lParam);
         User32.SetWindowPos(Handle, 0,
