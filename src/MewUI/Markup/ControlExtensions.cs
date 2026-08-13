@@ -1262,7 +1262,6 @@ public static class ControlExtensions
     /// Sets the button content to a centered text label. When <paramref name="accessKey"/> is true (default),
     /// "_" prefixes mark access key characters (e.g., "_Save" registers Alt+S).
     /// </summary>
-    /// <typeparam name="T">Button type.</typeparam>
     /// <param name="button">Target button.</param>
     /// <param name="text">Content text.</param>
     /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
@@ -1384,6 +1383,7 @@ public static class ControlExtensions
     /// <summary>
     /// Binds the button content element to a converted observable value.
     /// </summary>
+    /// <typeparam name="T">Button type.</typeparam>
     /// <typeparam name="TSource">Source value type.</typeparam>
     /// <param name="button">Target button.</param>
     /// <param name="source">Observable source.</param>
