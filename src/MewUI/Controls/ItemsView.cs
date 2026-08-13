@@ -66,7 +66,7 @@ public interface IItemsView
     event Action<ItemsChange>? Changed;
 
     /// <summary>
-    /// Forces a reset notification and re-applies selection policies.
+    /// Refreshes the view from its source, raises a reset notification, and re-applies selection policies.
     /// </summary>
     void Invalidate();
 }
@@ -242,11 +242,16 @@ public static class ItemsView
 }
 
 /// <summary>
-/// A strongly-typed <see cref="IItemsView"/> that wraps an <see cref="IReadOnlyList{T}"/>.
+/// A strongly-typed <see cref="IItemsView"/> over an <see cref="IReadOnlyList{T}"/>.
+/// Sources that implement <see cref="INotifyCollectionChanged"/> remain live; other sources are
+/// exposed as a snapshot that is refreshed by <see cref="Invalidate"/>.
 /// </summary>
 /// <typeparam name="T">Item type.</typeparam>
 public sealed class ItemsView<T> : IMultiSelectableItemsView
 {
+    private readonly IReadOnlyList<T> _source;
+    private IReadOnlyList<T> _items;
+    private readonly bool _sourceNotifies;
     private readonly Func<T, string>? _textSelector;
     private readonly Func<T, object?>? _keySelector;
     private readonly Func<object?, object?>? _keySelectorObject;
@@ -264,7 +269,9 @@ public sealed class ItemsView<T> : IMultiSelectableItemsView
     /// <param name="keySelector">Optional stable key selector for selection preservation.</param>
     public ItemsView(IReadOnlyList<T> items, Func<T, string>? textSelector = null, Func<T, object?>? keySelector = null)
     {
-        Items = items ?? throw new ArgumentNullException(nameof(items));
+        _source = items ?? throw new ArgumentNullException(nameof(items));
+        _sourceNotifies = items is INotifyCollectionChanged;
+        _items = _sourceNotifies ? items : items.ToArray();
         _textSelector = textSelector;
         _keySelector = keySelector;
         if (keySelector != null)
@@ -285,9 +292,9 @@ public sealed class ItemsView<T> : IMultiSelectableItemsView
     }
 
     /// <summary>
-    /// Gets the underlying items list.
+    /// Gets the current items list. For a non-notifying source, this is the current snapshot.
     /// </summary>
-    public IReadOnlyList<T> Items { get; }
+    public IReadOnlyList<T> Items => _items;
 
     /// <summary>
     /// Gets the number of items.
@@ -676,10 +683,15 @@ public sealed class ItemsView<T> : IMultiSelectableItemsView
     }
 
     /// <summary>
-    /// Forces a reset notification and re-applies selection policies.
+    /// Refreshes a non-notifying source snapshot, raises a reset notification, and re-applies selection policies.
     /// </summary>
     public void Invalidate()
     {
+        if (!_sourceNotifies)
+        {
+            _items = _source.ToArray();
+        }
+
         ApplyResetSelectionPolicy();
         RemapSelectedSet(NotifyCollectionChangedAction.Reset, 0, 0);
         ReconcilePrimaryAndSet();

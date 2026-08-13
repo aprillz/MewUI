@@ -39,6 +39,7 @@ internal sealed class FixedHeightItemsPresenter : Control, IItemsPresenter
                 _itemsSource.Changed -= OnItemsChanged;
             }
 
+            RecycleAll();
             _itemsSource = value;
             _itemsSource.Changed += OnItemsChanged;
 

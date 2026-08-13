@@ -41,6 +41,29 @@ public sealed class ItemsPresenterLifetimeTests
         Assert.AreEqual(0, source.SubscriberCount);
     }
 
+    [TestMethod]
+    public void FixedHeightPresenter_RecyclesRealizedItems_WhenSourceIsReplaced()
+    {
+        var presenter = new FixedHeightItemsPresenter
+        {
+            ItemsSource = ItemsView.Create(new[] { "1", "2", "3" }),
+        };
+
+        presenter.SetViewport(new Size(300, 100));
+        presenter.Measure(new Size(300, 100));
+        presenter.Arrange(new Rect(0, 0, 300, 100));
+
+        var realizedCount = 0;
+        presenter.VisitRealized(_ => realizedCount++);
+        Assert.AreEqual(3, realizedCount);
+
+        presenter.ItemsSource = ItemsView.Create(Array.Empty<string>());
+
+        realizedCount = 0;
+        presenter.VisitRealized(_ => realizedCount++);
+        Assert.AreEqual(0, realizedCount);
+    }
+
     private sealed class TrackingItemsView : IItemsView
     {
         private Action<ItemsChange>? _changed;

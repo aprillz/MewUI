@@ -40,6 +40,7 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
             if (ReferenceEquals(_itemsSource, value)) return;
 
             if (_itemsSource != null) _itemsSource.Changed -= OnItemsChanged;
+            RecycleAll();
             _itemsSource = value;
             _itemsSource.Changed += OnItemsChanged;
 

@@ -116,6 +116,57 @@ public sealed class MultiSelectableItemsViewTests
     }
 
     [TestMethod]
+    public void NonObservableList_UsesSnapshotUntilInvalidated()
+    {
+        var items = new List<string> { "0", "1", "2" };
+        var view = new ItemsView<string>(items);
+
+        items.RemoveAt(0);
+        items.Clear();
+
+        Assert.AreEqual(3, view.Count);
+        Assert.AreEqual("0", view.GetItem(0));
+        view.SelectedIndex = 2;
+        Assert.AreEqual("2", view.SelectedItem);
+
+        view.Invalidate();
+
+        Assert.AreEqual(0, view.Count);
+        Assert.AreEqual(-1, view.SelectedIndex);
+        Assert.IsNull(view.SelectedItem);
+    }
+
+    [TestMethod]
+    public void NonObservableList_InvalidateReplacesSnapshotAndRaisesReset()
+    {
+        var items = new List<string> { "0", "1", "2" };
+        var view = new ItemsView<string>(items);
+        ItemsChange? observed = null;
+        view.Changed += change => observed = change;
+
+        items.RemoveAt(0);
+        view.Invalidate();
+
+        Assert.AreEqual(2, view.Count);
+        Assert.AreEqual("1", view.GetItem(0));
+        Assert.AreEqual("2", view.GetItem(1));
+        Assert.IsNotNull(observed);
+        Assert.AreEqual(ItemsChangeKind.Reset, observed.Value.Kind);
+    }
+
+    [TestMethod]
+    public void ObservableCollection_RemainsLiveWithoutInvalidate()
+    {
+        var items = new ObservableCollection<string> { "0", "1", "2" };
+        var view = new ItemsView<string>(items);
+
+        items.RemoveAt(0);
+
+        Assert.AreEqual(2, view.Count);
+        Assert.AreEqual("1", view.GetItem(0));
+    }
+
+    [TestMethod]
     public void SwitchToSingle_CollapsesToPrimary()
     {
         var view = CreateView(5, ItemsSelectionMode.Extended);
