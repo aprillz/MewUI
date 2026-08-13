@@ -205,6 +205,26 @@ public sealed class SplitButtonTests
     }
 
     [TestMethod]
+    public void FluentChain_KeepsTheSplitButtonType()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var command = new Command("test.save", "Save");
+
+        // Compiles only while every step returns SplitButton: a step inherited from Button that returned
+        // Button would end the chain, since the drop-down extensions take a SplitButton.
+        SplitButton button = new SplitButton()
+            .Content("Save")
+            .Command(command, CommandPresentationMode.Text)
+            .OnClick(() => { })
+            .DropDownMenu(OneItemMenu())
+            .MaxDropDownHeight(240);
+
+        Assert.AreEqual(240, button.MaxDropDownHeight);
+        Assert.AreSame(command, button.Command);
+    }
+
+    [TestMethod]
     public void CommandPresentation_IsOptInAsOnButton()
     {
         if (SkipOnNonWindows()) return;

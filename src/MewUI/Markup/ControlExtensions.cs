@@ -1259,21 +1259,10 @@ public static class ControlExtensions
     #region Button
 
     /// <summary>
-    /// Sets the button content element.
-    /// </summary>
-    /// <param name="button">Target button.</param>
-    /// <param name="content">Content element.</param>
-    /// <returns>The button for chaining.</returns>
-    public static Button Content(this Button button, Element content)
-    {
-        button.Content = content;
-        return button;
-    }
-
-    /// <summary>
     /// Sets the button content to a centered text label. When <paramref name="accessKey"/> is true (default),
     /// "_" prefixes mark access key characters (e.g., "_Save" registers Alt+S).
     /// </summary>
+    /// <typeparam name="T">Button type.</typeparam>
     /// <param name="button">Target button.</param>
     /// <param name="text">Content text.</param>
     /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
@@ -1386,7 +1375,7 @@ public static class ControlExtensions
     /// <param name="button">Target button.</param>
     /// <param name="source">Observable source.</param>
     /// <returns>The button for chaining.</returns>
-    public static Button BindContent(this Button button, ObservableValue<Element?> source)
+    public static T BindContent<T>(this T button, ObservableValue<Element?> source) where T : Button
     {
         button.SetBinding(Button.ContentProperty, source, BindingMode.OneWay);
         return button;
@@ -1400,10 +1389,11 @@ public static class ControlExtensions
     /// <param name="source">Observable source.</param>
     /// <param name="convert">Conversion function.</param>
     /// <returns>The button for chaining.</returns>
-    public static Button BindContent<TSource>(
-        this Button button,
+    public static T BindContent<T, TSource>(
+        this T button,
         ObservableValue<TSource> source,
         Func<TSource, Element?> convert)
+        where T : Button
     {
         ArgumentNullException.ThrowIfNull(button);
         ArgumentNullException.ThrowIfNull(source);
@@ -1416,10 +1406,11 @@ public static class ControlExtensions
     /// <summary>
     /// Sets the semantic command invoked by the button.
     /// </summary>
-    public static Button Command(
-        this Button button,
+    public static T Command<T>(
+        this T button,
         Command? command,
         CommandPresentationMode presentation = CommandPresentationMode.None)
+        where T : Button
     {
         ArgumentNullException.ThrowIfNull(button);
         button.Command = command;
@@ -1430,10 +1421,11 @@ public static class ControlExtensions
     /// <summary>
     /// Binds the button's semantic command to an observable value.
     /// </summary>
-    public static Button BindCommand(
-        this Button button,
+    public static T BindCommand<T>(
+        this T button,
         ObservableValue<Command?> source,
         CommandPresentationMode presentation = CommandPresentationMode.None)
+        where T : Button
     {
         ArgumentNullException.ThrowIfNull(button);
         ArgumentNullException.ThrowIfNull(source);
@@ -1448,7 +1440,7 @@ public static class ControlExtensions
     /// <param name="button">Target button.</param>
     /// <param name="handler">Click handler.</param>
     /// <returns>The button for chaining.</returns>
-    public static Button OnClick(this Button button, Action handler)
+    public static T OnClick<T>(this T button, Action handler) where T : Button
     {
         button.Click += handler;
         return button;
@@ -1460,7 +1452,7 @@ public static class ControlExtensions
     /// <param name="button">Target button.</param>
     /// <param name="handler">Double click handler.</param>
     /// <returns>The button for chaining.</returns>
-    public static Button OnDoubleClick(this Button button, Action handler)
+    public static T OnDoubleClick<T>(this T button, Action handler) where T : Button
     {
         ArgumentNullException.ThrowIfNull(button);
         ArgumentNullException.ThrowIfNull(handler);
@@ -5003,7 +4995,7 @@ public static class ControlExtensions
     /// <returns>The control for chaining.</returns>
     public static T Content<T>(this T control, Element content) where T : ContentControl
     {
-        control.Content = content as UIElement;
+        control.Content = content;
         return control;
     }
 
@@ -5358,6 +5350,56 @@ public static class ControlExtensions
     #endregion
 
     #region SplitButton
+
+    // The Button text-content extensions cannot be generic: their signature would match the ToggleBase
+    // ones, and a type constraint is not part of a member's signature. These overloads restore the
+    // SplitButton type for chaining, the same way CheckBox and ToggleButton do over ToggleBase.
+
+    /// <summary>
+    /// Sets the split button content to a centered text label. When <paramref name="accessKey"/> is true
+    /// (default), "_" prefixes mark access key characters (e.g., "_Save" registers Alt+S).
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="text">Content text.</param>
+    /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton Content(this SplitButton button, string text, bool accessKey = true)
+    {
+        Content((Button)button, text, accessKey);
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the split button content to an observable string value (creates a centered TextBlock).
+    /// </summary>
+    /// <param name="button">Target split button.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton BindContent(this SplitButton button, ObservableValue<string> source, bool accessKey = true)
+    {
+        BindContent((Button)button, source, accessKey);
+        return button;
+    }
+
+    /// <summary>
+    /// Binds the split button content to an observable value with converter (creates a centered TextBlock).
+    /// </summary>
+    /// <typeparam name="TSource">Source value type.</typeparam>
+    /// <param name="button">Target split button.</param>
+    /// <param name="source">Observable source.</param>
+    /// <param name="convert">Conversion function.</param>
+    /// <param name="accessKey">Whether underscore prefixes define access keys.</param>
+    /// <returns>The split button for chaining.</returns>
+    public static SplitButton BindContent<TSource>(
+        this SplitButton button,
+        ObservableValue<TSource> source,
+        Func<TSource, string> convert,
+        bool accessKey = true)
+    {
+        BindContent((Button)button, source, convert, accessKey);
+        return button;
+    }
 
     /// <summary>
     /// Sets the menu opened by the split button's dropdown face.
