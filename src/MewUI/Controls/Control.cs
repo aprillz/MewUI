@@ -1390,26 +1390,25 @@ public abstract partial class Control : TextElement
         }
 
         var region = window.GetPopupPlacementRegion(new Rect(anchor.X, anchor.Y, 0, 0));
-
-        const double dx = 12;
-        const double dy = 18;
-        double x = anchor.X + dx;
-        double y = anchor.Y + dy;
-
         var measureSize = new Size(Math.Max(0, region.Width), Math.Max(0, region.Height));
-        Size desired = window.MeasureToolTip(ToolTip!, measureSize);
 
-        double w = Math.Max(0, desired.Width);
-        double h = Math.Max(0, desired.Height);
-
-        x = PopupPlacement.ClampHorizontal(x, w, region, floorToLeftEdge: false);
-
-        if (y + h > region.Bottom)
+        window.ShowToolTip(this, ToolTip!, measureSize, desired =>
         {
-            y = Math.Max(region.Y, anchor.Y - h - dy);
-        }
+            const double dx = 12;
+            const double dy = 18;
+            double w = Math.Max(0, desired.Width);
+            double h = Math.Max(0, desired.Height);
 
-        window.ShowToolTip(this, ToolTip!, new Rect(x, y, w, h));
+            double x = PopupPlacement.ClampHorizontal(anchor.X + dx, w, region, floorToLeftEdge: false);
+            double y = anchor.Y + dy;
+
+            if (y + h > region.Bottom)
+            {
+                y = Math.Max(region.Y, anchor.Y - h - dy);
+            }
+
+            return new Rect(x, y, w, h);
+        });
     }
 
     private void HideToolTip()

@@ -259,7 +259,7 @@ public sealed class HeadlessInputTests
         window.PerformLayout();
 
         var popupRoot = new Border { Background = Color.FromRgb(1, 2, 3) };
-        window.ShowPopup(owner, popupRoot, new Rect(200, 200, 100, 50));
+        window.ShowPopup(owner, popupRoot, _ => new Rect(200, 200, 100, 50));
         Assert.AreSame(window, popupRoot.FindVisualRoot(), "popup attached");
 
         window.SendClick(new Point(600, 500));

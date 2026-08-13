@@ -3185,12 +3185,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     internal void CloseAllPopups()
         => _popupManager.CloseAllPopups();
 
-    internal Rect ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
-        => _popupManager.ShowPopup(owner, popup, bounds, sizeToContent, staysOpen);
-
     /// <summary>
     /// Opens a popup whose placement is measured only after it is rooted and style-resolved in this
-    /// window. Use this overload when the placement math depends on the popup's own measured size.
+    /// window. Placement is always a callback: measuring a popup before it is rooted reads registered
+    /// defaults rather than this window's styles, fonts, theme and DPI.
     /// </summary>
     internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
         => _popupManager.ShowPopup(owner, popup, measureBounds, sizeToContent, staysOpen);
@@ -3234,11 +3232,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             Math.Max(0, bottomRight.Y - topLeft.Y));
     }
 
-    internal Size MeasureToolTip(Element content, Size availableSize)
-        => _popupManager.MeasureToolTip(content, availableSize);
-
-    internal void ShowToolTip(UIElement owner, Element content, Rect bounds)
-        => _popupManager.ShowToolTip(owner, content, bounds);
+    internal void ShowToolTip(UIElement owner, Element content, Size availableSize, Func<Size, Rect> place)
+        => _popupManager.ShowToolTip(owner, content, availableSize, place);
 
     internal void CloseToolTip(UIElement? owner = null)
         => _popupManager.CloseToolTip(owner);

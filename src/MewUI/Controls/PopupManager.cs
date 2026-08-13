@@ -122,14 +122,14 @@ internal sealed class PopupManager
         _window.Invalidate();
     }
 
-    internal Rect ShowPopup(UIElement owner, UIElement popup, Rect bounds, bool sizeToContent = false, bool staysOpen = false)
-        => ShowPopup(owner, popup, _ => bounds, sizeToContent, staysOpen);
-
     /// <summary>
     /// Opens <paramref name="popup"/>, computing its placement via <paramref name="measureBounds"/> only
     /// after the popup is rooted in this window (chrome attached, style/inherited/DPI/theme resolved), so
     /// placement measures the fully-styled popup instead of a pre-attach one whose named style and fonts
     /// have not resolved yet. Returns the measured placement bounds.
+    /// Placement is a callback rather than a ready-made rectangle because a caller that measured the popup
+    /// first would size it from registered defaults, and nothing downstream corrects a rectangle already
+    /// computed from those.
     /// </summary>
     internal Rect ShowPopup(UIElement owner, UIElement popup, Func<Window, Rect> measureBounds, bool sizeToContent = false, bool staysOpen = false)
     {
@@ -461,43 +461,16 @@ internal sealed class PopupManager
         return false;
     }
 
-    internal Size MeasureToolTip(Element content, Size availableSize)
-    {
-        ArgumentNullException.ThrowIfNull(content);
-
-        _toolTip ??= new ToolTip();
-        _toolTip.Content = content;
-        EnsureToolTipInheritsFromWindow();
-        _toolTip.Measure(availableSize);
-        return _toolTip.DesiredSize;
-    }
-
     /// <summary>
-    /// Ensures the tooltip can resolve inherited properties (e.g. FontSize, Foreground) before
-    /// it is added to the visual tree via ShowPopup. Without this, the tooltip measures with
-    /// registered property defaults instead of the theme values.
+    /// Shows the shared tooltip around <paramref name="content"/>. <paramref name="place"/> receives the
+    /// tooltip's desired size, measured against <paramref name="availableSize"/> once the tooltip is rooted,
+    /// and returns its bounds; the caller therefore never sees a pre-attach size.
     /// </summary>
-    private void EnsureToolTipInheritsFromWindow()
-    {
-        if (_toolTip == null)
-        {
-            return;
-        }
-
-        // If the tooltip is not in the visual tree, temporarily parent it to the window
-        // so inherited properties and styles resolve correctly during measurement.
-        if (_toolTip.Parent == null)
-        {
-            _toolTip.Parent = _window;
-            _toolTip.ResolveAndApplyStyle();
-            _toolTip.InvalidateMeasure();
-        }
-    }
-
-    internal void ShowToolTip(UIElement owner, Element content, Rect bounds)
+    internal void ShowToolTip(UIElement owner, Element content, Size availableSize, Func<Size, Rect> place)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(place);
 
         // Tooltips stay away while an interactive popup (menu, drop-down) is open: hover is not the
         // user's focus then, and the tooltip surface appearing/disappearing under the pointer flips
@@ -510,7 +483,13 @@ internal sealed class PopupManager
         _toolTip ??= new ToolTip();
         _toolTip.Content = content;
         _toolTipOwner = owner;
-        ShowPopup(owner, _toolTip, bounds);
+
+        var toolTip = _toolTip;
+        ShowPopup(owner, toolTip, _ =>
+        {
+            toolTip.Measure(availableSize);
+            return place(toolTip.DesiredSize);
+        });
     }
 
     private bool HasInteractivePopup()

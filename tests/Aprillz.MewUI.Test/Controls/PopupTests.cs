@@ -89,7 +89,7 @@ public sealed class PopupTests
 
         var (window, owner) = CreateWindow();
         var unrelated = new Border();
-        window.ShowPopup(owner, unrelated, new Rect(0, 0, 1, 1));
+        window.ShowPopup(owner, unrelated, _ => new Rect(0, 0, 1, 1));
         window.ClosePopup(unrelated);
 
         var transient = CreatePopup(80, 40);

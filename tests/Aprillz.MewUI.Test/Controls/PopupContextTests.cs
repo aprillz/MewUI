@@ -36,7 +36,7 @@ public sealed class PopupContextTests
 
         var popupText = new TextBlock { Text = "hello" };
         var popupRoot = new Border { StyleName = "accent", Child = popupText };
-        window.ShowPopup(owner, popupRoot, new Rect(10, 10, 200, 50));
+        window.ShowPopup(owner, popupRoot, _ => new Rect(10, 10, 200, 50));
 
         Assert.AreEqual(accent, popupRoot.Background, "StyleName resolved via owner's StyleSheet");
         Assert.AreEqual(24, popupText.FontSize, "inherited font size diverted through the owner");
@@ -72,7 +72,7 @@ public sealed class PopupContextTests
         window.PerformLayout();
 
         var popupRoot = new Border { StyleName = "accent" };
-        window.ShowPopup(owner, popupRoot, new Rect(10, 10, 100, 40));
+        window.ShowPopup(owner, popupRoot, _ => new Rect(10, 10, 100, 40));
         Assert.AreEqual(first, popupRoot.Background);
 
         owner.StyleSheet = AccentSheet(second);
@@ -104,7 +104,7 @@ public sealed class PopupContextTests
         Size MeasurePopupFor(Border popupOwner)
         {
             var text = new TextBlock { Text = "measure me" };
-            window.ShowPopup(popupOwner, text, new Rect(0, 0, 400, 100));
+            window.ShowPopup(popupOwner, text, _ => new Rect(0, 0, 400, 100));
             text.Measure(new Size(400, 100));
             var size = text.DesiredSize;
             window.ClosePopup(text);
@@ -139,10 +139,10 @@ public sealed class PopupContextTests
         window.PerformLayout();
 
         var popup = new Border();
-        window.ShowPopup(firstOwner, popup, new Rect(0, 0, 100, 40));
+        window.ShowPopup(firstOwner, popup, _ => new Rect(0, 0, 100, 40));
         Assert.AreEqual(30, popup.FontSize);
 
-        window.ShowPopup(secondOwner, popup, new Rect(0, 0, 100, 40));
+        window.ShowPopup(secondOwner, popup, _ => new Rect(0, 0, 100, 40));
         Assert.AreEqual(11, popup.FontSize, "open popup re-diverted to the new owner");
 
         window.ClosePopup(popup);
@@ -169,11 +169,11 @@ public sealed class PopupContextTests
         window.PerformLayout();
 
         var popup = new Border();
-        window.ShowPopup(firstOwner, popup, new Rect(0, 0, 100, 40));
+        window.ShowPopup(firstOwner, popup, _ => new Rect(0, 0, 100, 40));
         Assert.AreEqual(30, popup.FontSize);
         window.ClosePopup(popup);
 
-        window.ShowPopup(secondOwner, popup, new Rect(0, 0, 100, 40));
+        window.ShowPopup(secondOwner, popup, _ => new Rect(0, 0, 100, 40));
         Assert.AreEqual(11, popup.FontSize, "reopened popup follows the new owner");
         window.ClosePopup(popup);
     }
