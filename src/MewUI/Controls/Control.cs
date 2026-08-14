@@ -610,34 +610,32 @@ public abstract partial class Control : TextElement
         StyleSheet? applicationStyleSheet = Application.IsRunning
             ? Application.Current.StyleSheet
             : null;
-        Style? resolved;
-
         // 1. StyleName → walk StyleSheet chain
-        if (_styleName != null)
-        {
-            resolved = StyleScopeResolver.Resolve(this, _styleName, applicationStyleSheet);
-            if (resolved == null)
-            {
-                bool isAttached = FindVisualRoot() is Window;
-                if (!isAttached || applicationStyleSheet == null)
-                {
-                    // A detached control or a headless tree without an Application does not yet
-                    // have the complete scope chain. Retry on attach or the next layout pass.
-                    _styleNameResolved = false;
-                    return;
-                }
+        // 2. StyleSheet type rule → nearest container type-matched rule, which may name its style rather
+        //    than hold it. Either way an unresolved name is the same situation, so it is handled once.
+        var resolved = StyleScopeResolver.Resolve(
+            this, _styleName, applicationStyleSheet, out string? unresolvedName);
 
-                string scopes = StyleScopeResolver.DescribeScopes(this, includesApplication: true);
-                throw new InvalidOperationException(
-                    $"StyleName '{_styleName}' was not found for control type '{GetType().FullName}'. " +
-                    $"Searched scopes: {scopes}.");
-            }
+        if (_styleName != null && resolved == null)
+        {
+            unresolvedName = _styleName;
         }
 
-        // 2. StyleSheet type rule → nearest container type-matched rule
-        else
+        if (unresolvedName != null)
         {
-            resolved = StyleScopeResolver.Resolve(this, styleName: null, applicationStyleSheet);
+            bool isAttached = FindVisualRoot() is Window;
+            if (!isAttached || applicationStyleSheet == null)
+            {
+                // A detached control or a headless tree without an Application does not yet
+                // have the complete scope chain. Retry on attach or the next layout pass.
+                _styleNameResolved = false;
+                return;
+            }
+
+            string scopes = StyleScopeResolver.DescribeScopes(this, includesApplication: true);
+            throw new InvalidOperationException(
+                $"StyleName '{unresolvedName}' was not found for control type '{GetType().FullName}'. " +
+                $"Searched scopes: {scopes}.");
         }
 
         _styleNameResolved = true;

@@ -16,6 +16,7 @@ public sealed class StyleSheet
     private readonly HashSet<string> _materializingNames = new(StringComparer.Ordinal);
     private List<(Type Type, Style Style)>? _typeRules;
     private (Type Type, Style Style)[]? _frozenTypeRules;
+    private List<(Type Type, string Name)>? _typeRuleNames;
     private bool _isFrozen;
 
     internal bool UsesFrameworkNamedStyles { get; init; }
@@ -71,6 +72,52 @@ public sealed class StyleSheet
             ThrowIfFrozen();
             _typeRules ??= new();
             _typeRules.Add((typeof(T), style));
+        }
+    }
+
+    /// <summary>
+    /// Defines a type-based style rule that names its style instead of holding it. The name is resolved
+    /// where <c>Control.StyleName</c> is resolved, from the control's own scope chain, so a rule can point
+    /// at a style defined further out - a built-in key among them - and a nearer scope can redefine it.
+    /// </summary>
+    /// <typeparam name="T">Control type the rule applies to.</typeparam>
+    /// <param name="styleName">The style name to resolve when a control takes this rule.</param>
+    public void Define<T>(string styleName) where T : Controls.Control
+    {
+        ArgumentException.ThrowIfNullOrEmpty(styleName);
+
+        lock (_sync)
+        {
+            ThrowIfFrozen();
+            _typeRuleNames ??= new();
+            _typeRuleNames.Add((typeof(T), styleName));
+        }
+    }
+
+    /// <summary>The name a rule gives the control type, or null when this sheet names none for it.</summary>
+    internal string? GetTypeRuleName(Type controlType)
+    {
+        lock (_sync)
+        {
+            if (_typeRuleNames == null)
+            {
+                return null;
+            }
+
+            for (Type? candidate = controlType;
+                 candidate != null && typeof(Controls.Control).IsAssignableFrom(candidate);
+                 candidate = candidate.BaseType)
+            {
+                for (int i = _typeRuleNames.Count - 1; i >= 0; i--)
+                {
+                    if (_typeRuleNames[i].Type == candidate)
+                    {
+                        return _typeRuleNames[i].Name;
+                    }
+                }
+            }
+
+            return null;
         }
     }
 

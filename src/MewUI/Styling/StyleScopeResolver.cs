@@ -8,6 +8,29 @@ internal static class StyleScopeResolver
         Control control,
         string? styleName,
         StyleSheet? applicationStyleSheet)
+        => Resolve(control, styleName, applicationStyleSheet, out _);
+
+    /// <summary>
+    /// Resolves the style for a control. <paramref name="unresolvedName"/> reports a style name a type
+    /// rule asked for and no scope defined, so the caller treats it the way it treats a control's own
+    /// StyleName that resolved to nothing.
+    /// </summary>
+    internal static Style? Resolve(
+        Control control,
+        string? styleName,
+        StyleSheet? applicationStyleSheet,
+        out string? unresolvedName)
+    {
+        unresolvedName = null;
+        return Resolve(control, styleName, applicationStyleSheet, allowNamedTypeRules: true, ref unresolvedName);
+    }
+
+    private static Style? Resolve(
+        Control control,
+        string? styleName,
+        StyleSheet? applicationStyleSheet,
+        bool allowNamedTypeRules,
+        ref string? unresolvedName)
     {
         ArgumentNullException.ThrowIfNull(control);
 
@@ -25,6 +48,31 @@ internal static class StyleScopeResolver
             {
                 return style;
             }
+
+            // A type rule that names its style rather than holding it: the name is resolved from the
+            // control's own chain, so it reaches keys defined further out and a nearer scope can redefine
+            // one. The flag, not the shape of the lookup, is what stops that walk naming a rule again.
+            if (!allowNamedTypeRules || styleName != null)
+            {
+                continue;
+            }
+
+            if (sheet.GetTypeRuleName(controlType) is not string ruleName)
+            {
+                continue;
+            }
+
+            var named = Resolve(
+                control, ruleName, applicationStyleSheet, allowNamedTypeRules: false, ref unresolvedName);
+            if (named != null)
+            {
+                return named;
+            }
+
+            // Reported rather than thrown here: the caller knows whether the scope chain is complete yet,
+            // and treats this the way it treats a control's own StyleName that resolved to nothing.
+            unresolvedName = ruleName;
+            return null;
         }
 
         if (applicationStyleSheet == null)
