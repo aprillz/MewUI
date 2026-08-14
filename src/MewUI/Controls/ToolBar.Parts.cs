@@ -104,6 +104,13 @@ public sealed partial class ToolBar
 
         private const double DOT_SPACING = 3;
 
+        internal ToolBarGripElement()
+        {
+            // The four-directional cursor, because a group moves along both axes: to another place on its
+            // band and to another band. Hand would say the grip is something to click.
+            Cursor = CursorType.SizeAll;
+        }
+
         protected override Size MeasureContent(Size availableSize) => new(GRIP_WIDTH, 0);
 
         protected override void OnRender(IGraphicsContext context)
@@ -458,13 +465,14 @@ public sealed partial class ToolBar
             // against parts of no width. The constraint is the one Measure used, so this costs nothing when
             // the measure pass has already run.
             Measure(entryHeight);
+            var overflow = _overflow!;
 
             // Planned twice at most: the band's own chevron takes room, but only if the plan turns out to
             // drop a group whole. Deciding it up front would leave a gap whenever nothing was dropped.
             var plan = Plan(band.Width, margin, padding, spacing, showGrip);
             if (plan.AnyHidden)
             {
-                plan = Plan(band.Width - _overflow.DesiredSize.Width - spacing, margin, padding, spacing, showGrip);
+                plan = Plan(band.Width - overflow.DesiredSize.Width - spacing, margin, padding, spacing, showGrip);
             }
 
             IsOverflowing = plan.AnyHidden;
@@ -487,13 +495,13 @@ public sealed partial class ToolBar
 
             if (IsOverflowing)
             {
-                double width = Math.Min(_overflow.DesiredSize.Width, band.Width);
-                _overflow.Arrange(new Rect(
+                double width = Math.Min(overflow.DesiredSize.Width, band.Width);
+                overflow.Arrange(new Rect(
                     Math.Max(band.X, band.Right - margin - width), plateY + padding, width, entryHeight));
             }
             else
             {
-                _overflow.Arrange(Rect.Empty);
+                overflow.Arrange(Rect.Empty);
             }
         }
 
