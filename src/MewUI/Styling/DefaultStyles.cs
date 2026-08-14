@@ -766,6 +766,95 @@ public static class DefaultStyles
             ]);
     }
 
+    internal static Style CreateToolBarStyle() =>
+        new(typeof(ToolBar))
+        {
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ControlBackground),
+                Setter.Create(Control.PaddingProperty, new Thickness(4, 2, 4, 2)),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+            ],
+        };
+
+    internal static Style CreateToolBarGroupPlateStyle() =>
+        new(typeof(ToolBarGroupPlate))
+        {
+            Setters =
+            [
+                Setter.Create(Control.BackgroundProperty, t => t.Palette.ContainerBackground),
+                Setter.Create(Control.CornerRadiusProperty, t => t.Metrics.ControlCornerRadius),
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+            ],
+        };
+
+    internal static Style CreateToolBarButtonStyle()
+    {
+        EnsureRegistered<Control>(CreateControlBaseStyle);
+        EnsureRegistered<Button>(CreateButtonStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(Button),
+            transitions: [Transition.Create(Control.BackgroundProperty)],
+            setters: CreateToolBarButtonBaseSetters(),
+            triggers: CreateToolBarButtonTriggers());
+    }
+
+    internal static Style CreateToolBarToggleButtonStyle()
+    {
+        EnsureRegistered<Control>(CreateControlBaseStyle);
+        EnsureRegistered<ToggleButton>(CreateToggleButtonStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(ToggleButton),
+            transitions: [Transition.Create(Control.BackgroundProperty)],
+            setters: CreateToolBarButtonBaseSetters(),
+            triggers:
+            [
+                .. CreateToolBarButtonTriggers(),
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Checked,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonFace, t.Palette.Accent.WithAlpha(96)))],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Checked | VisualStateFlags.Hot,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonHoverBackground, t.Palette.Accent.WithAlpha(96)))],
+                },
+            ]);
+    }
+
+    // The toolbar paints the row, so an entry contributes only its own fill. The idle fill carries the
+    // hover hue at zero alpha rather than Color.Transparent, which is white and would make the fill ramp
+    // from white and flash bright over a dark toolbar.
+    private static SetterBase[] CreateToolBarButtonBaseSetters() =>
+        [
+            Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground.WithAlpha(0)),
+            Setter.Create(Control.BorderThicknessProperty, 0.0),
+            Setter.Create(Control.PaddingProperty, new Thickness(6, 2, 6, 2)),
+        ];
+
+    private static StateTrigger[] CreateToolBarButtonTriggers() =>
+        [
+            new StateTrigger
+            {
+                Match = VisualStateFlags.Hot,
+                Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground)],
+            },
+            new StateTrigger
+            {
+                Match = VisualStateFlags.Pressed,
+                Setters = [Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonPressedBackground)],
+            },
+            new StateTrigger
+            {
+                Match = VisualStateFlags.None,
+                Exclude = VisualStateFlags.Enabled,
+                Setters =
+                [
+                    Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
+                    Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
+                ],
+            },
+        ];
+
     internal static Style CreateDropDownButtonStyle() =>
         new(typeof(DropDownButton))
         {
