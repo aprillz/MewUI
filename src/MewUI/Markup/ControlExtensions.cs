@@ -3147,10 +3147,12 @@ public static class ControlExtensions
         pane.ItemTemplate = new DelegateTemplate<T>(
             build: _ =>
             {
+                // 20 rather than the 16 a command icon is drawn at: in a rail the icon is the whole of the
+                // item, since the text is hidden. It still fits the row, which is BaseControlHeight - 2.
                 var iconHost = new ContentControl
                 {
-                    Width = 16,
-                    Height = 16,
+                    Width = 20,
+                    Height = 20,
                     BorderThickness = 0,
                     IsHitTestVisible = false,
                     HorizontalAlignment = MewUI.HorizontalAlignment.Center,
