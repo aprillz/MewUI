@@ -176,11 +176,12 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
                 return new ToolBarSplitterElement();
 
             case ToolBarLabelItem label:
-                return new TextBlock
+                return new ToolBarLabel
                 {
                     Text = label.Text,
                     Margin = new Thickness(LABEL_MARGIN, 0, LABEL_MARGIN, 0),
-                }.CenterVertical();
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
 
             case ToolBarHost host:
                 return host.Content ?? new Border();

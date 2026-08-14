@@ -777,6 +777,28 @@ public static class DefaultStyles
             ],
         };
 
+    internal static Style CreateToolBarLabelStyle() =>
+        new(typeof(ToolBarLabel))
+        {
+            Transitions = ColorTransitions,
+            Setters =
+            [
+                Setter.Create(Control.BorderThicknessProperty, 0.0),
+                Setter.Create(Control.PaddingProperty, new Thickness(0)),
+            ],
+            Triggers =
+            [
+                // A label runs nothing, so it has no disabled state of its own; it dims with the toolbar
+                // because a line of ordinary text left bright among dimmed entries reads as still live.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.None,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText)],
+                },
+            ],
+        };
+
     internal static Style CreateToolBarGroupPlateStyle() =>
         new(typeof(ToolBarGroupPlate))
         {
@@ -808,15 +830,33 @@ public static class DefaultStyles
             triggers:
             [
                 .. CreateToolBarButtonTriggers(),
+
+                // Checked fills are the group's plate tinted, not a button face tinted: an entry sits on
+                // ContainerBackground here, so compositing over anything else lands at a different colour
+                // than the same tint would elsewhere. Enabled is part of the match rather than left out of
+                // it, because triggers apply in order and the last match wins.
                 new StateTrigger
                 {
-                    Match = VisualStateFlags.Checked,
-                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonFace, t.Palette.Accent.WithAlpha(96)))],
+                    Match = VisualStateFlags.Checked | VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ContainerBackground, t.Palette.Accent.WithAlpha(96)))],
                 },
                 new StateTrigger
                 {
-                    Match = VisualStateFlags.Checked | VisualStateFlags.Hot,
+                    Match = VisualStateFlags.Checked | VisualStateFlags.Hot | VisualStateFlags.Enabled,
                     Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonHoverBackground, t.Palette.Accent.WithAlpha(96)))],
+                },
+
+                // The tint a disabled ToggleButton keeps, over this surface.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Checked,
+                    Exclude = VisualStateFlags.Enabled,
+                    Setters =
+                    [
+                        Setter.Create(Control.BackgroundProperty,
+                            t => Color.Composite(t.Palette.ContainerBackground, t.Palette.WindowText.WithAlpha(48))),
+                        Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
+                    ],
                 },
             ]);
     }
@@ -849,7 +889,9 @@ public static class DefaultStyles
                 Exclude = VisualStateFlags.Enabled,
                 Setters =
                 [
-                    Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonDisabledBackground),
+                    // No fill at all, only dimmed content: an entry that cannot run contributes nothing to
+                    // the row, and a disabled colour would sit on the group's plate as a solid block.
+                    Setter.Create(Control.BackgroundProperty, t => t.Palette.ButtonHoverBackground.WithAlpha(0)),
                     Setter.Create(TextElement.ForegroundProperty, t => t.Palette.DisabledText),
                 ],
             },

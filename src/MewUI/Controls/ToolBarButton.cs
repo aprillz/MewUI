@@ -32,6 +32,20 @@ internal sealed class ToolBarGroupPlate : Control
             BorderThickness, CornerRadius);
 }
 
+/// <summary>
+/// A label entry. A control rather than the text alone, so that dimming while the toolbar is out of reach
+/// is a style state like every other part's, and follows a theme change with them.
+/// </summary>
+internal sealed class ToolBarLabel : Label
+{
+    static ToolBarLabel() { }
+
+    private static readonly bool _defaultStyleRegistered =
+        DefaultStyles.Register<ToolBarLabel>(DefaultStyles.CreateToolBarLabelStyle);
+
+    internal ToolBarLabel() => IsHitTestVisible = false;
+}
+
 /// <summary>A toggle entry's button. Flat like <see cref="ToolBarButton"/>, and stays filled while on.</summary>
 internal sealed class ToolBarToggleButton : ToggleButton
 {
