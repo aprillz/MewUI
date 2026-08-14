@@ -89,8 +89,6 @@ public sealed partial class NumericUpDown : RangeBase
         set => SetValue(ChangeOnWheelProperty, value);
     }
 
-    internal override void OnAccessKey() => Focus();
-
     /// <summary>
     /// True while the user (or programmatic call) is editing the value via the inline TextBox.
     /// Use <see cref="BeginEdit"/>, <see cref="CommitEdit"/>, <see cref="CancelEdit"/> to control.

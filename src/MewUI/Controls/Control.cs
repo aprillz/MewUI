@@ -175,6 +175,22 @@ public abstract partial class Control : TextElement
     /// </summary>
     protected Rect ContentBounds => Bounds.Deflate(Padding);
 
+    /// <summary>
+    /// Takes focus when the control can hold it. A control that runs something on its access key says so
+    /// by overriding this; for the rest, taking focus is the whole of what the key can do, and letting it
+    /// bubble past a control that can be focused loses it.
+    /// </summary>
+    internal override void OnAccessKey()
+    {
+        if (Focusable && IsEffectivelyEnabled)
+        {
+            Focus();
+            return;
+        }
+
+        base.OnAccessKey();
+    }
+
     #region VisualState System
 
     /// <summary>
