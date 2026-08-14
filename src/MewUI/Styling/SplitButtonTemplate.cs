@@ -11,13 +11,38 @@ internal static class SplitButtonTemplate
     // The width a ComboBox reserves for its arrow, so both controls place the glyph alike.
     private const double GLYPH_AREA_WIDTH = 22;
 
+    private static readonly Func<Palette, Color> _defaultSplitLine = static palette => palette.ControlBorder;
+
     private static DelegateControlTemplate<SplitButton>? _instance;
 
     /// <summary>Gets the shared template definition; each control that applies it builds its own tree.</summary>
     public static DelegateControlTemplate<SplitButton> Instance
-        => _instance ??= new DelegateControlTemplate<SplitButton>(Build);
+        => _instance ??= Create(faceStyle: null, _defaultSplitLine);
 
-    private static Element Build(SplitButton owner, ControlTemplateContext ctx)
+    /// <summary>
+    /// The same tree dressed for a chrome of another color: the faces take the given style, and the split
+    /// line the given color. A style rather than a style name, because the template hands it to the faces
+    /// through a sheet of their own scope: nothing outside this control can reach or take that look.
+    /// </summary>
+    public static DelegateControlTemplate<SplitButton> WithFaceStyle(
+        Style faceStyle,
+        Func<Palette, Color> splitLineColorSelector)
+    {
+        ArgumentNullException.ThrowIfNull(faceStyle);
+        ArgumentNullException.ThrowIfNull(splitLineColorSelector);
+        return Create(faceStyle, splitLineColorSelector);
+    }
+
+    private static DelegateControlTemplate<SplitButton> Create(
+        Style? faceStyle,
+        Func<Palette, Color> splitLineColorSelector)
+        => new((owner, ctx) => Build(owner, ctx, faceStyle, splitLineColorSelector));
+
+    private static Element Build(
+        SplitButton owner,
+        ControlTemplateContext ctx,
+        Style? faceStyle,
+        Func<Palette, Color> splitLineColorSelector)
     {
         // Only the outer corners round; the shared edge stays square so the two fills meet flush and
         // the pair still reads as one button.
@@ -45,9 +70,9 @@ internal static class SplitButtonTemplate
             // It overlays the primary face, which owns the pointer along that edge.
             IsHitTestVisible = false,
         }
-            .WithTheme(static (t, border) =>
+            .WithTheme((t, border) =>
             {
-                border.Background = t.Palette.ControlBorder;
+                border.Background = splitLineColorSelector(t.Palette);
                 border.Width = LayoutRounding.SnapThicknessToPixels(
                     t.Metrics.ControlBorderThickness, border.GetDpi() / 96.0, 1);
             })
@@ -72,6 +97,15 @@ internal static class SplitButtonTemplate
             ClipToBounds = true,
         };
         ctx.BindChrome(chrome);
+
+        if (faceStyle != null)
+        {
+            // A type rule on the chrome: the faces resolve from the nearest sheet up their context chain,
+            // so this dresses them without a name anyone outside this control could reach.
+            var sheet = new StyleSheet();
+            sheet.Define<DropDownFaceButton>(faceStyle);
+            chrome.StyleSheet = sheet;
+        }
 
         return chrome;
     }
