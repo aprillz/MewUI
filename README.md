@@ -225,7 +225,7 @@ See [Binding](docs/Binding.md) for segment kinds, null/fallback, TwoWay, collect
 ## 🧱 Controls / Panels
 
 Controls (Implemented):
-- `Button`, `ToggleButton`
+- `Button`, `ToggleButton`, `RepeatButton`, `SplitButton`, `DropDownButton`
 - `Label`, `TextBlock`, `Image`
 - `TextBox`, `MultiLineTextBox`, `SyntaxViewer`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
@@ -234,6 +234,8 @@ Controls (Implemented):
 - `TabControl`, `GroupBox`, `Expander`, `Border`
 - `ColorPicker`, `DatePicker`, `Calendar`
 - `MenuBar`, `ContextMenu`, `ToolTip` (in-window popups)
+- `ToolBar` (declared bands of command groups, dragged by their grips)
+- `NavigationView`
 - `ScrollViewer`
 - `Window`, `DispatcherTimer`
 

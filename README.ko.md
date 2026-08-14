@@ -202,15 +202,17 @@ var first = new TextBlock().Bind(TextBlock.TextProperty, order, x => x.Lines[0].
 ## 🧱 컨트롤 / 패널
 
 컨트롤(구현됨):
-- `Button`, `ToggleButton`
+- `Button`, `ToggleButton`, `RepeatButton`, `SplitButton`, `DropDownButton`
 - `Label`, `TextBlock`, `Image`
-- `TextBox`, `MultiLineTextBox`, `PasswordBox`
+- `TextBox`, `MultiLineTextBox`, `SyntaxViewer`, `PasswordBox`
 - `CheckBox`, `RadioButton`, `ToggleSwitch`
 - `ComboBox`, `ListBox`, `TreeView`, `GridView`
 - `Slider`, `ProgressBar`, `ProgressRing`, `NumericUpDown`
 - `TabControl`, `GroupBox`, `Expander`, `Border`
 - `ColorPicker`, `DatePicker`, `Calendar`
 - `MenuBar`, `ContextMenu`, `ToolTip` (창 내 팝업)
+- `ToolBar` (선언한 밴드에 명령 그룹, 그립으로 끌어 재배치)
+- `NavigationView`
 - `ScrollViewer`
 - `Window`, `DispatcherTimer`
 
