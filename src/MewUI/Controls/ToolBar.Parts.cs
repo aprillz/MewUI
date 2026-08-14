@@ -44,13 +44,20 @@ public sealed partial class ToolBar
         return chevron;
     }
 
-    /// <summary>Fills a menu with the rows the given entries collapse into.</summary>
+    /// <summary>
+    /// Fills a menu with the rows the given entries collapse into. A splitter becomes a separator, and one
+    /// that would lead or trail is dropped: a menu opens on its first row.
+    /// </summary>
     private static void FillMenu(Menu menu, IEnumerable<ToolBarEntry> entries)
     {
+        int start = menu.Items.Count;
         foreach (var entry in entries)
         {
             switch (entry)
             {
+                case ToolBarSplitter when menu.Items.Count > start && menu.Items[^1] is not MenuSeparator:
+                    menu.Items.Add(MenuSeparator.Instance);
+                    break;
                 case ToolBarSplitItem split when split.Command != null:
                     menu.Items.Add(new MenuItem(split.Command) { SubMenu = split.DropDownMenu });
                     break;
@@ -61,6 +68,32 @@ public sealed partial class ToolBar
                     menu.Items.Add(new MenuItem(item.Command));
                     break;
             }
+        }
+
+        if (menu.Items.Count > start && menu.Items[^1] is MenuSeparator)
+        {
+            menu.Items.RemoveAt(menu.Items.Count - 1);
+        }
+    }
+
+    /// <summary>The rule a <see cref="ToolBarSplitter"/> draws inside its group.</summary>
+    internal sealed class ToolBarSplitterElement : FrameworkElement
+    {
+        private const double GAP = 3;
+
+        private const double INSET = 2;
+
+        protected override Size MeasureContent(Size availableSize) => new((GAP * 2) + 1, 0);
+
+        protected override void OnRender(IGraphicsContext context)
+        {
+            double dpiScale = GetDpi() / 96.0;
+            double thickness = LayoutRounding.SnapThicknessToPixels(1, dpiScale, 1);
+            double x = LayoutRounding.RoundToPixel(Bounds.X + ((Bounds.Width - thickness) / 2), dpiScale);
+
+            context.FillRectangle(
+                new Rect(x, Bounds.Y + INSET, thickness, Math.Max(0, Bounds.Height - (INSET * 2))),
+                Theme.Palette.ControlBorder);
         }
     }
 

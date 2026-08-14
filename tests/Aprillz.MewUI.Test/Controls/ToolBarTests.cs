@@ -190,6 +190,35 @@ public sealed class ToolBarTests
     }
 
     [TestMethod]
+    public void ASplitterDividesAGroupAndBecomesASeparatorInTheMenu()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var group = new ToolBarGroup(Text("g1"), new ToolBarSplitter(), Text("g2"), Text("g3"));
+        var (window, bar) = Host(900, new ToolBarBand(group));
+
+        var entries = bar.VisualsInternal[0].Groups[0].Entries;
+        var rule = ((UIElement)entries[1]).Bounds;
+
+        Assert.IsGreaterThan(0, rule.Width, "the splitter took no room in the group");
+        Assert.IsLessThan(((UIElement)entries[0]).Bounds.Width, rule.Width, "the splitter is as wide as an entry");
+        Assert.IsLessThan(rule.X, ((UIElement)entries[0]).Bounds.Right, "the splitter is not between the two runs");
+
+        // Narrow enough that the run after the splitter goes to the chevron, splitter included.
+        bar.Width = ((UIElement)entries[2]).Bounds.X - bar.Bounds.X;
+        window.PerformLayout();
+
+        var visual = bar.VisualsInternal[0].Groups[0];
+        Assert.IsTrue(visual.IsTruncated, "the band did not cut the group");
+
+        visual.Chevron.IsDropDownOpen = true;
+        var rows = visual.Chevron.DropDownMenu!.Items;
+
+        Assert.IsTrue(rows.Count > 0, "the cut entries did not reach the menu");
+        Assert.IsInstanceOfType<MenuItem>(rows[0], "the menu opens on a separator");
+    }
+
+    [TestMethod]
     public void ALabelKeepsItsDistanceFromTheEntriesEitherSide()
     {
         if (SkipOnNonWindows()) return;

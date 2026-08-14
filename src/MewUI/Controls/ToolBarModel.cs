@@ -35,6 +35,15 @@ public sealed class ToolBarLabelItem : ToolBarEntry
     }
 }
 
+/// <summary>
+/// A rule between two runs of entries in one group. Groups state which entries belong together, so a
+/// splitter divides a group that travels as one rather than standing between groups. It collapses into a
+/// separator in an overflow menu.
+/// </summary>
+public sealed class ToolBarSplitter : ToolBarEntry
+{
+}
+
 /// <summary>An entry that runs a command.</summary>
 public class ToolBarItem : ToolBarEntry
 {

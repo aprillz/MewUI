@@ -172,6 +172,9 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
                     Content = BuildCommandContent(item.Command, ResolvePresentation(item)),
                 };
 
+            case ToolBarSplitter:
+                return new ToolBarSplitterElement();
+
             case ToolBarLabelItem label:
                 return new TextBlock
                 {
