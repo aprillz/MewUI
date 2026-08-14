@@ -58,6 +58,10 @@ public sealed partial class ToolBar
             }
 
             _drag = (_pressedGroup, DropTarget.None, _drag.Press, true);
+
+            // The pointer leaves the grip as soon as the drag starts, and the toolbar is what holds the
+            // capture, so the move cursor has to sit here for the rest of the gesture.
+            Cursor = CursorType.SizeAll;
         }
 
         var next = ResolveDropTarget(pointer);
@@ -90,6 +94,7 @@ public sealed partial class ToolBar
         bool hadPendingBand = HasPendingBand;
         _pressedGroup = null;
         _drag = default;
+        Cursor = null;
         (FindVisualRoot() as Window)?.ReleaseMouseCapture();
 
         if (dragged != null && target.IsSet)

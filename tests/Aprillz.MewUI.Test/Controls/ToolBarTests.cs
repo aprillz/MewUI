@@ -769,6 +769,39 @@ public sealed class ToolBarTests
     }
 
     [TestMethod]
+    public void TheMoveCursorHoldsForTheWholeDrag()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var (window, bar) = HostFiveBands();
+        var grip = bar.VisualsInternal[1].Groups[0].Grip;
+
+        Assert.AreEqual(CursorType.SizeAll, grip.Cursor, "the grip does not offer the move cursor");
+        Assert.IsNull(bar.Cursor, "an idle toolbar claims a cursor of its own");
+
+        var start = grip.CenterOf();
+        window.SendMouseDown(start);
+        window.SendMouseMove(new Point(start.X + 40, start.Y + 40));
+
+        // The pointer is far from the grip by now, and the toolbar holds the capture. The grip's own
+        // cursor is not consulted here: resolution starts at the captured element, which is the toolbar.
+        var backend = (HeadlessWindowBackend)window.Backend!;
+        Assert.AreEqual(CursorType.SizeAll, bar.Cursor, "the move cursor was lost as soon as the drag began");
+        Assert.AreEqual(CursorType.SizeAll, backend.LastCursor, "the backend was not told to show the move cursor");
+
+        // Off the toolbar entirely: the capture keeps the cursor, which would otherwise flicker back to
+        // the arrow on the way out and to the move cursor on the way in.
+        window.SendMouseMove(new Point(bar.Bounds.Right + 40, bar.Bounds.Bottom + 40));
+        Assert.AreEqual(
+            CursorType.SizeAll,
+            backend.LastCursor,
+            "the cursor changed when the pointer left the toolbar mid-drag");
+
+        window.SendMouseUp(new Point(start.X + 40, start.Y + 40));
+        Assert.IsNull(bar.Cursor, "the toolbar kept the move cursor after the drop");
+    }
+
+    [TestMethod]
     public void OnlyTheGripStartsADrag()
     {
         if (SkipOnNonWindows()) return;
