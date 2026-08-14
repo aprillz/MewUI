@@ -6,9 +6,13 @@
 # The suite derives its cases from whatever displays the machine has (see MonitorMatrix), so the point
 # of a remote box is the scales it owns, not the machine itself.
 #
+# Pass an ssh-config alias rather than user@host: scp spells the port -P and ssh -p, so a target
+# carrying a non-default port cannot satisfy both, and the machine is reached over a non-default port
+# from outside its LAN.
+#
 # Usage: ./win-remote-test.sh <ssh-target> [-- <extra runner args>]
-#   ./win-remote-test.sh testbox
-#   ./win-remote-test.sh testbox -- --filter-class MenuCaptionTrimTests
+#   ./win-remote-test.sh mewui-testbox
+#   ./win-remote-test.sh mewui-testbox -- --filter-class MenuCaptionTrimTests
 set -euo pipefail
 
 SSH_TARGET="${1:?usage: win-remote-test.sh <ssh-target> [-- <extra runner args>]}"
