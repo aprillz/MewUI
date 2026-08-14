@@ -51,6 +51,7 @@ partial class GalleryView
             {
                 var icon = SegmentIconShape(size.Dip);
                 icon.Data = geometry;
+                ApplyIconViewBox(icon, geometry);
                 return icon;
             });
         }

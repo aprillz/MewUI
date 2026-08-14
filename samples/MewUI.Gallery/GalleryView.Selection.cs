@@ -418,4 +418,26 @@ partial class GalleryView
         var entry = Array.Find(all, e => e.Name == name) ?? all[0];
         return PathGeometry.Parse(entry.PathData);
     }
+
+    // The icon set is drawn on standard grids and the resource carries no metadata, so the grid is the
+    // smallest standard one that covers the ink. Handing that to ViewBox keeps the margin the designer
+    // left: stretching to the ink instead scales every icon by however tightly it happens to be drawn.
+    private static readonly double[] _iconGrids = [16, 20, 24, 28, 32, 48];
+
+    private static void ApplyIconViewBox(PathShape shape, PathGeometry geometry)
+    {
+        var ink = geometry.GetBounds();
+        double extent = Math.Max(ink.Right, ink.Bottom);
+
+        foreach (double grid in _iconGrids)
+        {
+            if (extent <= grid)
+            {
+                shape.ViewBox = new Rect(0, 0, grid, grid);
+                return;
+            }
+        }
+
+        shape.ViewBox = new Rect(0, 0, extent, extent);
+    }
 }
