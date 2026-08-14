@@ -25,7 +25,6 @@ internal static class DropDownButtonTemplate
 
         var chevron = new GlyphElement { Kind = GlyphKind.ChevronDown }.Center().Column(1);
 
-        double radius = owner.CornerRadius;
         var face = new DropDownFaceButton
         {
             // The owner's chrome draws the border and background, so the face contributes only its
@@ -33,12 +32,12 @@ internal static class DropDownButtonTemplate
             Focusable = false,
             IsTabStop = false,
             Padding = Thickness.Zero,
-            FaceCornerRadius = new CornerRadius(radius, radius, radius, radius),
             Content = new Grid()
                 .Columns(GridLength.Star, GridLength.Pixels(GLYPH_AREA_WIDTH))
                 .Children(contentHost, chevron),
         };
         ctx.Register(DropDownButton.PART_DROP_DOWN_BUTTON, face);
+        ctx.Bind(face, Control.CornerRadiusProperty);
 
         var chrome = new Border
         {

@@ -21,17 +21,16 @@ internal static class SplitButtonTemplate
     {
         // Only the outer corners round; the shared edge stays square so the two fills meet flush and
         // the pair still reads as one button.
-        double radius = owner.CornerRadius;
-
         var primary = new DropDownFaceButton
         {
             Focusable = false,
             IsTabStop = false,
-            FaceCornerRadius = new CornerRadius(radius, 0, 0, radius),
+            FaceSide = DropDownFaceSide.Left,
             Content = new ContentPresenter().CenterVertical(),
         }.Column(0);
         ctx.Register(SplitButton.PART_PRIMARY_BUTTON, primary);
         ctx.Bind(primary, Control.PaddingProperty);
+        ctx.Bind(primary, Control.CornerRadiusProperty);
 
         // The hairline is what tells a split button from a plain drop-down button: it marks where the
         // primary action ends and the menu begins. It rides the right edge of the primary column rather
@@ -58,11 +57,12 @@ internal static class SplitButtonTemplate
         {
             Focusable = false,
             IsTabStop = false,
-            FaceCornerRadius = new CornerRadius(0, radius, radius, 0),
+            FaceSide = DropDownFaceSide.Right,
             Padding = Thickness.Zero,
             Content = new GlyphElement { Kind = GlyphKind.ChevronDown }.Center(),
         }.Column(1);
         ctx.Register(SplitButton.PART_DROP_DOWN_BUTTON, dropDown);
+        ctx.Bind(dropDown, Control.CornerRadiusProperty);
 
         var chrome = new Border
         {
