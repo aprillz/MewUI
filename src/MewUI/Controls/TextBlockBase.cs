@@ -167,7 +167,8 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
         // key each time, so the resolved layout is held until an input actually changes. The inputs
         // are compared rather than trusted to invalidation because inherited font values change
         // without notifying this element.
-        var style = new TextRunStyle(FontFamily, FontSize, FontWeight);
+        // Built here rather than through Control's helper: a text block is a TextElement, not a Control.
+        var style = new TextRunStyle(FontFamily, FontSize, FontWeight, FontStyle == FontStyle.Italic);
         uint dpi = GetDpi();
         if (_layout is not null &&
             _layoutMaxWidth.Equals(maxWidth) &&

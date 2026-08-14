@@ -584,6 +584,7 @@ public sealed partial class Calendar : Control, IVisualTreeHost
                 FontFamily,
                 fontSize,
                 FontWeight,
+                FontStyle == FontStyle.Italic,
                 Culture: culture)
         };
         var layout = GetGraphicsFactory().TextEngine.GetOrCreateLayout(

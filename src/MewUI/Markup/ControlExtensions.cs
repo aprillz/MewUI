@@ -151,6 +151,19 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets the font style to italic, or back to upright.
+    /// </summary>
+    /// <typeparam name="T">Control type.</typeparam>
+    /// <param name="control">Target control.</param>
+    /// <param name="italic">Whether to use the family's italic face.</param>
+    /// <returns>The control for chaining.</returns>
+    public static T Italic<T>(this T control, bool italic = true) where T : Control
+    {
+        control.FontStyle = italic ? MewUI.FontStyle.Italic : MewUI.FontStyle.Normal;
+        return control;
+    }
+
+    /// <summary>
     /// Sets the tooltip text.
     /// </summary>
     /// <typeparam name="T">Control type.</typeparam>
@@ -1118,6 +1131,18 @@ public static class ControlExtensions
     public static TextBlock SemiBold(this TextBlock textBlock)
     {
         textBlock.FontWeight = MewUI.FontWeight.SemiBold;
+        return textBlock;
+    }
+
+    /// <summary>
+    /// Sets the font style to italic, or back to upright.
+    /// </summary>
+    /// <param name="textBlock">Target text block.</param>
+    /// <param name="italic">Whether to use the family's italic face.</param>
+    /// <returns>The text block for chaining.</returns>
+    public static TextBlock Italic(this TextBlock textBlock, bool italic = true)
+    {
+        textBlock.FontStyle = italic ? MewUI.FontStyle.Italic : MewUI.FontStyle.Normal;
         return textBlock;
     }
 

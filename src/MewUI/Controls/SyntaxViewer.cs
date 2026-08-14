@@ -233,7 +233,7 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
         _view = new TextViewLayout(
             factory.TextEngine,
             _document,
-            new TextRunStyle(FontFamily, FontSize, FontWeight),
+            GetTextRunStyle(),
             new TextParagraphStyle
             {
                 Wrapping = Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,

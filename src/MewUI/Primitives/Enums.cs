@@ -108,6 +108,18 @@ public enum FontWeight
 }
 
 /// <summary>
+/// Font style values. Oblique, the slanted upright a family may carry beside a true italic, is absent
+/// until a backend can tell it from Italic: two of the three draw it with the same flag today.
+/// </summary>
+public enum FontStyle
+{
+    /// <summary>Upright.</summary>
+    Normal,
+    /// <summary>The family's italic face.</summary>
+    Italic
+}
+
+/// <summary>
 /// Orientation for layout panels.
 /// </summary>
 public enum Orientation

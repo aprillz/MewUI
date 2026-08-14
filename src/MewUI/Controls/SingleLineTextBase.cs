@@ -323,7 +323,7 @@ public abstract class SingleLineTextBase : TextBase
         _view = new TextViewLayout(
             factory.TextEngine,
             _document,
-            new TextRunStyle(FontFamily, FontSize, FontWeight),
+            GetTextRunStyle(),
             new TextParagraphStyle
             {
                 Wrapping = TextWrapping.NoWrap,
@@ -430,7 +430,7 @@ public abstract class SingleLineTextBase : TextBase
         {
             Text = text.AsMemory(),
             Dpi = GetDpi(),
-            DefaultStyle = new TextRunStyle(FontFamily, FontSize, FontWeight),
+            DefaultStyle = GetTextRunStyle(),
             Paragraph = new TextParagraphStyle
             {
                 MaxWidth = double.PositiveInfinity,

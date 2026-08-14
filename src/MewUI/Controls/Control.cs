@@ -1030,9 +1030,12 @@ public abstract partial class Control : TextElement
     {
     }
 
-    /// <summary>Returns this control's inherited font properties in text-engine form.</summary>
+    /// <summary>
+    /// Returns this control's inherited font properties in text-engine form. The style folds to the
+    /// engine's italic flag here: two states are all a font backend can tell apart today.
+    /// </summary>
     protected TextRunStyle GetTextRunStyle()
-        => new(FontFamily, FontSize, FontWeight);
+        => new(FontFamily, FontSize, FontWeight, FontStyle == FontStyle.Italic);
 
     protected Size MeasureEngineText(
         ReadOnlySpan<char> text,

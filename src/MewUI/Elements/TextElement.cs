@@ -27,6 +27,11 @@ public abstract class TextElement : FrameworkElement
         MewProperty<FontWeight>.Register<TextElement>(nameof(FontWeight), FontWeight.Normal,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
 
+    /// <summary>Font style property with inheritance support.</summary>
+    public static readonly MewProperty<FontStyle> FontStyleProperty =
+        MewProperty<FontStyle>.Register<TextElement>(nameof(FontStyle), FontStyle.Normal,
+            MewPropertyOptions.AffectsLayout | MewPropertyOptions.Inherits);
+
     #endregion
 
     /// <summary>
@@ -67,5 +72,14 @@ public abstract class TextElement : FrameworkElement
     {
         get => GetValue(FontWeightProperty);
         set => SetValue(FontWeightProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the font style, which selects the family's italic face.
+    /// </summary>
+    public FontStyle FontStyle
+    {
+        get => GetValue(FontStyleProperty);
+        set => SetValue(FontStyleProperty, value);
     }
 }
