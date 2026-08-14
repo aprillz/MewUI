@@ -29,12 +29,14 @@ internal sealed class BreadcrumbDropDown : PopupOwnerBase
         _listSubdirs = listSubdirs;
         _navigate = navigate;
 
-        // Bare glyph: no chrome, no tab stop (mouse-driven, like the plain separator it replaces).
+        // Bare glyph: no chrome and no tab stop. It remains focusable so clicking the owner while its
+        // popup is open does not clear focus, close the popup, and then reopen it with the same press.
         Background = Color.Transparent;
         BorderThickness = 0;
         // Same padding as the crumb buttons so chevron and crumbs read as consistent clickable segments.
         Padding = new Thickness(4);
-        Focusable = false;
+        Focusable = true;
+        IsTabStop = false;
         // Fill the crumb row height so the hover background is a comfortable target; width stays the glyph
         // footprint, so horizontal spacing is unchanged.
         VerticalAlignment = VerticalAlignment.Stretch;
