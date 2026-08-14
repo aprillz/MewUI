@@ -202,7 +202,7 @@ partial class GalleryView
                                         },
                                         bind: (view, item, _, ctx) =>
                                         {
-                                            ctx.Get<PathShape>("icon").Data = SegmentIcon(item.Icon);
+                                            SetSegmentIcon(ctx.Get<PathShape>("icon"), item.Icon);
                                             ctx.Get<TextBlock>("label").Text = item.Label;
                                         })
                                     .SelectedIndex(0)),
@@ -223,8 +223,8 @@ partial class GalleryView
                                         },
                                         v => v.Label)
                                     .ItemTemplate<SegmentItem>(
-                                        build: _ => SegmentIconShape(18).Center(),
-                                        bind: (view, item, _, _) => ((PathShape)view).Data = SegmentIcon(item.Icon))
+                                        build: _ => SegmentIconShape(16).Center(),
+                                        bind: (view, item, _, _) => SetSegmentIcon((PathShape)view, item.Icon))
                                     .SelectedIndex(1)),
 
                         // One segment enabled via binding (PrepareContainer + BindIsEnabled).
@@ -417,6 +417,14 @@ partial class GalleryView
         var all = IconResource.GetAll();
         var entry = Array.Find(all, e => e.Name == name) ?? all[0];
         return PathGeometry.Parse(entry.PathData);
+    }
+
+    /// <summary>Puts an icon on a shape with the design grid it was drawn on.</summary>
+    private static void SetSegmentIcon(PathShape shape, string name)
+    {
+        var geometry = SegmentIcon(name);
+        shape.Data = geometry;
+        ApplyIconViewBox(shape, geometry);
     }
 
     // The icon set is drawn on standard grids and the resource carries no metadata, so the grid is the

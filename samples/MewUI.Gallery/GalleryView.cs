@@ -37,7 +37,7 @@ partial class GalleryView : UserControl
         // Bottom-pinned footer item, sharing selection with the main list.
         var footer = new[]
         {
-            new NavEntry(NavigationItemKind.Item, "Settings", Ico("settings_regular"), SettingsPage),
+            new NavEntry(NavigationItemKind.Item, "Settings", IconShape("settings_regular"), SettingsPage),
         };
         nav.FooterItems(footer, e => e.Title, icon: e => e.Icon, content: PageContent, kind: e => e.Kind);
 
@@ -57,15 +57,22 @@ partial class GalleryView : UserControl
     private FrameworkElement SettingsPage() =>
         SettingsContent ?? new StackPanel().Vertical();
 
-    private static PathShape Ico(string name)
+    /// <summary>Builds a shape for a named icon, on the design grid it was drawn on.</summary>
+    private static PathShape IconShape(string name)
     {
         var all = IconResource.GetAll();
         var entry = Array.Find(all, x => x.Name == name) ?? all[0];
+        var geometry = PathGeometry.Parse(entry.PathData);
         var icon = new PathShape
         {
-            Data = PathGeometry.Parse(entry.PathData),
+            Data = geometry,
             Stretch = Stretch.Uniform,
         };
+
+        // Without the design grid, Uniform fits the ink, so an icon drawn with room around it comes out
+        // larger than one drawn to the edges even though both sit in the same 16 DIP slot.
+        ApplyIconViewBox(icon, geometry);
+
         icon.Bind(Shape.FillProperty, icon, TextElement.ForegroundProperty,
             (Color color) => (Brush)new SolidColorBrush(color));
         return icon;
@@ -122,7 +129,7 @@ partial class GalleryView : UserControl
     private NavEntry[] NavEntries()
     {
         NavEntry Group(string title) => new(NavigationItemKind.Header, title, null, null);
-        NavEntry Page(string title, Func<FrameworkElement> page, string icon) => new(NavigationItemKind.Item, title, Ico(icon), page);
+        NavEntry Page(string title, Func<FrameworkElement> page, string icon) => new(NavigationItemKind.Item, title, IconShape(icon), page);
 
         // Headers carry no icon; each selectable item uses a distinct icon.
         return

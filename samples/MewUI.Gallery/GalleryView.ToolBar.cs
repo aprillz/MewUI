@@ -107,10 +107,14 @@ partial class GalleryView
                     .Label("Find")
                     .Host(new TextBox().Width(140).Text("Search")));
 
+        // What ran goes to a line under the toolbar: a message box would take the focus and cover the band
+        // the entry was on, which is the thing being tried out here.
+        var log = new TextBlock().Text("Nothing run yet");
+
         foreach (var command in notified)
         {
             var captured = command;
-            bar.Commands.Register(captured, () => _ = MessageBox.NotifyAsync(captured.Text ?? captured.Id));
+            bar.Commands.Register(captured, () => log.Text = $"Ran: {captured.Text ?? captured.Id}");
         }
 
         foreach (var command in silent)
@@ -144,7 +148,8 @@ partial class GalleryView
                                 new Border()
                                     .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
                                     .CornerRadius(8)
-                                    .Child(new TextBlock().TextWrapping(TextWrapping.Wrap).Text("Drag left").Center()))
+                                    .Child(new TextBlock().TextWrapping(TextWrapping.Wrap).Text("Drag left").Center())),
+                        log
                         ),
                 minWidth: 820));
     }

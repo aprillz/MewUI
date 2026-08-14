@@ -44,7 +44,11 @@ partial class GalleryView
                             .Width(24).Height(24)
                             .Center()
                             .WithTheme((t, p) => p.Fill(t.Palette.WindowText)),
-                        bind: (view, item) => view.Data = item.Geometry),
+                        bind: (view, item) =>
+                        {
+                            view.Data = item.Geometry;
+                            ApplyIconViewBox(view, item.Geometry);
+                        }),
 
                 new GridViewColumn<IconItem>()
                     .Header("Name")
