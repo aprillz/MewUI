@@ -26,6 +26,13 @@ public abstract class Shape : FrameworkElement
         MewProperty<Stretch>.Register<Shape>(nameof(Stretch), Stretch.None, MewPropertyOptions.AffectsLayout);
 
     /// <summary>
+    /// The source rectangle a stretch maps onto the element, in the geometry's own coordinates.
+    /// Null uses the geometry's ink bounds.
+    /// </summary>
+    public static readonly MewProperty<Rect?> ViewBoxProperty =
+        MewProperty<Rect?>.Register<Shape>(nameof(ViewBox), null, MewPropertyOptions.AffectsLayout);
+
+    /// <summary>
     /// Gets or sets the brush used to fill the shape interior.
     /// </summary>
     public Brush? Fill
@@ -70,6 +77,18 @@ public abstract class Shape : FrameworkElement
         set => SetValue(StretchProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the source rectangle a stretch maps onto the element, in the geometry's own
+    /// coordinates. Icons drawn on a design grid set it to that grid, so the margin the grid leaves
+    /// around the ink survives: stretching to the ink bounds instead scales each icon by however tightly
+    /// it happens to be drawn, and a row of them comes out at different optical weights.
+    /// </summary>
+    public Rect? ViewBox
+    {
+        get => GetValue(ViewBoxProperty);
+        set => SetValue(ViewBoxProperty, value);
+    }
+
     private Pen? _cachedPen;
     private Brush? _cachedPenBrush;
     private double _cachedPenThickness;
@@ -107,7 +126,9 @@ public abstract class Shape : FrameworkElement
         var bounds = Bounds;
         if (bounds.Width <= 0 && bounds.Height <= 0) return;
 
-        var geoBounds = geometry.GetBounds();
+        // The declared grid wins over the ink: two icons drawn on the same grid then scale by the same
+        // factor whatever margin each one leaves.
+        var geoBounds = ViewBox ?? geometry.GetBounds();
 
         // Match WPF's Path/Shape semantics: Stretch operates on the geometry (so its baked
         // path coordinates fit the element bounds), while Stroke is applied at the Path
