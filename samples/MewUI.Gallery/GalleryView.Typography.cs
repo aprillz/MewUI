@@ -49,7 +49,7 @@ partial class GalleryView
 
         // FontFamily Inheritance
         var fontFamilyDemo = new Border()
-            .FontFamily("Consolas")
+            .FontFamily("Consolas, Menlo, DejaVu Sans Mono")
             .Padding(12)
             .BorderThickness(1)
             .CornerRadius(8)
@@ -59,10 +59,10 @@ partial class GalleryView
                     .Vertical()
                     .Spacing(6)
                     .Children(
-                        new TextBlock().Text("Inherited Consolas"),
-                        new TextBlock().Text("Also Consolas"),
-                        new TextBlock().Text("Override: Segoe UI").FontFamily("Segoe UI"),
-                        new Button().Content("Consolas Button")
+                        new TextBlock().Text("Inherited Fixed"),
+                        new TextBlock().Text("Also Fixed"),
+                        new TextBlock().Text("Override: Default").FontFamily(Theme.Metrics.FontFamily),
+                        new Button().Content("Fixed Button")
                     ));
 
         // FontWeight Inheritance
@@ -81,6 +81,31 @@ partial class GalleryView
                         new TextBlock().Text("Also Bold"),
                         new TextBlock().Text("Override: Normal").FontWeight(FontWeight.Normal),
                         new Button().Content("Bold Button")
+                    ));
+
+        // FontStyle Inheritance. Times New Roman because its italic is a face of its own: a family without
+        // one is slanted by the backend, which reads as italic but is not the same drawing.
+        var italicLabel = new TextBlock().Text("Inherited Italic");
+        var uprightLabel = new TextBlock().Text("Override: Normal").Italic(false);
+        var italicButton = new Button().Content("Italic Button");
+
+        var fontStyleDemo = new Border()
+            .FontFamily("Times New Roman")
+            .FontSize(16)
+            .Italic()
+            .Padding(12)
+            .BorderThickness(1)
+            .CornerRadius(8)
+            .WithTheme((t, b) => b.Background(t.Palette.ContainerBackground).BorderBrush(t.Palette.ControlBorder))
+            .Child(
+                new StackPanel()
+                    .Vertical()
+                    .Spacing(6)
+                    .Children(
+                        italicLabel,
+                        new TextBlock().Text("Bold Italic").Bold(),
+                        uprightLabel,
+                        italicButton
                     ));
 
         // Nested inheritance: outer=20pt, inner=12pt
@@ -130,6 +155,7 @@ partial class GalleryView
             Card("Font Size Inheritance", inheritanceDemo),
             Card("Font Family Inheritance", fontFamilyDemo),
             Card("Font Weight Inheritance", fontWeightDemo),
+            Card("Font Style Inheritance", fontStyleDemo),
             Card("Nested Inheritance", nestedDemo),
 
             // Last: the widest card on the page, so the ones that wrap in a row keep their places.
@@ -315,7 +341,7 @@ partial class GalleryView
             Width = 680,
             Height = 360,
             Wrap = false,
-            FontFamily = "Consolas",
+            FontFamily = "Consolas, Menlo, DejaVu Sans Mono",
             Text = """
                 using System.Collections.Generic;
                 using System.Linq;
