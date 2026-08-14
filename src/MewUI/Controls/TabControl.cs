@@ -26,6 +26,9 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             {
                 StyleName = BuiltInStyles.FlatButton,
                 Padding = new Thickness(0),
+                // The flat style inherits the base control height, which would make the chevron as tall
+                // as an ordinary button and leave the owner's own minimum with nothing to say.
+                MinHeight = 0,
                 Focusable = false,
                 IsTabStop = false,
                 Content = new GlyphElement { Kind = GlyphKind.ChevronDown },
@@ -160,6 +163,9 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
             DropDownMenu = _overflowMenu,
             MinWidth = 18,
             MinHeight = 18,
+            // The strip is taller than the chevron, so the button centres itself in the row it is given
+            // rather than the arrange pass doing that arithmetic.
+            VerticalAlignment = VerticalAlignment.Center,
             Focusable = false,
             IsTabStop = false,
         };
@@ -788,10 +794,8 @@ public sealed partial class TabControl : Control, ISelector, IIndexedSelector, I
         if (_overflowActive)
         {
             double width = Math.Min(_overflowButton.DesiredSize.Width, headerBounds.Width);
-            double height = Math.Min(_overflowButton.DesiredSize.Height, headerBounds.Height);
             double buttonX = Math.Max(headerBounds.X, headerBounds.Right - width);
-            double buttonY = headerBounds.Y + Math.Max(0, (headerBounds.Height - height) / 2);
-            _overflowButton.Arrange(new Rect(buttonX, buttonY, width, height));
+            _overflowButton.Arrange(new Rect(buttonX, headerBounds.Y, width, headerBounds.Height));
         }
         else
         {

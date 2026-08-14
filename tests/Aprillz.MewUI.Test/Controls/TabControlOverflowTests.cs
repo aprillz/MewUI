@@ -44,6 +44,23 @@ public sealed class TabControlOverflowTests
         => overflow.DropDownMenu!.Items.OfType<MenuItem>().ToList();
 
     [TestMethod]
+    public void OverflowButton_KeepsItsHeightAndCentresInTheStrip()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var (_, tabs, overflow) = Host(width: 200, tabCount: 8);
+        var header = VisualTree.Find(tabs, e => e is TabHeaderButton && e.Bounds.Height > 0)!;
+
+        Assert.IsTrue(overflow.Bounds.Height > 0, "the overflow button was not laid out");
+        Assert.AreEqual(18, overflow.Bounds.Height,
+            $"the chevron stretched to the strip instead of keeping its own height (overflow={overflow.Bounds})");
+        Assert.AreEqual(
+            header.Bounds.Y + ((header.Bounds.Height - overflow.Bounds.Height) / 2),
+            overflow.Bounds.Y,
+            $"the chevron is not centred in the strip (overflow={overflow.Bounds}, header={header.Bounds})");
+    }
+
+    [TestMethod]
     public void OverflowMenu_ListsOnlyHiddenTabs()
     {
         if (SkipOnNonWindows()) return;
