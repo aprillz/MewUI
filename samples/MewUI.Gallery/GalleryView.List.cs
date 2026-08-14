@@ -364,6 +364,7 @@ partial class GalleryView
 
             var remoteRoot = CreateFolder("remote", depth: 0);
             var treeView = new TreeView()
+                .ExpandTrigger(TreeViewExpandTrigger.DoubleClickNode)
                 .Width(240)
                 .Items(
                     [remoteRoot],
