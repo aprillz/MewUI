@@ -42,75 +42,70 @@ partial class GalleryView
         var zoomIn = Cmd("zoomIn", "Zoom _in");
         var zoomOut = Cmd("zoomOut", "Zoom _out");
 
-        var bar = new ToolBar { CanReorderGroups = true };
-
         // Six groups a band, three entries each, so the splitter has plenty to collapse. Every entry kind
         // is here too, which makes the plates differ in width for the drag to move.
-        bar.Bands.Add(new ToolBarBand(
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("new", "_New", "document_add_regular")),
-                new ToolBarItem(Cmd("open", "_Open", "folder_open_regular")),
-                new ToolBarSplitItem(save)
-                {
-                    DropDownMenu = new Menu().Item(Cmd("saveAs", "Save _As")).Item(Cmd("saveAll", "Save A_ll")),
-                }),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("cut", "Cu_t", "cut_regular")),
-                new ToolBarItem(Cmd("copy", "_Copy", "copy_regular")),
-                new ToolBarItem(Cmd("paste", "_Paste", "clipboard_paste_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("print", "_Print", "print_regular")),
-                new ToolBarItem(Cmd("duplicate", "Duplicate", "save_copy_regular")),
-                new ToolBarItem(Cmd("refresh", "Refresh", "arrow_sync_circle_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("image", "Image", "image_library_regular")),
-                new ToolBarItem(Cmd("shapes", "Shapes", "shapes_regular")),
-                new ToolBarItem(Cmd("table", "Table", "table_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("grid", "Grid", "grid_regular")),
-                new ToolBarItem(Cmd("layer", "Layers", "layer_regular")),
-                new ToolBarItem(Cmd("dock", "Dock", "dock_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("window", "Window", "window_regular")),
-                new ToolBarItem(Cmd("windowNew", "New window", "window_new_regular")),
-                new ToolBarItem(Cmd("resize", "Resize", "resize_regular")))));
-
-        bar.Bands.Add(new ToolBarBand(
-            new ToolBarGroup(
-                new ToolBarToggleItem(Toggle("alignLeft", "Align left", "text_align_left_regular")) { IsChecked = true },
-                new ToolBarToggleItem(Toggle("alignCenter", "Align centre", "text_align_center_regular")),
-                new ToolBarToggleItem(Toggle("alignRight", "Align right", "text_align_right_regular"))),
-            new ToolBarGroup(
-                new ToolBarLabelItem("Style"),
-                new ToolBarToggleItem(Toggle("wrap", "_Word wrap", "text_wrap_regular")) { IsChecked = true },
-                new ToolBarMenuItem
-                {
-                    Text = "Font",
-                    Icon = font.Icon,
-                    DropDownMenu = new Menu().Item(font).Item(color),
-                },
-                new ToolBarMenuItem
-                {
-                    Text = "Zoom",
-                    Icon = color.Icon,
-                    DropDownMenu = new Menu().Item(zoomIn).Item(zoomOut).Separator().Item(Cmd("reset", "Reset")),
-                }),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("list", "List", "list_regular")),
-                new ToolBarItem(Cmd("tree", "Tree", "text_bullet_list_tree_regular")),
-                new ToolBarItem(Cmd("collections", "Collections", "collections_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("home", "Home", "home_regular")),
-                new ToolBarItem(Cmd("navigate", "Navigate", "navigation_regular")),
-                new ToolBarItem(Cmd("link", "Link", "link_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("tools", "Tools", "wrench_regular")),
-                new ToolBarItem(Cmd("paint", "Paint", "paint_brush_regular")),
-                new ToolBarItem(Cmd("select", "Select", "multiselect_regular"))),
-            new ToolBarGroup(
-                new ToolBarItem(Cmd("settings", "Settings", "settings_regular")),
-                new ToolBarItem(Cmd("options", "Options", "options_regular")),
-                new ToolBarItem(Cmd("alerts", "Alerts", "alert_on_regular")))));
+        var bar = new ToolBar()
+            .CanReorderGroups()
+            .Band(
+                new ToolBarGroup()
+                    .Item(Cmd("new", "_New", "document_add_regular"))
+                    .Item(Cmd("open", "_Open", "folder_open_regular"))
+                    .Split(save, new Menu().Item(Cmd("saveAs", "Save _As")).Item(Cmd("saveAll", "Save A_ll"))),
+                new ToolBarGroup()
+                    .Item(Cmd("cut", "Cu_t", "cut_regular"))
+                    .Item(Cmd("copy", "_Copy", "copy_regular"))
+                    .Item(Cmd("paste", "_Paste", "clipboard_paste_regular")),
+                // One group where there were two, divided by a splitter: the two runs travel together now.
+                new ToolBarGroup()
+                    .Item(Cmd("print", "_Print", "print_regular"))
+                    .Item(Cmd("duplicate", "Duplicate", "save_copy_regular"))
+                    .Item(Cmd("refresh", "Refresh", "arrow_sync_circle_regular"))
+                    .Splitter()
+                    .Item(Cmd("image", "Image", "image_library_regular"))
+                    .Item(Cmd("shapes", "Shapes", "shapes_regular"))
+                    .Item(Cmd("table", "Table", "table_regular")),
+                new ToolBarGroup()
+                    .Item(Cmd("grid", "Grid", "grid_regular"))
+                    .Item(Cmd("layer", "Layers", "layer_regular"))
+                    .Item(Cmd("dock", "Dock", "dock_regular")),
+                new ToolBarGroup()
+                    .Item(Cmd("window", "Window", "window_regular"))
+                    .Item(Cmd("windowNew", "New window", "window_new_regular"))
+                    .Item(Cmd("resize", "Resize", "resize_regular")))
+            .Band(
+                new ToolBarGroup()
+                    .Toggle(Toggle("alignLeft", "Align left", "text_align_left_regular"), isChecked: true)
+                    .Toggle(Toggle("alignCenter", "Align centre", "text_align_center_regular"))
+                    .Toggle(Toggle("alignRight", "Align right", "text_align_right_regular")),
+                new ToolBarGroup()
+                    .Label("Style")
+                    .Toggle(Toggle("wrap", "_Word wrap", "text_wrap_regular"), isChecked: true)
+                    .Menu("Font", new Menu().Item(font).Item(color), font.Icon)
+                    .Menu(
+                        "Zoom",
+                        new Menu().Item(zoomIn).Item(zoomOut).Separator().Item(Cmd("reset", "Reset")),
+                        color.Icon),
+                new ToolBarGroup()
+                    .Item(Cmd("list", "List", "list_regular"))
+                    .Item(Cmd("tree", "Tree", "text_bullet_list_tree_regular"))
+                    .Item(Cmd("collections", "Collections", "collections_regular")),
+                new ToolBarGroup()
+                    .Item(Cmd("home", "Home", "home_regular"))
+                    .Item(Cmd("navigate", "Navigate", "navigation_regular"))
+                    .Item(Cmd("link", "Link", "link_regular")),
+                new ToolBarGroup()
+                    .Item(Cmd("tools", "Tools", "wrench_regular"))
+                    .Item(Cmd("paint", "Paint", "paint_brush_regular"))
+                    .Item(Cmd("select", "Select", "multiselect_regular")),
+                new ToolBarGroup()
+                    .Item(Cmd("settings", "Settings", "settings_regular"))
+                    .Item(Cmd("options", "Options", "options_regular"))
+                    .Item(Cmd("alerts", "Alerts", "alert_on_regular")))
+            // A hosted control on a band of its own: a host is the one entry an overflow menu cannot collapse.
+            .Band(
+                new ToolBarGroup()
+                    .Label("Find")
+                    .Host(new TextBox().Width(140).Text("Search")));
 
         foreach (var command in notified)
         {
@@ -123,11 +118,10 @@ partial class GalleryView
             bar.Commands.Register(command, () => { });
         }
 
-        var layout = new TextBlock { Text = Describe(bar) };
-        bar.GroupsReordered += () => layout.Text = Describe(bar);
-
         // The splitter is what makes overflow visible: drag it left and each band gives up its trailing
-        // entries one at a time, then whole groups, behind that band's own chevron.
+        // entries one at a time, then whole groups, behind that band's own chevron. The card states a
+        // minimum width because a split panel wants what its two panes want: without one, narrowing the
+        // toolbar pane would narrow the card itself and the panel would walk left as it is dragged.
         return CardGrid(
             Card(
                 "ToolBar",
@@ -135,7 +129,9 @@ partial class GalleryView
                     .Vertical()
                     .Spacing(8)
                     .Children(
-                        new TextBlock { Text = "Drag a grip to move its group. Below the last band opens a new one. Drag the splitter to narrow the toolbar." },
+                        new TextBlock()
+                            .Text("Drag a grip to move its group. Below the last band opens a new one. Drag the splitter to narrow the toolbar."),
+
                         new SplitPanel()
                             .Horizontal()
                             .SplitterThickness(8)
@@ -148,26 +144,8 @@ partial class GalleryView
                                 new Border()
                                     .WithTheme((t, b) => b.Background(t.Palette.ButtonFace))
                                     .CornerRadius(8)
-                                    .Child(new TextBlock().TextWrapping(TextWrapping.Wrap).Text("Drag left").Center())),
-                        layout)));
+                                    .Child(new TextBlock().TextWrapping(TextWrapping.Wrap).Text("Drag left").Center()))
+                        ),
+                minWidth: 820));
     }
-
-    private static string Describe(ToolBar bar)
-    {
-        var lines = bar.Bands.Select(band => string.Join(
-            "   |   ",
-            band.Groups.Select(group => string.Join(
-                ", ",
-                group.Items.Select(DescribeEntry)))));
-
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    private static string DescribeEntry(ToolBarEntry entry) => entry switch
-    {
-        ToolBarItem item => item.Command?.Text ?? "?",
-        ToolBarMenuItem menu => menu.Text,
-        ToolBarLabelItem label => label.Text,
-        _ => "?",
-    };
 }
