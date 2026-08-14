@@ -152,30 +152,27 @@ partial class GalleryView
                     )
             ),
 
-            // Named per control on the left, put on the scope on the right: a panel carrying a type rule
-            // styles every Button under it, and those buttons say nothing about the look they have.
+            // The style is named once on the panel, so every Button under it takes the look and the buttons
+            // themselves say nothing about which one they have.
             Card(
                 "Built-in Styles",
                 new StackPanel()
-                    .Horizontal()
-                    .Spacing(24)
+                    .Vertical()
+                    .Spacing(8)
                     .Children(
                         new StackPanel()
                             .Vertical()
                             .Spacing(8)
+                            .StyleSheet(new StyleSheet().WithName<Button>(BuiltInStyles.FlatButton))
                             .Children(
-                                new TextBlock().Text("StyleName").FontSize(ThemeFontSize.Small),
-                                new Button().Content("Flat Button").StyleName(BuiltInStyles.FlatButton),
-                                new Button().Content("Flat Disabled").StyleName(BuiltInStyles.FlatButton).Disable(),
-                                new Button().Content("Accent Button").StyleName(BuiltInStyles.AccentButton),
-                                new Button().Content("Accent Disabled").StyleName(BuiltInStyles.AccentButton).Disable()),
+                                new Button().Content("Flat Button"),
+                                new Button().Content("Flat Disabled").Disable()),
 
                         new StackPanel()
                             .Vertical()
                             .Spacing(8)
                             .StyleSheet(new StyleSheet().WithName<Button>(BuiltInStyles.AccentButton))
                             .Children(
-                                new TextBlock().Text("StyleSheet type rule").FontSize(ThemeFontSize.Small),
                                 new Button().Content("Accent Button"),
                                 new Button().Content("Accent Disabled").Disable())
                     )

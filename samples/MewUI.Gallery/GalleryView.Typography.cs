@@ -127,11 +127,13 @@ partial class GalleryView
                 minWidth: 650),
             Card("Line Box (LineSpacing / LineBoxTrim)", LineBoxDemo(), minWidth: 500),
             Card("Search Highlight (ListBox / TreeView)", SearchHighlightDemo(), minWidth: 500),
-            Card("SyntaxViewer", SyntaxViewerDemo(), minWidth: 650),
             Card("Font Size Inheritance", inheritanceDemo),
             Card("Font Family Inheritance", fontFamilyDemo),
             Card("Font Weight Inheritance", fontWeightDemo),
-            Card("Nested Inheritance", nestedDemo)
+            Card("Nested Inheritance", nestedDemo),
+
+            // Last: the widest card on the page, so the ones that wrap in a row keep their places.
+            Card("SyntaxViewer", SyntaxViewerDemo(), minWidth: 650)
         );
     }
 

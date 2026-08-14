@@ -136,7 +136,6 @@ partial class GalleryView : UserControl
         [
             Group("Basics"),
             Page("Buttons", ButtonsPage, "tap_single_regular"),
-            Page("ToolBar", ToolBarPage, "wrench_regular"),
             Page("Inputs", InputsPage, "textbox_regular"),
             Page("Data Binding", DataBindingPage, "link_regular"),
             Page("Drag & Drop", DragDropPage, "drag_regular"),
@@ -168,6 +167,7 @@ partial class GalleryView : UserControl
             Group("Windowing"),
             Page("Window", WindowPage, "window_regular"),
             Page("Menu", MenuPage, "options_regular"),
+            Page("ToolBar", ToolBarPage, "wrench_regular"),
             Page("MessageBox", MessageBoxPage, "alert_on_regular"),
             Page("File Dialog", FileDialogPage, "folder_open_regular"),
             Page("ShowDialog", ShowDialogPage, "window_new_regular"),

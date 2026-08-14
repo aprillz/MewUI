@@ -105,7 +105,7 @@ partial class GalleryView
             .Band(
                 new ToolBarGroup()
                     .Label("Find")
-                    .Host(new TextBox().Width(140).Text("Search")));
+                    .Host(new TextBox().Width(140).Placeholder("Search")));
 
         // What ran goes to a line under the toolbar: a message box would take the focus and cover the band
         // the entry was on, which is the thing being tried out here.
