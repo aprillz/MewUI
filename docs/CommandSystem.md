@@ -141,9 +141,7 @@ created, not on every render frame or `CanExecute` evaluation.
 A raster factory can select the smallest source at least as large as `size.Pixel` and lay out the visual at
 `size.Dip`. Active presenters rematerialize the icon when their DPI changes.
 
-Core consumers that currently materialize Command icons are ContextMenu, MenuBar dropdowns, and Buttons (including
-the primary face of `SplitButton`) with a presentation mode. Button still defaults to explicit `Content`, and no Toolbar presenter is available yet. The
-24-DIP `ThemeMetrics.ToolBarIconSize` establishes the contract for that future presenter.
+Core consumers that currently materialize Command icons are ContextMenu, MenuBar dropdowns, ToolBar entries, and Buttons (including the primary face of `SplitButton`) with a presentation mode. Button still defaults to explicit `Content`. All of them draw the icon at `ThemeMetrics.CommandIconSize` (16 DIP).
 
 A MenuItem can override the Command icon.
 

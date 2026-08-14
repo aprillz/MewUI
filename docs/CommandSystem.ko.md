@@ -142,9 +142,7 @@ SVG는 새 `Image`, geometry는 새 `PathShape`, emoji는 새 `TextBlock`을 반
 비트맵 factory는 `size.Pixel` 이상인 가장 작은 source를 선택하고 visual은 `size.Dip`으로 배치할 수 있습니다.
 DPI가 변경되면 활성 presenter는 새 크기로 icon visual을 다시 생성합니다.
 
-현재 Core에서 Command 아이콘을 자동 materialize하는 소비자는 ContextMenu, MenuBar dropdown, 표시 모드를
-지정한 Button(`SplitButton`의 primary face 포함)입니다. Button의 기본 동작은 여전히 명시적 `Content`이며, Toolbar presenter는 아직 제공하지
-않습니다. `ThemeMetrics.ToolBarIconSize`의 24 DIP는 해당 presenter를 추가할 때 사용할 계약입니다.
+현재 코어에서 Command 아이콘을 자동 materialize하는 소비자는 ContextMenu, MenuBar dropdown, ToolBar 항목, 표시 모드를 지정한 Button(`SplitButton`의 primary face 포함)입니다. Button의 기본 동작은 여전히 명시적 `Content`입니다. 모두 `ThemeMetrics.CommandIconSize`(16 DIP)로 아이콘을 그립니다.
 
 MenuItem별로 Command 아이콘을 덮어쓸 수도 있습니다.
 

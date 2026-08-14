@@ -115,7 +115,7 @@ public partial class Button : CommandSourceControl
             return;
         }
 
-        double iconSize = Theme.Metrics.ContextMenuIconSize;
+        double iconSize = Theme.Metrics.CommandIconSize;
         if (!double.IsFinite(iconSize) || iconSize <= 0) iconSize = 16;
         var resolvedSize = IconTemplate.ResolveSize(iconSize, GetDpi() / 96.0);
         _commandPresentationContent.Update(Command.Presentation, CommandPresentationMode, resolvedSize);
@@ -148,7 +148,7 @@ public partial class Button : CommandSourceControl
     protected override void OnThemeChanged(Theme oldTheme, Theme newTheme)
     {
         base.OnThemeChanged(oldTheme, newTheme);
-        if (oldTheme.Metrics.ContextMenuIconSize != newTheme.Metrics.ContextMenuIconSize)
+        if (oldTheme.Metrics.CommandIconSize != newTheme.Metrics.CommandIconSize)
         {
             UpdateCommandPresentationContent();
         }

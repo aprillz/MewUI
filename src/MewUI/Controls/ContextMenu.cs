@@ -266,7 +266,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
 
     private double ResolveIconSize()
     {
-        double size = Theme.Metrics.ContextMenuIconSize;
+        double size = Theme.Metrics.CommandIconSize;
         return double.IsFinite(size) && size > 0 ? size : 16;
     }
 
@@ -430,7 +430,7 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
             ItemPadding = newTheme.Metrics.ItemPadding;
         }
 
-        if (oldTheme.Metrics.ContextMenuIconSize != newTheme.Metrics.ContextMenuIconSize &&
+        if (oldTheme.Metrics.CommandIconSize != newTheme.Metrics.CommandIconSize &&
             FindVisualRoot() is Window)
         {
             PrepareMaterializedIcons();
