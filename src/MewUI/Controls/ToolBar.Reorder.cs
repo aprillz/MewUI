@@ -122,7 +122,11 @@ public sealed partial class ToolBar
         // group's own band included: it is still on screen while it is being dragged.
         if (pointer.Y >= _visuals[^1].Bounds.Bottom)
         {
-            return new DropTarget(_visuals.Count, 0);
+            // Except for the only group of the last band: the band it left would empty and go, leaving the
+            // toolbar exactly as it is, so the drop stays put rather than opening a row for nothing.
+            return IsOnlyGroupOfLastBand(_drag.Group)
+                ? new DropTarget(_visuals.Count - 1, 0)
+                : new DropTarget(_visuals.Count, 0);
         }
 
         int band = 0;
@@ -157,6 +161,12 @@ public sealed partial class ToolBar
 
         return new DropTarget(band, index);
     }
+
+    private bool IsOnlyGroupOfLastBand(GroupVisual? dragged)
+        => dragged != null
+            && _bands.Count > 0
+            && ReferenceEquals(dragged.Group.Owner, _bands[^1])
+            && _bands[^1].GroupsInternal.Count == 1;
 
     private void Commit(GroupVisual dragged, DropTarget target)
     {

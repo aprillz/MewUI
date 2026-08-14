@@ -648,6 +648,32 @@ public sealed class ToolBarTests
     }
 
     [TestMethod]
+    public void TheOnlyGroupOfTheLastBandDoesNotOpenAnotherBelowIt()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var (window, bar) = HostFiveBands();
+        double idle = bar.DesiredSize.Height;
+        var last = bar.VisualsInternal[^1].Bounds;
+
+        var grip = bar.VisualsInternal[^1].Groups[0].Grip.CenterOf();
+        window.SendMouseDown(grip);
+        window.SendMouseMove(new Point(grip.X, grip.Y + 12));
+        window.SendMouseMove(new Point(last.X + 4, last.Bottom + 12));
+        window.PerformLayout();
+
+        // Moving it down would empty the band it left, which then goes: the toolbar would look the same.
+        Assert.AreEqual(idle, bar.DesiredSize.Height, "the toolbar made room for a band it does not need");
+        Assert.AreEqual(4, bar.DropTargetInternal.Band, "the drop aimed past the last band");
+
+        window.SendMouseUp(new Point(last.X + 4, last.Bottom + 12));
+        window.PerformLayout();
+
+        Assert.AreEqual("1\n2\n3\n4\n5", Layout(bar), "the drop moved a group that had nowhere to go");
+        Assert.HasCount(5, bar.Bands, "a band was opened or dropped");
+    }
+
+    [TestMethod]
     public void OnlyTheGripStartsADrag()
     {
         if (SkipOnNonWindows()) return;
