@@ -266,8 +266,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     /// </summary>
     internal void UpdateCursorForElement(UIElement? element)
     {
+        // A captured element keeps the cursor for the whole gesture: the pointer leaves its bounds all the
+        // time while dragging, and picking the cursor up from whatever lies under it there would flicker
+        // between the drag cursor and the arrow.
         CursorType? cursor = null;
-        for (var current = element; current != null; current = current.Parent as UIElement)
+        for (var current = _capturedElement ?? element; current != null; current = current.Parent as UIElement)
         {
             var c = current.Cursor;
             if (c.HasValue)
