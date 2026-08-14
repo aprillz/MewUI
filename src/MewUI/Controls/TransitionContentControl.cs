@@ -125,6 +125,12 @@ public class TransitionContentControl : Control, IVisualTreeHost
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Raised once a content change has finished playing, the run out to nothing included. A host that
+    /// tears itself down when it holds no content waits for this, or the exit is never seen.
+    /// </summary>
+    public event Action? TransitionCompleted;
+
     private void OnTransitionCompleted()
     {
         _clock = null;
@@ -139,6 +145,7 @@ public class TransitionContentControl : Control, IVisualTreeHost
         }
 
         InvalidateVisual();
+        TransitionCompleted?.Invoke();
     }
 
     private void FinishTransition()

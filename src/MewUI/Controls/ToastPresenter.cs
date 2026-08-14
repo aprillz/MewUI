@@ -21,6 +21,16 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
             Transition = ContentTransition.CreateSlide(SlideDirection.Down, 300),
         };
 
+        // Idle is when the run out has played, not when the content was dropped: the service takes this
+        // presenter off the overlay on that signal, which would otherwise cut the toast off mid-exit.
+        _transition.TransitionCompleted += () =>
+        {
+            if (_transition.Content == null)
+            {
+                BecameIdle?.Invoke();
+            }
+        };
+
         AttachChild(_transition);
         IsHitTestVisible = false;
     }
@@ -54,14 +64,12 @@ internal sealed class ToastPresenter : Control, IVisualTreeHost
     {
         _timer?.Stop();
         _transition.Content = null;
-        BecameIdle?.Invoke();
     }
 
     private void OnTimerTick()
     {
         _timer?.Stop();
         _transition.Content = null;
-        BecameIdle?.Invoke();
     }
 
     internal static TimeSpan ComputeDuration(string text)
