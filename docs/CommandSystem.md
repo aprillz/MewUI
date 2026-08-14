@@ -46,6 +46,29 @@ new Button()
 
 Explicitly assigned or bound `Content` takes precedence over generated command presentation.
 
+`DropDownButton` is intentionally not a Command consumer. Activating any part of it opens its
+`DropDownMenu`; commands belong to the menu items. `SplitButton` is a Button and uses its inherited
+`Command` for the primary face, while its drop-down face only opens the menu.
+
+```csharp
+var more = new DropDownButton
+{
+    Content = new TextBlock().Text("More"),
+    DropDownMenu = new Menu().Item(exportPdf).Item(print),
+};
+
+var saveSplit = new SplitButton
+{
+    Content = new TextBlock().Text("Save"),
+    Command = save,
+    DropDownMenu = new Menu().Item(saveAs).Item(saveAll),
+};
+```
+
+If `save` cannot execute, only the `SplitButton` primary face is disabled; the drop-down remains
+reachable. The owner is the sole primary Command source—the template's internal buttons forward
+activation and do not execute the Command themselves.
+
 Each `SegmentButton` container in a `ButtonGroup` is also an independent Command consumer. Connect the per-item
 Command in `PrepareContainer`; its `CanExecute` result participates in that segment's effective enabled state.
 
@@ -118,8 +141,8 @@ created, not on every render frame or `CanExecute` evaluation.
 A raster factory can select the smallest source at least as large as `size.Pixel` and lay out the visual at
 `size.Dip`. Active presenters rematerialize the icon when their DPI changes.
 
-Core consumers that currently materialize Command icons are ContextMenu, MenuBar dropdowns, and Buttons with a
-presentation mode. Button still defaults to explicit `Content`, and no Toolbar presenter is available yet. The
+Core consumers that currently materialize Command icons are ContextMenu, MenuBar dropdowns, and Buttons (including
+the primary face of `SplitButton`) with a presentation mode. Button still defaults to explicit `Content`, and no Toolbar presenter is available yet. The
 24-DIP `ThemeMetrics.ToolBarIconSize` establishes the contract for that future presenter.
 
 A MenuItem can override the Command icon.

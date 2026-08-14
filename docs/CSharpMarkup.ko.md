@@ -326,6 +326,33 @@ new Button()
 | `BindContent(ObservableValue<string>)` | 콘텐츠 바인딩 |
 | `BindContent(source, convert)` | 변환된 텍스트 또는 요소 콘텐츠 바인딩 |
 
+### 드롭다운 버튼
+
+```csharp
+new DropDownButton()
+    .DropDownMenu(new Menu().Item(exportPdf).Item(print))
+    .Content(new TextBlock().Text("More"));
+
+new SplitButton
+{
+    Command = save,
+}
+    .DropDownMenu(new Menu().Item(saveAs).Item(saveAll))
+    .Content("Save");
+```
+
+| 메서드 | 설명 |
+|--------|------|
+| `DropDownMenu` | drop-down face가 여는 메뉴 |
+| `IsDropDownOpen` | 열림 상태 조회 또는 변경 |
+| `MaxDropDownHeight` | 스크롤되기 전 메뉴의 최대 높이 |
+| `OnDropDownOpening(Action)` | 열기 직전에 handler 추가; 항목 재구성에 사용 가능 |
+| `OnDropDownClosed(Action)` | 메뉴가 닫힌 뒤 handler 추가 |
+
+`DropDownButton`은 항상 메뉴를 열며 primary Command가 없습니다. `SplitButton`은 primary
+face에서 상속된 Button Command를 실행합니다. `CanExecute`가 false이면 해당 face만
+비활성화되고 메뉴는 계속 사용할 수 있습니다.
+
 ### ButtonGroup 세그먼트
 
 ```csharp

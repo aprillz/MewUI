@@ -46,6 +46,29 @@ new Button()
 
 명시적으로 설정하거나 바인딩한 `Content`가 있으면 자동 생성한 Command 표시보다 우선합니다.
 
+`DropDownButton`은 의도적으로 Command 소비자가 아닙니다. 어느 부분을 활성화해도
+`DropDownMenu`를 열며, Command는 메뉴 항목이 가집니다. `SplitButton`은 Button이므로 primary
+face에서 상속된 `Command`를 실행하고, drop-down face는 메뉴만 엽니다.
+
+```csharp
+var more = new DropDownButton
+{
+    Content = new TextBlock().Text("More"),
+    DropDownMenu = new Menu().Item(exportPdf).Item(print),
+};
+
+var saveSplit = new SplitButton
+{
+    Content = new TextBlock().Text("Save"),
+    Command = save,
+    DropDownMenu = new Menu().Item(saveAs).Item(saveAll),
+};
+```
+
+`save`를 실행할 수 없으면 `SplitButton`의 primary face만 비활성화되고 drop-down은 계속 열 수
+있습니다. 소유 컨트롤만 primary Command source이며, 템플릿 내부 버튼은 활성화를 전달할 뿐
+Command를 직접 실행하지 않습니다.
+
 `ButtonGroup`의 각 컨테이너인 `SegmentButton`도 독립적인 Command 소비자입니다. 항목별 Command는
 `PrepareContainer`에서 연결하며, `CanExecute`는 해당 세그먼트의 유효 enabled 상태에 반영됩니다.
 
@@ -120,7 +143,7 @@ SVG는 새 `Image`, geometry는 새 `PathShape`, emoji는 새 `TextBlock`을 반
 DPI가 변경되면 활성 presenter는 새 크기로 icon visual을 다시 생성합니다.
 
 현재 Core에서 Command 아이콘을 자동 materialize하는 소비자는 ContextMenu, MenuBar dropdown, 표시 모드를
-지정한 Button입니다. Button의 기본 동작은 여전히 명시적 `Content`이며, Toolbar presenter는 아직 제공하지
+지정한 Button(`SplitButton`의 primary face 포함)입니다. Button의 기본 동작은 여전히 명시적 `Content`이며, Toolbar presenter는 아직 제공하지
 않습니다. `ThemeMetrics.ToolBarIconSize`의 24 DIP는 해당 presenter를 추가할 때 사용할 계약입니다.
 
 MenuItem별로 Command 아이콘을 덮어쓸 수도 있습니다.

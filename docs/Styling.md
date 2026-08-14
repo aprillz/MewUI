@@ -16,14 +16,16 @@ MewUI's styling system is built around the following principles:
 ### Value resolution order
 
 ```
+Animated value (transition in progress)
+  ↓  if the effective source is not being animated
 Local value (control.Background = ...)
   ↓  if not set
-Animated value (transition in progress)
-  ↓  if not animating
-Trigger value (StateTrigger match)
-  ↓  if no trigger matches
-Style base setter
-  ↓  if no style setter
+ElementTrigger value
+  ↓  if no element trigger supplies the property
+Binding value
+  ↓  if no binding supplies the property
+Style value (matching StateTrigger, then base setter)
+  ↓  if neither style layer supplies the property
 Inherited value (parent chain)
   ↓  if not inherited
 Default value
@@ -32,17 +34,21 @@ Default value
 ### Style resolution order
 
 ```
-When StyleName is set:
-  Walk parent chain (from self) looking up name in each StyleSheet
-    → then Application.StyleSheet
-      → if not found, fall through below
-
-When StyleName is unset or name not found:
-  Walk parent chain looking up type-based rule in each StyleSheet
-    → if not found, fall through below
-
-DefaultStyles (theme default style)    (lowest priority)
+Application style (highest priority):
+  StyleName set   → nearest named style
+  StyleName unset → nearest type-based rule
+  (the two selectors are mutually exclusive)
+    ↓ values not supplied by the application style
+Nearest framework DefaultStyle for the control's runtime type
+    ↓ values not supplied by either style layer
+Inherited or property default value
 ```
+
+The framework default and the selected application style form two layers in the same `Style`
+value-source tier. Setters and triggers accumulate from the lower layer upward, so the application
+style wins when it defines a property and otherwise inherits the framework value. Transitions use
+the same precedence rule: the application style's first matching transition is used, then the
+framework default is consulted.
 
 ---
 
@@ -143,31 +149,54 @@ var style = new Style(typeof(Button))
 A style can inherit from another style. The derived style's setters and triggers override the base for the same properties.
 
 ```csharp
-// Inherit from the default Button theme style
+// Extend a reusable application style
 var myButton = new Style(typeof(Button))
 {
-    BasedOn = Style.ForType<Button>(),
+    BasedOn = sharedButtonStyle,
     Setters =
     [
-        // Only override what you need — rest comes from BasedOn
+        // Only override what you need — rest comes from sharedButtonStyle
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
     ],
 };
 ```
 
-`Style.ForType<T>()` returns the default theme style without requiring a Theme instance.
+`BasedOn` composes styles within one layer. Independently of `BasedOn`, an ordinary named or
+type-rule style is automatically layered over the nearest framework default style for the
+control's runtime type. Explicit `BasedOn = Style.ForType<T>()` remains supported, but is normally
+unnecessary; if it names the same default style that the runtime layer already selected, it is
+applied only once.
 
-> **Policy**: if `BasedOn` is not set, only the setters/triggers defined in this style apply. The framework does not auto-merge with the theme style. This matches WPF behavior and keeps styling predictable.
+### 2.6 Replacing the framework default style
 
-### 2.6 Unset (reverting BasedOn values)
+Set `OverridesDefaultStyle = true` when an application style intentionally supplies the complete
+look and must not inherit any framework default setters, triggers, or transitions. The style's own
+`BasedOn` chain is still applied.
 
-`BasedOn` is additive — a derived style overrides base setters but cannot remove them. `Setter.Unset(property)` fills that gap: within a derived style it unsets the property, so it reverts to the inherited value (or the type default when nothing is inherited), exactly as if no style in the chain had set it. This mirrors CSS `unset`.
+```csharp
+var looklessButton = new Style(typeof(Button))
+{
+    OverridesDefaultStyle = true,
+    Setters =
+    [
+        Setter.Create(Control.TemplateProperty, (ControlTemplate?)myButtonTemplate),
+    ],
+};
+```
+
+This option belongs on `Style`, not on the control. Consequently it applies consistently whether
+the style is selected by `StyleName`, a type rule, or directly by framework code. For a control
+whose visuals are supplied by its default template (for example `NumericUpDown`, `DropDownButton`,
+or `SplitButton`), a replacement style must provide a `Template` or the control will be lookless.
+
+### 2.7 Unset (reverting style values)
+
+Style layering is additive — a higher style normally overrides lower values but does not remove them. `Setter.Unset(property)` fills that gap: at its declaration point it removes the current Style-tier candidate, so the property reverts to the inherited value (or the type default when nothing is inherited), exactly as if no style layer had set it. This mirrors CSS `unset`.
 
 ```csharp
 // Keep the base chrome (background, border, ...) but let the font follow the ambient/inherited value
 var menuDropDown = new Style(typeof(ContextMenu))
 {
-    BasedOn = Style.ForType<ContextMenu>(),
     Setters =
     [
         Setter.Unset(TextElement.FontFamilyProperty),
@@ -179,10 +208,10 @@ var menuDropDown = new Style(typeof(ContextMenu))
 
 Scope:
 
-- Acts only on the **Style-base tier** of this style chain for the named property. Higher-priority sources still win: a `Local` value, a running animation, and a matching trigger are untouched.
+- Acts on the entire **Style tier** for the named property, including a value inherited from the lower framework-default layer. Higher persistent sources (`Local`, `ElementTrigger`, and `Binding`) are unaffected. A later matching application trigger can set the property again.
 - For an inherited property (`Foreground`, `Font*`), Unset reverts to the value inherited from ancestors; if no ancestor provides one, to the type default (including any `OverrideDefaultValue`).
 - In a nested `BasedOn` chain, an Unset at a more-derived level wins over base setters below it, and a still-more-derived level can re-set the property.
-- Unset applies to base setters, not to trigger setters.
+- `Unset` can appear in base setters or trigger setters. In a trigger it takes effect only while that trigger matches; later active declarations can set the property again.
 
 ---
 
@@ -206,7 +235,7 @@ var btn = new Button { StyleName = "accent-button" };
 btn.Content("Save");
 ```
 
-When `StyleName` is set, MewUI walks from the control itself up the parent chain, looking up the name in each `FrameworkElement`'s `StyleSheet`. If no parent `StyleSheet` contains the name, `Application.StyleSheet` is checked last. If still not found, resolution falls through to type-based rules, then Theme defaults (`DefaultStyles`).
+When `StyleName` is set, MewUI walks from the control itself up the parent chain, looking up the name in each `FrameworkElement`'s `StyleSheet`. If no parent `StyleSheet` contains the name, `Application.StyleSheet` is checked last. A name that is still unresolved does **not** fall back to a type rule: once the control is attached and all scopes are known, it produces an error identifying the missing name and searched scopes.
 
 ### 3.2 Type-based rules
 
@@ -223,6 +252,10 @@ toolbar.Add(new CheckBox().Content("Bold")); // unaffected — only Button is ma
 ```
 
 Type matching checks exact type first, then base types. `Define<Button>(style)` applies to `Button` and its subclasses.
+
+A type rule is considered only when `StyleName` is not set. A named style and a type rule therefore
+never merge implicitly. Use `BasedOn` when the named style should deliberately extend another
+application style.
 
 ### 3.3 Nested StyleSheets
 
@@ -251,15 +284,19 @@ Each property value has a source that determines its priority:
 
 | Source | Priority | Description |
 |--------|----------|-------------|
-| `Local` | Highest | Directly set on the control (e.g., `button.Background = Color.Red`) |
-| `Trigger` | High | Set by a matching `StateTrigger` |
-| `Style` | Medium | Set by a `Style` base setter |
+| `Local` | Highest | Directly set on the element (e.g., `button.Background = Color.Red`) |
+| `ElementTrigger` | Higher | Set by a matching trigger declared directly on the element |
+| `Binding` | High | Current value supplied by a binding |
+| `Style` | Medium | Final candidate from application/default setters and matching `StateTrigger`s |
 | `Inherited` | Low | Inherited from parent (e.g., `Foreground` from `Window`) |
 | `Default` | Lowest | Property's default value |
 
+An animation temporarily presents a value over whichever source is currently effective; it is an
+overlay rather than another persistent candidate in the table.
+
 ### Local values and triggers
 
-When a property has a `Local` value, triggers and style setters are ignored for that property. This matches WPF behavior.
+When a property has a `Local` value, element triggers, bindings, and style candidates are retained but shadowed for that property. Clearing the local value reveals the next candidate.
 
 ```csharp
 var btn = new Button().Content("Red Button");
@@ -296,15 +333,27 @@ Since styles are shared globally (not per-theme), you can reference them statica
 var baseStyle = Style.ForType<Button>();
 ```
 
+Use this API when the actual default-style object is needed for explicit composition or inspection;
+ordinary partial application styles inherit the runtime default automatically.
+
+## 6. Migration from replacement semantics
+
+Named styles and type rules now preserve unspecified framework defaults. For `Control` itself the
+newly inherited surface is currently limited to `CornerRadius` and `BorderThickness`; richer
+control defaults can also contribute templates, padding, colors, triggers, and transitions. If an
+existing style was intended to erase all of those values, add `OverridesDefaultStyle = true` and
+provide every required value, especially `Template` for default-template controls. In DEBUG builds,
+the property inspector labels style candidates as `Framework default` or `Application` and marks
+framework values that are newly inherited through this cascade.
+
 ---
 
-## 6. Complete example
+## 7. Complete example
 
 ```csharp
 // Define styles (static, shared, theme-aware)
 var flatButton = new Style(typeof(Button))
 {
-    BasedOn = Style.ForType<Button>(),
     Setters =
     [
         Setter.Create(Control.BackgroundProperty,
@@ -325,7 +374,6 @@ var flatButton = new Style(typeof(Button))
 
 var accentButton = new Style(typeof(Button))
 {
-    BasedOn = Style.ForType<Button>(),
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),

@@ -326,6 +326,33 @@ new Button()
 | `BindContent(ObservableValue<string>)` | Content binding |
 | `BindContent(source, convert)` | Converted text or element content binding |
 
+### Drop-down buttons
+
+```csharp
+new DropDownButton()
+    .DropDownMenu(new Menu().Item(exportPdf).Item(print))
+    .Content(new TextBlock().Text("More"));
+
+new SplitButton
+{
+    Command = save,
+}
+    .DropDownMenu(new Menu().Item(saveAs).Item(saveAll))
+    .Content("Save");
+```
+
+| Method | Description |
+|--------|-------------|
+| `DropDownMenu` | Menu opened by the drop-down face |
+| `IsDropDownOpen` | Read or change the open state |
+| `MaxDropDownHeight` | Maximum menu height before scrolling |
+| `OnDropDownOpening(Action)` | Add a handler immediately before opening; suitable for rebuilding items |
+| `OnDropDownClosed(Action)` | Add a handler after the menu closes |
+
+`DropDownButton` always opens its menu and has no primary Command. `SplitButton` executes its
+inherited Button Command from the primary face; a false `CanExecute` disables only that face and
+keeps the menu available.
+
 ### ButtonGroup segments
 
 ```csharp

@@ -16,14 +16,16 @@ MewUI 스타일링 시스템의 설계 원칙:
 ### 값 해결 우선순위
 
 ```
+Animation 값 (전환 진행 중)
+  ↓ 유효 소스에 애니메이션이 없는 경우
 Local 값 (control.Background = ...)
   ↓ 설정되지 않은 경우
-Animation 값 (전환 진행 중)
-  ↓ 애니메이션 없는 경우
-Trigger 값 (StateTrigger 매칭)
-  ↓ 매칭되는 트리거 없는 경우
-Style base setter
-  ↓ 스타일 setter 없는 경우
+ElementTrigger 값
+  ↓ 해당 속성을 제공하는 element trigger가 없는 경우
+Binding 값
+  ↓ 해당 속성을 제공하는 binding이 없는 경우
+Style 값 (매칭되는 StateTrigger, 그 다음 base setter)
+  ↓ 두 스타일 레이어 모두 해당 속성을 제공하지 않는 경우
 상속 값 (부모 체인)
   ↓ 상속되지 않는 경우
 기본값
@@ -32,17 +34,21 @@ Style base setter
 ### 스타일 해결 우선순위
 
 ```
-StyleName 지정 시:
-  자신부터 부모 체인의 StyleSheet에서 이름 조회
-    → Application.StyleSheet 조회
-      → 못 찾으면 아래로 fallback
-
-StyleName 미지정 또는 이름 못 찾은 경우:
-  부모 체인의 StyleSheet에서 타입 기반 조회
-    → 못 찾으면 아래로 fallback
-
-DefaultStyles (Theme 기본 스타일)       (최저 우선순위)
+애플리케이션 스타일 (최고 우선순위):
+  StyleName 지정   → 가장 가까운 이름 기반 스타일
+  StyleName 미지정 → 가장 가까운 타입 기반 규칙
+  (두 선택 방식은 상호 배타적)
+    ↓ 애플리케이션 스타일이 제공하지 않은 값
+컨트롤의 런타임 타입에 가장 가까운 프레임워크 DefaultStyle
+    ↓ 두 스타일 레이어 모두 제공하지 않은 값
+상속값 또는 속성 기본값
 ```
+
+프레임워크 기본 스타일과 선택된 애플리케이션 스타일은 같은 `Style` 값 소스 안의 두
+레이어를 구성합니다. Setter와 trigger는 아래 레이어부터 위로 누적되므로 애플리케이션
+스타일이 속성을 정의하면 이기고, 정의하지 않으면 프레임워크 값을 이어받습니다.
+Transition도 같은 우선순위를 따릅니다. 애플리케이션 스타일에서 먼저 찾고, 없을 때
+프레임워크 기본 스타일을 조회합니다.
 
 ---
 
@@ -143,31 +149,53 @@ var style = new Style(typeof(Button))
 스타일은 다른 스타일을 상속할 수 있습니다. 파생 스타일의 setter/trigger가 같은 속성에 대해 base를 override합니다.
 
 ```csharp
-// 기본 Button 테마 스타일 상속
+// 재사용 가능한 애플리케이션 스타일 상속
 var myButton = new Style(typeof(Button))
 {
-    BasedOn = Style.ForType<Button>(),
+    BasedOn = sharedButtonStyle,
     Setters =
     [
-        // 필요한 것만 override — 나머지는 BasedOn에서 상속
+        // 필요한 것만 override — 나머지는 sharedButtonStyle에서 상속
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),
     ],
 };
 ```
 
-`Style.ForType<T>()`는 Theme 인스턴스 없이 기본 테마 스타일을 반환합니다.
+`BasedOn`은 한 레이어 안에서 스타일을 합성합니다. 이와 별개로 일반 이름 스타일이나
+타입 규칙 스타일은 컨트롤의 런타임 타입에 가장 가까운 프레임워크 기본 스타일 위에
+자동으로 쌓입니다. `BasedOn = Style.ForType<T>()`도 계속 지원하지만 보통은 불필요합니다.
+런타임 레이어가 선택한 것과 같은 기본 스타일을 지정해도 한 번만 적용됩니다.
 
-> **방침**: `BasedOn`을 설정하지 않으면 이 스타일에 정의된 setter/trigger만 적용됩니다. 프레임워크가 테마 스타일과 자동 병합하지 않습니다. WPF와 동일한 동작이며 스타일링을 예측 가능하게 유지합니다.
+### 2.6 프레임워크 기본 스타일 완전 교체
 
-### 2.6 Unset (BasedOn 값 되돌리기)
+애플리케이션 스타일이 완전한 룩을 제공하고 프레임워크의 기본 setter, trigger,
+transition을 하나도 이어받지 않아야 한다면 `OverridesDefaultStyle = true`를 지정합니다.
+이 스타일 자체의 `BasedOn` 체인은 그대로 적용됩니다.
 
-`BasedOn`은 가산적입니다 — 파생 스타일이 base setter를 override할 수는 있어도 제거할 수는 없습니다. `Setter.Unset(property)`가 그 빈틈을 메웁니다: 파생 스타일 안에서 해당 속성을 unset하여, 체인의 어떤 스타일도 그 속성을 설정하지 않은 것처럼 상속값(상속이 없으면 타입 기본값)으로 되돌립니다. CSS `unset`과 같은 의미입니다.
+```csharp
+var looklessButton = new Style(typeof(Button))
+{
+    OverridesDefaultStyle = true,
+    Setters =
+    [
+        Setter.Create(Control.TemplateProperty, (ControlTemplate?)myButtonTemplate),
+    ],
+};
+```
+
+이 옵션은 컨트롤이 아니라 `Style`에 있습니다. 따라서 `StyleName`, 타입 규칙, 프레임워크
+코드 중 어떤 경로로 스타일을 선택해도 동일하게 동작합니다. 기본 템플릿이 시각 요소를
+제공하는 컨트롤(예: `NumericUpDown`, `DropDownButton`, `SplitButton`)을 완전히 교체할 때는
+새 스타일이 `Template`을 제공해야 하며, 그렇지 않으면 룩이 없는 컨트롤이 됩니다.
+
+### 2.7 Unset (스타일 값 되돌리기)
+
+스타일 레이어링은 가산적입니다. 위 스타일은 보통 아래 값을 override하지만 제거하지는 않습니다. `Setter.Unset(property)`가 그 빈틈을 메웁니다. 선언된 지점에서 현재 Style 티어 후보를 제거하여, 어떤 스타일 레이어도 해당 속성을 설정하지 않은 것처럼 상속값(상속이 없으면 타입 기본값)으로 되돌립니다. CSS `unset`과 같은 의미입니다.
 
 ```csharp
 // base의 chrome(배경, 테두리 등)는 유지하되 폰트만 앰비언트/상속값을 따르게 함
 var menuDropDown = new Style(typeof(ContextMenu))
 {
-    BasedOn = Style.ForType<ContextMenu>(),
     Setters =
     [
         Setter.Unset(TextElement.FontFamilyProperty),
@@ -179,10 +207,10 @@ var menuDropDown = new Style(typeof(ContextMenu))
 
 스코프:
 
-- 해당 속성에 대해 이 스타일 체인의 **Style-base 티어만** 비웁니다. 상위 소스는 그대로 이깁니다: `Local` 값, 진행 중인 애니메이션, 매칭되는 트리거는 건드리지 않습니다.
+- 해당 속성에 대해 아래 프레임워크 기본 레이어에서 이어받은 값까지 포함한 **Style 티어 전체**를 비웁니다. 더 높은 지속 소스(`Local`, `ElementTrigger`, `Binding`)는 건드리지 않습니다. 뒤에서 매칭되는 애플리케이션 trigger는 해당 속성을 다시 설정할 수 있습니다.
 - 상속 속성(`Foreground`, `Font*`)이면 조상에서 상속된 값으로 복귀하고, 조상에 값이 없으면 타입 기본값(`OverrideDefaultValue` 포함)으로 복귀합니다.
 - 중첩 `BasedOn` 체인에서는 더 파생된 레벨의 Unset이 아래 base setter를 이기고, 더더욱 파생된 레벨은 그 속성을 다시 set할 수 있습니다.
-- Unset은 base setter에 적용되며 트리거 setter에는 적용되지 않습니다.
+- `Unset`은 base setter와 trigger setter 모두에 사용할 수 있습니다. Trigger 안에서는 해당 trigger가 매칭되는 동안만 적용되며, 뒤의 활성 선언이 속성을 다시 설정할 수 있습니다.
 
 ---
 
@@ -206,7 +234,7 @@ var btn = new Button { StyleName = "accent-button" };
 btn.Content("Save");
 ```
 
-`StyleName`이 설정되면 자기 자신부터 부모 체인을 올라가며 각 `FrameworkElement`의 `StyleSheet`에서 해당 이름을 조회합니다. 부모 체인에서 찾지 못하면 `Application.StyleSheet`를 마지막으로 조회합니다. 그래도 없으면 타입 기반 규칙 → Theme 기본 스타일(`DefaultStyles`) 순서로 fallback합니다.
+`StyleName`이 설정되면 자기 자신부터 부모 체인을 올라가며 각 `FrameworkElement`의 `StyleSheet`에서 해당 이름을 조회합니다. 부모 체인에서 찾지 못하면 `Application.StyleSheet`를 마지막으로 조회합니다. 그래도 이름을 찾지 못했을 때 타입 규칙으로 fallback하지는 않습니다. 컨트롤이 연결되어 모든 scope가 확정된 뒤에는 찾지 못한 이름과 조회한 scope를 포함한 오류가 발생합니다.
 
 ### 3.2 타입 기반 규칙
 
@@ -223,6 +251,10 @@ toolbar.Add(new CheckBox().Content("Bold")); // 영향 없음 — Button만 매�
 ```
 
 타입 매칭은 정확한 타입을 먼저, 그 다음 부모 타입을 매칭합니다. `Define<Button>(style)`은 `Button`과 그 하위 클래스에 적용됩니다.
+
+타입 규칙은 `StyleName`이 지정되지 않았을 때만 조회합니다. 따라서 이름 스타일과 타입
+규칙은 암시적으로 병합되지 않습니다. 이름 스타일이 다른 애플리케이션 스타일을
+의도적으로 확장해야 한다면 `BasedOn`을 사용합니다.
 
 ### 3.3 중첩 StyleSheet
 
@@ -251,15 +283,19 @@ innerPanel.StyleSheet.Define<Button>(accentButtonStyle);
 
 | 소스 | 우선순위 | 설명 |
 |------|----------|------|
-| `Local` | 최고 | 컨트롤에 직접 설정 (예: `button.Background = Color.Red`) |
-| `Trigger` | 높음 | 매칭되는 `StateTrigger`에 의해 설정 |
-| `Style` | 중간 | `Style` base setter에 의해 설정 |
+| `Local` | 최고 | 요소에 직접 설정 (예: `button.Background = Color.Red`) |
+| `ElementTrigger` | 더 높음 | 요소에 직접 선언된 trigger가 설정 |
+| `Binding` | 높음 | binding이 제공하는 현재 값 |
+| `Style` | 중간 | 애플리케이션/기본 setter와 매칭되는 `StateTrigger`의 최종 후보 |
 | `Inherited` | 낮음 | 부모에서 상속 (예: `Window`의 `Foreground`) |
 | `Default` | 최저 | 속성의 기본값 |
 
+Animation은 현재 유효한 소스 위에 값을 일시적으로 표시합니다. 따라서 표 안의 지속적인
+후보 소스와는 별도의 overlay입니다.
+
 ### Local 값과 트리거
 
-속성에 `Local` 값이 있으면 트리거와 스타일 setter가 해당 속성에 대해 무시됩니다. WPF와 동일한 동작입니다.
+속성에 `Local` 값이 있으면 element trigger, binding, 스타일 후보는 유지되지만 가려집니다. Local 값을 지우면 다음 후보가 다시 드러납니다.
 
 ```csharp
 var btn = new Button().Content("빨간 버튼");
@@ -296,15 +332,28 @@ Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.ButtonFace)
 var baseStyle = Style.ForType<Button>();
 ```
 
+실제 기본 스타일 객체를 명시적으로 합성하거나 조사할 때 이 API를 사용합니다. 일반적인
+부분 애플리케이션 스타일은 런타임 기본 스타일을 자동으로 이어받습니다.
+
+## 6. 교체 의미론에서 마이그레이션
+
+이제 이름 스타일과 타입 규칙은 지정하지 않은 프레임워크 기본값을 보존합니다. `Control`
+자체에서 새로 이어받는 범위는 현재 `CornerRadius`와 `BorderThickness`뿐이지만, 더 풍부한
+컨트롤 기본 스타일에서는 템플릿, padding, 색상, trigger, transition도 이어받을 수
+있습니다. 기존 스타일이 이 값을 전부 지우려는 목적이었다면
+`OverridesDefaultStyle = true`를 추가하고, 기본 템플릿 컨트롤의 `Template`을 비롯해 필요한
+값을 모두 제공해야 합니다. DEBUG 빌드의 속성 inspector는 스타일 후보를
+`Framework default`와 `Application`으로 표시하고, 이번 cascade로 새로 상속된 프레임워크
+값도 표시합니다.
+
 ---
 
-## 6. 전체 예제
+## 7. 전체 예제
 
 ```csharp
 // 스타일 정의 (static, 공유, 테마 반응)
 var flatButton = new Style(typeof(Button))
 {
-    BasedOn = Style.ForType<Button>(),
     Setters =
     [
         Setter.Create(Control.BackgroundProperty,
@@ -325,7 +374,6 @@ var flatButton = new Style(typeof(Button))
 
 var accentButton = new Style(typeof(Button))
 {
-    BasedOn = Style.ForType<Button>(),
     Setters =
     [
         Setter.Create(Control.BackgroundProperty, (Theme t) => t.Palette.Accent),

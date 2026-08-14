@@ -8,7 +8,8 @@
 - **템플릿은 opt-in입니다.** `Template`이 null이면(기본값) 컨트롤은 기존의 자체 렌더링
   경로를 그대로 사용하며, 성능 특성도 변하지 않습니다. 템플릿을 설정한 컨트롤만
   템플릿 경로로 동작합니다.
-- 단, 일부 조합 컨트롤(현재 `NumericUpDown`)은 테마 기본 스타일이 템플릿을 공급하는
+- 단, 일부 조합 컨트롤(현재 `NumericUpDown`, `DropDownButton`, `SplitButton`)은 테마 기본
+  스타일이 템플릿을 공급하는
   **기본 템플릿** 컨트롤입니다. 이 경우 로컬 `Template` 없이도 항상 템플릿 경로로
   동작합니다(아래 "기본 템플릿" 절).
 
@@ -186,9 +187,9 @@ _pathHost.Template = new DelegateControlTemplate<ContentControl>((host, ctx) =>
 ### <a id="default-template"></a>기본 템플릿: 스타일이 공급하는 템플릿
 
 `Template`은 일반 속성이므로 **테마 기본 스타일의 setter로도 공급**할 수 있습니다.
-파트들이 실제 컨트롤로 상호작용을 소유하는 조합 컨트롤이 이 방식을 씁니다.
-`NumericUpDown`이 첫 사례입니다: 표시 TextBlock + 숨김 편집 TextBox + RepeatButton
-스피너 열이 테마 스타일의 템플릿으로 공급되고, 컨트롤 자체에는 그리기 코드가 없습니다.
+파트들이 실제 컨트롤로 상호작용을 소유하는 조합 컨트롤이 이 방식을 씁니다. 예를 들면
+`NumericUpDown`의 편집/스피너 파트, `DropDownButton`의 popup trigger,
+`SplitButton`의 분리된 primary/drop-down 동작이 있습니다.
 
 ```csharp
 // 테마 기본 스타일 안 (프레임워크 내부)
@@ -201,6 +202,9 @@ Setter.Create(Control.TemplateProperty, (ControlTemplate?)NumericUpDownTemplate.
   자체 그리기 경로가 없으므로 빈 컨트롤이 됩니다(룩리스 컨트롤의 표준 의미론).
 - `StyleName`이나 서브트리 `StyleSheet` 타입 규칙으로도 템플릿을 갖는 스타일을 공급할
   수 있으므로, 앱/화면 단위의 룩 변형이 스타일 체계 안에서 성립합니다.
+- 부분 이름 스타일이나 타입 규칙은 런타임 타입의 프레임워크 기본 스타일 위에 쌓이므로,
+  별도로 지정하지 않은 기본 `Template`은 유지됩니다. 완전 교체할 때만 스타일에
+  `OverridesDefaultStyle = true`를 지정하고, 이 컨트롤들에는 새 `Template`도 제공해야 합니다.
 - 어느 컨트롤이 기본 드로잉이고 어느 컨트롤이 기본 템플릿인지의 기준: **파트가 실제
   컨트롤로 존재해야 상호작용이 성립하는가**. 프리미티브(TextBox, Button, CheckBox 등)는
   드로잉이 본질이라 기본 템플릿을 갖지 않습니다.

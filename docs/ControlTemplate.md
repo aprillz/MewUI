@@ -8,7 +8,8 @@
 - **Templates are opt-in.** With `Template` null (the default) a control uses its own rendering
   path unchanged, with the same performance characteristics. Only controls with a template set
   run on the template path.
-- However, some composite controls (currently `NumericUpDown`) are **default-template**
+- However, some composite controls (currently `NumericUpDown`, `DropDownButton`, and
+  `SplitButton`) are **default-template**
   controls whose theme default style supplies a template. They always run on the template path
   even without a local `Template` (see "Default templates" below).
 
@@ -190,9 +191,9 @@ _pathHost.Template = new DelegateControlTemplate<ContentControl>((host, ctx) =>
 ### <a id="default-template"></a>Default templates: templates supplied by a style
 
 `Template` is an ordinary property, so **a theme default style's setter can supply it** too.
-Composite controls whose parts own real interactions use this. `NumericUpDown` is the first
-case: a display TextBlock, a hidden edit TextBox and a RepeatButton spinner column are
-supplied as the theme style's template, and the control itself has no drawing code.
+Composite controls whose parts own real interactions use this. Examples include the editable and
+spinner parts of `NumericUpDown`, the popup trigger of `DropDownButton`, and the separate primary
+and drop-down actions of `SplitButton`.
 
 ```csharp
 // inside the theme default style (framework internal)
@@ -206,6 +207,9 @@ Setter.Create(Control.TemplateProperty, (ControlTemplate?)NumericUpDownTemplate.
   (standard lookless-control semantics).
 - Styles carrying templates can also be supplied through `StyleName` or subtree `StyleSheet`
   type rules, so app- or screen-level look variations work within the style system.
+- A partial named or type-rule style is layered over the runtime type's framework default, so an
+  unspecified default `Template` is preserved. Set `OverridesDefaultStyle = true` on the style only
+  for a complete replacement; that replacement must provide its own `Template` for these controls.
 - The criterion for which controls draw by default and which get default templates: **does the
   interaction only work when the part exists as a real control?** Primitives (TextBox, Button,
   CheckBox, ...) are drawing by nature and get no default template.
