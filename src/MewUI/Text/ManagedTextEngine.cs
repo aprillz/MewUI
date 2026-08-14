@@ -78,20 +78,21 @@ internal sealed class ManagedTextEngine : ITextEngine, IDisposable
                     segments[index] = segments[index] with { X = segments[index].X + x };
                 }
             }
+            double baseline = ApplyHalfLeading(font.Ascent, height, font.Ascent + font.Descent);
             double trimTop = 0;
             double trimBottom = 0;
             if (snapshot.Paragraph.LineBoxTrim != LineBoxTrim.None)
             {
-                trimTop = Math.Max(0, font.Ascent - font.CapHeight);
+                trimTop = Math.Max(0, baseline - font.CapHeight);
                 if (snapshot.Paragraph.LineBoxTrim == LineBoxTrim.CapAndBaseline)
                 {
-                    trimBottom = Math.Max(0, height - font.Ascent);
+                    trimBottom = Math.Max(0, height - baseline);
                 }
             }
             double boxHeight = height - trimTop - trimBottom;
             var line = new ManagedTextLine(
                 new TextLayoutLineMetrics(
-                    0, snapshot.Text.Length, 0, new Rect(x, 0, width, boxHeight), font.Ascent - trimTop, trailingWhitespace),
+                    0, snapshot.Text.Length, 0, new Rect(x, 0, width, boxHeight), baseline - trimTop, trailingWhitespace),
                 clusters: null,
                 fastSegments: segments)
             {
@@ -470,7 +471,12 @@ internal sealed class ManagedTextEngine : ITextEngine, IDisposable
             double fontHeight = GetFontLineHeight(context, font);
             double height = ResolveLineHeight(snapshot.Paragraph, fontHeight, fontHeight);
             lines.Add(new ManagedTextLine(
-                new TextLayoutLineMetrics(snapshot.Text.Length, 0, 0, new Rect(0, y, 0, height), font.Ascent),
+                new TextLayoutLineMetrics(
+                    snapshot.Text.Length,
+                    0,
+                    0,
+                    new Rect(0, y, 0, height),
+                    ApplyHalfLeading(font.Ascent, height, font.Ascent + font.Descent)),
                 []));
         }
 
@@ -499,6 +505,14 @@ internal sealed class ManagedTextEngine : ITextEngine, IDisposable
         {
             baseline = defaultFont.Ascent;
         }
+
+        // Measured against the fonts' own ascent and descent, not the cluster heights: a cluster's height
+        // already carries the font's line gap, so comparing with it would find nothing to split and leave
+        // that gap under the text.
+        double textHeight = clusters.Count == 0
+            ? defaultFont.Ascent + defaultFont.Descent
+            : clusters.Max(static cluster => cluster.Font.Ascent + cluster.Font.Descent);
+        baseline = ApplyHalfLeading(baseline, height, textHeight);
 
         // Alignment ignores the space a wrap left at the end of the line, so right-aligned text ends
         // flush with the edge instead of one space short of it.
@@ -687,6 +701,14 @@ internal sealed class ManagedTextEngine : ITextEngine, IDisposable
         => paragraph.LineHeight is > 0
             ? paragraph.LineHeight.Value
             : Math.Max(fontHeight, measuredHeight);
+
+    /// <summary>
+    /// Splits the room a line box has beyond the text's own ascent and descent evenly above and below it,
+    /// the way a CSS line box does. Given to the descent side alone, a font with line gap - or a line
+    /// height the paragraph set - holds its text against the top of the box.
+    /// </summary>
+    private static double ApplyHalfLeading(double baseline, double lineHeight, double textHeight)
+        => baseline + (Math.Max(0, lineHeight - textHeight) / 2);
 
     /// <summary>Trims the first line's box to its cap height and, when requested, the last line's bottom to its baseline.</summary>
     private void ApplyLineBoxTrim(TextLayoutRequestSnapshot snapshot, List<ManagedTextLine> lines)
