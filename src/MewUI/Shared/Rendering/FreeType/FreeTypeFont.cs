@@ -7,6 +7,9 @@ namespace Aprillz.MewUI.Rendering.FreeType;
 
 internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
 {
+    // OS/2 fsSelection bit 7: the font asks layout to use its typographic metrics.
+    private const ushort USE_TYPO_METRICS = 1 << 7;
+
     public string FontPath { get; }
     public int PixelHeight { get; }
 
@@ -28,6 +31,16 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
                 double heightPx = (long)metrics.height / 64.0;
                 double dpiScale = pixelHeight > 0 ? pixelHeight / size : 1.0;
 
+                // FT_Size_Metrics reports hhea, which several families set tight against their caps:
+                // the URW base35 fonts leave 0.035em above the cap line, so their text sat against the
+                // top of every line box. The other platforms lay out with the OS/2 metrics below, so
+                // preferring those also makes one font measure the same everywhere.
+                if (TryGetLineMetrics(face.Face, in metrics, out double os2AscentPx, out double os2DescentPx))
+                {
+                    ascentPx = os2AscentPx;
+                    descentPx = os2DescentPx;
+                }
+
                 Ascent = ascentPx / dpiScale;
                 Descent = descentPx / dpiScale;
                 InternalLeading = Math.Max(0, (heightPx - ascentPx - descentPx) / dpiScale);
@@ -41,6 +54,51 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
             Descent = size * 0.25;
             CapHeight = size * 0.7;
         }
+    }
+
+    /// <summary>
+    /// Reads the ascent and descent the font asks line layout to use, in pixels at the active size.
+    /// Returns false when the face carries no usable OS/2 table.
+    /// </summary>
+    private static unsafe bool TryGetLineMetrics(
+        nint face,
+        in FT_Size_Metrics metrics,
+        out double ascentPx,
+        out double descentPx)
+    {
+        ascentPx = 0;
+        descentPx = 0;
+
+        var os2 = (TT_OS2*)FT.FT_Get_Sfnt_Table(face, FreeTypeSfntTags.FT_SFNT_OS2);
+        if (os2 == null || os2->version == ushort.MaxValue)
+        {
+            return false;
+        }
+
+        double ascentUnits;
+        double descentUnits;
+        if ((os2->fsSelection & USE_TYPO_METRICS) != 0)
+        {
+            // The font asks for its typographic metrics explicitly.
+            ascentUnits = os2->sTypoAscender;
+            descentUnits = -os2->sTypoDescender;
+        }
+        else
+        {
+            ascentUnits = os2->usWinAscent;
+            descentUnits = os2->usWinDescent;
+        }
+
+        if (ascentUnits <= 0 || descentUnits < 0)
+        {
+            return false;
+        }
+
+        // y_scale maps font units to 26.6 pixels.
+        double unitScale = (long)metrics.y_scale / 65536.0 / 64.0;
+        ascentPx = ascentUnits * unitScale;
+        descentPx = descentUnits * unitScale;
+        return ascentPx > 0;
     }
 
     private static unsafe double ResolveCapHeight(

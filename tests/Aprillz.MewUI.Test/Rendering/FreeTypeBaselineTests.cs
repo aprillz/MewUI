@@ -40,7 +40,7 @@ public sealed class FreeTypeBaselineTests
             measured.Height,
             "The raster box must retain the complete font metric height.");
 
-        if (ascentPx - pixelHeight < 2)
+        if (ascentPx - pixelHeight < 1)
         {
             Assert.Inconclusive("The resolved font does not expose the tall-ascent regression case.");
             return;
