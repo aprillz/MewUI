@@ -81,6 +81,49 @@ public sealed class ToolBarTests
     }
 
     [TestMethod]
+    public void TheFluentApiBuildsTheSameModel()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var menu = new Menu();
+        var bar = new ToolBar()
+            .CanReorderGroups()
+            .ItemPresentation(CommandPresentationMode.Text)
+            .Band(
+                new ToolBarGroup()
+                    .Item(Cmd("run"))
+                    .Splitter()
+                    .Toggle(Cmd("wrap"), isChecked: true)
+                    .Split(Cmd("save"), menu),
+                new ToolBarGroup()
+                    .Label("Zoom")
+                    .Menu("More", menu)
+                    .Host(new Border { Width = 40 }))
+            .Band(new ToolBarGroup().Item(Cmd("find")));
+
+        Assert.IsTrue(bar.CanReorderGroups);
+        Assert.AreEqual(CommandPresentationMode.Text, bar.ItemPresentation);
+        Assert.HasCount(2, bar.Bands);
+        Assert.HasCount(2, bar.Bands[0].Groups);
+
+        var entries = bar.Bands[0].Groups[0].Items;
+        Assert.IsInstanceOfType<ToolBarItem>(entries[0]);
+        Assert.IsInstanceOfType<ToolBarSplitter>(entries[1]);
+        Assert.IsTrue(((ToolBarToggleItem)entries[2]).IsChecked);
+        Assert.AreSame(menu, ((ToolBarSplitItem)entries[3]).DropDownMenu);
+
+        var second = bar.Bands[0].Groups[1].Items;
+        Assert.AreEqual("Zoom", ((ToolBarLabelItem)second[0]).Text);
+        Assert.AreEqual("More", ((ToolBarMenuItem)second[1]).Text);
+        Assert.IsInstanceOfType<Border>(((ToolBarHost)second[2]).Content);
+
+        // The entry overrides come back typed, so a chain keeps building the entry it started on.
+        var item = new ToolBarToggleItem(Cmd("bold")).Presentation(CommandPresentationMode.Icon).IsChecked();
+        Assert.AreEqual(CommandPresentationMode.Icon, item.Presentation);
+        Assert.IsTrue(item.IsChecked);
+    }
+
+    [TestMethod]
     public void EachEntryKind_MaterializesItsOwnControl()
     {
         if (SkipOnNonWindows()) return;
