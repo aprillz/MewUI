@@ -184,18 +184,15 @@ internal sealed class PngDecoder : IImageDecoder
         // PNG filter spec: bpp is bytes per pixel rounded up to 1 when < 1 byte.
         int filterBpp = Math.Max(1, bitsPerPixel / 8);
         int expected = checked(height * (1 + rowBytes));
-        // TODO: Need optimize allocation
-        byte[] inflated;
+        byte[] inflated = new byte[expected];
         try
         {
-            inflated = InflateZlib(idat.ToArray(), expected);
+            if (InflateZlib(idat.GetBuffer(), (int)idat.Length, inflated) != expected)
+            {
+                return false;
+            }
         }
         catch
-        {
-            return false;
-        }
-
-        if (inflated.Length < expected)
         {
             return false;
         }
@@ -224,13 +221,31 @@ internal sealed class PngDecoder : IImageDecoder
         return true;
     }
 
-    private static byte[] InflateZlib(byte[] zlibData, int expectedSize)
+    /// <summary>
+    /// Inflates into <paramref name="destination"/>, which the caller sized from the header. Returns the
+    /// byte count written, or -1 when the stream carries more than the header promised.
+    /// </summary>
+    // Inflating straight into the caller's buffer keeps one image out of three copies of itself: a
+    // stream of its own, the array that stream would hand back, and the unfiltered result.
+    private static int InflateZlib(byte[] zlibData, int zlibLength, byte[] destination)
     {
-        using var ms = new MemoryStream(zlibData);
+        using var ms = new MemoryStream(zlibData, 0, zlibLength);
         using var z = new ZLibStream(ms, CompressionMode.Decompress, false);
-        using var outMs = expectedSize > 0 ? new MemoryStream(expectedSize) : new MemoryStream();
-        z.CopyTo(outMs);
-        return outMs.ToArray();
+
+        int written = 0;
+        while (written < destination.Length)
+        {
+            int read = z.Read(destination, written, destination.Length - written);
+            if (read == 0)
+            {
+                break;
+            }
+
+            written += read;
+        }
+
+        // Trailing data beyond the expected size means the header and the stream disagree.
+        return z.ReadByte() == -1 ? written : -1;
     }
 
     private static void Unfilter(byte[] filtered, byte[] raw, int width, int height, int bpp, int rowBytes)
