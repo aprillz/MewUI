@@ -143,6 +143,10 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
 
+    [LibraryImport(LibraryName, EntryPoint = "GetMonitorInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetMonitorInfoEx(nint hMonitor, ref MONITORINFOEX lpmi);
+
     [LibraryImport(LibraryName)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetClientRect(nint hWnd, out RECT lpRect);

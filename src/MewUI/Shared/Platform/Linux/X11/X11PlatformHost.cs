@@ -37,6 +37,8 @@ public sealed class X11PlatformHost : IPlatformHost
     private nint _xsettingsOwnerWindow;
     private nint _netWmCmSelectionAtom;
     private nint _rootWindow;
+    // Refresh rate in Hz, 0 before it is read and -1 when RandR reports no usable rate.
+    private int _displayRefreshHz;
 
     // Cursors are owned per-display, not per-window: each shape is created once, shared by every window
     // (via XDefineCursor), and freed exactly once when the display closes. Freeing themed (libXcursor)
@@ -217,24 +219,33 @@ public sealed class X11PlatformHost : IPlatformHost
                     if (!HandleLoopException(app, ex)) break;
                 }
 
-                int fps = scheduler.TargetFps;
-                if (fps > 0)
+                try
                 {
-                    long frameTicks = ticksPerSecond / fps;
-                    long now = Stopwatch.GetTimestamp();
-                    long elapsed = now - lastFrameTicks;
-                    if (elapsed < frameTicks)
+                    int fps = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync, GetDisplayRefreshHz());
+                    if (fps > 0)
                     {
-                        int waitMs = (int)((frameTicks - elapsed) * 1000 / ticksPerSecond);
-                        if (waitMs > 0)
-                            WaitForWorkOrEvents(timeoutOverrideMs: waitMs, ignoreRenderRequests: true);
+                        long frameTicks = ticksPerSecond / fps;
+                        WaitForFrameBudget(lastFrameTicks + frameTicks, ticksPerSecond);
+
+                        // Advance the deadline instead of restarting from now, so a frame that overran is
+                        // not paid for twice. A deadline further behind than one frame is abandoned rather
+                        // than chased, which would burst frames after a stall.
+                        lastFrameTicks += frameTicks;
+                        if (Stopwatch.GetTimestamp() - lastFrameTicks > frameTicks)
+                        {
+                            lastFrameTicks = Stopwatch.GetTimestamp();
+                        }
                     }
-                    lastFrameTicks = Stopwatch.GetTimestamp();
+                    else
+                    {
+                        WaitForWorkOrEvents(timeoutOverrideMs: 0, ignoreRenderRequests: true);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    WaitForWorkOrEvents(timeoutOverrideMs: 0, ignoreRenderRequests: true);
+                    if (!HandleLoopException(app, ex)) break;
                 }
+
                 continue;
             }
             else
@@ -966,6 +977,76 @@ public sealed class X11PlatformHost : IPlatformHost
         {
             _renderBackends[i].RenderNow();
         }
+    }
+
+    /// <summary>
+    /// Blocks until the frame deadline, consuming whatever wakes the wait. Rendering itself produces X
+    /// events, so a wait that returned on a pending event and did not drain it would come back at once
+    /// and spend the rest of the budget spinning.
+    /// </summary>
+    private void WaitForFrameBudget(long deadlineTicks, long ticksPerSecond)
+    {
+        while (_running)
+        {
+            long remaining = deadlineTicks - Stopwatch.GetTimestamp();
+            if (remaining <= 0)
+            {
+                return;
+            }
+
+            int waitMs = (int)Math.Max(1, remaining * 1000 / ticksPerSecond);
+            WaitForWorkOrEvents(timeoutOverrideMs: waitMs, ignoreRenderRequests: true);
+            DrainAndProcessEvents();
+        }
+    }
+
+    /// <summary>
+    /// Returns the screen's refresh rate in Hz, or 0 when RandR is absent or reports no rate. Read once:
+    /// a mode change mid-run leaves the loop one stale cap, which is cheaper than a server round trip
+    /// per frame.
+    /// </summary>
+    private int GetDisplayRefreshHz()
+    {
+        if (_displayRefreshHz != 0)
+        {
+            return Math.Max(0, _displayRefreshHz);
+        }
+
+        _displayRefreshHz = -1;
+        if (Display == 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            if (XRandrExt.XRRQueryExtension(Display, out _, out _) != 0)
+            {
+                var root = NativeX11.XRootWindow(Display, NativeX11.XDefaultScreen(Display));
+                var config = XRandrExt.XRRGetScreenInfo(Display, root);
+                if (config != 0)
+                {
+                    short rate = XRandrExt.XRRConfigCurrentRate(config);
+                    XRandrExt.XRRFreeScreenConfigInfo(config);
+
+                    // A nested or virtual server can report 0 or 1, neither of which is a rate.
+                    if (rate > 1)
+                    {
+                        _displayRefreshHz = rate;
+                    }
+                }
+            }
+        }
+        catch (DllNotFoundException)
+        {
+            DiagLog.Write("[x11] libXrandr unavailable; the frame cap falls back to a fixed rate");
+        }
+        catch (EntryPointNotFoundException)
+        {
+            DiagLog.Write("[x11] RandR entry points unavailable; the frame cap falls back to a fixed rate");
+        }
+
+        return Math.Max(0, _displayRefreshHz);
     }
 
     private void WaitForWorkOrEvents(int? timeoutOverrideMs = null, bool ignoreRenderRequests = false)

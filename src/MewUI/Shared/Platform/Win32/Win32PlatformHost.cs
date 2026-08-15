@@ -32,6 +32,14 @@ public sealed class Win32PlatformHost : IPlatformHost
     private nint _renderEvent;
     private nint _frameBudgetTimer;
     private bool _frameBudgetTimerResolved;
+    // Refresh rate in Hz, 0 before it is read and -1 when the driver reports no usable rate.
+    private int _displayRefreshHz;
+    private long _displayRefreshReadAt;
+
+    // Re-read so a window moved to another monitor picks up that monitor's rate, without paying a
+    // device context per frame.
+    private const int REFRESH_RECHECK_SECONDS = 2;
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
 
     /// <summary>
     /// Gets the system UI font family, queried once so registration can report it without a host instance.
@@ -228,7 +236,7 @@ public sealed class Win32PlatformHost : IPlatformHost
                     if (!HandleLoopException(app, ex)) break;
                 }
 
-                int fps = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync);
+                int fps = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync, GetDisplayRefreshHz());
                 if (fps > 0)
                 {
                     long frameTicks = ticksPerSecond / fps;
@@ -570,38 +578,120 @@ public sealed class Win32PlatformHost : IPlatformHost
                 return;
             }
 
+            uint result;
+            uint messageResult;
             if (timer == 0)
             {
                 long waitMs = remaining * 1000 / ticksPerSecond;
-                WaitWithoutRenderEvent(waitMs > 0 ? (uint)waitMs : 1, 0);
-                continue;
+                result = WaitWithoutRenderEvent(waitMs > 0 ? (uint)waitMs : 1, 0);
+                messageResult = WaitConstants.WAIT_OBJECT_0;
             }
-
-            // Negative due time is relative, in 100 ns units.
-            long dueTime = -(remaining * 10_000_000 / ticksPerSecond);
-            if (dueTime >= 0 || !Kernel32.SetWaitableTimer(timer, in dueTime, 0, 0, 0, false))
+            else
             {
-                return;
+                // Negative due time is relative, in 100 ns units.
+                long dueTime = -(remaining * 10_000_000 / ticksPerSecond);
+                if (dueTime >= 0 || !Kernel32.SetWaitableTimer(timer, in dueTime, 0, 0, 0, false))
+                {
+                    return;
+                }
+
+                result = WaitWithoutRenderEvent(0xFFFFFFFF, timer);
+                Kernel32.CancelWaitableTimer(timer);
+                messageResult = WaitConstants.WAIT_OBJECT_0 + 1;
             }
 
-            WaitWithoutRenderEvent(0xFFFFFFFF, timer);
-            Kernel32.CancelWaitableTimer(timer);
+            if (result == messageResult)
+            {
+                // MWMO_INPUTAVAILABLE returns for a message that was already seen, so leaving the queue
+                // untouched would wake this wait again at once and spend the rest of the budget spinning.
+                // The dispatcher posts one wake message per animated frame, which is exactly that case.
+                ProcessMessages();
+            }
         }
     }
 
-    private void WaitWithoutRenderEvent(uint timeoutMs, nint extraHandle)
+    private static uint WaitWithoutRenderEvent(uint timeoutMs, nint extraHandle)
     {
         unsafe
         {
             if (extraHandle == 0)
             {
-                User32.MsgWaitForMultipleObjectsEx(0, null, timeoutMs, WaitConstants.QS_ALLINPUT, WaitConstants.MWMO_INPUTAVAILABLE);
-                return;
+                return User32.MsgWaitForMultipleObjectsEx(0, null, timeoutMs, WaitConstants.QS_ALLINPUT, WaitConstants.MWMO_INPUTAVAILABLE);
             }
 
             nint* handles = stackalloc nint[1];
             handles[0] = extraHandle;
-            User32.MsgWaitForMultipleObjectsEx(1, handles, timeoutMs, WaitConstants.QS_ALLINPUT, WaitConstants.MWMO_INPUTAVAILABLE);
+            return User32.MsgWaitForMultipleObjectsEx(1, handles, timeoutMs, WaitConstants.QS_ALLINPUT, WaitConstants.MWMO_INPUTAVAILABLE);
+        }
+    }
+
+    /// <summary>
+    /// Returns the refresh rate the loop should hold itself to: the fastest among the monitors currently
+    /// hosting a window, so a window on a 144 Hz screen is not capped to a 60 Hz primary. Falls back to
+    /// the primary monitor, and to 0 when no rate is reported.
+    /// </summary>
+    private unsafe int GetDisplayRefreshHz()
+    {
+        long now = Stopwatch.GetTimestamp();
+        if (_displayRefreshHz != 0 && now - _displayRefreshReadAt < Stopwatch.Frequency * REFRESH_RECHECK_SECONDS)
+        {
+            return Math.Max(0, _displayRefreshHz);
+        }
+
+        _displayRefreshReadAt = now;
+        int best = 0;
+        foreach (var backend in _windows.Values)
+        {
+            if (backend.Handle == 0)
+            {
+                continue;
+            }
+
+            var monitor = User32.MonitorFromWindow(backend.Handle, MONITOR_DEFAULTTONEAREST);
+            var info = MONITORINFOEX.Create();
+            if (monitor == 0 || !User32.GetMonitorInfoEx(monitor, ref info))
+            {
+                continue;
+            }
+
+            string device = new string(info.szDevice, 0, 32).TrimEnd('\0');
+            best = Math.Max(best, ReadRefreshHz(device));
+        }
+
+        if (best == 0)
+        {
+            best = ReadRefreshHz(null);
+        }
+
+        _displayRefreshHz = best > 0 ? best : -1;
+        return Math.Max(0, _displayRefreshHz);
+    }
+
+    /// <summary>Reads one display device's refresh rate, or the primary monitor's when the name is null.</summary>
+    private static int ReadRefreshHz(string? deviceName)
+    {
+        nint hdc = deviceName == null ? User32.GetDC(0) : Gdi32.CreateDC(deviceName, deviceName, null, 0);
+        if (hdc == 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            // 0 and 1 both mean "hardware default" rather than a rate.
+            int refresh = Gdi32.GetDeviceCaps(hdc, Gdi32.VREFRESH);
+            return refresh > 1 ? refresh : 0;
+        }
+        finally
+        {
+            if (deviceName == null)
+            {
+                User32.ReleaseDC(0, hdc);
+            }
+            else
+            {
+                Gdi32.DeleteDC(hdc);
+            }
         }
     }
 

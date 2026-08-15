@@ -15,6 +15,12 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     public string Backend => BackendIdentifier;
 
+    /// <summary>Presenting waits on the compositor, so the render loop leaves pacing to it.</summary>
+    // The rate that comes back is the composition clock rather than the rate of the monitor the window
+    // sits on: on a mixed-refresh desktop a window on the 60 Hz screen still receives frames at about
+    // the 144 Hz one's pace.
+    public bool SupportsVSync => true;
+
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;

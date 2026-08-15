@@ -18,6 +18,15 @@ internal static partial class Gdi32
     public static partial bool DeleteDC(nint hdc);
 
     [LibraryImport(LibraryName)]
+    public static partial int GetDeviceCaps(nint hdc, int index);
+
+    [LibraryImport(LibraryName, EntryPoint = "CreateDCW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint CreateDC(string? driver, string? device, string? port, nint initData);
+
+    /// <summary>Vertical refresh rate in Hz; 0 or 1 mean the hardware default.</summary>
+    public const int VREFRESH = 116;
+
+    [LibraryImport(LibraryName)]
     public static partial int SaveDC(nint hdc);
 
     [LibraryImport(LibraryName)]

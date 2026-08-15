@@ -14,6 +14,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
     private MacOSDispatcher? _dispatcher;
     private Application? _app;
     private bool _running;
+    // Refresh rate in Hz, 0 before it is read and -1 when the display reports no usable rate.
+    private int _displayRefreshHz;
     private ThemeVariant _lastSystemTheme = ThemeVariant.Light;
     private nint _lastInputWindow;
     private int _themeUpdateRequested;
@@ -346,6 +348,21 @@ public sealed class MacOSPlatformHost : IPlatformHost
     }
 
     /// <summary>
+    /// Returns the main screen's refresh rate in Hz, or 0 when it reports none. Read once: a mode change
+    /// mid-run leaves the loop one stale cap, which is cheaper than a display query per frame.
+    /// </summary>
+    private int GetDisplayRefreshHz()
+    {
+        if (_displayRefreshHz == 0)
+        {
+            int refresh = CoreGraphicsDisplayInterop.GetMainDisplayRefreshHz();
+            _displayRefreshHz = refresh > 0 ? refresh : -1;
+        }
+
+        return Math.Max(0, _displayRefreshHz);
+    }
+
+    /// <summary>
     /// Runs the event/render loop until the app quits and, when <paramref name="keepRunning"/> is supplied,
     /// until it returns false. Shared by <see cref="Run"/> and <see cref="RunNestedLoop"/>.
     /// </summary>
@@ -390,32 +407,53 @@ public sealed class MacOSPlatformHost : IPlatformHost
                     }
                 }
             }
+            int frameCap = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync, GetDisplayRefreshHz());
+            long frameTicks = frameCap > 0 ? Stopwatch.Frequency / frameCap : 0;
+
+            // A cap only holds if it gates the render itself. Dispatcher work and render requests both
+            // cut the wait below short, and an animation produces them every frame.
+            bool frameDue = frameTicks == 0 || Stopwatch.GetTimestamp() - lastFrameTicks >= frameTicks;
             if (scheduler.IsContinuous)
             {
-                try
+                if (frameDue)
                 {
-                    RenderContinuousWindows(scheduler);
-                }
-                catch (Exception ex)
-                {
-                    if (!HandleLoopException(app, ex))
-                    {
-                        break;
-                    }
-                }
-
-                if (scheduler.TargetFps <= 0)
-                {
-                    MacOSInterop.WaitForNextEvent(0, updateWindows: true);
                     try
                     {
-                        DrainEventsAndDispatcher();
+                        RenderContinuousWindows(scheduler);
                     }
                     catch (Exception ex)
                     {
                         if (!HandleLoopException(app, ex))
                         {
                             break;
+                        }
+                    }
+
+                    if (frameTicks > 0)
+                    {
+                        // Advance the deadline instead of restarting from now, so a frame that overran is
+                        // not paid for twice, and abandon a deadline more than one frame behind rather
+                        // than chasing it with a burst.
+                        lastFrameTicks += frameTicks;
+                        if (Stopwatch.GetTimestamp() - lastFrameTicks > frameTicks)
+                        {
+                            lastFrameTicks = Stopwatch.GetTimestamp();
+                        }
+                    }
+
+                    if (frameCap <= 0)
+                    {
+                        MacOSInterop.WaitForNextEvent(0, updateWindows: true);
+                        try
+                        {
+                            DrainEventsAndDispatcher();
+                        }
+                        catch (Exception ex)
+                        {
+                            if (!HandleLoopException(app, ex))
+                            {
+                                break;
+                            }
                         }
                     }
                 }
@@ -454,7 +492,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 break;
             }
 
-            if (scheduler.IsContinuous && scheduler.TargetFps <= 0)
+            if (scheduler.IsContinuous && frameCap <= 0)
             {
                 Thread.Yield();
                 _dispatcher!.ClearWakeRequest();
@@ -462,7 +500,26 @@ public sealed class MacOSPlatformHost : IPlatformHost
             }
 
             int timeoutMs;
-            if (_dispatcher!.HasPendingWork)
+            bool waitingOutFrameBudget =
+                scheduler.IsContinuous && frameTicks > 0 && Stopwatch.GetTimestamp() - lastFrameTicks < frameTicks;
+
+            if (waitingOutFrameBudget)
+            {
+                // Work posted during the frame must not turn the budget into a spin: run it now, then park
+                // for whatever is left. An animation posts a dispatcher wake every frame.
+                int drainGuard = 0;
+                while (_dispatcher!.HasPendingWork && drainGuard < 8)
+                {
+                    _dispatcher.ProcessWorkItems();
+                    drainGuard++;
+                }
+
+                long remaining = frameTicks - (Stopwatch.GetTimestamp() - lastFrameTicks);
+                int frameWaitMs = remaining > 0 ? (int)(remaining * 1000 / Stopwatch.Frequency) : 0;
+                int timerWaitMs = _dispatcher.GetPollTimeoutMs(maxMs: frameWaitMs <= 0 ? 1 : frameWaitMs);
+                timeoutMs = Math.Max(1, timerWaitMs < 0 ? frameWaitMs : Math.Min(frameWaitMs, timerWaitMs));
+            }
+            else if (_dispatcher!.HasPendingWork)
             {
                 timeoutMs = 0;
             }
@@ -470,28 +527,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
             {
                 if (scheduler.IsContinuous)
                 {
-                    int fps = scheduler.TargetFps;
-                    if (fps > 0)
-                    {
-                        long ticksPerSecond = Stopwatch.Frequency;
-                        long frameTicks = ticksPerSecond / fps;
-                        long now = Stopwatch.GetTimestamp();
-                        long elapsed = now - lastFrameTicks;
-
-                        int frameWaitMs = 0;
-                        if (elapsed < frameTicks)
-                        {
-                            frameWaitMs = (int)((frameTicks - elapsed) * 1000 / ticksPerSecond);
-                        }
-
-                        int timerWaitMs = _dispatcher.GetPollTimeoutMs(maxMs: frameWaitMs <= 0 ? 1000 : frameWaitMs);
-                        timeoutMs = frameWaitMs <= 0 ? timerWaitMs : (timerWaitMs < 0 ? frameWaitMs : Math.Min(frameWaitMs, timerWaitMs));
-                        lastFrameTicks = Stopwatch.GetTimestamp();
-                    }
-                    else
-                    {
-                        timeoutMs = 0;
-                    }
+                    timeoutMs = 0;
                 }
                 else
                 {
@@ -499,8 +535,10 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 }
             }
 
-            // Never park while any window needs render, because drains can invalidate after the render section already ran.
-            if (timeoutMs != 0 && AnyWindowNeedsRender())
+            // Never park while any window needs render, because drains can invalidate after the render
+            // section already ran. An animation sets that flag every frame, so the frame budget has to
+            // win here or the cap would never hold.
+            if (timeoutMs != 0 && !waitingOutFrameBudget && AnyWindowNeedsRender())
             {
                 timeoutMs = 0;
             }
@@ -517,7 +555,10 @@ public sealed class MacOSPlatformHost : IPlatformHost
                 // sees that work and we do not block. A post that reads _parked==1 will post a wake that unblocks us.
                 // Interlocked.Exchange provides the full StoreLoad fence the double-checked park needs on ARM64.
                 Interlocked.Exchange(ref _parked, 1);
-                if (_dispatcher!.HasPendingWork || AnyWindowNeedsRender())
+
+                // A window that needs render does not justify skipping the park while the frame budget
+                // still has time left: the render cannot happen before the deadline anyway.
+                if (_dispatcher!.HasPendingWork || (!waitingOutFrameBudget && AnyWindowNeedsRender()))
                 {
                     Volatile.Write(ref _parked, 0);
                 }

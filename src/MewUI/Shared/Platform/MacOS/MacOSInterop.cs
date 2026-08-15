@@ -1119,6 +1119,45 @@ internal static partial class CoreFoundationInterop
     public static void WakeMainRunLoop() => CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
+/// <summary>Reads the main screen's refresh rate, which the render loop uses as its frame cap.</summary>
+internal static partial class CoreGraphicsDisplayInterop
+{
+    private const string LibraryName = "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics";
+
+    [LibraryImport(LibraryName)]
+    private static partial uint CGMainDisplayID();
+
+    [LibraryImport(LibraryName)]
+    private static partial nint CGDisplayCopyDisplayMode(uint display);
+
+    [LibraryImport(LibraryName)]
+    private static partial double CGDisplayModeGetRefreshRate(nint mode);
+
+    [LibraryImport(LibraryName)]
+    private static partial void CGDisplayModeRelease(nint mode);
+
+    /// <summary>Returns the refresh rate in Hz, or 0 when the display reports none.</summary>
+    public static int GetMainDisplayRefreshHz()
+    {
+        var mode = CGDisplayCopyDisplayMode(CGMainDisplayID());
+        if (mode == 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            // Built-in panels have historically reported 0 here rather than their actual rate.
+            double rate = CGDisplayModeGetRefreshRate(mode);
+            return rate > 1 ? (int)Math.Round(rate) : 0;
+        }
+        finally
+        {
+            CGDisplayModeRelease(mode);
+        }
+    }
+}
+
 // Dispatches work onto the libdispatch main queue so the wake callback runs on the main thread.
 internal static partial class LibDispatchInterop
 {

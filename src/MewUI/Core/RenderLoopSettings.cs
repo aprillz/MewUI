@@ -64,9 +64,12 @@ public sealed class RenderLoopSettings
     /// <summary>
     /// Frame rate the loop should hold itself to, or 0 to leave pacing to the backend's presentation.
     /// <see cref="TargetFps"/> wins when set; otherwise a backend that cannot pace on the display refresh
-    /// gets <see cref="VSyncFallbackFps"/> so an animating window does not render as fast as the CPU allows.
+    /// holds itself to <paramref name="displayRefreshHz"/> so an animating window neither renders as fast
+    /// as the CPU allows nor gives up the frames a faster screen can show.
     /// </summary>
-    internal int EffectiveFrameCap(bool backendSupportsVSync)
+    /// <param name="backendSupportsVSync">Whether presenting blocks on the display refresh.</param>
+    /// <param name="displayRefreshHz">The screen's refresh rate, or 0 when the platform cannot report it.</param>
+    internal int EffectiveFrameCap(bool backendSupportsVSync, int displayRefreshHz = 0)
     {
         int target = TargetFps;
         if (target > 0)
@@ -74,10 +77,15 @@ public sealed class RenderLoopSettings
             return target;
         }
 
-        return VSyncEnabled && !backendSupportsVSync ? VSyncFallbackFps : 0;
+        if (!VSyncEnabled || backendSupportsVSync)
+        {
+            return 0;
+        }
+
+        return displayRefreshHz > 0 ? displayRefreshHz : VSyncFallbackFps;
     }
 
-    // Chosen over a display-refresh query because no platform host exposes one, and 60 is the rate a
-    // backend without presentation pacing (GDI) is expected to hold.
+    // Used when the platform cannot report a refresh rate; 60 is the rate a backend without presentation
+    // pacing (GDI) is expected to hold.
     internal const int VSyncFallbackFps = 60;
 }
