@@ -16,11 +16,6 @@ public sealed partial class MewVGX11GraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.X11";
 
-    /// <summary>Presenting does not block on the display refresh, so the render loop paces itself.</summary>
-    // The swap interval this backend asks for is advisory: measured on both a compositing X server and
-    // a nested one, the swap returned immediately and the loop rendered hundreds of frames a second.
-    public bool SupportsVSync => false;
-
     /// <summary>The active GL backend (GLX or EGL), chosen once at registration via
     /// <c>MewVGX11Backend.Register</c> / <c>RegisterEgl</c>.</summary>
     private static IX11GLBackend GLBackend =>

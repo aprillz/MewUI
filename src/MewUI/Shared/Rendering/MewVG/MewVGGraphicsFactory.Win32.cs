@@ -15,10 +15,6 @@ public sealed partial class MewVGWin32GraphicsFactory
 {
     public const string BackendIdentifier = "MewVG.Win32";
 
-    /// <summary>Presenting does not block on the display refresh, so the render loop paces itself.</summary>
-    // Measured at 650 frames a second on a 144 Hz screen with the swap interval this backend asks for.
-    public bool SupportsVSync => false;
-
     private readonly IMewVGOffscreenSurfaceProvider _offscreenProvider =
         new MewVGGLOffscreenSurfaceProvider(OpenGL32.wglGetCurrentContext);
 
