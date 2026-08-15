@@ -2225,7 +2225,7 @@ internal sealed class MacOSWindowBackend : IWindowBackend
 
     internal void RenderIfNeeded()
     {
-        if (Interlocked.Exchange(ref _needsRender, 0) == 0)
+        if (!NeedsRender)
         {
             return;
         }
@@ -2239,6 +2239,10 @@ internal sealed class MacOSWindowBackend : IWindowBackend
         {
             return;
         }
+
+        // The render loop calls this directly, so the request is consumed here rather than only in
+        // RenderIfNeeded. Left set, one invalidation would make every later pulse render this window.
+        Interlocked.Exchange(ref _needsRender, 0);
 
         UpdateDpiIfNeeded();
         // If we're rendering right now, avoid scheduling another render from size-change invalidations.
