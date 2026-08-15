@@ -13,6 +13,8 @@ internal sealed class Direct2DImage : IImage
     private readonly bool _hasAlpha;  // false → skip premultiply scan, use ALPHA_MODE.IGNORE
     private int _pixelsVersion = -1;
     private byte[]? _premultiplied;
+    // True while _premultiplied is a buffer this class allocated rather than the source's own.
+    private bool _premultipliedIsCopy;
     private nint _renderTarget;
     private int _renderTargetGeneration;
     private nint _bitmap;
@@ -70,6 +72,7 @@ internal sealed class Direct2DImage : IImage
         {
             _pixelsVersion = v;
             _premultiplied = null;
+            _premultipliedIsCopy = false;
             ReleaseBitmap();
             _renderTarget = 0;
             _renderTargetGeneration = 0;
@@ -124,6 +127,15 @@ internal sealed class Direct2DImage : IImage
             }
         }
 
+        // CreateBitmap copied the pixels into the bitmap, and nothing reads this buffer again. A buffer
+        // premultiplied here is dropped; one borrowed from the source belongs to the source, so holding
+        // the reference costs nothing. A later re-upload premultiplies again from the source.
+        if (_premultipliedIsCopy)
+        {
+            _premultiplied = null;
+            _premultipliedIsCopy = false;
+        }
+
         return _bitmap;
     }
 
@@ -152,7 +164,15 @@ internal sealed class Direct2DImage : IImage
         // source is already premultiplied (offscreen RT - the hot path) we use the buffer
         // directly; only straight-alpha sources (PNG decode, raw bytes) pay the CPU
         // premultiply cost.
-        _premultiplied = _pixels.IsPremultiplied ? l.Buffer : PremultiplyIfNeeded(l.Buffer);
+        if (_pixels.IsPremultiplied)
+        {
+            _premultiplied = l.Buffer;
+            return;
+        }
+
+        var premultiplied = PremultiplyIfNeeded(l.Buffer);
+        _premultiplied = premultiplied;
+        _premultipliedIsCopy = !ReferenceEquals(premultiplied, l.Buffer);
     }
 
     private static byte[] PremultiplyIfNeeded(byte[] bgra)
@@ -195,5 +215,6 @@ internal sealed class Direct2DImage : IImage
         ReleaseBitmap();
         _renderTarget = 0;
         _premultiplied = null;
+        _premultipliedIsCopy = false;
     }
 }
