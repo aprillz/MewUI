@@ -4,6 +4,11 @@ using Aprillz.MewUI.Controls;
 
 namespace MewUI.Test.Core;
 
+/// <summary>
+/// What makes the render loop draw a frame. A clock attached to an element does not select that
+/// element's window: its tick invalidates what it animates, and the invalidation is the render's only
+/// reason. Clocks with no owner keep the application-wide demand they have always had.
+/// </summary>
 [TestClass]
 [DoNotParallelize]
 public sealed class AnimationRenderDemandTests
@@ -31,30 +36,22 @@ public sealed class AnimationRenderDemandTests
     }
 
     [TestMethod]
-    public void OwnedClock_DemandsOnlyItsVisualRootWindow()
+    public void OwnedClock_DoesNotSelectItsWindowByItself()
     {
-        var first = new Window();
-        var firstOwner = new Border();
-        first.Content = firstOwner;
-
-        var second = new Window
-        {
-            Content = new Border(),
-        };
+        var window = new Window();
+        var owner = new Border();
+        window.Content = owner;
 
         var clock = new AnimationClock(TimeSpan.FromSeconds(10))
-            .AttachTo(firstOwner);
+            .AttachTo(owner);
         var settings = new RenderLoopSettings();
 
         clock.Start();
-        var pulse = AnimationManager.Instance.BeginPulse(settings);
+        using var pulse = AnimationManager.Instance.BeginPulse(settings);
 
         Assert.IsFalse(pulse.HasApplicationRenderDemand);
-        Assert.IsTrue(pulse.HasRenderDemand(first));
-        Assert.IsFalse(pulse.HasRenderDemand(second));
-
-        pulse.Dispose();
-        Assert.IsFalse(pulse.HasRenderDemand(first));
+        Assert.IsFalse(pulse.ShouldRender(window, needsRender: false));
+        Assert.IsTrue(pulse.ShouldRender(window, needsRender: true));
 
         clock.Stop();
     }
@@ -69,67 +66,37 @@ public sealed class AnimationRenderDemandTests
         using var pulse = AnimationManager.Instance.BeginPulse(settings);
 
         Assert.IsTrue(pulse.HasApplicationRenderDemand);
+        Assert.IsTrue(pulse.ShouldRender(new Window(), needsRender: false));
 
         clock.Stop();
     }
 
     [TestMethod]
-    public void PausedOwnedClock_DoesNotDemandItsWindow()
+    public void Pulse_CentralizesApplicationWideRenderPolicy()
     {
         var window = new Window();
-        var owner = new Border();
-        window.Content = owner;
-
-        var clock = new AnimationClock(TimeSpan.FromSeconds(10))
-            .AttachTo(owner);
         var settings = new RenderLoopSettings();
 
-        clock.Start();
-        clock.Pause();
-        using var pulse = AnimationManager.Instance.BeginPulse(settings);
-
-        Assert.IsFalse(pulse.HasRenderDemand(window));
-        Assert.IsFalse(pulse.HasApplicationRenderDemand);
-
-        clock.Stop();
-    }
-
-    [TestMethod]
-    public void Pulse_CentralizesApplicationWideAndWindowRenderPolicy()
-    {
-        var first = new Window();
-        var owner = new Border();
-        first.Content = owner;
-        var second = new Window();
-        var settings = new RenderLoopSettings();
-
-        var clock = new AnimationClock(TimeSpan.FromSeconds(10))
-            .AttachTo(owner);
-
-        clock.Start();
         using (var pulse = AnimationManager.Instance.BeginPulse(settings))
         {
-            Assert.IsTrue(pulse.ShouldRender(first, needsRender: false));
-            Assert.IsFalse(pulse.ShouldRender(second, needsRender: false));
-            Assert.IsTrue(pulse.ShouldRender(second, needsRender: true));
+            Assert.IsFalse(pulse.ShouldRender(window, needsRender: false));
+            Assert.IsTrue(pulse.ShouldRender(window, needsRender: true));
 
             settings.Continuous = true;
-            Assert.IsFalse(pulse.ShouldRender(second, needsRender: false),
+            Assert.IsFalse(pulse.ShouldRender(window, needsRender: false),
                 "Render policy must remain stable for the lifetime of one pulse.");
         }
 
         using (var continuousPulse = AnimationManager.Instance.BeginPulse(settings))
         {
-            Assert.IsTrue(continuousPulse.ShouldRender(second, needsRender: false));
+            Assert.IsTrue(continuousPulse.ShouldRender(window, needsRender: false));
         }
 
         settings.Continuous = false;
         settings.VSyncEnabled = false;
         using (var vsyncOffPulse = AnimationManager.Instance.BeginPulse(settings))
         {
-            Assert.IsTrue(vsyncOffPulse.ShouldRender(second, needsRender: false));
+            Assert.IsTrue(vsyncOffPulse.ShouldRender(window, needsRender: false));
         }
-
-        clock.Stop();
     }
 }

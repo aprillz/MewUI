@@ -38,7 +38,11 @@ public abstract partial class UIElement
     private long _contentVersion;
 
     private CacheEntry? _cache;
-    private bool _bitmapCachesReleasedWhileCulled;
+
+    // What the last render pass observed: true while this element sat outside the cull viewport, and
+    // false again once it is actually drawn. A repaint asked for from here reaches no pixels, so it
+    // does not need to wake the window.
+    private bool _culledSinceLastRender;
 
     // While > 0 on the current thread, the viewport-bounds cull in Render is bypassed: a cache
     // snapshot renders the whole subtree into an offscreen surface, so culling against the window
@@ -48,9 +52,9 @@ public abstract partial class UIElement
 
     internal static bool IsRenderingToCache => _cacheSnapshotDepth > 0;
 
-    private void ReleaseBitmapCachesInSubtree()
+    private void MarkSubtreeCulled()
     {
-        if (_bitmapCachesReleasedWhileCulled)
+        if (_culledSinceLastRender)
         {
             return;
         }
@@ -60,14 +64,39 @@ public abstract partial class UIElement
             if (element is UIElement uiElement)
             {
                 uiElement.DisposeCacheEntry();
-                uiElement._bitmapCachesReleasedWhileCulled = true;
+                uiElement._culledSinceLastRender = true;
             }
         });
     }
 
-    private void MarkBitmapCacheVisible()
+    private void MarkRendered()
     {
-        _bitmapCachesReleasedWhileCulled = false;
+        _culledSinceLastRender = false;
+    }
+
+    /// <summary>
+    /// Marks this element as not reaching the screen while it is still drawn into an ancestor's cache.
+    /// Its own cache is left alone: the snapshot in progress is writing through it.
+    /// </summary>
+    private void MarkCulledWhileCaching()
+    {
+        _culledSinceLastRender = true;
+    }
+
+    /// <summary>
+    /// Ages the cached bitmaps above this element without waking the window. A repaint that is dropped
+    /// still happened: an ancestor holding a snapshot of it must re-take that snapshot before showing it
+    /// again, which the version mismatch makes it do the next time it renders.
+    /// </summary>
+    private void StaleCachedAncestors()
+    {
+        for (Element? element = Parent; element != null; element = element.Parent)
+        {
+            if (element is UIElement uiElement && uiElement._hasBitmapCache)
+            {
+                uiElement._contentVersion++;
+            }
+        }
     }
 
     /// <summary>
@@ -90,9 +119,20 @@ public abstract partial class UIElement
 
     public override void InvalidateVisual()
     {
+        // The version is bumped even when the walk stops here, so a cache rebuilt after this element
+        // comes back into view carries the content this repaint asked for.
         if (_hasBitmapCache)
         {
             _contentVersion++;
+        }
+
+        // A repaint from an element the last render pass culled reaches no pixels, so it must not wake
+        // the window. SkipViewportCull is read live: an element that set it after being marked is
+        // drawn again and has to be able to ask for it.
+        if (_culledSinceLastRender && !SkipViewportCull && !IsRenderingToCache)
+        {
+            StaleCachedAncestors();
+            return;
         }
 
         base.InvalidateVisual();

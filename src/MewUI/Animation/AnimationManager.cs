@@ -22,7 +22,6 @@ public sealed class AnimationManager
     private readonly List<AnimationClock> _active = new();
     private readonly List<AnimationClock> _pendingAdd = new();
     private readonly List<AnimationClock> _pendingRemove = new();
-    private readonly HashSet<Window> _pulseDemandWindows = new(ReferenceEqualityComparer.Instance);
     private bool _pulseHasApplicationDemand;
     private bool _isUpdating;
 
@@ -153,7 +152,6 @@ public sealed class AnimationManager
     {
         lock (_sync)
         {
-            _pulseDemandWindows.Clear();
             _pulseHasApplicationDemand = false;
 
             if (_active.Count == 0 && _pendingAdd.Count == 0)
@@ -164,7 +162,9 @@ public sealed class AnimationManager
             long now = timestamp;
 
             // Capture demand before ticking. A clock may complete and unregister during Update, but
-            // its final callback still needs one frame on the surface it updated.
+            // its final callback still needs one frame on the surface it updated. An attached clock
+            // needs no entry here: its tick invalidates what it animates, and that invalidation is what
+            // selects the window.
             for (int i = 0; i < _active.Count; i++)
             {
                 var clock = _active[i];
@@ -176,10 +176,6 @@ public sealed class AnimationManager
                 if (!clock.HasOwner)
                 {
                     _pulseHasApplicationDemand = true;
-                }
-                else if (clock.ResolveOwnerWindow() is Window window)
-                {
-                    _pulseDemandWindows.Add(window);
                 }
             }
 
@@ -228,19 +224,10 @@ public sealed class AnimationManager
         }
     }
 
-    private bool HasPulseRenderDemand(Window window)
-    {
-        lock (_sync)
-        {
-            return _pulseDemandWindows.Contains(window);
-        }
-    }
-
     private void CompletePulse()
     {
         lock (_sync)
         {
-            _pulseDemandWindows.Clear();
             _pulseHasApplicationDemand = false;
         }
     }
@@ -293,12 +280,16 @@ public sealed class AnimationManager
 
         internal bool HasApplicationRenderDemand => _hasApplicationRenderDemand;
 
-        internal bool HasRenderDemand(Window window) => _manager.HasPulseRenderDemand(window);
-
+        /// <summary>
+        /// Whether this window has to be rendered for the frame the pulse just advanced.
+        /// </summary>
+        /// <param name="window">The window being considered for this frame.</param>
+        /// <param name="needsRender">Whether something asked this window to repaint.</param>
+        // A clock attached to an element does not select its window here: its tick invalidates what it
+        // animates, and that invalidation is the render's only reason. An element the render pass culled
+        // invalidates nothing, so its window sleeps.
         internal bool ShouldRender(Window window, bool needsRender) =>
-            needsRender ||
-            _rendersApplicationWide ||
-            HasRenderDemand(window);
+            needsRender || _rendersApplicationWide;
 
         public void Dispose() => _manager.CompletePulse();
     }
@@ -316,7 +307,6 @@ public sealed class AnimationManager
                 instance._active.Clear();
                 instance._pendingAdd.Clear();
                 instance._pendingRemove.Clear();
-                instance._pulseDemandWindows.Clear();
                 instance._pulseHasApplicationDemand = false;
                 instance.RefreshActiveState();
             }

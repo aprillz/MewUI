@@ -164,7 +164,7 @@ public abstract partial class UIElement : Element
         {
             if (!IsVisible)
             {
-                ReleaseBitmapCachesInSubtree();
+                MarkSubtreeCulled();
             }
 
             OnVisibilityChanged();
@@ -478,14 +478,27 @@ public abstract partial class UIElement : Element
             return;
         }
 
-        if (!SkipViewportCull && _cacheSnapshotDepth == 0 && this is not Window &&
-            _renderCullViewport is Rect cullViewport && !cullViewport.IntersectsWith(Bounds))
+        bool outsideViewport =
+            !SkipViewportCull && this is not Window &&
+            _renderCullViewport is Rect cullViewport && !cullViewport.IntersectsWith(Bounds);
+
+        if (outsideViewport && _cacheSnapshotDepth == 0)
         {
-            ReleaseBitmapCachesInSubtree();
+            MarkSubtreeCulled();
             return;
         }
 
-        MarkBitmapCacheVisible();
+        if (outsideViewport)
+        {
+            // A cache snapshot has to fill its whole surface, so this still draws. What it draws never
+            // reaches the screen while the cached element is scrolled this far, so the element stays
+            // marked as culled and its later repaints only bump the cache version.
+            MarkCulledWhileCaching();
+        }
+        else
+        {
+            MarkRendered();
+        }
 
         using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this))
         {
