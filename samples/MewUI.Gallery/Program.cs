@@ -34,7 +34,7 @@ var topMost = new ObservableValue<bool>(false);
 
 var currentAccent = ThemeManager.DefaultAccent;
 
-var logo = ImageSource.FromFile(GalleryView.CombineBaseDirectory("Resources", "logo_h-1280.png"));
+var logo = ImageSource.FromFile(GalleryView.CombineBaseDirectory("Resources", "logo_h-480.png"));
 
 var timer = new DispatcherTimer()
     .Interval(TimeSpan.FromSeconds(1))
@@ -199,8 +199,8 @@ FrameworkElement SettingsControls() => new StackPanel()
             new WrapPanel().Spacing(12).Children(
                 new CheckBox()
                     .Content("Cached")
-                    .IsChecked(true)
                     .OnCheckedChanged(v => gallery.SetCardsCached(v == true))
+                    .IsChecked(true)
                     .CenterVertical(),
                 new CheckBox()
                     .Content("TopMost")

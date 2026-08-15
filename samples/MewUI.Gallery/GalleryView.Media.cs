@@ -5,7 +5,7 @@ namespace Aprillz.MewUI.Gallery;
 partial class GalleryView
 {
     private ImageSource april = ImageSource.FromFile(CombineBaseDirectory("Resources", "april.jpg"));
-    private ImageSource logo = ImageSource.FromFile(CombineBaseDirectory("Resources", "logo_h-1280.png"));
+    private ImageSource logo = ImageSource.FromFile(CombineBaseDirectory("Resources", "logo_h-480.png"));
 
     private Image peekImage = null!;
     private ObservableValue<string> imagePeekText = new ObservableValue<string>("Color: -");

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <RootNamespace>Aprillz.MewUI.Gallery</RootNamespace>
@@ -75,7 +75,7 @@
   <Import Project="..\..\build\Aprillz.MewUI.targets" />
 
   <ItemGroup>
-    <None Include="..\..\assets\logo\logo_h-1280.png" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\logo_h-1280.png" />
+    <None Include="..\..\assets\logo\logo_h-480.png" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\logo_h-480.png" />
     <None Include="..\..\assets\images\april.jpg" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\april.jpg" />
     <None Include="..\..\assets\images\soonduk.jpg" CopyToOutputDirectory="PreserveNewest" TargetPath="Resources\soonduk.jpg" />
 

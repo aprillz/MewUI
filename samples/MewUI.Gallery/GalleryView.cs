@@ -93,7 +93,6 @@ partial class GalleryView : UserControl
         var border = new Border()
             .MinWidth(minWidth)
             .CornerRadius(10)
-            .Cached()
             .Child(
                 new StackPanel()
                     .Vertical()
