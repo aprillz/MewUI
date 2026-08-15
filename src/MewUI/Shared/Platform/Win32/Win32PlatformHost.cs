@@ -236,7 +236,7 @@ public sealed class Win32PlatformHost : IPlatformHost
                     if (!HandleLoopException(app, ex)) break;
                 }
 
-                int fps = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync, GetDisplayRefreshHz());
+                int fps = scheduler.EffectiveFrameCap(GetDisplayRefreshHz());
                 if (fps > 0)
                 {
                     long frameTicks = ticksPerSecond / fps;
@@ -254,6 +254,8 @@ public sealed class Win32PlatformHost : IPlatformHost
                 }
                 else
                 {
+                    // No cap means VSync was turned off, which asks for every frame the machine can
+                    // produce. Every window renders on every pass in that mode, so this does not idle.
                     WaitForMessagesOrRender(0, renderOnSignal: false);
                 }
             }

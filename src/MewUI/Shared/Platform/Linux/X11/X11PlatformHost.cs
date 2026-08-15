@@ -221,7 +221,7 @@ public sealed class X11PlatformHost : IPlatformHost
 
                 try
                 {
-                    int fps = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync, GetDisplayRefreshHz());
+                    int fps = scheduler.EffectiveFrameCap(GetDisplayRefreshHz());
                     if (fps > 0)
                     {
                         long frameTicks = ticksPerSecond / fps;

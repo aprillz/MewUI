@@ -67,9 +67,8 @@ public sealed class RenderLoopSettings
     /// holds itself to <paramref name="displayRefreshHz"/> so an animating window neither renders as fast
     /// as the CPU allows nor gives up the frames a faster screen can show.
     /// </summary>
-    /// <param name="backendSupportsVSync">Whether presenting blocks on the display refresh.</param>
     /// <param name="displayRefreshHz">The screen's refresh rate, or 0 when the platform cannot report it.</param>
-    internal int EffectiveFrameCap(bool backendSupportsVSync, int displayRefreshHz = 0)
+    internal int EffectiveFrameCap(int displayRefreshHz = 0)
     {
         int target = TargetFps;
         if (target > 0)
@@ -77,7 +76,10 @@ public sealed class RenderLoopSettings
             return target;
         }
 
-        if (!VSyncEnabled || backendSupportsVSync)
+        // Turning VSync off is the request for an unlimited loop, and the only case that leaves the loop
+        // without a rhythm of its own. A backend that blocks in its present reaches that block before the
+        // cap below, so the cap costs it nothing while covering the frames it does not present.
+        if (!VSyncEnabled)
         {
             return 0;
         }

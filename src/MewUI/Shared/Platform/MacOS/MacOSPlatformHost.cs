@@ -407,7 +407,7 @@ public sealed class MacOSPlatformHost : IPlatformHost
                     }
                 }
             }
-            int frameCap = scheduler.EffectiveFrameCap(app.GraphicsFactory.SupportsVSync, GetDisplayRefreshHz());
+            int frameCap = scheduler.EffectiveFrameCap(GetDisplayRefreshHz());
             long frameTicks = frameCap > 0 ? Stopwatch.Frequency / frameCap : 0;
 
             // A cap only holds if it gates the render itself. Dispatcher work and render requests both
@@ -494,6 +494,8 @@ public sealed class MacOSPlatformHost : IPlatformHost
 
             if (scheduler.IsContinuous && frameCap <= 0)
             {
+                // No cap means VSync was turned off, which asks for every frame the machine can produce.
+                // Every window renders on every pass in that mode, so this does not idle.
                 Thread.Yield();
                 _dispatcher!.ClearWakeRequest();
                 continue;
