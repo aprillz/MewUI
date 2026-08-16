@@ -84,7 +84,24 @@ public enum TextViewLayerAnchor
 public interface ITextOffsetMap
 {
     int MapToSource(int projectedOffset);
+
+    /// <summary>
+    /// Projected offset a source offset sits at. Where the projection stands text at that offset
+    /// rather than over it, the answer is in front of that text.
+    /// </summary>
     int MapFromSource(int sourceOffset);
+
+    /// <summary>
+    /// Projected range a source range covers. The start binds in front of text the projection
+    /// stands at that offset and the end binds behind it, which is the only way a range of no
+    /// source length can name the text projected at its position. The default answers from the two
+    /// endpoints, which is exact for a map that stands text over source text only.
+    /// </summary>
+    TextRange MapRangeFromSource(int sourceOffset, int sourceLength)
+    {
+        int start = MapFromSource(sourceOffset);
+        return new TextRange(start, Math.Max(0, MapFromSource(sourceOffset + sourceLength) - start));
+    }
 }
 
 public sealed class IdentityTextOffsetMap : ITextOffsetMap
@@ -104,6 +121,12 @@ internal sealed class ComposedTextOffsetMap(ITextOffsetMap sourceMap, ITextOffse
 
     public int MapFromSource(int sourceOffset)
         => projectedMap.MapFromSource(sourceMap.MapFromSource(sourceOffset));
+
+    public TextRange MapRangeFromSource(int sourceOffset, int sourceLength)
+    {
+        var inner = sourceMap.MapRangeFromSource(sourceOffset, sourceLength);
+        return projectedMap.MapRangeFromSource(inner.Start, inner.Length);
+    }
 }
 
 public readonly record struct TextProjectionContext(

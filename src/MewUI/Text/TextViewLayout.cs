@@ -636,18 +636,16 @@ public sealed class TextViewLayout : ITextViewLayout
             {
                 continue;
             }
-            int position = offsetMap.MapFromSource(elementOffset - logical.Offset);
-            int projectedEnd = offsetMap.MapFromSource(elementOffset - logical.Offset + element.DocumentLength);
+            var projectedSpan = offsetMap.MapRangeFromSource(
+                elementOffset - logical.Offset, element.DocumentLength);
             // Only the columns the element paints become the object; anything the projection left
             // beyond them is laid out as ordinary text, which is how a tab marker paints one glyph
-            // and still lets the tab reach its stop. An element standing at a position rather than
-            // over one has no source span to measure, so it paints its own columns.
-            int length = element.DocumentLength == 0
-                ? element.VisualLength
-                : Math.Min(projectedEnd - position, element.VisualLength);
-            if (position >= 0 && length > 0)
+            // and still lets the tab reach its stop.
+            int length = Math.Min(projectedSpan.Length, element.VisualLength);
+            if (projectedSpan.Start >= 0 && length > 0)
             {
-                inlines.Add(new InlineRun(position, length, element.Object, element.BreaksLine));
+                inlines.Add(new InlineRun(
+                    projectedSpan.Start, length, element.Object, element.BreaksLine));
             }
         }
         var transformContext = new TextLineTransformContext(logical, text.AsMemory(), _defaultStyle, offsetMap);
