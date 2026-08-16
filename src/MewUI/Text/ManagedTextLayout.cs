@@ -325,14 +325,22 @@ internal sealed class ManagedTextLayout : ITextLayout, IManagedTextLayoutData
         {
             return default;
         }
-        if (x >= bounds.Right)
+        var segments = line.FastSegments;
+        if (segments is null || segments.Count == 0)
         {
             return new CharacterHit(Snapshot.Text.Length, 0);
         }
-
-        var segment = FindFastPathSegment(line.FastSegments!, x);
-        var map = GetFastSegmentMap(segment);
+        var map = GetFastSegmentMap(FindFastPathSegment(segments, x));
         int[] boundaries = map.Boundaries;
+        if (x >= bounds.Right)
+        {
+            // The character the point is past, entered from its trailing edge, as the cluster path
+            // reports it. FirstCharacterIndex names the character a point falls in, so answering with
+            // the line end would make it round up where every other path rounds down.
+            int lastStart = boundaries.Length >= 2 ? boundaries[^2] : Snapshot.Text.Length;
+            return new CharacterHit(lastStart, Snapshot.Text.Length - lastStart);
+        }
+
         int low = 0;
         int high = boundaries.Length - 1;
         while (high - low > 1)
@@ -357,9 +365,11 @@ internal sealed class ManagedTextLayout : ITextLayout, IManagedTextLayoutData
         double trailingX = map.TryGetX(boundaries[high], out double cachedTrailing)
             ? cachedTrailing
             : GetFastPathX(line, boundaries[high]);
+        // The trailing half is said as a trailing length rather than the next boundary, so
+        // FirstCharacterIndex names the character the point is in and InsertionIndex still rounds.
         return x < leadingX + (trailingX - leadingX) * 0.5
             ? new CharacterHit(boundaries[low], 0)
-            : new CharacterHit(boundaries[high], 0);
+            : new CharacterHit(boundaries[low], boundaries[high] - boundaries[low]);
     }
 
     private double GetFastPathX(ManagedTextLine line, int insertion)
