@@ -289,8 +289,10 @@ public sealed class RectangleSelection : Selection
     /// </summary>
     private static double GetX(TextArea textArea, TextViewPosition position)
     {
-        var line = textArea.Document.GetLineByNumber(position.Line);
-        var visualLine = textArea.TextView.GetOrConstructVisualLine(line);
+        // By offset rather than by line: a line laid out in slices has to answer with the one the
+        // position stands in.
+        var visualLine = textArea.TextView.GetOrConstructVisualLine(
+            textArea.Document.GetOffset(position.Line, position.Column));
         if (visualLine is null)
         {
             return 0;
@@ -312,7 +314,7 @@ public sealed class RectangleSelection : Selection
         {
             int startColumn = visualLine.GetVisualColumn(new Point(_startX, 0), allowVirtualSpace: true);
             int endColumn = visualLine.GetVisualColumn(new Point(_endX, 0), allowVirtualSpace: true);
-            int baseOffset = visualLine.FirstDocumentLine.Offset;
+            int baseOffset = visualLine.StartOffset;
             _segments.Add(new SelectionSegment(
                 baseOffset + visualLine.GetRelativeOffset(startColumn),
                 startColumn,
@@ -324,15 +326,18 @@ public sealed class RectangleSelection : Selection
     /// <summary>
     /// The laid-out lines the rectangle crosses, each visited once. A collapsed folding puts several
     /// document lines on one laid-out line, so the walk steps by the line it just visited rather
-    /// than by one document line, as the original does.
+    /// than by one document line, as the original does. A line long enough to be laid out in slices
+    /// answers with the slice the rectangle's left edge falls in; a rectangle wide enough to reach
+    /// past that slice reads the rest of itself as virtual space, columns being a slice's own.
     /// </summary>
     private IEnumerable<VisualLine> CoveredLines()
     {
+        double left = Math.Min(_startX, _endX);
         int last = Math.Min(Math.Max(_startLine, _endLine), _document.LineCount);
         var line = _document.GetLineByNumber(Math.Min(_startLine, _endLine));
         while (line is not null && line.LineNumber <= last)
         {
-            var visualLine = TextArea.TextView.GetOrConstructVisualLine(line);
+            var visualLine = TextArea.TextView.GetOrConstructVisualLine(line, left);
             if (visualLine is null)
             {
                 line = line.NextLine;
@@ -353,7 +358,7 @@ public sealed class RectangleSelection : Selection
         foreach (var visualLine in CoveredLines())
         {
             int column = visualLine.GetVisualColumn(new Point(_endX, 0), allowVirtualSpace: true);
-            yield return (visualLine.FirstDocumentLine.Offset + visualLine.GetRelativeOffset(column), column);
+            yield return (visualLine.StartOffset + visualLine.GetRelativeOffset(column), column);
         }
     }
 

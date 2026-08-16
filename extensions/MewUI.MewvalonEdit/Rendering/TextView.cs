@@ -391,10 +391,24 @@ public sealed class TextView : MewObject, ITextEditorComponent
     /// A line long enough to be laid out in slices has more than one, so the offset being asked
     /// about decides which one comes back.
     /// </summary>
-    private VisualLine? GetOrConstructVisualLine(int documentOffset)
+    internal VisualLine? GetOrConstructVisualLine(int documentOffset)
     {
         var layout = Host.GetLineLayout(documentOffset);
         return layout is null ? null : Wrap(layout);
+    }
+
+    /// <summary>
+    /// The laid-out line of <paramref name="documentLine"/> holding <paramref name="x"/>. A line
+    /// long enough to be sliced answers with the slice that x falls in, found from the whole line's
+    /// coordinates so the parts outside the viewport are not laid out to look for it.
+    /// </summary>
+    internal VisualLine? GetOrConstructVisualLine(DocumentLine documentLine, double x)
+    {
+        ArgumentNullException.ThrowIfNull(documentLine);
+        var extent = Host.GetLineExtent(documentLine.Offset);
+        return extent is null
+            ? GetOrConstructVisualLine(documentLine.Offset)
+            : GetOrConstructVisualLine(extent.SourceOffset + extent.GetOffsetForX(x));
     }
 
     /// <summary>Document-space position of a text view position.</summary>
