@@ -113,6 +113,28 @@
   </ItemGroup>
 
   <!--
+    DevTools and profiler opt-in. On in Debug, off in Release, and never available in trimmed or
+    NativeAOT publishes: the property panel enumerates CLR members by reflection, so a trimmed
+    member list would silently lie. Setting <MewUIDevTools>true</MewUIDevTools> turns them on in
+    any non-trimmed configuration. Trim="true" hands the value to the trimmer as well as the
+    runtime, which is what lets ILLink.Substitutions.xml fold the gate to a constant.
+  -->
+  <PropertyGroup>
+    <MewUIDevTools Condition="'$(MewUIDevTools)' == '' And '$(Configuration)' == 'Debug'">true</MewUIDevTools>
+    <MewUIDevTools Condition="'$(MewUIDevTools)' == ''">false</MewUIDevTools>
+    <_MewUIDevToolsRefused Condition="'$(MewUIDevTools)' == 'true' And ('$(PublishAot)' == 'true' Or '$(PublishTrimmed)' == 'true')">true</_MewUIDevToolsRefused>
+    <MewUIDevTools Condition="'$(_MewUIDevToolsRefused)' == 'true'">false</MewUIDevTools>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.DevTools.Enabled" Value="$(MewUIDevTools)" Trim="true" />
+  </ItemGroup>
+
+  <Target Name="_MewUIWarnDevToolsUnavailable" BeforeTargets="Build" Condition="'$(_MewUIDevToolsRefused)' == 'true'">
+    <Warning Text="MewUIDevTools was requested but trimmed and NativeAOT publishes cannot host the DevTools; building without them." />
+  </Target>
+
+  <!--
     Binding path generator interceptors. The compiler only honours interceptors whose namespace is
     allow-listed, so opt the generated namespace in here rather than asking every app to do it.
     This must live in targets, not props: nuget.g.props is imported before the project body, where

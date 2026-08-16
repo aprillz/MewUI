@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aprillz.MewUI.Controls;
@@ -458,4 +457,3 @@ internal sealed class DebugPropertyPanel : UserControl
         }
     }
 }
-#endif

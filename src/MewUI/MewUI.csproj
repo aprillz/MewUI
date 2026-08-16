@@ -37,6 +37,13 @@
                       ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Lets the trimmer fold DevToolsGate.IsSupported to false, which drops the DevTools graph. -->
+  <ItemGroup>
+    <EmbeddedResource Include="ILLink.Substitutions.xml">
+      <LogicalName>ILLink.Substitutions.xml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <!-- Split platform hosts and rendering backends into separate assemblies -->
   <ItemGroup>
     <Compile Remove="Shared\**" />

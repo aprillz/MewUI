@@ -52,4 +52,8 @@
     <ProjectReference Include="..\..\..\src\MewUI.Platform.MacOS\MewUI.Platform.MacOS.csproj" />
     <ProjectReference Include="..\..\..\src\MewUI.Backend.MewVG.MacOS\MewUI.Backend.MewVG.MacOS.csproj" />
   </ItemGroup>
+
+  <!-- Package consumers always get this through buildTransitive, so the probe must too: it carries
+       the feature switches the trimmer needs to fold optional features away. -->
+  <Import Project="..\..\..\build\Aprillz.MewUI.targets" />
 </Project>

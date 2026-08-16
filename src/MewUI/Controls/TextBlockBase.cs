@@ -299,7 +299,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
 
         var bounds = Bounds;
         ITextLayout layout;
-        using (ProfilerMarkers.TextLayout.Auto())
+        using (DevToolsGate.IsSupported ? ProfilerMarkers.TextLayout.Auto() : default)
         {
             layout = GetOrCreateTextLayout(ResolveWrapping(), bounds.Width, bounds.Height);
         }
@@ -319,7 +319,7 @@ public abstract partial class TextBlockBase : TextElement, IDisposable
             ? ReadOnlyMemory<TextPaintSpan>.Empty
             : _paintSpans.ToArray();
 
-        using (ProfilerMarkers.TextDraw.Auto())
+        using (DevToolsGate.IsSupported ? ProfilerMarkers.TextDraw.Auto() : default)
         {
             var options = new TextDrawOptions(Foreground, spans, Owner: this);
             var origin = new Point(bounds.X, y);

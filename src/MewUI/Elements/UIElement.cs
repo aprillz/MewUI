@@ -500,7 +500,7 @@ public abstract partial class UIElement : Element
             MarkRendered();
         }
 
-        using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this))
+        using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Render, this) : default)
         {
             // Outside the cache branch: the cached bitmap is the element's own pixels, so fading it
             // here leaves the cache reusable while the opacity animates.

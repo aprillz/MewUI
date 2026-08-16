@@ -748,7 +748,6 @@ public abstract partial class Control : TextElement
         Style DeclaringStyle,
         StateTrigger? Trigger);
 
-#if DEBUG
     internal StyleCascadeTrace GetStyleCascadeTrace(MewProperty property)
     {
         ArgumentNullException.ThrowIfNull(property);
@@ -903,7 +902,6 @@ public abstract partial class Control : TextElement
             finalEntryIndex = entryIndex;
         }
     }
-#endif
 
     private static void CollectResolvedValues(
         Style? style,

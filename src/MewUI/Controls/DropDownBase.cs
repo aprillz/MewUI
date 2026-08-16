@@ -94,7 +94,7 @@ public abstract partial class DropDownBase : PopupOwnerBase
 
             ArrowForeground = Foreground;
             var profiler = PerformanceProfiler.Instance;
-            using (profiler.IsEnabled ? profiler.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this) : default)
+            using (DevToolsGate.IsSupported && profiler.IsEnabled ? profiler.SampleElement(typeof(DropDownBase), ProfilerSampleCategory.Render, this) : default)
             {
                 RenderHeaderContent(context, headerRect, innerHeaderRect);
             }

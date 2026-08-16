@@ -1,4 +1,3 @@
-#if DEBUG
 using Aprillz.MewUI.Controls;
 using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Text;
@@ -175,4 +174,3 @@ internal sealed class DebugInspectorOverlay : Control
     private static string FormatRect(Rect r)
         => $"[{r.X:0.#},{r.Y:0.#} {r.Width:0.#}x{r.Height:0.#}]";
 }
-#endif

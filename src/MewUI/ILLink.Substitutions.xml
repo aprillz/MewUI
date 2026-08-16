@@ -1,0 +1,12 @@
+<linker>
+  <!--
+    Conditional substitution: it applies only when the app sets the feature switch to false, so
+    <MewUIDevTools>true</MewUIDevTools> leaves the gate readable and keeps the DevTools graph.
+  -->
+  <assembly fullname="Aprillz.MewUI">
+    <type fullname="Aprillz.MewUI.Diagnostics.DevToolsGate">
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="false"
+              feature="Aprillz.MewUI.DevTools.Enabled" featurevalue="false" />
+    </type>
+  </assembly>
+</linker>

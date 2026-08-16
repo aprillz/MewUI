@@ -431,7 +431,7 @@ public abstract partial class Element : MewObject
         }
 
         Size measured;
-        using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Measure))
+        using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Measure) : default)
         {
             measured = MeasureCore(availableSize);
         }
@@ -468,7 +468,7 @@ public abstract partial class Element : MewObject
         }
 
         Bounds = arrangedRect;
-        using (PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Arrange))
+        using (DevToolsGate.IsSupported ? PerformanceProfiler.Instance.SampleElement(GetType(), ProfilerSampleCategory.Arrange) : default)
         {
             ArrangeCore(arrangedRect);
         }

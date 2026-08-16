@@ -292,9 +292,10 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     {
         _lastMousePositionDip = positionDip;
         _lastMouseScreenPositionPx = screenPositionPx;
-#if DEBUG
-        InvalidateInspectorOverlayIfHoverChanged();
-#endif
+        if (DevToolsGate.IsSupported)
+        {
+            InvalidateInspectorOverlayIfHoverChanged();
+        }
     }
 
     internal void ReevaluateMouseOver()
@@ -364,12 +365,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         _popupManager = new PopupManager(this);
         InitializeBitmapCacheDiagnostics();
 
-#if DEBUG
-        if (this is not DebugVisualTreeWindow)
+        // The tree window targets another window; giving it its own DevTools would nest them.
+        if (DevToolsGate.IsSupported && this is not DebugVisualTreeWindow)
         {
-            InitializeDebugDevTools();
+            _devTools = new WindowDevTools(this);
         }
-#endif
     }
 
     public AdornerLayer AdornerLayer { get; }
@@ -1908,8 +1908,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private void PerformLayoutCore()
     {
-        var profiler = PerformanceProfiler.Instance;
-        bool profiling = profiler.IsEnabled;
+        bool profiling = DevToolsGate.IsSupported && PerformanceProfiler.Instance.IsEnabled;
         long layoutStart = profiling ? Stopwatch.GetTimestamp() : 0;
         long measureTicks = 0;
         long arrangeTicks = 0;
@@ -2671,8 +2670,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     private void RenderFrameCore(IRenderTarget target, Size clientSize)
     {
-        var profiler = PerformanceProfiler.Instance;
-        var frameTiming = _excludeFromProfiler ? default : profiler.BeginFrame(_profilerSourceId);
+        var frameTiming = DevToolsGate.IsSupported && !_excludeFromProfiler
+            ? PerformanceProfiler.Instance.BeginFrame(_profilerSourceId)
+            : default;
+
+        // Reading the gate here lets the trimmer drop every marker and timing branch below it.
+        bool profiling = DevToolsGate.IsSupported && frameTiming.Enabled;
         long phaseStart;
 
         // Render surfaces are one-shot (different target instance per call).
@@ -2684,12 +2687,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         try
         {
-            phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-            using (frameTiming.Enabled ? ProfilerMarkers.BeginFrame.Auto() : default)
+            phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+            using (profiling ? ProfilerMarkers.BeginFrame.Auto() : default)
             {
                 context.BeginFrame(target);
             }
-            if (frameTiming.Enabled)
+            if (profiling)
             {
                 frameTiming.BeginFrameTicks += Stopwatch.GetTimestamp() - phaseStart;
             }
@@ -2706,8 +2709,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 clearColor = EffectiveOpaqueBackground;
             }
 
-            phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-            using (frameTiming.Enabled ? ProfilerMarkers.Clear.Auto() : default)
+            phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+            using (profiling ? ProfilerMarkers.Clear.Auto() : default)
             {
                 context.Clear(clearColor);
 
@@ -2717,7 +2720,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                     context.FillRectangle(new Rect(0, 0, clientSize.Width, clientSize.Height), Background);
                 }
             }
-            if (frameTiming.Enabled)
+            if (profiling)
             {
                 frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
             }
@@ -2736,8 +2739,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
             try
             {
-                phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-                using (frameTiming.Enabled ? ProfilerMarkers.ContentRender.Auto() : default)
+                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                using (profiling ? ProfilerMarkers.ContentRender.Auto() : default)
                 {
                     if (_hostedPortalRoot != null && _hostedPortalOrigin != default)
                     {
@@ -2753,66 +2756,64 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                         EffectiveVisualRoot?.Render(context);
                     }
                 }
-                if (frameTiming.Enabled)
+                if (profiling)
                 {
                     frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                 }
 
-                phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-                using (frameTiming.Enabled ? ProfilerMarkers.AdornerRender.Auto() : default)
+                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                using (profiling ? ProfilerMarkers.AdornerRender.Auto() : default)
                 {
                     for (int i = 0; i < _adorners.Count; i++)
                     {
                         var adorner = _adorners[i].Element;
-#if DEBUG
-                        if (ReferenceEquals(adorner, _performanceAdorner))
+
+                        // The performance monitor draws last so it can report this frame's own cost.
+                        if (DevToolsGate.IsSupported && ReferenceEquals(adorner, _devTools?.PerformanceAdorner))
                         {
                             continue;
                         }
-#endif
 
                         adorner.Render(context);
                     }
                 }
-                if (frameTiming.Enabled)
+                if (profiling)
                 {
                     frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                 }
 
-                phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-                using (frameTiming.Enabled ? ProfilerMarkers.PopupRender.Auto() : default)
+                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                using (profiling ? ProfilerMarkers.PopupRender.Auto() : default)
                 {
                     _popupManager.Render(context);
                 }
-                if (frameTiming.Enabled)
+                if (profiling)
                 {
                     frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                 }
 
-                phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-                using (frameTiming.Enabled ? ProfilerMarkers.OverlayRender.Auto() : default)
+                phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                using (profiling ? ProfilerMarkers.OverlayRender.Auto() : default)
                 {
                     OverlayLayer.Render(context);
                 }
-                if (frameTiming.Enabled)
+                if (profiling)
                 {
                     frameTiming.RenderBodyTicks += Stopwatch.GetTimestamp() - phaseStart;
                 }
 
-#if DEBUG
-                if (_performanceAdorner != null)
+                if (DevToolsGate.IsSupported && _devTools?.PerformanceAdorner is Adorner performanceAdorner)
                 {
-                    phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
-                    using (frameTiming.Enabled ? ProfilerMarkers.DevToolsRender.Auto() : default)
+                    phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
+                    using (profiling ? ProfilerMarkers.DevToolsRender.Auto() : default)
                     {
-                        _performanceAdorner.Render(context);
+                        performanceAdorner.Render(context);
                     }
-                    if (frameTiming.Enabled)
+                    if (profiling)
                     {
                         frameTiming.DevToolsTicks += Stopwatch.GetTimestamp() - phaseStart;
                     }
                 }
-#endif
             }
             finally
             {
@@ -2827,17 +2828,17 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             // EndFrame must run even if rendering throws so backend GPU/COM state is closed.
             // For oneShot contexts, Dispose must also run to return pooled collections.
-            phaseStart = frameTiming.Enabled ? Stopwatch.GetTimestamp() : 0;
+            phaseStart = profiling ? Stopwatch.GetTimestamp() : 0;
             try
             {
                 bool presentWait = Application.IsRunning && Application.Current.RenderLoopSettings.VSyncEnabled;
-                using (frameTiming.Enabled ? (presentWait ? ProfilerMarkers.Present.Auto() : ProfilerMarkers.EndFrame.Auto()) : default)
+                using (profiling ? (presentWait ? ProfilerMarkers.Present.Auto() : ProfilerMarkers.EndFrame.Auto()) : default)
                 {
                     context.EndFrame();
                 }
             }
             finally { if (oneShot) context.Dispose(); }
-            if (frameTiming.Enabled)
+            if (profiling)
             {
                 frameTiming.EndFrameTicks += Stopwatch.GetTimestamp() - phaseStart;
                 if (Application.IsRunning && Application.Current.RenderLoopSettings.VSyncEnabled)
@@ -2848,8 +2849,12 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             }
         }
 
-        profiler.CommitFrame(ref frameTiming, _lastLayoutPerformanceStats, LastFrameStats.DrawCalls, LastFrameStats.CullCount, LastFrameStats.PrimitiveStats);
-        LastFramePerformanceStats = profiler.LatestFrame;
+        if (DevToolsGate.IsSupported)
+        {
+            var profiler = PerformanceProfiler.Instance;
+            profiler.CommitFrame(ref frameTiming, _lastLayoutPerformanceStats, LastFrameStats.DrawCalls, LastFrameStats.CullCount, LastFrameStats.PrimitiveStats);
+            LastFramePerformanceStats = profiler.LatestFrame;
+        }
 
         if (!_firstFrameRenderedRaised)
         {
@@ -3266,14 +3271,11 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             FocusManager.ClearFocus();
         }
 
-#if DEBUG
-        DebugOnAfterMouseDownHitTest(positionInWindow, button, element);
-#endif
+        if (DevToolsGate.IsSupported)
+        {
+            _devTools?.OnAfterMouseDownHitTest(positionInWindow, button, element);
+        }
     }
-
-#if DEBUG
-    partial void DebugOnAfterMouseDownHitTest(Point positionInWindow, MouseButton button, UIElement? element);
-#endif
 
     internal void OnFocusChanged(UIElement? newFocusedElement)
         => _popupManager.RequestClosePopups(PopupCloseRequest.FocusChanged(newFocusedElement));

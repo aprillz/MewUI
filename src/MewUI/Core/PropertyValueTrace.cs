@@ -6,7 +6,6 @@ internal readonly record struct PropertyValueCandidateTrace(
     bool IsWinner,
     object? RawValue);
 
-#if DEBUG
 internal enum StyleCascadeLayer
 {
     FrameworkDefault,
@@ -52,7 +51,6 @@ internal readonly record struct StyleCascadeTrace(
         }
     }
 }
-#endif
 
 internal readonly record struct PropertyValueTrace(
     MewProperty Property,
