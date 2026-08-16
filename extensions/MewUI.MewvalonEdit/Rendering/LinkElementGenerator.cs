@@ -80,7 +80,7 @@ public class VisualLineLinkText : VisualLineText
 }
 
 /// <summary>Underlines URLs found in the document text.</summary>
-public class LinkElementGenerator : VisualLineElementGenerator
+public class LinkElementGenerator : VisualLineElementGenerator, IBuiltinElementGenerator
 {
     public static readonly Regex DefaultLinkRegex =
         new(@"\b(https?://|ftp://|www\.)[\w\d\._/\-~%@()+:?&=#!]*[\w\d/]", RegexOptions.CultureInvariant);
@@ -99,6 +99,12 @@ public class LinkElementGenerator : VisualLineElementGenerator
 
     /// <summary>Requires Ctrl+Click to follow generated links. Default true, as in AvalonEdit.</summary>
     public bool RequireControlModifierForClick { get; set; } = true;
+
+    void IBuiltinElementGenerator.FetchOptions(TextEditorOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        RequireControlModifierForClick = options.RequireControlModifierForHyperlinkClick;
+    }
 
     /// <summary>Builds the link element. Override to substitute a subclass, e.g. one intercepting navigation.</summary>
     protected virtual VisualLineLinkText CreateLinkElement(string text, int documentLength)

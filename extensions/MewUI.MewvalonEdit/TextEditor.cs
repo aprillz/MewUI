@@ -1234,39 +1234,28 @@ public class TextEditor : Control, ITextEditorComponent
     {
         SetBuiltInGenerator(
             ref _singleCharacterGenerator,
-            Options.ShowSpaces || Options.ShowTabs || Options.ShowBoxForControlCharacters,
-            () => new SingleCharacterElementGenerator(Options, this));
-        SetBuiltInGenerator(ref _linkGenerator, Options.EnableHyperlinks, static () => new LinkElementGenerator());
-        SetBuiltInGenerator(ref _mailLinkGenerator, Options.EnableEmailHyperlinks, static () => new MailLinkElementGenerator());
-        if (_linkGenerator is not null)
-        {
-            _linkGenerator.RequireControlModifierForClick = Options.RequireControlModifierForHyperlinkClick;
-        }
-        if (_mailLinkGenerator is not null)
-        {
-            _mailLinkGenerator.RequireControlModifierForClick = Options.RequireControlModifierForHyperlinkClick;
-        }
+            Options.ShowSpaces || Options.ShowTabs || Options.ShowEndOfLine
+                || Options.ShowBoxForControlCharacters);
+        SetBuiltInGenerator(ref _linkGenerator, Options.EnableHyperlinks);
+        SetBuiltInGenerator(ref _mailLinkGenerator, Options.EnableEmailHyperlinks);
     }
 
-    private void SetBuiltInGenerator<TGenerator>(
-        ref TGenerator? generator,
-        bool wanted,
-        Func<TGenerator> create)
-        where TGenerator : VisualLineElementGenerator
+    private void SetBuiltInGenerator<TGenerator>(ref TGenerator? generator, bool wanted)
+        where TGenerator : VisualLineElementGenerator, IBuiltinElementGenerator, new()
     {
-        if (wanted == (generator is not null))
+        if (wanted != (generator is not null))
         {
-            return;
+            if (wanted)
+            {
+                generator = new TGenerator();
+                ElementGenerators.Add(generator);
+            }
+            else
+            {
+                ElementGenerators.Remove(generator!);
+                generator = null;
+            }
         }
-        if (wanted)
-        {
-            generator = create();
-            ElementGenerators.Add(generator);
-        }
-        else
-        {
-            ElementGenerators.Remove(generator!);
-            generator = null;
-        }
+        ((IBuiltinElementGenerator?)generator)?.FetchOptions(Options);
     }
 }

@@ -3,6 +3,7 @@ using Aprillz.MewUI.MewvalonEdit;
 using Aprillz.MewUI.MewvalonEdit.Document;
 using Aprillz.MewUI.MewvalonEdit.Highlighting;
 using Aprillz.MewUI.MewvalonEdit.Rendering;
+using Aprillz.MewUI.Rendering;
 using Aprillz.MewUI.Text;
 
 namespace MewUI.MewvalonEdit.Test;
@@ -12,16 +13,31 @@ namespace MewUI.MewvalonEdit.Test;
 public sealed class WhitespaceAndThemeTests
 {
     /// <summary>
-    /// A space is stood in for by a marker glyph in its own colour, so it reads as whitespace rather
-    /// than as content. The original builds it as a single-character element too.
+    /// A space is stood in for by a marker glyph in its own color, so it reads as whitespace rather
+    /// than as content. The color is taken from the view on every paint, so a theme change reaches a
+    /// marker whose element was built under the previous one.
     /// </summary>
     [TestMethod]
     public void SpaceMarkersArePaintedInTheMarkerColor()
     {
-        var editor = new TextEditor { Text = "a b" };
-        editor.Options.ShowSpaces = true;
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
 
-        var element = ConstructSingleCharacterElement(editor, offset: 1);
+        var editor = new TextEditor { Text = "a b", ShowLineNumbers = false, SkipViewportCull = true };
+        editor.Options.ShowSpaces = true;
+        editor.Measure(new Size(320, 80));
+        editor.Arrange(new Rect(0, 0, 320, 80));
+
+        var factory = Application.DefaultGraphicsFactory;
+        using (var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(320, 80, 1)))
+        using (var context = factory.CreateContext(surface))
+        {
+            context.BeginFrame(surface);
+            editor.Render(context);
+            context.EndFrame();
+        }
+
+        var element = editor.TextArea.TextView
+            .GetOrConstructVisualLine(editor.Document.GetLineByNumber(1))!.Elements.SingleOrDefault();
 
         Assert.IsNotNull(element, "No element stood in for the space.");
         Assert.AreEqual(editor.WhitespaceMarkerColor, element.Foreground);

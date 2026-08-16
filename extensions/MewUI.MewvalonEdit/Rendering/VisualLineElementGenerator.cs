@@ -6,6 +6,15 @@ namespace Aprillz.MewUI.MewvalonEdit.Rendering;
 /// Replaces ranges of the document with elements that draw themselves. The scan protocol matches
 /// AvalonEdit: the builder asks each generator where it wants to act, then asks the winner to build.
 /// </summary>
+/// <summary>
+/// A generator the editor attaches on its own, which the editor keeps in step with the options it
+/// was attached for. A generator built by hand carries its own settings and never sees this.
+/// </summary>
+internal interface IBuiltinElementGenerator
+{
+    void FetchOptions(TextEditorOptions options);
+}
+
 public abstract class VisualLineElementGenerator
 {
     protected ITextRunConstructionContext? CurrentContext { get; private set; }

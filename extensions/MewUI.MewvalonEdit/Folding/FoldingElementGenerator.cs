@@ -8,10 +8,27 @@ namespace Aprillz.MewUI.MewvalonEdit.Folding;
 /// A <see cref="VisualLineElementGenerator"/> that produces line elements for folded
 /// <see cref="FoldingSection"/>s.
 /// </summary>
-public sealed class FoldingElementGenerator : VisualLineElementGenerator
+public sealed class FoldingElementGenerator : VisualLineElementGenerator, ITextViewConnect
 {
+    private readonly List<TextView> _textViews = [];
+
     /// <summary>The folding manager whose foldings are shown.</summary>
     public FoldingManager? FoldingManager { get; set; }
+
+    /// <summary>Views this generator is attached to, in the order they were added.</summary>
+    public IReadOnlyList<TextView> TextViews => _textViews;
+
+    void ITextViewConnect.AddToTextView(TextView textView)
+    {
+        ArgumentNullException.ThrowIfNull(textView);
+        _textViews.Add(textView);
+    }
+
+    void ITextViewConnect.RemoveFromTextView(TextView textView)
+    {
+        ArgumentNullException.ThrowIfNull(textView);
+        _textViews.Remove(textView);
+    }
 
     /// <inheritdoc/>
     public override int GetFirstInterestedOffset(int startOffset)
