@@ -84,6 +84,34 @@ internal sealed class ReplacementOffsetMap(ReplacementOffsetMap.Segment[] segmen
         return sourceOffset + delta;
     }
 
+    public TextRange MapRangeFromSource(int sourceOffset, int sourceLength)
+    {
+        int start = MapFromSource(sourceOffset);
+        return new TextRange(start, Math.Max(0, MapRangeEnd(sourceOffset + sourceLength) - start));
+    }
+
+    /// <summary>
+    /// Where a range ends, which is behind text the projection stands at that offset. A range of no
+    /// source length is the whole of that text rather than nothing.
+    /// </summary>
+    private int MapRangeEnd(int sourceOffset)
+    {
+        int delta = 0;
+        foreach (var segment in segments)
+        {
+            if (sourceOffset < segment.SourceStart)
+            {
+                break;
+            }
+            if (sourceOffset < segment.SourceStart + segment.SourceLength)
+            {
+                return segment.ProjectedStart + segment.ProjectedLength;
+            }
+            delta += segment.ProjectedLength - segment.SourceLength;
+        }
+        return sourceOffset + delta;
+    }
+
     public int MapToSource(int projectedOffset)
     {
         int delta = 0;
