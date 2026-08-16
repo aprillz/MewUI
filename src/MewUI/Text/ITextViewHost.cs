@@ -1,6 +1,47 @@
 namespace Aprillz.MewUI.Text;
 
 /// <summary>Contract of a control that presents a text document through the extension pipeline.</summary>
+/// <summary>
+/// A whole document line's coordinates, answered from the line's own estimate without laying it
+/// out. Speaks source offsets and x only: columns belong to a laid-out slice, and a line long
+/// enough to be sliced has no columns of its own until one is built.
+/// </summary>
+/// <remarks>
+/// The mapping keeps the width it was built with for as long as the line lives, so a slice laid out
+/// later does not move sideways as the view refines its estimates. <see cref="Width"/> can therefore
+/// differ from <see cref="ITextViewHost.ExtentWidth"/>. A document change invalidates the extent, so
+/// callers ask for it again rather than holding one.
+/// </remarks>
+public interface ITextLineExtent
+{
+    /// <summary>Document offset the line starts at.</summary>
+    int SourceOffset { get; }
+
+    /// <summary>Length of the line's text, excluding its delimiter.</summary>
+    int SourceLength { get; }
+
+    /// <summary>Width of the whole line, equal to <see cref="GetXForOffset"/> at its end.</summary>
+    double Width { get; }
+
+    /// <summary>
+    /// Whether the mappings are measured rather than estimated, which they are only where every
+    /// character of the line advances the same amount.
+    /// </summary>
+    bool IsExact { get; }
+
+    /// <summary>
+    /// Distance from the line's left edge to a line-relative source offset, which is clamped into
+    /// the line.
+    /// </summary>
+    double GetXForOffset(int sourceOffset);
+
+    /// <summary>
+    /// Line-relative source offset at a distance from the line's left edge, rounded down and
+    /// clamped into the line.
+    /// </summary>
+    int GetOffsetForX(double x);
+}
+
 public interface ITextViewHost
 {
     /// <summary>Document whose text the view presents.</summary>
@@ -40,6 +81,12 @@ public interface ITextViewHost
     /// answers meaningfully only once it has been given a width.
     /// </summary>
     TextLineLayout? GetLineLayout(int documentOffset);
+
+    /// <summary>
+    /// Coordinates of the whole line holding the offset, answered without laying it out. Null where
+    /// there is no line, or where the view wraps and so measures a line in rows rather than in x.
+    /// </summary>
+    ITextLineExtent? GetLineExtent(int documentOffset);
 
     /// <summary>Area the text is drawn into, excluding chrome.</summary>
     Rect TextViewportBounds { get; }

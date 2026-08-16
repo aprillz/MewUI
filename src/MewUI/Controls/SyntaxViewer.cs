@@ -285,6 +285,13 @@ public sealed partial class SyntaxViewer : Control, IVisualTreeHost, ITextViewHo
     }
 
     /// <inheritdoc/>
+    public ITextLineExtent? GetLineExtent(int documentOffset)
+    {
+        EnsureView();
+        return _view?.GetLineExtent(documentOffset);
+    }
+
+    /// <inheritdoc/>
     public double ExtentHeight
     {
         get

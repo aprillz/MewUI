@@ -384,6 +384,29 @@ public sealed class TextViewLayout : ITextViewLayout
     /// inside a collapsed range answers with the line that stands in for it. Null when the document
     /// has no lines.
     /// </summary>
+    /// <summary>
+    /// The whole line's coordinates, from its own estimate where it has one and from its laid-out
+    /// text where it is short enough not to need one.
+    /// </summary>
+    public ITextLineExtent? GetLineExtent(int documentOffset)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_document.LineCount == 0 || _paragraph.Wrapping != TextWrapping.NoWrap)
+        {
+            return null;
+        }
+
+        var source = _document.GetLineByOffset(Math.Clamp(documentOffset, 0, _document.TextLength));
+        var state = _states[source.LineNumber];
+        if (state.VirtualNoWrap is { } estimate)
+        {
+            return new EstimatedLineExtent(source.Offset, source.Length, estimate);
+        }
+
+        var layout = GetLineLayout(source.Offset);
+        return layout is null ? null : new LaidOutLineExtent(source.Offset, source.Length, layout);
+    }
+
     public TextLineLayout? GetLineLayout(int documentOffset)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -941,6 +964,45 @@ public sealed class TextViewLayout : ITextViewLayout
             state.Layout = null;
         }
         _materialized.Clear();
+    }
+
+    /// <summary>A sliced line's coordinates, which come from the estimate that chose the slices.</summary>
+    private sealed class EstimatedLineExtent(int sourceOffset, int sourceLength, VirtualNoWrapState estimate)
+        : ITextLineExtent
+    {
+        public int SourceOffset => sourceOffset;
+        public int SourceLength => sourceLength;
+        public double Width => GetXForOffset(sourceLength);
+        public bool IsExact => estimate.IsUniform;
+
+        public double GetXForOffset(int offset)
+            => estimate.GetXForOffset(Math.Clamp(offset, 0, sourceLength));
+
+        public int GetOffsetForX(double x) => Math.Clamp(estimate.GetOffsetForX(x), 0, sourceLength);
+    }
+
+    /// <summary>
+    /// A line short enough to be laid out whole, so its coordinates are the laid-out ones and exact.
+    /// </summary>
+    private sealed class LaidOutLineExtent(int sourceOffset, int sourceLength, TextLineLayout layout)
+        : ITextLineExtent
+    {
+        public int SourceOffset => sourceOffset;
+        public int SourceLength => sourceLength;
+        public double Width => GetXForOffset(sourceLength);
+        public bool IsExact => true;
+
+        public double GetXForOffset(int offset)
+            => layout.GetCaretBounds(
+                new CharacterHit(
+                    layout.MapSourceOffsetToProjected(Math.Clamp(offset, 0, sourceLength)),
+                    0)).X;
+
+        public int GetOffsetForX(double x)
+            => Math.Clamp(
+                layout.MapProjectedOffsetToSource(layout.HitTest(new Point(x, 0)).FirstCharacterIndex),
+                0,
+                sourceLength);
     }
 
     private sealed class LineState(double height)

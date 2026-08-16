@@ -568,6 +568,13 @@ public sealed partial class MultiLineTextBox : TextBase, IVisualTreeHost, ITextV
     }
 
     /// <inheritdoc/>
+    public ITextLineExtent? GetLineExtent(int documentOffset)
+    {
+        EnsureView();
+        return _view?.GetLineExtent(documentOffset);
+    }
+
+    /// <inheritdoc/>
     public double DefaultLineHeight
     {
         get
