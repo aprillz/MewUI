@@ -63,4 +63,29 @@ public sealed class RectangleSelectionSliceTests
         Assert.IsGreaterThan(0, startX);
         Assert.IsGreaterThan(startX, endX);
     }
+
+    /// <summary>
+    /// A rectangle wide enough that its two edges stand in different slices. Each edge is read where
+    /// it is, so the span between them is the text it covers rather than what one slice could see.
+    /// </summary>
+    [TestMethod]
+    public void ARectangleWiderThanASliceCoversTheTextBetweenItsEdges()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        string line = new string('x', LONG);
+        var editor = CreateEditor(line + "\n" + line);
+        var selection = new RectangleSelection(
+            editor.TextArea,
+            new TextViewPosition(1, 201, -1),
+            new TextViewPosition(2, 3501, -1));
+
+        var segments = selection.Segments.ToArray();
+        Assert.HasCount(2, segments);
+        foreach (var segment in segments)
+        {
+            Assert.AreEqual(3300, segment.Length,
+                $"The rectangle covered {segment.Length} characters instead of the 3300 between its edges.");
+        }
+    }
 }
