@@ -1,4 +1,5 @@
 using Aprillz.MewUI.Input;
+using Aprillz.MewUI.MewvalonEdit.Document;
 using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.MewvalonEdit.Rendering;
@@ -98,8 +99,13 @@ public class VisualLineElement
     /// <summary>Offset from the start of the visual line. Assigned while the line is built.</summary>
     public int RelativeTextOffset { get; internal set; }
 
-    /// <summary>Equal to <see cref="RelativeTextOffset"/>: this port maps visual columns onto line offsets.</summary>
-    public int VisualColumn => RelativeTextOffset;
+    /// <summary>
+    /// Where the element starts on the visual surface. Later than <see cref="RelativeTextOffset"/>
+    /// once an earlier element stands more columns in for its text. Assigned once the line's
+    /// projection is known, so it is not yet valid inside
+    /// <see cref="VisualLineElementGenerator.ConstructElement"/>.
+    /// </summary>
+    public int VisualColumn { get; internal set; }
 
     public VisualLineElementTextRunProperties TextRunProperties { get; } = new();
 
@@ -132,6 +138,43 @@ public class VisualLineElement
     /// <summary>
     /// Called before the element is painted, for appearance the view owns rather than the element.
     /// </summary>
+    /// <summary>
+    /// Next caret stop at or past <paramref name="visualColumn"/> inside this element, or -1 when it
+    /// offers none. The default makes an element atomic: the caret stops at its edges and never
+    /// inside it, which is what keeps it out of a folded region's placeholder.
+    /// </summary>
+    public virtual int GetNextCaretPosition(
+        int visualColumn, LogicalDirection direction, CaretPositioningMode mode)
+    {
+        int start = VisualColumn;
+        int end = VisualColumn + VisualLength;
+        bool stopsAtEnds = mode is not CaretPositioningMode.WordStart
+            and not CaretPositioningMode.WordStartOrSymbol;
+        if (direction == LogicalDirection.Backward)
+        {
+            if (visualColumn > end && stopsAtEnds)
+            {
+                return end;
+            }
+            if (visualColumn > start)
+            {
+                return start;
+            }
+        }
+        else
+        {
+            if (visualColumn < start)
+            {
+                return start;
+            }
+            if (visualColumn < end && stopsAtEnds)
+            {
+                return end;
+            }
+        }
+        return -1;
+    }
+
     protected internal virtual void PrepareForPaint(TextView textView)
     {
     }

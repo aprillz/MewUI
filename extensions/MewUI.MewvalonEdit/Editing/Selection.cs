@@ -76,11 +76,18 @@ public abstract class Selection
             {
                 return newText;
             }
-            int columnDiff = start.VisualColumn - visualLine.VisualLengthWithEndOfLineMarker;
+            // Measured to the end of the text, not of the laid-out line: the end-of-line marker
+            // holds a column now but moves along with what is typed, so counting it would leave the
+            // text one column short of where the caller aimed.
+            int columnDiff = start.VisualColumn - visualLine.VisualLength;
             if (columnDiff > 0)
             {
                 string additionalSpaces = string.Empty;
-                if (!TextArea.Options.ConvertTabsToSpaces && lineText.Trim('\t').Length == 0)
+                // An empty line has no indentation to continue, so it fills with spaces like a line
+                // that holds text does.
+                if (!TextArea.Options.ConvertTabsToSpaces
+                    && lineText.Length > 0
+                    && lineText.Trim('\t').Length == 0)
                 {
                     int tabCount = columnDiff / TextArea.Options.IndentationSize;
                     additionalSpaces = new string('\t', tabCount);

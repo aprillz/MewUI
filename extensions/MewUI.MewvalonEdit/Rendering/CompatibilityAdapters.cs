@@ -177,30 +177,27 @@ internal sealed class ElementGeneratorAdapter(TextEditor editor)
         }
 
         var scan = EnsureScanned(context.LogicalLine);
-        bool changesLength = false;
+        List<ReplacementProjection.Replacement>? replacements = null;
         foreach (var element in scan.Elements)
         {
             if (element.VisualLength != element.DocumentLength)
             {
-                changesLength = true;
-                break;
-            }
-        }
-        if (!changesLength)
-        {
-            return identity;
-        }
-
-        var replacements = new List<ReplacementProjection.Replacement>();
-        foreach (var element in scan.Elements)
-        {
-            if (element.VisualLength != element.DocumentLength)
-            {
+                replacements ??= new List<ReplacementProjection.Replacement>(scan.Elements.Count);
                 replacements.Add(new ReplacementProjection.Replacement(
                     element.RelativeTextOffset, element.DocumentLength, element.GetVisualText()));
             }
         }
-        return ReplacementProjection.Build(context.SourceText, replacements);
+
+        var projected = replacements is null
+            ? identity
+            : ReplacementProjection.Build(context.SourceText, replacements);
+        // The columns are only knowable once the projection is: an element that stands more columns
+        // in for its text pushes every element after it along.
+        foreach (var element in scan.Elements)
+        {
+            element.VisualColumn = projected.OffsetMap.MapFromSource(element.RelativeTextOffset);
+        }
+        return projected;
     }
 
     /// <inheritdoc/>
@@ -393,10 +390,12 @@ internal sealed class ElementGeneratorAdapter(TextEditor editor)
         // A caller that reaches these stages on its own still gets the elements.
         var context = new TextElementScanContext(editor.Document.CoreDocument, logical.Offset);
         int end = logical.Offset + logical.Length;
-        for (int offset = logical.Offset; offset < end;)
+        // The line end is asked about too: an element may stand there rather than over a character,
+        // which is where the end-of-line marker lives.
+        for (int offset = logical.Offset; offset <= end;)
         {
             int interested = GetFirstInterestedOffset(in context, offset);
-            if (interested < offset || interested >= end)
+            if (interested < offset || interested > end)
             {
                 break;
             }
@@ -430,7 +429,12 @@ internal sealed class ElementGeneratorAdapter(TextEditor editor)
         public InlineMetrics Measure() => element.Measure(editor.EditorDpi);
 
         public void Draw(ITextRenderContext context, Point origin)
-            => element.Draw(context, origin, editor.EditorDpi);
+        {
+            // Every paint, because the scan cache outlives a theme change: an element that took its
+            // color from the theme when it was built would keep the old one.
+            element.PrepareForPaint(editor.TextArea.TextView);
+            element.Draw(context, origin, editor.EditorDpi);
+        }
     }
 
 }

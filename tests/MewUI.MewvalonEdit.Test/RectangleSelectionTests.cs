@@ -1,6 +1,9 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.MewvalonEdit;
 using Aprillz.MewUI.MewvalonEdit.Editing;
+using Aprillz.MewUI.MewvalonEdit.Document;
+using Aprillz.MewUI.MewvalonEdit.Folding;
+using Aprillz.MewUI.Text;
 
 namespace MewUI.MewvalonEdit.Test;
 
@@ -102,6 +105,46 @@ public sealed class RectangleSelectionTests
         Assert.AreEqual("abcdXef\nab  X", editor.Text.ReplaceLineEndings("\n"));
     }
 
+    /// <summary>
+    /// The typed text lands where the rectangle stands whether or not the end-of-line marker is
+    /// shown. The marker holds a column while it is drawn but moves along with what is typed, so
+    /// counting it into the padding left the text one column short.
+    /// </summary>
+    [TestMethod]
+    public void ShowingTheEndOfLineMarkerDoesNotShortenThePadding()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var editor = CreateEditor("abcdef\nab\n");
+        editor.Options.ShowEndOfLine = true;
+        var selection = new RectangleSelection(
+            editor.TextArea, new TextViewPosition(1, 5, 4), new TextViewPosition(2, 3, 4));
+
+        selection.ReplaceSelectionWithText("X");
+
+        Assert.AreEqual("abcdXef\nab  X\n", editor.Text.ReplaceLineEndings("\n"));
+    }
+
+    /// <summary>
+    /// An empty line has no indentation to continue, so it is padded like a line that holds text.
+    /// A line that is tabs only keeps filling with tabs.
+    /// </summary>
+    [TestMethod]
+    public void AnEmptyLineIsPaddedWithSpacesAndATabLineWithTabs()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var editor = CreateEditor("abcdefgh\n\n\t");
+        Assert.IsFalse(editor.Options.ConvertTabsToSpaces, "The tab branch needs tabs to be kept.");
+        // The tab line reaches column 8's x at its own column 5, the tab standing for four columns.
+        var selection = new RectangleSelection(
+            editor.TextArea, new TextViewPosition(1, 9, 8), new TextViewPosition(3, 2, 5));
+
+        selection.ReplaceSelectionWithText("X");
+
+        Assert.AreEqual("abcdefghX\n        X\n\t\tX", editor.Text.ReplaceLineEndings("\n"));
+    }
+
     [TestMethod]
     public void AMultiLineReplacementDistributesItsLines()
     {
@@ -115,6 +158,77 @@ public sealed class RectangleSelectionTests
 
         Assert.AreEqual("ab11ef\ngh22kl\nmn33qr", editor.Text.ReplaceLineEndings("\n"));
         Assert.IsTrue(editor.TextArea.Selection.IsEmpty, "A block paste ends the selection.");
+    }
+
+    /// <summary>
+    /// A collapsed folding puts several document lines on one laid-out line. The rectangle covers
+    /// that line once, so the text lands once and the hidden lines are left alone.
+    /// </summary>
+    [TestMethod]
+    public void ACollapsedFoldingTakesTheInsertionOnce()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var editor = CreateEditor("aaaa\nbbbb {\ncccc\ndddd\n} eeee\nffff");
+        var manager = FoldingManager.Install(editor);
+        new BraceFoldingStrategy().UpdateFoldings(manager, editor.Document);
+        editor.Measure(new Size(400, 300));
+        editor.Arrange(new Rect(0, 0, 400, 300));
+        var folding = manager.AllFoldings.FirstOrDefault();
+        Assert.IsNotNull(folding, "The brace strategy found no folding to collapse.");
+        folding.IsFolded = true;
+        editor.Measure(new Size(400, 300));
+        editor.Arrange(new Rect(0, 0, 400, 300));
+
+        var selection = new RectangleSelection(
+            editor.TextArea, new TextViewPosition(1, 3, 2), new TextViewPosition(6, 3, 2));
+
+        selection.ReplaceSelectionWithText("XY");
+
+        Assert.AreEqual(
+            "aaXYaa\nbbXYbb {\ncccc\ndddd\n} eeee\nffXYff",
+            editor.Text.ReplaceLineEndings("\n"));
+    }
+
+    /// <summary>
+    /// The caret steps over a collapsed folding rather than into it. Walking the document text alone
+    /// mapped every hidden offset back onto the placeholder's first column, which left the caret
+    /// unable to pass the folding at all.
+    /// </summary>
+    [TestMethod]
+    public void TheCaretStepsOverACollapsedFolding()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("GDI backend is Windows-only."); return; }
+
+        var editor = CreateEditor("a {\nhidden one\nhidden two\n} b");
+        var manager = FoldingManager.Install(editor);
+        new BraceFoldingStrategy().UpdateFoldings(manager, editor.Document);
+        editor.Measure(new Size(400, 300));
+        editor.Arrange(new Rect(0, 0, 400, 300));
+        var folding = manager.AllFoldings.FirstOrDefault();
+        Assert.IsNotNull(folding);
+        folding.IsFolded = true;
+        editor.Measure(new Size(400, 300));
+        editor.Arrange(new Rect(0, 0, 400, 300));
+
+        var visualLine = editor.TextArea.TextView.GetOrConstructVisualLine(
+            editor.Document.GetLineByNumber(1));
+        Assert.IsNotNull(visualLine);
+
+        var stops = new List<int>();
+        int column = 0;
+        while (column >= 0 && stops.Count < 8)
+        {
+            stops.Add(column);
+            column = visualLine.GetNextCaretPosition(
+                column, LogicalDirection.Forward, CaretPositioningMode.Normal, allowVirtualSpace: false);
+        }
+
+        // "a { ... } b" lays out as "a ... b": the placeholder holds columns 2 to 4.
+        CollectionAssert.AreEqual(
+            new[] { 0, 1, 2, 5, 6, 7 },
+            stops,
+            $"The caret stopped at [{string.Join(", ", stops)}] instead of stepping over the placeholder.");
     }
 
     [TestMethod]

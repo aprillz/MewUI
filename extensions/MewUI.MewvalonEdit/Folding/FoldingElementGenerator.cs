@@ -60,7 +60,7 @@ public sealed class FoldingElementGenerator : VisualLineElementGenerator
             string title = foldingSection.Title ?? string.Empty;
             if (string.IsNullOrEmpty(title))
             {
-                title = "…";
+                title = "...";
             }
             return new FoldingLineElement(
                 foldingSection, title, foldedUntil - offset, CurrentContext!.DefaultStyle);

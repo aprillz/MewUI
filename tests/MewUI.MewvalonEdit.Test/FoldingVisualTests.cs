@@ -211,7 +211,7 @@ public sealed class FoldingVisualTests
 
         // The same glyph, in the same colour, with nothing drawn around it.
         int glyphOnly = CountPixelsColored(
-            RenderElement(BuildPlainEditor("…", marker)), new Rect(0, 0, WIDTH, HEIGHT), marker);
+            RenderElement(BuildPlainEditor("...", marker)), new Rect(0, 0, WIDTH, HEIGHT), marker);
 
         Assert.IsGreaterThan(glyphOnly, boxed, "The collapsed placeholder was not outlined.");
     }

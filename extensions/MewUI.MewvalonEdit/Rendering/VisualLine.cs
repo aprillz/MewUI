@@ -27,6 +27,14 @@ public sealed class VisualLine
 
     public DocumentLine FirstDocumentLine { get; }
 
+    /// <summary>
+    /// Last document line this one covers. Later than <see cref="FirstDocumentLine"/> where a
+    /// collapsed folding hid the lines in between, which is what a walk over document lines has to
+    /// skip past to visit each laid-out line once.
+    /// </summary>
+    public DocumentLine LastDocumentLine
+        => Document.GetLineByOffset(StartOffset + DocumentLength);
+
     /// <summary>Document this line was laid out from.</summary>
     public TextDocument Document => _textView.Document;
 
@@ -54,12 +62,11 @@ public sealed class VisualLine
     public IReadOnlyList<VisualTextLine> TextLines => _layout.VisualLines;
 
     /// <summary>
-    /// <see cref="VisualLength"/> plus the column of the end-of-line marker when the options show
-    /// one, as the original counts it. Virtual space starts at the column after this, so counting a
-    /// marker that is not shown pushed everything typed there one column short.
+    /// <see cref="VisualLength"/> plus the end-of-line marker's column when the options show one.
+    /// The laid-out line ends here, so virtual space starts at the column after it.
     /// </summary>
     public int VisualLengthWithEndOfLineMarker
-        => VisualLength + (_textView.Options.ShowEndOfLine && FirstDocumentLine.DelimiterLength > 0 ? 1 : 0);
+        => VisualLength + (_textView.Options.ShowEndOfLine && LastDocumentLine.NextLine is not null ? 1 : 0);
 
     /// <summary>First visual column of <paramref name="row"/>.</summary>
     public int GetTextLineVisualStartColumn(VisualTextLine row)
@@ -82,12 +89,18 @@ public sealed class VisualLine
             allowVirtualSpace = false;
         }
         int lineStart = StartOffset;
-        int lineEnd = StartOffset + FirstDocumentLine.Length;
+        // The laid-out range, not the first document line: a collapsed folding puts several document
+        // lines on this one, and a scan bounded by the first line's length would end inside it.
+        int lineEnd = StartOffset + DocumentLength;
         if (direction == LogicalDirection.Backward)
         {
             if (visualColumn > VisualLength)
             {
                 return allowVirtualSpace ? visualColumn - 1 : VisualLength;
+            }
+            if (StopFromElement(visualColumn, direction, mode) is int elementStop)
+            {
+                return elementStop;
             }
             int offset = lineStart + GetRelativeOffset(Math.Clamp(visualColumn, 0, VisualLength));
             int next = TextUtilities.GetNextCaretPosition(Document, offset, direction, mode);
@@ -109,6 +122,10 @@ public sealed class VisualLine
             {
                 return allowVirtualSpace ? visualColumn + 1 : -1;
             }
+            if (StopFromElement(visualColumn, direction, mode) is int elementStop)
+            {
+                return elementStop;
+            }
             int offset = lineStart + GetRelativeOffset(Math.Max(visualColumn, 0));
             int next = TextUtilities.GetNextCaretPosition(Document, offset, direction, mode);
             if (next >= lineStart && next <= lineEnd)
@@ -122,6 +139,26 @@ public sealed class VisualLine
             }
             return -1;
         }
+    }
+
+    /// <summary>
+    /// The stop the element covering <paramref name="visualColumn"/> gives, or null where no element
+    /// covers it and the document text answers instead. An element speaks for its own columns: a
+    /// folded region's placeholder stands for text the caret must step over rather than into.
+    /// </summary>
+    private int? StopFromElement(int visualColumn, LogicalDirection direction, CaretPositioningMode mode)
+    {
+        foreach (var element in Elements)
+        {
+            if (visualColumn < element.VisualColumn ||
+                visualColumn >= element.VisualColumn + element.VisualLength)
+            {
+                continue;
+            }
+            int stop = element.GetNextCaretPosition(visualColumn, direction, mode);
+            return stop < 0 ? null : stop;
+        }
+        return null;
     }
 
     /// <summary>
@@ -170,10 +207,10 @@ public sealed class VisualLine
             return row.Bounds.Right;
         }
         double x = _layout.DocumentX
-            + _layout.GetCaretBounds(new CharacterHit(Math.Min(visualColumn, VisualLength), 0)).X;
-        if (visualColumn > VisualLength)
+            + _layout.GetCaretBounds(new CharacterHit(Math.Min(visualColumn, VisualLengthWithEndOfLineMarker), 0)).X;
+        if (visualColumn > VisualLengthWithEndOfLineMarker)
         {
-            x += (visualColumn - VisualLength) * _textView.WideSpaceWidth;
+            x += (visualColumn - VisualLengthWithEndOfLineMarker) * _textView.WideSpaceWidth;
         }
         return x;
     }
@@ -238,10 +275,10 @@ public sealed class VisualLine
     public double GetVisualXPosition(int visualColumn)
     {
         double x = _layout.DocumentX
-            + _layout.GetCaretBounds(new CharacterHit(Math.Min(visualColumn, VisualLength), 0)).X;
-        if (visualColumn > VisualLength)
+            + _layout.GetCaretBounds(new CharacterHit(Math.Min(visualColumn, VisualLengthWithEndOfLineMarker), 0)).X;
+        if (visualColumn > VisualLengthWithEndOfLineMarker)
         {
-            x += (visualColumn - VisualLength) * _textView.WideSpaceWidth;
+            x += (visualColumn - VisualLengthWithEndOfLineMarker) * _textView.WideSpaceWidth;
         }
         return x;
     }
@@ -257,7 +294,9 @@ public sealed class VisualLine
         => CreatePosition(GetVisualColumn(documentPoint, allowVirtualSpace, out bool isAtEndOfLine), isAtEndOfLine);
 
     /// <summary>
-    /// Position at a document-space point, rounded down to the character the point is inside.
+    /// Position at a document-space point, rounded down to the character the point is inside. Past
+    /// the end of the line it truncates rather than rounds, so a point short of the next column
+    /// does not reach it.
     /// </summary>
     public TextViewPosition GetTextViewPositionFloor(Point documentPoint, bool allowVirtualSpace)
         => CreatePosition(
@@ -280,11 +319,23 @@ public sealed class VisualLine
     internal int GetVisualColumnFloor(Point documentPoint, bool allowVirtualSpace, out bool isAtEndOfLine)
     {
         var row = GetRowByY(documentPoint.Y);
-        int column = TryGetVirtualColumn(documentPoint, row, allowVirtualSpace, out int virtualColumn)
-            ? virtualColumn
-            : HitTest(documentPoint).FirstCharacterIndex;
-        isAtEndOfLine = column >= row.LogicalStart + row.LogicalLength;
-        return column;
+        double x = documentPoint.X - _layout.DocumentX;
+        if (x > row.Bounds.Width)
+        {
+            isAtEndOfLine = true;
+            if (allowVirtualSpace && ReferenceEquals(row, _layout.VisualLines[^1]))
+            {
+                // Truncated, not rounded: a floor may not answer with a column the point has not
+                // reached. This is the one place the two lookups part.
+                return VisualLengthWithEndOfLineMarker
+                    + (int)((x - row.Bounds.Width) / _textView.WideSpaceWidth);
+            }
+            // Past the row with nowhere to go, the row's end is the answer; the hit test would name
+            // the last character instead.
+            return row.LogicalStart + row.LogicalLength;
+        }
+        isAtEndOfLine = false;
+        return HitTest(documentPoint).FirstCharacterIndex;
     }
 
     private TextViewPosition CreatePosition(int visualColumn, bool isAtEndOfLine)
@@ -308,7 +359,7 @@ public sealed class VisualLine
         }
         int virtualColumns = (int)Math.Round(
             (x - row.Bounds.Width) / _textView.WideSpaceWidth, MidpointRounding.AwayFromZero);
-        visualColumn = VisualLength + virtualColumns;
+        visualColumn = VisualLengthWithEndOfLineMarker + virtualColumns;
         return true;
     }
 

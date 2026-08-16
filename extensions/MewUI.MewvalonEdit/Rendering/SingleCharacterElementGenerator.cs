@@ -13,6 +13,7 @@ internal sealed class SingleCharacterElementGenerator(TextEditorOptions options,
 {
     private const char SPACE_MARKER = '·';
     private const char TAB_MARKER = '»';
+    private const char END_OF_LINE_MARKER = '¶';
 
     public override int GetFirstInterestedOffset(int startOffset)
     {
@@ -30,7 +31,9 @@ internal sealed class SingleCharacterElementGenerator(TextEditorOptions options,
                 return offset;
             }
         }
-        return -1;
+        // The end-of-line marker stands at the line end rather than over a character, so it is asked
+        // for at the one offset the character scan above cannot reach.
+        return startOffset <= end && WantsEndOfLine(line) ? end : -1;
     }
 
     public override VisualLineElement? ConstructElement(int offset)
@@ -40,8 +43,18 @@ internal sealed class SingleCharacterElementGenerator(TextEditorOptions options,
         {
             return null;
         }
-        char character = context.Document.GetCharAt(offset);
         var style = new TextRunStyle(editor.FontFamily, editor.FontSize, editor.FontWeight);
+        var currentLine = context.CurrentDocumentLine;
+        if (offset == currentLine.Offset + currentLine.Length)
+        {
+            return WantsEndOfLine(currentLine)
+                ? new EndOfLineMarkerElement(END_OF_LINE_MARKER.ToString(), style)
+                {
+                    Foreground = editor.WhitespaceMarkerColor
+                }
+                : null;
+        }
+        char character = context.Document.GetCharAt(offset);
         if (character == ' ' && options.ShowSpaces)
         {
             return new WhitespaceMarkerElement(SPACE_MARKER.ToString(), " ", style)
@@ -73,6 +86,36 @@ internal sealed class SingleCharacterElementGenerator(TextEditorOptions options,
         '\t' => options.ShowTabs,
         _ => options.ShowBoxForControlCharacters && char.IsControl(character)
     };
+
+    // The last line of a document has no line after it, so it has no line end to mark.
+    private bool WantsEndOfLine(DocumentLine line) => options.ShowEndOfLine && line.NextLine is not null;
+}
+
+/// <summary>
+/// The end-of-line marker, standing at the line end rather than over a character: one visual column
+/// for no document text. The column is what keeps virtual space starting after the glyph instead of
+/// on top of it.
+/// </summary>
+internal sealed class EndOfLineMarkerElement(string glyph, TextRunStyle style)
+    : VisualLineElement(1, 0)
+{
+    protected internal override string GetVisualText() => glyph;
+
+    public override InlineMetrics Measure(uint dpi)
+    {
+        var layout = MarkerLayout.For(glyph, style, dpi);
+        return new InlineMetrics(
+            layout.MeasuredSize.Width,
+            layout.MeasuredSize.Height,
+            layout.Lines[0].Baseline);
+    }
+
+    public override void Draw(ITextRenderContext context, Point origin, uint dpi)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var options = new TextDrawOptions(Foreground ?? Color.FromRgb(0x80, 0x80, 0x80));
+        context.Draw(MarkerLayout.For(glyph, style, dpi), origin, in options);
+    }
 }
 
 /// <summary>

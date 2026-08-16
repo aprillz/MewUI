@@ -1,5 +1,6 @@
 using System.Text;
 using Aprillz.MewUI.MewvalonEdit.Document;
+using Aprillz.MewUI.MewvalonEdit.Rendering;
 
 namespace Aprillz.MewUI.MewvalonEdit.Editing;
 
@@ -307,17 +308,8 @@ public sealed class RectangleSelection : Selection
 
     private void CalculateSegments()
     {
-        // The original walks visual lines and skips folded spans through LastDocumentLine; the
-        // collapsed-line skip arrives with the folding integration.
-        int first = Math.Min(_startLine, _endLine);
-        int last = Math.Max(_startLine, _endLine);
-        for (int lineNumber = first; lineNumber <= last && lineNumber <= _document.LineCount; lineNumber++)
+        foreach (var visualLine in CoveredLines())
         {
-            var visualLine = TextArea.TextView.GetOrConstructVisualLine(_document.GetLineByNumber(lineNumber));
-            if (visualLine is null)
-            {
-                continue;
-            }
             int startColumn = visualLine.GetVisualColumn(new Point(_startX, 0), allowVirtualSpace: true);
             int endColumn = visualLine.GetVisualColumn(new Point(_endX, 0), allowVirtualSpace: true);
             int baseOffset = visualLine.FirstDocumentLine.Offset;
@@ -330,21 +322,36 @@ public sealed class RectangleSelection : Selection
     }
 
     /// <summary>
+    /// The laid-out lines the rectangle crosses, each visited once. A collapsed folding puts several
+    /// document lines on one laid-out line, so the walk steps by the line it just visited rather
+    /// than by one document line, as the original does.
+    /// </summary>
+    private IEnumerable<VisualLine> CoveredLines()
+    {
+        int last = Math.Min(Math.Max(_startLine, _endLine), _document.LineCount);
+        var line = _document.GetLineByNumber(Math.Min(_startLine, _endLine));
+        while (line is not null && line.LineNumber <= last)
+        {
+            var visualLine = TextArea.TextView.GetOrConstructVisualLine(line);
+            if (visualLine is null)
+            {
+                line = line.NextLine;
+                continue;
+            }
+            yield return visualLine;
+            line = visualLine.LastDocumentLine.NextLine;
+        }
+    }
+
+    /// <summary>
     /// Where a caret belongs on each line the rectangle crosses: the moving edge, which is the one
     /// the caret was walked to. A column past the end of its line has no character, so the offset is
     /// the line's end and the column says how far past it the caret stands.
     /// </summary>
     internal IEnumerable<(int Offset, int VisualColumn)> CaretEdges()
     {
-        int first = Math.Min(_startLine, _endLine);
-        int last = Math.Max(_startLine, _endLine);
-        for (int lineNumber = first; lineNumber <= last && lineNumber <= _document.LineCount; lineNumber++)
+        foreach (var visualLine in CoveredLines())
         {
-            var visualLine = TextArea.TextView.GetOrConstructVisualLine(_document.GetLineByNumber(lineNumber));
-            if (visualLine is null)
-            {
-                continue;
-            }
             int column = visualLine.GetVisualColumn(new Point(_endX, 0), allowVirtualSpace: true);
             yield return (visualLine.FirstDocumentLine.Offset + visualLine.GetRelativeOffset(column), column);
         }

@@ -73,6 +73,12 @@ internal sealed class ReplacementOffsetMap(ReplacementOffsetMap.Segment[] segmen
             {
                 return segment.ProjectedStart;
             }
+            // Text standing at a source position rather than over one leaves that position in front
+            // of it, so the caret at the end of a line stays before an end-of-line marker.
+            if (segment.SourceLength == 0 && sourceOffset == segment.SourceStart)
+            {
+                return segment.ProjectedStart;
+            }
             delta += segment.ProjectedLength - segment.SourceLength;
         }
         return sourceOffset + delta;

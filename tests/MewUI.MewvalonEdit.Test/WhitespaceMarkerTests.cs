@@ -67,6 +67,35 @@ public sealed class WhitespaceMarkerTests
     }
 
     /// <summary>
+    /// An element knows where it stands on the visual surface, not where its text starts. A tab
+    /// marker stands two columns in for one character, so everything after it sits one column
+    /// further along than its offset.
+    /// </summary>
+    [TestMethod]
+    public void AnElementAfterATabMarkerKnowsItsShiftedColumn()
+    {
+        RequireWindows();
+        var editor = CreateEditor("\ta b", static options =>
+        {
+            options.ShowTabs = true;
+            options.ShowSpaces = true;
+        });
+        editor.Measure(new Size(WIDTH, HEIGHT));
+        editor.Arrange(new Rect(0, 0, WIDTH, HEIGHT));
+
+        var visualLine = editor.TextArea.TextView.GetOrConstructVisualLine(
+            editor.Document.GetLineByNumber(1));
+        Assert.IsNotNull(visualLine);
+        Assert.HasCount(2, visualLine.Elements, "Expected a tab marker and a space marker.");
+
+        Assert.AreEqual(0, visualLine.Elements[0].RelativeTextOffset);
+        Assert.AreEqual(0, visualLine.Elements[0].VisualColumn, "The tab marker starts the line.");
+        Assert.AreEqual(2, visualLine.Elements[1].RelativeTextOffset);
+        Assert.AreEqual(3, visualLine.Elements[1].VisualColumn,
+            "The space marker sits one column past its offset, the tab marker holding two columns.");
+    }
+
+    /// <summary>
     /// The marker takes the width of the space it stands in for at every density. Measuring its own
     /// glyph instead let the two round apart above 100%, which moved the rest of the line whenever
     /// the markers were turned on.
