@@ -4,6 +4,14 @@
 
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $script:SettingsPath = Join-Path $env:LOCALAPPDATA 'MewUI\release.json'
+
+# What a release writes, and so what it stages. A change here is either about to be made again or was
+# left by a run that stopped partway, which is why the worktree check ignores it.
+$script:ReleasePaths = @(
+    'build/MewUI.Common.props',
+    'samples/FBASample',
+    'tools/aot-size/release-sizes.json',
+    'docs/assets')
 $script:PropsPath = Join-Path $script:RepoRoot 'build\MewUI.Common.props'
 $script:SizeToolDir = Join-Path $script:RepoRoot 'tools\aot-size'
 $script:FbaSyncProject = Join-Path $script:RepoRoot 'tools\fba-sync\FbaSync.csproj'
@@ -55,8 +63,9 @@ function Set-DeclaredVersion {
 }
 
 <#
-    What a release needs of this machine: main, with nothing uncommitted and no tag of that name.
-    Nothing here reaches origin, so preparing works offline.
+    What a release needs of this machine: main, and no tag of that name. Nothing here reaches origin,
+    so preparing works offline. Whether anything is uncommitted is the publish step's question, since
+    preparing is what writes and commits in the first place.
 #>
 function Assert-ReleasableWorktree {
     param([string] $Tag)
@@ -64,11 +73,6 @@ function Assert-ReleasableWorktree {
     $branch = (Invoke-Git rev-parse --abbrev-ref HEAD).Trim()
     if ($branch -ne 'main') {
         throw "Releases are cut from main; this worktree is on $branch."
-    }
-
-    $dirty = Invoke-Git status --porcelain --untracked-files=no
-    if ($dirty) {
-        throw "The working tree has uncommitted changes:`n$dirty"
     }
 
     $existing = & git -C $script:RepoRoot tag --list $Tag

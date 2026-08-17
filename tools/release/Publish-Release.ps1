@@ -27,6 +27,14 @@ $tag = "v$Version"
 Write-Step "Checking the repository"
 
 Assert-ReleasableWorktree -Tag $tag
+
+# Everything a release writes was committed by the prepare step, so anything left here was not part
+# of it and would be pushed without having been looked at.
+$dirty = Invoke-Git status --porcelain --untracked-files=no
+if ($dirty) {
+    throw "The working tree has uncommitted changes:`n$dirty"
+}
+
 Assert-OriginReady -Tag $tag
 
 Write-Step "Checking what was prepared"

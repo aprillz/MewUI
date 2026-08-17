@@ -88,13 +88,7 @@ if ($SkipSizeChecks) {
 Write-Step "Committing what the tag has to contain"
 
 if (Invoke-Git status --porcelain --untracked-files=no) {
-    # The size data and its charts are in: measuring them needs the version this release sets, so an
-    # update made just before belongs in this commit rather than one of its own.
-    Invoke-Git add `
-        build/MewUI.Common.props `
-        samples/FBASample `
-        tools/aot-size/release-sizes.json `
-        docs/assets | Out-Null
+    Invoke-Git add @script:ReleasePaths | Out-Null
     if (Invoke-Git diff --cached --name-only) {
         Invoke-Git commit -m "Bump MewUIVersion to $Version" | Out-Null
         Write-Host "  committed $((Invoke-Git rev-parse --short HEAD).Trim())"
