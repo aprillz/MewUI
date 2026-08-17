@@ -54,12 +54,16 @@ function Get-DeclaredVersion {
     return $node.InnerText.Trim()
 }
 
+# Edited as text rather than as XML: saving a parsed document rewrites the whole file, which drops the
+# blank lines it is laid out with and turns its LF endings into CRLF.
 function Set-DeclaredVersion {
     param([string] $Version)
-    $props = [xml](Get-Content -LiteralPath $script:PropsPath -Raw)
-    $node = $props.SelectSingleNode('/Project/PropertyGroup/MewUIVersion')
-    $node.InnerText = $Version
-    $props.Save($script:PropsPath)
+    $text = [IO.File]::ReadAllText($script:PropsPath)
+    $updated = $text -replace '<MewUIVersion>[^<]*</MewUIVersion>', "<MewUIVersion>$Version</MewUIVersion>"
+    if ($updated -eq $text) {
+        throw "MewUIVersion is missing from $script:PropsPath."
+    }
+    [IO.File]::WriteAllText($script:PropsPath, $updated, [Text.UTF8Encoding]::new($false))
 }
 
 <#
