@@ -1516,14 +1516,20 @@ internal sealed class X11WindowBackend : IWindowBackend
                 break;
 
             case FocusIn:
-                SetWindowActive(true);
-                _inputMethod?.OnFocusIn();
-                UpdateImeCursorRect();
+                if (IsRealFocusChange(ev.xfocus))
+                {
+                    SetWindowActive(true);
+                    _inputMethod?.OnFocusIn();
+                    UpdateImeCursorRect();
+                }
                 break;
 
             case FocusOut:
-                SetWindowActive(false);
-                _inputMethod?.OnFocusOut();
+                if (IsRealFocusChange(ev.xfocus))
+                {
+                    SetWindowActive(false);
+                    _inputMethod?.OnFocusOut();
+                }
                 break;
 
             case PropertyNotify:
@@ -2752,6 +2758,22 @@ internal sealed class X11WindowBackend : IWindowBackend
 
     public void EnsureTheme(bool isDark)
     {
+    }
+
+    /// <summary>Whether a focus event reports this window gaining or losing the keyboard, not a grab.</summary>
+    private static bool IsRealFocusChange(in XFocusChangeEvent e)
+    {
+        // A keyboard grab (the window manager's switcher, a menu) brackets itself with focus events the
+        // window did not actually change focus for; a focus change during one arrives as
+        // NotifyWhileGrabbed. NotifyPointer reports where the pointer is, and NotifyInferior a child
+        // that is still part of this window.
+        const int NotifyNormal = 0;
+        const int NotifyInferior = 2;
+        const int NotifyWhileGrabbed = 3;
+        const int NotifyPointer = 5;
+
+        return e.mode is NotifyNormal or NotifyWhileGrabbed
+            && e.detail is not (NotifyInferior or NotifyPointer);
     }
 
     private void SetWindowActive(bool active)
