@@ -211,6 +211,7 @@ internal static class GdiConstants
     public const uint CLEARTYPE_NATURAL_QUALITY = 6;
 
     // Glyph outline
+    public const uint GGO_METRICS = 0;
     public const uint GGO_NATIVE = 2;
     public const uint GGO_BEZIER = 3;
     public const uint GGO_UNHINTED = 0x100; // OR with format - disables grid-fit hinting

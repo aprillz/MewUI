@@ -57,10 +57,30 @@ internal sealed partial class GdiFont : FontBase, IGlyphOutlineFont
         Ascent = tm.tmAscent / dpiScale;
         Descent = tm.tmDescent / dpiScale;
         InternalLeading = tm.tmInternalLeading / dpiScale;
-        // GDI TEXTMETRIC doesn't expose cap height directly.
-        // Approximate: pure ascent (without internal leading) → cap height + overshoot.
-        // ~92% of pure ascent is a reasonable cap height approximation.
-        CapHeight = (tm.tmAscent - tm.tmInternalLeading) * 0.92 / dpiScale;
+        CapHeight = ResolveCapHeight(in tm, dpiScale);
+    }
+
+    /// <summary>Cap height in device-independent units.</summary>
+    private unsafe double ResolveCapHeight(in TEXTMETRIC tm, double dpiScale)
+    {
+        // TEXTMETRIC carries no cap height. Loading a flat-sided capital through the hinting the text
+        // will be drawn with reports where the rasterizer puts the cap line, which is what a box
+        // trimmed to that line has to agree with. The ratio below stands in for faces with no outline:
+        // it is a guess, and one measured at 0.67 rather than 0.92 on families whose ascent runs tall.
+        EnsureOutlineDc();
+        if (_outlineDc != 0)
+        {
+            var matrix = MAT2.Identity;
+            GLYPHMETRICS metrics;
+            if (GetGlyphOutlineW(_outlineDc, 'H', GdiConstants.GGO_METRICS, &metrics, 0, null, &matrix)
+                    != 0xFFFFFFFF
+                && metrics.gmptGlyphOrigin.y > 0)
+            {
+                return metrics.gmptGlyphOrigin.y / dpiScale;
+            }
+        }
+
+        return (tm.tmAscent - tm.tmInternalLeading) * 0.92 / dpiScale;
     }
 
     /// <summary>Internal leading in pixels (for use by rasterizers operating in pixel space).</summary>

@@ -31,16 +31,6 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
                 double heightPx = (long)metrics.height / 64.0;
                 double dpiScale = pixelHeight > 0 ? pixelHeight / size : 1.0;
 
-                // FT_Size_Metrics reports hhea, which several families set tight against their caps:
-                // the URW base35 fonts leave 0.035em above the cap line, so their text sat against the
-                // top of every line box. The other platforms lay out with the OS/2 metrics below, so
-                // preferring those also makes one font measure the same everywhere.
-                if (TryGetLineMetrics(face.Face, in metrics, out double os2AscentPx, out double os2DescentPx))
-                {
-                    ascentPx = os2AscentPx;
-                    descentPx = os2DescentPx;
-                }
-
                 Ascent = ascentPx / dpiScale;
                 Descent = descentPx / dpiScale;
                 InternalLeading = Math.Max(0, (heightPx - ascentPx - descentPx) / dpiScale);
@@ -107,21 +97,10 @@ internal sealed class FreeTypeFont : FontBase, IGlyphOutlineFont
         double dpiScale,
         double ascent)
     {
-        var os2 = (TT_OS2*)FT.FT_Get_Sfnt_Table(face, FreeTypeSfntTags.FT_SFNT_OS2);
-        if (os2 != null && os2->version != ushort.MaxValue && os2->version >= 2 && os2->sCapHeight > 0)
-        {
-            // y_scale maps font units to 26.6 pixels. Preserve fractional precision instead
-            // of using the integer-rounded FT_Size_Metrics ascender.
-            double capHeightPx = os2->sCapHeight * (long)metrics.y_scale / 65536.0 / 64.0;
-            if (capHeightPx > 0)
-            {
-                return capHeightPx / dpiScale;
-            }
-        }
-
-        // Older and non-SFNT fonts have no sCapHeight. A flat-sided capital is a more faithful
-        // cap-line probe than an ascent ratio and reflects the active size's hinting.
-        if (FT.FT_Load_Char(face, 'H', FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_NO_BITMAP) == 0)
+        // Loaded with the flags FreeTypeText rasterizes with, so the cap line sits where the glyphs are
+        // drawn. The ascent and line height above come from the same grid-fitted metrics, which is what
+        // lets a box trimmed to this cap line land on a whole pixel row.
+        if (FT.FT_Load_Char(face, 'H', FreeTypeLoad.FT_LOAD_DEFAULT | FreeTypeLoad.FT_LOAD_TARGET_LIGHT) == 0)
         {
             var faceRec = (FT_FaceRec*)face;
             if (faceRec->glyph != 0)
