@@ -88,7 +88,9 @@ if ($SkipSizeChecks) {
 Write-Step "Committing what the tag has to contain"
 
 if (Invoke-Git status --porcelain --untracked-files=no) {
-    Invoke-Git add @script:ReleasePaths | Out-Null
+    # -u stages what actually changed among tracked files and nothing else. Naming a path outright
+    # would also fail on build/MewUI.Common.props, which sits under the rule that ignores build output.
+    Invoke-Git add -u -- @script:ReleasePaths | Out-Null
     if (Invoke-Git diff --cached --name-only) {
         Invoke-Git commit -m "Bump MewUIVersion to $Version" | Out-Null
         Write-Host "  committed $((Invoke-Git rev-parse --short HEAD).Trim())"
