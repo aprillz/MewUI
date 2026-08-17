@@ -27,6 +27,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM --- Build the previewer; Core bundles it and cannot reference the project (it references Core) ---
+echo Building previewer ...
+dotnet build "%ROOT%\src\MewUI.Preview\MewUI.Preview.csproj" -c Release /nr:false
+if errorlevel 1 (
+  echo FAILED: previewer build
+  exit /b 1
+)
+
 REM --- Individual packages (src) ---
 set PROJECTS=^
   src\MewUI\MewUI.csproj^

@@ -44,6 +44,35 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!-- Framework-wide build policy. Core carries it because every MewUI package depends on Core,
+       so the feature switches and the generator's interceptor namespace reach a consumer whatever
+       combination of packages it references. -->
+  <ItemGroup>
+    <None Include="..\..\build\$(MewUITitle).Core.targets" Link="buildTransitive\$(MewUITitle).Core.targets"
+          Pack="true" PackagePath="buildTransitive\" Visible="false" />
+  </ItemGroup>
+
+  <!-- Editor preview session support. The preview assembly ships inside this package (never as a
+       package dependency) so the framework/previewer pair cannot version-skew, and it is referenced
+       only when the MEWUI_PREVIEW environment variable is set. MewUI.Preview references this project,
+       so build order comes from pack_mewui.cmd building it first rather than from a ProjectReference;
+       _MewUIRequirePreviewAssemblies below turns a missing build into a pack failure. -->
+  <ItemGroup>
+    <None Include="..\..\build\MewUIPreview.targets" Link="buildTransitive\MewUIPreview.targets"
+          Pack="true" PackagePath="buildTransitive\" Visible="false" />
+    <None Include="..\..\build\MewUIPreviewInit.cs" Link="buildTransitive\MewUIPreviewInit.cs"
+          Pack="true" PackagePath="buildTransitive\" Visible="false" />
+    <None Include="..\MewUI.Preview\bin\$(Configuration)\net8.0\$(MewUITitle).Preview.dll"
+          Pack="true" PackagePath="buildTransitive\preview\net8.0\" Visible="false" />
+    <None Include="..\MewUI.Preview\bin\$(Configuration)\net10.0\$(MewUITitle).Preview.dll"
+          Pack="true" PackagePath="buildTransitive\preview\net10.0\" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="_MewUIRequirePreviewAssemblies" BeforeTargets="Pack">
+    <Error Condition="!Exists('..\MewUI.Preview\bin\$(Configuration)\net8.0\$(MewUITitle).Preview.dll') Or !Exists('..\MewUI.Preview\bin\$(Configuration)\net10.0\$(MewUITitle).Preview.dll')"
+           Text="Build src\MewUI.Preview for both target frameworks before packing; the package must carry the previewer for IDE preview sessions." />
+  </Target>
+
   <!-- Split platform hosts and rendering backends into separate assemblies -->
   <ItemGroup>
     <Compile Remove="Shared\**" />

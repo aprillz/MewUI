@@ -1,0 +1,69 @@
+<Project>
+
+  <!--
+    Framework-wide build policy, carried by Aprillz.MewUI.Core so every consumer gets it, whatever
+    combination of MewUI packages it references. The metapackage targets carry only the publish
+    filtering that their own bundling makes necessary.
+  -->
+
+  <PropertyGroup>
+    <_MewUICoreTargetsImported>true</_MewUICoreTargetsImported>
+  </PropertyGroup>
+
+  <!--
+    Hot Reload opt-out. MewUI auto-registers a MetadataUpdateHandler in its own assembly, so
+    Hot Reload works with no app declaration under `dotnet watch`. Setting
+    <MewUIHotReload>false</MewUIHotReload> emits an AppContext switch that disables the handler
+    at runtime (the assembly attribute is baked into MewUI.dll and cannot be removed by MSBuild).
+  -->
+  <ItemGroup Condition="'$(MewUIHotReload)' == 'false'">
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.HotReload.Enabled" Value="false" Trim="false" />
+  </ItemGroup>
+
+  <!--
+    DevTools and profiler opt-in. On in Debug, off in Release, and never available in trimmed or
+    NativeAOT publishes: the property panel enumerates CLR members by reflection, so a trimmed
+    member list would silently lie. Setting <MewUIDevTools>true</MewUIDevTools> turns them on in
+    any non-trimmed configuration. Trim="true" hands the value to the trimmer as well as the
+    runtime, which is what lets ILLink.Substitutions.xml fold the gate to a constant.
+  -->
+  <PropertyGroup>
+    <MewUIDevTools Condition="'$(MewUIDevTools)' == '' And '$(Configuration)' == 'Debug'">true</MewUIDevTools>
+    <MewUIDevTools Condition="'$(MewUIDevTools)' == ''">false</MewUIDevTools>
+    <!-- Only a publish trims, so an app that declares PublishAot still runs the tools under
+         `dotnet run`. Refusing at build time would take them away from every debug session of an
+         app that merely intends to publish AOT later. -->
+    <_MewUIDevToolsRefused Condition="'$(MewUIDevTools)' == 'true' And '$(_IsPublishing)' == 'true' And ('$(PublishAot)' == 'true' Or '$(PublishTrimmed)' == 'true')">true</_MewUIDevToolsRefused>
+    <MewUIDevTools Condition="'$(_MewUIDevToolsRefused)' == 'true'">false</MewUIDevTools>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.DevTools.Enabled" Value="$(MewUIDevTools)" Trim="true" />
+  </ItemGroup>
+
+  <Target Name="_MewUIWarnDevToolsUnavailable" BeforeTargets="Publish" Condition="'$(_MewUIDevToolsRefused)' == 'true'">
+    <Warning Text="MewUIDevTools was requested but trimmed and NativeAOT publishes cannot host the DevTools; publishing without them." />
+  </Target>
+
+  <!--
+    Binding path generator interceptors. The compiler only honours interceptors whose namespace is
+    allow-listed, so opt the generated namespace in here rather than asking every app to do it.
+    This must live in targets, not props: nuget.g.props is imported before the project body, where
+    $(TargetFramework) is not yet set. Csc reads both properties, and MS first-party generators
+    still use the Preview one, so setting both covers every SDK and Roslyn combination.
+
+    The property is set unconditionally. Repo samples import this file from the project body, which
+    runs before the SDK infers $(TargetFrameworkIdentifier), so testing that value here silently
+    skips the injection and the build fails with CS9137.
+  -->
+  <PropertyGroup>
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Aprillz.MewUI.Generated</InterceptorsPreviewNamespaces>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Aprillz.MewUI.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
+
+  <!-- Editor preview session composition (see agent/preview-tooling/plan.md section 4.2). -->
+  <Import Project="$(MSBuildThisFileDirectory)MewUIPreview.targets"
+          Condition="'$(_MewUIPreviewTargetsImported)' != 'true' and Exists('$(MSBuildThisFileDirectory)MewUIPreview.targets')" />
+
+</Project>
