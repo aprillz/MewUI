@@ -10,6 +10,7 @@ partial class GalleryView : UserControl
 
     // All card borders, so the global "Cached" toggle can flip BitmapCache on every card at once.
     private readonly List<Border> _cardBorders = new();
+    private bool _cardsCached;
 
     protected override Element? OnBuild() => BuildNavigationShell();
 
@@ -158,7 +159,6 @@ partial class GalleryView : UserControl
     {
         var border = new Border()
             .MinWidth(minWidth)
-            .CornerRadius(10)
             .Child(
                 new StackPanel()
                     .Vertical()
@@ -171,14 +171,29 @@ partial class GalleryView : UserControl
                         content
                     ));
         _cardBorders.Add(border);
+        // Pages are built the first time they are navigated to, so a card created while the toggle is
+        // already on would otherwise stay uncached until the toggle is flipped again.
+        if (_cardsCached)
+        {
+            border.CacheMode = new BitmapCache();
+        }
+
         return border;
     }
 
     /// <summary>Globally turns BitmapCache on/off for every card (debug toggle).</summary>
     public void SetCardsCached(bool cached)
     {
+        if (_cardsCached == cached)
+        {
+            return;
+        }
+
+        _cardsCached = cached;
         foreach (var border in _cardBorders)
         {
+            // Assigning a fresh BitmapCache to a card that already has one would drop its bitmap and
+            // make it capture again, so only a real change reaches the cards.
             border.CacheMode = cached ? new BitmapCache() : null;
         }
     }
