@@ -37,19 +37,7 @@ $tag = "v$Version"
 Write-Step "Checking the repository"
 
 Assert-ReleasableWorktree -Tag $tag
-
-# origin has to be reachable and level with main before anything is generated: preparing on a branch
-# that is behind produces a commit that cannot be pushed without a merge.
-Invoke-Git fetch origin main --quiet | Out-Null
-$local = (Invoke-Git rev-parse HEAD).Trim()
-$remote = (Invoke-Git rev-parse origin/main).Trim()
-if ($local -ne $remote) {
-    $ahead = (Invoke-Git rev-list --count origin/main..HEAD).Trim()
-    $behind = (Invoke-Git rev-list --count HEAD..origin/main).Trim()
-    throw "main and origin/main differ ($ahead ahead, $behind behind). Push or pull before preparing."
-}
-
-Write-Host "  main is $local and matches origin/main"
+Assert-NotBehindOrigin
 
 Write-Step "Checking the version"
 

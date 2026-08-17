@@ -27,17 +27,7 @@ $tag = "v$Version"
 Write-Step "Checking the repository"
 
 Assert-ReleasableWorktree -Tag $tag
-Invoke-Git fetch origin main --quiet | Out-Null
-
-# main may be ahead of origin here, which is the whole point, but it must not be behind or the push
-# would need a merge that nobody reviewed.
-$behind = (Invoke-Git rev-list --count HEAD..origin/main).Trim()
-if ($behind -ne '0') {
-    throw "main is $behind commits behind origin/main. Pull and prepare again."
-}
-
-$ahead = (Invoke-Git rev-list --count origin/main..HEAD).Trim()
-Write-Host "  main is $ahead commits ahead of origin/main"
+Assert-NotBehindOrigin
 
 Write-Step "Checking what was prepared"
 

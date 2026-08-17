@@ -87,6 +87,21 @@ function Assert-ReleasableWorktree {
 }
 
 <#
+    Being ahead of origin is fine and usual: the release commit is made here and the publish step
+    pushes the branch before the tag, so origin/main ends up holding the tag either way. Being behind
+    is not, because the push would then need a merge that nobody reviewed.
+#>
+function Assert-NotBehindOrigin {
+    Invoke-Git fetch origin main --quiet | Out-Null
+    $behind = (Invoke-Git rev-list --count HEAD..origin/main).Trim()
+    if ($behind -ne '0') {
+        throw "main is $behind commits behind origin/main. Pull first."
+    }
+    $ahead = (Invoke-Git rev-list --count origin/main..HEAD).Trim()
+    Write-Host "  main is $ahead commits ahead of origin/main"
+}
+
+<#
     Rebuilds the file-based gallery sample into a scratch file and reports whether the committed one
     still matches, which is how the publish step tells that nothing drifted after preparation.
 #>
