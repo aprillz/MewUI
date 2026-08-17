@@ -13,8 +13,9 @@ obj/
 [Ll]ogFiles/
 [Dd]ebug*/
 [Rr]elease*/
-# Release tooling, which the build-output rule above would otherwise swallow
-!tools/release/
+# Release tooling and shared MSBuild files, which the build-output rules above would otherwise swallow
+!/tools/release/
+!/build/
 
 # User-specific files
 *.rsuser
