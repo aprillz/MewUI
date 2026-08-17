@@ -110,13 +110,16 @@ function Assert-OriginReady {
     repository: a host name and a checkout path belong to whoever is releasing, not to the branch.
     Returns the arguments for Update-ReleaseSizes.ps1, or null when there is no such file.
 
+    Only what has no usable default belongs in it. The Mac user, its checkout and dotnet path, the
+    sandbox it builds in, and the WSL checkout all derive from the machine or the repository already.
+    The port is here because the measurement passes it to ssh and scp itself, which overrides whatever
+    an ssh config alias says.
+
     %LOCALAPPDATA%\MewUI\release.json
     {
-        "WslDistribution": "Ubuntu",
-        "WslRepo": "/home/me/MewUI",
+        "WslDistribution": "Ubuntu-24.04",
         "MacHost": "mac.local",
-        "MacUser": "me",
-        "MacRepo": "/Users/me/Dev/MewUI"
+        "MacPort": 22
     }
 #>
 function Get-ReleaseSettings {
@@ -126,9 +129,9 @@ function Get-ReleaseSettings {
 
     $json = Get-Content -LiteralPath $script:SettingsPath -Raw | ConvertFrom-Json
     $settings = @{}
-    foreach ($name in 'WslDistribution', 'WslRepo', 'MacHost', 'MacUser', 'MacRepo', 'MacDotNet', 'MacSandbox') {
+    foreach ($name in 'WslDistribution', 'WslRepo', 'MacHost', 'MacPort', 'MacUser', 'MacRepo', 'MacDotNet', 'MacSandbox') {
         $value = $json.$name
-        if (-not [string]::IsNullOrWhiteSpace($value)) {
+        if ($null -ne $value -and -not [string]::IsNullOrWhiteSpace([string] $value)) {
             $settings[$name] = $value
         }
     }
