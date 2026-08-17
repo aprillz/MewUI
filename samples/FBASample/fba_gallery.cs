@@ -1255,7 +1255,7 @@ partial class GalleryView
                     },
                     bind: (view, item, _, ctx) =>
                     {
-                        SetSegmentIcon(ctx.Get<PathShape>("icon"), item.Icon);
+                        BindNamedIcon(ctx.Get<PathShape>("icon"), item.Icon);
                         ctx.Get<TextBlock>("label").Text = item.Label;
                     });
 
@@ -1265,21 +1265,17 @@ partial class GalleryView
                 .Items(items, x => x.Label)
                 .ItemTemplate<SegmentItem>(
                     build: _ => SegmentIconShape(16).Center(),
-                    bind: (view, item, _, _) => SetSegmentIcon((PathShape)view, item.Icon));
+                    bind: (view, item, _, _) => BindNamedIcon((PathShape)view, item.Icon));
 
-        // Command-owned icon: each presenter gets a fresh visual while the frozen geometry is shared.
+        // Command-owned icon: each presenter gets a fresh visual, and the icon is looked up when that
+        // visual is created rather than here, so a late-arriving icon dictionary still reaches it.
         static IconTemplate CommandIcon(string name)
-        {
-            var geometry = SegmentIcon(name);
-            geometry.Freeze();
-            return new IconTemplate(size =>
+            => new IconTemplate(size =>
             {
                 var icon = SegmentIconShape(size.Dip);
-                icon.Data = geometry;
-                ApplyIconViewBox(icon, geometry);
+                BindNamedIcon(icon, name);
                 return icon;
             });
-        }
 
         // The card is the command scope: every drop-down below registers on it, so one panel owns the
         // handlers, the gate and the shortcut map.
@@ -3281,7 +3277,7 @@ partial class GalleryView
                         bind: (view, item) =>
                         {
                             view.Data = item.Geometry;
-                            ApplyIconViewBox(view, item.Geometry);
+                            view.ViewBox = IconViewBox(item.Geometry);
                         }),
 
                 new GridViewColumn<IconItem>()
@@ -5476,7 +5472,7 @@ partial class GalleryView
                                         },
                                         bind: (view, item, _, ctx) =>
                                         {
-                                            SetSegmentIcon(ctx.Get<PathShape>("icon"), item.Icon);
+                                            BindNamedIcon(ctx.Get<PathShape>("icon"), item.Icon);
                                             ctx.Get<TextBlock>("label").Text = item.Label;
                                         })
                                     .SelectedIndex(0)),
@@ -5498,7 +5494,7 @@ partial class GalleryView
                                         v => v.Label)
                                     .ItemTemplate<SegmentItem>(
                                         build: _ => SegmentIconShape(16).Center(),
-                                        bind: (view, item, _, _) => SetSegmentIcon((PathShape)view, item.Icon))
+                                        bind: (view, item, _, _) => BindNamedIcon((PathShape)view, item.Icon))
                                     .SelectedIndex(1)),
 
                         // One segment enabled via binding (PrepareContainer + BindIsEnabled).
@@ -5686,27 +5682,12 @@ partial class GalleryView
         return shape;
     }
 
-    private static PathGeometry SegmentIcon(string name)
-    {
-        var all = IconResource.GetAll(Resources.Icons.Value);
-        var entry = Array.Find(all, e => e.Name == name);
-        return PathGeometry.Parse(entry?.PathData ?? FALLBACK_ICON);
-    }
-
-    /// <summary>Puts an icon on a shape with the design grid it was drawn on.</summary>
-    private static void SetSegmentIcon(PathShape shape, string name)
-    {
-        var geometry = SegmentIcon(name);
-        shape.Data = geometry;
-        ApplyIconViewBox(shape, geometry);
-    }
-
     // The icon set is drawn on standard grids and the resource carries no metadata, so the grid is the
     // smallest standard one that covers the ink. Handing that to ViewBox keeps the margin the designer
     // left: stretching to the ink instead scales every icon by however tightly it happens to be drawn.
     private static readonly double[] _iconGrids = [16, 20, 24, 28, 32, 48];
 
-    private static void ApplyIconViewBox(PathShape shape, PathGeometry geometry)
+    private static Rect IconViewBox(PathGeometry geometry)
     {
         var ink = geometry.GetBounds();
         double extent = Math.Max(ink.Right, ink.Bottom);
@@ -5715,12 +5696,11 @@ partial class GalleryView
         {
             if (extent <= grid)
             {
-                shape.ViewBox = new Rect(0, 0, grid, grid);
-                return;
+                return new Rect(0, 0, grid, grid);
             }
         }
 
-        shape.ViewBox = new Rect(0, 0, extent, extent);
+        return new Rect(0, 0, extent, extent);
     }
 }
 
@@ -6251,17 +6231,12 @@ partial class GalleryView
     private FrameworkElement ToolBarPage()
     {
         static IconTemplate Icon(string name)
-        {
-            var geometry = SegmentIcon(name);
-            geometry.Freeze();
-            return new IconTemplate(size =>
+            => new IconTemplate(size =>
             {
                 var shape = SegmentIconShape(size.Dip);
-                shape.Data = geometry;
-                ApplyIconViewBox(shape, geometry);
+                BindNamedIcon(shape, name);
                 return shape;
             });
-        }
 
         var notified = new List<Command>();
         var silent = new List<Command>();
@@ -8374,27 +8349,64 @@ partial class GalleryView : UserControl
     private static PathShape IconShape(string name)
     {
         var icon = new PathShape { Stretch = Stretch.Uniform };
-        ApplyNamedIcon(icon, name);
-
-        // The host may still be fetching the dictionary; refill the same element once it lands.
-        Resources.Icons.Changed += () => ApplyNamedIcon(icon, name);
+        BindNamedIcon(icon, name);
 
         icon.Bind(Shape.FillProperty, icon, TextElement.ForegroundProperty,
             (Color color) => (Brush)new SolidColorBrush(color));
         return icon;
     }
 
-    /// <summary>Puts the named icon on a shape, falling back to a placeholder while unavailable.</summary>
-    private static void ApplyNamedIcon(PathShape icon, string name)
+    /// <summary>One icon's geometry and the design grid it was drawn on.</summary>
+    private sealed record NamedIcon(PathGeometry Geometry, Rect ViewBox);
+
+    // One value per requested name. The dictionary can arrive after the shapes exist, and item templates
+    // recycle their shapes, so the shapes bind to these instead of being refilled by hand.
+    private static readonly Dictionary<string, ObservableValue<NamedIcon>> _namedIcons = new();
+
+    /// <summary>Binds a shape to a named icon, so a late-arriving dictionary reaches it.</summary>
+    private static void BindNamedIcon(PathShape shape, string name)
+    {
+        var icon = NamedIconValue(name);
+        shape.Bind(PathShape.DataProperty, icon, x => x.Geometry);
+
+        // Without the design grid, Uniform fits the ink, so an icon drawn with room around it comes out
+        // larger than one drawn to the edges even though both sit in the same 16 DIP slot.
+        shape.Bind(Shape.ViewBoxProperty, icon, x => (Rect?)x.ViewBox);
+    }
+
+    private static ObservableValue<NamedIcon> NamedIconValue(string name)
+    {
+        if (_namedIcons.TryGetValue(name, out var existing))
+        {
+            return existing;
+        }
+
+        if (_namedIcons.Count == 0)
+        {
+            Resources.Icons.Changed += () =>
+            {
+                foreach (var pair in _namedIcons)
+                {
+                    pair.Value.Value = ReadNamedIcon(pair.Key);
+                }
+            };
+        }
+
+        var icon = new ObservableValue<NamedIcon>(ReadNamedIcon(name));
+        _namedIcons.Add(name, icon);
+        return icon;
+    }
+
+    /// <summary>Reads one icon from the dictionary, standing in the placeholder while it is unavailable.</summary>
+    private static NamedIcon ReadNamedIcon(string name)
     {
         var all = IconResource.GetAll(Resources.Icons.Value);
         var entry = Array.Find(all, x => x.Name == name);
         var geometry = PathGeometry.Parse(entry?.PathData ?? FALLBACK_ICON);
-        icon.Data = geometry;
 
-        // Without the design grid, Uniform fits the ink, so an icon drawn with room around it comes out
-        // larger than one drawn to the edges even though both sit in the same 16 DIP slot.
-        ApplyIconViewBox(icon, geometry);
+        // Shared by every shape bound to this name, so it must not be mutated afterwards.
+        geometry.Freeze();
+        return new NamedIcon(geometry, IconViewBox(geometry));
     }
 
     public GalleryView(Window window)
@@ -8499,7 +8511,7 @@ static class ResourceImageExtensions
     /// <summary>Binds an image to a host-filled resource box, which may still be empty.</summary>
     public static Image BindSource(this Image image, ObservableValue<IImageSource?> resource)
     {
-        image.SetBinding(Image.SourceProperty, resource, BindingMode.OneWay);
+        image.SetBinding(Image.SourceProperty, resource);
         return image;
     }
 }

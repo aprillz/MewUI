@@ -202,7 +202,7 @@ partial class GalleryView
                                         },
                                         bind: (view, item, _, ctx) =>
                                         {
-                                            SetSegmentIcon(ctx.Get<PathShape>("icon"), item.Icon);
+                                            BindNamedIcon(ctx.Get<PathShape>("icon"), item.Icon);
                                             ctx.Get<TextBlock>("label").Text = item.Label;
                                         })
                                     .SelectedIndex(0)),
@@ -224,7 +224,7 @@ partial class GalleryView
                                         v => v.Label)
                                     .ItemTemplate<SegmentItem>(
                                         build: _ => SegmentIconShape(16).Center(),
-                                        bind: (view, item, _, _) => SetSegmentIcon((PathShape)view, item.Icon))
+                                        bind: (view, item, _, _) => BindNamedIcon((PathShape)view, item.Icon))
                                     .SelectedIndex(1)),
 
                         // One segment enabled via binding (PrepareContainer + BindIsEnabled).
@@ -412,27 +412,12 @@ partial class GalleryView
         return shape;
     }
 
-    private static PathGeometry SegmentIcon(string name)
-    {
-        var all = IconResource.GetAll(Resources.Icons.Value);
-        var entry = Array.Find(all, e => e.Name == name);
-        return PathGeometry.Parse(entry?.PathData ?? FALLBACK_ICON);
-    }
-
-    /// <summary>Puts an icon on a shape with the design grid it was drawn on.</summary>
-    private static void SetSegmentIcon(PathShape shape, string name)
-    {
-        var geometry = SegmentIcon(name);
-        shape.Data = geometry;
-        ApplyIconViewBox(shape, geometry);
-    }
-
     // The icon set is drawn on standard grids and the resource carries no metadata, so the grid is the
     // smallest standard one that covers the ink. Handing that to ViewBox keeps the margin the designer
     // left: stretching to the ink instead scales every icon by however tightly it happens to be drawn.
     private static readonly double[] _iconGrids = [16, 20, 24, 28, 32, 48];
 
-    private static void ApplyIconViewBox(PathShape shape, PathGeometry geometry)
+    private static Rect IconViewBox(PathGeometry geometry)
     {
         var ink = geometry.GetBounds();
         double extent = Math.Max(ink.Right, ink.Bottom);
@@ -441,11 +426,10 @@ partial class GalleryView
         {
             if (extent <= grid)
             {
-                shape.ViewBox = new Rect(0, 0, grid, grid);
-                return;
+                return new Rect(0, 0, grid, grid);
             }
         }
 
-        shape.ViewBox = new Rect(0, 0, extent, extent);
+        return new Rect(0, 0, extent, extent);
     }
 }

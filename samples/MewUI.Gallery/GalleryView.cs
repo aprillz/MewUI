@@ -84,27 +84,64 @@ partial class GalleryView : UserControl
     private static PathShape IconShape(string name)
     {
         var icon = new PathShape { Stretch = Stretch.Uniform };
-        ApplyNamedIcon(icon, name);
-
-        // The host may still be fetching the dictionary; refill the same element once it lands.
-        Resources.Icons.Changed += () => ApplyNamedIcon(icon, name);
+        BindNamedIcon(icon, name);
 
         icon.Bind(Shape.FillProperty, icon, TextElement.ForegroundProperty,
             (Color color) => (Brush)new SolidColorBrush(color));
         return icon;
     }
 
-    /// <summary>Puts the named icon on a shape, falling back to a placeholder while unavailable.</summary>
-    private static void ApplyNamedIcon(PathShape icon, string name)
+    /// <summary>One icon's geometry and the design grid it was drawn on.</summary>
+    private sealed record NamedIcon(PathGeometry Geometry, Rect ViewBox);
+
+    // One value per requested name. The dictionary can arrive after the shapes exist, and item templates
+    // recycle their shapes, so the shapes bind to these instead of being refilled by hand.
+    private static readonly Dictionary<string, ObservableValue<NamedIcon>> _namedIcons = new();
+
+    /// <summary>Binds a shape to a named icon, so a late-arriving dictionary reaches it.</summary>
+    private static void BindNamedIcon(PathShape shape, string name)
+    {
+        var icon = NamedIconValue(name);
+        shape.Bind(PathShape.DataProperty, icon, x => x.Geometry);
+
+        // Without the design grid, Uniform fits the ink, so an icon drawn with room around it comes out
+        // larger than one drawn to the edges even though both sit in the same 16 DIP slot.
+        shape.Bind(Shape.ViewBoxProperty, icon, x => (Rect?)x.ViewBox);
+    }
+
+    private static ObservableValue<NamedIcon> NamedIconValue(string name)
+    {
+        if (_namedIcons.TryGetValue(name, out var existing))
+        {
+            return existing;
+        }
+
+        if (_namedIcons.Count == 0)
+        {
+            Resources.Icons.Changed += () =>
+            {
+                foreach (var pair in _namedIcons)
+                {
+                    pair.Value.Value = ReadNamedIcon(pair.Key);
+                }
+            };
+        }
+
+        var icon = new ObservableValue<NamedIcon>(ReadNamedIcon(name));
+        _namedIcons.Add(name, icon);
+        return icon;
+    }
+
+    /// <summary>Reads one icon from the dictionary, standing in the placeholder while it is unavailable.</summary>
+    private static NamedIcon ReadNamedIcon(string name)
     {
         var all = IconResource.GetAll(Resources.Icons.Value);
         var entry = Array.Find(all, x => x.Name == name);
         var geometry = PathGeometry.Parse(entry?.PathData ?? FALLBACK_ICON);
-        icon.Data = geometry;
 
-        // Without the design grid, Uniform fits the ink, so an icon drawn with room around it comes out
-        // larger than one drawn to the edges even though both sit in the same 16 DIP slot.
-        ApplyIconViewBox(icon, geometry);
+        // Shared by every shape bound to this name, so it must not be mutated afterwards.
+        geometry.Freeze();
+        return new NamedIcon(geometry, IconViewBox(geometry));
     }
 
     public GalleryView(Window window)

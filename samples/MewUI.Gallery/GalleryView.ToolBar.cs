@@ -7,17 +7,12 @@ partial class GalleryView
     private FrameworkElement ToolBarPage()
     {
         static IconTemplate Icon(string name)
-        {
-            var geometry = SegmentIcon(name);
-            geometry.Freeze();
-            return new IconTemplate(size =>
+            => new IconTemplate(size =>
             {
                 var shape = SegmentIconShape(size.Dip);
-                shape.Data = geometry;
-                ApplyIconViewBox(shape, geometry);
+                BindNamedIcon(shape, name);
                 return shape;
             });
-        }
 
         var notified = new List<Command>();
         var silent = new List<Command>();

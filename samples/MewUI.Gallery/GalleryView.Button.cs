@@ -30,7 +30,7 @@ partial class GalleryView
                     },
                     bind: (view, item, _, ctx) =>
                     {
-                        SetSegmentIcon(ctx.Get<PathShape>("icon"), item.Icon);
+                        BindNamedIcon(ctx.Get<PathShape>("icon"), item.Icon);
                         ctx.Get<TextBlock>("label").Text = item.Label;
                     });
 
@@ -40,21 +40,17 @@ partial class GalleryView
                 .Items(items, x => x.Label)
                 .ItemTemplate<SegmentItem>(
                     build: _ => SegmentIconShape(16).Center(),
-                    bind: (view, item, _, _) => SetSegmentIcon((PathShape)view, item.Icon));
+                    bind: (view, item, _, _) => BindNamedIcon((PathShape)view, item.Icon));
 
-        // Command-owned icon: each presenter gets a fresh visual while the frozen geometry is shared.
+        // Command-owned icon: each presenter gets a fresh visual, and the icon is looked up when that
+        // visual is created rather than here, so a late-arriving icon dictionary still reaches it.
         static IconTemplate CommandIcon(string name)
-        {
-            var geometry = SegmentIcon(name);
-            geometry.Freeze();
-            return new IconTemplate(size =>
+            => new IconTemplate(size =>
             {
                 var icon = SegmentIconShape(size.Dip);
-                icon.Data = geometry;
-                ApplyIconViewBox(icon, geometry);
+                BindNamedIcon(icon, name);
                 return icon;
             });
-        }
 
         // The card is the command scope: every drop-down below registers on it, so one panel owns the
         // handlers, the gate and the shortcut map.
