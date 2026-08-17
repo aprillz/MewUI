@@ -71,11 +71,15 @@ if ($StartAt -ne 3 -and -not $SkipMacOS) {
     if ([string]::IsNullOrWhiteSpace($MacHost)) {
         throw '-MacHost is required unless -SkipMacOS is specified.'
     }
-    if ([string]::IsNullOrWhiteSpace($MacRepo)) {
-        $MacRepo = "/Users/$MacUser/Dev/MewUI"
-    }
     if ([string]::IsNullOrWhiteSpace($MacSandbox)) {
         $MacSandbox = "/Users/$MacUser/Sandbox/mewui-release-size"
+    }
+    # Named explicitly, the Mac checkout is measured where it is and has to be synchronized already.
+    # Left alone, the sources this measures are sent there, which is the only way a release that is
+    # still local can be measured: a checkout can only hold what was pushed.
+    $sendMacSource = [string]::IsNullOrWhiteSpace($MacRepo)
+    if ($sendMacSource) {
+        $MacRepo = "$MacSandbox/source"
     }
 }
 
@@ -95,6 +99,31 @@ function Invoke-WslChecked([string] $Command) {
     }
     $arguments += @('--', 'sh', '-lc', $Command)
     Invoke-Checked wsl.exe $arguments
+}
+
+<#
+    Sends the sources the manifest covers, packed with the exclusions it applies, so the copy on the
+    Mac hashes to the same value. Anything already at the destination is replaced, which keeps a
+    leftover file from a previous run out of the hash.
+#>
+function Send-MacSource {
+    $roots = @(
+        'assets', 'build', 'src', 'samples/MewUI.Gallery',
+        'tools/aot-size/MewUI.AotSizeProbe', 'tools/aot-size/MewUI.ReleaseSizeTool')
+    $excludes = @('bin', 'obj', '*.user', '.DS_Store', 'Thumbs.db', 'MewUI.Local.props')
+    $archive = Join-Path ([IO.Path]::GetTempPath()) 'mewui-release-source.tar.gz'
+    $remoteArchive = "$MacSandbox/source.tar.gz"
+
+    Invoke-Checked tar (@('-czf', $archive) + ($excludes | ForEach-Object { "--exclude=$_" }) +
+        @('-C', $repoRoot) + $roots)
+    try {
+        Invoke-MacChecked "mkdir -p $(Quote-Sh $MacSandbox)"
+        Invoke-Checked scp @('-P', $MacPort, $archive, "$MacUser@$MacHost`:$remoteArchive")
+        Invoke-MacChecked ("rm -rf $(Quote-Sh $MacRepo) && mkdir -p $(Quote-Sh $MacRepo) && " +
+            "tar -xzf $(Quote-Sh $remoteArchive) -C $(Quote-Sh $MacRepo) && rm -f $(Quote-Sh $remoteArchive)")
+    } finally {
+        Remove-Item -LiteralPath $archive -ErrorAction SilentlyContinue
+    }
 }
 
 function Invoke-MacCaptured([string] $Command) {
@@ -155,6 +184,10 @@ if ($StartAt -eq 3) {
     }
 
     if (-not $SkipMacOS) {
+        if ($sendMacSource) {
+            Write-Host '  macOS: sending sources...'
+            Send-MacSource
+        }
         Write-Host '  macOS: computing manifest through SSH...'
         $macTool = "$MacRepo/tools/aot-size/MewUI.ReleaseSizeTool/MewUI.ReleaseSizeTool.csproj"
         $macManifest = Invoke-MacCaptured "$(Quote-Sh $MacDotNet) run --project $(Quote-Sh $macTool) -c Release --artifacts-path $(Quote-Sh "$MacSandbox/tool") -- --repo $(Quote-Sh $MacRepo) --manifest-only"
@@ -164,7 +197,7 @@ if ($StartAt -eq 3) {
 
     $badManifest = @($preflight | Where-Object Manifest -ne $localManifest)
     if ($badManifest.Count -ne 0) {
-        throw "Synchronized source differs on: $($badManifest.Platform -join ', '). Synchronize MewUI and retry."
+        throw "Source differs on: $($badManifest.Platform -join ', '). Synchronize MewUI and retry."
     }
     Write-Host '  Source manifests match.'
 
