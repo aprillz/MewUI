@@ -27,7 +27,7 @@ $tag = "v$Version"
 Write-Step "Checking the repository"
 
 Assert-ReleasableWorktree -Tag $tag
-Invoke-Git fetch origin main --tags | Out-Null
+Invoke-Git fetch origin main --quiet | Out-Null
 
 # main may be ahead of origin here, which is the whole point, but it must not be behind or the push
 # would need a merge that nobody reviewed.

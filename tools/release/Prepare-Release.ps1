@@ -40,7 +40,7 @@ Assert-ReleasableWorktree -Tag $tag
 
 # origin has to be reachable and level with main before anything is generated: preparing on a branch
 # that is behind produces a commit that cannot be pushed without a merge.
-Invoke-Git fetch origin main --tags | Out-Null
+Invoke-Git fetch origin main --quiet | Out-Null
 $local = (Invoke-Git rev-parse HEAD).Trim()
 $remote = (Invoke-Git rev-parse origin/main).Trim()
 if ($local -ne $remote) {

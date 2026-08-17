@@ -14,11 +14,14 @@ function Write-Step {
     Write-Host "==> $Message" -ForegroundColor Cyan
 }
 
+# git writes progress to stderr even when it succeeds. Windows PowerShell wraps a redirected native
+# stderr line in an ErrorRecord, which a Stop preference turns into a failure, so the stream is left
+# to reach the console on its own and only the exit code decides.
 function Invoke-Git {
     param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $Arguments)
-    $output = & git -C $script:RepoRoot @Arguments 2>&1
+    $output = & git -C $script:RepoRoot @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "git $($Arguments -join ' ') failed: $output"
+        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
     }
     return $output
 }
@@ -69,7 +72,17 @@ function Assert-ReleasableWorktree {
 
     $existing = & git -C $script:RepoRoot tag --list $Tag
     if ($existing) {
-        throw "$Tag already exists. Delete it or pick another version."
+        throw "$Tag already exists here. Delete it or pick another version."
+    }
+
+    # Asked of origin directly rather than fetched: one local tag that disagrees with the remote makes
+    # a --tags fetch fail outright, which would block a release for an unrelated old tag.
+    $remote = & git -C $script:RepoRoot ls-remote --tags origin "refs/tags/$Tag"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not reach origin to look for $Tag."
+    }
+    if ($remote) {
+        throw "$Tag already exists on origin."
     }
 }
 
