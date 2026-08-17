@@ -198,7 +198,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                         TEXT_CONTRAST,
                         clearTypeLevel,
                         pixelGeometry,
-                        DWRITE_RENDERING_MODE.GDI_CLASSIC,
+                        DWRITE_RENDERING_MODE.NATURAL_SYMMETRIC,
                         out nint tuned1);
                     if (hr1 >= 0 && tuned1 != 0)
                     {
@@ -217,7 +217,7 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
                 TEXT_CONTRAST,
                 clearTypeLevel,
                 pixelGeometry,
-                DWRITE_RENDERING_MODE.GDI_CLASSIC,
+                DWRITE_RENDERING_MODE.NATURAL_SYMMETRIC,
                 out nint tuned);
             return hr >= 0 ? tuned : 0;
         }
