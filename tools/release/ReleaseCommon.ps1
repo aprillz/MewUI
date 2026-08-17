@@ -54,8 +54,8 @@ function Set-DeclaredVersion {
 }
 
 <#
-    The checks both steps share. A release is cut from main with nothing uncommitted, and the tag must
-    not exist yet.
+    What a release needs of this machine: main, with nothing uncommitted and no tag of that name.
+    Nothing here reaches origin, so preparing works offline.
 #>
 function Assert-ReleasableWorktree {
     param([string] $Tag)
@@ -74,6 +74,24 @@ function Assert-ReleasableWorktree {
     if ($existing) {
         throw "$Tag already exists here. Delete it or pick another version."
     }
+}
+
+<#
+    What a release needs of origin, asked only when something is about to be pushed. Being ahead is
+    normal, since the release commit was made here; being behind is not, because the push would then
+    need a merge that nobody reviewed.
+#>
+function Assert-OriginReady {
+    param([string] $Tag)
+
+    Invoke-Git fetch origin main --quiet | Out-Null
+
+    $behind = (Invoke-Git rev-list --count HEAD..origin/main).Trim()
+    if ($behind -ne '0') {
+        throw "main is $behind commits behind origin/main. Pull first."
+    }
+    $ahead = (Invoke-Git rev-list --count origin/main..HEAD).Trim()
+    Write-Host "  main is $ahead commits ahead of origin/main"
 
     # Asked of origin directly rather than fetched: one local tag that disagrees with the remote makes
     # a --tags fetch fail outright, which would block a release for an unrelated old tag.
@@ -84,21 +102,6 @@ function Assert-ReleasableWorktree {
     if ($remote) {
         throw "$Tag already exists on origin."
     }
-}
-
-<#
-    Being ahead of origin is fine and usual: the release commit is made here and the publish step
-    pushes the branch before the tag, so origin/main ends up holding the tag either way. Being behind
-    is not, because the push would then need a merge that nobody reviewed.
-#>
-function Assert-NotBehindOrigin {
-    Invoke-Git fetch origin main --quiet | Out-Null
-    $behind = (Invoke-Git rev-list --count HEAD..origin/main).Trim()
-    if ($behind -ne '0') {
-        throw "main is $behind commits behind origin/main. Pull first."
-    }
-    $ahead = (Invoke-Git rev-list --count origin/main..HEAD).Trim()
-    Write-Host "  main is $ahead commits ahead of origin/main"
 }
 
 <#

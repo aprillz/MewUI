@@ -27,7 +27,7 @@ $tag = "v$Version"
 Write-Step "Checking the repository"
 
 Assert-ReleasableWorktree -Tag $tag
-Assert-NotBehindOrigin
+Assert-OriginReady -Tag $tag
 
 Write-Step "Checking what was prepared"
 
