@@ -14,9 +14,13 @@
     Version to release, without the leading v.
 
 .PARAMETER SkipSizeChecks
-    Skips both size checks: the NativeAOT probe measurement and the release size chart check. The
-    probes publish four self-contained apps and take several minutes, and a patch release that does
-    not re-measure keeps the previous release's numbers on purpose.
+    Skips everything about size: the release numbers, the charts, and the NativeAOT probes. The probes
+    publish four self-contained apps and take several minutes, and a patch release that does not
+    re-measure keeps the previous release's numbers on purpose.
+
+.NOTES
+    The release numbers are re-measured only when %LOCALAPPDATA%\MewUI\release.json names the machines
+    to measure Linux and macOS on. See Get-ReleaseSettings in ReleaseCommon.ps1 for its shape.
 
 .EXAMPLE
     ./tools/release/Prepare-Release.ps1 -Version 0.20.0
@@ -62,12 +66,21 @@ if ($LASTEXITCODE -ne 0) {
 if ($SkipSizeChecks) {
     Write-Step "Skipping the size checks"
 } else {
-    # The chart is checked, not rewritten: release-sizes.json carries the version its numbers were
-    # measured for, so a release that does not re-measure keeps the previous one on purpose. Only the
-    # SVGs having drifted from that data is a problem. The probes are then measured against the
-    # committed baseline, which this never writes.
-    Write-Step "Checking the sizes"
-    & (Join-Path $script:SizeToolDir 'Update-ReleaseSizeAssets.ps1') -Check
+    # The release numbers are re-measured only where the machines to measure on are known, since Linux
+    # and macOS are reached from here. Without that file the recorded numbers stand, which is what a
+    # release that does not re-measure wants, and only the charts having drifted from them is checked.
+    $settings = Get-ReleaseSettings
+    if ($null -eq $settings) {
+        Write-Step "Checking the release size charts"
+        Write-Host "  no $script:SettingsPath, so the recorded numbers stand"
+        & (Join-Path $script:SizeToolDir 'Update-ReleaseSizeAssets.ps1') -Check
+    } else {
+        Write-Step "Measuring the release sizes"
+        & (Join-Path $script:SizeToolDir 'Update-ReleaseSizes.ps1') @settings
+    }
+
+    # Measured against the committed baseline, which this never writes.
+    Write-Step "Measuring the NativeAOT probes"
     & (Join-Path $script:SizeToolDir 'Measure-AotSize.ps1') `
         -BaselinePath (Join-Path $script:SizeToolDir 'baselines\win-x64-gdi.json')
 }

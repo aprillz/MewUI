@@ -3,6 +3,7 @@
 #>
 
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$script:SettingsPath = Join-Path $env:LOCALAPPDATA 'MewUI\release.json'
 $script:PropsPath = Join-Path $script:RepoRoot 'build\MewUI.Common.props'
 $script:SizeToolDir = Join-Path $script:RepoRoot 'tools\aot-size'
 $script:FbaSyncProject = Join-Path $script:RepoRoot 'tools\fba-sync\FbaSync.csproj'
@@ -102,6 +103,36 @@ function Assert-OriginReady {
     if ($remote) {
         throw "$Tag already exists on origin."
     }
+}
+
+<#
+    The machines this release measures on, read from the user's local directory rather than the
+    repository: a host name and a checkout path belong to whoever is releasing, not to the branch.
+    Returns the arguments for Update-ReleaseSizes.ps1, or null when there is no such file.
+
+    %LOCALAPPDATA%\MewUI\release.json
+    {
+        "WslDistribution": "Ubuntu",
+        "WslRepo": "/home/me/MewUI",
+        "MacHost": "mac.local",
+        "MacUser": "me",
+        "MacRepo": "/Users/me/Dev/MewUI"
+    }
+#>
+function Get-ReleaseSettings {
+    if (-not (Test-Path -LiteralPath $script:SettingsPath)) {
+        return $null
+    }
+
+    $json = Get-Content -LiteralPath $script:SettingsPath -Raw | ConvertFrom-Json
+    $settings = @{}
+    foreach ($name in 'WslDistribution', 'WslRepo', 'MacHost', 'MacUser', 'MacRepo', 'MacDotNet', 'MacSandbox') {
+        $value = $json.$name
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            $settings[$name] = $value
+        }
+    }
+    return $settings
 }
 
 <#
