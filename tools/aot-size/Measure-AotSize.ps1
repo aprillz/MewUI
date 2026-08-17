@@ -60,6 +60,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to prepare the '$Backend' backend for NativeAOT probes."
 }
 
+# Restored once here rather than by each publish below, which passes --no-restore so that four probes
+# of one configuration share the work. The runtime identifier and the backend are what select the
+# probe's project references, so they have to be the ones the publishes will use.
+& dotnet restore $project -r $RuntimeIdentifier "-p:MewUIBackend=$Backend"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to restore the NativeAOT probe project."
+}
+
 $results = @()
 foreach ($probeName in $Probe) {
     $probeRoot = Join-Path $OutputRoot $probeName.ToLowerInvariant()
