@@ -88,7 +88,7 @@ partial class GalleryView
                                         .Background(Color.Green.WithAlpha(64))
                                         .Child(
                                             new Image()
-                                                .Source(logo)
+                                                .BindSource(Resources.Logo)
                                                 .Apply(x => EnableWindowDrag(tw, x))
                                                 .Width(500)
                                                 .Height(128)
@@ -396,12 +396,15 @@ partial class GalleryView
         var p = ModifierKeys.Primary;
         IconTemplate MenuIcon(string name)
         {
-            var all = IconResource.GetAll();
-            var entry = Array.Find(all, x => x.Name == name) ?? all[0];
-            var geometry = PathGeometry.Parse(entry.PathData);
-            geometry.Freeze();
+            // Looked up when the menu is built rather than captured here, so a late-arriving icon
+            // dictionary still reaches it: menus are created when the user opens them.
             return new IconTemplate(size =>
             {
+                var all = IconResource.GetAll(Resources.Icons.Value);
+                var entry = Array.Find(all, x => x.Name == name);
+                var geometry = PathGeometry.Parse(entry?.PathData ?? FALLBACK_ICON);
+                geometry.Freeze();
+
                 var icon = new PathShape()
                     .Data(geometry)
                     .Size(size.Dip)

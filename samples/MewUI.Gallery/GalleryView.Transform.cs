@@ -8,7 +8,7 @@ partial class GalleryView
     {
         // Shared image factory
         Image CatImage() => new Image()
-            .Source(april).Width(120).Height(120)
+            .BindSource(Resources.April).Width(120).Height(120)
             .StretchMode(Stretch.Uniform)
             .ImageScaleQuality(ImageScaleQuality.HighQuality);
 
@@ -34,7 +34,7 @@ partial class GalleryView
 
         // --- Combined ---
         var combinedBox = new TransformBox().Center().Child(
-            new Image().Source(logo).Width(200).Height(80)
+            new Image().BindSource(Resources.Logo).Width(200).Height(80)
                 .StretchMode(Stretch.Uniform)
                 .ImageScaleQuality(ImageScaleQuality.HighQuality));
         var sliderCombRot = new Slider().Range(-180, 180).Value(0).Width(140);
@@ -165,11 +165,10 @@ partial class GalleryView
         // --- Zoom & Pan Canvas ---
         void OpenZoomPanWindow()
         {
-            var soonduk = ImageSource.FromFile(CombineBaseDirectory("Resources", "soonduk.jpg"));
             var image = new Image()
                 .StretchMode(Stretch.None)
                 .ImageScaleQuality(ImageScaleQuality.HighQuality)
-                .Source(soonduk);
+                .BindSource(Resources.Soonduk);
 
             var canvas = new ZoomPanCanvas { Child = image, CenterContent = true };
 

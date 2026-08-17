@@ -414,9 +414,9 @@ partial class GalleryView
 
     private static PathGeometry SegmentIcon(string name)
     {
-        var all = IconResource.GetAll();
-        var entry = Array.Find(all, e => e.Name == name) ?? all[0];
-        return PathGeometry.Parse(entry.PathData);
+        var all = IconResource.GetAll(Resources.Icons.Value);
+        var entry = Array.Find(all, e => e.Name == name);
+        return PathGeometry.Parse(entry?.PathData ?? FALLBACK_ICON);
     }
 
     /// <summary>Puts an icon on a shape with the design grid it was drawn on.</summary>

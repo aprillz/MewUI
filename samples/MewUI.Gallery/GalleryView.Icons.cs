@@ -7,18 +7,19 @@ partial class GalleryView
 {
     private FrameworkElement IconsPage()
     {
-        var allIcons = IconResource.GetAll()
+        IconItem[] AllIcons() => IconResource.GetAll(Resources.Icons.Value)
             .Select(e => new IconItem(e.Name, e.PathData))
             .ToArray();
 
         var query = new ObservableValue<string>(string.Empty);
-        var countText = new ObservableValue<string>($"{allIcons.Length} icons");
+        var countText = new ObservableValue<string>("0 icons");
 
         GridView grid = null!;
 
         void ApplyFilter()
         {
             var q = (query.Value ?? string.Empty).Trim();
+            var allIcons = AllIcons();
             IEnumerable<IconItem> filtered = allIcons;
             if (!string.IsNullOrWhiteSpace(q))
                 filtered = filtered.Where(i => i.Name.Contains(q, StringComparison.OrdinalIgnoreCase));
@@ -28,12 +29,13 @@ partial class GalleryView
             countText.Value = $"{view.Count} / {allIcons.Length} icons";
         }
 
+        Resources.Icons.Changed += ApplyFilter;
         query.Changed += ApplyFilter;
 
         grid = new GridView()
             .RowHeight(32)
             .Width(300)
-            .ItemsSource(allIcons)
+            .ItemsSource(AllIcons())
             .Columns(
                 new GridViewColumn<IconItem>()
                     .Header("")

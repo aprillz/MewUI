@@ -6,9 +6,6 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private ImageSource iconFolderOpen = ImageSource.FromFile(CombineBaseDirectory("Resources/folder-horizontal-open.png"));
-    private ImageSource iconFolderClose = ImageSource.FromFile(CombineBaseDirectory("Resources/folder-horizontal.png"));
-    private ImageSource iconFile = ImageSource.FromFile(CombineBaseDirectory("Resources/document.png"));
 
     private FrameworkElement ListsPage()
     {
@@ -324,7 +321,7 @@ partial class GalleryView
                     ),
                 bind: (view, item, _, ctx) =>
                 {
-                    ctx.Get<Image>("Icon").Source(item.HasChildren ? (treeView.IsExpanded(item) ? iconFolderOpen : iconFolderClose) : iconFile);
+                    ctx.Get<Image>("Icon").Source(item.HasChildren ? (treeView.IsExpanded(item) ? Resources.FolderOpen.Value : Resources.FolderClosed.Value) : Resources.Document.Value);
                     ctx.Get<TextBlock>("Text").Text(item.Text);
                 });
 
@@ -459,7 +456,7 @@ partial class GalleryView
                     bool isFolder = item.Children.Count > 0 || item.CanLoadChildren;
 
                     var icon = ctx.Get<Image>("Icon");
-                    icon.Source(isFolder ? (treeView.ItemsSource.GetIsExpanded(index) ? iconFolderOpen : iconFolderClose) : iconFile);
+                    icon.Source(isFolder ? (treeView.ItemsSource.GetIsExpanded(index) ? Resources.FolderOpen.Value : Resources.FolderClosed.Value) : Resources.Document.Value);
 
                     ctx.Get<TextBlock>("Text").Text(item.Name);
 

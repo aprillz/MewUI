@@ -4,8 +4,6 @@ namespace Aprillz.MewUI.Gallery;
 
 partial class GalleryView
 {
-    private ImageSource april = ImageSource.FromFile(CombineBaseDirectory("Resources", "april.jpg"));
-    private ImageSource logo = ImageSource.FromFile(CombineBaseDirectory("Resources", "logo_h-480.png"));
 
     private Image peekImage = null!;
     private ObservableValue<string> imagePeekText = new ObservableValue<string>("Color: -");
@@ -19,7 +17,7 @@ partial class GalleryView
                     .Spacing(8)
                     .Children(
                         new Image()
-                            .Source(april)
+                            .BindSource(Resources.April)
                             .Width(120)
                             .Height(120)
                             .StretchMode(Stretch.Uniform)
@@ -42,7 +40,7 @@ partial class GalleryView
                             .OnMouseMove(e => imagePeekText.Value = peekImage.TryPeekColor(e.GetPosition(peekImage), out var c)
                                 ? $"Color: #{c.ToArgb():X8}"
                                 : "Color: #--------")
-                            .Source(logo)
+                            .BindSource(Resources.Logo)
                             .ImageScaleQuality(ImageScaleQuality.HighQuality)
                             .Width(200)
                             .Height(120)
@@ -68,12 +66,12 @@ partial class GalleryView
                             .ItemHeight(90)
                             .Children(
                                 new Image()
-                                    .Source(april)
+                                    .BindSource(Resources.April)
                                     .StretchMode(Stretch.Uniform)
                                     .ImageScaleQuality(ImageScaleQuality.HighQuality),
 
                                 new Image()
-                                    .Source(april)
+                                    .BindSource(Resources.April)
                                     .ViewBoxRelative(new Rect(0.25, 0.25, 0.5, 0.5))
                                     .StretchMode(Stretch.UniformToFill)
                                     .ImageScaleQuality(ImageScaleQuality.HighQuality)

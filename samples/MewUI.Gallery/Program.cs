@@ -34,7 +34,18 @@ var topMost = new ObservableValue<bool>(false);
 
 var currentAccent = ThemeManager.DefaultAccent;
 
-var logo = ImageSource.FromFile(GalleryView.CombineBaseDirectory("Resources", "logo_h-480.png"));
+// The gallery pages bind to these rather than loading files themselves, so the file-based app can
+// fill the same values from the network. Here they are filled before the window exists, which means
+// the first frame already has every image and icon.
+FillResources();
+
+static void FillResources()
+{
+    foreach (var name in GalleryResources.FileNames)
+    {
+        GalleryView.Resources.Apply(name, File.ReadAllBytes(GalleryView.CombineBaseDirectory("Resources", name)));
+    }
+}
 
 var timer = new DispatcherTimer()
     .Interval(TimeSpan.FromSeconds(1))
@@ -137,7 +148,7 @@ FrameworkElement TopBar() => new Border()
                     .DockLeft()
                     .Children(
                         new Image()
-                            .Source(logo)
+                            .BindSource(GalleryView.Resources.Logo)
                             .ImageScaleQuality(ImageScaleQuality.HighQuality)
                             .Width(200)
                             .CenterVertical(),

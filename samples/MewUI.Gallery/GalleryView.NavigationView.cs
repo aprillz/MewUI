@@ -6,7 +6,6 @@ partial class GalleryView
 {
     private FrameworkElement NavigationViewPage()
     {
-        var imageSource = ImageSource.FromFile(CombineBaseDirectory("Resources", "document.png"));
         var entries = new[]
         {
             new NavigationIconEntry(
@@ -19,7 +18,7 @@ partial class GalleryView
                 "An emoji rendered by a TextBlock, demonstrating that an icon can be any Element."),
             new NavigationIconEntry(
                 "Image",
-                DimWhenDisabled(new Image().Source(imageSource).StretchMode(Stretch.Uniform)),
+                DimWhenDisabled(new Image().BindSource(Resources.Document).StretchMode(Stretch.Uniform)),
                 "A bitmap icon rendered by Image with Uniform stretch inside the navigation icon slot."),
         };
 

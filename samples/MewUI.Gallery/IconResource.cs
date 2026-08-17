@@ -10,26 +10,30 @@ static partial class IconResource
 {
     public sealed record IconEntry(string Name, string PathData);
 
-    private static IconEntry[]? _all;
+    private static string? _lastXaml;
+    private static IconEntry[] _cached = [];
 
-    public static IconEntry[] GetAll()
+    /// <summary>
+    /// Parses the icon dictionary the host supplied, or returns an empty set while it is still on
+    /// its way. Results are cached per document so repeated calls during a page build are cheap.
+    /// </summary>
+    public static IconEntry[] GetAll(string? xaml)
     {
-        if (_all != null) return _all;
+        if (string.IsNullOrWhiteSpace(xaml))
+        {
+            return [];
+        }
+
+        if (string.Equals(_lastXaml, xaml, StringComparison.Ordinal))
+        {
+            return _cached;
+        }
 
         var list = new List<IconEntry>();
-        LoadFromFile(CombineBaseDirectory("Resources", "Icons.xaml"), list);
-        _all = [.. list];
-        return _all;
-    }
-
-    private static string CombineBaseDirectory(params string[] path)
-        => Path.Combine([AppContext.BaseDirectory, .. path]);
-
-    private static void LoadFromFile(string resourceName, List<IconEntry> list)
-    {
-        var xaml = File.ReadAllText(resourceName);
-
         Load(xaml, list);
+        _lastXaml = xaml;
+        _cached = [.. list];
+        return _cached;
     }
 
     private static void LoadFromResource(string resourceName, List<IconEntry> list)
