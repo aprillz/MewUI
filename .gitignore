@@ -13,6 +13,8 @@ obj/
 [Ll]ogFiles/
 [Dd]ebug*/
 [Rr]elease*/
+# Release tooling, which the build-output rule above would otherwise swallow
+!tools/release/
 
 # User-specific files
 *.rsuser
