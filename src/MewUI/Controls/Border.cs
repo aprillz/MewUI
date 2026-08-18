@@ -14,6 +14,18 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
 
     private PathGeometry? _cachedBorderPath;
     private PathGeometry? _cachedBgPath;
+    private BorderGeometryCacheKey _cachedBorderKey;
+    private BorderGeometryCacheKey _cachedBgKey;
+
+    // Frozen-geometry cache key: the generated contours depend only on these
+    // inputs. Freezing the regenerated paths lets the backend reuse its
+    // per-geometry fill caches across frames instead of re-tessellating.
+    private readonly record struct BorderGeometryCacheKey(
+        Rect Bounds,
+        double DpiScale,
+        Thickness BorderThickness,
+        CornerRadius CornerRadius,
+        bool RingHides);
 
     public static readonly MewProperty<Thickness> NonUniformBorderThicknessProperty =
         MewProperty<Thickness>.Register<Border>(nameof(NonUniformBorderThickness), default,
@@ -155,14 +167,23 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
             bool ringHides = borderBrush.A == 255 && metrics.BorderThickness != Thickness.Zero;
             if (bg.A > 0)
             {
-                _cachedBgPath ??= new PathGeometry();
-                if (ringHides)
+                var key = new BorderGeometryCacheKey(
+                    metrics.Bounds, metrics.DpiScale, metrics.BorderThickness, metrics.CornerRadius, ringHides);
+                if (_cachedBgPath == null || _cachedBgKey != key)
                 {
-                    BorderGeometry.GenerateOuterContour(_cachedBgPath, in metrics);
-                }
-                else
-                {
-                    BorderGeometry.GenerateBackgroundRegion(_cachedBgPath, in metrics);
+                    var path = new PathGeometry();
+                    if (ringHides)
+                    {
+                        BorderGeometry.GenerateOuterContour(path, in metrics);
+                    }
+                    else
+                    {
+                        BorderGeometry.GenerateBackgroundRegion(path, in metrics);
+                    }
+
+                    path.Freeze();
+                    _cachedBgPath = path;
+                    _cachedBgKey = key;
                 }
 
                 if (!_cachedBgPath.IsEmpty)
@@ -173,8 +194,17 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
 
             if (borderBrush.A > 0 && metrics.BorderThickness != Thickness.Zero)
             {
-                _cachedBorderPath ??= new PathGeometry();
-                BorderGeometry.GenerateBorderRegion(_cachedBorderPath, in metrics);
+                var key = new BorderGeometryCacheKey(
+                    metrics.Bounds, metrics.DpiScale, metrics.BorderThickness, metrics.CornerRadius, RingHides: false);
+                if (_cachedBorderPath == null || _cachedBorderKey != key)
+                {
+                    var path = new PathGeometry();
+                    BorderGeometry.GenerateBorderRegion(path, in metrics);
+                    path.Freeze();
+                    _cachedBorderPath = path;
+                    _cachedBorderKey = key;
+                }
+
                 if (!_cachedBorderPath.IsEmpty)
                 {
                     context.FillPath(_cachedBorderPath, borderBrush);
