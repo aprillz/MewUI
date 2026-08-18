@@ -84,6 +84,37 @@ new ButtonGroup()
 선택 상태로 바인딩하려면 `SegmentedControl.SelectedIndex`/`SelectedItem`을 사용합니다. 이 연결에는
 `CommandParameter`가 필요하지 않습니다. 각 `SegmentButton`이 실행할 Command 자체를 받습니다.
 
+### ToolBar
+
+`ToolBar`는 band를, band는 group을, group은 entry를 담습니다. entry는 컨트롤이 아니라 모델이며, 툴바가 entry마다 컨트롤 하나를 만들고 band가 담지 못한 entry는 그 band의 overflow 메뉴 행으로 바꿉니다. `Item`, `Toggle`, `Split`은 Command를 받고 `Menu`, `Label`, `Splitter`, `Host`는 받지 않습니다.
+
+```csharp
+var save = new Command("file.save", "_Save", saveIcon);
+var wrap = new Command("view.wordWrap", "_Word wrap", wrapIcon);
+
+var bar = new ToolBar()
+    .Band(
+        new ToolBarGroup()
+            .Item(new Command("file.new", "_New", newIcon))
+            .Split(save, new Menu().Item(saveAs).Item(saveAll)),
+        new ToolBarGroup()
+            .Label("View")
+            .Toggle(wrap, isChecked: true)
+            .Menu("Zoom", new Menu().Item(zoomIn).Item(zoomOut), zoomIcon)
+            .Splitter()
+            .Host(new TextBox().Width(140).Placeholder("Search")));
+
+bar.Commands.Register(save, () => document.Save(), () => document.IsDirty);
+```
+
+`Item`은 버튼이 되고, `Split`은 primary face가 Command를 실행하고 chevron이 메뉴를 여는 `SplitButton`이 되며, `Menu`는 자체 Command가 없는 `DropDownButton`이 됩니다. `Host`는 band가 감출 수 없는 유일한 entry입니다. 임의의 요소는 접혀 들어갈 메뉴 행이 없으므로 대신 자신의 최소 크기까지 줄어듭니다.
+
+`Toggle`은 Command를 실행하면서 켜짐/꺼짐 상태도 표시합니다. 체크 상태는 Command가 아니라 entry의 것입니다. `ToolBarToggleItem.IsChecked`가 원본이고, 만들어진 컨트롤이 사용자의 변경을 그 값에 다시 씁니다. `CommandPresentation`이 체크 상태를 제외하는 것과 같은 구분입니다.
+
+entry는 `ToolBar.ItemPresentation`에 따라 Command를 표시하며 기본값은 `CommandPresentationMode.Icon`입니다. entry 하나만 `ToolBarItem.Presentation`으로 덮어쓸 수 있습니다. 아이콘 전용 entry의 Command에 아이콘이 없으면 비어 보이는 대신 텍스트로 대체합니다. 아이콘은 메뉴와 같은 크기인 `ThemeMetrics.CommandIconSize`로 그립니다.
+
+overflow 행은 자리를 대신하는 entry와 같은 Command로 만들어집니다. `Item`은 그 Command의 `MenuItem`이 되고, `Split`은 드롭다운을 하위 메뉴로 가진 `MenuItem`이 되며, `Splitter`는 구분선이 됩니다. 그래서 entry가 band에 있든 overflow 메뉴에 있든 enabled 상태와 텍스트, 아이콘은 한곳에 남습니다. `Label`은 옆 entry를 설명하는 표시이므로 행이 생기지 않습니다.
+
 ### 반응형 표시와 지역화
 
 `Command.Presentation.AccessText`와 `Icon`은 MewProperty입니다. `Command.BindText(...)`와
@@ -119,7 +150,7 @@ Command의 기본 텍스트와 AccessKey를 모두 덮어쓰므로, 같은 명�
 
 Command 아이콘은 표시 위치가 요청한 크기로 새 visual을 만드는 `IconTemplate`로 정의합니다.
 `IconTemplateSize.Dip`은 레이아웃 크기이며, `Pixel`은 현재 DPI에서 필요한 물리 픽셀 크기입니다.
-ContextMenu와 MenuBar dropdown은 16 DIP를 사용하며, 향후 Toolbar presenter의 기본 크기는 24 DIP입니다.
+ContextMenu와 MenuBar dropdown, ToolBar entry 모두 `ThemeMetrics.CommandIconSize`(16 DIP)를 요청합니다.
 
 ```csharp
 var copyGeometry = PathGeometry.Parse(copyPathData);

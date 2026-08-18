@@ -84,6 +84,37 @@ as left/center/right/justify alignment, use `ButtonGroup` as above. To bind the 
 use `SegmentedControl.SelectedIndex`/`SelectedItem`. This connection does not require `CommandParameter`: each
 `SegmentButton` receives the Command it executes.
 
+### ToolBar
+
+A `ToolBar` holds bands of groups, and a group holds entries. Entries are models rather than controls: the toolbar materializes one control per entry, and turns the entries a band cannot fit into rows of that band's overflow menu. `Item`, `Toggle`, and `Split` take a Command; `Menu`, `Label`, `Splitter`, and `Host` do not.
+
+```csharp
+var save = new Command("file.save", "_Save", saveIcon);
+var wrap = new Command("view.wordWrap", "_Word wrap", wrapIcon);
+
+var bar = new ToolBar()
+    .Band(
+        new ToolBarGroup()
+            .Item(new Command("file.new", "_New", newIcon))
+            .Split(save, new Menu().Item(saveAs).Item(saveAll)),
+        new ToolBarGroup()
+            .Label("View")
+            .Toggle(wrap, isChecked: true)
+            .Menu("Zoom", new Menu().Item(zoomIn).Item(zoomOut), zoomIcon)
+            .Splitter()
+            .Host(new TextBox().Width(140).Placeholder("Search")));
+
+bar.Commands.Register(save, () => document.Save(), () => document.IsDirty);
+```
+
+`Item` becomes a button, `Split` a `SplitButton` whose primary face runs the command and whose chevron opens the menu, and `Menu` a `DropDownButton` that carries no command of its own. `Host` is the one entry a band cannot hide, since an arbitrary element has no menu row to collapse into; it shrinks to its own minimum instead.
+
+`Toggle` runs its command and also reads as on or off. The checked state belongs to the entry, not to the command: `ToolBarToggleItem.IsChecked` is the source, and the materialized control writes the user's change back to it. This is the same separation `CommandPresentation` makes by excluding check state.
+
+Entries show their command through `ToolBar.ItemPresentation`, which defaults to `CommandPresentationMode.Icon`, and a single entry can override it with `ToolBarItem.Presentation`. An icon-only entry whose command carries no icon falls back to text rather than rendering empty. Icons are drawn at `ThemeMetrics.CommandIconSize`, the same size menus use.
+
+Overflow rows are built from the same Commands as the entries they replace: an `Item` becomes a `MenuItem` for its command, a `Split` becomes a `MenuItem` with the drop-down as its submenu, and a `Splitter` becomes a separator. Enabled state, text, and icon therefore stay in one place whether the entry is on the band or in the overflow menu. A `Label` has no row, as it annotates the entry beside it.
+
 ### Reactive presentation and localization
 
 `Command.Presentation.AccessText` and `Icon` are MewProperties. `Command.BindText(...)` and `BindIcon(...)` create
@@ -118,7 +149,7 @@ the shortcut declaration on the menu item.
 
 Define a command icon with an `IconTemplate` that creates a new visual at the size requested by its presenter.
 `IconTemplateSize.Dip` is the layout size and `Pixel` is the physical pixel requirement at the current DPI.
-ContextMenu and MenuBar dropdowns use 16 DIPs. The default size for a future Toolbar presenter is 24 DIPs.
+ContextMenu, MenuBar dropdowns, and ToolBar entries all request `ThemeMetrics.CommandIconSize`, which is 16 DIPs.
 
 ```csharp
 var copyGeometry = PathGeometry.Parse(copyPathData);
