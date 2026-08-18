@@ -12,7 +12,7 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<Border>(DefaultStyles.CreateBorderStyle);
 
-    private PathGeometry? _cachedOuterPath;
+    private PathGeometry? _cachedBorderPath;
     private PathGeometry? _cachedBgPath;
 
     public static readonly MewProperty<Thickness> NonUniformBorderThicknessProperty =
@@ -147,25 +147,37 @@ public sealed partial class Border : Control, IVisualTreeHost, ILogicalTreeHost
         }
         else
         {
-            // Non-uniform: border first (outer fill), then background on top (inner fill).
-            // Border color extends under background - no seam at boundary.
-            if (borderBrush.A > 0 && metrics.BorderThickness != Thickness.Zero)
-            {
-                _cachedOuterPath ??= new PathGeometry();
-                BorderGeometry.GenerateOuterContour(_cachedOuterPath, in metrics);
-                if (!_cachedOuterPath.IsEmpty)
-                {
-                    context.FillPath(_cachedOuterPath, borderBrush);
-                }
-            }
-
+            // Non-uniform: background first, then the border ring on top. The ring carries its own
+            // hole, so a transparent background leaves the middle empty instead of filled with the
+            // border colour. Where an opaque ring is about to cover it, the background runs to the
+            // outer contour so their shared edge has no antialiased seam; anywhere else it stops at
+            // the inner contour, which is the only area it may paint.
+            bool ringHides = borderBrush.A == 255 && metrics.BorderThickness != Thickness.Zero;
             if (bg.A > 0)
             {
                 _cachedBgPath ??= new PathGeometry();
-                BorderGeometry.GenerateBackgroundRegion(_cachedBgPath, in metrics);
+                if (ringHides)
+                {
+                    BorderGeometry.GenerateOuterContour(_cachedBgPath, in metrics);
+                }
+                else
+                {
+                    BorderGeometry.GenerateBackgroundRegion(_cachedBgPath, in metrics);
+                }
+
                 if (!_cachedBgPath.IsEmpty)
                 {
                     context.FillPath(_cachedBgPath, bg);
+                }
+            }
+
+            if (borderBrush.A > 0 && metrics.BorderThickness != Thickness.Zero)
+            {
+                _cachedBorderPath ??= new PathGeometry();
+                BorderGeometry.GenerateBorderRegion(_cachedBorderPath, in metrics);
+                if (!_cachedBorderPath.IsEmpty)
+                {
+                    context.FillPath(_cachedBorderPath, borderBrush);
                 }
             }
         }

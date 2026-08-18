@@ -250,11 +250,13 @@ internal static class BorderGeometry
         double dx = ex - sx, dy = ey - sy;
         double c1x, c1y, c2x, c2y;
 
-        // Reverse of CW(-dx, -dy): swap c1↔c2
-        if (dx <= 0 && dy <= 0)      { c1x = sx;          c1y = sy + ry * K; c2x = ex + rx * K; c2y = ey;          }
-        else if (dx >= 0 && dy <= 0) { c1x = sx - rx * K; c1y = sy;          c2x = ex;          c2y = ey + ry * K; }
-        else if (dx >= 0 && dy >= 0) { c1x = sx;          c1y = sy - ry * K; c2x = ex - rx * K; c2y = ey;          }
-        else                         { c1x = sx + rx * K; c1y = sy;          c2x = ex;          c2y = ey - ry * K; }
+        // Reverse of the CW arc that runs end to start: its second control point becomes this arcs
+        // first. Offsetting the first one from the start against the direction of travel bends the
+        // corner inward, which fills the round with a diagonal.
+        if (dx <= 0 && dy <= 0)      { c1x = sx;          c1y = sy - ry * K; c2x = ex + rx * K; c2y = ey;          }
+        else if (dx >= 0 && dy <= 0) { c1x = sx + rx * K; c1y = sy;          c2x = ex;          c2y = ey + ry * K; }
+        else if (dx >= 0 && dy >= 0) { c1x = sx;          c1y = sy + ry * K; c2x = ex - rx * K; c2y = ey;          }
+        else                         { c1x = sx - rx * K; c1y = sy;          c2x = ex;          c2y = ey - ry * K; }
 
         path.BezierTo(c1x, c1y, c2x, c2y, ex, ey);
     }
