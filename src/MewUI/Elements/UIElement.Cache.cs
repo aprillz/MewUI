@@ -180,24 +180,49 @@ public abstract partial class UIElement
         // because subpixel coverage cannot be resolved against unknown backdrop pixels. The nearest
         // opaque background in the ancestry is what the cache would have been composited onto, so
         // priming it with that colour leaves the same pixels and keeps the text subpixel-rendered.
+        var bounds = Bounds;
+
         for (Element? element = this; element != null; element = element.Parent)
         {
-            if (element is not Controls.Control control || control.Background.A != 255)
+            if (element is Controls.Control control && control.Background.A == 255)
             {
-                continue;
+                // This element's own background only covers the whole box when it is not rounded; a
+                // rounded one leaves its corners to whatever is behind, which an ancestor colour supplies.
+                if (!ReferenceEquals(element, this) || control.CornerRadius <= 0)
+                {
+                    return control.Background;
+                }
             }
 
-            // This element's own background only covers the whole box when it is not rounded; a
-            // rounded one leaves its corners to whatever is behind, which an ancestor colour supplies.
-            if (ReferenceEquals(element, this) && control.CornerRadius > 0)
+            // A sibling overlapping this element paints between it and any ancestor background, so that
+            // background is not what the cache composites onto: filling with it would hide the sibling.
+            if (element.Parent is IVisualTreeHost host && HasOverlappingSibling(host, element, bounds))
             {
-                continue;
+                return null;
             }
-
-            return control.Background;
         }
 
         return null;
+    }
+
+    private static bool HasOverlappingSibling(IVisualTreeHost parent, Element child, Rect bounds)
+    {
+        bool overlaps = false;
+
+        parent.VisitChildren(sibling =>
+        {
+            if (ReferenceEquals(sibling, child)
+                || sibling is not UIElement uiElement
+                || !uiElement.Bounds.IntersectsWith(bounds))
+            {
+                return true;
+            }
+
+            overlaps = true;
+            return false;
+        });
+
+        return overlaps;
     }
 
     private bool EnsureCache(IGraphicsFactory factory, double dpiScale, int deviceGeneration, BitmapCache bitmapCache)
