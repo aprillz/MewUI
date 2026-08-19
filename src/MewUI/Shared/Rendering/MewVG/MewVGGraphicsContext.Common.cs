@@ -382,7 +382,15 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             var entry = _fillCache.GetOrCreateValue(path);
             var cached = fillRule == FillRule.EvenOdd ? entry.EvenOdd : entry.NonZero;
 
-            if (cached == null || cached.IsStale(_vg.TessTol))
+            // Scale-aware staleness: the cached flattening is calibrated for the
+            // scale it was built at, so drawing the same frozen geometry larger
+            // (an icon size slider, zoom) must rebuild it or curves turn faceted.
+            var xform = _vg.GetTransformMatrix();
+            var scaleX = MathF.Sqrt(xform.M11 * xform.M11 + xform.M12 * xform.M12);
+            var scaleY = MathF.Sqrt(xform.M21 * xform.M21 + xform.M22 * xform.M22);
+            var currentScale = MathF.Max(scaleX, scaleY);
+
+            if (cached == null || cached.IsStale(_vg.TessTol, windingRule, currentScale))
             {
                 // First use or DPI changed: build object-space cache (identity transform)
                 ReplayNvgPathCommands(path, fillRule, identityTransform: true);
