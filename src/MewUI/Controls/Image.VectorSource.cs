@@ -7,13 +7,22 @@ namespace Aprillz.MewUI.Controls;
 // stretch mode and clipping both factor in); idle/unrelated repaints (immediate mode repaints the whole
 // window) just blit it. The surface is reused across content changes at the same painted size (e.g. a
 // virtualized tile rebinding to a same-aspect icon); a size/DPI change reallocates. Detached controls
-// hand their surface to the window's reclaimer pool for same-size reuse. UI-thread only.
+// hand their surface to the window's reclaimer pool for same-size reuse. Cache fields are UI-thread
+// only; a size change with a valid stale bitmap re-rasterizes on a worker thread (the stale bitmap is
+// stretched in the meantime), first show and content changes stay synchronous.
 public sealed partial class Image
 {
     private IRenderSurface? _vectorSurface;
     private IImage? _vectorImage;
     private (int Width, int Height) _vectorSize;
     private bool _vectorContentValid;
+
+    // Background-rebuild state. The volatile flag is the only cross-thread field (the worker never
+    // touches cache fields); everything else is read/written on the UI thread.
+    private volatile bool _vectorRebuildInProgress;
+    private (int Width, int Height) _vectorWantedSize;
+    private int _vectorContentVersion;
+    private bool _vectorAsyncUnsupported;
 
     private void RenderVector(IGraphicsContext context, IVectorImageSource vector)
     {
@@ -51,8 +60,21 @@ public sealed partial class Image
             int surfaceWidth = Math.Clamp((int)Math.Ceiling(visible.Width * effectiveScale), 1, maxExtent);
             int surfaceHeight = Math.Clamp((int)Math.Ceiling(visible.Height * effectiveScale), 1, maxExtent);
 
+            _vectorWantedSize = (surfaceWidth, surfaceHeight);
+
             if (_vectorSurface == null || _vectorSize != (surfaceWidth, surfaceHeight))
             {
+                // Size change with a still-correct stale bitmap: show it stretched into the new region
+                // and re-rasterize in the background (a complex vector can take hundreds of ms, which
+                // would stall every resize frame). First show and content changes fall through to the
+                // synchronous path so no wrong/empty frame is ever displayed.
+                if (_vectorImage != null && _vectorContentValid && !_vectorAsyncUnsupported)
+                {
+                    MaybeStartVectorRebuild(factory, vector, dest, visible, effectiveScale, surfaceWidth, surfaceHeight);
+                    context.DrawImage(_vectorImage, visible);
+                    return;
+                }
+
                 ClearVectorCache();
                 // Reuse a surface this control parked on a recent detach/recycle if one of the exact
                 // size survived; otherwise allocate. Reusing it keeps the offscreen surface (and its
@@ -134,8 +156,143 @@ public sealed partial class Image
         _vectorImage = factory.CreateImageView(surface);
     }
 
+    /// <summary>Starts a background re-rasterization for the wanted pixel size unless one is already in flight.</summary>
+    private void MaybeStartVectorRebuild(IGraphicsFactory factory, IVectorImageSource vector, Rect dest, Rect visible, double effectiveScale, int pixelWidth, int pixelHeight)
+    {
+        if (_vectorRebuildInProgress)
+        {
+            // Latest-wins: the in-flight build commits or is discarded against the wanted size, and its
+            // InvalidateVisual re-enters here with the current size.
+            return;
+        }
+
+        _vectorRebuildInProgress = true;
+        var destInSurface = new Rect(
+            (dest.X - visible.X) * effectiveScale,
+            (dest.Y - visible.Y) * effectiveScale,
+            dest.Width * effectiveScale,
+            dest.Height * effectiveScale);
+        _ = RebuildVectorAsync(factory, vector, destInSurface, pixelWidth, pixelHeight, _vectorContentVersion);
+    }
+
+    /// <summary>Rasterizes the vector on a worker thread, then commits the result on the UI thread.</summary>
+    private async Task RebuildVectorAsync(IGraphicsFactory factory, IVectorImageSource vector, Rect destInSurface, int pixelWidth, int pixelHeight, int contentVersion)
+    {
+        IRenderSurface? newSurface = null;
+        IImage? newImage = null;
+        var unsupported = false;
+        try
+        {
+            // The lambda captures locals only; instance cache fields stay UI-thread exclusive.
+            await Task.Run(() =>
+            {
+                // Backend worker-thread setup: GL activates a share-listed worker context, D2D
+                // (multi-threaded factory), Metal and GDI return a no-op scope.
+                using var workerScope = factory.AcquireBackgroundRenderScope();
+                var surface = factory.CreateSurface(
+                    RenderSurfaceDescriptor.CachedImage(pixelWidth, pixelHeight, 1.0, "ImageVectorCache"));
+                if (surface is not ICpuPixelSurface cpu)
+                {
+                    surface.Dispose();
+                    unsupported = true;
+                    return;
+                }
+                try
+                {
+                    cpu.Clear(Color.Transparent);
+                    using (var offscreen = factory.CreateContext(surface))
+                    {
+                        offscreen.BeginFrame(surface);
+                        try
+                        {
+                            vector.Render(offscreen, destInSurface);
+                        }
+                        finally
+                        {
+                            offscreen.EndFrame();
+                        }
+                    }
+                    newImage = factory.CreateImageView(surface);
+                    newSurface = surface;
+                    surface = null!;
+                }
+                finally
+                {
+                    surface?.Dispose();
+                }
+            }).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Build failed: drop partial state; the commit below falls back to a synchronous rebuild.
+            newImage?.Dispose();
+            newSurface?.Dispose();
+            newImage = null;
+            newSurface = null;
+        }
+
+        var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
+        Action commit = () => CommitVectorRebuild(newSurface, newImage, pixelWidth, pixelHeight, contentVersion, unsupported);
+        if (dispatcher != null && !dispatcher.IsOnUIThread)
+        {
+            dispatcher.BeginInvoke(commit);
+        }
+        else
+        {
+            commit();
+        }
+    }
+
+    /// <summary>UI-thread commit: installs the worker-built bitmap if the request still matches, discards it otherwise.</summary>
+    private void CommitVectorRebuild(IRenderSurface? newSurface, IImage? newImage, int pixelWidth, int pixelHeight, int contentVersion, bool unsupported)
+    {
+        try
+        {
+            if (unsupported)
+            {
+                // The factory produced a non-CPU-writable cache surface; stop retrying the worker path.
+                _vectorAsyncUnsupported = true;
+            }
+
+            // Discard when the control detached, the wanted size moved on (a newer resize supersedes
+            // this build) or the content changed mid-flight (the bitmap shows outdated content).
+            var stillWanted = FindVisualRoot() is Window
+                && _vectorWantedSize == (pixelWidth, pixelHeight)
+                && _vectorContentVersion == contentVersion;
+            if (newSurface == null || newImage == null || !stillWanted)
+            {
+                newImage?.Dispose();
+                newSurface?.Dispose();
+                if (stillWanted)
+                {
+                    // Build failed but the size is still wanted: drop the stale cache so the next
+                    // paint rebuilds synchronously instead of showing the stretched bitmap forever.
+                    ClearVectorCache();
+                }
+                return;
+            }
+
+            ClearVectorCache();
+            _vectorSurface = newSurface;
+            _vectorImage = newImage;
+            _vectorSize = (pixelWidth, pixelHeight);
+            _vectorContentValid = true;
+        }
+        finally
+        {
+            _vectorRebuildInProgress = false;
+            // Repaint with the committed bitmap; on discard this re-runs RenderVector, which re-kicks
+            // a build for the currently wanted size.
+            InvalidateVisual();
+        }
+    }
+
     // Marks the cached bitmap stale (content/tint changed) but keeps the surface for reuse at the same size.
-    private void InvalidateVectorContent() => _vectorContentValid = false;
+    private void InvalidateVectorContent()
+    {
+        _vectorContentValid = false;
+        _vectorContentVersion++;
+    }
 
     // Hands the live cache surface to the window's size-keyed reclaimer on detach (e.g. a virtualized
     // tile recycled) so any same-size control can reuse it instead of rebuilding the offscreen
@@ -156,6 +313,7 @@ public sealed partial class Image
             _vectorImage = null;
             _vectorSize = default;
             _vectorContentValid = false;
+            _vectorContentVersion++;
         }
         else
         {
@@ -192,6 +350,7 @@ public sealed partial class Image
         _vectorSurface = null;
         _vectorSize = default;
         _vectorContentValid = false;
+        _vectorContentVersion++;
     }
 
     // Destination rect for a vector source. Unlike the raster path (which crops the source rect for
