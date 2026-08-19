@@ -6,6 +6,10 @@ namespace Svg;
 
 public partial class SvgLinearGradientServer
 {
+    // Gradient endpoints are rounded to 4 decimals while bounds keep full double precision,
+    // so edge comparisons need this much slack to still recognize a point sitting on the bounds.
+    private const double EDGE_TOLERANCE = 1e-4;
+
     protected override Brush? CreateBrush(SvgVisualElement styleOwner, ISvgRenderer renderer, float opacity, bool forStroke)
     {
         bool usesObjectBounds = GradientUnits == SvgCoordinateUnits.ObjectBoundingBox;
@@ -85,18 +89,18 @@ public partial class SvgLinearGradientServer
         var bounds = boundable.Bounds;
         if (specifiedStart.X == specifiedEnd.X)
         {
-            return (bounds.Top < specifiedStart.Y && specifiedStart.Y < bounds.Bottom ? LinePoints.Start : LinePoints.None) |
-                   (bounds.Top < specifiedEnd.Y && specifiedEnd.Y < bounds.Bottom ? LinePoints.End : LinePoints.None);
+            return (StrictlyBetween(specifiedStart.Y, bounds.Top, bounds.Bottom) ? LinePoints.Start : LinePoints.None) |
+                   (StrictlyBetween(specifiedEnd.Y, bounds.Top, bounds.Bottom) ? LinePoints.End : LinePoints.None);
         }
 
         if (specifiedStart.Y == specifiedEnd.Y)
         {
-            return (bounds.Left < specifiedStart.X && specifiedStart.X < bounds.Right ? LinePoints.Start : LinePoints.None) |
-                   (bounds.Left < specifiedEnd.X && specifiedEnd.X < bounds.Right ? LinePoints.End : LinePoints.None);
+            return (StrictlyBetween(specifiedStart.X, bounds.Left, bounds.Right) ? LinePoints.Start : LinePoints.None) |
+                   (StrictlyBetween(specifiedEnd.X, bounds.Left, bounds.Right) ? LinePoints.End : LinePoints.None);
         }
 
-        return (Contains(bounds, specifiedStart) ? LinePoints.Start : LinePoints.None) |
-               (Contains(bounds, specifiedEnd) ? LinePoints.End : LinePoints.None);
+        return (IsInside(bounds, specifiedStart) ? LinePoints.Start : LinePoints.None) |
+               (IsInside(bounds, specifiedEnd) ? LinePoints.End : LinePoints.None);
     }
 
     private GradientPoints ExpandGradient(ISvgBoundable boundable, Point specifiedStart, Point specifiedEnd)
@@ -109,8 +113,11 @@ public partial class SvgLinearGradientServer
         var effectiveStart = specifiedStart;
         var effectiveEnd = specifiedEnd;
         var intersectionPoints = CandidateIntersections(bounds, specifiedStart, specifiedEnd);
-        if (intersectionPoints.Count < 2)
+        if (intersectionPoints.Count < 2 ||
+            CalculateDistance(intersectionPoints[0], intersectionPoints[1]) <= EDGE_TOLERANCE)
+        {
             return new GradientPoints(specifiedStart, specifiedEnd);
+        }
 
         if (!(Math.Sign(intersectionPoints[1].X - intersectionPoints[0].X) == Math.Sign(specifiedEnd.X - specifiedStart.X) &&
               Math.Sign(intersectionPoints[1].Y - intersectionPoints[0].Y) == Math.Sign(specifiedEnd.Y - specifiedStart.Y)))
@@ -157,31 +164,31 @@ public partial class SvgLinearGradientServer
         else
         {
             Point candidate;
-            if ((p1.X == bounds.Left || p1.X == bounds.Right) && (p1.Y == bounds.Top || p1.Y == bounds.Bottom))
+            if (IsCorner(bounds, p1))
             {
                 results.Add(p1);
             }
             else
             {
                 candidate = new Point(bounds.Left, (p2.Y - p1.Y) / (p2.X - p1.X) * (bounds.Left - p1.X) + p1.Y);
-                if (bounds.Top <= candidate.Y && candidate.Y <= bounds.Bottom && !ContainsPoint(results, candidate))
+                if (WithinRange(candidate.Y, bounds.Top, bounds.Bottom) && !ContainsPoint(results, candidate))
                     results.Add(candidate);
                 candidate = new Point(bounds.Right, (p2.Y - p1.Y) / (p2.X - p1.X) * (bounds.Right - p1.X) + p1.Y);
-                if (bounds.Top <= candidate.Y && candidate.Y <= bounds.Bottom && !ContainsPoint(results, candidate))
+                if (WithinRange(candidate.Y, bounds.Top, bounds.Bottom) && !ContainsPoint(results, candidate))
                     results.Add(candidate);
             }
 
-            if ((p2.X == bounds.Left || p2.X == bounds.Right) && (p2.Y == bounds.Top || p2.Y == bounds.Bottom))
+            if (IsCorner(bounds, p2))
             {
                 results.Add(p2);
             }
             else
             {
                 candidate = new Point((bounds.Top - p1.Y) / (p2.Y - p1.Y) * (p2.X - p1.X) + p1.X, bounds.Top);
-                if (bounds.Left <= candidate.X && candidate.X <= bounds.Right && !ContainsPoint(results, candidate))
+                if (WithinRange(candidate.X, bounds.Left, bounds.Right) && !ContainsPoint(results, candidate))
                     results.Add(candidate);
                 candidate = new Point((bounds.Bottom - p1.Y) / (p2.Y - p1.Y) * (p2.X - p1.X) + p1.X, bounds.Bottom);
-                if (bounds.Left <= candidate.X && candidate.X <= bounds.Right && !ContainsPoint(results, candidate))
+                if (WithinRange(candidate.X, bounds.Left, bounds.Right) && !ContainsPoint(results, candidate))
                     results.Add(candidate);
             }
         }
@@ -329,8 +336,21 @@ public partial class SvgLinearGradientServer
         return false;
     }
 
-    private static bool Contains(Rect rect, Point point)
-        => rect.Left <= point.X && point.X <= rect.Right && rect.Top <= point.Y && point.Y <= rect.Bottom;
+    private static bool IsInside(Rect rect, Point point)
+        => StrictlyBetween(point.X, rect.Left, rect.Right) && StrictlyBetween(point.Y, rect.Top, rect.Bottom);
+
+    private static bool IsCorner(Rect rect, Point point)
+        => (NearlyEqual(point.X, rect.Left) || NearlyEqual(point.X, rect.Right)) &&
+           (NearlyEqual(point.Y, rect.Top) || NearlyEqual(point.Y, rect.Bottom));
+
+    private static bool StrictlyBetween(double value, double min, double max)
+        => min + EDGE_TOLERANCE < value && value < max - EDGE_TOLERANCE;
+
+    private static bool WithinRange(double value, double min, double max)
+        => min - EDGE_TOLERANCE <= value && value <= max + EDGE_TOLERANCE;
+
+    private static bool NearlyEqual(double left, double right)
+        => Math.Abs(left - right) <= EDGE_TOLERANCE;
 
     private static double CalculateDistance(Point p1, Point p2)
     {
