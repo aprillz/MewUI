@@ -15,7 +15,17 @@ public abstract partial class SvgTextBase
     {
         get
         {
-            var path = Path(null) ?? new PathGeometry();
+            // Accumulate into a fresh geometry: Path(null) returns the element's
+            // cached path, which render freezes for the backend fill cache, and
+            // appending children into it would also corrupt the cache on every
+            // Bounds call.
+            var path = new PathGeometry();
+            var ownPath = Path(null);
+            if (ownPath is { IsEmpty: false })
+            {
+                path.AddPath(ownPath);
+            }
+
             foreach (var elem in Children.OfType<SvgVisualElement>())
             {
                 if (elem is SvgTextSpan span && string.IsNullOrWhiteSpace(span.Text))
