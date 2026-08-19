@@ -79,6 +79,11 @@ public abstract class SingleLineTextBase : TextBase
     /// </summary>
     private protected virtual string GetMeasureSample() => GetTextSnapshot();
 
+    // The inline editor of a template host (e.g. NumericUpDown) reports no text width of its
+    // own: the host's display text governs the width, so neither clearing nor typing longer
+    // edit text can resize the control; overflow scrolls within the editor viewport.
+    internal bool MeasuresOwnTextWidth { get; set; } = true;
+
     protected override Size MeasureContent(Size availableSize)
     {
         double borderInset = GetBorderVisualInset();
@@ -86,20 +91,24 @@ public abstract class SingleLineTextBase : TextBase
         var probe = engine.CreateLayout(CreateMeasureRequest("Mg"));
         double lineHeight = Math.Max(FontSize, probe.MeasuredSize.Height);
 
-        string sample = GetMeasureSample();
-        if (sample.Length == 0)
+        double sampleWidth = 0;
+        if (MeasuresOwnTextWidth)
         {
-            sample = Placeholder;
+            string sample = GetMeasureSample();
+            if (sample.Length == 0)
+            {
+                sample = Placeholder;
+            }
+            if (sample.Length > MEASURE_SAMPLE_LIMIT)
+            {
+                sample = sample[..MEASURE_SAMPLE_LIMIT];
+            }
+            if (sample.Length == 0)
+            {
+                sample = "MMMMMMMMMM";
+            }
+            sampleWidth = engine.CreateLayout(CreateMeasureRequest(sample)).MeasuredSize.Width;
         }
-        if (sample.Length > MEASURE_SAMPLE_LIMIT)
-        {
-            sample = sample[..MEASURE_SAMPLE_LIMIT];
-        }
-        if (sample.Length == 0)
-        {
-            sample = "MMMMMMMMMM";
-        }
-        double sampleWidth = engine.CreateLayout(CreateMeasureRequest(sample)).MeasuredSize.Width;
 
         return new Size(
             sampleWidth + Padding.HorizontalThickness + borderInset * 2,

@@ -300,7 +300,10 @@ public sealed partial class NumericUpDown : RangeBase
         // control owns; a custom template without it keeps full author control (ctx.Bind, etc.).
         if (_displayPart != null)
         {
-            _displayPart.IsVisible = !editing;
+            // The display text stays visible (transparent) while editing so it keeps
+            // participating in measure: the control's width follows the formatted value,
+            // not the in-flight edit text, and clearing the editor cannot change it.
+            _displayPart.Opacity = editing ? 0.0 : 1.0;
             textBox.IsVisible = editing;
             textBox.IsHitTestVisible = editing;
         }
