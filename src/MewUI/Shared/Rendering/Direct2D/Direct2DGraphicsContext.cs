@@ -524,7 +524,9 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         try
         {
             nint brush = GetSolidBrush(color);
-            float stroke = QuantizeStrokeDip((float)thickness);
+            // Path strokes keep their exact width (see the MewVG backend note);
+            // quantization stays on the UI primitives only.
+            float stroke = (float)thickness;
             D2D1VTable.DrawGeometry((ID2D1RenderTarget*)_renderTarget, geometry, brush, stroke, _defaultStrokeStyle);
         }
         finally
@@ -761,7 +763,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        float stroke = QuantizeStrokeDip((float)pen.Thickness);
+        float stroke = (float)pen.Thickness;
         nint ssHandle = _ownerFactory.GetOrCreateStrokeStyle(pen.StrokeStyle);
 
         nint geometry = BuildD2DPathGeometry(path, FillRule.NonZero, out bool ownsGeometry);
