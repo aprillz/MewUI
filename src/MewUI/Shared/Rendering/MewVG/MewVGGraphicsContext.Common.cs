@@ -359,7 +359,11 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
         ReplayNvgPathCommands(path);
         _vg.StrokeColor(ToNvgColor(color));
-        NvgStrokeWidth((float)thickness);
+        // Path strokes keep their exact width: vector artwork (SVG) relies on
+        // fractional and sub-pixel stroke weights, which the core renders via
+        // coverage-emulating alpha. Pixel snapping stays on the UI primitives
+        // (lines, rectangles, ellipses) only.
+        _vg.StrokeWidth((float)thickness);
         _vg.Stroke();
     }
 
@@ -512,7 +516,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
 
         ReplayNvgPathCommands(path);
         NvgStrokeHelper.ApplyPenStyle(_vg, pen);
-        NvgStrokeWidth((float)pen.Thickness);
+        _vg.StrokeWidth((float)pen.Thickness);
         NvgStrokeHelper.ApplyStrokeBrush(_vg, pen, NvgStrokeHelper.ComputePathBounds(path));
         _vg.Stroke();
     }
