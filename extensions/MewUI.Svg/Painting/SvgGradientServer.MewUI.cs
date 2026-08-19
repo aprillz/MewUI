@@ -103,15 +103,17 @@ public abstract partial class SvgGradientServer
 
     protected Matrix3x2 GetEffectiveGradientTransform(Rect bounds, bool usesObjectBounds)
     {
+        // gradientTransform is defined inside the gradient's own coordinate system, so it has to
+        // run before the bounding-box mapping. Appending it instead would rotate/skew the gradient
+        // around the document origin rather than around the element.
         var transform = EffectiveGradientTransform;
-        transform = Matrix3x2.CreateTranslation((float)bounds.X, (float)bounds.Y) * transform;
 
         if (usesObjectBounds)
         {
-            transform = Matrix3x2.CreateScale((float)bounds.Width, (float)bounds.Height) * transform;
+            transform *= Matrix3x2.CreateScale((float)bounds.Width, (float)bounds.Height);
         }
 
-        return transform;
+        return transform * Matrix3x2.CreateTranslation((float)bounds.X, (float)bounds.Y);
     }
 
     protected static Point TransformPoint(Point point, Matrix3x2 matrix)
