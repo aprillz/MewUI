@@ -108,6 +108,11 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
         {
             return;
         }
+        // Backends cache tessellation/geometry only for frozen paths; the built path is final here.
+        if (!path.IsFrozen)
+        {
+            path.Freeze();
+        }
 
         var brush = Fill.GetBrush(this, renderer, FixOpacityValue(FillOpacity));
         if (brush is null)
@@ -134,6 +139,10 @@ public abstract partial class SvgVisualElement : SvgElement, ISvgBoundable, ISvg
         if (path is null || path.IsEmpty)
         {
             return false;
+        }
+        if (!path.IsFrozen)
+        {
+            path.Freeze();
         }
 
         var brush = Stroke.GetBrush(this, renderer, FixOpacityValue(StrokeOpacity), true);
