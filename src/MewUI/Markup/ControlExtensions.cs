@@ -1444,6 +1444,20 @@ public static class ControlExtensions
     }
 
     /// <summary>
+    /// Sets what the control builds a tooltip from when it has no tooltip of its own.
+    /// </summary>
+    /// <param name="control">Target command source.</param>
+    /// <param name="mode">Parts of the command to build from.</param>
+    /// <returns>The control for chaining.</returns>
+    public static T CommandToolTipMode<T>(this T control, CommandToolTipMode mode)
+        where T : CommandSourceControl
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.CommandToolTipMode = mode;
+        return control;
+    }
+
+    /// <summary>
     /// Binds the button's semantic command to an observable value.
     /// </summary>
     public static T BindCommand<T>(
@@ -1468,6 +1482,19 @@ public static class ControlExtensions
     public static T OnClick<T>(this T button, Action handler) where T : Button
     {
         button.Click += handler;
+        return button;
+    }
+
+    /// <summary>
+    /// Sets the predicate asked whether the button can be clicked.
+    /// </summary>
+    /// <param name="button">Target button.</param>
+    /// <param name="predicate">Predicate, or null to ask nothing.</param>
+    /// <returns>The button for chaining.</returns>
+    public static T OnCanClick<T>(this T button, Func<bool>? predicate) where T : Button
+    {
+        ArgumentNullException.ThrowIfNull(button);
+        button.CanClick = predicate;
         return button;
     }
 

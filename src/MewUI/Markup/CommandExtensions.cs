@@ -8,6 +8,31 @@ namespace Aprillz.MewUI;
 public static class CommandExtensions
 {
     /// <summary>
+    /// Sets the sentence saying what running the command does. Material a presenter may use; a tooltip
+    /// built from a command carries it when the presenter asks for it.
+    /// </summary>
+    public static Command Description(this Command command, string? description)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        command.Presentation.Description = description;
+        return command;
+    }
+
+    /// <summary>
+    /// Binds the command's description to an observable source.
+    /// </summary>
+    public static Command BindDescription(this Command command, ObservableValue<string?> source)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(source);
+        command.Presentation.SetBinding(
+            CommandPresentation.DescriptionProperty,
+            source,
+            BindingMode.OneWay);
+        return command;
+    }
+
+    /// <summary>
     /// Binds the command's default presentation text to an observable source.
     /// </summary>
     /// <remarks>

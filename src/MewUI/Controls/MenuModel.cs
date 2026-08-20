@@ -61,6 +61,7 @@ public sealed class MenuItem : MenuEntry
     private char _cachedAccessKey;
     private int _cachedUnderlineIndex = -1;
     private bool _commandCanExecute = true;
+    private bool _canClick = true;
     private string? _commandShortcutDisplayText;
 
     public MenuItem() { }
@@ -131,9 +132,49 @@ public sealed class MenuItem : MenuEntry
         set => SetValue(SubMenuProperty, value);
     }
 
+    /// <summary>
+    /// Asked whether the row can be clicked, for a row whose condition is local enough that a command
+    /// would be ceremony. Combined with <see cref="IsEnabled"/> and with the command's own answer rather
+    /// than replacing either, so any of the three disables the row.
+    /// </summary>
+    /// <remarks>
+    /// A predicate carries no change signal. It is asked again each time the menu opens, which is the
+    /// only moment a row is about to be read; a condition that changes while the menu is up must be
+    /// expressed as a binding to <see cref="IsEnabled"/> instead.
+    /// </remarks>
+    public Func<bool>? CanClick
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                ReevaluateCanClick();
+            }
+        }
+    }
+
     internal event Action<MenuItem, MenuModelChange>? Changed;
 
-    internal bool IsEffectivelyEnabled => IsEnabled && _commandCanExecute;
+    internal bool IsEffectivelyEnabled => IsEnabled && _commandCanExecute && _canClick;
+
+    /// <summary>
+    /// Asks <see cref="CanClick"/> again and reports whether the answer moved. The result is kept rather
+    /// than asked per read: the drawing and hit-testing paths read it many times per frame.
+    /// </summary>
+    internal bool ReevaluateCanClick()
+    {
+        bool value = CanClick?.Invoke() ?? true;
+        if (_canClick == value)
+        {
+            return false;
+        }
+
+        _canClick = value;
+        Changed?.Invoke(this, MenuModelChange.Enabled);
+        return true;
+    }
 
     internal IconTemplate? ResolveIconTemplate()
         => HasExplicitValue(IconProperty) ? Icon : Command?.Presentation.Icon;
@@ -201,7 +242,7 @@ public sealed class MenuItem : MenuEntry
         if (oldCommand != null)
         {
             WeakEventManager.RemoveHandler(
-                CommandPresentationWeakEvents.Changed,
+                CommandPresentationWeakEvents.Invalidated,
                 oldCommand.Presentation,
                 this);
         }
@@ -213,7 +254,7 @@ public sealed class MenuItem : MenuEntry
         if (newCommand != null)
         {
             WeakEventManager.AddHandler(
-                CommandPresentationWeakEvents.Changed,
+                CommandPresentationWeakEvents.Invalidated,
                 newCommand.Presentation,
                 this,
                 static item => item.OnCommandPresentationChanged());

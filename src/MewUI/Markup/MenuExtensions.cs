@@ -197,6 +197,19 @@ public static class MenuExtensions
     }
 
     /// <summary>
+    /// Sets the predicate asked whether the row can be clicked. Asked again each time the menu opens.
+    /// </summary>
+    /// <param name="item">Target menu item.</param>
+    /// <param name="predicate">Predicate, or null to ask nothing.</param>
+    /// <returns>The menu item for chaining.</returns>
+    public static MenuItem OnCanClick(this MenuItem item, Func<bool>? predicate)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.CanClick = predicate;
+        return item;
+    }
+
+    /// <summary>
     /// Binds the local enabled value. Command CanExecute is combined with this value and does not
     /// replace the binding.
     /// </summary>

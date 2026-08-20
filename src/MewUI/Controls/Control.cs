@@ -1376,6 +1376,15 @@ public abstract partial class Control : TextElement
         HideToolTip();
     }
 
+    /// <summary>
+    /// What to show when the pointer rests on this control, or <see langword="null"/> to show nothing.
+    /// Called each time a tooltip is about to appear, so a control that builds its content from something
+    /// that changes can build it here rather than keeping <see cref="ToolTip"/> in step.
+    /// </summary>
+    protected virtual Element? ResolveToolTipContent() => ToolTip;
+
+    internal Element? ResolveToolTipContentInternal() => ResolveToolTipContent();
+
     private void ShowToolTip()
     {
         if (!IsMouseOver)
@@ -1383,7 +1392,7 @@ public abstract partial class Control : TextElement
             return;
         }
 
-        if (ToolTip == null)
+        if (ResolveToolTipContent() is not Element content)
         {
             return;
         }
@@ -1407,7 +1416,7 @@ public abstract partial class Control : TextElement
         var region = window.GetPopupPlacementRegion(new Rect(anchor.X, anchor.Y, 0, 0));
         var measureSize = new Size(Math.Max(0, region.Width), Math.Max(0, region.Height));
 
-        window.ShowToolTip(this, ToolTip!, measureSize, desired =>
+        window.ShowToolTip(this, content, measureSize, desired =>
         {
             const double dx = 12;
             const double dy = 18;
@@ -1428,11 +1437,6 @@ public abstract partial class Control : TextElement
 
     private void HideToolTip()
     {
-        if (ToolTip == null)
-        {
-            return;
-        }
-
         var root = FindVisualRoot();
         if (root is not Window window)
         {

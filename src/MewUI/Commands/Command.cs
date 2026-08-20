@@ -50,5 +50,10 @@ public sealed class Command
     /// </summary>
     public IconTemplate? Icon => Presentation.Icon;
 
+    /// <summary>
+    /// Gets the sentence saying what running this command does, or null when it has none.
+    /// </summary>
+    public string? Description => Presentation.Description;
+
     public override string ToString() => Id;
 }
