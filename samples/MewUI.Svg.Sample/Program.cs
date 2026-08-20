@@ -206,11 +206,12 @@ Element IconsView(string iconSet)
             {
                 var img = new Image()
                     .Register(ctx, "Img")
+                    .Bind(Image.WidthProperty, iconSize).Bind(Image.HeightProperty, iconSize)
                     .StretchMode(Stretch.Uniform);
                 return img;
             },
             bind: (view, item, index, ctx) =>
-                ctx.Get<Image>("Img").Bind(Image.WidthProperty, iconSize).Bind(Image.HeightProperty, iconSize).Source(item)));
+                ctx.Get<Image>("Img").Source(item)));
 
     // S/M/L radio buttons resize the virtualized tiles by re-applying the WrapPresenter
     // (SetPresenter keeps ItemsSource/ItemTemplate + scroll offset).
