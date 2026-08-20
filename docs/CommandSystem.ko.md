@@ -101,7 +101,7 @@ var bar = new ToolBar()
             .Label("View")
             .Toggle(wrap, isChecked: true)
             .Menu("Zoom", new Menu().Item(zoomIn).Item(zoomOut), zoomIcon)
-            .Splitter()
+            .Separator()
             .Host(new TextBox().Width(140).Placeholder("Search")));
 
 bar.Commands.Register(save, () => document.Save(), () => document.IsDirty);

@@ -99,6 +99,19 @@ public static class PanelExtensions
     #region StackPanel
 
     /// <summary>
+    /// Sets the direction of the run this rule divides. Horizontal draws a vertical rule.
+    /// </summary>
+    /// <param name="separator">Target separator.</param>
+    /// <param name="orientation">Orientation value.</param>
+    /// <returns>The separator for chaining.</returns>
+    public static Separator Orientation(this Separator separator, Orientation orientation)
+    {
+        ArgumentNullException.ThrowIfNull(separator);
+        separator.Orientation = orientation;
+        return separator;
+    }
+
+    /// <summary>
     /// Sets the orientation.
     /// </summary>
     /// <param name="panel">Target stack panel.</param>

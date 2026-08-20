@@ -4,18 +4,35 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// An entry in a <see cref="ToolBarGroup"/>. Entries are models: the toolbar materializes a control for
-/// each one, and turns the ones a band cannot fit into rows of that band's overflow menu.
+/// each one, and hands the ones a band cannot fit to that band's overflow popup, which shows the very
+/// controls it made rather than rebuilding them.
 /// </summary>
 public abstract class ToolBarEntry : MewObject
 {
+    /// <summary>
+    /// What to show when the pointer rests on this entry. Content, not a policy: when it is left empty the
+    /// entry builds one from its command according to <see cref="ToolBar.ItemToolTipMode"/>.
+    /// </summary>
+    public static readonly MewProperty<Element?> ToolTipProperty =
+        MewProperty<Element?>.Register<ToolBarEntry>(nameof(ToolTip), null,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.NotifyChanged());
+
     internal ToolBarEntry() { }
+
+    /// <inheritdoc cref="ToolTipProperty"/>
+    public Element? ToolTip
+    {
+        get => GetValue(ToolTipProperty);
+        set => SetValue(ToolTipProperty, value);
+    }
 
     internal ToolBarGroup? Owner { get; set; }
 
     private protected void NotifyChanged() => Owner?.NotifyChanged();
 }
 
-/// <summary>Static text that annotates the entry beside it. It does not appear in an overflow menu.</summary>
+/// <summary>Static text that annotates the entry beside it.</summary>
 public sealed class ToolBarLabelItem : ToolBarEntry
 {
     public static readonly MewProperty<string> TextProperty =
@@ -37,10 +54,9 @@ public sealed class ToolBarLabelItem : ToolBarEntry
 
 /// <summary>
 /// A rule between two runs of entries in one group. Groups state which entries belong together, so a
-/// splitter divides a group that travels as one rather than standing between groups. It collapses into a
-/// separator in an overflow menu.
+/// separator divides a group that travels as one rather than standing between groups.
 /// </summary>
-public sealed class ToolBarSplitter : ToolBarEntry
+public sealed class ToolBarSeparator : ToolBarEntry
 {
 }
 
@@ -160,8 +176,8 @@ public sealed class ToolBarMenuItem : ToolBarEntry
 }
 
 /// <summary>
-/// An entry that hosts an arbitrary element. It is the one entry a band cannot hide, because an
-/// arbitrary element has no menu row to collapse into; it shrinks to its own minimum instead.
+/// An entry that hosts an arbitrary element. The overflow popup shows the element itself, so a hosted
+/// control collapses like any other entry and keeps what it holds while it is there.
 /// </summary>
 public sealed class ToolBarHost : ToolBarEntry
 {
@@ -288,7 +304,7 @@ public sealed class ToolBarGroup
 
 /// <summary>
 /// One row of a toolbar. Bands are explicit, so a row never appears or disappears because the width
-/// changed: a band that runs out of room hides its trailing groups behind its own chevron instead.
+/// changed: a band that runs out of room hides its trailing groups behind its own overflow button instead.
 /// </summary>
 public sealed class ToolBarBand
 {

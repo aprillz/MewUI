@@ -16,10 +16,24 @@ public sealed partial class ToolBar
         internal bool IsSet => Band >= 0;
     }
 
-    private (GroupVisual? Group, DropTarget Target, Point Press, bool Armed) _drag;
+    private (GroupVisual? Group, DropTarget Target, Point Press, bool Armed) _dragState;
+
+    /// <summary>
+    /// The drag in progress. Assigned rather than the field, so <see cref="IsReordering"/> is answered from
+    /// the property store and a binding or a style can follow the drag.
+    /// </summary>
+    private (GroupVisual? Group, DropTarget Target, Point Press, bool Armed) _drag
+    {
+        get => _dragState;
+        set
+        {
+            _dragState = value;
+            SetValue(IsReorderingPropertyKey, value.Group != null);
+        }
+    }
 
     /// <summary>The drop the current drag would commit, for tests and for the mark.</summary>
-    internal DropTarget DropTargetInternal => _drag.Target;
+    internal DropTarget DropTargetInternal => _dragState.Target;
 
     private void OnGripPressed(GroupVisual group, MouseEventArgs e)
     {

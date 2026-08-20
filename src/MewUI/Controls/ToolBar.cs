@@ -4,7 +4,7 @@ namespace Aprillz.MewUI.Controls;
 
 /// <summary>
 /// Rows of command groups. Rows are the <see cref="Bands"/> themselves, never a consequence of the
-/// width: a band that runs out of room hides its trailing groups behind its own chevron, so the
+/// width: a band that runs out of room hides its trailing groups behind its own overflow button, so the
 /// toolbar's height is what the application asked for and does not change as the window resizes.
 /// </summary>
 public sealed partial class ToolBar : Control, IVisualTreeHost
@@ -14,6 +14,15 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<ToolBar>(DefaultStyles.CreateToolBarStyle);
 
+    // The parts are ordinary controls wearing a named style, so a button the application puts in a host
+    // can wear the same one and an application style sheet can redefine all of them at once.
+    private static readonly bool _buttonStyleRegistered =
+        FrameworkNamedStyles.Register("toolbar-button", DefaultStyles.CreateToolBarButtonStyle);
+    private static readonly bool _toggleButtonStyleRegistered =
+        FrameworkNamedStyles.Register("toolbar-toggle-button", DefaultStyles.CreateToolBarToggleButtonStyle);
+    private static readonly bool _labelStyleRegistered =
+        FrameworkNamedStyles.Register("toolbar-label", DefaultStyles.CreateToolBarLabelStyle);
+
     /// <summary>How entries show their commands unless the entry overrides it.</summary>
     public static readonly MewProperty<CommandPresentationMode> ItemPresentationProperty =
         MewProperty<CommandPresentationMode>.Register<ToolBar>(nameof(ItemPresentation),
@@ -22,11 +31,25 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
             static (self, _, _) => self.OnBandsChanged());
 
     /// <summary>
+    /// What the entries build a tooltip from when the entry supplies none. Decided here rather than per
+    /// entry: a toolbar that says one thing about half its buttons and another about the rest is harder to
+    /// read than either. Defaults to everything the command can say, because an icon-only entry shows no
+    /// name at all.
+    /// </summary>
+    public static readonly MewProperty<CommandToolTipMode> ItemToolTipModeProperty =
+        MewProperty<CommandToolTipMode>.Register<ToolBar>(nameof(ItemToolTipMode),
+            CommandToolTipMode.Text | CommandToolTipMode.Shortcut | CommandToolTipMode.Description,
+            MewPropertyOptions.None,
+            static (self, _, _) => self.OnBandsChanged());
+
+    /// <summary>
     /// Whether groups may be dragged into a different place. This is a capability, not a mode: a press
-    /// still runs the entry, and only a drag from a group's grip moves it.
+    /// still runs the entry, and only a drag from a group's grip moves it. On by default, as a toolbar
+    /// with grips has been since the toolbars this one is modelled on; turn it off for a fixed one and
+    /// the grips go with it.
     /// </summary>
     public static readonly MewProperty<bool> CanReorderGroupsProperty =
-        MewProperty<bool>.Register<ToolBar>(nameof(CanReorderGroups), false,
+        MewProperty<bool>.Register<ToolBar>(nameof(CanReorderGroups), true,
             MewPropertyOptions.AffectsLayout);
 
     /// <summary>Gap between entries inside one group.</summary>
@@ -38,14 +61,11 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
     /// <summary>Inset of an entry inside its own plate.</summary>
     private const double GROUP_PADDING = 2;
 
-    /// <summary>Gap on either side of a label, which has no button face to keep it off its neighbours.</summary>
-    private const double LABEL_MARGIN = 4;
-
     /// <summary>
-    /// Width of a band's overflow chevron. Narrower than an entry because it carries an 8 DIP glyph and
+    /// Width of a band's overflow button. Narrower than an entry because it carries an 8 DIP glyph and
     /// nothing else; its height is the entry height, so it lines up with the entries beside it.
     /// </summary>
-    private const double CHEVRON_WIDTH = 12;
+    private const double OVERFLOW_BUTTON_WIDTH = 12;
 
     // 4 DIPs, the same gesture threshold the drag/drop router uses.
     private const double DRAG_THRESHOLD = 4.0;
@@ -66,6 +86,13 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
         set => SetValue(ItemPresentationProperty, value);
     }
 
+    /// <inheritdoc cref="ItemToolTipModeProperty"/>
+    public CommandToolTipMode ItemToolTipMode
+    {
+        get => GetValue(ItemToolTipModeProperty);
+        set => SetValue(ItemToolTipModeProperty, value);
+    }
+
     /// <inheritdoc cref="CanReorderGroupsProperty"/>
     public bool CanReorderGroups
     {
@@ -76,8 +103,14 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
     /// <summary>Raised after a drag has moved a group, once <see cref="Bands"/> holds the new layout.</summary>
     public event Action? GroupsReordered;
 
-    /// <summary>Gets whether a group is currently being dragged.</summary>
-    public bool IsReordering => _drag.Group != null;
+    private static readonly MewPropertyKey<bool> IsReorderingPropertyKey =
+        MewProperty<bool>.RegisterReadOnly<ToolBar>(nameof(IsReordering), false);
+
+    /// <summary>Whether a group is currently being dragged.</summary>
+    public static readonly MewProperty<bool> IsReorderingProperty = IsReorderingPropertyKey.Property;
+
+    /// <inheritdoc cref="IsReorderingProperty"/>
+    public bool IsReordering => GetValue(IsReorderingProperty);
 
     /// <summary>
     /// Height of a group's plate: an entry of the standard control height, plus the plate's own padding.
@@ -126,21 +159,96 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
             _visuals.Add(visual);
         }
 
+        UpdateTrackedPresentations();
+
         _visualsValid = true;
     }
 
     private CommandPresentationMode ResolvePresentation(ToolBarItem item)
         => item.Presentation ?? ItemPresentation;
 
+    private readonly HashSet<CommandPresentation> _trackedPresentations = new();
+    private readonly HashSet<CommandPresentation> _presentationScratch = new();
+
+    /// <summary>
+    /// Follows the presentations the bands currently draw from. An entry's content is built here rather
+    /// than by the button, which prefers a content it was handed, so a presentation that changes has to
+    /// reach the toolbar for the entry to show it. One registration per presentation, because two entries
+    /// may run the same command; weak, because a command outlives the toolbar.
+    /// </summary>
+    private void UpdateTrackedPresentations()
+    {
+        _presentationScratch.Clear();
+        foreach (var band in _bands)
+        {
+            foreach (var group in band.GroupsInternal)
+            {
+                foreach (var entry in group.ItemsInternal)
+                {
+                    if (entry is ToolBarItem item && item.Command is Command command)
+                    {
+                        _presentationScratch.Add(command.Presentation);
+                    }
+                }
+            }
+        }
+
+        foreach (var presentation in _trackedPresentations)
+        {
+            if (!_presentationScratch.Contains(presentation))
+            {
+                WeakEventManager.RemoveHandler(
+                    CommandPresentationWeakEvents.Invalidated, presentation, this);
+            }
+        }
+
+        foreach (var presentation in _presentationScratch)
+        {
+            if (!_trackedPresentations.Contains(presentation))
+            {
+                WeakEventManager.AddHandler(
+                    CommandPresentationWeakEvents.Invalidated,
+                    presentation,
+                    this,
+                    static bar => bar.OnBandsChanged());
+            }
+        }
+
+        _trackedPresentations.Clear();
+        foreach (var presentation in _presentationScratch)
+        {
+            _trackedPresentations.Add(presentation);
+        }
+    }
+
     private Element CreateEntryControl(ToolBarEntry entry)
+    {
+        var control = CreateEntryControlCore(entry);
+
+        // A hosted element is the application's own; the toolbar states nothing about it, tooltip
+        // included, the same way it leaves the style the application gave it alone.
+        if (entry is not ToolBarHost && control is Control target)
+        {
+            target.ToolTip = entry.ToolTip;
+            if (target is CommandSourceControl source)
+            {
+                source.CommandToolTipMode = ItemToolTipMode;
+            }
+        }
+
+        return control;
+    }
+
+    private Element CreateEntryControlCore(ToolBarEntry entry)
     {
         switch (entry)
         {
             case ToolBarToggleItem toggle:
                 // A toggle carries no CommandPresentationMode, which lives on Button, so its content is
                 // materialized here from the same command presentation a button would have used.
-                var toggleButton = new ToolBarToggleButton
+                var toggleButton = new ToggleButton
                 {
+                    StyleName = BuiltInStyles.ToolBarToggleButton,
                     Command = toggle.Command,
                     Content = BuildCommandContent(toggle.Command, ResolvePresentation(toggle)),
                     IsChecked = toggle.IsChecked,
@@ -166,21 +274,25 @@ public sealed partial class ToolBar : Control, IVisualTreeHost
             case ToolBarItem item:
                 // Built here rather than through the button's own CommandPresentationMode: the mode comes
                 // from the entry or the toolbar, and an entry with no icon has to fall back to text.
-                return new ToolBarButton
+                return new Button
                 {
+                    StyleName = BuiltInStyles.ToolBarButton,
                     Command = item.Command,
                     Content = BuildCommandContent(item.Command, ResolvePresentation(item)),
                 };
 
-            case ToolBarSplitter:
-                return new ToolBarSplitterElement();
+            case ToolBarSeparator:
+                return new Separator();
 
             case ToolBarLabelItem label:
-                return new ToolBarLabel
+                return new Label
                 {
+                    StyleName = BuiltInStyles.ToolBarLabel,
                     Text = label.Text,
-                    Margin = new Thickness(LABEL_MARGIN, 0, LABEL_MARGIN, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
+
+                    // A label runs nothing, so a press on it belongs to the group under it: that is what
+                    // starts a reorder drag.
+                    IsHitTestVisible = false,
                 };
 
             case ToolBarHost host:

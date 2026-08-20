@@ -52,6 +52,19 @@ public static class ToolBarExtensions
     }
 
     /// <summary>
+    /// Sets what entries build a tooltip from when they supply none of their own.
+    /// </summary>
+    /// <param name="bar">Target toolbar.</param>
+    /// <param name="mode">Parts of the command to build from.</param>
+    /// <returns>The toolbar for chaining.</returns>
+    public static ToolBar ItemToolTipMode(this ToolBar bar, CommandToolTipMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(bar);
+        bar.ItemToolTipMode = mode;
+        return bar;
+    }
+
+    /// <summary>
     /// Sets whether groups may be dragged into a different place.
     /// </summary>
     /// <param name="bar">Target toolbar.</param>
@@ -151,10 +164,10 @@ public static class ToolBarExtensions
     /// </summary>
     /// <param name="group">Target group.</param>
     /// <returns>The group for chaining.</returns>
-    public static ToolBarGroup Splitter(this ToolBarGroup group)
+    public static ToolBarGroup Separator(this ToolBarGroup group)
     {
         ArgumentNullException.ThrowIfNull(group);
-        group.Items.Add(new ToolBarSplitter());
+        group.Items.Add(new ToolBarSeparator());
         return group;
     }
 
@@ -172,6 +185,50 @@ public static class ToolBarExtensions
     }
 
     /// <summary>
+    /// Adds the given elements as entries, each hosted as it is. For a toolbar built from controls rather
+    /// than from commands: the elements keep their own content, handlers and bindings, and the band
+    /// collapses them into its overflow popup like any other entry.
+    /// </summary>
+    /// <param name="group">Target group.</param>
+    /// <param name="elements">Elements to host, left to right.</param>
+    /// <returns>The group for chaining.</returns>
+    public static ToolBarGroup Items(this ToolBarGroup group, params Element[] elements)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(elements);
+
+        foreach (var element in elements)
+        {
+            ApplyToolBarLook(element);
+            group.Items.Add(new ToolBarHost(element));
+        }
+
+        return group;
+    }
+
+    /// <summary>
+    /// Names the toolbar style for the kinds of control a toolbar has a look for. Only <see cref="Items"/>
+    /// does this: it is the entry point an application chooses when it wants a toolbar built from
+    /// controls, so what goes through it should look like one. A control that already names a style keeps
+    /// it, and <see cref="Host"/> leaves everything alone.
+    /// </summary>
+    private static void ApplyToolBarLook(Element element)
+    {
+        if (element is not Control control || control.StyleName != null)
+        {
+            return;
+        }
+
+        control.StyleName = control switch
+        {
+            Controls.ToggleButton => BuiltInStyles.ToolBarToggleButton,
+            Controls.Button => BuiltInStyles.ToolBarButton,
+            Controls.Label => BuiltInStyles.ToolBarLabel,
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// Sets how this entry shows its command, overriding the toolbar's own presentation.
     /// </summary>
     /// <param name="item">Target entry.</param>
@@ -183,6 +240,83 @@ public static class ToolBarExtensions
         ArgumentNullException.ThrowIfNull(item);
         item.Presentation = presentation;
         return item;
+    }
+
+    /// <summary>Binds the text this label entry shows.</summary>
+    public static ToolBarLabelItem BindText(this ToolBarLabelItem item, ObservableValue<string> source)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        item.SetBinding(ToolBarLabelItem.TextProperty, source, BindingMode.OneWay);
+        return item;
+    }
+
+    /// <summary>Binds the text this menu entry shows.</summary>
+    public static ToolBarMenuItem BindText(this ToolBarMenuItem item, ObservableValue<string> source)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        item.SetBinding(ToolBarMenuItem.TextProperty, source, BindingMode.OneWay);
+        return item;
+    }
+
+    /// <summary>Binds the icon this menu entry shows.</summary>
+    public static ToolBarMenuItem BindIcon(this ToolBarMenuItem item, ObservableValue<IconTemplate?> source)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        item.SetBinding(ToolBarMenuItem.IconProperty, source, BindingMode.OneWay);
+        return item;
+    }
+
+    /// <summary>Binds the command this entry runs.</summary>
+    public static T BindCommand<T>(this T item, ObservableValue<Command?> source)
+        where T : ToolBarItem
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        item.SetBinding(ToolBarItem.CommandProperty, source, BindingMode.OneWay);
+        return item;
+    }
+
+    /// <summary>
+    /// Binds whether this entry reads as on. Two-way: the toolbar writes the entry back when the button
+    /// it made is pressed, so the bound value follows the user as well as the application.
+    /// </summary>
+    public static ToolBarToggleItem BindIsChecked(this ToolBarToggleItem item, ObservableValue<bool> source)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(source);
+        item.SetBinding(ToolBarToggleItem.IsCheckedProperty, source, BindingMode.TwoWay);
+        return item;
+    }
+
+    /// <summary>
+    /// Sets what this entry shows when the pointer rests on it, instead of what its command would say.
+    /// </summary>
+    /// <param name="entry">Target entry.</param>
+    /// <param name="text">Tooltip text, or null to go back to the command.</param>
+    /// <returns>The entry for chaining.</returns>
+    public static T ToolTip<T>(this T entry, string? text)
+        where T : ToolBarEntry
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        entry.ToolTip = string.IsNullOrEmpty(text) ? null : new TextBlock { Text = text };
+        return entry;
+    }
+
+    /// <summary>
+    /// Sets what this entry shows when the pointer rests on it, instead of what its command would say.
+    /// </summary>
+    /// <param name="entry">Target entry.</param>
+    /// <param name="content">Tooltip content, or null to go back to the command.</param>
+    /// <returns>The entry for chaining.</returns>
+    public static T ToolTip<T>(this T entry, Element? content)
+        where T : ToolBarEntry
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        entry.ToolTip = content;
+        return entry;
     }
 
     /// <summary>

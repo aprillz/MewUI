@@ -6279,7 +6279,7 @@ partial class GalleryView
                     .Item(Cmd("print", "_Print", "print_regular"))
                     .Item(Cmd("duplicate", "Duplicate", "save_copy_regular"))
                     .Item(Cmd("refresh", "Refresh", "arrow_sync_circle_regular"))
-                    .Splitter()
+                    .Separator()
                     .Item(Cmd("image", "Image", "image_library_regular"))
                     .Item(Cmd("shapes", "Shapes", "shapes_regular"))
                     .Item(Cmd("table", "Table", "table_regular")),

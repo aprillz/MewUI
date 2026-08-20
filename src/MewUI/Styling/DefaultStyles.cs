@@ -778,13 +778,18 @@ public static class DefaultStyles
         };
 
     internal static Style CreateToolBarLabelStyle() =>
-        new(typeof(ToolBarLabel))
+        new(typeof(Label))
         {
             Transitions = ColorTransitions,
             Setters =
             [
                 Setter.Create(Control.BorderThicknessProperty, 0.0),
                 Setter.Create(Control.PaddingProperty, new Thickness(0)),
+
+                // A label has no button face to keep it off its neighbours, so the gap is part of its look
+                // rather than something the toolbar adds when it builds one.
+                Setter.Create(FrameworkElement.MarginProperty, new Thickness(4, 0, 4, 0)),
+                Setter.Create(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center),
             ],
             Triggers =
             [
@@ -800,7 +805,7 @@ public static class DefaultStyles
         };
 
     internal static Style CreateToolBarGroupPlateStyle() =>
-        new(typeof(ToolBarGroupPlate))
+        new(typeof(ToolBar.ToolBarGroupPlate))
         {
             Setters =
             [
@@ -818,6 +823,32 @@ public static class DefaultStyles
             transitions: [Transition.Create(Control.BackgroundProperty)],
             setters: CreateToolBarButtonBaseSetters(),
             triggers: CreateToolBarButtonTriggers());
+    }
+
+    internal static Style CreateToolBarOverflowButtonStyle()
+    {
+        EnsureRegistered<Control>(CreateControlBaseStyle);
+        EnsureRegistered<Button>(CreateButtonStyle);
+        return Style.DeriveFromRegisteredDefault(typeof(Button),
+            transitions: [Transition.Create(Control.BackgroundProperty)],
+            setters: CreateToolBarButtonBaseSetters(),
+            triggers:
+            [
+                .. CreateToolBarButtonTriggers(),
+
+                // The same fill a checked toggle entry carries, because the state is the same claim: this
+                // face is what the thing on screen belongs to. Both composite over the group's plate.
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Active | VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ContainerBackground, t.Palette.Accent.WithAlpha(96)))],
+                },
+                new StateTrigger
+                {
+                    Match = VisualStateFlags.Active | VisualStateFlags.Hot | VisualStateFlags.Enabled,
+                    Setters = [Setter.Create(Control.BackgroundProperty, t => Color.Composite(t.Palette.ButtonHoverBackground, t.Palette.Accent.WithAlpha(96)))],
+                },
+            ]);
     }
 
     internal static Style CreateToolBarToggleButtonStyle()

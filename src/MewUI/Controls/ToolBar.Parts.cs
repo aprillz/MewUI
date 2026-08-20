@@ -6,95 +6,25 @@ namespace Aprillz.MewUI.Controls;
 
 public sealed partial class ToolBar
 {
-    private static DelegateControlTemplate<DropDownButton>? _overflowTemplate;
-
-    // A toolbar wants a bare chevron, so the overflow supplies its own face through the public part
-    // contract. The face clears its own minimums because the flat style inherits the base control size,
-    // which the owner's minimums cannot undo.
-    private static DelegateControlTemplate<DropDownButton> OverflowTemplate
-        => _overflowTemplate ??= new DelegateControlTemplate<DropDownButton>(static (owner, ctx) =>
-        {
-            var face = new ToolBarButton
-            {
-                Padding = new Thickness(0),
-                MinWidth = 0,
-                MinHeight = 0,
-                Focusable = false,
-                IsTabStop = false,
-                Content = new GlyphElement { Kind = GlyphKind.ChevronDown, GlyphSize = 3 },
-            };
-            ctx.Register(DropDownButton.PART_DROP_DOWN_BUTTON, face);
-            return face;
-        });
-
-    private static DropDownButton CreateChevron(ToolBar owner, Menu menu, Action opening)
-    {
-        var chevron = new DropDownButton
-        {
-            Template = OverflowTemplate,
-            DropDownMenu = menu,
-            MinWidth = CHEVRON_WIDTH,
-            MinHeight = 0,
-            VerticalAlignment = VerticalAlignment.Stretch,
-            Focusable = false,
-            IsTabStop = false,
-        };
-        chevron.DropDownOpening += opening;
-        chevron.Parent = owner;
-        return chevron;
-    }
-
     /// <summary>
-    /// Fills a menu with the rows the given entries collapse into. A splitter becomes a separator, and one
-    /// that would lead or trail is dropped: a menu opens on its first row.
+    /// The plate behind one group. Toolbar chrome rather than a part an application supplies: its
+    /// rectangle is the group's own, which is what a reorder drop lands against. It is an element with its
+    /// own default style rather than something the toolbar paints, so a theme reaches its background and
+    /// corners.
     /// </summary>
-    private static void FillMenu(Menu menu, IEnumerable<ToolBarEntry> entries)
+    internal sealed class ToolBarGroupPlate : Control
     {
-        int start = menu.Items.Count;
-        foreach (var entry in entries)
-        {
-            switch (entry)
-            {
-                case ToolBarSplitter when menu.Items.Count > start && menu.Items[^1] is not MenuSeparator:
-                    menu.Items.Add(MenuSeparator.Instance);
-                    break;
-                case ToolBarSplitItem split when split.Command != null:
-                    menu.Items.Add(new MenuItem(split.Command) { SubMenu = split.DropDownMenu });
-                    break;
-                case ToolBarMenuItem item:
-                    menu.Items.Add(new MenuItem(item.Text) { SubMenu = item.DropDownMenu, Icon = item.Icon });
-                    break;
-                case ToolBarItem item when item.Command != null:
-                    menu.Items.Add(new MenuItem(item.Command));
-                    break;
-            }
-        }
+        static ToolBarGroupPlate() { }
 
-        if (menu.Items.Count > start && menu.Items[^1] is MenuSeparator)
-        {
-            menu.Items.RemoveAt(menu.Items.Count - 1);
-        }
-    }
+        private static readonly bool _defaultStyleRegistered =
+            DefaultStyles.Register<ToolBarGroupPlate>(DefaultStyles.CreateToolBarGroupPlateStyle);
 
-    /// <summary>The rule a <see cref="ToolBarSplitter"/> draws inside its group.</summary>
-    internal sealed class ToolBarSplitterElement : FrameworkElement
-    {
-        private const double GAP = 3;
-
-        private const double INSET = 2;
-
-        protected override Size MeasureContent(Size availableSize) => new((GAP * 2) + 1, 0);
+        // A press that misses an entry belongs to the group under it: that is what starts a reorder drag.
+        internal ToolBarGroupPlate() => IsHitTestVisible = false;
 
         protected override void OnRender(IGraphicsContext context)
-        {
-            double dpiScale = GetDpi() / 96.0;
-            double thickness = LayoutRounding.SnapThicknessToPixels(1, dpiScale, 1);
-            double x = LayoutRounding.RoundToPixel(Bounds.X + ((Bounds.Width - thickness) / 2), dpiScale);
-
-            context.FillRectangle(
-                new Rect(x, Bounds.Y + INSET, thickness, Math.Max(0, Bounds.Height - (INSET * 2))),
-                Theme.Palette.ControlBorder);
-        }
+            => DrawBackgroundAndBorder(context, GetSnappedBorderBounds(Bounds), Background, BorderBrush,
+                BorderThickness, CornerRadius);
     }
 
     /// <summary>The handle at the left of a group, and the only thing a drag starts from.</summary>
@@ -129,7 +59,7 @@ public sealed partial class ToolBar
 
     /// <summary>
     /// One group's visuals: the plate it is drawn on, the grip that drags it, a control per entry, and the
-    /// chevron that offers the entries the band could not fit. The chevron is the group's own, so a group
+    /// overflow button that offers the entries the band could not fit. The button is the group's own, so a group
     /// that has given up every entry is still a plate with a grip on the band: it can be dragged to
     /// another band, and what it holds is still reachable.
     /// </summary>
@@ -137,8 +67,8 @@ public sealed partial class ToolBar
     {
         private readonly List<Element> _entries = new();
         private readonly List<double> _entryWidths = new();
-        private readonly Menu _menu = new();
-        private DropDownButton? _chevron;
+        private readonly OverflowPopup _overflow = new();
+        private ToolBarOverflowButton? _overflowButton;
 
         internal GroupVisual(ToolBarGroup group) => Group = group;
 
@@ -148,8 +78,22 @@ public sealed partial class ToolBar
 
         internal ToolBarGripElement Grip { get; } = new();
 
-        /// <summary>The chevron holding the entries the band could not fit.</summary>
-        internal DropDownButton Chevron => _chevron!;
+        /// <summary>The button offering the entries the band could not fit.</summary>
+        internal ToolBarOverflowButton OverflowButton => _overflowButton!;
+
+        /// <summary>The popup that button opens.</summary>
+        internal OverflowPopup OverflowContent => _overflow;
+
+        /// <summary>
+        /// Whether a popup currently holds this group's entries. Neither the band's measure nor its arrange
+        /// touches them while it does: they answer to whatever popup they sit in.
+        /// </summary>
+        internal bool EntriesOnLoan => _overflow.IsOpen || _onLoanToBand;
+
+        /// <summary>Records that the band's own popup took this group's entries.</summary>
+        internal void SetOnLoanToBand(bool onLoan) => _onLoanToBand = onLoan;
+
+        private bool _onLoanToBand;
 
         internal IReadOnlyList<Element> Entries => _entries;
 
@@ -169,7 +113,7 @@ public sealed partial class ToolBar
             Plate.Parent = owner;
             Grip.Parent = owner;
             Grip.MouseDown += args => owner.OnGripPressed(this, args);
-            _chevron = CreateChevron(owner, _menu, RebuildMenu);
+            _overflowButton = CreateOverflowButton(owner, () => OpenOverflow(owner));
 
             foreach (var entry in Group.ItemsInternal)
             {
@@ -181,11 +125,14 @@ public sealed partial class ToolBar
 
         internal void Detach(ToolBar owner)
         {
+            // Returns whatever the popup borrowed, so the entries are the toolbar's again to release.
+            _overflow.Close();
+
             Release(Plate, owner);
             Release(Grip, owner);
-            if (_chevron != null)
+            if (_overflowButton != null)
             {
-                Release(_chevron, owner);
+                Release(_overflowButton, owner);
             }
 
             foreach (var entry in _entries)
@@ -204,10 +151,28 @@ public sealed partial class ToolBar
             }
         }
 
-        private void RebuildMenu()
+        /// <summary>
+        /// Hands the entries past the band's last one to the popup. They are the controls the group
+        /// already built, so what the popup shows is what the band would have shown.
+        /// </summary>
+        internal void OpenOverflow(ToolBar owner)
         {
-            _menu.Items.Clear();
-            FillMenu(_menu, Group.ItemsInternal.Skip(VisibleEntryCount));
+            if (_overflow.IsOpen)
+            {
+                _overflow.Close();
+                return;
+            }
+
+            _overflow.Begin(owner);
+            for (int i = VisibleEntryCount; i < _entries.Count; i++)
+            {
+                _overflow.Add(_entries[i]);
+            }
+
+            if (_overflow.HasItems)
+            {
+                _overflow.Show(_overflowButton!);
+            }
         }
 
         /// <summary>Measures the parts and returns the plate width the whole group needs.</summary>
@@ -218,23 +183,30 @@ public sealed partial class ToolBar
                 Grip.Measure(new Size(ToolBarGripElement.GRIP_WIDTH, entryHeight));
             }
 
-            _chevron!.Measure(new Size(double.PositiveInfinity, entryHeight));
+            _overflowButton!.Measure(new Size(double.PositiveInfinity, entryHeight));
 
             _entryWidths.Clear();
-            foreach (var entry in _entries)
+            for (int i = 0; i < _entries.Count; i++)
             {
-                entry.Measure(new Size(double.PositiveInfinity, entryHeight));
-                _entryWidths.Add(entry.DesiredSize.Width);
+                // An entry a popup is holding keeps the width it was last measured at. Measuring it against
+                // the band would overwrite the size the popup arranged it from.
+                bool held = _onLoanToBand || (_overflow.IsOpen && i >= VisibleEntryCount);
+                if (!held)
+                {
+                    _entries[i].Measure(new Size(double.PositiveInfinity, entryHeight));
+                }
+
+                _entryWidths.Add(_entries[i].DesiredSize.Width);
             }
 
-            return WidthFor(_entries.Count, padding, spacing, showGrip, withChevron: false);
+            return WidthFor(_entries.Count, padding, spacing, showGrip, withOverflowButton: false);
         }
 
         /// <summary>
         /// The plate width of a group showing its first <paramref name="count"/> entries, with room for its
-        /// chevron when <paramref name="withChevron"/> says the rest of them need one.
+        /// an overflow button when <paramref name="withOverflowButton"/> says the rest of them need one.
         /// </summary>
-        internal double WidthFor(int count, double padding, double spacing, bool showGrip, bool withChevron)
+        internal double WidthFor(int count, double padding, double spacing, bool showGrip, bool withOverflowButton)
         {
             double width = showGrip ? ToolBarGripElement.GRIP_WIDTH + spacing : 0;
             for (int i = 0; i < count; i++)
@@ -242,9 +214,9 @@ public sealed partial class ToolBar
                 width += _entryWidths[i] + (i > 0 ? spacing : 0);
             }
 
-            if (withChevron)
+            if (withOverflowButton)
             {
-                width += _chevron!.DesiredSize.Width + (count > 0 || showGrip ? spacing : 0);
+                width += _overflowButton!.DesiredSize.Width + (count > 0 || showGrip ? spacing : 0);
             }
 
             return width + (padding * 2);
@@ -253,7 +225,16 @@ public sealed partial class ToolBar
         internal void Arrange(Rect plate, double padding, double spacing, bool showGrip, int visibleEntries)
         {
             IsHidden = false;
+            int previousVisible = VisibleEntryCount;
             VisibleEntryCount = Math.Clamp(visibleEntries, 0, _entries.Count);
+
+            // The open popup holds exactly the entries past the old count. A new count means it is holding
+            // the wrong ones, and re-filling it under the pointer would move what is being clicked.
+            if (_overflow.IsOpen && previousVisible != VisibleEntryCount)
+            {
+                _overflow.Close();
+            }
+
             Plate.Measure(new Size(plate.Width, plate.Height));
             Plate.Arrange(plate);
 
@@ -277,7 +258,12 @@ public sealed partial class ToolBar
             {
                 if (i >= VisibleEntryCount)
                 {
-                    _entries[i].Arrange(Rect.Empty);
+                    // While the popup holds it, the entry is laid out by the popup and not by the band.
+                    if (!_overflow.IsOpen)
+                    {
+                        _entries[i].Arrange(Rect.Empty);
+                    }
+
                     continue;
                 }
 
@@ -288,22 +274,30 @@ public sealed partial class ToolBar
 
             if (IsTruncated)
             {
-                double width = _chevron!.DesiredSize.Width;
-                _chevron.Arrange(new Rect(Math.Max(x, plate.Right - padding - width), y, width, height));
+                double width = _overflowButton!.DesiredSize.Width;
+                _overflowButton.Arrange(new Rect(Math.Max(x, plate.Right - padding - width), y, width, height));
             }
             else
             {
-                _chevron!.Arrange(Rect.Empty);
+                _overflowButton!.Arrange(Rect.Empty);
             }
         }
 
         internal void Hide()
         {
+            _overflow.Close();
             IsHidden = true;
             VisibleEntryCount = 0;
             Plate.Arrange(Rect.Empty);
             Grip.Arrange(Rect.Empty);
-            _chevron!.Arrange(Rect.Empty);
+            _overflowButton!.Arrange(Rect.Empty);
+
+            // The band's popup may be showing this hidden group's entries; they are laid out there.
+            if (_onLoanToBand)
+            {
+                return;
+            }
+
             foreach (var entry in _entries)
             {
                 entry.Arrange(Rect.Empty);
@@ -330,7 +324,7 @@ public sealed partial class ToolBar
 
             if (IsTruncated)
             {
-                _chevron!.Render(context);
+                _overflowButton!.Render(context);
             }
         }
 
@@ -341,9 +335,9 @@ public sealed partial class ToolBar
                 return null;
             }
 
-            if (IsTruncated && _chevron!.HitTest(point) is UIElement chevronHit)
+            if (IsTruncated && _overflowButton!.HitTest(point) is UIElement overflowHit)
             {
-                return chevronHit;
+                return overflowHit;
             }
 
             if (Grip.Bounds.Width > 0 && Grip.HitTest(point) is UIElement gripHit)
@@ -364,7 +358,7 @@ public sealed partial class ToolBar
 
         internal bool VisitChildren(Func<Element, bool> visitor)
         {
-            if (!visitor(Plate) || !visitor(Grip) || !visitor(_chevron!))
+            if (!visitor(Plate) || !visitor(Grip) || !visitor(_overflowButton!))
             {
                 return false;
             }
@@ -382,15 +376,15 @@ public sealed partial class ToolBar
     }
 
     /// <summary>
-    /// One band's visuals: a group visual per group, and the chevron that offers the groups this band had
-    /// no room for at all. The chevron belongs to the band, so a band that overflows never pushes anything
+    /// One band's visuals: a group visual per group, and the overflow button that offers the groups this band had
+    /// no room for at all. The button belongs to the band, so a band that overflows never pushes anything
     /// onto another band.
     /// </summary>
     internal sealed class BandVisual
     {
         private readonly List<GroupVisual> _groups = new();
-        private readonly Menu _menu = new();
-        private DropDownButton? _overflow;
+        private readonly OverflowPopup _overflowPopup = new();
+        private ToolBarOverflowButton? _overflow;
         private ToolBar? _owner;
 
         internal BandVisual(ToolBarBand band) => Band = band;
@@ -404,12 +398,22 @@ public sealed partial class ToolBar
         /// <summary>Whether the band had to drop a group whole.</summary>
         internal bool IsOverflowing { get; private set; }
 
-        internal DropDownButton Overflow => _overflow!;
+        internal ToolBarOverflowButton OverflowButton => _overflow!;
+
+        /// <summary>The popup the band's overflow button opens.</summary>
+        internal OverflowPopup OverflowContent => _overflowPopup;
 
         internal void Build(ToolBar owner)
         {
             _owner = owner;
-            _overflow = CreateChevron(owner, _menu, RebuildMenu);
+            _overflow = CreateOverflowButton(owner, () => OpenOverflow(owner));
+            _overflowPopup.Returned += () =>
+            {
+                foreach (var group in _groups)
+                {
+                    group.SetOnLoanToBand(false);
+                }
+            };
 
             foreach (var group in Band.GroupsInternal)
             {
@@ -421,6 +425,9 @@ public sealed partial class ToolBar
 
         internal void Detach(ToolBar owner)
         {
+            // Returns whatever the popup borrowed before the groups release their entries.
+            _overflowPopup.Close();
+
             foreach (var group in _groups)
             {
                 group.Detach(owner);
@@ -467,7 +474,7 @@ public sealed partial class ToolBar
             Measure(entryHeight);
             var overflow = _overflow!;
 
-            // Planned twice at most: the band's own chevron takes room, but only if the plan turns out to
+            // Planned twice at most: the band's own overflow button takes room, but only if the plan turns out to
             // drop a group whole. Deciding it up front would leave a gap whenever nothing was dropped.
             var plan = Plan(band.Width, margin, padding, spacing, showGrip);
             if (plan.AnyHidden)
@@ -503,12 +510,33 @@ public sealed partial class ToolBar
             {
                 overflow.Arrange(Rect.Empty);
             }
+
+            // The open popup holds the groups that were hidden when it opened. A different set means it is
+            // showing groups the band has taken back, or missing ones it has just dropped.
+            if (_overflowPopup.IsOpen && HiddenGroupMask() != _openedHiddenMask)
+            {
+                _overflowPopup.Close();
+            }
+        }
+
+        private ulong HiddenGroupMask()
+        {
+            ulong mask = 0;
+            for (int i = 0; i < _groups.Count && i < 64; i++)
+            {
+                if (_groups[i].IsHidden)
+                {
+                    mask |= 1UL << i;
+                }
+            }
+
+            return mask;
         }
 
         /// <summary>
         /// How many entries each group shows in the given width, or -1 for a group the band has no room for
         /// at all. Every group is first given the width it needs to stand collapsed, a grip beside a
-        /// chevron, and only what is left over is handed out as entries from the left. Narrowing therefore
+        /// an overflow button, and only what is left over is handed out as entries from the left. Narrowing therefore
         /// empties the groups on the right one entry at a time instead of dropping them, and a group only
         /// goes away when the band cannot hold even that minimum.
         /// </summary>
@@ -522,7 +550,7 @@ public sealed partial class ToolBar
 
             for (int i = 0; i < count; i++)
             {
-                minimums[i] = _groups[i].WidthFor(0, padding, spacing, showGrip, withChevron: true);
+                minimums[i] = _groups[i].WidthFor(0, padding, spacing, showGrip, withOverflowButton: true);
                 used += minimums[i] + (margin * 2);
             }
 
@@ -548,7 +576,7 @@ public sealed partial class ToolBar
                 for (int entries = 1; entries <= group.Entries.Count; entries++)
                 {
                     double candidate = group.WidthFor(
-                        entries, padding, spacing, showGrip, withChevron: entries < group.Entries.Count);
+                        entries, padding, spacing, showGrip, withOverflowButton: entries < group.Entries.Count);
                     if (used - current + candidate > available)
                     {
                         break;
@@ -568,9 +596,20 @@ public sealed partial class ToolBar
             return (counts, anyHidden);
         }
 
-        private void RebuildMenu()
+        /// <summary>
+        /// Hands the entries of every group the band dropped whole to the popup, one group after another
+        /// with a rule between them, so the grouping the application declared survives the collapse.
+        /// </summary>
+        internal void OpenOverflow(ToolBar owner)
         {
-            _menu.Items.Clear();
+            if (_overflowPopup.IsOpen)
+            {
+                _overflowPopup.Close();
+                return;
+            }
+
+            _overflowPopup.Begin(owner);
+            bool anyBefore = false;
             foreach (var group in _groups)
             {
                 if (!group.IsHidden)
@@ -578,15 +617,27 @@ public sealed partial class ToolBar
                     continue;
                 }
 
-                FillMenu(_menu, group.Group.ItemsInternal);
-                _menu.Items.Add(MenuSeparator.Instance);
+                if (anyBefore)
+                {
+                    _overflowPopup.AddSeparator();
+                }
+
+                group.SetOnLoanToBand(true);
+                foreach (var entry in group.Entries)
+                {
+                    _overflowPopup.Add(entry);
+                    anyBefore = true;
+                }
             }
 
-            if (_menu.Items.Count > 0 && _menu.Items[^1] is MenuSeparator)
+            if (_overflowPopup.HasItems)
             {
-                _menu.Items.RemoveAt(_menu.Items.Count - 1);
+                _openedHiddenMask = HiddenGroupMask();
+                _overflowPopup.Show(_overflow!);
             }
         }
+
+        private ulong _openedHiddenMask;
 
         internal void Render(IGraphicsContext context)
         {
