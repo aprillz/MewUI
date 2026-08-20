@@ -161,8 +161,8 @@ public sealed partial class Image
     {
         if (_vectorRebuildInProgress)
         {
-            // Latest-wins: the in-flight build commits or is discarded against the wanted size, and its
-            // InvalidateVisual re-enters here with the current size.
+            // The in-flight build commits whatever size it was started for, and its InvalidateVisual
+            // re-enters here so the next build chases the size current at that point.
             return;
         }
 
@@ -243,7 +243,7 @@ public sealed partial class Image
         }
     }
 
-    /// <summary>UI-thread commit: installs the worker-built bitmap if the request still matches, discards it otherwise.</summary>
+    /// <summary>UI-thread commit: installs the worker-built bitmap unless the control detached or its content changed.</summary>
     private void CommitVectorRebuild(IRenderSurface? newSurface, IImage? newImage, int pixelWidth, int pixelHeight, int contentVersion, bool unsupported)
     {
         try
@@ -254,16 +254,15 @@ public sealed partial class Image
                 _vectorAsyncUnsupported = true;
             }
 
-            // Discard when the control detached, the wanted size moved on (a newer resize supersedes
-            // this build) or the content changed mid-flight (the bitmap shows outdated content).
-            var stillWanted = FindVisualRoot() is Window
-                && _vectorWantedSize == (pixelWidth, pixelHeight)
-                && _vectorContentVersion == contentVersion;
-            if (newSurface == null || newImage == null || !stillWanted)
+            // A size the resize already moved past is still installed: it is closer to the current one
+            // than the bitmap it replaces, so the frames until the next build stretch less. Only a
+            // detached control or content that changed mid-flight makes the result unusable.
+            var usable = FindVisualRoot() is Window && _vectorContentVersion == contentVersion;
+            if (newSurface == null || newImage == null || !usable)
             {
                 newImage?.Dispose();
                 newSurface?.Dispose();
-                if (stillWanted)
+                if (usable && _vectorWantedSize == (pixelWidth, pixelHeight))
                 {
                     // Build failed but the size is still wanted: drop the stale cache so the next
                     // paint rebuilds synchronously instead of showing the stretched bitmap forever.
@@ -281,8 +280,8 @@ public sealed partial class Image
         finally
         {
             _vectorRebuildInProgress = false;
-            // Repaint with the committed bitmap; on discard this re-runs RenderVector, which re-kicks
-            // a build for the currently wanted size.
+            // Repaint with the committed bitmap. When it was built for a superseded size this re-runs
+            // RenderVector, which kicks the next build off the size wanted now.
             InvalidateVisual();
         }
     }
