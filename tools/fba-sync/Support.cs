@@ -34,3 +34,31 @@ internal static class Locate
         return Directory.Exists(local) ? local : Path.Combine(repoRoot, "tools", "fba-sync", "template");
     }
 }
+
+internal static class PackageVersion
+{
+    /// <summary>Reads MewUIVersion, the version the release scripts declare and publish under.</summary>
+    public static string Declared(string repoRoot)
+    {
+        string path = Path.Combine(repoRoot, "build", "MewUI.Common.props");
+        if (!File.Exists(path))
+        {
+            throw new FbaSyncException($"props not found: {path}");
+        }
+
+        var document = System.Xml.Linq.XDocument.Load(path);
+        var node = document.Descendants("MewUIVersion").FirstOrDefault();
+        if (node == null)
+        {
+            throw new FbaSyncException($"MewUIVersion is missing from {path}.");
+        }
+
+        string version = node.Value.Trim();
+        if (version.Length == 0)
+        {
+            throw new FbaSyncException($"MewUIVersion is empty in {path}.");
+        }
+
+        return version;
+    }
+}

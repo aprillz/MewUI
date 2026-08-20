@@ -8,9 +8,10 @@ namespace Aprillz.MewUI.FbaSync;
 /// </summary>
 internal static class Assemble
 {
-    public static string File(string templateDir, GalleryReader gallery)
+    public static string File(string templateDir, GalleryReader gallery, string packageVersion)
     {
         string host = ReadTemplate(templateDir, "host.txt");
+        host = ApplyVersion(host, packageVersion);
 
         var builder = new StringBuilder();
         builder.Append(MergeUsings(host, gallery.Usings).TrimEnd()).Append('\n');
@@ -40,15 +41,30 @@ internal static class Assemble
     }
 
     /// <summary>
+    /// Points the sample's package reference at the version the repository declares, so a release
+    /// never ships a sample pinned to an older package.
+    /// </summary>
+    private static string ApplyVersion(string host, string packageVersion)
+    {
+        const string MARKER = "{VERSION}";
+        if (!host.Contains(MARKER, StringComparison.Ordinal))
+        {
+            throw new FbaSyncException($"host template has no {MARKER} marker for the package version.");
+        }
+
+        return host.Replace(MARKER, packageVersion);
+    }
+
+    /// <summary>
     /// Inserts the gallery's usings into the host template at its {USINGS} marker, dropping the ones
     /// the template already has and the gallery's own namespace, whose types are now global.
     /// </summary>
     private static string MergeUsings(string host, IReadOnlyList<string> galleryUsings)
     {
-        const string marker = "{USINGS}";
-        if (!host.Contains(marker, StringComparison.Ordinal))
+        const string MARKER = "{USINGS}";
+        if (!host.Contains(MARKER, StringComparison.Ordinal))
         {
-            throw new FbaSyncException($"host template has no {marker} marker for the gallery's usings.");
+            throw new FbaSyncException($"host template has no {MARKER} marker for the gallery's usings.");
         }
 
         var existing = host
@@ -64,6 +80,6 @@ internal static class Assemble
             .OrderBy(u => u, StringComparer.Ordinal)
             .ToList();
 
-        return host.Replace(marker, string.Join('\n', extra));
+        return host.Replace(MARKER, string.Join('\n', extra));
     }
 }
