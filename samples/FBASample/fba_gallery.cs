@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.20.0
+#:package Aprillz.MewUI@0.20.2
 
 using System.Net.Http;
 
@@ -6241,10 +6241,26 @@ partial class GalleryView
         var notified = new List<Command>();
         var silent = new List<Command>();
 
-        Command Cmd(string id, string text, string? icon = null)
+        // Gestures are collected rather than mapped here: the map they go into belongs to the toolbar,
+        // which does not exist yet.
+        var shortcuts = new List<(Command Command, KeyGesture Gesture)>();
+
+        Command Cmd(
+            string id,
+            string text,
+            string? icon = null,
+            string? description = null,
+            Key shortcut = Key.None)
         {
             var command = new Command($"gallery.toolbar.{id}", text, icon == null ? null : Icon(icon));
+            command.Description(description);
             notified.Add(command);
+
+            if (shortcut != Key.None)
+            {
+                shortcuts.Add((command, new KeyGesture(shortcut, ModifierKeys.Primary)));
+            }
+
             return command;
         }
 
@@ -6255,7 +6271,7 @@ partial class GalleryView
             return command;
         }
 
-        var save = Cmd("save", "_Save", "save_regular");
+        var save = Cmd("save", "_Save", "save_regular", "Writes the document to disk.", Key.S);
         var font = Cmd("font", "Font", "text_font_regular");
         var color = Cmd("color", "Colour", "color_regular");
         var zoomIn = Cmd("zoomIn", "Zoom _in");
@@ -6264,19 +6280,18 @@ partial class GalleryView
         // Six groups a band, three entries each, so the splitter has plenty to collapse. Every entry kind
         // is here too, which makes the plates differ in width for the drag to move.
         var bar = new ToolBar()
-            .CanReorderGroups()
             .Band(
                 new ToolBarGroup()
-                    .Item(Cmd("new", "_New", "document_add_regular"))
-                    .Item(Cmd("open", "_Open", "folder_open_regular"))
+                    .Item(Cmd("new", "_New", "document_add_regular", "Starts a document with nothing in it.", Key.N))
+                    .Item(Cmd("open", "_Open", "folder_open_regular", "Opens a document already on disk.", Key.O))
                     .Split(save, new Menu().Item(Cmd("saveAs", "Save _As")).Item(Cmd("saveAll", "Save A_ll"))),
                 new ToolBarGroup()
-                    .Item(Cmd("cut", "Cu_t", "cut_regular"))
-                    .Item(Cmd("copy", "_Copy", "copy_regular"))
-                    .Item(Cmd("paste", "_Paste", "clipboard_paste_regular")),
+                    .Item(Cmd("cut", "Cu_t", "cut_regular", shortcut: Key.X))
+                    .Item(Cmd("copy", "_Copy", "copy_regular", shortcut: Key.C))
+                    .Item(Cmd("paste", "_Paste", "clipboard_paste_regular", shortcut: Key.V)),
                 // One group where there were two, divided by a splitter: the two runs travel together now.
                 new ToolBarGroup()
-                    .Item(Cmd("print", "_Print", "print_regular"))
+                    .Item(Cmd("print", "_Print", "print_regular", "Sends the document to a printer.", Key.P))
                     .Item(Cmd("duplicate", "Duplicate", "save_copy_regular"))
                     .Item(Cmd("refresh", "Refresh", "arrow_sync_circle_regular"))
                     .Separator()
@@ -6320,7 +6335,8 @@ partial class GalleryView
                     .Item(Cmd("settings", "Settings", "settings_regular"))
                     .Item(Cmd("options", "Options", "options_regular"))
                     .Item(Cmd("alerts", "Alerts", "alert_on_regular")))
-            // A hosted control on a band of its own: a host is the one entry an overflow menu cannot collapse.
+            // A hosted control on a band of its own: narrow the toolbar and it collapses into the overflow
+            // popup as the text box it is, which a band that rebuilt its entries as menu rows could not do.
             .Band(
                 new ToolBarGroup()
                     .Label("Find")
@@ -6330,10 +6346,35 @@ partial class GalleryView
         // the entry was on, which is the thing being tried out here.
         var log = new TextBlock().Text("Nothing run yet");
 
+        // Entries show icons only here, so what a tooltip says is the only name they have. Every option
+        // below is a combination of the parts a command can supply.
+        var toolTipModes = new (string Text, CommandToolTipMode Mode)[]
+        {
+            ("Name, shortcut, description", CommandToolTipMode.Text | CommandToolTipMode.Shortcut | CommandToolTipMode.Description),
+            ("Name and shortcut", CommandToolTipMode.Text | CommandToolTipMode.Shortcut),
+            ("Name only", CommandToolTipMode.Text),
+            ("Description only", CommandToolTipMode.Description),
+            ("No tooltip", CommandToolTipMode.None),
+        };
+
+        var toolTipMode = new ComboBox()
+            .Width(220)
+            .Items(toolTipModes, option => option.Text)
+            .SelectedIndex(0)
+            .CenterVertical();
+        toolTipMode.SelectionChanged += _ =>
+            bar.ItemToolTipMode = toolTipModes[Math.Max(0, toolTipMode.SelectedIndex)].Mode;
+
         foreach (var command in notified)
         {
             var captured = command;
             bar.Commands.Register(captured, () => log.Text = $"Ran: {captured.Text ?? captured.Id}");
+        }
+
+        // Resolution walks up from the entry, so one map on the toolbar reaches every one of them.
+        foreach (var (command, gesture) in shortcuts)
+        {
+            bar.InputMap.Map(command, gesture);
         }
 
         foreach (var command in silent)
@@ -6355,6 +6396,17 @@ partial class GalleryView
                         new TextBlock()
                             .Text("Drag a grip to move its group. Below the last band opens a new one. Drag the splitter to narrow the toolbar."),
 
+                        new StackPanel()
+                            .Horizontal()
+                            .Spacing(8)
+                            .Children(
+                                new Label().Text("Tooltip").CenterVertical(),
+                                toolTipMode,
+                                new TextBlock()
+                                    .TextWrapping(TextWrapping.Wrap)
+                                    .Text("New, Open, Save and Print carry both a shortcut and a description; Cut, Copy and Paste carry a shortcut only; the rest carry neither. A part with nothing behind it is left out rather than filled from another.")
+                                    .CenterVertical()),
+
                         new SplitPanel()
                             .Horizontal()
                             .SplitterThickness(8)
@@ -6370,7 +6422,62 @@ partial class GalleryView
                                     .Child(new TextBlock().TextWrapping(TextWrapping.Wrap).Text("Drag left").Center())),
                         log
                         ),
-                minWidth: 820));
+                minWidth: 820),
+            LegacyToolBarCard());
+    }
+
+    /// <summary>
+    /// A toolbar built from controls instead of commands: what an application porting from a framework
+    /// where a toolbar holds buttons would write. The controls are hosted as they are, so their own
+    /// handlers and bindings work and the band still collapses them.
+    /// </summary>
+    private FrameworkElement LegacyToolBarCard()
+    {
+        var log = new TextBlock().Text("Nothing run yet");
+
+        // Save asks whether there is anything to write. A predicate is asked again after every click, so
+        // opening a game enables it and saving turns it off without either side telling the other.
+        bool dirty = false;
+
+        var bar = new ToolBar()
+            .Band(
+                new ToolBarGroup().Items(
+                    new Button().Content("🆕").ToolTip("New game")
+                        .OnClick(() => { dirty = true; log.Text = "Ran: New game"; }),
+                    new Button().Content("📂").ToolTip("Open")
+                        .OnClick(() => { dirty = true; log.Text = "Ran: Open"; }),
+                    new Button().Content("💾").ToolTip("Save")
+                        .OnCanClick(() => dirty)
+                        .OnClick(() => { dirty = false; log.Text = "Ran: Save"; })),
+                new ToolBarGroup().Items(
+                    new Button().Content("✂️").ToolTip("Cut").OnClick(() => log.Text = "Ran: Cut"),
+                    new Button().Content("📋").ToolTip("Copy").OnClick(() => log.Text = "Ran: Copy"),
+                    new Button().Content("📌").ToolTip("Paste").OnClick(() => log.Text = "Ran: Paste")),
+                new ToolBarGroup().Items(
+                    new ToggleButton().Content("🎨").ToolTip("Colour")
+                        .OnCheckedChanged(isChecked => log.Text = $"Colour: {isChecked}"),
+                    new ToggleButton().Content("🔊").ToolTip("Sound")
+                        .OnCheckedChanged(isChecked => log.Text = $"Sound: {isChecked}"),
+                    new Separator(),
+                    new ToggleButton().Content("🧭").ToolTip("Compass")
+                        .OnCheckedChanged(isChecked => log.Text = $"Compass: {isChecked}")),
+                new ToolBarGroup().Items(
+                    new Label().Text("Zoom"),
+                    new ComboBox().Width(80).Items(["100%", "150%", "200%"])
+                    .SelectedIndex(0).OnSelectionChanged(item => log.Text = $"Zoom: {item}")));
+
+        return Card(
+            "ToolBar from controls",
+            new StackPanel()
+                .Vertical()
+                .Spacing(8)
+                .Children(
+                    new TextBlock()
+                        .TextWrapping(TextWrapping.Wrap)
+                        .Text("Entries put in with Items() are the controls themselves. They keep their own content and handlers, and carry the tooltip each one was given rather than one built from a command. Save stays disabled until New or Open has run: it answers a CanClick predicate instead of a command."),
+                    bar,
+                    log),
+            minWidth: 420);
     }
 }
 
