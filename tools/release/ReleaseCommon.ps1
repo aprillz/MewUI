@@ -54,6 +54,22 @@ function Get-DeclaredVersion {
     return $node.InnerText.Trim()
 }
 
+<#
+    The version as a commit carries it. A tag names a commit rather than the working tree, so the check
+    that decides what a release claims reads what was committed, not what happens to be on disk.
+#>
+function Get-CommittedVersion {
+    param([string] $Commit = 'HEAD')
+
+    $text = (Invoke-Git show "${Commit}:build/MewUI.Common.props") -join "`n"
+    $props = [xml] $text
+    $node = $props.SelectSingleNode('/Project/PropertyGroup/MewUIVersion')
+    if ($null -eq $node) {
+        throw "MewUIVersion is missing from build/MewUI.Common.props in $Commit."
+    }
+    return $node.InnerText.Trim()
+}
+
 # Edited as text rather than as XML: saving a parsed document rewrites the whole file, which drops the
 # blank lines it is laid out with and turns its LF endings into CRLF.
 function Set-DeclaredVersion {
