@@ -3,7 +3,7 @@
 #:property TargetFramework=net10.0
 #:property PublishAot=true
 #:property TrimMode=full
-#:package Aprillz.MewUI@0.20.0
+#:package Aprillz.MewUI@{VERSION}
 
 using System.Net.Http;
 

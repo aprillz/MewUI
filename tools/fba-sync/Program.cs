@@ -24,7 +24,7 @@ try
         reader.Read(source);
     }
 
-    string text = Assemble.File(templateDir, reader);
+    string text = Assemble.File(templateDir, reader, PackageVersion.Declared(repoRoot));
     Directory.CreateDirectory(Path.GetDirectoryName(output)!);
     File.WriteAllText(output, text);
 
