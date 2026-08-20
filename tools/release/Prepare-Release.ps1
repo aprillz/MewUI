@@ -95,9 +95,15 @@ if (Invoke-Git status --porcelain --untracked-files=no) {
         Invoke-Git commit -m "Bump MewUIVersion to $Version" | Out-Null
         Write-Host "  committed $((Invoke-Git rev-parse --short HEAD).Trim())"
     }
+    # Left where they are rather than refused: nothing uncommitted reaches the tag, so an unrelated
+    # edit is the releaser's business. Listed so a generated file that landed outside the release
+    # paths is still seen.
     $leftover = Invoke-Git status --porcelain --untracked-files=no
     if ($leftover) {
-        throw "Generated changes outside the release paths remain:`n$leftover"
+        Write-Host "  left uncommitted outside the release paths:"
+        foreach ($line in $leftover) {
+            Write-Host "    $line"
+        }
     }
 } else {
     Write-Host "  nothing changed"

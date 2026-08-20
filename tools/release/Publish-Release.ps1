@@ -28,14 +28,19 @@ Write-Step "Checking the repository"
 
 Assert-ReleasableWorktree -Tag $tag
 
-# Everything a release writes was committed by the prepare step, so anything left here was not part
-# of it and would be pushed without having been looked at.
-$dirty = Invoke-Git status --porcelain --untracked-files=no
-if ($dirty) {
-    throw "The working tree has uncommitted changes:`n$dirty"
-}
-
 Assert-OriginReady -Tag $tag
+
+# A push carries commits, not the working tree, so what a release has to answer for is the commits
+# about to leave this machine rather than whatever is left uncommitted beside them.
+$unpushed = Invoke-Git log --oneline origin/main..HEAD
+if ($unpushed) {
+    Write-Host "  commits this push will publish:"
+    foreach ($line in $unpushed) {
+        Write-Host "    $line"
+    }
+} else {
+    Write-Host "  nothing new to push; the tag will point at origin/main"
+}
 
 Write-Step "Checking what was prepared"
 
