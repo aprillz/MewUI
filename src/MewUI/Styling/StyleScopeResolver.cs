@@ -75,12 +75,15 @@ internal static class StyleScopeResolver
             return null;
         }
 
-        if (applicationStyleSheet == null)
+        if (applicationStyleSheet != null &&
+            Lookup(applicationStyleSheet, styleName, controlType, liveLookup) is Style applicationStyle)
         {
-            return null;
+            return applicationStyle;
         }
 
-        return Lookup(applicationStyleSheet, styleName, controlType, liveLookup);
+        // A framework name belongs to the framework rather than to an application's style sheet, so a tree
+        // with no Application behind it - a test host, a tool - still resolves it.
+        return styleName != null ? FrameworkNamedStyles.GetStyle(styleName) : null;
     }
 
     private static Style? Lookup(
