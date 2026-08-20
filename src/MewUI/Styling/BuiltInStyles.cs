@@ -61,6 +61,36 @@ public static class BuiltInStyles
         }
     }
 
+    /// <summary>StyleName key for a toolbar entry's button.</summary>
+    public static string ToolBarButton
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("toolbar-button", DefaultStyles.CreateToolBarButtonStyle);
+            return "toolbar-button";
+        }
+    }
+
+    /// <summary>StyleName key for a toolbar entry's toggle button.</summary>
+    public static string ToolBarToggleButton
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("toolbar-toggle-button", DefaultStyles.CreateToolBarToggleButtonStyle);
+            return "toolbar-toggle-button";
+        }
+    }
+
+    /// <summary>StyleName key for a toolbar label entry.</summary>
+    public static string ToolBarLabel
+    {
+        get
+        {
+            FrameworkNamedStyles.Register("toolbar-label", DefaultStyles.CreateToolBarLabelStyle);
+            return "toolbar-label";
+        }
+    }
+
     private static readonly (string Name, Func<Style> Factory)[] _all =
     [
         ("flat-button", CreateFlatButtonStyle),
@@ -68,6 +98,9 @@ public static class BuiltInStyles
         ("accent-split-button", CreateAccentSplitButtonStyle),
         ("combobox-popup", CreateComboBoxPopupStyle),
         ("datepicker-popup", CreateDatePickerPopupStyle),
+        ("toolbar-button", DefaultStyles.CreateToolBarButtonStyle),
+        ("toolbar-toggle-button", DefaultStyles.CreateToolBarToggleButtonStyle),
+        ("toolbar-label", DefaultStyles.CreateToolBarLabelStyle),
     ];
 
     internal static void Register(StyleSheet sheet)

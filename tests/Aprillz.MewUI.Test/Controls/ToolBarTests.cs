@@ -107,7 +107,7 @@ public sealed class ToolBarTests
             .Band(
                 new ToolBarGroup()
                     .Item(Cmd("run"))
-                    .Splitter()
+                    .Separator()
                     .Toggle(Cmd("wrap"), isChecked: true)
                     .Split(Cmd("save"), menu),
                 new ToolBarGroup()
@@ -123,7 +123,7 @@ public sealed class ToolBarTests
 
         var entries = bar.Bands[0].Groups[0].Items;
         Assert.IsInstanceOfType<ToolBarItem>(entries[0]);
-        Assert.IsInstanceOfType<ToolBarSplitter>(entries[1]);
+        Assert.IsInstanceOfType<ToolBarSeparator>(entries[1]);
         Assert.IsTrue(((ToolBarToggleItem)entries[2]).IsChecked);
         Assert.AreSame(menu, ((ToolBarSplitItem)entries[3]).DropDownMenu);
 
@@ -136,6 +136,63 @@ public sealed class ToolBarTests
         var item = new ToolBarToggleItem(Cmd("bold")).Presentation(CommandPresentationMode.Icon).IsChecked();
         Assert.AreEqual(CommandPresentationMode.Icon, item.Presentation);
         Assert.IsTrue(item.IsChecked);
+    }
+
+    [TestMethod]
+    public void ControlsPutInAGroup_AreShownAsTheyAreAndCollapseLikeEntries()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var button = new Button().Content("New").OnClick(() => { });
+        var toggle = new ToggleButton().Content("Wrap");
+        var group = new ToolBarGroup().Items(button, new Separator(), toggle);
+
+        var (window, bar) = Host(900, new ToolBarBand(group));
+        var entries = bar.VisualsInternal[0].Groups[0].Entries;
+
+        Assert.AreSame(button, entries[0], "the toolbar rebuilt the control instead of showing it");
+        Assert.IsInstanceOfType<Separator>(entries[1]);
+        Assert.AreSame(toggle, entries[2]);
+
+        // The band cuts them like any other entry, and the popup shows the very controls it cut.
+        bar.Width = ((UIElement)entries[1]).Bounds.X - bar.Bounds.X;
+        window.PerformLayout();
+
+        var visual = bar.VisualsInternal[0].Groups[0];
+        Assert.IsTrue(visual.IsTruncated, "controls put in a group did not collapse");
+
+        visual.OpenOverflow(bar);
+        Assert.Contains(toggle, visual.OverflowContent.Items, "the cut control is not in the popup");
+    }
+
+    [TestMethod]
+    public void ACommandThatChangesWhatItSays_ChangesWhatTheEntryShows()
+    {
+        if (SkipOnNonWindows()) return;
+
+        var text = new ObservableValue<string>("Run");
+        var command = new Command("gallery.run").BindText(text);
+        var label = new ObservableValue<string>("Zoom");
+        var labelItem = new ToolBarLabelItem().BindText(label);
+
+        var (window, bar) = Host(900,
+            new ToolBarBand(new ToolBarGroup(
+                new ToolBarItem(command) { Presentation = CommandPresentationMode.Text },
+                labelItem)));
+
+        string EntryText(int index)
+            => ((TextBlock)((StackPanel)((ContentControl)bar.VisualsInternal[0].Groups[0].Entries[index])
+                .EffectiveContent!).Children[0]).Text;
+
+        Assert.AreEqual("Run", EntryText(0));
+
+        text.Value = "Stop";
+        window.PerformLayout();
+        Assert.AreEqual("Stop", EntryText(0), "the entry kept what the command used to say");
+
+        label.Value = "Scale";
+        window.PerformLayout();
+        Assert.AreEqual("Scale", ((Label)bar.VisualsInternal[0].Groups[0].Entries[1]).Text);
     }
 
     [TestMethod]
@@ -209,7 +266,7 @@ public sealed class ToolBarTests
     {
         if (SkipOnNonWindows()) return;
 
-        var group = new ToolBarGroup(Text("g1"), new ToolBarSplitter(), Text("g2"), Text("g3"));
+        var group = new ToolBarGroup(Text("g1"), new ToolBarSeparator(), Text("g2"), Text("g3"));
         var (window, bar) = Host(900, new ToolBarBand(group));
 
         var entries = bar.VisualsInternal[0].Groups[0].Entries;
@@ -219,18 +276,19 @@ public sealed class ToolBarTests
         Assert.IsLessThan(((UIElement)entries[0]).Bounds.Width, rule.Width, "the splitter is as wide as an entry");
         Assert.IsLessThan(rule.X, ((UIElement)entries[0]).Bounds.Right, "the splitter is not between the two runs");
 
-        // Narrow enough that the run after the splitter goes to the chevron, splitter included.
+        // Narrow enough that the run after the splitter goes to the overflow button, splitter included.
         bar.Width = ((UIElement)entries[2]).Bounds.X - bar.Bounds.X;
         window.PerformLayout();
 
         var visual = bar.VisualsInternal[0].Groups[0];
         Assert.IsTrue(visual.IsTruncated, "the band did not cut the group");
 
-        visual.Chevron.IsDropDownOpen = true;
-        var rows = visual.Chevron.DropDownMenu!.Items;
+        visual.OpenOverflow(bar);
+        var shown = visual.OverflowContent.Items;
 
-        Assert.IsTrue(rows.Count > 0, "the cut entries did not reach the menu");
-        Assert.IsInstanceOfType<MenuItem>(rows[0], "the menu opens on a separator");
+        Assert.IsTrue(shown.Count > 0, "the cut entries did not reach the popup");
+        Assert.AreSame(visual.Entries[visual.VisibleEntryCount], shown[0],
+            "the popup rebuilt the entry instead of showing the one the band cut");
     }
 
     [TestMethod]
@@ -363,7 +421,7 @@ public sealed class ToolBarTests
             new ToolBarGroup(Text("g3")),
             new ToolBarGroup(Text("g4")));
 
-        // A grip beside a chevron is what a group costs collapsed; four of them do not fit in this.
+        // A grip beside an overflow button is what a group costs collapsed; four of them do not fit in this.
         var (_, bar) = Host(70, band);
         bar.CanReorderGroups = true;
 
@@ -371,12 +429,12 @@ public sealed class ToolBarTests
         Assert.IsTrue(visual.IsOverflowing, "the band held groups it has no room for");
         Assert.IsFalse(visual.Groups[0].IsHidden, "the leftmost group went before the ones after it");
         Assert.IsTrue(visual.Groups[^1].IsHidden, "the rightmost group stayed while others went");
-        Assert.IsGreaterThan(0, visual.Overflow.Bounds.Width, "the band shows no chevron for what it dropped");
+        Assert.IsGreaterThan(0, visual.OverflowButton.Bounds.Width, "the band shows no overflow button for what it dropped");
 
-        visual.Overflow.IsDropDownOpen = true;
-        var rows = visual.Overflow.DropDownMenu!.Items.OfType<MenuItem>().Select(row => row.Command?.Id).ToList();
-        Assert.IsTrue(rows.Contains("g4"), "the dropped group is not in the band's menu");
-        Assert.IsFalse(rows.Contains("g1"), "a group the band still shows was offered in its menu");
+        visual.OpenOverflow(bar);
+        var shown = visual.OverflowContent.Items.OfType<Button>().Select(entry => entry.Command?.Id).ToList();
+        Assert.IsTrue(shown.Contains("g4"), "the dropped group is not in the band's popup");
+        Assert.IsFalse(shown.Contains("g1"), "a group the band still shows was offered in its popup");
     }
 
     [TestMethod]
@@ -417,23 +475,23 @@ public sealed class ToolBarTests
             var last = ((UIElement)group.Entries[group.VisibleEntryCount - 1]).Bounds;
             Assert.IsLessThanOrEqualTo(group.Bounds.Right, last.Right, "an entry hangs off its own plate");
 
-            // The chevron belongs to the group it cut, not to the band's right edge.
-            var chevron = group.Chevron.Bounds;
-            Assert.IsGreaterThanOrEqualTo(group.Bounds.X, chevron.X, "the chevron sits outside the group");
-            Assert.IsLessThanOrEqualTo(group.Bounds.Right, chevron.Right, "the chevron sits outside the group");
-            Assert.IsLessThanOrEqualTo(chevron.X, last.Right, "the chevron overlaps the last entry");
-            Assert.AreEqual(last.Height, chevron.Height, "the chevron is not the height of an entry");
-            Assert.IsLessThan(last.Width, chevron.Width, "the chevron is not narrower than an entry");
+            // The overflow button belongs to the group it cut, not to the band's right edge.
+            var overflowButton = group.OverflowButton.Bounds;
+            Assert.IsGreaterThanOrEqualTo(group.Bounds.X, overflowButton.X, "the overflow button sits outside the group");
+            Assert.IsLessThanOrEqualTo(group.Bounds.Right, overflowButton.Right, "the overflow button sits outside the group");
+            Assert.IsLessThanOrEqualTo(overflowButton.X, last.Right, "the overflow button overlaps the last entry");
+            Assert.AreEqual(last.Height, overflowButton.Height, "the overflow button is not the height of an entry");
+            Assert.IsLessThan(last.Width, overflowButton.Width, "the overflow button is not narrower than an entry");
 
             Assert.IsLessThan(
                 ((UIElement)group.Entries[0]).Bounds.X,
                 group.Grip.Bounds.X,
                 "the grip is not at the left of what the group still shows");
 
-            group.Chevron.IsDropDownOpen = true;
-            var rows = group.Chevron.DropDownMenu!.Items.OfType<MenuItem>().Select(row => row.Command?.Id).ToList();
-            Assert.IsFalse(rows.Contains("g2"), "an entry the band still shows was offered again in the menu");
-            Assert.IsTrue(rows.Contains("g4"), "the entry the cut removed is not in the menu");
+            group.OpenOverflow(bar);
+            var shown = group.OverflowContent.Items.OfType<Button>().Select(entry => entry.Command?.Id).ToList();
+            Assert.IsFalse(shown.Contains("g2"), "an entry the band still shows was offered again in the popup");
+            Assert.IsTrue(shown.Contains("g4"), "the entry the cut removed is not in the popup");
             return;
         }
 
@@ -466,17 +524,17 @@ public sealed class ToolBarTests
                 continue;
             }
 
-            // No entry of the group's own fits, but its grip and its chevron do: the group is still there
+            // No entry of the group's own fits, but its grip and its overflow button do: the group is still there
             // to be dragged, and everything it holds is still one click away.
             Assert.IsGreaterThan(0, group.Grip.Bounds.Width, "the group vanished instead of keeping its grip");
-            Assert.IsGreaterThan(0, group.Chevron.Bounds.Width, "the collapsed group has no chevron of its own");
+            Assert.IsGreaterThan(0, group.OverflowButton.Bounds.Width, "the collapsed group has no overflow button of its own");
             Assert.IsTrue(group.IsTruncated, "a grip-only group is not reported as truncated");
 
-            group.Chevron.IsDropDownOpen = true;
-            var rows = group.Chevron.DropDownMenu!.Items.OfType<MenuItem>().Select(row => row.Command?.Id).ToList();
-            Assert.IsTrue(rows.Contains("g2"), "the entries the band gave up are not all in the menu");
-            Assert.IsTrue(rows.Contains("g4"), "the entries the band gave up are not all in the menu");
-            group.Chevron.IsDropDownOpen = false;
+            group.OpenOverflow(bar);
+            var shown = group.OverflowContent.Items.OfType<Button>().Select(entry => entry.Command?.Id).ToList();
+            Assert.IsTrue(shown.Contains("g2"), "the entries the band gave up are not all in the popup");
+            Assert.IsTrue(shown.Contains("g4"), "the entries the band gave up are not all in the popup");
+            group.OverflowContent.Close();
 
             // Collapsed is not gone: the grip still starts a drag, so the group can be moved to a band
             // where there is room for it.
@@ -623,7 +681,7 @@ public sealed class ToolBarTests
     }
 
     [TestMethod]
-    public void EveryGroupKeepsItsGripAndChevronBeforeAnyGroupIsDropped()
+    public void EveryGroupKeepsItsGripAndOverflowButtonBeforeAnyGroupIsDropped()
     {
         if (SkipOnNonWindows()) return;
 
@@ -639,7 +697,7 @@ public sealed class ToolBarTests
         double full = band.Groups[^1].Bounds.Right;
 
         // The width where the groups can no longer all be whole. Every one of them must still be on the
-        // band, because a collapsed group costs a grip and a chevron and nothing more.
+        // band, because a collapsed group costs a grip and an overflow button and nothing more.
         for (double width = full; width > 40; width -= 2)
         {
             bar.Width = width;
@@ -651,14 +709,14 @@ public sealed class ToolBarTests
             }
 
             Assert.IsFalse(band.Groups.Any(group => group.IsHidden), $"a group was dropped at {width}");
-            Assert.IsFalse(band.IsOverflowing, $"the band took a chevron of its own at {width}");
+            Assert.IsFalse(band.IsOverflowing, $"the band took an overflow button of its own at {width}");
 
             foreach (var group in band.Groups)
             {
                 Assert.IsGreaterThan(0, group.Grip.Bounds.Width, "a group on the band has no grip");
                 if (group.IsTruncated)
                 {
-                    Assert.IsGreaterThan(0, group.Chevron.Bounds.Width, "a cut group has no chevron");
+                    Assert.IsGreaterThan(0, group.OverflowButton.Bounds.Width, "a cut group has no overflow button");
                 }
             }
 
@@ -873,6 +931,9 @@ public sealed class ToolBarTests
         var (window, bar) = Host(900,
             new ToolBarBand(new ToolBarGroup(Text("g1"))),
             new ToolBarBand(new ToolBarGroup(Text("g2"))));
+
+        bar.CanReorderGroups = false;
+        window.PerformLayout();
 
         var grip = bar.VisualsInternal[0].Groups[0].Grip;
         Assert.AreEqual(0, grip.Bounds.Width, "a toolbar that does not allow reordering shows no grip");
