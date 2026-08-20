@@ -45,6 +45,14 @@ public sealed class FocusManager
     /// and can trigger unwanted scroll-into-view.
     /// </param>
     public bool SetFocus(UIElement? element, bool resolveDefault)
+        => SetFocus(element, resolveDefault, bringIntoView: true);
+
+    /// <summary>
+    /// Sets focus without telling the scroll hosts around the element to bring it into view. For a control
+    /// handing focus to a part of its own template: the element on screen has not changed, so scrolling to
+    /// the part would move the view out from under whoever put the focus there.
+    /// </summary>
+    internal bool SetFocus(UIElement? element, bool resolveDefault, bool bringIntoView)
     {
         if (resolveDefault)
         {
@@ -81,7 +89,10 @@ public sealed class FocusManager
 
         // If focus moved into a templated control (e.g. TreeView/GridView item template),
         // let the nearest items host update selection and scroll the owning item into view.
-        NotifyFocusIntoViewHosts(element);
+        if (bringIntoView)
+        {
+            NotifyFocusIntoViewHosts(element);
+        }
 
         _window.RequerySuggested();
 

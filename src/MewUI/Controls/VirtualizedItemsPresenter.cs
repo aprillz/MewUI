@@ -408,6 +408,29 @@ internal sealed class VirtualizedItemsPresenter
         _recycledByIndex.Clear();
     }
 
+    /// <summary>
+    /// Where focus goes back to: the element it left, or the nearest ancestor inside the container that
+    /// can take it. Null when nothing in the container can.
+    /// </summary>
+    private static UIElement? ResolveRestoreTarget(UIElement deferred, Element root)
+    {
+        for (Element? current = deferred; current != null; current = current.Parent)
+        {
+            if (current is UIElement candidate
+                && candidate.Focusable && candidate.IsEffectivelyEnabled && candidate.IsVisible)
+            {
+                return candidate;
+            }
+
+            if (ReferenceEquals(current, root))
+            {
+                break;
+            }
+        }
+
+        return null;
+    }
+
     private void TryRestoreDeferredFocus(FrameworkElement container, int index)
     {
         if (_deferredFocusedIndex != index)
@@ -451,13 +474,17 @@ internal sealed class VirtualizedItemsPresenter
             return;
         }
 
-        if (!deferred.Focusable || !deferred.IsEffectivelyEnabled || !deferred.IsVisible)
+        // The element focus left can be gone by the time the container comes back: a template part shown
+        // only while editing is hidden again once the recycle ends that edit. The nearest ancestor that
+        // can hold focus is the control itself, which is what the user was on.
+        var target = ResolveRestoreTarget(deferred, root);
+        if (target == null)
         {
             ClearDeferredFocus();
             return;
         }
 
-        window.FocusManager.SetFocus(deferred);
+        window.FocusManager.SetFocus(target);
         ClearDeferredFocus();
     }
 

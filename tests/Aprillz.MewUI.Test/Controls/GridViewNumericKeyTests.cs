@@ -58,10 +58,10 @@ public sealed class GridViewNumericKeyTests
         var numeric = (NumericUpDown?)VisualTree.Find(grid, element => element is NumericUpDown);
         Assert.IsNotNull(numeric);
 
-        // Tab-style focus: the control itself, no edit mode.
+        // Focus opens the editor; Up and Down still step, so a cell keeps its keyboard stepping.
         numeric.Focus();
         double valueBefore = numeric.Value;
-        Assert.IsFalse(numeric.IsEditing, "tab-style focus must not enter edit mode");
+        Assert.IsTrue(numeric.IsEditing, "focus did not open the editor");
 
         window.SendKeyPress(Key.Up);
         double afterFirst = items[0].Amount.Value;
