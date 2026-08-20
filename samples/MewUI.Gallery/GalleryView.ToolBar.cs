@@ -211,37 +211,36 @@ partial class GalleryView
     {
         var log = new TextBlock().Text("Nothing run yet");
 
-        Button Emoji(string glyph, string toolTip)
-            => new Button().Content(glyph).ToolTip(toolTip).OnClick(() => log.Text = $"Ran: {toolTip}");
-
-        ToggleButton Switch(string glyph, string toolTip)
-        {
-            var toggle = new ToggleButton().Content(glyph).ToolTip(toolTip);
-            toggle.CheckedChanged += isChecked => log.Text = $"{toolTip}: {isChecked}";
-            return toggle;
-        }
-
-        var zoom = new ComboBox().Width(80).Items(["100%", "150%", "200%"]).SelectedIndex(0);
-        zoom.SelectionChanged += _ => log.Text = $"Zoom: {zoom.SelectedIndex}";
+        // Save asks whether there is anything to write. A predicate is asked again after every click, so
+        // opening a game enables it and saving turns it off without either side telling the other.
+        bool dirty = false;
 
         var bar = new ToolBar()
             .Band(
                 new ToolBarGroup().Items(
-                    Emoji("🆕", "New game"),
-                    Emoji("📂", "Open"),
-                    Emoji("💾", "Save")),
+                    new Button().Content("🆕").ToolTip("New game")
+                        .OnClick(() => { dirty = true; log.Text = "Ran: New game"; }),
+                    new Button().Content("📂").ToolTip("Open")
+                        .OnClick(() => { dirty = true; log.Text = "Ran: Open"; }),
+                    new Button().Content("💾").ToolTip("Save")
+                        .OnCanClick(() => dirty)
+                        .OnClick(() => { dirty = false; log.Text = "Ran: Save"; })),
                 new ToolBarGroup().Items(
-                    Emoji("✂️", "Cut"),
-                    Emoji("📋", "Copy"),
-                    Emoji("📌", "Paste")),
+                    new Button().Content("✂️").ToolTip("Cut").OnClick(() => log.Text = "Ran: Cut"),
+                    new Button().Content("📋").ToolTip("Copy").OnClick(() => log.Text = "Ran: Copy"),
+                    new Button().Content("📌").ToolTip("Paste").OnClick(() => log.Text = "Ran: Paste")),
                 new ToolBarGroup().Items(
-                    Switch("🎨", "Colour"),
-                    Switch("🔊", "Sound"),
+                    new ToggleButton().Content("🎨").ToolTip("Colour")
+                        .OnCheckedChanged(isChecked => log.Text = $"Colour: {isChecked}"),
+                    new ToggleButton().Content("🔊").ToolTip("Sound")
+                        .OnCheckedChanged(isChecked => log.Text = $"Sound: {isChecked}"),
                     new Separator(),
-                    Switch("🧭", "Compass")),
+                    new ToggleButton().Content("🧭").ToolTip("Compass")
+                        .OnCheckedChanged(isChecked => log.Text = $"Compass: {isChecked}")),
                 new ToolBarGroup().Items(
                     new Label().Text("Zoom"),
-                    zoom));
+                    new ComboBox().Width(80).Items(["100%", "150%", "200%"])
+                    .SelectedIndex(0).OnSelectionChanged(item => log.Text = $"Zoom: {item}")));
 
         return Card(
             "ToolBar from controls",
@@ -251,7 +250,7 @@ partial class GalleryView
                 .Children(
                     new TextBlock()
                         .TextWrapping(TextWrapping.Wrap)
-                        .Text("Entries put in with Items() are the controls themselves. They keep their own content and handlers, and carry the tooltip each one was given rather than one built from a command."),
+                        .Text("Entries put in with Items() are the controls themselves. They keep their own content and handlers, and carry the tooltip each one was given rather than one built from a command. Save stays disabled until New or Open has run: it answers a CanClick predicate instead of a command."),
                     bar,
                     log),
             minWidth: 420);
