@@ -142,6 +142,7 @@ public sealed partial class NumericUpDown : RangeBase
             UpdateTextBoxFromValue();
         }
 
+        _editEndedWhileFocused = IsFocusWithin;
         SetIsEditing(false);
     }
 
@@ -156,6 +157,7 @@ public sealed partial class NumericUpDown : RangeBase
         }
 
         UpdateTextBoxFromValue();
+        _editEndedWhileFocused = IsFocusWithin;
         SetIsEditing(false);
     }
 
@@ -269,18 +271,36 @@ public sealed partial class NumericUpDown : RangeBase
     protected override void OnGotFocus()
     {
         base.OnGotFocus();
+
+        // Focus makes the value editable, as it does in every other numeric spin control. Not right after a
+        // commit or a cancel though: those hand focus back here on their way out, and reopening the editor
+        // would make ending an edit impossible without leaving the control.
+        if (!_editEndedWhileFocused)
+        {
+            BeginEdit();
+        }
+
         InvalidateVisual();
     }
 
     protected override void OnLostFocus()
     {
         base.OnLostFocus();
-        if (!IsFocusWithin && IsEditing)
+        if (!IsFocusWithin)
         {
-            CommitEdit();
+            _editEndedWhileFocused = false;
+            if (IsEditing)
+            {
+                CommitEdit();
+            }
         }
+
         InvalidateVisual();
     }
+
+    // Set while a commit or a cancel hands focus from the editor back to this control, so that focus does
+    // not open the editor again. Cleared once focus leaves the control altogether.
+    private bool _editEndedWhileFocused;
 
     private void UpdateDisplayText() => SetValue(DisplayTextPropertyKey, FormatValue(Value));
 
@@ -314,7 +334,18 @@ public sealed partial class NumericUpDown : RangeBase
         {
             SyncTextBoxStyle();
             UpdateTextBoxFromValue();
-            textBox.Focus();
+
+            // The editor is this control's own part, so nothing has moved on screen: focusing it must not
+            // ask the scroll hosts to bring it into view, which would jump the viewport off the click.
+            if (FindVisualRoot() is Window window)
+            {
+                window.FocusManager.SetFocus(textBox, resolveDefault: false, bringIntoView: false);
+            }
+            else
+            {
+                textBox.Focus();
+            }
+
             textBox.SelectAll();
         }
         else
@@ -405,6 +436,32 @@ public sealed partial class NumericUpDown : RangeBase
         }
     }
 
+    /// <summary>
+    /// Steps the value with the editor open, putting the stepped text in the editor first. Committing the
+    /// value can reach the application, which may rebuild the tree this control sits in and take the focus
+    /// away; the commit that focus loss triggers then parses text that already agrees with the new value
+    /// instead of undoing the step.
+    /// </summary>
+    private void StepWhileEditing(double delta)
+    {
+        double next = Value + delta;
+        var textBox = _partTextBox;
+        if (textBox != null)
+        {
+            _suppressTextBoxUpdate = true;
+            try
+            {
+                textBox.Text = FormatValue(next);
+            }
+            finally
+            {
+                _suppressTextBoxUpdate = false;
+            }
+        }
+
+        CommitValue(next);
+    }
+
     private void OnTextBoxKeyDown(KeyEventArgs e)
     {
         if (!IsEditing)
@@ -430,14 +487,14 @@ public sealed partial class NumericUpDown : RangeBase
 
         if (e.Key == Key.Up)
         {
-            CommitValue(Value + GetEffectiveStep());
+            StepWhileEditing(GetEffectiveStep());
             e.Handled = true;
             return;
         }
 
         if (e.Key == Key.Down)
         {
-            CommitValue(Value - GetEffectiveStep());
+            StepWhileEditing(-GetEffectiveStep());
             e.Handled = true;
         }
     }
