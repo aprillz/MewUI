@@ -48,7 +48,7 @@ public partial class Button : CommandSourceControl
         if (oldValue != null)
         {
             WeakEventManager.RemoveHandler(
-                CommandPresentationWeakEvents.Changed,
+                CommandPresentationWeakEvents.Invalidated,
                 oldValue.Presentation,
                 this);
         }
@@ -56,7 +56,7 @@ public partial class Button : CommandSourceControl
         if (newValue != null)
         {
             WeakEventManager.AddHandler(
-                CommandPresentationWeakEvents.Changed,
+                CommandPresentationWeakEvents.Invalidated,
                 newValue.Presentation,
                 this,
                 static button => button.UpdateCommandPresentationContent());
@@ -179,7 +179,31 @@ public partial class Button : CommandSourceControl
     /// </summary>
     public event Action? Click;
 
-    protected override bool ComputeIsEnabledSuggestion() => QueryCommandCanExecute();
+    /// <summary>
+    /// Asked whether the button can be clicked, for a button whose condition is local enough that a
+    /// command would be ceremony. Combined with <see cref="UIElement.IsEnabled"/> and with the command's
+    /// own answer rather than replacing either, so any of the three disables the button.
+    /// </summary>
+    /// <remarks>
+    /// A predicate carries no change signal. It is asked again when the command system re-evaluates and
+    /// when <see cref="Window.RequerySuggested"/> is called; a condition that changes on its own must be
+    /// pushed with one of those, or expressed as a binding to <see cref="UIElement.IsEnabled"/> instead.
+    /// </remarks>
+    public Func<bool>? CanClick
+    {
+        get;
+        set
+        {
+            if (field != value)
+            {
+                field = value;
+                RefreshEnabledSubtree();
+            }
+        }
+    }
+
+    protected override bool ComputeIsEnabledSuggestion()
+        => (CanClick?.Invoke() ?? true) && QueryCommandCanExecute();
 
     protected override Size MeasureContent(Size availableSize)
     {
@@ -287,7 +311,7 @@ public partial class Button : CommandSourceControl
         if (Command is Command command)
         {
             WeakEventManager.RemoveHandler(
-                CommandPresentationWeakEvents.Changed,
+                CommandPresentationWeakEvents.Invalidated,
                 command.Presentation,
                 this);
         }

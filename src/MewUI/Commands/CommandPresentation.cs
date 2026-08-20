@@ -20,9 +20,22 @@ public sealed class CommandPresentation : MewObject
     public static readonly MewProperty<IconTemplate?> IconProperty =
         MewProperty<IconTemplate?>.Register<CommandPresentation>(nameof(Icon), null,
             MewPropertyOptions.None,
-            static (self, _, _) => self.Changed?.Invoke());
+            static (self, _, _) => self.Invalidated?.Invoke());
 
-    private string? _displayText;
+    // No invalidation: nothing materializes a description in advance, so there is nothing built from it
+    // to throw away. A tooltip that carries one is composed when it is about to appear.
+    public static readonly MewProperty<string?> DescriptionProperty =
+        MewProperty<string?>.Register<CommandPresentation>(nameof(Description), null);
+
+    private static readonly MewPropertyKey<string?> DisplayTextPropertyKey =
+        MewProperty<string?>.RegisterReadOnly<CommandPresentation>(nameof(DisplayText), null);
+
+    /// <summary>
+    /// The label with access-key markers removed, as a property so a presenter can bind to it rather
+    /// than re-read it whenever <see cref="AccessText"/> changes.
+    /// </summary>
+    public static readonly MewProperty<string?> DisplayTextProperty = DisplayTextPropertyKey.Property;
+
     private char _accessKey;
     private int _accessKeyIndex = -1;
 
@@ -48,10 +61,8 @@ public sealed class CommandPresentation : MewObject
         set => SetValue(AccessTextProperty, value);
     }
 
-    /// <summary>
-    /// Gets the current display label with access-key markers removed.
-    /// </summary>
-    public string? DisplayText => _displayText;
+    /// <inheritdoc cref="DisplayTextProperty"/>
+    public string? DisplayText => GetValue(DisplayTextProperty);
 
     /// <summary>
     /// Gets the current access key, or the null character when none is defined.
@@ -72,32 +83,46 @@ public sealed class CommandPresentation : MewObject
         set => SetValue(IconProperty, value);
     }
 
-    internal event Action? Changed;
+    /// <summary>
+    /// Gets or sets a sentence saying what running the command does. Material for a presenter to use,
+    /// not a tooltip: which surfaces show it is the presenter's choice.
+    /// </summary>
+    public string? Description
+    {
+        get => GetValue(DescriptionProperty);
+        set => SetValue(DescriptionProperty, value);
+    }
+
+    /// <summary>
+    /// Raised when what a presenter built from this presentation is stale. Coarse on purpose: a presenter
+    /// assembles one visual out of several of these values, so it has one thing to rebuild.
+    /// </summary>
+    internal event Action? Invalidated;
 
     private void OnAccessTextChanged()
     {
         var rawText = AccessText;
         if (rawText == null)
         {
-            _displayText = null;
+            SetValue(DisplayTextPropertyKey, null);
             _accessKey = default;
             _accessKeyIndex = -1;
         }
         else
         {
             bool hasAccessKey = AccessKeyHelper.TryParse(rawText, out var accessKey, out var displayText);
-            _displayText = displayText;
+            SetValue(DisplayTextPropertyKey, displayText);
             _accessKey = hasAccessKey ? accessKey : default;
             _accessKeyIndex = hasAccessKey ? AccessKeyHelper.GetUnderlineIndex(rawText) : -1;
         }
 
-        Changed?.Invoke();
+        Invalidated?.Invoke();
     }
 }
 
 internal static class CommandPresentationWeakEvents
 {
-    internal static readonly WeakEventKey<CommandPresentation, Action> Changed = new(
-        static (source, handler) => source.Changed += handler,
-        static (source, handler) => source.Changed -= handler);
+    internal static readonly WeakEventKey<CommandPresentation, Action> Invalidated = new(
+        static (source, handler) => source.Invalidated += handler,
+        static (source, handler) => source.Invalidated -= handler);
 }

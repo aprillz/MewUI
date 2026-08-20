@@ -241,13 +241,19 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
     {
         foreach (var entry in Menu.Items)
         {
-            if (entry is MenuItem item && item.Command is Command command)
+            if (entry is not MenuItem item)
+            {
+                continue;
+            }
+
+            // Predicates answer for rows with no command too, so this runs outside the command branch.
+            item.ReevaluateCanClick();
+
+            if (item.Command is Command command)
             {
                 bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget);
-                string? shortcutText =
-                    InputMapResolver.TryGetEffectiveGesture(window, command, _capturedCommandTarget.OriginElement, out var gesture)
-                        ? gesture.ToDisplayString()
-                        : null;
+                string? shortcutText = InputMapResolver.GetEffectiveGestureText(
+                    window, command, _capturedCommandTarget.OriginElement);
                 item.ApplyCommandState(enabled, shortcutText);
             }
         }
@@ -403,13 +409,18 @@ public sealed partial class ContextMenu : Control, IPopupOwner, ICommandSource, 
         bool changed = false;
         foreach (var entry in Menu.Items)
         {
-            if (entry is MenuItem item && item.Command is Command command)
+            if (entry is not MenuItem item)
+            {
+                continue;
+            }
+
+            changed |= item.ReevaluateCanClick();
+
+            if (item.Command is Command command)
             {
                 bool enabled = window.CommandRouter.CanExecute(command, _capturedCommandTarget);
-                string? shortcutText =
-                    InputMapResolver.TryGetEffectiveGesture(window, command, _capturedCommandTarget.OriginElement, out var gesture)
-                        ? gesture.ToDisplayString()
-                        : null;
+                string? shortcutText = InputMapResolver.GetEffectiveGestureText(
+                    window, command, _capturedCommandTarget.OriginElement);
                 changed |= item.ApplyCommandState(enabled, shortcutText);
             }
         }

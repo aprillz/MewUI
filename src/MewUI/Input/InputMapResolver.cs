@@ -60,6 +60,14 @@ internal static class InputMapResolver
     }
 
     /// <summary>
+    /// The display string for the gesture the given command would actually respond to, or
+    /// <see langword="null"/> when it answers to none. Every surface that labels a shortcut reads it from
+    /// here, so a menu row and a tooltip never disagree about what the key is.
+    /// </summary>
+    public static string? GetEffectiveGestureText(Window window, Command command, Element? origin)
+        => TryGetEffectiveGesture(window, command, origin, out var gesture) ? gesture.ToDisplayString() : null;
+
+    /// <summary>
     /// Finds the gesture the given command would actually respond to for the origin context,
     /// consistent with forward key resolution; used for menu shortcut labels.
     /// </summary>
