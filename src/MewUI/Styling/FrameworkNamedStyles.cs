@@ -22,4 +22,30 @@ internal static class FrameworkNamedStyles
             return _factories.TryGetValue(name, out factory);
         }
     }
+
+    /// <summary>
+    /// Materializes a framework style for trees with no application style sheet to hold it. The instance
+    /// is shared, so controls wearing one name apply the same style.
+    /// </summary>
+    internal static Style? GetStyle(string name)
+    {
+        lock (_sync)
+        {
+            if (_styles.TryGetValue(name, out var style))
+            {
+                return style;
+            }
+
+            if (!_factories.TryGetValue(name, out var factory))
+            {
+                return null;
+            }
+
+            style = factory();
+            _styles[name] = style;
+            return style;
+        }
+    }
+
+    private static readonly Dictionary<string, Style> _styles = new(StringComparer.Ordinal);
 }
