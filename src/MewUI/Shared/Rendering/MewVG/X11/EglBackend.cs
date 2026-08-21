@@ -15,7 +15,7 @@ internal sealed class EglBackend : IX11GLBackend
     public IOpenGLWindowResources CreateWindowResources(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext)
         => EglOpenGLWindowResources.Create(display, window, visualInfo, shareContext);
 
-    public IOpenGLWindowResources CreateWorkerResources(nint display, nint drawable, X11GLVisualInfo visualInfo)
+    public IOpenGLWindowResources CreateWorkerResources(nint display, X11GLVisualInfo visualInfo)
         => EglWorkerResources.Create(display, visualInfo);
 
     public nint GetCurrentContext() => LibEgl.eglGetCurrentContext();

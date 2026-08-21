@@ -17,9 +17,10 @@ internal interface IX11GLBackend
     /// <summary>Creates a window's GL context, optionally sharing with the worker context.</summary>
     IOpenGLWindowResources CreateWindowResources(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext);
 
-    /// <summary>Creates the surfaceless share-root context used for background offscreen (FBO)
-    /// rendering. GLX reuses <paramref name="drawable"/> for make-current; EGL is surfaceless.</summary>
-    IOpenGLWindowResources CreateWorkerResources(nint display, nint drawable, X11GLVisualInfo visualInfo);
+    /// <summary>Creates the share-root context used for background offscreen (FBO) rendering.
+    /// It never binds an application window: GLX makes its own private drawable, EGL is
+    /// surfaceless.</summary>
+    IOpenGLWindowResources CreateWorkerResources(nint display, X11GLVisualInfo visualInfo);
 
     /// <summary>Current GL context handle on the calling thread (0 if none).</summary>
     nint GetCurrentContext();
