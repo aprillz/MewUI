@@ -53,6 +53,9 @@ public sealed partial class MewVGX11GraphicsFactory
     private X11GLVisualInfo _workerVisualInfo;
     private bool _workerHasVisualInfo;
     private bool _workerInitFailed;
+    // Set while no window exists, because the platform host closes the X display once the last
+    // one goes away and a scope still rendering on that display crashes inside the driver.
+    private volatile bool _workerSuspended;
 
     /// <summary>GLXContext of the shared worker context. 0 if not yet created
     /// or init failed. Window contexts pass this as <c>shareList</c> at
@@ -206,11 +209,12 @@ public sealed partial class MewVGX11GraphicsFactory
             throw new ArgumentException("MewVG (X11) requires an X11 GLX window surface.", nameof(surface));
         }
 
-        // Capture display / drawable / visual for lazy worker-context creation
-        // and ensure the worker context exists BEFORE this window's context, so
-        // we can pass the worker context as shareList. Window contexts created
-        // before any worker scope can still proceed (no share); only background
-        // rendering benefits from sharing.
+        // Capture display / visual for lazy worker-context creation and ensure
+        // the worker context exists BEFORE this window's context, so we can pass
+        // the worker context as shareList. Window contexts created before any
+        // worker scope can still proceed (no share); only background rendering
+        // benefits from sharing.
+        _workerSuspended = false;
         CaptureFirstWindowGLInfo(glx.Display, glx.VisualInfo);
         EnsureWorkerContext();
 
@@ -276,6 +280,27 @@ public sealed partial class MewVGX11GraphicsFactory
         handled = true;
     }
 
+    partial void TryReleaseWindowResources(nint hwnd)
+    {
+        if (!_windows.IsEmpty)
+        {
+            return;
+        }
+
+        _workerSuspended = true;
+        DrainWorkerScopes();
+    }
+
+    /// <summary>Blocks until no background render scope is active.</summary>
+    private void DrainWorkerScopes()
+    {
+        // A scope holds the activation lock for its whole render, so taking the lock once is
+        // enough to wait one out; _workerSuspended keeps the next one from starting.
+        lock (_workerActivationLock)
+        {
+        }
+    }
+
     partial void DisposePlatformResources()
     {
         _offscreenProvider.Dispose();
@@ -291,37 +316,48 @@ public sealed partial class MewVGX11GraphicsFactory
             return MewVGNoOpRenderScope.Instance;
         }
 
-        EnsureWorkerContext();
-        if (_worker == null)
-        {
-            // Worker context isn't available yet (no window has been created, so
-            // we don't have a GLX visual). Caller proceeds without a worker scope
-            // - they'll fail to CreateContext on this thread, which their try /
-            // catch handles by skipping the rebuild.
-            return MewVGNoOpRenderScope.Instance;
-        }
-
-        // A single shared context can only be current on one thread at a time, so
-        // this serializes worker against worker. UI frames run unblocked: the worker
-        // binds its own drawable, never a window's.
+        // A single shared context can only be current on one thread at a time, so this
+        // serializes worker against worker, and against the drain that precedes display
+        // teardown. UI frames run unblocked: the worker binds its own drawable, never a
+        // window's.
         Monitor.Enter(_workerActivationLock);
+        bool activated = false;
         try
         {
-            // Worker context renders only into FBOs. GLX binds its own private 1x1
-            // drawable; EGL uses a surfaceless current (EGL_KHR_surfaceless_context).
-            if (!MakeWorkerCurrent())
+            if (!_workerSuspended)
             {
-                throw new InvalidOperationException("MakeCurrent (worker) failed.");
+                EnsureWorkerContext();
             }
 
-            // Windowless sessions reach this scope before any window resources ran the GL
-            // function bootstrap; it is interlocked-guarded, so this is a no-op afterwards.
-            MewVGGLBootstrapX11.EnsureInitialized();
+            if (_worker != null && !_workerSuspended)
+            {
+                // Worker context renders only into FBOs. GLX binds its own private 1x1
+                // drawable; EGL uses a surfaceless current (EGL_KHR_surfaceless_context).
+                if (!MakeWorkerCurrent())
+                {
+                    throw new InvalidOperationException("MakeCurrent (worker) failed.");
+                }
+
+                // Windowless sessions reach this scope before any window resources ran the GL
+                // function bootstrap; it is interlocked-guarded, so this is a no-op afterwards.
+                MewVGGLBootstrapX11.EnsureInitialized();
+                activated = true;
+            }
         }
         catch
         {
             Monitor.Exit(_workerActivationLock);
             throw;
+        }
+
+        if (!activated)
+        {
+            // No worker context: no window has been created yet (so we have no GLX visual), or
+            // the last one just went away. Caller proceeds without a worker scope - they'll
+            // fail to CreateContext on this thread, which their try / catch handles by
+            // skipping the rebuild.
+            Monitor.Exit(_workerActivationLock);
+            return MewVGNoOpRenderScope.Instance;
         }
         return new X11WorkerContextScope(_workerActivationLock, this);
     }
