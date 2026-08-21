@@ -378,37 +378,8 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             return;
         }
 
-        if (path.IsFrozen)
+        if (TryGetFrozenFill(path, fillRule, out var cached, out var windingRule))
         {
-            var windingRule = fillRule == FillRule.EvenOdd
-                ? TessWindingRule.Odd : TessWindingRule.NonZero;
-
-            var entry = _fillCache.GetOrCreateValue(path);
-            var cached = fillRule == FillRule.EvenOdd ? entry.EvenOdd : entry.NonZero;
-
-            // Scale-aware staleness: the cached flattening is calibrated for the
-            // scale it was built at, so drawing the same frozen geometry larger
-            // (an icon size slider, zoom) must rebuild it or curves turn faceted.
-            var xform = _vg.GetTransformMatrix();
-            var scaleX = MathF.Sqrt(xform.M11 * xform.M11 + xform.M12 * xform.M12);
-            var scaleY = MathF.Sqrt(xform.M21 * xform.M21 + xform.M22 * xform.M22);
-            var currentScale = MathF.Max(scaleX, scaleY);
-
-            if (cached == null || cached.IsStale(_vg.TessTol, windingRule, currentScale))
-            {
-                // First use or DPI changed: build object-space cache (identity transform)
-                ReplayNvgPathCommands(path, fillRule, identityTransform: true);
-                cached = _vg.BuildFillCache(windingRule);
-
-                // Store back into entry
-                if (fillRule == FillRule.EvenOdd)
-                    entry.EvenOdd = cached;
-                else
-                    entry.NonZero = cached;
-
-                _fillCache.AddOrUpdate(path, entry);
-            }
-
             // Every frame: render from cache with current transform
             _vg.FillColor(ToNvgColor(color));
             _vg.FillFromCache(cached, windingRule);
@@ -418,6 +389,48 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         ReplayNvgPathCommands(path, fillRule);
         _vg.FillColor(ToNvgColor(color));
         _vg.Fill();
+    }
+
+    /// <summary>Tessellation of frozen geometry, built once in object space and reused across
+    /// draws. False when the geometry is not frozen and the caller has to replay it per draw.</summary>
+    private bool TryGetFrozenFill(PathGeometry path, FillRule fillRule,
+        out FrozenFillCache cached, out TessWindingRule windingRule)
+    {
+        windingRule = fillRule == FillRule.EvenOdd ? TessWindingRule.Odd : TessWindingRule.NonZero;
+        cached = null!;
+        if (!path.IsFrozen)
+        {
+            return false;
+        }
+
+        var entry = _fillCache.GetOrCreateValue(path);
+        var existing = fillRule == FillRule.EvenOdd ? entry.EvenOdd : entry.NonZero;
+
+        // Scale-aware staleness: the cached flattening is calibrated for the
+        // scale it was built at, so drawing the same frozen geometry larger
+        // (an icon size slider, zoom) must rebuild it or curves turn faceted.
+        var xform = _vg.GetTransformMatrix();
+        var scaleX = MathF.Sqrt(xform.M11 * xform.M11 + xform.M12 * xform.M12);
+        var scaleY = MathF.Sqrt(xform.M21 * xform.M21 + xform.M22 * xform.M22);
+        var currentScale = MathF.Max(scaleX, scaleY);
+
+        if (existing == null || existing.IsStale(_vg.TessTol, windingRule, currentScale))
+        {
+            // First use or DPI changed: build object-space cache (identity transform)
+            ReplayNvgPathCommands(path, fillRule, identityTransform: true);
+            existing = _vg.BuildFillCache(windingRule);
+
+            // Store back into entry
+            if (fillRule == FillRule.EvenOdd)
+                entry.EvenOdd = existing;
+            else
+                entry.NonZero = existing;
+
+            _fillCache.AddOrUpdate(path, entry);
+        }
+
+        cached = existing;
+        return true;
     }
 
     public override void DrawLine(Point start, Point end, Pen pen)
@@ -596,17 +609,45 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         }
         if (path == null) return;
         if (brush is SolidColorBrush solid) { FillPath(path, solid.Color, fillRule); return; }
+        // Frozen geometry takes the same tessellation cache as a solid fill: the cache holds
+        // geometry only, and FillFromCache draws it with whatever paint the state carries.
+        bool frozen = TryGetFrozenFill(path, fillRule, out var cached, out var windingRule);
+
         if (brush is ImageBrush imageBrush)
         {
-            ReplayNvgPathCommands(path, fillRule);
-            if (ApplyImageBrushPaint(imageBrush)) _vg.Fill();
+            if (!frozen)
+            {
+                ReplayNvgPathCommands(path, fillRule);
+            }
+            if (!ApplyImageBrushPaint(imageBrush))
+            {
+                return;
+            }
+            if (frozen)
+            {
+                _vg.FillFromCache(cached, windingRule);
+            }
+            else
+            {
+                _vg.Fill();
+            }
             return;
         }
         if (brush is not GradientBrush gradient) return;
 
-        ReplayNvgPathCommands(path, fillRule);
+        if (!frozen)
+        {
+            ReplayNvgPathCommands(path, fillRule);
+        }
         NvgStrokeHelper.ApplyGradientPaint(_vg, gradient, NvgStrokeHelper.ComputePathBounds(path));
-        _vg.Fill();
+        if (frozen)
+        {
+            _vg.FillFromCache(cached, windingRule);
+        }
+        else
+        {
+            _vg.Fill();
+        }
     }
 
     /// <summary>
