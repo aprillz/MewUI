@@ -17,10 +17,19 @@ public sealed class DialogPolicyTests
     [TestMethod]
     public void FileDialog_ManagedSelectionTreatsNativeAsPreference()
     {
-        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: false, nativeAvailable: false));
-        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: false, nativeAvailable: true));
-        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: true, nativeAvailable: false));
-        Assert.IsFalse(FileDialog.ShouldUseManaged(preferNative: true, nativeAvailable: true));
+        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: false, nativeAvailable: false, managedSupported: true));
+        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: false, nativeAvailable: true, managedSupported: true));
+        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: true, nativeAvailable: false, managedSupported: true));
+        Assert.IsFalse(FileDialog.ShouldUseManaged(preferNative: true, nativeAvailable: true, managedSupported: true));
+    }
+
+    [TestMethod]
+    public void FileDialog_DisabledManagedSupportNeverProvidesNativeFallback()
+    {
+        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: false, nativeAvailable: false, managedSupported: false));
+        Assert.IsTrue(FileDialog.ShouldUseManaged(preferNative: false, nativeAvailable: true, managedSupported: false));
+        Assert.IsFalse(FileDialog.ShouldUseManaged(preferNative: true, nativeAvailable: false, managedSupported: false));
+        Assert.IsFalse(FileDialog.ShouldUseManaged(preferNative: true, nativeAvailable: true, managedSupported: false));
     }
 
     [TestMethod]

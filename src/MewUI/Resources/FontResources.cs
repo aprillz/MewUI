@@ -148,12 +148,10 @@ public static class FontResources
     private static string ComputeStableKeyForPath(string fullPath)
     {
         // Path-based fonts are considered "global for the process" (no refcount-based lifetime),
-        // but we still store them in the dictionary to avoid repeated registration work.
-        // Use SHA256(path) to keep the key compact and case-insensitive on Windows.
-        using var sha = SHA256.Create();
-        var bytes = System.Text.Encoding.UTF8.GetBytes(fullPath);
-        var hash = sha.ComputeHash(bytes);
-        return Convert.ToHexString(hash);
+        // but we still store them in the dictionary to avoid repeated registration work. The
+        // dictionary already compares keys case-insensitively, so hashing the normalized path adds
+        // no identity guarantee and unnecessarily roots cryptography for ordinary system fonts.
+        return "path:" + fullPath;
     }
 
     private static bool IsUnderCacheDirectory(string path)

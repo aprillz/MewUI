@@ -46,6 +46,33 @@
   </Target>
 
   <!--
+    Environment-variable diagnostics follow the consumer configuration. Debug consumers can opt in
+    at runtime with MEWUI_*_DEBUG variables; Release consumers omit the logging graph by default.
+    Release diagnostics can be retained explicitly with <MewUIEnvironmentDebugLogging>true</MewUIEnvironmentDebugLogging>.
+  -->
+  <PropertyGroup>
+    <MewUIEnvironmentDebugLogging Condition="'$(MewUIEnvironmentDebugLogging)' == '' And '$(Configuration)' == 'Debug'">true</MewUIEnvironmentDebugLogging>
+    <MewUIEnvironmentDebugLogging Condition="'$(MewUIEnvironmentDebugLogging)' == ''">false</MewUIEnvironmentDebugLogging>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.EnvironmentDebugLogging.Enabled" Value="$(MewUIEnvironmentDebugLogging)" Trim="true" />
+  </ItemGroup>
+
+  <!--
+    Managed file dialogs are included by default. Apps that rely exclusively on native dialogs can
+    disable them; Trim="true" lets ILLink remove the managed dialog implementation from trimmed and
+    NativeAOT output while leaving the PreferNative API available.
+  -->
+  <PropertyGroup>
+    <MewUIManagedFileDialogs Condition="'$(MewUIManagedFileDialogs)' == ''">true</MewUIManagedFileDialogs>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Aprillz.MewUI.ManagedFileDialogs.Enabled" Value="$(MewUIManagedFileDialogs)" Trim="true" />
+  </ItemGroup>
+
+  <!--
     Binding path generator interceptors. The compiler only honours interceptors whose namespace is
     allow-listed, so opt the generated namespace in here rather than asking every app to do it.
     This must live in targets, not props: nuget.g.props is imported before the project body, where

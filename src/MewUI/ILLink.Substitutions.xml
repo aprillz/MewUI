@@ -8,5 +8,13 @@
       <method signature="System.Boolean get_IsSupported()" body="stub" value="false"
               feature="Aprillz.MewUI.DevTools.Enabled" featurevalue="false" />
     </type>
+    <type fullname="Aprillz.MewUI.ManagedFileDialogGate">
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="false"
+              feature="Aprillz.MewUI.ManagedFileDialogs.Enabled" featurevalue="false" />
+    </type>
+    <type fullname="Aprillz.MewUI.Diagnostics.EnvironmentDebugLoggingGate">
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="false"
+              feature="Aprillz.MewUI.EnvironmentDebugLogging.Enabled" featurevalue="false" />
+    </type>
   </assembly>
 </linker>
