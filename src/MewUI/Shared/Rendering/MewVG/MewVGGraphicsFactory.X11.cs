@@ -45,12 +45,11 @@ public sealed partial class MewVGX11GraphicsFactory
     // Shared offscreen "share-list root" GL context (GLX or EGL). Window contexts share with it
     // so worker-rendered FBO textures are sample-able from window contexts.
     private IOpenGLWindowResources? _worker;
-    // First-window display + drawable + visual - captured at first window
-    // creation and reused for worker context init / activation. Single-display
-    // X11 process is the assumed common case; multi-display would need per-
-    // display worker contexts (not supported here).
+    // First-window display + visual - captured at first window creation and
+    // reused for worker context init / activation. Single-display X11 process
+    // is the assumed common case; multi-display would need per-display worker
+    // contexts (not supported here).
     private nint _workerDisplay;
-    private nint _workerDrawable;
     private X11GLVisualInfo _workerVisualInfo;
     private bool _workerHasVisualInfo;
     private bool _workerInitFailed;
@@ -68,18 +67,17 @@ public sealed partial class MewVGX11GraphicsFactory
         }
     }
 
-    /// <summary>Captures the display / drawable / visual of the FIRST window
-    /// created so the worker context can be initialized lazily against the same
-    /// GLX visual. Called from <see cref="CreateWindowResources"/> before the
-    /// window's own context is made.</summary>
-    private void CaptureFirstWindowGLInfo(nint display, nint window, X11GLVisualInfo visualInfo)
+    /// <summary>Captures the display / visual of the FIRST window created so the
+    /// worker context can be initialized lazily against the same GLX visual. Called
+    /// from <see cref="CreateWindowResources"/> before the window's own context is
+    /// made.</summary>
+    private void CaptureFirstWindowGLInfo(nint display, X11GLVisualInfo visualInfo)
     {
         if (_workerHasVisualInfo) return;
         lock (_workerCtxInitLock)
         {
             if (_workerHasVisualInfo) return;
             _workerDisplay = display;
-            _workerDrawable = window;
             _workerVisualInfo = visualInfo;
             _workerHasVisualInfo = true;
         }
@@ -106,7 +104,7 @@ public sealed partial class MewVGX11GraphicsFactory
             try
             {
                 // Backend creates the share-root context (GLX share-list root, or surfaceless EGL).
-                _worker = GLBackend.CreateWorkerResources(_workerDisplay, _workerDrawable, _workerVisualInfo);
+                _worker = GLBackend.CreateWorkerResources(_workerDisplay, _workerVisualInfo);
             }
             catch
             {
@@ -118,9 +116,8 @@ public sealed partial class MewVGX11GraphicsFactory
 
     /// <summary>
     /// Captures worker GL info without any application window: opens a self-owned display and
-    /// creates a never-mapped 1x1 window with the backend-chosen visual, which gives GLX a valid
-    /// drawable for make-current (EGL is surfaceless and ignores it). The display, colormap, and
-    /// drawable intentionally live for the process lifetime alongside the worker context.
+    /// picks the backend's visual. The display intentionally lives for the process lifetime
+    /// alongside the worker context.
     /// </summary>
     private bool TryCaptureWindowlessGLInfo()
     {
@@ -139,39 +136,7 @@ public sealed partial class MewVGX11GraphicsFactory
                 return false;
             }
 
-            const int ALLOC_NONE = 0;
-            const ulong CW_BORDER_PIXEL = 1UL << 3;
-            const ulong CW_COLORMAP = 1UL << 13;
-            const uint INPUT_OUTPUT = 1;
-
-            nint root = NativeX11.XRootWindow(display, screen);
-            nint colormap = NativeX11.XCreateColormap(display, root, visual.Visual, ALLOC_NONE);
-            if (colormap == 0)
-            {
-                NativeX11.XCloseDisplay(display);
-                return false;
-            }
-
-            var attributes = new XSetWindowAttributes
-            {
-                colormap = colormap,
-                // A visual depth differing from the parent's needs an explicit border pixel,
-                // otherwise XCreateWindow fails with BadMatch.
-                border_pixel = 0,
-            };
-            nint drawable = NativeX11.XCreateWindow(
-                display, root, 0, 0, 1, 1, 0,
-                visual.Depth, INPUT_OUTPUT, visual.Visual,
-                CW_COLORMAP | CW_BORDER_PIXEL, ref attributes);
-            if (drawable == 0)
-            {
-                NativeX11.XFreeColormap(display, colormap);
-                NativeX11.XCloseDisplay(display);
-                return false;
-            }
-
             _workerDisplay = display;
-            _workerDrawable = drawable;
             _workerVisualInfo = visual;
             _workerHasVisualInfo = true;
             return true;
@@ -246,7 +211,7 @@ public sealed partial class MewVGX11GraphicsFactory
         // we can pass the worker context as shareList. Window contexts created
         // before any worker scope can still proceed (no share); only background
         // rendering benefits from sharing.
-        CaptureFirstWindowGLInfo(glx.Display, glx.Window, glx.VisualInfo);
+        CaptureFirstWindowGLInfo(glx.Display, glx.VisualInfo);
         EnsureWorkerContext();
 
         return MewVGX11WindowResources.Create(glx.Display, glx.Window, glx.VisualInfo, _worker?.NativeContext ?? 0);
@@ -336,13 +301,13 @@ public sealed partial class MewVGX11GraphicsFactory
             return MewVGNoOpRenderScope.Instance;
         }
 
-        // Same broad mutex as Win32: worker scope ↔ UI window frame fully
-        // serialize. UI freezes for the duration of any worker rebuild -
-        // accepted in favor of correctness on share-listed GLX contexts.
+        // A single shared context can only be current on one thread at a time, so
+        // this serializes worker against worker. UI frames run unblocked: the worker
+        // binds its own drawable, never a window's.
         Monitor.Enter(_workerActivationLock);
         try
         {
-            // Worker context renders only into FBOs. GLX reuses the first window's
+            // Worker context renders only into FBOs. GLX binds its own private 1x1
             // drawable; EGL uses a surfaceless current (EGL_KHR_surfaceless_context).
             if (!MakeWorkerCurrent())
             {

@@ -13,8 +13,8 @@ internal sealed class GlxBackend : IX11GLBackend
     public IOpenGLWindowResources CreateWindowResources(nint display, nint window, X11GLVisualInfo visualInfo, nint shareContext)
         => GlxOpenGLWindowResources.Create(display, window, visualInfo, shareContext);
 
-    public IOpenGLWindowResources CreateWorkerResources(nint display, nint drawable, X11GLVisualInfo visualInfo)
-        => GlxWorkerResources.Create(display, drawable, visualInfo);
+    public IOpenGLWindowResources CreateWorkerResources(nint display, X11GLVisualInfo visualInfo)
+        => GlxWorkerResources.Create(display, visualInfo);
 
     public nint GetCurrentContext() => LibGL.glXGetCurrentContext();
 }
