@@ -38,10 +38,184 @@ public sealed class OpenGLImageFilterExecutor : IImageFilterExecutor
                 var gpuResult = TryGpuBlur(b, context);
                 return gpuResult ?? _fallback.Execute(filter, context);
             }
+            case ColorMatrixFilter cm:
+            {
+                var gpuResult = TryGpuColorMatrix(cm, context);
+                return gpuResult ?? _fallback.Execute(filter, context);
+            }
+            case OffsetFilter o:
+            {
+                var gpuResult = TryGpuOffset(o, context);
+                return gpuResult ?? _fallback.Execute(filter, context);
+            }
+            case MergeFilter m:
+            {
+                var gpuResult = TryGpuMerge(m, context);
+                return gpuResult ?? _fallback.Execute(filter, context);
+            }
             default:
-                // ColorMatrix / Composite / Merge / DropShadow → CPU until we ship dedicated shaders.
+                // Flood / Compose / Composite / DropShadow → CPU until we ship dedicated shaders.
                 return _fallback.Execute(filter, context);
         }
+    }
+
+    private FilterResult? TryGpuColorMatrix(ColorMatrixFilter cm, IImageFilterContext ctx)
+    {
+        FilterResult input = cm.Input is null ? ctx.Source : Execute(cm.Input, ctx);
+        ScratchFilterResult? scratch = null;
+        bool ownsResult = false;
+        try
+        {
+            if (!TryGetReadableSurface(input, out var glSource)) return null;
+
+            scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, input.Bounds);
+            if (!TryGetWritableSurface(scratch, out var glDest)) return null;
+            if (!OpenGLFilterPasses.TryApplyColorMatrix(glSource, glDest, cm.Matrix)) return null;
+
+            ownsResult = true;
+            return scratch;
+        }
+        finally
+        {
+            if (!ownsResult)
+            {
+                scratch?.Dispose();
+            }
+            if (!ReferenceEquals(input, ctx.Source))
+            {
+                input.Dispose();
+            }
+        }
+    }
+
+    private FilterResult? TryGpuOffset(OffsetFilter o, IImageFilterContext ctx)
+    {
+        FilterResult input = o.Input is null ? ctx.Source : Execute(o.Input, ctx);
+        ScratchFilterResult? scratch = null;
+        bool ownsResult = false;
+        try
+        {
+            if (!TryGetReadableSurface(input, out var glSource)) return null;
+
+            // Dx/Dy are in logical/DIP units; the node only moves the result, so the pixels are
+            // copied unchanged and the translation lands in the bounds the consumer places by.
+            var bounds = new Rect(
+                input.Bounds.X + (o.Dx * ctx.LogicalToPixelScaleX),
+                input.Bounds.Y + (o.Dy * ctx.LogicalToPixelScaleY),
+                input.Bounds.Width,
+                input.Bounds.Height);
+
+            scratch = ctx.AcquireScratch(input.PixelWidth, input.PixelHeight, bounds);
+            if (!TryGetWritableSurface(scratch, out var glDest)) return null;
+            if (!OpenGLFilterPasses.TryCopy(glSource, glDest)) return null;
+
+            ownsResult = true;
+            return scratch;
+        }
+        finally
+        {
+            if (!ownsResult)
+            {
+                scratch?.Dispose();
+            }
+            if (!ReferenceEquals(input, ctx.Source))
+            {
+                input.Dispose();
+            }
+        }
+    }
+
+    private FilterResult? TryGpuMerge(MergeFilter m, IImageFilterContext ctx)
+    {
+        if (m.InputList.Count == 0)
+        {
+            // Empty merge produces a transparent layer at source bounds; leave that to the CPU.
+            return null;
+        }
+
+        var inputs = new List<FilterResult>(m.InputList.Count);
+        ScratchFilterResult? scratch = null;
+        bool ownsResult = false;
+        try
+        {
+            foreach (var node in m.InputList)
+            {
+                inputs.Add(Execute(node, ctx));
+            }
+
+            // Composite over the union so inputs an offset node moved stay spatially aligned,
+            // matching the CPU executor's Porter-Duff path.
+            var bounds = inputs[0].Bounds;
+            for (int i = 1; i < inputs.Count; i++)
+            {
+                bounds = Union(bounds, inputs[i].Bounds);
+            }
+
+            var layers = new List<OpenGLFilterPasses.CompositeLayer>(inputs.Count);
+            foreach (var result in inputs)
+            {
+                if (!TryGetReadableSurface(result, out var glLayer)) return null;
+                layers.Add(new OpenGLFilterPasses.CompositeLayer(
+                    glLayer,
+                    (int)Math.Round(result.Bounds.X - bounds.X),
+                    (int)Math.Round(result.Bounds.Y - bounds.Y)));
+            }
+
+            int width = Math.Max(1, (int)Math.Ceiling(bounds.Width));
+            int height = Math.Max(1, (int)Math.Ceiling(bounds.Height));
+            scratch = ctx.AcquireScratch(width, height, bounds);
+            if (!TryGetWritableSurface(scratch, out var glDest)) return null;
+            if (!OpenGLFilterPasses.TryComposite(glDest, layers)) return null;
+
+            ownsResult = true;
+            return scratch;
+        }
+        finally
+        {
+            if (!ownsResult)
+            {
+                scratch?.Dispose();
+            }
+            foreach (var result in inputs)
+            {
+                if (!ReferenceEquals(result, ctx.Source))
+                {
+                    result.Dispose();
+                }
+            }
+        }
+    }
+
+    private static Rect Union(Rect first, Rect second)
+    {
+        double left = Math.Min(first.X, second.X);
+        double top = Math.Min(first.Y, second.Y);
+        double right = Math.Max(first.Right, second.Right);
+        double bottom = Math.Max(first.Bottom, second.Bottom);
+        return new Rect(left, top, right - left, bottom - top);
+    }
+
+    /// <summary>True when the result is a GPU target whose texture already holds its content.
+    /// Results assembled by the CPU executor are not, and need an upload we punt on.</summary>
+    private static bool TryGetReadableSurface(FilterResult result, out OpenGLPixelRenderSurface surface)
+    {
+        surface = null!;
+        if (result.UnderlyingSurface is not OpenGLPixelRenderSurface gl) return false;
+        if (!gl.IsFboInitialized || gl.Fbo == 0 || gl.Texture == 0) return false;
+        surface = gl;
+        return true;
+    }
+
+    /// <summary>True when the scratch is a GPU target ready to be rendered into. The pool hands
+    /// back render targets whose GPU resources have not been created yet.</summary>
+    private static bool TryGetWritableSurface(ScratchFilterResult scratch, out OpenGLPixelRenderSurface surface)
+    {
+        surface = null!;
+        if (scratch.UnderlyingSurface is not OpenGLPixelRenderSurface gl) return false;
+        gl.InitializeFbo();
+        if (!gl.IsFboInitialized || gl.Fbo == 0 || gl.Texture == 0) return false;
+        surface = gl;
+        return true;
     }
 
     private FilterResult? TryGpuBlur(BlurFilter b, IImageFilterContext ctx)
