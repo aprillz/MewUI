@@ -330,9 +330,18 @@ namespace Aprillz.MewUI.VisualStudio.Session
             // and a pre-connect failure retries with restore (e.g. after a PackageReference change).
             bool noRestore = _skipRestore
                 && File.Exists(Path.Combine(Path.GetDirectoryName(_effectiveProjectPath), "obj", "project.assets.json"));
+
+            // The app the session runs holds its own output directory open for as long as it lives, so it
+            // gets one of its own: sharing bin would fail every build made while the preview is up. Under
+            // obj, which keeps the intermediate outputs shared, so this costs a copy and not a compile.
+            // Spelled --property because dotnet watch reads -p as the abbreviation of --project.
+            string outputPath = Path.Combine(
+                Path.GetDirectoryName(_effectiveProjectPath), "obj", "mewui-preview") + Path.DirectorySeparatorChar;
+            string output = $" --property:BaseOutputPath=\"{outputPath}\"";
+
             string arguments = _driver == ReloadDriver.Watch
-                ? $"watch --non-interactive --project \"{_effectiveProjectPath}\" run{(noRestore ? " --no-restore" : "")}"
-                : $"run --project \"{_effectiveProjectPath}\"{(noRestore ? " --no-restore" : "")}";
+                ? $"watch --non-interactive --project \"{_effectiveProjectPath}\" run{(noRestore ? " --no-restore" : "")}{output}"
+                : $"run --project \"{_effectiveProjectPath}\"{(noRestore ? " --no-restore" : "")}{output}";
 
             var startInfo = new ProcessStartInfo("dotnet", arguments)
             {

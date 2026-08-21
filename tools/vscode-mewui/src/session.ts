@@ -288,9 +288,14 @@ export class PreviewSession {
             && fs.existsSync(path.join(path.dirname(this.effectiveProjectPath), "obj", "project.assets.json"))
             ? ["--no-restore"]
             : [];
+        // The app the session runs holds its own output directory open for as long as it lives, so it gets
+        // one of its own: sharing bin would fail every build made while the preview is up. Under obj, which
+        // keeps the intermediate outputs shared, so this costs a copy and not a compile. Spelled --property
+        // because dotnet watch reads -p as the abbreviation of --project.
+        const output = `--property:BaseOutputPath=${path.join(path.dirname(this.effectiveProjectPath), "obj", "mewui-preview") + path.sep}`;
         const args = this.driver === "watch"
-            ? ["watch", "--non-interactive", "--project", this.effectiveProjectPath, "run", ...noRestore]
-            : ["run", "--project", this.effectiveProjectPath, ...noRestore];
+            ? ["watch", "--non-interactive", "--project", this.effectiveProjectPath, "run", ...noRestore, output]
+            : ["run", "--project", this.effectiveProjectPath, ...noRestore, output];
         const child = spawn("dotnet", args, {
             cwd: path.dirname(this.effectiveProjectPath),
             env: {

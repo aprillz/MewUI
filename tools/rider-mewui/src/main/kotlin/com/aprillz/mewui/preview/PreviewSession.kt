@@ -265,6 +265,12 @@ class PreviewSession(
             if (noRestore) {
                 add("--no-restore")
             }
+
+            // The app the session runs holds its own output directory open for as long as it lives, so it
+            // gets one of its own: sharing bin would fail every build made while the preview is up. Under
+            // obj, which keeps the intermediate outputs shared, so this costs a copy and not a compile.
+            // Spelled --property because dotnet watch reads -p as the abbreviation of --project.
+            add("--property:BaseOutputPath=" + File(projectDirectory, "obj/mewui-preview").path + File.separator)
         }
 
         val builder = ProcessBuilder(arguments)
