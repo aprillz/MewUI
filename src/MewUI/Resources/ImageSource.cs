@@ -17,7 +17,12 @@ namespace Aprillz.MewUI;
 /// </summary>
 public sealed class ImageSource : IOrientedImageSource
 {
+    private delegate bool EncodedImageDecoder(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation);
+    private delegate string? EncodedFormatDetector(ReadOnlySpan<byte> encoded);
+
     private readonly object _decodeLock = new();
+    private readonly EncodedImageDecoder? _decoder;
+    private readonly EncodedFormatDetector? _formatDetector;
     private byte[]? _encoded;
     private string? _cachedFormatId;
     private bool _formatIdComputed;
@@ -26,10 +31,21 @@ public sealed class ImageSource : IOrientedImageSource
     private ImageOrientation _orientation = ImageOrientation.Identity;
     private StaticPixelBufferSource? _decodedPixelSource;
 
-    private ImageSource(byte[] encoded)
+    private ImageSource(
+        byte[] encoded,
+        EncodedImageDecoder decoder,
+        EncodedFormatDetector? formatDetector = null,
+        string? knownFormatId = null)
     {
         ArgumentNullException.ThrowIfNull(encoded);
         _encoded = encoded;
+        _decoder = decoder;
+        _formatDetector = formatDetector;
+        if (knownFormatId != null)
+        {
+            _cachedFormatId = knownFormatId;
+            _formatIdComputed = true;
+        }
     }
 
     private ImageSource(Bgra32PixelBuffer pixels)
@@ -64,7 +80,7 @@ public sealed class ImageSource : IOrientedImageSource
         {
             if (!_formatIdComputed)
             {
-                _cachedFormatId = _encoded is null ? null : ImageDecoders.DetectFormatId(_encoded);
+                _cachedFormatId = _encoded is null ? null : _formatDetector?.Invoke(_encoded);
                 _formatIdComputed = true;
             }
             return _cachedFormatId;
@@ -89,13 +105,20 @@ public sealed class ImageSource : IOrientedImageSource
     /// <summary>
     /// Creates an <see cref="ImageSource"/> from encoded image bytes.
     /// </summary>
-    public static ImageSource FromBytes(byte[] data) => new(data);
+    public static ImageSource FromBytes(byte[] data) =>
+        new(data, ImageDecoders.TryDecode, ImageDecoders.DetectFormatId);
+
+    internal static ImageSource FromPngBytes(byte[] data) =>
+        new(data, DecodePng, knownFormatId: "png");
+
+    internal static ImageSource FromBmpBytes(byte[] data) =>
+        new(data, DecodeBmp, knownFormatId: "bmp");
 
     /// <summary>
     /// Loads an <see cref="ImageSource"/> from a file path.
     /// </summary>
     /// <param name="path">Path to an encoded image file.</param>
-    public static ImageSource FromFile(string path) => new(File.ReadAllBytes(path));
+    public static ImageSource FromFile(string path) => FromBytes(File.ReadAllBytes(path));
 
     /// <summary>
     /// Loads an embedded resource from the specified assembly.
@@ -249,12 +272,12 @@ public sealed class ImageSource : IOrientedImageSource
             var data = GC.AllocateUninitializedArray<byte>(len);
             stream.Position = 0;
             stream.ReadExactly(data);
-            return new ImageSource(data);
+            return FromBytes(data);
         }
 
         using var ms = new MemoryStream();
         stream.CopyTo(ms);
-        return new ImageSource(ms.ToArray());
+        return FromBytes(ms.ToArray());
     }
 
     internal bool TryGetBgra32PixelBuffer(out Bgra32PixelBuffer bitmap)
@@ -293,7 +316,7 @@ public sealed class ImageSource : IOrientedImageSource
                 return true;
             }
 
-            if (_encoded is null || !ImageDecoders.TryDecode(_encoded, out _decodedBitmap, out _orientation))
+            if (_encoded is null || _decoder == null || !_decoder(_encoded, out _decodedBitmap, out _orientation))
             {
                 pixelSource = null!;
                 return false;
@@ -306,7 +329,7 @@ public sealed class ImageSource : IOrientedImageSource
             // Cache FormatId before releasing encoded bytes so it remains available.
             if (!_formatIdComputed)
             {
-                _cachedFormatId = ImageDecoders.DetectFormatId(_encoded);
+                _cachedFormatId = _formatDetector?.Invoke(_encoded);
                 _formatIdComputed = true;
             }
             _encoded = null;
@@ -347,6 +370,18 @@ public sealed class ImageSource : IOrientedImageSource
 
         throw new NotSupportedException(
             $"Unsupported image format. Built-in decoders: BMP/PNG/JPEG. " +
-            $"Detected: {ImageDecoders.DetectFormatId(_encoded) ?? "unknown"}.");
+            $"Detected: {FormatId ?? "unknown"}.");
+    }
+
+    private static bool DecodePng(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation)
+    {
+        orientation = ImageOrientation.Identity;
+        return new PngDecoder().TryDecode(encoded, out bitmap);
+    }
+
+    private static bool DecodeBmp(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation)
+    {
+        orientation = ImageOrientation.Identity;
+        return new BmpDecoder().TryDecode(encoded, out bitmap);
     }
 }

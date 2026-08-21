@@ -4,6 +4,16 @@ using System.Runtime.CompilerServices;
 
 namespace Aprillz.MewUI.Diagnostics;
 
+internal static class EnvironmentDebugLoggingGate
+{
+    private const string ENABLED_SWITCH = "Aprillz.MewUI.EnvironmentDebugLogging.Enabled";
+
+    private static readonly bool _isSupported =
+        !AppContext.TryGetSwitch(ENABLED_SWITCH, out bool enabled) || enabled;
+
+    internal static bool IsSupported => _isSupported;
+}
+
 /// <summary>
 /// Environment-variable-backed on/off switches for debug logging.
 /// </summary>
@@ -36,7 +46,7 @@ internal static class EnvDebugSwitches
 /// Tagged debug logger controlled by an environment variable.
 /// Interpolated string logging avoids formatting work when disabled.
 /// </summary>
-public sealed class EnvDebugLogger
+internal sealed class EnvDebugLogger
 {
     private readonly string _envVar;
     private readonly string _tag;
@@ -47,11 +57,11 @@ public sealed class EnvDebugLogger
         _tag = tag;
     }
 
-    public bool Enabled => EnvDebugSwitches.IsOn(_envVar);
+    public bool Enabled => EnvironmentDebugLoggingGate.IsSupported && EnvDebugSwitches.IsOn(_envVar);
 
     public void Write(string message)
     {
-        if (!Enabled)
+        if (!EnvironmentDebugLoggingGate.IsSupported || !EnvDebugSwitches.IsOn(_envVar))
         {
             return;
         }
@@ -61,7 +71,7 @@ public sealed class EnvDebugLogger
 
     public void Write([InterpolatedStringHandlerArgument("")] ref Handler message)
     {
-        if (!message.IsActive)
+        if (!EnvironmentDebugLoggingGate.IsSupported || !message.IsActive)
         {
             return;
         }
@@ -91,7 +101,7 @@ public sealed class EnvDebugLogger
 
         public Handler(int literalLength, int formattedCount, EnvDebugLogger logger, out bool enabled)
         {
-            enabled = logger.Enabled;
+            enabled = EnvironmentDebugLoggingGate.IsSupported && logger.Enabled;
             IsActive = enabled;
             _builder = enabled
                 ? new DefaultInterpolatedStringHandler(literalLength, formattedCount)
