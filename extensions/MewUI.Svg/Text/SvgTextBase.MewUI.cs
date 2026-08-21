@@ -85,6 +85,9 @@ public abstract partial class SvgTextBase
             {
                 _pathBuiltWithRenderer = false;
                 var factory = Application.Current?.GraphicsFactory ?? Application.DefaultGraphicsFactory;
+                // Bounds is reached from the layout pass, outside any render pass, and OpenGL
+                // backends cannot create an offscreen surface without a context on this thread.
+                using var renderScope = factory.AcquireBackgroundRenderScope();
                 using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(1, 1, 1));
                 using var context = factory.CreateContext(surface);
                 using var tempRenderer = new MewSvgRenderer(factory, context);
