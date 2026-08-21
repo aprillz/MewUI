@@ -20,12 +20,13 @@ internal static class GdiTextAdvances
             return [];
         }
 
-        var cumulativePixels = new int[text.Length];
-        var oldFont = Gdi32.SelectObject(hdc, font.Handle);
-        try
+        var advances = GC.AllocateUninitializedArray<double>(text.Length);
+        fixed (char* textPointer = text)
+        fixed (double* advancesPointer = advances)
         {
-            fixed (char* textPointer = text)
-            fixed (int* widthsPointer = cumulativePixels)
+            int* cumulativePixels = (int*)advancesPointer;
+            var oldFont = Gdi32.SelectObject(hdc, font.Handle);
+            try
             {
                 SIZE size;
                 if (!Gdi32.GetTextExtentExPoint(
@@ -34,23 +35,24 @@ internal static class GdiTextAdvances
                     text.Length,
                     int.MaxValue,
                     null,
-                    widthsPointer,
+                    cumulativePixels,
                     &size))
                 {
                     throw new InvalidOperationException("GetTextExtentExPointW failed.");
                 }
             }
-        }
-        finally
-        {
-            Gdi32.SelectObject(hdc, oldFont);
-        }
+            finally
+            {
+                Gdi32.SelectObject(hdc, oldFont);
+            }
 
-        double scale = dpiScale > 0 ? dpiScale : 1;
-        var advances = new double[cumulativePixels.Length];
-        for (int i = 0; i < cumulativePixels.Length; i++)
-        {
-            advances[i] = cumulativePixels[i] / scale;
+            double scale = dpiScale > 0 ? dpiScale : 1;
+            // The native int output occupies the first half of the double buffer. Convert from
+            // the end so writing a double never overwrites an int that has not been read yet.
+            for (int i = advances.Length - 1; i >= 0; i--)
+            {
+                advancesPointer[i] = cumulativePixels[i] / scale;
+            }
         }
 
         return advances;
