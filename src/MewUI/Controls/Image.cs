@@ -213,7 +213,7 @@ public sealed partial class Image : FrameworkElement
             return false;
         }
 
-        var data = decoded.Data;
+        var data = decoded.Data.Span;
         byte b = data[index - 3];
         byte g = data[index - 2];
         byte r = data[index - 1];

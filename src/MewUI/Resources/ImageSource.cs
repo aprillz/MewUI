@@ -38,7 +38,7 @@ public sealed class ImageSource : IOrientedImageSource
         {
             throw new ArgumentOutOfRangeException(nameof(pixels), "Buffer dimensions must be positive.");
         }
-        if (pixels.Data is null || pixels.Data.Length != pixels.WidthPx * pixels.HeightPx * 4)
+        if (pixels.Data.IsEmpty || pixels.Data.Length != pixels.WidthPx * pixels.HeightPx * 4)
         {
             throw new ArgumentException("Invalid BGRA buffer length.", nameof(pixels));
         }
@@ -224,7 +224,7 @@ public sealed class ImageSource : IOrientedImageSource
             throw new ArgumentException("Destination buffer is too small for the specified stride.", nameof(destination));
         }
 
-        var src = _decodedBitmap.Data.AsSpan();
+        var src = _decodedBitmap.Data.Span;
         int srcOffset = 0;
         int dstOffset = 0;
         for (int y = 0; y < height; y++)

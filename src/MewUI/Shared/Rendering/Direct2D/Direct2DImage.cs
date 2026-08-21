@@ -1,7 +1,9 @@
 using Aprillz.MewUI.Native.Com;
 using Aprillz.MewUI.Native.Direct2D;
-using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Rendering.Simd;
+using Aprillz.MewUI.Resources;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
@@ -12,7 +14,7 @@ internal sealed class Direct2DImage : IImage
     private readonly IPixelBufferSource _pixels;
     private readonly bool _hasAlpha;  // false → skip premultiply scan, use ALPHA_MODE.IGNORE
     private int _pixelsVersion = -1;
-    private byte[]? _premultiplied;
+    private Memory<byte> _premultiplied;
     // True while _premultiplied is a buffer this class allocated rather than the source's own.
     private bool _premultipliedIsCopy;
     private nint _renderTarget;
@@ -91,7 +93,7 @@ internal sealed class Direct2DImage : IImage
         }
 
         EnsurePremultiplied();
-        if (_premultiplied is null || _premultiplied.Length == 0)
+        if (_premultiplied.IsEmpty)
         {
             return 0;
         }
@@ -110,7 +112,7 @@ internal sealed class Direct2DImage : IImage
 
         unsafe
         {
-            fixed (byte* p = _premultiplied)
+            var p = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_premultiplied.Span));
             {
                 int hr = D2D1VTable.CreateBitmap(
                     (ID2D1RenderTarget*)renderTarget,
@@ -132,7 +134,7 @@ internal sealed class Direct2DImage : IImage
         // the reference costs nothing. A later re-upload premultiplies again from the source.
         if (_premultipliedIsCopy)
         {
-            _premultiplied = null;
+            _premultiplied = Memory<byte>.Empty;
             _premultipliedIsCopy = false;
         }
 
@@ -141,7 +143,7 @@ internal sealed class Direct2DImage : IImage
 
     private void EnsurePremultiplied()
     {
-        if (_disposed || _premultiplied != null) return;
+        if (_disposed || !_premultiplied.IsEmpty) return;
 
         using var l = _pixels.Lock();
         if (l.Buffer.Length == 0)
@@ -172,14 +174,15 @@ internal sealed class Direct2DImage : IImage
 
         var premultiplied = PremultiplyIfNeeded(l.Buffer);
         _premultiplied = premultiplied;
-        _premultipliedIsCopy = !ReferenceEquals(premultiplied, l.Buffer);
+        _premultipliedIsCopy = !premultiplied.Equals(l.Buffer);
     }
 
-    private static byte[] PremultiplyIfNeeded(byte[] bgra)
+    private static Memory<byte> PremultiplyIfNeeded(Memory<byte> bgra)
     {
+        var span = bgra.Span;
         for (int i = 3; i < bgra.Length; i += 4)
         {
-            if (bgra[i] != 0xFF) return Premultiply(bgra);
+            if (span[i] != 0xFF) return Premultiply(span);
         }
         return bgra;
     }

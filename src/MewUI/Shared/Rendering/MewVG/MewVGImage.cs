@@ -230,7 +230,7 @@ internal sealed class MewVGImage : IImage
         }
 
         using var l = _source.Lock();
-        int imageId = vg.CreateImageBGRA(PixelWidth, PixelHeight, flags, l.Buffer);
+        int imageId = vg.CreateImageBGRA(PixelWidth, PixelHeight, flags, l.Buffer.Span);
         _images[imageKey] = new ImageEntry(imageId, version);
         return imageId;
     }

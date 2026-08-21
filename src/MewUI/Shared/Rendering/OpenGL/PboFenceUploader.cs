@@ -1,5 +1,7 @@
 using Aprillz.MewUI.Native;
 using Aprillz.MewUI.Resources;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Aprillz.MewUI.Rendering.OpenGL;
 
@@ -194,7 +196,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
     {
         using var pixelLock = _source.Lock();
         var bytes = pixelLock.Buffer;
-        if (bytes is null || bytes.Length == 0) return;
+        if (bytes.IsEmpty) return;
 
         // Rotate to the next PBO so the previous one (still being DMA'd) isn't
         // overwritten - driver would otherwise stall waiting for the prior
@@ -211,7 +213,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         // fresh frame in. Equivalent to glBufferData(size, ptr, STREAM_DRAW)
         // but slightly more explicit about intent.
         OpenGLPboExt.BufferData(OpenGLPboExt.GL_PIXEL_UNPACK_BUFFER, byteSize, null, OpenGLPboExt.GL_STREAM_DRAW);
-        fixed (byte* dataPtr = bytes)
+        byte* dataPtr = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(bytes.Span));
         {
             OpenGLPboExt.BufferSubData(OpenGLPboExt.GL_PIXEL_UNPACK_BUFFER, 0, byteSize, dataPtr);
         }

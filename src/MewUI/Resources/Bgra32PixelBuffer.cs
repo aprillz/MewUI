@@ -15,7 +15,7 @@ namespace Aprillz.MewUI.Resources;
 public readonly record struct Bgra32PixelBuffer(
     int WidthPx,
     int HeightPx,
-    byte[] Data,
+    Memory<byte> Data,
     bool HasAlpha = true)
 {
     public int StrideBytes => WidthPx * 4;

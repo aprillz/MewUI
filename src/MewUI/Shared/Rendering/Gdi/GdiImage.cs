@@ -137,7 +137,7 @@ internal sealed class GdiImage : IImage
                 return;
             }
 
-            CopyToDibPremultiplied(l.Buffer, sourceIsPremultiplied: _source.IsPremultiplied);
+            CopyToDibPremultiplied(l.Buffer.Span, sourceIsPremultiplied: _source.IsPremultiplied);
             _sourceVersion = v;
 
             if (_gpBitmap != 0)

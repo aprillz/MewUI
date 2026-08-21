@@ -13,7 +13,7 @@ namespace Aprillz.MewUI;
 public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSource, IDisposable
 {
     private readonly object _lock = new();
-    private byte[] _bgra;
+    private Memory<byte> _bgra;
     private int _version;
     private bool _disposed;
     private PixelRegion? _dirtyRegion;
@@ -86,7 +86,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
 
         if (clear)
         {
-            Array.Clear(_bgra);
+            _bgra.Span.Clear();
         }
     }
 
@@ -105,7 +105,8 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         PixelWidth = bitmap.WidthPx;
         PixelHeight = bitmap.HeightPx;
         HasAlpha = bitmap.HasAlpha;
-        _bgra = bitmap.Data ?? throw new ArgumentNullException(nameof(bitmap));
+        if (bitmap.Data.IsEmpty) throw new ArgumentNullException(nameof(bitmap));
+        _bgra = bitmap.Data;
         _releaseLock = () => Monitor.Exit(_lock);
         if (_bgra.Length != PixelWidth * PixelHeight * 4)
         {
@@ -186,7 +187,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         {
             ThrowIfDisposed();
 
-            var dst = _bgra.AsSpan();
+            var dst = _bgra.Span;
             int dstRow0 = checked((y * PixelWidth + x) * 4);
             int srcRow = 0;
 
@@ -220,7 +221,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
             uint bgra = (uint)(b | ((uint)g << 8) | ((uint)r << 16) | ((uint)a << 24));
             // Use Span.Fill on a uint view of the pixel buffer. The runtime provides a highly optimized
             // (often SIMD-accelerated) memset-like implementation for this pattern.
-            MemoryMarshal.Cast<byte, uint>(_bgra.AsSpan()).Fill(bgra);
+            MemoryMarshal.Cast<byte, uint>(_bgra.Span).Fill(bgra);
 
             changed = MarkDirty_NoLock(new PixelRegion(0, 0, PixelWidth, PixelHeight));
         }
@@ -262,7 +263,7 @@ public class WriteableBitmap : IImageSource, INotifyImageChanged, IPixelBufferSo
         return new PixelBufferLock(_bgra, PixelWidth, PixelHeight, StrideBytes, v, dirtyRegion, _releaseLock);
     }
 
-    internal Span<byte> GetPixelsMutableNoLock() => _bgra;
+    internal Span<byte> GetPixelsMutableNoLock() => _bgra.Span;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Action? MarkDirty_NoLock(PixelRegion? additionalDirtyRegion = null)

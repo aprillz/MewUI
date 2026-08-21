@@ -1400,7 +1400,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
         return CreateHIconFromPixelBuffer(bmp);
     }
 
-    private static nint CreateHIconFromPixelBuffer(Bgra32PixelBuffer bmp)
+    unsafe static nint CreateHIconFromPixelBuffer(Bgra32PixelBuffer bmp)
     {
         int w = Math.Max(1, bmp.WidthPx);
         int h = Math.Max(1, bmp.HeightPx);
@@ -1418,7 +1418,7 @@ internal sealed class Win32WindowBackend : IWindowBackend
             return 0;
         }
 
-        Marshal.Copy(bmp.Data, 0, bits, bmp.Data.Length);
+        bmp.Data.Span.CopyTo(new Span<byte>((void*)bits, bmp.Data.Length));
 
         // For 32-bpp icons, Windows primarily uses the alpha channel; provide a 1-bpp mask for compatibility.
         nint hbmMask = Gdi32.CreateBitmap(w, h, nPlanes: 1, nBitCount: 1, lpBits: 0);

@@ -1221,7 +1221,7 @@ internal sealed class X11WindowBackend : IWindowBackend
         dst.Add(w);
         dst.Add(h);
 
-        var pixels = bmp.Data;
+        var pixels = bmp.Data.Span;
         int idx = 0;
         int pixelCount = checked(w * h);
         for (int i = 0; i < pixelCount; i++)

@@ -115,7 +115,7 @@ public sealed class PixelBufferLock : IDisposable
     /// <summary>
     /// Gets the backing byte buffer containing pixel data.
     /// </summary>
-    public byte[] Buffer { get; }
+    public Memory<byte> Buffer { get; }
 
     /// <summary>
     /// The dirty region since the last lock, or null if the entire buffer should be considered dirty.
@@ -124,7 +124,7 @@ public sealed class PixelBufferLock : IDisposable
     public PixelRegion? DirtyRegion { get; }
 
     public PixelBufferLock(
-        byte[] buffer,
+        Memory<byte> buffer,
         int pixelWidth,
         int pixelHeight,
         int strideBytes,
