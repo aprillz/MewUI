@@ -32,6 +32,11 @@ public sealed partial class Image : FrameworkElement
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender,
             static (self, oldValue, newValue) => self.OnSourcePropertyChanged(oldValue, newValue));
 
+    public static readonly MewProperty<ImageVectorCacheMode> VectorCacheModeProperty =
+        MewProperty<ImageVectorCacheMode>.Register<Image>(nameof(VectorCacheMode), ImageVectorCacheMode.Cached,
+            MewPropertyOptions.AffectsRender,
+            static (self, _, _) => self.ClearVectorCache());
+
     public static readonly MewProperty<ImageOrientationMode> OrientationModeProperty =
         MewProperty<ImageOrientationMode>.Register<Image>(nameof(OrientationMode), ImageOrientationMode.FromImage,
             MewPropertyOptions.AffectsLayout | MewPropertyOptions.AffectsRender);
@@ -115,6 +120,16 @@ public sealed partial class Image : FrameworkElement
     {
         get => GetValue(OrientationModeProperty);
         set => SetValue(OrientationModeProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets how a vector source is rendered. Defaults to
+    /// <see cref="ImageVectorCacheMode.Cached"/>.
+    /// </summary>
+    public ImageVectorCacheMode VectorCacheMode
+    {
+        get => GetValue(VectorCacheModeProperty);
+        set => SetValue(VectorCacheModeProperty, value);
     }
 
     // Effective orientation to apply: Normal unless the mode is FromImage and the source carries one.

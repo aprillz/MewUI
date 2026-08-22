@@ -56,4 +56,18 @@ public interface IRenderResourceCache
     void ReleaseLater(IDisposable resource, IRenderOperation safeAfter);
 
     void Trim(RenderCacheTrimReason reason);
+
+    /// <summary>
+    /// Takes a pooled scratch surface matching <paramref name="key"/> exactly, or
+    /// <see langword="null"/> when the pool holds none. The caller owns the surface until it is
+    /// handed back via <see cref="ReturnScratchSurface"/>; the previous content is undefined.
+    /// </summary>
+    IRenderSurface? RentScratchSurface(ScratchSurfaceKey key);
+
+    /// <summary>
+    /// Hands a surface (back) to the scratch pool for later reuse under <paramref name="key"/>.
+    /// The pool takes ownership: it disposes the surface when the budget forces eviction or the
+    /// cache is disposed. The key must describe the surface's actual allocation.
+    /// </summary>
+    void ReturnScratchSurface(ScratchSurfaceKey key, IRenderSurface surface);
 }
