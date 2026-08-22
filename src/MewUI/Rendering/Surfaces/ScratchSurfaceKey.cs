@@ -1,0 +1,106 @@
+namespace Aprillz.MewUI.Rendering;
+
+/// <summary>
+/// Identifies interchangeable offscreen render surfaces in the scratch pool. Two surfaces with the
+/// same key can be swapped for one another because the renter repaints the content it needs.
+/// </summary>
+/// <param name="PixelWidth">Allocated surface width in pixels.</param>
+/// <param name="PixelHeight">Allocated surface height in pixels.</param>
+/// <param name="DpiScale">DPI scale the surface was created with.</param>
+/// <param name="HasAlpha">Whether the surface carries a per-pixel alpha channel.</param>
+public readonly record struct ScratchSurfaceKey(
+    int PixelWidth,
+    int PixelHeight,
+    double DpiScale,
+    bool HasAlpha);
+
+/// <summary>
+/// Scratch-surface acquisition for offscreen caches. Callers ask for the size they actually paint;
+/// the pool behind <see cref="IRenderDevice.ResourceCache"/> rounds the allocation up so a resize
+/// sweep reuses a handful of surfaces instead of creating one per frame. The returned surface is
+/// therefore usually larger than requested - paint the top-left region and blit with a source rect.
+/// </summary>
+public static class ScratchSurfaceExtensions
+{
+    /// <summary>
+    /// Returns a surface at least <paramref name="pixelWidth"/> x <paramref name="pixelHeight"/>,
+    /// reusing a pooled one when available. Content is undefined. Hand it back via
+    /// <see cref="ReleaseScratchSurface"/> instead of disposing.
+    /// </summary>
+    public static IRenderSurface AcquireScratchSurface(
+        this IRenderDevice device,
+        int pixelWidth,
+        int pixelHeight,
+        double dpiScale = 1.0,
+        bool hasAlpha = true,
+        string? debugName = null)
+    {
+        int allocWidth = ScratchSurfaceSize.Approximate(pixelWidth);
+        int allocHeight = ScratchSurfaceSize.Approximate(pixelHeight);
+        var key = new ScratchSurfaceKey(allocWidth, allocHeight, dpiScale, hasAlpha);
+
+        var pooled = device.ResourceCache?.RentScratchSurface(key);
+        if (pooled != null)
+        {
+            return pooled;
+        }
+
+        return device.CreateSurface(
+            RenderSurfaceDescriptor.CachedImage(allocWidth, allocHeight, dpiScale, debugName, hasAlpha));
+    }
+
+    /// <summary>
+    /// Hands a surface obtained from <see cref="AcquireScratchSurface"/> back for reuse.
+    /// Disposes it when the device has no pool or the pool is over budget.
+    /// </summary>
+    public static void ReleaseScratchSurface(this IRenderDevice device, IRenderSurface surface)
+    {
+        var cache = device.ResourceCache;
+        if (cache == null || surface.IsDisposed)
+        {
+            surface.Dispose();
+            return;
+        }
+
+        var key = new ScratchSurfaceKey(
+            surface.PixelWidth,
+            surface.PixelHeight,
+            surface.DpiScale,
+            surface is Aprillz.MewUI.Resources.IPixelBufferSource pixels
+                ? pixels.HasAlpha
+                : surface.Capabilities.HasFlag(SurfaceCapabilities.Alpha));
+        cache.ReturnScratchSurface(key, surface);
+    }
+}
+
+/// <summary>
+/// Rounds requested surface dimensions up so that a resize sweep asks for a handful of distinct
+/// sizes instead of a new one every frame, which is what makes the scratch pool hit.
+/// </summary>
+public static class ScratchSurfaceSize
+{
+    // Below this, a surface is not worth sizing precisely.
+    private const int MIN_EXTENT = 16;
+
+    /// <summary>Rounds one axis up to the nearest allocation step.</summary>
+    public static int Approximate(int extent)
+    {
+        if (extent <= MIN_EXTENT)
+        {
+            return MIN_EXTENT;
+        }
+
+        // Fixed quanta keep nearby resize requests reusable without the 40-100% area waste of
+        // independently rounding both axes to powers of two. Larger surfaces use a wider quantum,
+        // keeping the number of pool keys bounded while capping per-axis slack at roughly 6%.
+        int quantum = extent switch
+        {
+            <= 256 => 16,
+            <= 1024 => 32,
+            <= 4096 => 64,
+            _ => 128,
+        };
+        long rounded = ((long)extent + quantum - 1) / quantum * quantum;
+        return rounded > int.MaxValue ? int.MaxValue : (int)rounded;
+    }
+}

@@ -157,7 +157,7 @@ public abstract partial class UIElement
             {
                 entry.InvalidationOverlayColor = window.NextBitmapCacheInvalidationOverlayColor();
             }
-            context.DrawImage(entry.Image, Bounds);
+            context.DrawImage(entry.Image, Bounds, new Rect(0, 0, entry.PixelWidth, entry.PixelHeight));
             if (!IsRenderingToCache &&
                 window?.DevToolsBitmapCacheInvalidationOverlayEnabled == true)
             {
@@ -257,9 +257,10 @@ public abstract partial class UIElement
         {
             DisposeCacheEntry();
 
-            IRenderSurface surface = factory.CreateSurface(
-                RenderSurfaceDescriptor.CachedImage(
-                    pixelWidth, pixelHeight, effectiveDpiScale, hasAlpha: opaqueFill is null));
+            // Pool-sized (approx-fitted) surface; PixelWidth/Height keep the painted content size
+            // and the blit reads just that region.
+            IRenderSurface surface = factory.AcquireScratchSurface(
+                pixelWidth, pixelHeight, effectiveDpiScale, hasAlpha: opaqueFill is null, debugName: "BitmapCache");
             try
             {
                 entry = new CacheEntry
@@ -276,7 +277,7 @@ public abstract partial class UIElement
             }
             catch
             {
-                surface.Dispose();
+                factory.ReleaseScratchSurface(surface);
                 throw;
             }
         }
@@ -310,11 +311,27 @@ public abstract partial class UIElement
 
     private void DisposeCacheEntry()
     {
-        _cache?.Dispose();
+        if (_cache is not { } entry)
+        {
+            return;
+        }
         _cache = null;
+
+        entry.Image.Dispose();
+        // The surface itself goes back to the device scratch pool so the next cache (any element,
+        // any window) can repaint into it instead of allocating.
+        var device = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
+        if (device != null)
+        {
+            device.ReleaseScratchSurface(entry.Surface);
+        }
+        else
+        {
+            entry.Surface.Dispose();
+        }
     }
 
-    private sealed class CacheEntry : IDisposable
+    private sealed class CacheEntry
     {
         public required IRenderSurface Surface { get; init; }
         public required IImage Image { get; init; }
@@ -325,11 +342,5 @@ public abstract partial class UIElement
         public required Color? OpaqueFill { get; init; }
         public long Version { get; set; }
         public Color InvalidationOverlayColor { get; set; }
-
-        public void Dispose()
-        {
-            Image.Dispose();
-            Surface.Dispose();
-        }
     }
 }

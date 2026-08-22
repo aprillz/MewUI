@@ -2442,10 +2442,6 @@ public partial class Window : ContentControl, ILayoutRoundingHost
             return;
         }
 
-        // Release parked vector-cache surfaces (tied to this device) before the context goes away so
-        // their deferred GPU disposal drains under a still-valid context.
-        DisposeVectorSurfaceReclaimer();
-
         // Dispose the cached render context BEFORE the factory tears down its window
         // resources - backends may still hold references that the factory is about to free.
         _renderContext?.Dispose();

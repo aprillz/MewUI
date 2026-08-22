@@ -148,6 +148,11 @@ internal sealed unsafe class Direct2DGpuPixelRenderSurface : IPixelBufferSource,
 
     bool IReusableScratchSurface.CanReturnToPool => IsDeviceCurrent;
 
+    // The bitmap is drawn through the device context it was created on, and that context may only
+    // be used by its own thread.
+    bool IReusableScratchSurface.CanRenderFromCurrentThread
+        => IsDeviceCurrent && _factory.IsCurrentThreadDeviceContext(_deviceContext);
+
     // ID2DTextureSource - exposes the GPU bitmap via the backend marker so D2D consumers
     // can short-circuit the CPU readback path when source and consumer share a device.
     nint ID2DTextureSource.NativeBitmap => IsDeviceCurrent ? _bitmap : 0;
