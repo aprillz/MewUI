@@ -1223,7 +1223,7 @@ public class Grid : Panel
             return CaptureMeasureSizesInto(definitions, ref scratch);
         }
 
-        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, ref scratch);
+        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, starFloorIsMeasured: false, ref scratch);
     }
 
     private static double[] CreateFinalSizes<T>(IReadOnlyList<T> definitions, double available, double spacing, ref double[] scratch)
@@ -1234,7 +1234,7 @@ public class Grid : Panel
             return CaptureMeasureSizesInto(definitions, ref scratch);
         }
 
-        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, ref scratch);
+        return CreateDistributedSizes(definitions, available, spacing, useMeasuredForStarWhenInfinite: false, starFloorIsMeasured: true, ref scratch);
     }
 
     private static double[] CreateDistributedSizes<T>(
@@ -1242,6 +1242,7 @@ public class Grid : Panel
         double available,
         double spacing,
         bool useMeasuredForStarWhenInfinite,
+        bool starFloorIsMeasured,
         ref double[] scratch)
         where T : GridDefinitionBase
     {
@@ -1260,7 +1261,7 @@ public class Grid : Panel
             if (definition.UserSize.IsStar)
             {
                 starIndices.Add(i);
-                sizes[i] = ClampDefinitionSize(definition, definition.UserMinSize);
+                sizes[i] = ClampDefinitionSize(definition, StarFloor(definition, starFloorIsMeasured));
             }
             else
             {
@@ -1304,10 +1305,11 @@ public class Grid : Panel
             {
                 int index = unresolved[i];
                 var definition = definitions[index];
-                double proposed = remaining * definition.UserSize.Value / remainingWeight;
+                double floor = StarFloor(definition, starFloorIsMeasured);
+                double proposed = Math.Max(floor, remaining * definition.UserSize.Value / remainingWeight);
                 double clamped = ClampDefinitionSize(definition, proposed);
 
-                if (clamped <= definition.UserMinSize + 0.01 || clamped >= definition.UserMaxSize - 0.01)
+                if (clamped <= floor + 0.01 || clamped >= definition.UserMaxSize - 0.01)
                 {
                     sizes[index] = clamped;
                     remaining -= clamped;
@@ -1328,7 +1330,9 @@ public class Grid : Panel
             foreach (var index in unresolved)
             {
                 var definition = definitions[index];
-                double proposed = remaining * definition.UserSize.Value / remainingWeight;
+                double proposed = Math.Max(
+                    StarFloor(definition, starFloorIsMeasured),
+                    remaining * definition.UserSize.Value / remainingWeight);
                 sizes[index] = ClampDefinitionSize(definition, proposed);
             }
         }
@@ -1338,6 +1342,12 @@ public class Grid : Panel
 
         return sizes;
     }
+
+    /// <summary>Smallest size a star definition may take. In arrange this includes the size measure
+    /// gave it, so proportional distribution never places a child in a cell narrower than the content
+    /// the grid reported as its desired size.</summary>
+    private static double StarFloor(GridDefinitionBase definition, bool includeMeasured)
+        => includeMeasured ? Math.Max(definition.UserMinSize, definition.MeasureSize) : definition.UserMinSize;
 
     private static void ApplyFinalSizes<T>(IReadOnlyList<T> definitions, double[] sizes) where T : GridDefinitionBase
     {
