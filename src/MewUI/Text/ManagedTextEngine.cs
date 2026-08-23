@@ -1238,6 +1238,11 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
         TextLayoutCachePolicy policy,
         object? owner)
     {
+        if (policy == TextLayoutCachePolicy.None)
+        {
+            return _engine.CreateLayoutCore(snapshot);
+        }
+
         if (policy == TextLayoutCachePolicy.Owner)
         {
             ArgumentNullException.ThrowIfNull(owner);

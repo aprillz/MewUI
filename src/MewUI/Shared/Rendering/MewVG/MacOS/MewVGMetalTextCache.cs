@@ -19,6 +19,11 @@ internal sealed class MewVGMetalTextCache : IDisposable
     // image-id is then leaked until the NVG context itself disposes - acceptable since
     // it's bounded by "ever-created TextBlock instances", not by render rate.
     private readonly ConditionalWeakTable<object, OwnerEntry> _ownerCache = new();
+    // Scratch entries for transient text, one per transient draw in a frame. A slot is only
+    // repainted in place the frame after its last use, once ReleasePendingDeletes has reset the
+    // index past the flush that consumed it.
+    private readonly List<OwnerEntry> _transientSlots = new();
+    private int _transientIndex;
     private bool _disposed;
 
     // Keep it conservative; text is the hottest path and Metal textures can accumulate quickly.
@@ -223,6 +228,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
     {
         if (_disposed) return;
         _frameGeneration++;
+        _transientIndex = 0;
         while (_pendingDeletes.Count > 0)
         {
             int imageId = _pendingDeletes.Dequeue();
@@ -276,11 +282,6 @@ internal sealed class MewVGMetalTextCache : IDisposable
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
 
-        // The rasterized bitmap is widthPx + aaExtra × heightPx (matches CoreTextText.Rasterize).
-        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2);
-        int aaWidthPx = checked(widthPx + aaExtra);
-        int requiredBytes = checked(aaWidthPx * heightPx * 4);
-
         var entry = _ownerCache.GetValue(owner, static _ => new OwnerEntry());
 
         uint ownedArgb = ((uint)color.A << 24) | ((uint)color.R << 16) | ((uint)color.G << 8) | color.B;
@@ -319,6 +320,99 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 out imageId, out bitmapWidthPx, out bitmapHeightPx);
         }
 
+        if (!RasterizeIntoEntry(entry, font, text, widthPx, heightPx, dpi, color,
+                horizontalAlignment, verticalAlignment, wrapping, trimming,
+                out int actualW, out int actualH))
+        {
+            return false;
+        }
+
+        entry.LastFrame = _frameGeneration;
+        entry.LastFontRef = fontRef;
+        entry.LastArgb = ownedArgb;
+        entry.LastWidthPx = widthPx;
+        entry.LastHeightPx = heightPx;
+        entry.LastHorizontalAlignment = horizontalAlignment;
+        entry.LastVerticalAlignment = verticalAlignment;
+        entry.LastWrapping = wrapping;
+        entry.LastTrimming = trimming;
+        entry.LastText = text.ToString();
+
+        imageId = entry.ImageId;
+        bitmapWidthPx = actualW;
+        bitmapHeightPx = actualH;
+        return true;
+    }
+
+    /// <summary>
+    /// Transient text rasterization: paints into the next scratch texture of this frame, which is
+    /// neither keyed nor tied to an owner and is reused by a later frame's transient draws.
+    /// </summary>
+    public bool TryGetOrCreateTransient(
+        CoreTextFont font,
+        ReadOnlySpan<char> text,
+        int widthPx,
+        int heightPx,
+        uint dpi,
+        Color color,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment,
+        TextWrapping wrapping,
+        TextTrimming trimming,
+        out int imageId,
+        out int bitmapWidthPx,
+        out int bitmapHeightPx)
+    {
+        imageId = 0;
+        bitmapWidthPx = widthPx;
+        bitmapHeightPx = heightPx;
+
+        if (_disposed || font.GetFontRef(dpi) == 0 || text.IsEmpty)
+        {
+            return false;
+        }
+
+        if (_transientIndex >= _transientSlots.Count)
+        {
+            _transientSlots.Add(new OwnerEntry());
+        }
+
+        var entry = _transientSlots[_transientIndex++];
+        if (!RasterizeIntoEntry(entry, font, text, Math.Max(1, widthPx), Math.Max(1, heightPx), dpi, color,
+                horizontalAlignment, verticalAlignment, wrapping, trimming,
+                out int actualW, out int actualH))
+        {
+            return false;
+        }
+
+        imageId = entry.ImageId;
+        bitmapWidthPx = actualW;
+        bitmapHeightPx = actualH;
+        return true;
+    }
+
+    // Rasterizes into the entry's buffer and uploads it: in place when the bitmap size is
+    // unchanged, otherwise into a new texture with the old one deleted deferred.
+    private bool RasterizeIntoEntry(
+        OwnerEntry entry,
+        CoreTextFont font,
+        ReadOnlySpan<char> text,
+        int widthPx,
+        int heightPx,
+        uint dpi,
+        Color color,
+        TextAlignment horizontalAlignment,
+        TextAlignment verticalAlignment,
+        TextWrapping wrapping,
+        TextTrimming trimming,
+        out int actualW,
+        out int actualH)
+    {
+        // The rasterized bitmap is widthPx + aaExtra × heightPx (matches CoreTextText.Rasterize).
+        int aaExtra = (int)Math.Ceiling(dpi / 96.0 * 2);
+        int aaWidthPx = checked(widthPx + aaExtra);
+        int requiredBytes = checked(aaWidthPx * heightPx * 4);
+
         // Grow buffer if needed. No shrink - rare large rasterization shouldn't force
         // reallocation on every subsequent small one.
         if (entry.Buffer == null || entry.Buffer.Length < requiredBytes)
@@ -331,7 +425,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 horizontalAlignment, verticalAlignment,
                 wrapping, widthPx, trimming,
                 entry.Buffer,
-                out int actualW, out int actualH))
+                out actualW, out actualH))
         {
             return false;
         }
@@ -341,13 +435,10 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         if (entry.ImageId != 0 && entry.TextureWidthPx == actualW && entry.TextureHeightPx == actualH)
         {
-            // FAST PATH: dimensions stable → in-place texture update.
             _vg.UpdateImageBGRA(entry.ImageId, pixels);
         }
         else
         {
-            // SLOW PATH: first frame for this owner OR bitmap size changed.
-            // Defer old image deletion the same way EvictIfNeeded does - queued draws may still reference it.
             if (entry.ImageId != 0)
             {
                 _pendingDeletes.Enqueue(entry.ImageId);
@@ -367,20 +458,6 @@ internal sealed class MewVGMetalTextCache : IDisposable
             Account(TextureBytes(actualW, actualH));
         }
 
-        entry.LastFrame = _frameGeneration;
-        entry.LastFontRef = fontRef;
-        entry.LastArgb = ownedArgb;
-        entry.LastWidthPx = widthPx;
-        entry.LastHeightPx = heightPx;
-        entry.LastHorizontalAlignment = horizontalAlignment;
-        entry.LastVerticalAlignment = verticalAlignment;
-        entry.LastWrapping = wrapping;
-        entry.LastTrimming = trimming;
-        entry.LastText = text.ToString();
-
-        imageId = entry.ImageId;
-        bitmapWidthPx = actualW;
-        bitmapHeightPx = actualH;
         return true;
     }
 
@@ -431,6 +508,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         // (which happens immediately after this in MewVGMetalWindowResources.Dispose). We
         // just drop our refs so the entries become eligible for GC.
         _ownerCache.Clear();
+        _transientSlots.Clear();
 
         // Drain any deferred deletes that haven't been flushed yet so their imageIds don't
         // leak past the cache lifetime.

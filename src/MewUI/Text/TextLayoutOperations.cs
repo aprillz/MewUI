@@ -16,7 +16,8 @@ internal static class TextLayoutOperations
         TextTrimming trimming = TextTrimming.None,
         TextAlignment alignment = TextAlignment.Left,
         object? owner = null,
-        long revision = 0)
+        long revision = 0,
+        bool transient = false)
     {
         var request = new TextLayoutRequest
         {
@@ -31,13 +32,14 @@ internal static class TextLayoutOperations
                 Trimming = trimming,
                 Alignment = alignment
             },
-            Revision = revision
+            Revision = revision,
+            Transient = transient
         };
 
-        return factory.TextEngine.GetOrCreateLayout(
-            request,
-            owner is null ? TextLayoutCachePolicy.Content : TextLayoutCachePolicy.Owner,
-            owner);
+        var policy = transient
+            ? TextLayoutCachePolicy.None
+            : owner is null ? TextLayoutCachePolicy.Content : TextLayoutCachePolicy.Owner;
+        return factory.TextEngine.GetOrCreateLayout(request, policy, owner);
     }
 
     public static Size Measure(
@@ -46,10 +48,11 @@ internal static class TextLayoutOperations
         uint dpi,
         in TextRunStyle style,
         double maxWidth = double.PositiveInfinity,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        bool transient = false)
         => string.IsNullOrEmpty(text)
             ? Size.Empty
-            : GetOrCreate(factory, text, dpi, in style, maxWidth, wrapping: wrapping).MeasuredSize;
+            : GetOrCreate(factory, text, dpi, in style, maxWidth, wrapping: wrapping, transient: transient).MeasuredSize;
 
     public static void DrawInBounds(
         IGraphicsContext context,
@@ -58,7 +61,8 @@ internal static class TextLayoutOperations
         Color color,
         TextAlignment verticalAlignment = TextAlignment.Top,
         object? owner = null,
-        ReadOnlyMemory<TextPaintSpan> paintSpans = default)
+        ReadOnlyMemory<TextPaintSpan> paintSpans = default,
+        bool transient = false)
     {
         double y = verticalAlignment switch
         {
@@ -67,7 +71,7 @@ internal static class TextLayoutOperations
             _ => bounds.Y
         };
         var origin = new Point(bounds.X, y);
-        var options = new TextDrawOptions(color, paintSpans, Owner: owner);
+        var options = new TextDrawOptions(color, paintSpans, Owner: owner, Transient: transient);
 
         if (layout.MeasuredSize.Width <= bounds.Width + 0.5 && layout.ContentHeight <= bounds.Height + 0.5)
         {

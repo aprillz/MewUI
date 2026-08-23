@@ -96,7 +96,8 @@ internal sealed class DebugPerformanceOverlay : Control
 
         const double maxWidth = 380;
         const double pad = 8;
-        var size = MeasureEngineText(text.WrittenSpan, maxWidth, TextWrapping.Wrap);
+        // The numbers change every frame, so this text is transient: nothing it draws is cached.
+        var size = MeasureEngineText(text.WrittenSpan, maxWidth, TextWrapping.Wrap, transient: true);
         var x = Math.Max(Bounds.X + 8, Bounds.Right - size.Width - pad * 2 - 8);
         var panelRect = new Rect(x, Bounds.Y + 8, size.Width + pad * 2, size.Height + pad * 2);
         panelRect = LayoutRounding.SnapBoundsRectToPixels(panelRect, context.DpiScale);
@@ -108,7 +109,8 @@ internal sealed class DebugPerformanceOverlay : Control
             text.WrittenSpan,
             panelRect.Deflate(new Thickness(pad)),
             Color.White,
-            wrapping: TextWrapping.Wrap);
+            wrapping: TextWrapping.Wrap,
+            transient: true);
 
         DrawResourcePanel(context, panelRect, maxWidth, pad);
     }
@@ -143,11 +145,11 @@ internal sealed class DebugPerformanceOverlay : Control
         text.AppendBytes(memory.GeometryCacheBytes);
         text.Append("\nPrivate ");
         text.AppendBytes(memory.PrivateUsage);
-        text.Append("  WS ");
+        text.Append(" \nWS ");
         text.AppendBytes(memory.WorkingSetSize);
-        text.Append("  Private WS ");
+        text.Append(" \nPrivate WS ");
         text.AppendBytes(memory.PrivateWorkingSetSize);
-        text.Append("  GC ");
+        text.Append(" \nGC ");
         text.AppendBytes(memory.GcHeapBytes);
         if (!memory.IsBalanced)
         {
@@ -157,7 +159,7 @@ internal sealed class DebugPerformanceOverlay : Control
             text.Append((int)memory.ScratchDisposed);
         }
 
-        var size = MeasureEngineText(text.WrittenSpan, maxWidth, TextWrapping.Wrap);
+        var size = MeasureEngineText(text.WrittenSpan, maxWidth, TextWrapping.Wrap, transient: true);
         var x = Math.Max(Bounds.X + 8, Bounds.Right - size.Width - pad * 2 - 8);
         var panelRect = new Rect(x, framePanel.Bottom + 8, size.Width + pad * 2, size.Height + pad * 2);
         panelRect = LayoutRounding.SnapBoundsRectToPixels(panelRect, context.DpiScale);
@@ -169,6 +171,7 @@ internal sealed class DebugPerformanceOverlay : Control
             text.WrittenSpan,
             panelRect.Deflate(new Thickness(pad)),
             Color.White,
-            wrapping: TextWrapping.Wrap);
+            wrapping: TextWrapping.Wrap,
+            transient: true);
     }
 }

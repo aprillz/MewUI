@@ -36,7 +36,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         var managed = Validate(layout);
         if (CanDrawFastPath(managed, in options))
         {
-            DrawFastPath(managed, origin, options.Foreground, options.Owner);
+            DrawFastPath(managed, origin, options.Foreground, EffectiveOwner(in options), options.Transient);
         }
         else
         {
@@ -59,13 +59,18 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         var managed = Validate(layout);
         if (CanDrawFastPath(managed, in options))
         {
-            DrawFastPath(managed, origin, options.Foreground, options.Owner);
+            DrawFastPath(managed, origin, options.Foreground, EffectiveOwner(in options), options.Transient);
         }
         else
         {
             DrawForegroundCore(managed, origin, in options);
         }
     }
+
+    // Transient text draws through the backend's per-frame scratch textures, which it selects by
+    // this owner identity; the caller's owner would key a cache entry instead.
+    private static object? EffectiveOwner(in TextDrawOptions options)
+        => options.Transient ? TransientText.Owner : options.Owner;
 
     private static ManagedTextLayout Validate(ITextLayout layout)
     {
@@ -138,32 +143,42 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                     Math.Max(1, runWidth),
                     inkHeight);
                 var realized = GetOrCreateRun(
-                    managed, textStart, textLength, cluster.Font, runWidth, inkHeight);
+                    managed, textStart, textLength, cluster.Font, runWidth, inkHeight, options.Transient);
                 if (realized is not null)
                 {
-                    DrawRunColorSegments(
-                        clusters, index, runEnd, origin, bounds, inkBaseline, realized, in options);
+                    try
+                    {
+                        DrawRunColorSegments(
+                            clusters, index, runEnd, origin, bounds, inkBaseline, realized, in options);
+                    }
+                    finally
+                    {
+                        if (options.Transient)
+                        {
+                            realized.Dispose();
+                        }
+                    }
                 }
                 index = runEnd;
             }
 
             if (line.IsTrimmed)
             {
-                DrawEllipsis(managed, line, clusters, origin, options.Foreground, options.Owner);
+                DrawEllipsis(managed, line, clusters, origin, options.Foreground, EffectiveOwner(in options));
             }
         }
 
         DrawDecorations(managed, origin, options.PaintSpans.Span);
     }
 
-    private void DrawFastPath(ManagedTextLayout managed, Point origin, Color color, object? owner)
+    private void DrawFastPath(ManagedTextLayout managed, Point origin, Color color, object? owner, bool transient)
     {
         var line = managed.ManagedLines[0];
         var font = managed.GetDefaultFont();
         Rect? clip = _context.GetClipBoundsLocal();
         if (clip is Rect visibleClip)
         {
-            DrawFastPathVisibleRange(managed, line, origin, visibleClip, color, owner, font);
+            DrawFastPathVisibleRange(managed, line, origin, visibleClip, color, owner, font, transient);
             return;
         }
 
@@ -174,10 +189,14 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                 origin.Y + line.Metrics.Bounds.Y - line.TrimTop,
                 Math.Max(1, segment.Width),
                 line.Metrics.Bounds.Height + line.TrimTop + line.TrimBottom);
-            var realized = GetOrCreateRun(managed, segment.Start, segment.Length, font, bounds.Width, bounds.Height);
+            var realized = GetOrCreateRun(managed, segment.Start, segment.Length, font, bounds.Width, bounds.Height, transient);
             if (realized is not null)
             {
                 DrawRun(realized, bounds.Position, color, owner);
+                if (transient)
+                {
+                    realized.Dispose();
+                }
             }
         }
     }
@@ -189,7 +208,8 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         Rect clip,
         Color color,
         object? owner,
-        IFont font)
+        IFont font,
+        bool transient)
     {
         const double OVERSCAN = 32;
         double hitY = line.Metrics.Bounds.Y + line.Metrics.Bounds.Height * 0.5;
@@ -209,10 +229,14 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
             origin.Y + line.Metrics.Bounds.Y - line.TrimTop,
             Math.Max(1, endCaret.X - startCaret.X),
             line.Metrics.Bounds.Height + line.TrimTop + line.TrimBottom);
-        var realized = GetOrCreateRun(managed, textStart, textEnd - textStart, font, bounds.Width, bounds.Height);
+        var realized = GetOrCreateRun(managed, textStart, textEnd - textStart, font, bounds.Width, bounds.Height, transient);
         if (realized is not null)
         {
             DrawRun(realized, bounds.Position, color, owner);
+            if (transient)
+            {
+                realized.Dispose();
+            }
         }
     }
 
@@ -387,7 +411,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
             double right = origin.X + lastCluster.X + lastCluster.Width;
             if (segmentStart == firstCluster && clusterIndex == endCluster)
             {
-                DrawRun(realized, runBounds.Position, segmentColor, options.Owner);
+                DrawRun(realized, runBounds.Position, segmentColor, EffectiveOwner(in options));
             }
             else
             {
@@ -404,7 +428,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                     try
                     {
                         _context.IntersectClip(clip);
-                        DrawRun(realized, runBounds.Position, segmentColor, options.Owner);
+                        DrawRun(realized, runBounds.Position, segmentColor, EffectiveOwner(in options));
                     }
                     finally
                     {
@@ -439,10 +463,11 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         int textLength,
         IFont font,
         double width,
-        double height)
+        double height,
+        bool transient)
     {
         var key = new RunRealizationKey(layout, textStart, textLength, font, Math.Round(width, 6), Math.Round(height, 6));
-        if (_runs.TryGetValue(key, out var cached))
+        if (!transient && _runs.TryGetValue(key, out var cached))
         {
             return cached;
         }
@@ -457,9 +482,13 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
             return null;
         }
 
-        var created = new RealizedRun(
-            backendRun);
-        _runs.Add(key, created);
+        // A transient run is drawn once and disposed by the caller; caching it would only pin
+        // text that never repeats.
+        var created = new RealizedRun(backendRun);
+        if (!transient)
+        {
+            _runs.Add(key, created);
+        }
         return created;
     }
 

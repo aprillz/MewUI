@@ -23,6 +23,12 @@ internal sealed class MewVGTextCache : IDisposable
     private readonly Dictionary<MewVGTextCacheKey, LinkedListNode<CacheEntry>> _map = new();
     private readonly LinkedList<CacheEntry> _lru = new();
     private readonly Queue<int> _pendingDeletes = new();
+    // Scratch textures for transient text, one per transient draw in a frame. A slot is only
+    // repainted in place the frame after its last use, once ReleasePendingDeletes has reset the
+    // index past the flush that consumed it.
+    private readonly List<TransientSlot> _transientSlots = new();
+    private int _transientIndex;
+    private byte[]? _transientBuffer;
     private long _currentBytes;
     private bool _disposed;
 
@@ -105,6 +111,74 @@ internal sealed class MewVGTextCache : IDisposable
         return entry;
     }
 
+    /// <summary>Returns a reusable raster buffer of at least <paramref name="bytes"/> bytes for a transient draw.</summary>
+    public byte[] RentTransientBuffer(int bytes)
+    {
+        if (_transientBuffer == null || _transientBuffer.Length < bytes)
+        {
+            _transientBuffer = new byte[Math.Max(bytes, (_transientBuffer?.Length ?? 0) * 2)];
+        }
+
+        return _transientBuffer;
+    }
+
+    /// <summary>
+    /// Uploads <paramref name="pixels"/> into the next transient scratch texture of this frame and
+    /// returns it; the texture is neither keyed nor retained beyond reuse by a later frame.
+    /// </summary>
+    public MewVGTextEntry UseTransient(ReadOnlySpan<byte> pixels, int widthPx, int heightPx, bool linear)
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(MewVGTextCache));
+        }
+
+        if (widthPx <= 0 || heightPx <= 0)
+        {
+            return default;
+        }
+
+        if (_transientIndex >= _transientSlots.Count)
+        {
+            _transientSlots.Add(new TransientSlot());
+        }
+
+        var slot = _transientSlots[_transientIndex++];
+        if (slot.ImageId != 0 && slot.WidthPx == widthPx && slot.HeightPx == heightPx && slot.Linear == linear)
+        {
+            _vg.UpdateImageBGRA(slot.ImageId, pixels);
+        }
+        else
+        {
+            ReleaseSlot(slot);
+            var flags = linear ? NVGimageFlags.None : NVGimageFlags.Nearest;
+            slot.ImageId = _vg.CreateImageBGRA(widthPx, heightPx, flags, pixels);
+            if (slot.ImageId == 0)
+            {
+                return default;
+            }
+
+            slot.WidthPx = widthPx;
+            slot.HeightPx = heightPx;
+            slot.Linear = linear;
+            slot.Bytes = EstimateBytes(widthPx, heightPx);
+            RenderMemoryLedger.TextCacheBytesChanged(slot.Bytes);
+        }
+
+        return new MewVGTextEntry(slot.ImageId, widthPx, heightPx, 0, 0, widthPx, heightPx);
+    }
+
+    private void ReleaseSlot(TransientSlot slot)
+    {
+        if (slot.ImageId != 0)
+        {
+            _pendingDeletes.Enqueue(slot.ImageId);
+            RenderMemoryLedger.TextCacheBytesChanged(-slot.Bytes);
+            slot.ImageId = 0;
+            slot.Bytes = 0;
+        }
+    }
+
     private static long EstimateBytes(int widthPx, int heightPx)
     {
         if (widthPx <= 0 || heightPx <= 0)
@@ -162,6 +236,7 @@ internal sealed class MewVGTextCache : IDisposable
             return;
         }
 
+        _transientIndex = 0;
         while (_pendingDeletes.Count > 0)
         {
             int imageId = _pendingDeletes.Dequeue();
@@ -195,6 +270,15 @@ internal sealed class MewVGTextCache : IDisposable
         _map.Clear();
         RenderMemoryLedger.TextCacheBytesChanged(-_currentBytes);
         _currentBytes = 0;
+
+        foreach (var slot in _transientSlots)
+        {
+            ReleaseSlot(slot);
+        }
+
+        _transientSlots.Clear();
+        _transientIndex = 0;
+        _transientBuffer = null;
     }
 
     public void Dispose()
@@ -212,4 +296,13 @@ internal sealed class MewVGTextCache : IDisposable
     }
 
     private readonly record struct CacheEntry(MewVGTextCacheKey Key, string Text, MewVGTextEntry Entry, long Bytes);
+
+    private sealed class TransientSlot
+    {
+        public int ImageId;
+        public int WidthPx;
+        public int HeightPx;
+        public bool Linear;
+        public long Bytes;
+    }
 }
