@@ -1239,6 +1239,23 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         };
     }
 
+    // Set while a transient run is drawn: text that changes every frame bypasses the text cache.
+    private bool _transientText;
+
+    public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
+        BackendTextFormat format, BackendTextLayout layout, Color color, object? owner)
+    {
+        _transientText = ReferenceEquals(owner, Aprillz.MewUI.Text.TransientText.Owner);
+        try
+        {
+            DrawBackendTextLayout(text, format, layout, color);
+        }
+        finally
+        {
+            _transientText = false;
+        }
+    }
+
     public override unsafe void DrawBackendTextLayout(ReadOnlySpan<char> text,
         BackendTextFormat format, BackendTextLayout layout, Color color)
     {
@@ -1289,7 +1306,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
                     out textHeightPx);
             }
 
-            if (_textCache != null)
+            if (_textCache != null && !_transientText)
             {
                 _textCache.DrawCached(
                     Hdc, text, r, gdiFont, color, gdiFormat, yOffsetPx, textHeightPx,

@@ -1038,7 +1038,8 @@ public abstract partial class Control : TextElement
     protected Size MeasureEngineText(
         ReadOnlySpan<char> text,
         double maxWidth = double.PositiveInfinity,
-        TextWrapping wrapping = TextWrapping.NoWrap)
+        TextWrapping wrapping = TextWrapping.NoWrap,
+        bool transient = false)
     {
         if (text.IsEmpty)
         {
@@ -1047,7 +1048,7 @@ public abstract partial class Control : TextElement
 
         var style = GetTextRunStyle();
         return TextLayoutOperations.Measure(
-            GetGraphicsFactory(), text.ToString(), GetDpi(), in style, maxWidth, wrapping);
+            GetGraphicsFactory(), text.ToString(), GetDpi(), in style, maxWidth, wrapping, transient);
     }
 
     protected void DrawEngineText(
@@ -1059,7 +1060,8 @@ public abstract partial class Control : TextElement
         TextAlignment verticalAlignment = TextAlignment.Top,
         TextWrapping wrapping = TextWrapping.NoWrap,
         TextTrimming trimming = TextTrimming.None,
-        object? owner = null)
+        object? owner = null,
+        bool transient = false)
     {
         if (text.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
         {
@@ -1076,9 +1078,10 @@ public abstract partial class Control : TextElement
             bounds.Height,
             wrapping,
             trimming,
-            horizontalAlignment);
+            horizontalAlignment,
+            transient: transient);
         TextLayoutOperations.DrawInBounds(
-            context, layout, bounds, color, verticalAlignment, owner ?? this);
+            context, layout, bounds, color, verticalAlignment, owner ?? this, transient: transient);
     }
 
     protected override void OnDpiChanged(uint oldDpi, uint newDpi)

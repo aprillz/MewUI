@@ -182,6 +182,24 @@ internal sealed partial class MewVGX11GraphicsContext
         };
     }
 
+    // Set while a transient run is drawn: text that changes every frame goes through the cache's
+    // per-frame scratch textures instead of its keyed entries.
+    private bool _transientText;
+
+    public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
+        BackendTextFormat format, BackendTextLayout layout, Color color, object? owner)
+    {
+        _transientText = ReferenceEquals(owner, Aprillz.MewUI.Text.TransientText.Owner);
+        try
+        {
+            DrawBackendTextLayout(text, format, layout, color);
+        }
+        finally
+        {
+            _transientText = false;
+        }
+    }
+
     public override void DrawBackendTextLayout(ReadOnlySpan<char> text,
         BackendTextFormat format, BackendTextLayout layout, Color color)
     {
@@ -230,7 +248,22 @@ internal sealed partial class MewVGX11GraphicsContext
             (int)format.Wrapping,
             (int)format.Trimming));
 
-        if (!_textCache.TryGet(key, text, out var entry))
+        MewVGTextEntry entry;
+        if (_transientText)
+        {
+            var bmp = FreeTypeText.Rasterize(
+                text,
+                ftFont,
+                widthPx,
+                heightPx,
+                color,
+                format.HorizontalAlignment,
+                format.VerticalAlignment,
+                format.Wrapping,
+                format.Trimming);
+            entry = _textCache.UseTransient(bmp.Data.AsSpan(0, bmp.WidthPx * bmp.HeightPx * 4), bmp.WidthPx, bmp.HeightPx, linear: false);
+        }
+        else if (!_textCache.TryGet(key, text, out entry))
         {
             var bmp = FreeTypeText.Rasterize(
                 text,

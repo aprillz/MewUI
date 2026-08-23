@@ -3,7 +3,11 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Text;
 
-public enum TextLayoutCachePolicy { Content, Owner }
+/// <summary>
+/// How a layout is retained: keyed by its content, keyed by an owner object that replaces its
+/// previous layout, or not retained at all (for text that changes every frame).
+/// </summary>
+public enum TextLayoutCachePolicy { Content, Owner, None }
 
 public enum TextFidelity { RunWidth, ClusterAdvance, Shaped }
 
@@ -178,11 +182,16 @@ public readonly record struct TextPaintSpan(
 
 public readonly record struct TextOverlay(TextRange Range, Color Color);
 
+/// <param name="Transient">
+/// The text changes every frame: nothing drawn for it is kept in the run or backend text caches,
+/// and the backend reuses per-frame scratch textures instead of filling its cache with one-off entries.
+/// </param>
 public readonly record struct TextDrawOptions(
     Color Foreground,
     ReadOnlyMemory<TextPaintSpan> PaintSpans = default,
     ReadOnlyMemory<TextOverlay> Overlays = default,
-    object? Owner = null);
+    object? Owner = null,
+    bool Transient = false);
 
 public interface ITextRenderContext
 {

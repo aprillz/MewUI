@@ -21,7 +21,8 @@ internal static class OpenGLTextRasterizer
         TextAlignment horizontalAlignment,
         TextAlignment verticalAlignment,
         TextWrapping wrapping,
-        TextTrimming trimming = TextTrimming.None)
+        TextTrimming trimming = TextTrimming.None,
+        byte[]? buffer = null)
     {
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
@@ -112,12 +113,14 @@ internal static class OpenGLTextRasterizer
                     }
                 }
 
+                // A caller-provided buffer (at least widthPx * heightPx * 4 bytes) is filled in its
+                // leading region; the returned bitmap then aliases it.
                 int bytes = widthPx * heightPx * 4;
-                var bgra = new byte[bytes];
+                var bgra = buffer != null && buffer.Length >= bytes ? buffer : new byte[bytes];
                 Marshal.Copy(bits, bgra, 0, bytes);
 
                 // Convert black background + white text into alpha, and apply requested color.
-                ApplyCoverageToColor(bgra, color);
+                ApplyCoverageToColor(bgra.AsSpan(0, bytes), color);
                 return new TextBitmap(widthPx, heightPx, bgra);
             }
             finally
@@ -141,7 +144,7 @@ internal static class OpenGLTextRasterizer
         }
     }
 
-    private static void ApplyCoverageToColor(byte[] bgra, Color color)
+    private static void ApplyCoverageToColor(Span<byte> bgra, Color color)
     {
         byte r = color.R;
         byte g = color.G;

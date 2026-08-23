@@ -33,6 +33,15 @@ internal interface ITextBackendRun : IDisposable
     nint NativeHandle { get; }
 }
 
+/// <summary>
+/// Owner identity handed to <see cref="ITextBackendRenderContext.DrawRun"/> for transient text:
+/// the backend draws through its per-frame scratch textures and keeps nothing in its text cache.
+/// </summary>
+internal static class TransientText
+{
+    public static readonly object Owner = new();
+}
+
 /// <summary>Backend-private run realization and drawing surface.</summary>
 internal interface ITextBackendRenderContext
 {

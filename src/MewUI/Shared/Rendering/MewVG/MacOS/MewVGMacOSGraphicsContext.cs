@@ -600,7 +600,22 @@ internal sealed partial class MewVGMacOSGraphicsContext
         int imageId;
         int bitmapWidthPx;
         int bitmapHeightPx;
-        bool ok = owner != null
+        bool ok = ReferenceEquals(owner, Aprillz.MewUI.Text.TransientText.Owner)
+            ? _textCache.TryGetOrCreateTransient(
+                ct,
+                text,
+                widthPx,
+                heightPx,
+                (uint)Math.Round(DpiScale * 96.0),
+                color,
+                format.HorizontalAlignment,
+                TextAlignment.Top,
+                format.Wrapping,
+                format.Trimming,
+                out imageId,
+                out bitmapWidthPx,
+                out bitmapHeightPx)
+            : owner != null
             ? _textCache.TryGetOrCreateOwned(
                 owner,
                 ct,
