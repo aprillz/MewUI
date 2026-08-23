@@ -109,5 +109,66 @@ internal sealed class DebugPerformanceOverlay : Control
             panelRect.Deflate(new Thickness(pad)),
             Color.White,
             wrapping: TextWrapping.Wrap);
+
+        DrawResourcePanel(context, panelRect, maxWidth, pad);
+    }
+
+    // A second box under the frame panel: what the render caches hold and what the process
+    // occupies, from RenderMemoryLedger.
+    private void DrawResourcePanel(IGraphicsContext context, Rect framePanel, double maxWidth, double pad)
+    {
+        var memory = RenderMemoryLedger.Snapshot();
+
+        Span<char> buffer = stackalloc char[512];
+        var text = new StackTextFormatter(buffer);
+        text.Append("Scratch active ");
+        text.Append((int)memory.ScratchActiveCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.ScratchActiveBytes);
+        text.Append("  pooled ");
+        text.Append((int)memory.ScratchPooledCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.ScratchPooledBytes);
+        text.Append("\nBitmapCache ");
+        text.Append((int)memory.BitmapCacheCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.BitmapCacheBytes);
+        text.Append("  Vector ");
+        text.Append((int)memory.VectorCacheCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.VectorCacheBytes);
+        text.Append("\nText ");
+        text.AppendBytes(memory.TextCacheBytes);
+        text.Append("  Geometry ");
+        text.AppendBytes(memory.GeometryCacheBytes);
+        text.Append("\nPrivate ");
+        text.AppendBytes(memory.PrivateUsage);
+        text.Append("  WS ");
+        text.AppendBytes(memory.WorkingSetSize);
+        text.Append("  Private WS ");
+        text.AppendBytes(memory.PrivateWorkingSetSize);
+        text.Append("  GC ");
+        text.AppendBytes(memory.GcHeapBytes);
+        if (!memory.IsBalanced)
+        {
+            text.Append("\nScratch ledger mismatch: created ");
+            text.Append((int)memory.ScratchCreated);
+            text.Append(" disposed ");
+            text.Append((int)memory.ScratchDisposed);
+        }
+
+        var size = MeasureEngineText(text.WrittenSpan, maxWidth, TextWrapping.Wrap);
+        var x = Math.Max(Bounds.X + 8, Bounds.Right - size.Width - pad * 2 - 8);
+        var panelRect = new Rect(x, framePanel.Bottom + 8, size.Width + pad * 2, size.Height + pad * 2);
+        panelRect = LayoutRounding.SnapBoundsRectToPixels(panelRect, context.DpiScale);
+
+        context.FillRoundedRectangle(panelRect, 6, 6, Color.FromArgb(205, 18, 18, 18));
+        context.DrawRoundedRectangle(panelRect, 6, 6, Color.FromArgb(230, 90, 190, 230), 1, strokeInset: true);
+        DrawEngineText(
+            context,
+            text.WrittenSpan,
+            panelRect.Deflate(new Thickness(pad)),
+            Color.White,
+            wrapping: TextWrapping.Wrap);
     }
 }
