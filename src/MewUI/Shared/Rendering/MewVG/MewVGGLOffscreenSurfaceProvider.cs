@@ -134,7 +134,7 @@ internal sealed class MewVGGLOffscreenSurfaceProvider : IMewVGOffscreenSurfacePr
             }
         }
 
-        var vg = new NanoVGGL(NVGcreateFlags.Antialias);
+        var vg = new NanoVGGL();
         var textCache = new MewVGTextCache(vg);
         return new MewVGGLOffscreenSurface(nativeContext, vg, textCache);
     }

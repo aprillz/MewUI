@@ -55,7 +55,7 @@ internal sealed class MewVGX11WindowResources : IDisposable
         try
         {
             MewVGGLBootstrapX11.EnsureInitialized();
-            var vg = new NanoVGGL(NVGcreateFlags.Antialias);
+            var vg = new NanoVGGL();
             return new MewVGX11WindowResources(display, gl, vg, shareContext);
         }
         finally
