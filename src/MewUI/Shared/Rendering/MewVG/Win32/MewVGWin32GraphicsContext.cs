@@ -720,23 +720,13 @@ internal sealed partial class MewVGWin32GraphicsContext
 
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, pixelSurface.Fbo);
 
-        // Explicit colormask + stencil mask BEFORE clear: NanoVG_GL3's flush may have
-        // left these in a stencil-only-pass state (alpha or stencil writes disabled).
-        // glClear honors masks, so a sticky mask leaves alpha undefined / stencil
-        // untouched on a freshly allocated FBO - rendering as opaque-black filter
-        // results downstream when the alpha channel reads as 1 instead of 0. Setting
-        // (true,true,true,true) is cheap and a hard guarantee.
+        // Explicit colormask BEFORE clear: a flush may have left color writes masked.
+        // glClear honors the mask, so a sticky mask leaves alpha undefined on a freshly
+        // allocated FBO - rendering as opaque-black filter results downstream when the
+        // alpha channel reads as 1 instead of 0.
         GL.ColorMask(true, true, true, true);
         GL.ClearColor(0f, 0f, 0f, 0f);
 
-        uint clearMask = GL.GL_COLOR_BUFFER_BIT;
-        if (pixelSurface.HasStencil)
-        {
-            GL.StencilMask(0xFF);
-            GL.ClearStencil(0);
-            clearMask |= GL.GL_STENCIL_BUFFER_BIT;
-        }
-
-        GL.Clear(clearMask);
+        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
     }
 }

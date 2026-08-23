@@ -50,9 +50,6 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
 
         int screen = X11.XDefaultScreen(display);
 
-        const int GLX_DEPTH_SIZE = 12;
-        const int GLX_STENCIL_SIZE = 13;
-
         int[] attribs =
         {
             4,  // GLX_RGBA
@@ -65,8 +62,6 @@ internal sealed unsafe class GlxOpenGLWindowResources : IOpenGLWindowResources
             8,
             11, // GLX_ALPHA_SIZE
             8,
-            GLX_DEPTH_SIZE, 24,
-            GLX_STENCIL_SIZE, 8,
             0   // None
         };
 

@@ -41,7 +41,7 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
     public static WglOpenGLWindowResources Create(nint hwnd, nint hdc)
         => Create(hwnd, hdc, new WglPixelFormatOptions(
             DepthBits: 0,
-            StencilBits: 8), shareContext: 0);
+            StencilBits: 0), shareContext: 0);
 
     public static WglOpenGLWindowResources Create(nint hwnd, nint hdc, WglPixelFormatOptions options)
         => Create(hwnd, hdc, options, shareContext: 0);
@@ -61,7 +61,15 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         pfd.cDepthBits = (byte)Math.Clamp(options.DepthBits, 0, 32);
         pfd.cStencilBits = (byte)Math.Clamp(options.StencilBits, 0, 16);
 
-        int pixelFormat = Gdi32.ChoosePixelFormat(hdc, ref pfd);
+        int pixelFormat;
+        if (options.DepthBits == 0 && options.StencilBits == 0)
+        {
+            pixelFormat = ChooseExactColorOnlyPixelFormat(hdc, ref pfd);
+        }
+        else
+        {
+            pixelFormat = Gdi32.ChoosePixelFormat(hdc, ref pfd);
+        }
         if (pixelFormat == 0)
         {
             throw new InvalidOperationException($"ChoosePixelFormat failed: {Marshal.GetLastWin32Error()}");
@@ -112,6 +120,51 @@ internal sealed unsafe class WglOpenGLWindowResources : IOpenGLWindowResources
         OpenGL32.wglMakeCurrent(0, 0);
 
         return new WglOpenGLWindowResources(hwnd, hglrc, supportsBgra, supportsNpot, swapIntervalExt);
+    }
+
+    /// <summary>Finds the accelerated 32-bit RGBA double-buffered format with no depth and no stencil, or 0.</summary>
+    internal static int ChooseExactColorOnlyPixelFormat(nint hdc, ref PIXELFORMATDESCRIPTOR selected)
+    {
+        var descriptorSize = (uint)Marshal.SizeOf<PIXELFORMATDESCRIPTOR>();
+        var candidate = PIXELFORMATDESCRIPTOR.CreateOpenGLDoubleBuffered();
+        var formatCount = Gdi32.DescribePixelFormat(hdc, 1, descriptorSize, ref candidate);
+        if (formatCount <= 0)
+        {
+            return 0;
+        }
+
+        const uint requiredFlags = Native.Constants.PixelFormatDescriptorFlags.PFD_DRAW_TO_WINDOW |
+                                   Native.Constants.PixelFormatDescriptorFlags.PFD_SUPPORT_OPENGL |
+                                   Native.Constants.PixelFormatDescriptorFlags.PFD_DOUBLEBUFFER;
+        const uint genericFormat = 0x00000040;
+        const uint genericAccelerated = 0x00001000;
+        for (var format = 1; format <= formatCount; format++)
+        {
+            candidate = default;
+            candidate.nSize = (ushort)descriptorSize;
+            candidate.nVersion = 1;
+            if (Gdi32.DescribePixelFormat(hdc, format, descriptorSize, ref candidate) == 0)
+            {
+                continue;
+            }
+
+            var softwareOnly = (candidate.dwFlags & genericFormat) != 0 &&
+                               (candidate.dwFlags & genericAccelerated) == 0;
+            if (softwareOnly ||
+                (candidate.dwFlags & requiredFlags) != requiredFlags ||
+                candidate.iPixelType != Native.Constants.PixelFormatDescriptorFlags.PFD_TYPE_RGBA ||
+                candidate.iLayerType != Native.Constants.PixelFormatDescriptorFlags.PFD_MAIN_PLANE ||
+                candidate.cColorBits != 32 || candidate.cAlphaBits != 8 ||
+                candidate.cDepthBits != 0 || candidate.cStencilBits != 0)
+            {
+                continue;
+            }
+
+            selected = candidate;
+            return format;
+        }
+
+        return 0;
     }
 
     private static bool DetectBgraSupport()

@@ -25,9 +25,7 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     private uint _fbo;
 
     private uint _texture;
-    private uint _stencilRenderbuffer;
     private bool _fboInitialized;
-    private bool _hasStencil;
 
     // HGLRC / GLXContext that created the FBO + texture + RB. Required by the
     // background-rebuild path because FBOs and renderbuffers are NOT shared across
@@ -105,8 +103,6 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     /// Gets whether FBO resources have been initialized.
     /// </summary>
     internal bool IsFboInitialized => _fboInitialized;
-
-    internal bool HasStencil => _hasStencil;
 
     /// <summary>HGLRC / GLXContext that owns the FBO + RB handles. The offscreen
     /// provider's deferred-disposal drain uses this to skip targets whose owning
@@ -481,13 +477,6 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
             _fbo = 0;
         }
 
-        if (_stencilRenderbuffer != 0)
-        {
-            uint rb = _stencilRenderbuffer;
-            OpenGLExt.DeleteRenderbuffers(1, &rb);
-            _stencilRenderbuffer = 0;
-        }
-
         if (_texture != 0)
         {
             uint tex = _texture;
@@ -495,7 +484,6 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
             _texture = 0;
         }
 
-        _hasStencil = false;
         _fboInitialized = false;
     }
 
@@ -548,44 +536,14 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
         OpenGLExt.FramebufferTexture2D(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_COLOR_ATTACHMENT0,
             GL.GL_TEXTURE_2D, _texture, 0);
 
-        uint renderbuffer = 0;
-        OpenGLExt.GenRenderbuffers(1, &renderbuffer);
-        if (renderbuffer != 0)
-        {
-            _stencilRenderbuffer = renderbuffer;
-            OpenGLExt.BindRenderbuffer(OpenGLExt.GL_RENDERBUFFER, _stencilRenderbuffer);
-            OpenGLExt.RenderbufferStorage(OpenGLExt.GL_RENDERBUFFER, OpenGLExt.GL_DEPTH24_STENCIL8, PixelWidth, PixelHeight);
-            OpenGLExt.FramebufferRenderbuffer(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_DEPTH_STENCIL_ATTACHMENT,
-                OpenGLExt.GL_RENDERBUFFER, _stencilRenderbuffer);
-            OpenGLExt.BindRenderbuffer(OpenGLExt.GL_RENDERBUFFER, 0);
-        }
-
         // Check completeness
         uint status = OpenGLExt.CheckFramebufferStatus(OpenGLExt.GL_FRAMEBUFFER);
-        if (status != OpenGLExt.GL_FRAMEBUFFER_COMPLETE && _stencilRenderbuffer != 0)
-        {
-            OpenGLExt.FramebufferRenderbuffer(OpenGLExt.GL_FRAMEBUFFER, OpenGLExt.GL_DEPTH_STENCIL_ATTACHMENT,
-                OpenGLExt.GL_RENDERBUFFER, 0);
-
-            uint rb = _stencilRenderbuffer;
-            OpenGLExt.DeleteRenderbuffers(1, &rb);
-            _stencilRenderbuffer = 0;
-
-            status = OpenGLExt.CheckFramebufferStatus(OpenGLExt.GL_FRAMEBUFFER);
-        }
-
         if (status != OpenGLExt.GL_FRAMEBUFFER_COMPLETE)
         {
             // Cleanup on failure
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
             OpenGLExt.DeleteFramebuffers(1, &fbo);
             _fbo = 0;
-            if (_stencilRenderbuffer != 0)
-            {
-                uint rb = _stencilRenderbuffer;
-                OpenGLExt.DeleteRenderbuffers(1, &rb);
-                _stencilRenderbuffer = 0;
-            }
             uint tex = _texture;
             GL.DeleteTextures(1, ref tex);
             _texture = 0;
@@ -594,7 +552,6 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
 
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
         GL.BindTexture(GL.GL_TEXTURE_2D, 0);
-        _hasStencil = _stencilRenderbuffer != 0;
         _fboInitialized = true;
     }
 

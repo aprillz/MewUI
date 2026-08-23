@@ -110,8 +110,6 @@ internal sealed class EglOpenGLWindowResources : IOpenGLWindowResources
             LibEgl.EGL_RED_SIZE, 8,
             LibEgl.EGL_GREEN_SIZE, 8,
             LibEgl.EGL_BLUE_SIZE, 8,
-            LibEgl.EGL_DEPTH_SIZE, 24,
-            LibEgl.EGL_STENCIL_SIZE, 8,
             LibEgl.EGL_NONE,
         };
 

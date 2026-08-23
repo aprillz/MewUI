@@ -10,7 +10,7 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// <summary>
 /// GLX implementation of <see cref="IX11GLVisualChooser"/>: picks an X11 visual compatible with
 /// GLX rendering - a 32-bit ARGB FBConfig when transparency is requested, otherwise an
-/// RGBA/double-buffer visual preferring a stencil buffer (for rounded clip and path fills).
+/// RGBA/double-buffer visual. MewVG renders without depth or stencil, so neither is requested.
 /// Registered by the MewVG X11 backend so the platform window layer carries no GL-API calls.
 /// (Moved verbatim out of X11WindowBackend.)
 /// </summary>
@@ -22,8 +22,6 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
     private const int GLX_WINDOW_BIT = 0x00000001;
     private const int GLX_RGBA_BIT = 0x00000001;
     private const int GLX_ALPHA_SIZE = 11;
-    private const int GLX_DEPTH_SIZE = 12;
-    private const int GLX_STENCIL_SIZE = 13;
 
     public unsafe bool TryChooseVisual(nint display, int screen, bool allowsTransparency, out X11GLVisualInfo visual)
     {
@@ -51,10 +49,6 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                 8,
                 GLX_ALPHA_SIZE,
                 8,
-                GLX_DEPTH_SIZE,
-                24,
-                GLX_STENCIL_SIZE,
-                8,
                 0
             };
 
@@ -62,7 +56,6 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
             if (fbConfigs != 0 && fbCount > 0)
             {
                 XVisualInfo? best = null;
-                int bestStencil = -1;
 
                 for (int i = 0; i < fbCount; i++)
                 {
@@ -75,16 +68,6 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                     int alphaSize = 0;
                     _ = LibGL.glXGetFBConfigAttrib(display, fb, GLX_ALPHA_SIZE, out alphaSize);
                     if (alphaSize < 8)
-                    {
-                        continue;
-                    }
-
-                    int depthSize = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(display, fb, GLX_DEPTH_SIZE, out depthSize);
-
-                    int stencilSize = 0;
-                    _ = LibGL.glXGetFBConfigAttrib(display, fb, GLX_STENCIL_SIZE, out stencilSize);
-                    if (depthSize < 16 || stencilSize < 8)
                     {
                         continue;
                     }
@@ -103,12 +86,8 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                         continue;
                     }
 
-                    // Prefer configs with a stencil buffer for rounded clip and path fills.
-                    if (best == null || stencilSize > bestStencil)
-                    {
-                        best = vi;
-                        bestStencil = stencilSize;
-                    }
+                    best = vi;
+                    break;
                 }
 
                 NativeX11.XFree(fbConfigs);
@@ -136,10 +115,6 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                     8,
                     GLX_ALPHA_SIZE,
                     8,
-                    GLX_DEPTH_SIZE,
-                    24,
-                    GLX_STENCIL_SIZE,
-                    8,
                     0
                 ]
                 : [
@@ -151,10 +126,6 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                     8,
                     10, // GLX_BLUE_SIZE
                     8,
-                    GLX_DEPTH_SIZE,
-                    24,
-                    GLX_STENCIL_SIZE,
-                    8,
                     0
                 ];
 
@@ -164,12 +135,11 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                 visualInfoPtr = LibGL.glXChooseVisual(display, screen, (nint)p);
             }
 
-            if (visualInfoPtr == 0)
+            if (visualInfoPtr == 0 && allowsTransparency)
             {
-                // Last resort: no stencil (rounded clip may not work) and no alpha even when
-                // transparency was requested, so the window still comes up (opaque) on servers
-                // without ARGB GL visuals.
-                int[] attribsNoStencil =
+                // Last resort: no alpha even though transparency was requested, so the window
+                // still comes up (opaque) on servers without ARGB GL visuals.
+                int[] attribsOpaque =
                 {
                     4,  // GLX_RGBA
                     5,  // GLX_DOUBLEBUFFER
@@ -179,20 +149,18 @@ internal sealed class GlxVisualChooser : IX11GLVisualChooser
                     8,
                     10, // GLX_BLUE_SIZE
                     8,
-                    GLX_DEPTH_SIZE,
-                    24,
                     0
                 };
 
-                fixed (int* p = attribsNoStencil)
+                fixed (int* p = attribsOpaque)
                 {
                     visualInfoPtr = LibGL.glXChooseVisual(display, screen, (nint)p);
                 }
+            }
 
-                if (visualInfoPtr == 0)
-                {
-                    return false;
-                }
+            if (visualInfoPtr == 0)
+            {
+                return false;
             }
 
             visualInfo = Marshal.PtrToStructure<XVisualInfo>(visualInfoPtr);

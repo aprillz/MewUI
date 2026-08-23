@@ -330,12 +330,10 @@ public sealed partial class MewVGWin32GraphicsFactory
                     throw new InvalidOperationException("Worker GL context: GetDC failed.");
                 }
 
-                // Pixel format must be share-compatible with window contexts. Match the
-                // pfd seed that MewVGWindowResources uses (stencil bits for NanoVG AA/clip).
+                // Pixel format must be share-compatible with window contexts: the same exact
+                // color-only format MewVGWin32WindowResources selects.
                 var pfd = PIXELFORMATDESCRIPTOR.CreateOpenGLDoubleBuffered();
-                pfd.cStencilBits = 8;
-
-                int pf = Gdi32.ChoosePixelFormat(hdc, ref pfd);
+                int pf = WglOpenGLWindowResources.ChooseExactColorOnlyPixelFormat(hdc, ref pfd);
                 if (pf == 0)
                 {
                     throw new InvalidOperationException(
