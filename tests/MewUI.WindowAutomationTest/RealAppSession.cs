@@ -33,7 +33,16 @@ public static class RealAppSession
             try
             {
                 Win32Platform.Register();
-                Direct2DBackend.Register();
+                // Direct2D unless the runner asks for the GL backend, which is the one whose
+                // window-level clip and pixel-format choices the clip oracle exercises.
+                if (string.Equals(Environment.GetEnvironmentVariable("MEWUI_AUTOMATION_BACKEND"), "MewVG", StringComparison.OrdinalIgnoreCase))
+                {
+                    MewVGWin32Backend.Register();
+                }
+                else
+                {
+                    Direct2DBackend.Register();
+                }
 
                 Application.Run(() =>
                 {
