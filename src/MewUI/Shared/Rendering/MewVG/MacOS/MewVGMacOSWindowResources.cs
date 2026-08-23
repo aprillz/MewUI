@@ -99,7 +99,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable
 
         using var pool = new AutoReleasePool();
 
-        var vg = new NanoVGMetal(device, NVGcreateFlags.Antialias)
+        var vg = new NanoVGMetal(device)
         {
             PixelFormat = MTLPixelFormat.BGRA8Unorm,
             // Use a depth-stencil format for reliable stencil rendering on macOS.

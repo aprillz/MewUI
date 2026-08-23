@@ -71,7 +71,7 @@ internal sealed class MewVGWin32WindowResources : IDisposable
         {
             MewVGGLBootstrap.EnsureInitialized();
 
-            var vg = new NanoVGGL(NVGcreateFlags.Antialias);
+            var vg = new NanoVGGL();
             return new MewVGWin32WindowResources(hwnd, gl, vg, shareContext);
         }
         finally

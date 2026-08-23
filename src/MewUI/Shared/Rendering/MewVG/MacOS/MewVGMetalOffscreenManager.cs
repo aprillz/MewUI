@@ -97,7 +97,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             throw new InvalidOperationException("Failed to create offscreen MTLCommandQueue.");
         }
 
-        var vg = new NanoVGMetal(key, NVGcreateFlags.Antialias)
+        var vg = new NanoVGMetal(key)
         {
             PixelFormat = MTLPixelFormat.BGRA8Unorm,
             StencilFormat = MTLPixelFormat.Depth32Float_Stencil8
