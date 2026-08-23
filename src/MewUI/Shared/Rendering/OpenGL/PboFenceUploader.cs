@@ -213,7 +213,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         // fresh frame in. Equivalent to glBufferData(size, ptr, STREAM_DRAW)
         // but slightly more explicit about intent.
         OpenGLPboExt.BufferData(OpenGLPboExt.GL_PIXEL_UNPACK_BUFFER, byteSize, null, OpenGLPboExt.GL_STREAM_DRAW);
-        byte* dataPtr = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(bytes.Span));
+        fixed (byte* dataPtr = bytes.Span)
         {
             OpenGLPboExt.BufferSubData(OpenGLPboExt.GL_PIXEL_UNPACK_BUFFER, 0, byteSize, dataPtr);
         }

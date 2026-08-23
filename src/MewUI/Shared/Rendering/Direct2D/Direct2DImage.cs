@@ -112,7 +112,7 @@ internal sealed class Direct2DImage : IImage
 
         unsafe
         {
-            var p = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_premultiplied.Span));
+            fixed (byte* p = _premultiplied.Span)
             {
                 int hr = D2D1VTable.CreateBitmap(
                     (ID2D1RenderTarget*)renderTarget,
