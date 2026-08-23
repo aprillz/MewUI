@@ -29,7 +29,8 @@ internal sealed class MewVGMetalTextCache : IDisposable
     // Keep it conservative; text is the hottest path and Metal textures can accumulate quickly.
     private const int MaxEntries = 512;
 
-    private sealed record CacheEntry(int ImageId, int WidthPx, int HeightPx);
+    // Text is kept so a hit can be confirmed: the key only carries the text's hash.
+    private sealed record CacheEntry(int ImageId, int WidthPx, int HeightPx, string Text);
 
     private sealed class OwnerEntry
     {
@@ -63,7 +64,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
     private long _frameGeneration;
 
     internal readonly record struct TextCacheKey(
-        string Text,
+        int TextHash,
         nint FontRef,
         uint ColorArgb,
         int WidthPx,
@@ -85,7 +86,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
                 hash = (hash * 397) ^ (int)VerticalAlignment;
                 hash = (hash * 397) ^ (int)Wrapping;
                 hash = (hash * 397) ^ (int)Trimming;
-                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Text);
+                hash = (hash * 397) ^ TextHash;
                 return hash;
             }
         }
@@ -124,11 +125,10 @@ internal sealed class MewVGMetalTextCache : IDisposable
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
 
-        string s = text.ToString();
         uint argb = ((uint)color.A << 24) | ((uint)color.R << 16) | ((uint)color.G << 8) | color.B;
 
         var key = new TextCacheKey(
-            s,
+            string.GetHashCode(text),
             fontRef,
             argb,
             widthPx,
@@ -140,11 +140,17 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         if (_cache.TryGetValue(key, out var entry))
         {
-            imageId = entry.ImageId;
-            bitmapWidthPx = entry.WidthPx;
-            bitmapHeightPx = entry.HeightPx;
-            Touch(key);
-            return imageId != 0;
+            if (text.SequenceEqual(entry.Text))
+            {
+                imageId = entry.ImageId;
+                bitmapWidthPx = entry.WidthPx;
+                bitmapHeightPx = entry.HeightPx;
+                Touch(key);
+                return imageId != 0;
+            }
+
+            // Different text with the same hash: drop the entry so the new text takes the slot.
+            Remove(key);
         }
 
         var bmp = CoreTextText.Rasterize(font, text, widthPx, heightPx, dpi, color, horizontalAlignment, verticalAlignment, wrapping, widthPx, trimming);
@@ -164,7 +170,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         bitmapWidthPx = bmp.WidthPx;
         bitmapHeightPx = bmp.HeightPx;
-        Add(key, new CacheEntry(imageId, bmp.WidthPx, bmp.HeightPx));
+        Add(key, new CacheEntry(imageId, bmp.WidthPx, bmp.HeightPx, text.ToString()));
         return true;
     }
 
@@ -201,21 +207,26 @@ internal sealed class MewVGMetalTextCache : IDisposable
     {
         while (_cache.Count > MaxEntries && _lru.First != null)
         {
-            var victimKey = _lru.First.Value;
-            _lru.RemoveFirst();
-            _lruNodes.Remove(victimKey);
+            Remove(_lru.First.Value);
+        }
+    }
 
-            if (_cache.Remove(victimKey, out var entry))
+    private void Remove(TextCacheKey key)
+    {
+        if (_lruNodes.Remove(key, out var node))
+        {
+            _lru.Remove(node);
+        }
+
+        if (_cache.Remove(key, out var entry))
+        {
+            Account(-TextureBytes(entry.WidthPx, entry.HeightPx));
+            if (entry.ImageId != 0)
             {
-                Account(-TextureBytes(entry.WidthPx, entry.HeightPx));
-                if (entry.ImageId != 0)
-                {
-                    // Defer deletion: eviction happens during mid-frame text
-                    // creation, but main NVG has already buffered draw calls
-                    // referencing this imageId. Releasing it now would leave
-                    // the queued draws sampling a freed MTLTexture.
-                    _pendingDeletes.Enqueue(entry.ImageId);
-                }
+                // Defer deletion: removal happens during mid-frame text creation, but the main
+                // NVG has already buffered draw calls referencing this imageId. Releasing it now
+                // would leave the queued draws sampling a freed MTLTexture.
+                _pendingDeletes.Enqueue(entry.ImageId);
             }
         }
     }

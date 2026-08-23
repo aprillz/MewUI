@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Text;
 using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Text;
@@ -947,8 +946,8 @@ internal sealed class ManagedTextEngine : ITextEngine, IDisposable
 
 internal sealed class TextLayoutRequestSnapshot
 {
-    private string? _contentKey;
-    private string? _ownerKey;
+    private ulong? _contentKey;
+    private ulong? _ownerKey;
 
     private TextLayoutRequestSnapshot(
         string text,
@@ -981,9 +980,27 @@ internal sealed class TextLayoutRequestSnapshot
     public TextFidelity Fidelity { get; }
     public long Revision { get; }
     public bool Transient { get; }
-    public string ContentKey => _contentKey ??= CreateCacheKey(includeText: true);
-    public string OwnerKey => _ownerKey ??= CreateCacheKey(includeText: false);
-    internal bool HasMaterializedContentKey => _contentKey is not null;
+    /// <summary>64-bit hash of every layout input including the text; equal inputs hash equal, so a hit still needs <see cref="ContentEquals"/>.</summary>
+    public ulong ContentKey
+    {
+        get
+        {
+            _contentKey ??= CreateCacheKey(includeText: true);
+            return _contentKey.Value;
+        }
+    }
+
+    /// <summary>64-bit hash of every layout input except the text, for owner-keyed caching.</summary>
+    public ulong OwnerKey
+    {
+        get
+        {
+            _ownerKey ??= CreateCacheKey(includeText: false);
+            return _ownerKey.Value;
+        }
+    }
+
+    internal bool HasMaterializedContentKey => _contentKey.HasValue;
 
     public static TextLayoutRequestSnapshot Create(TextLayoutRequest request)
     {
@@ -1086,47 +1103,141 @@ internal sealed class TextLayoutRequestSnapshot
         return false;
     }
 
-    private string CreateCacheKey(bool includeText)
+    /// <summary>True when <paramref name="other"/> lays out the same text with the same inputs.</summary>
+    public bool ContentEquals(TextLayoutRequestSnapshot other)
+        => OwnerEquals(other) && string.Equals(Text, other.Text, StringComparison.Ordinal);
+
+    /// <summary>True when <paramref name="other"/> shares every layout input except the text itself.</summary>
+    public bool OwnerEquals(TextLayoutRequestSnapshot other)
     {
-        var builder = new StringBuilder(includeText ? Text.Length + 128 : 128);
-        if (includeText)
+        if (Dpi != other.Dpi ||
+            Fidelity != other.Fidelity ||
+            !DefaultStyle.Equals(other.DefaultStyle) ||
+            !ParagraphEquals(Paragraph, other.Paragraph) ||
+            !Runs.AsSpan().SequenceEqual(other.Runs) ||
+            Inlines.Length != other.Inlines.Length)
         {
-            builder.Append(Text);
+            return false;
         }
-        builder.Append('\u001f').Append(Dpi).Append('\u001f').Append((int)Fidelity)
-            .Append('\u001f').Append(Paragraph.MaxWidth.ToString("R", CultureInfo.InvariantCulture))
-            .Append('\u001f').Append(Paragraph.MaxHeight.ToString("R", CultureInfo.InvariantCulture))
-            .Append('\u001f').Append((int)Paragraph.Wrapping).Append('\u001f').Append((int)Paragraph.Trimming)
-            .Append('\u001f').Append((int)Paragraph.Alignment).Append('\u001f').Append((int)Paragraph.FlowDirection)
-            .Append('\u001f').Append(Paragraph.Culture.Name).Append('\u001f').Append(Paragraph.Language)
-            .Append('\u001f').Append(Paragraph.LineHeight?.ToString("R", CultureInfo.InvariantCulture))
-            .Append('\u001f').Append(Paragraph.LineSpacing.ToString("R", CultureInfo.InvariantCulture))
-            .Append('\u001f').Append(Paragraph.LetterSpacing.ToString("R", CultureInfo.InvariantCulture))
-            .Append('\u001f').Append((int)Paragraph.LineBoxTrim).Append(':').Append(Paragraph.TabSize);
-        AppendStyle(builder, DefaultStyle);
-        foreach (double tab in Paragraph.TabStops)
+
+        for (int index = 0; index < Inlines.Length; index++)
         {
-            builder.Append('\u001e').Append(tab.ToString("R", CultureInfo.InvariantCulture));
+            var inline = Inlines[index];
+            var otherInline = other.Inlines[index];
+            if (inline.Position != otherInline.Position ||
+                inline.Length != otherInline.Length ||
+                inline.BreaksLine != otherInline.BreaksLine ||
+                !ReferenceEquals(inline.Object, otherInline.Object))
+            {
+                return false;
+            }
         }
-        foreach (var run in Runs)
-        {
-            builder.Append('\u001d').Append(run.Start).Append(':').Append(run.Length);
-            AppendStyle(builder, run.Style);
-        }
-        foreach (var inline in Inlines)
-        {
-            builder.Append('\u001c').Append(inline.Position).Append(':').Append(inline.Length)
-                .Append(':').Append(RuntimeHelpers.GetHashCode(inline.Object));
-        }
-        return builder.ToString();
+
+        return true;
     }
 
-    private static void AppendStyle(StringBuilder builder, TextRunStyle style)
-        => builder.Append('\u001b').Append(style.FontFamily)
-            .Append(':').Append(style.FontSize.ToString("R", CultureInfo.InvariantCulture))
-            .Append(':').Append((int)style.Weight).Append(':').Append(style.Italic)
-            .Append(':').Append((int)style.Decoration).Append(':').Append(style.Culture?.Name)
-            .Append(':').Append(style.Language);
+    private static bool ParagraphEquals(TextParagraphStyle left, TextParagraphStyle right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        return left.MaxWidth.Equals(right.MaxWidth) &&
+            left.MaxHeight.Equals(right.MaxHeight) &&
+            left.Wrapping == right.Wrapping &&
+            left.Trimming == right.Trimming &&
+            left.Alignment == right.Alignment &&
+            left.FlowDirection == right.FlowDirection &&
+            string.Equals(left.Culture.Name, right.Culture.Name, StringComparison.Ordinal) &&
+            string.Equals(left.Language, right.Language, StringComparison.Ordinal) &&
+            Nullable.Equals(left.LineHeight, right.LineHeight) &&
+            left.LineSpacing.Equals(right.LineSpacing) &&
+            left.LetterSpacing.Equals(right.LetterSpacing) &&
+            left.LineBoxTrim == right.LineBoxTrim &&
+            left.TabSize == right.TabSize &&
+            TabStopsEqual(left.TabStops, right.TabStops);
+    }
+
+    private static bool TabStopsEqual(IReadOnlyList<double> left, IReadOnlyList<double> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < left.Count; index++)
+        {
+            if (!left[index].Equals(right[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private ulong CreateCacheKey(bool includeText)
+    {
+        var hash = new RapidHashBuilder();
+        if (includeText)
+        {
+            hash.Add(Text.AsSpan());
+        }
+
+        hash.Add(Dpi);
+        hash.Add((int)Fidelity);
+        hash.Add(Paragraph.MaxWidth);
+        hash.Add(Paragraph.MaxHeight);
+        hash.Add((int)Paragraph.Wrapping);
+        hash.Add((int)Paragraph.Trimming);
+        hash.Add((int)Paragraph.Alignment);
+        hash.Add((int)Paragraph.FlowDirection);
+        hash.Add(Paragraph.Culture.Name);
+        hash.Add(Paragraph.Language);
+        hash.Add(Paragraph.LineHeight.HasValue);
+        hash.Add(Paragraph.LineHeight ?? 0);
+        hash.Add(Paragraph.LineSpacing);
+        hash.Add(Paragraph.LetterSpacing);
+        hash.Add((int)Paragraph.LineBoxTrim);
+        hash.Add(Paragraph.TabSize);
+        AddStyle(ref hash, DefaultStyle);
+        hash.Add(Paragraph.TabStops.Count);
+        foreach (double tab in Paragraph.TabStops)
+        {
+            hash.Add(tab);
+        }
+
+        hash.Add(Runs.Length);
+        foreach (var run in Runs)
+        {
+            hash.Add(run.Start);
+            hash.Add(run.Length);
+            AddStyle(ref hash, run.Style);
+        }
+
+        hash.Add(Inlines.Length);
+        foreach (var inline in Inlines)
+        {
+            hash.Add(inline.Position);
+            hash.Add(inline.Length);
+            hash.Add(inline.BreaksLine);
+            hash.Add(RuntimeHelpers.GetHashCode(inline.Object));
+        }
+
+        return hash.Hash;
+    }
+
+    private static void AddStyle(ref RapidHashBuilder hash, TextRunStyle style)
+    {
+        hash.Add(style.FontFamily);
+        hash.Add(style.FontSize);
+        hash.Add((int)style.Weight);
+        hash.Add(style.Italic);
+        hash.Add((int)style.Decoration);
+        hash.Add(style.Culture?.Name);
+        hash.Add(style.Language);
+    }
 
     private static void ValidateStyle(TextRunStyle style, string parameterName)
     {
@@ -1224,8 +1335,8 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
 {
     private const int ContentCapacity = 256;
     private readonly ManagedTextEngine _engine;
-    private readonly Dictionary<string, ManagedTextLayout> _content = [];
-    private readonly Queue<string> _contentOrder = [];
+    private readonly Dictionary<ulong, ManagedTextLayout> _content = [];
+    private readonly Queue<ulong> _contentOrder = [];
     private readonly ConditionalWeakTable<object, OwnerEntry> _owners = new();
     private int _ownerCount;
 
@@ -1248,7 +1359,8 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
             ArgumentNullException.ThrowIfNull(owner);
             if (_owners.TryGetValue(owner, out var entry) &&
                 entry.Revision == snapshot.Revision &&
-                entry.OwnerKey == snapshot.OwnerKey)
+                entry.OwnerKey == snapshot.OwnerKey &&
+                entry.Layout.Snapshot.OwnerEquals(snapshot))
             {
                 return entry.Layout;
             }
@@ -1272,15 +1384,24 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
         {
             throw new ArgumentException("Layouts containing inline objects require owner caching.", nameof(snapshot));
         }
-        if (_content.TryGetValue(snapshot.ContentKey, out var cached))
+        ulong contentKey = snapshot.ContentKey;
+        if (_content.TryGetValue(contentKey, out var cached))
         {
-            return cached;
+            if (cached.Snapshot.ContentEquals(snapshot))
+            {
+                return cached;
+            }
+
+            // Two different requests hashed alike: the newer one takes the slot.
+            var replacement = _engine.CreateLayoutCore(snapshot);
+            _content[contentKey] = replacement;
+            return replacement;
         }
 
         var created = _engine.CreateLayoutCore(snapshot);
-        _content.Add(snapshot.ContentKey, created);
-        _contentOrder.Enqueue(snapshot.ContentKey);
-        while (_content.Count > ContentCapacity && _contentOrder.TryDequeue(out string? oldest))
+        _content.Add(contentKey, created);
+        _contentOrder.Enqueue(contentKey);
+        while (_content.Count > ContentCapacity && _contentOrder.TryDequeue(out ulong oldest))
         {
             _content.Remove(oldest);
         }
@@ -1304,10 +1425,10 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
 
     public void Dispose() => Trim();
 
-    private sealed class OwnerEntry(long revision, string ownerKey, ManagedTextLayout layout)
+    private sealed class OwnerEntry(long revision, ulong ownerKey, ManagedTextLayout layout)
     {
         public long Revision { get; set; } = revision;
-        public string OwnerKey { get; set; } = ownerKey;
+        public ulong OwnerKey { get; set; } = ownerKey;
         public ManagedTextLayout Layout { get; set; } = layout;
     }
 }
