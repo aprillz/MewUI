@@ -38,7 +38,6 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
 
     // MTLStorageMode: Shared = 0 (CPU & GPU both addressable; works on Apple Silicon and Intel iGPU).
     private const ulong MTLStorageModeShared = 0;
-    private const ulong MTLStorageModePrivate = 2;
 
     private static readonly nint ClsMTLTextureDescriptor = ObjCRuntime.GetClass("MTLTextureDescriptor");
     private static readonly nint SelTexture2DDescriptorWithPixelFormat = ObjCRuntime.RegisterSelector("texture2DDescriptorWithPixelFormat:width:height:mipmapped:");
@@ -120,9 +119,6 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     /// </summary>
     public nint ColorTexture { get; private set; }
 
-    /// <summary>Depth/stencil texture matching the color size; private storage.</summary>
-    public nint StencilTexture { get; private set; }
-
     public MewVGMetalPixelRenderSurface(int pixelWidth, int pixelHeight, double dpiScale, bool hasAlpha = true)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(pixelWidth, 0);
@@ -197,8 +193,8 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
     private nint _commandQueue;
 
     /// <summary>
-    /// Allocates the color and stencil MTLTextures on the supplied device if
-    /// they don't already exist. Idempotent across multiple offscreen passes
+    /// Allocates the color MTLTexture on the supplied device if it
+    /// doesn't already exist. Idempotent across multiple offscreen passes
     /// targeting the same bitmap.
     /// </summary>
     internal void EnsureGpuTextures(nint device, nint commandQueue = 0)
@@ -211,16 +207,9 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
             _commandQueue = commandQueue;
         }
 
-        if (ColorTexture != 0 && StencilTexture != 0) return;
+        if (ColorTexture != 0) return;
 
-        if (ColorTexture == 0)
-        {
-            ColorTexture = CreateTexture(device, MTLPixelFormat.BGRA8Unorm, MTLStorageModeShared);
-        }
-        if (StencilTexture == 0)
-        {
-            StencilTexture = CreateTexture(device, MTLPixelFormat.Depth32Float_Stencil8, MTLStorageModePrivate);
-        }
+        ColorTexture = CreateTexture(device, MTLPixelFormat.BGRA8Unorm, MTLStorageModeShared);
     }
 
     // IMetalTextureSource - exposes the color MTLTexture for zero-copy NoDelete wrapping.
@@ -454,7 +443,6 @@ internal sealed unsafe partial class MewVGMetalPixelRenderSurface : IPixelBuffer
         }
         _pendingReadback = false;
         if (ColorTexture != 0) { ObjCRuntime.SendMessageNoReturn(ColorTexture, SelRelease); ColorTexture = 0; }
-        if (StencilTexture != 0) { ObjCRuntime.SendMessageNoReturn(StencilTexture, SelRelease); StencilTexture = 0; }
     }
 }
 
