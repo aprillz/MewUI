@@ -122,8 +122,10 @@ internal sealed partial class MewVGMacOSGraphicsContext
         // and is attached as color[1] of the main render pass so transparent
         // strokes/fills can write coverage and composite within one encoder.
         nint coverageTexture = _vg.EnsureCoverageTexture(_viewportWidthPx, _viewportHeightPx);
+        // The path clip lives in color[2] the same way (see MNVGcontext.ClipPixelFormat).
+        nint clipTexture = _vg.EnsureClipMaskTexture(_viewportWidthPx, _viewportHeightPx);
 
-        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, coverageTexture);
+        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, coverageTexture, clipTexture);
         if (passDesc == 0)
         {
             return;
@@ -352,7 +354,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint coverageTexture)
+    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint coverageTexture, nint clipTexture)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -391,6 +393,20 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 ObjCRuntime.SendMessageNoReturn(color1, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
                 ObjCRuntime.SendMessageNoReturn(color1, SelSetStoreAction, (UInt64)MTLStoreAction.DontCare);
                 ObjCRuntime.SendMessageNoReturn(color1, SelSetClearColor, new MTLClearColor(0, 0, 0, 0));
+            }
+        }
+
+        // colorAttachments[2] - the path clip (RG8). .r is the clip coverage every draw multiplies
+        // by, so it clears to 1 (no clip); .g is scratch for building the next clip.
+        if (clipTexture != 0)
+        {
+            nint color2 = colorAttachments != 0 ? ObjCRuntime.SendMessage(colorAttachments, SelObjectAtIndexedSubscript, (UInt64)2) : 0;
+            if (color2 != 0)
+            {
+                ObjCRuntime.SendMessageNoReturn(color2, SelSetTexture, clipTexture);
+                ObjCRuntime.SendMessageNoReturn(color2, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
+                ObjCRuntime.SendMessageNoReturn(color2, SelSetStoreAction, (UInt64)MTLStoreAction.DontCare);
+                ObjCRuntime.SendMessageNoReturn(color2, SelSetClearColor, new MTLClearColor(1, 0, 0, 0));
             }
         }
 

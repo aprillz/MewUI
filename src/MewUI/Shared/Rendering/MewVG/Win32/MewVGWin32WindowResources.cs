@@ -59,7 +59,8 @@ internal sealed class MewVGWin32WindowResources : IDisposable
 
     public static MewVGWin32WindowResources Create(nint hwnd, nint hdc, nint shareContext = 0)
     {
-        // NanoVG uses stencil for AA and clipping; request a stencil buffer when selecting pixel format.
+        // Clips no longer touch the stencil buffer, but winding fills of image paints and stencil
+        // strokes still do, so the window keeps its stencil drawable until those routes change.
         var gl = WglOpenGLWindowResources.Create(hwnd, hdc,
             new WglOpenGLWindowResources.WglPixelFormatOptions(
                 DepthBits: 0,
