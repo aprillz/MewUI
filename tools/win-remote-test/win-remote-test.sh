@@ -44,9 +44,18 @@ ssh "$SSH_TARGET" "powershell -NoProfile -Command \"Remove-Item -Recurse -Force 
 
 # The job is written to a staging name and renamed, so the broker never picks up a half-uploaded file.
 echo "== queueing $JOB_ID"
+# MEWUI_REMOTE_ENV carries NAME=value pairs (semicolon-separated) into the job, for runs that
+# select a backend or a rendering mode through the environment.
+ENV_LINES=""
+if [[ -n "${MEWUI_REMOTE_ENV:-}" ]]; then
+  IFS=';' read -ra PAIRS <<< "$MEWUI_REMOTE_ENV"
+  for pair in "${PAIRS[@]}"; do
+    [[ -n "$pair" ]] && ENV_LINES+="set $pair"$'\n'
+  done
+fi
 cat > "$HERE/$JOB_ID.cmd" <<EOF
 @echo off
-"$REMOTE_ROOT\\publish\\Aprillz.MewUI.WindowAutomationTest.exe" $RUNNER_ARGS
+${ENV_LINES}"$REMOTE_ROOT\\publish\\Aprillz.MewUI.WindowAutomationTest.exe" $RUNNER_ARGS
 EOF
 scp -q "$HERE/$JOB_ID.cmd" "$SSH_TARGET:$REMOTE_ROOT\\jobs\\$JOB_ID.staging"
 rm "$HERE/$JOB_ID.cmd"
