@@ -30,10 +30,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private static readonly nint SelSetLoadAction = ObjCRuntime.RegisterSelector("setLoadAction:");
     private static readonly nint SelSetStoreAction = ObjCRuntime.RegisterSelector("setStoreAction:");
     private static readonly nint SelSetClearColor = ObjCRuntime.RegisterSelector("setClearColor:");
-    private static readonly nint SelStencilAttachment = ObjCRuntime.RegisterSelector("stencilAttachment");
-    private static readonly nint SelSetClearStencil = ObjCRuntime.RegisterSelector("setClearStencil:");
-    private static readonly nint SelDepthAttachment = ObjCRuntime.RegisterSelector("depthAttachment");
-    private static readonly nint SelSetClearDepth = ObjCRuntime.RegisterSelector("setClearDepth:");
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
     private static readonly nint SelWaitUntilCompleted = ObjCRuntime.RegisterSelector("waitUntilCompleted");
 
@@ -125,7 +121,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
         // The path clip lives in color[2] the same way (see MNVGcontext.ClipPixelFormat).
         nint clipTexture = _vg.EnsureClipMaskTexture(_viewportWidthPx, _viewportHeightPx);
 
-        nint passDesc = CreateRenderPass(frame.ColorTexture, frame.StencilTexture, coverageTexture, clipTexture);
+        nint passDesc = CreateRenderPass(frame.ColorTexture, coverageTexture, clipTexture);
         if (passDesc == 0)
         {
             return;
@@ -207,7 +203,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
     private readonly record struct MetalFrame(
         nint Device,
         nint ColorTexture,
-        nint StencilTexture,
         nint CommandQueue,
         nint Drawable);
 
@@ -267,7 +262,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
             frame = new MetalFrame(
                 _resources.Device,
                 colorTexture,
-                _resources.EnsureStencilTexture(viewportWidthPx, viewportHeightPx),
                 _resources.CommandQueue,
                 drawable);
             return true;
@@ -320,7 +314,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
             frame = new MetalFrame(
                 _offscreen.Device,
                 _target.ColorTexture,
-                _target.StencilTexture,
                 _offscreen.CommandQueue,
                 0);
             return frame.ColorTexture != 0;
@@ -354,7 +347,7 @@ internal sealed partial class MewVGMacOSGraphicsContext
             => _offscreenProvider.ReturnSurface(_offscreen);
     }
 
-    private static nint CreateRenderPass(nint drawableTexture, nint stencilTexture, nint coverageTexture, nint clipTexture)
+    private static nint CreateRenderPass(nint drawableTexture, nint coverageTexture, nint clipTexture)
     {
         if (ClsMTLRenderPassDescriptor == 0 || SelRenderPassDescriptor == 0)
         {
@@ -407,41 +400,6 @@ internal sealed partial class MewVGMacOSGraphicsContext
                 ObjCRuntime.SendMessageNoReturn(color2, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
                 ObjCRuntime.SendMessageNoReturn(color2, SelSetStoreAction, (UInt64)MTLStoreAction.DontCare);
                 ObjCRuntime.SendMessageNoReturn(color2, SelSetClearColor, new MTLClearColor(1, 0, 0, 0));
-            }
-        }
-
-        if (stencilTexture != 0)
-        {
-            // When using a depth-stencil format (e.g. Depth32Float_Stencil8), bind the same texture to both.
-            if (SelDepthAttachment != 0)
-            {
-                nint depth = ObjCRuntime.SendMessage(passDesc, SelDepthAttachment);
-                if (depth != 0)
-                {
-                    ObjCRuntime.SendMessageNoReturn(depth, SelSetTexture, stencilTexture);
-                    ObjCRuntime.SendMessageNoReturn(depth, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
-                    ObjCRuntime.SendMessageNoReturn(depth, SelSetStoreAction, (UInt64)MTLStoreAction.DontCare);
-                    if (SelSetClearDepth != 0)
-                    {
-                        ObjCRuntime.SendMessageNoReturn(depth, SelSetClearDepth, 1.0);
-                    }
-                }
-            }
-
-            if (SelStencilAttachment != 0)
-            {
-                nint stencil = ObjCRuntime.SendMessage(passDesc, SelStencilAttachment);
-                if (stencil != 0)
-                {
-                    ObjCRuntime.SendMessageNoReturn(stencil, SelSetTexture, stencilTexture);
-                    ObjCRuntime.SendMessageNoReturn(stencil, SelSetLoadAction, (UInt64)MTLLoadAction.Clear);
-                    ObjCRuntime.SendMessageNoReturn(stencil, SelSetStoreAction, (UInt64)MTLStoreAction.DontCare);
-                    // Ensure a known clear value so clip tests behave deterministically.
-                    if (SelSetClearStencil != 0)
-                    {
-                        ObjCRuntime.SendMessageNoReturn(stencil, SelSetClearStencil, (UInt64)0);
-                    }
-                }
             }
         }
 

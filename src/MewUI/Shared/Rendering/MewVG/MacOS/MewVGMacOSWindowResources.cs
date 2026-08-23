@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 using Aprillz.MewVG;
 using Aprillz.MewVG.Interop;
 
@@ -8,7 +6,6 @@ namespace Aprillz.MewUI.Rendering.MewVG;
 internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCacheMaintenance
 {
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
-    private static readonly nint ClsMTLTextureDescriptor = ObjCRuntime.GetClass("MTLTextureDescriptor");
     private static readonly nint SelAlloc = ObjCRuntime.Selectors.alloc;
     private static readonly nint SelInit = ObjCRuntime.Selectors.init;
     private static readonly nint SelRelease = ObjCRuntime.Selectors.release;
@@ -18,26 +15,8 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
     private static readonly nint SelSetFramebufferOnly = ObjCRuntime.RegisterSelector("setFramebufferOnly:");
     private static readonly nint SelSetPresentsWithTransaction = ObjCRuntime.RegisterSelector("setPresentsWithTransaction:");
     private static readonly nint SelSetAllowsNextDrawableTimeout = ObjCRuntime.RegisterSelector("setAllowsNextDrawableTimeout:");
-    private static readonly nint SelNewTextureWithDescriptor = ObjCRuntime.RegisterSelector("newTextureWithDescriptor:");
-    private static readonly nint SelTexture2DDescriptorWithPixelFormat = ObjCRuntime.RegisterSelector("texture2DDescriptorWithPixelFormat:width:height:mipmapped:");
-    private static readonly nint SelSetUsage = ObjCRuntime.RegisterSelector("setUsage:");
-    private static readonly nint SelSetStorageMode = ObjCRuntime.RegisterSelector("setStorageMode:");
-    private const ulong MTLTextureUsageRenderTarget = 1ul << 2;
-    private const ulong MTLStorageModePrivate = 2;
-
-    // Depth/stencil pool depth matches the color drawable's triple buffering (CAMetalLayer
-    // default maximumDrawableCount = 3), so the stencil attachment pipelines the same way the
-    // color texture does. A single shared stencil texture forces Metal's hazard tracker to
-    // serialize frame N+1 behind frame N's stencil access; N independent slots let up to N
-    // frames stay in flight. Kept <= MNVG_INIT_BUFFER_COUNT (4, the vertex/uniform ring depth)
-    // since there is no benefit pooling stencil deeper than the color drawable pool.
-    private const int STENCIL_POOL_SIZE = 3;
 
     private bool _disposed;
-    private readonly nint[] _stencilTextures = new nint[STENCIL_POOL_SIZE];
-    private int _stencilSlotIndex = -1;
-    private int _stencilWidthPx;
-    private int _stencilHeightPx;
 
     public nint Hwnd { get; }
 
@@ -101,10 +80,7 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
 
         var vg = new NanoVGMetal(device)
         {
-            PixelFormat = MTLPixelFormat.BGRA8Unorm,
-            // Use a depth-stencil format for reliable stencil rendering on macOS.
-            // Stencil8 alone is not consistently renderable across devices/drivers.
-            StencilFormat = MTLPixelFormat.Depth32Float_Stencil8
+            PixelFormat = MTLPixelFormat.BGRA8Unorm
         };
 
         // Configure layer to match the device and pixel format used by the renderer.
@@ -143,87 +119,6 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
         return new MewVGMetalWindowResources(hwnd, metalLayer, device, commandQueue, vg);
     }
 
-    /// <summary>
-    /// Advances to the next pooled stencil slot and returns its texture, creating or resizing
-    /// it as needed. Must be called exactly once per frame, at the frame boundary (from
-    /// <c>TryBeginFrame</c>) - the render pass bound in that same frame keeps this slot for its
-    /// single render encoder, so slot rotation here never splits a frame's clip stack across
-    /// two textures.
-    /// </summary>
-    public nint EnsureStencilTexture(int widthPx, int heightPx)
-    {
-        if (_disposed)
-        {
-            return 0;
-        }
-
-        widthPx = Math.Max(1, widthPx);
-        heightPx = Math.Max(1, heightPx);
-
-        if (_stencilWidthPx != widthPx || _stencilHeightPx != heightPx)
-        {
-            using var pool = new AutoReleasePool();
-
-            for (int i = 0; i < _stencilTextures.Length; i++)
-            {
-                ReleaseIfNotNull(ref _stencilTextures[i]);
-            }
-
-            _stencilWidthPx = widthPx;
-            _stencilHeightPx = heightPx;
-        }
-
-        _stencilSlotIndex = (_stencilSlotIndex + 1) % STENCIL_POOL_SIZE;
-
-        if (_stencilTextures[_stencilSlotIndex] == 0)
-        {
-            using var pool = new AutoReleasePool();
-            _stencilTextures[_stencilSlotIndex] = CreateTexture(MTLPixelFormat.Depth32Float_Stencil8, widthPx, heightPx);
-        }
-
-        return _stencilTextures[_stencilSlotIndex];
-    }
-
-    private nint CreateTexture(MTLPixelFormat format, int widthPx, int heightPx)
-    {
-        if (ClsMTLTextureDescriptor == 0 || SelTexture2DDescriptorWithPixelFormat == 0)
-        {
-            return 0;
-        }
-
-        // +[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:width:height:mipmapped:]
-        nint desc = ObjCRuntime.SendMessage(
-            ClsMTLTextureDescriptor,
-            SelTexture2DDescriptorWithPixelFormat,
-            (uint)format,
-            (UIntPtr)(uint)widthPx,
-            (UIntPtr)(uint)heightPx,
-            false);
-
-        if (desc == 0)
-        {
-            return 0;
-        }
-
-        // Configure usage/storage for render target.
-        if (SelSetUsage != 0)
-        {
-            ObjCRuntime.SendMessageNoReturn(desc, SelSetUsage, (UInt64)MTLTextureUsageRenderTarget);
-        }
-
-        if (SelSetStorageMode != 0)
-        {
-            ObjCRuntime.SendMessageNoReturn(desc, SelSetStorageMode, (UInt64)MTLStorageModePrivate);
-        }
-
-        if (Device == 0 || SelNewTextureWithDescriptor == 0)
-        {
-            return 0;
-        }
-
-        return ObjCRuntime.SendMessage(Device, SelNewTextureWithDescriptor, desc);
-    }
-
     public void TrimCaches()
     {
         if (!_disposed)
@@ -244,11 +139,6 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
         _cachedContext?.Dispose();
         _cachedContext = null;
 
-        for (int i = 0; i < _stencilTextures.Length; i++)
-        {
-            ReleaseIfNotNull(ref _stencilTextures[i]);
-        }
-
         TextCache.Dispose();
 
         if (Vg is IDisposable disposable)
@@ -267,18 +157,6 @@ internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCache
         {
             ObjCRuntime.Release(device);
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ReleaseIfNotNull(ref nint obj)
-    {
-        if (obj == 0)
-        {
-            return;
-        }
-
-        ObjCRuntime.Release(obj);
-        obj = 0;
     }
 
     private readonly struct AutoReleasePool : IDisposable

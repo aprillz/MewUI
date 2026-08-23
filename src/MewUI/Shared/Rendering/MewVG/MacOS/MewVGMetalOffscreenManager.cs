@@ -99,8 +99,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
 
         var vg = new NanoVGMetal(key)
         {
-            PixelFormat = MTLPixelFormat.BGRA8Unorm,
-            StencilFormat = MTLPixelFormat.Depth32Float_Stencil8
+            PixelFormat = MTLPixelFormat.BGRA8Unorm
         };
 
         var textCache = new MewVGMetalTextCache(vg);
