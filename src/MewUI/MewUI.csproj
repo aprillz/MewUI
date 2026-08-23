@@ -37,7 +37,7 @@
                       ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Lets the trimmer fold DevToolsGate.IsSupported to false, which drops the DevTools graph. -->
+  <!-- Feature-switch substitutions let the trimmer drop optional framework graphs. -->
   <ItemGroup>
     <EmbeddedResource Include="ILLink.Substitutions.xml">
       <LogicalName>ILLink.Substitutions.xml</LogicalName>

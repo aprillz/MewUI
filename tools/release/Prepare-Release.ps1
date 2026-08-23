@@ -109,6 +109,14 @@ if (Invoke-Git status --porcelain --untracked-files=no) {
     Write-Host "  nothing changed"
 }
 
+# The half of the version check that preparing owns: the commit a release will tag has to declare the
+# requested version, so publishing has something committed to verify rather than a file on disk.
+$committed = Get-CommittedVersion
+if ($committed -ne $Version) {
+    throw "HEAD declares MewUIVersion $committed, not $Version. The bump was not committed."
+}
+Write-Host "  HEAD declares MewUIVersion $Version"
+
 Write-Host ""
 Write-Host "Prepared $tag locally. Review it, then run:" -ForegroundColor Green
 Write-Host "  ./tools/release/Publish-Release.ps1 -Version $Version"

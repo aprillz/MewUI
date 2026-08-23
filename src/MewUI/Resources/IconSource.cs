@@ -135,20 +135,22 @@ public sealed class IconSource
                 continue;
             }
 
-            byte[]? blob;
+            ImageSource? source;
             if (LooksLikePng(icoData, off, len))
             {
-                blob = new byte[len];
+                var blob = new byte[len];
                 Buffer.BlockCopy(icoData, off, blob, 0, len);
+                source = ImageSource.FromPngBytes(blob);
             }
             else
             {
-                blob = ConvertDibToBmp(icoData, off, len);
+                var blob = ConvertDibToBmp(icoData, off, len);
+                source = blob == null ? null : ImageSource.FromBmpBytes(blob);
             }
 
-            if (blob != null)
+            if (source != null)
             {
-                result.Add(sizePx: Math.Max(w, h), source: ImageSource.FromBytes(blob));
+                result.Add(sizePx: Math.Max(w, h), source);
             }
         }
 

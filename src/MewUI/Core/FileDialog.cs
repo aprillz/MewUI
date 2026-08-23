@@ -85,7 +85,7 @@ public sealed class OpenFileDialogOptions
     public int FilterIndex { get; set; }
     /// <summary>Whether multi-selection is enabled.</summary>
     public bool Multiselect { get; set; }
-    /// <summary>Whether to prefer a native dialog when available. Falls back to managed. Default: true.</summary>
+    /// <summary>Whether to prefer a native dialog when available. Falls back to managed when managed dialogs are included. Default: true.</summary>
     public bool PreferNative { get; set; } = true;
     /// <summary>Managed-only advanced options (null uses defaults).</summary>
     public ManagedDialogExtras? Managed { get; set; }
@@ -112,7 +112,7 @@ public sealed class SaveFileDialogOptions
     public string? DefaultExtension { get; set; }
     /// <summary>Whether to prompt before overwriting an existing file.</summary>
     public bool OverwritePrompt { get; set; } = true;
-    /// <summary>Whether to prefer a native dialog when available. Falls back to managed. Default: true.</summary>
+    /// <summary>Whether to prefer a native dialog when available. Falls back to managed when managed dialogs are included. Default: true.</summary>
     public bool PreferNative { get; set; } = true;
     /// <summary>Managed-only advanced options (null uses defaults).</summary>
     public ManagedDialogExtras? Managed { get; set; }
@@ -129,7 +129,7 @@ public sealed class FolderDialogOptions
     public string Title { get; set; } = "Select folder";
     /// <summary>Initial directory (optional).</summary>
     public string? InitialDirectory { get; set; }
-    /// <summary>Whether to prefer a native dialog when available. Falls back to managed. Default: true.</summary>
+    /// <summary>Whether to prefer a native dialog when available. Falls back to managed when managed dialogs are included. Default: true.</summary>
     public bool PreferNative { get; set; } = true;
     /// <summary>Managed-only advanced options (null uses defaults).</summary>
     public ManagedDialogExtras? Managed { get; set; }
@@ -175,6 +175,11 @@ public static class FileDialog
         }
         catch (Exception ex)
         {
+            if (!ManagedFileDialogGate.IsSupported)
+            {
+                throw;
+            }
+
             LogNativeFallback(ex);
             var managed = RunManaged(FileDialogMode.Save, options.Owner, options.InitialDirectory, options.Filters, options.Managed);
             return managed is { Length: > 0 } ? managed[0] : null;
@@ -198,6 +203,11 @@ public static class FileDialog
         }
         catch (Exception ex)
         {
+            if (!ManagedFileDialogGate.IsSupported)
+            {
+                throw;
+            }
+
             LogNativeFallback(ex);
             var managed = RunManaged(FileDialogMode.SelectFolder, options.Owner, options.InitialDirectory, null, options.Managed);
             return managed is { Length: > 0 } ? managed[0] : null;
@@ -229,6 +239,11 @@ public static class FileDialog
         }
         catch (Exception ex)
         {
+            if (!ManagedFileDialogGate.IsSupported)
+            {
+                throw;
+            }
+
             LogNativeFallback(ex);
             return await RunManagedAsync(mode, options.Owner, options.InitialDirectory, options.Filters, options.Managed).ConfigureAwait(true);
         }
@@ -252,6 +267,11 @@ public static class FileDialog
         }
         catch (Exception ex)
         {
+            if (!ManagedFileDialogGate.IsSupported)
+            {
+                throw;
+            }
+
             LogNativeFallback(ex);
             var managed = await RunManagedAsync(FileDialogMode.Save, options.Owner, options.InitialDirectory, options.Filters, options.Managed).ConfigureAwait(true);
             return managed is { Length: > 0 } ? managed[0] : null;
@@ -276,6 +296,11 @@ public static class FileDialog
         }
         catch (Exception ex)
         {
+            if (!ManagedFileDialogGate.IsSupported)
+            {
+                throw;
+            }
+
             LogNativeFallback(ex);
             var managed = await RunManagedAsync(FileDialogMode.SelectFolder, options.Owner, options.InitialDirectory, null, options.Managed).ConfigureAwait(true);
             return managed is { Length: > 0 } ? managed[0] : null;
@@ -296,6 +321,11 @@ public static class FileDialog
         }
         catch (Exception ex)
         {
+            if (!ManagedFileDialogGate.IsSupported)
+            {
+                throw;
+            }
+
             LogNativeFallback(ex);
             return RunManaged(mode, options.Owner, options.InitialDirectory, options.Filters, options.Managed);
         }
@@ -303,24 +333,45 @@ public static class FileDialog
 
     private static string[]? RunManaged(FileDialogMode mode, Window? owner, string? initialDirectory, IReadOnlyList<FileFilter>? filters, ManagedDialogExtras? extras)
     {
+        if (!ManagedFileDialogGate.IsSupported)
+        {
+            throw new NotSupportedException("Managed file dialogs are disabled for this application.");
+        }
+
+        return RunManagedCore(mode, owner, initialDirectory, filters, extras);
+    }
+
+    private static string[]? RunManagedCore(FileDialogMode mode, Window? owner, string? initialDirectory, IReadOnlyList<FileFilter>? filters, ManagedDialogExtras? extras)
+    {
         var dialog = new ManagedFileDialogWindow(mode, initialDirectory, filters, extras);
         dialog.ShowDialog(ResolveOwnerWindow(owner));
         return dialog.Accepted ? dialog.SelectedPaths.ToArray() : null;
     }
 
-    private static async Task<string[]?> RunManagedAsync(FileDialogMode mode, Window? owner, string? initialDirectory, IReadOnlyList<FileFilter>? filters, ManagedDialogExtras? extras)
+    private static Task<string[]?> RunManagedAsync(FileDialogMode mode, Window? owner, string? initialDirectory, IReadOnlyList<FileFilter>? filters, ManagedDialogExtras? extras)
+    {
+        if (!ManagedFileDialogGate.IsSupported)
+        {
+            throw new NotSupportedException("Managed file dialogs are disabled for this application.");
+        }
+
+        return RunManagedCoreAsync(mode, owner, initialDirectory, filters, extras);
+    }
+
+    private static async Task<string[]?> RunManagedCoreAsync(FileDialogMode mode, Window? owner, string? initialDirectory, IReadOnlyList<FileFilter>? filters, ManagedDialogExtras? extras)
     {
         var dialog = new ManagedFileDialogWindow(mode, initialDirectory, filters, extras);
         await dialog.ShowDialogAsync(ResolveOwnerWindow(owner)).ConfigureAwait(true);
         return dialog.Accepted ? dialog.SelectedPaths.ToArray() : null;
     }
 
-    // PreferNative expresses a preference, not a guarantee. An unavailable native path always uses managed.
+    // PreferNative expresses a preference, not a guarantee. An unavailable native path uses managed
+    // only when the application includes managed file-dialog support.
     private static bool UseManaged(bool preferNative)
-        => ShouldUseManaged(preferNative, NativeAvailable());
+        => ShouldUseManaged(preferNative, NativeAvailable(), ManagedFileDialogGate.IsSupported);
 
-    internal static bool ShouldUseManaged(bool preferNative, bool nativeAvailable)
-        => !preferNative || !nativeAvailable;
+    internal static bool ShouldUseManaged(bool preferNative, bool nativeAvailable, bool managedSupported)
+        => !preferNative || (managedSupported && !nativeAvailable);
 
     private static bool NativeAvailable()
     {
@@ -368,4 +419,14 @@ public static class FileDialog
 
         return null;
     }
+}
+
+internal static class ManagedFileDialogGate
+{
+    private const string ENABLED_SWITCH = "Aprillz.MewUI.ManagedFileDialogs.Enabled";
+
+    private static readonly bool _isSupported =
+        !AppContext.TryGetSwitch(ENABLED_SWITCH, out bool enabled) || enabled;
+
+    internal static bool IsSupported => _isSupported;
 }
