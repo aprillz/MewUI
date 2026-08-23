@@ -104,6 +104,7 @@ public sealed partial class Image
                     ClearVectorCache();
                     // Pool-sized allocation, at least content-sized; shared across controls.
                     _vectorSurface = factory.AcquireScratchSurface(contentWidth, contentHeight, debugName: "ImageVectorCache");
+                    AccountVectorCache(_vectorSurface);
                     _vectorSize = (_vectorSurface.PixelWidth, _vectorSurface.PixelHeight);
                 }
                 _vectorContentValid = false;
@@ -297,6 +298,7 @@ public sealed partial class Image
 
             ClearVectorCache();
             _vectorSurface = newSurface;
+            AccountVectorCache(newSurface);
             _vectorImage = newImage;
             _vectorSize = (newSurface.PixelWidth, newSurface.PixelHeight);
             _vectorContentSize = (pixelWidth, pixelHeight);
@@ -322,11 +324,22 @@ public sealed partial class Image
     internal void ParkVectorCache(Window? window) => ClearVectorCache();
 
     /// <summary>Releases the cached surface back to the device scratch pool.</summary>
+    // Ledger bytes of the surface behind _vectorSurface, subtracted again when it is released.
+    private long _vectorAccountedBytes;
+
+    private void AccountVectorCache(IRenderSurface surface)
+    {
+        _vectorAccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+        RenderMemoryLedger.VectorCacheEntryAdded(_vectorAccountedBytes);
+    }
+
     private void ClearVectorCache()
     {
         _vectorImage?.Dispose();
         if (_vectorSurface != null)
         {
+            RenderMemoryLedger.VectorCacheEntryRemoved(_vectorAccountedBytes);
+            _vectorAccountedBytes = 0;
             var device = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
             if (device != null)
             {

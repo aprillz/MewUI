@@ -39,14 +39,18 @@ public static class ScratchSurfaceExtensions
         int allocHeight = ScratchSurfaceSize.Approximate(pixelHeight);
         var key = new ScratchSurfaceKey(allocWidth, allocHeight, dpiScale, hasAlpha);
 
+        long bytes = RenderMemoryLedger.ScratchBytes(allocWidth, allocHeight);
         var pooled = device.ResourceCache?.RentScratchSurface(key);
         if (pooled != null)
         {
+            RenderMemoryLedger.ScratchAcquired(bytes, created: false);
             return pooled;
         }
 
-        return device.CreateSurface(
+        var created = device.CreateSurface(
             RenderSurfaceDescriptor.CachedImage(allocWidth, allocHeight, dpiScale, debugName, hasAlpha));
+        RenderMemoryLedger.ScratchAcquired(bytes, created: true);
+        return created;
     }
 
     /// <summary>
@@ -56,9 +60,11 @@ public static class ScratchSurfaceExtensions
     public static void ReleaseScratchSurface(this IRenderDevice device, IRenderSurface surface)
     {
         var cache = device.ResourceCache;
+        RenderMemoryLedger.ScratchReleased(RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight));
         if (cache == null || surface.IsDisposed)
         {
             surface.Dispose();
+            RenderMemoryLedger.ScratchDisposedOutsidePool();
             return;
         }
 
