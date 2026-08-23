@@ -42,8 +42,6 @@ internal sealed class EglVisualChooser : IX11GLVisualChooser
             LibEgl.EGL_GREEN_SIZE, 8,
             LibEgl.EGL_BLUE_SIZE, 8,
             LibEgl.EGL_ALPHA_SIZE, allowsTransparency ? 8 : 0,
-            LibEgl.EGL_DEPTH_SIZE, 24,
-            LibEgl.EGL_STENCIL_SIZE, 8,
             LibEgl.EGL_NONE,
         };
 

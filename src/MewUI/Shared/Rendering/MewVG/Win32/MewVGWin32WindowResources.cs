@@ -59,12 +59,12 @@ internal sealed class MewVGWin32WindowResources : IDisposable
 
     public static MewVGWin32WindowResources Create(nint hwnd, nint hdc, nint shareContext = 0)
     {
-        // Clips no longer touch the stencil buffer, but winding fills of image paints and stencil
-        // strokes still do, so the window keeps its stencil drawable until those routes change.
+        // MewVG renders without depth or stencil, so the window takes an exact color-only
+        // pixel format; a driver without one fails here instead of falling back.
         var gl = WglOpenGLWindowResources.Create(hwnd, hdc,
             new WglOpenGLWindowResources.WglPixelFormatOptions(
                 DepthBits: 0,
-                StencilBits: 8),
+                StencilBits: 0),
             shareContext);
         gl.MakeCurrent(hdc);
         try

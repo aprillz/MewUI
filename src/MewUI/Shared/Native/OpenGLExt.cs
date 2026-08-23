@@ -10,13 +10,9 @@ internal static unsafe partial class OpenGLExt
     public const uint GL_RENDERBUFFER = 0x8D41;
     public const uint GL_COLOR_ATTACHMENT0 = 0x8CE0;
     public const uint GL_DEPTH_ATTACHMENT = 0x8D00;
-    public const uint GL_STENCIL_ATTACHMENT = 0x8D20;
-    public const uint GL_DEPTH_STENCIL_ATTACHMENT = 0x821A;
     public const uint GL_FRAMEBUFFER_COMPLETE = 0x8CD5;
     public const uint GL_DRAW_FRAMEBUFFER = 0x8CA9;
     public const uint GL_READ_FRAMEBUFFER = 0x8CA8;
-    public const uint GL_DEPTH_STENCIL = 0x84F9;
-    public const uint GL_DEPTH24_STENCIL8 = 0x88F0;
 
     // Shader / program / VAO / VBO constants (GL 2.0+ / 3.0+)
     public const uint GL_VERTEX_SHADER = 0x8B31;

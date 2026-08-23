@@ -53,8 +53,8 @@ internal sealed partial class MewVGX11GraphicsContext
             // Clear the window framebuffer for real. The public Clear(Color) is a NanoVG fill, which no-ops when
             // clearing to a transparent colour (alpha-blend with alpha=0) - so on a transparent window the GLX
             // back buffer (preserved across swaps on some drivers) accumulates previous frames and the alpha
-            // builds up. glClear zeroes the buffer incl. alpha; ColorMask is forced on first because NanoVG's
-            // stencil-fill pass can leave colormask=(F,F,F,F) (same fix as the offscreen PreparePixelSurface).
+            // builds up. glClear zeroes the buffer incl. alpha; ColorMask is forced on first because a flush
+            // can leave colormask=(F,F,F,F) (same fix as the offscreen PreparePixelSurface).
             OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, 0);
             GL.ColorMask(true, true, true, true);
             GL.ClearColor(0f, 0f, 0f, 0f);
@@ -549,22 +549,13 @@ internal sealed partial class MewVGX11GraphicsContext
 
         OpenGLExt.BindFramebuffer(OpenGLExt.GL_FRAMEBUFFER, pixelSurface.Fbo);
 
-        // Force colormask + stencil mask to "all writes enabled" before clear. NanoVG's
-        // path-fill flush sets colormask=(F,F,F,F) for the stencil-marking pass; if its
-        // restore at flush end is incomplete, the next glClear leaves alpha untouched
-        // (= undefined / 0xFF on a fresh texture), producing opaque-black filter
-        // results in transparent regions. See Win32 PreparePixelSurface.
+        // Force colormask to "all writes enabled" before clear: if a flush leaves color
+        // writes masked, the next glClear leaves alpha untouched (= undefined / 0xFF on a
+        // fresh texture), producing opaque-black filter results in transparent regions.
+        // See Win32 PreparePixelSurface.
         GL.ColorMask(true, true, true, true);
         GL.ClearColor(0f, 0f, 0f, 0f);
 
-        uint clearMask = GL.GL_COLOR_BUFFER_BIT;
-        if (pixelSurface.HasStencil)
-        {
-            GL.StencilMask(0xFF);
-            GL.ClearStencil(0);
-            clearMask |= GL.GL_STENCIL_BUFFER_BIT;
-        }
-
-        GL.Clear(clearMask);
+        GL.Clear(GL.GL_COLOR_BUFFER_BIT);
     }
 }
