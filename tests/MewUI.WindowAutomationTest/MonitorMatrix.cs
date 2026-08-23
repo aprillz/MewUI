@@ -46,6 +46,26 @@ public static class MonitorMatrix
         }
     }
 
+    /// <summary>One monitor per distinct scale, for cases that care about a scale rather than a move.</summary>
+    public static IEnumerable<object[]> DistinctScales()
+    {
+        foreach (var monitor in Monitors.GroupBy(static monitor => monitor.Dpi).Select(static group => group.First()).OrderBy(static monitor => monitor.Dpi))
+        {
+            yield return [monitor];
+        }
+    }
+
+    /// <summary>Names a generated case after the scale it runs at.</summary>
+    public static string ScaleName(System.Reflection.MethodInfo method, object?[]? data)
+    {
+        if (data is [MonitorProbe monitor, ..])
+        {
+            return $"{method.Name}({monitor.ScalePercent}%)";
+        }
+
+        return method.Name;
+    }
+
     /// <summary>Names a generated case after the transition it drives.</summary>
     public static string TransitionName(System.Reflection.MethodInfo method, object?[]? data)
     {
