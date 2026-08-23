@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
@@ -22,23 +24,50 @@ public static class RenderMemoryLedger
     private static long _vectorCacheBytes;
     private static long _textCacheBytes;
     private static long _geometryCacheBytes;
+    private static Process? _process;
+
+    /// <summary>
+    /// Platform-provided reader for the process memory counters. The platform host sets it on
+    /// registration; without one the snapshot falls back to the runtime's process counters, which
+    /// cannot report a private working set.
+    /// </summary>
+    internal static Func<ProcessMemory>? ProcessMemoryReader { get; set; }
 
     /// <summary>Reads the current totals.</summary>
-    public static RenderMemorySnapshot Snapshot() => new(
-        Volatile.Read(ref _scratchActiveCount),
-        Volatile.Read(ref _scratchActiveBytes),
-        Volatile.Read(ref _scratchPooledCount),
-        Volatile.Read(ref _scratchPooledBytes),
-        Volatile.Read(ref _scratchCreated),
-        Volatile.Read(ref _scratchDisposed),
-        Volatile.Read(ref _bitmapCacheCount),
-        Volatile.Read(ref _bitmapCacheBytes),
-        Volatile.Read(ref _vectorCacheCount),
-        Volatile.Read(ref _vectorCacheBytes),
-        Volatile.Read(ref _textCacheBytes),
-        Volatile.Read(ref _geometryCacheBytes),
-        Environment.WorkingSet,
-        GC.GetTotalMemory(false));
+    public static RenderMemorySnapshot Snapshot()
+    {
+        var process = ReadProcessMemory();
+        return new RenderMemorySnapshot(
+            Volatile.Read(ref _scratchActiveCount),
+            Volatile.Read(ref _scratchActiveBytes),
+            Volatile.Read(ref _scratchPooledCount),
+            Volatile.Read(ref _scratchPooledBytes),
+            Volatile.Read(ref _scratchCreated),
+            Volatile.Read(ref _scratchDisposed),
+            Volatile.Read(ref _bitmapCacheCount),
+            Volatile.Read(ref _bitmapCacheBytes),
+            Volatile.Read(ref _vectorCacheCount),
+            Volatile.Read(ref _vectorCacheBytes),
+            Volatile.Read(ref _textCacheBytes),
+            Volatile.Read(ref _geometryCacheBytes),
+            process.PrivateUsage,
+            process.WorkingSetSize,
+            process.PrivateWorkingSetSize,
+            GC.GetTotalMemory(false));
+    }
+
+    private static ProcessMemory ReadProcessMemory()
+    {
+        var reader = ProcessMemoryReader;
+        if (reader != null)
+        {
+            return reader();
+        }
+
+        var process = _process ??= Process.GetCurrentProcess();
+        process.Refresh();
+        return new ProcessMemory(process.PrivateMemorySize64, Environment.WorkingSet, 0);
+    }
 
     /// <summary>Accounting size of a scratch surface allocation, shared by the pool and the ledger.</summary>
     internal static long ScratchBytes(int pixelWidth, int pixelHeight)
@@ -107,6 +136,12 @@ public static class RenderMemoryLedger
     internal static void GeometryCacheBytesChanged(long delta) => Interlocked.Add(ref _geometryCacheBytes, delta);
 }
 
+/// <summary>Process memory counters as the operating system reports them.</summary>
+/// <param name="PrivateUsage">Committed memory private to the process (Windows private bytes; the physical footprint on macOS; anonymous data and stack mappings on Linux).</param>
+/// <param name="WorkingSetSize">Resident memory, shared pages included.</param>
+/// <param name="PrivateWorkingSetSize">Resident memory not shared with any other process; 0 when the platform cannot report it.</param>
+public readonly record struct ProcessMemory(long PrivateUsage, long WorkingSetSize, long PrivateWorkingSetSize);
+
 /// <summary>One reading of <see cref="RenderMemoryLedger"/>.</summary>
 /// <param name="ScratchActiveCount">Scratch surfaces currently rented by a cache (bitmap caches, vector caches).</param>
 /// <param name="ScratchActiveBytes">Allocated pixel bytes of the rented scratch surfaces.</param>
@@ -120,7 +155,9 @@ public static class RenderMemoryLedger
 /// <param name="VectorCacheBytes">Allocated pixel bytes behind those bitmaps.</param>
 /// <param name="TextCacheBytes">Rasterized text the backend text caches hold.</param>
 /// <param name="GeometryCacheBytes">Tessellation and geometry data retained for frozen paths.</param>
-/// <param name="WorkingSetBytes">Process working set at the time of the reading.</param>
+/// <param name="PrivateUsage">See <see cref="ProcessMemory.PrivateUsage"/>.</param>
+/// <param name="WorkingSetSize">See <see cref="ProcessMemory.WorkingSetSize"/>.</param>
+/// <param name="PrivateWorkingSetSize">See <see cref="ProcessMemory.PrivateWorkingSetSize"/>.</param>
 /// <param name="GcHeapBytes">Managed heap at the time of the reading.</param>
 public readonly record struct RenderMemorySnapshot(
     long ScratchActiveCount,
@@ -135,7 +172,9 @@ public readonly record struct RenderMemorySnapshot(
     long VectorCacheBytes,
     long TextCacheBytes,
     long GeometryCacheBytes,
-    long WorkingSetBytes,
+    long PrivateUsage,
+    long WorkingSetSize,
+    long PrivateWorkingSetSize,
     long GcHeapBytes)
 {
     /// <summary>Every scratch surface ever created is either still rented, pooled, or disposed.</summary>
