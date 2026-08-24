@@ -1,5 +1,6 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Resources;
+using Aprillz.MewUI.Rendering;
 
 namespace MewUI.Test.Resources;
 
@@ -54,6 +55,30 @@ public sealed class ImageSourceOrientationTests
         source.EnsureDecode();
 
         Assert.AreEqual(ImageOrientation.Identity, source.Orientation);
+    }
+
+    [TestMethod]
+    public void EnsureDecode_TransfersLedgerBytesFromEncodedToDecoded()
+    {
+        byte[] encoded = Oriented(ImageOrientation.Normal);
+        var before = RenderMemoryLedger.Snapshot();
+        var source = ImageSource.FromBytes(encoded);
+        var encodedSnapshot = RenderMemoryLedger.Snapshot();
+
+        Assert.AreEqual(before.EncodedBackingCount + 1, encodedSnapshot.EncodedBackingCount);
+        Assert.AreEqual(before.EncodedBackingBytes + encoded.LongLength, encodedSnapshot.EncodedBackingBytes);
+
+        source.EnsureDecode();
+        var decodedSnapshot = RenderMemoryLedger.Snapshot();
+
+        Assert.AreEqual(before.EncodedBackingCount, decodedSnapshot.EncodedBackingCount);
+        Assert.AreEqual(before.EncodedBackingBytes, decodedSnapshot.EncodedBackingBytes);
+        Assert.AreEqual(encodedSnapshot.DecodedPixelCount + 1, decodedSnapshot.DecodedPixelCount);
+        Assert.AreEqual(encodedSnapshot.DecodedPixelBytes + 4, decodedSnapshot.DecodedPixelBytes);
+        Assert.AreEqual(encodedSnapshot.DecodeAttempts + 1, decodedSnapshot.DecodeAttempts);
+        Assert.AreEqual(encodedSnapshot.DecodeSucceeded + 1, decodedSnapshot.DecodeSucceeded);
+        Assert.AreEqual(encodedSnapshot.DecodeFailed, decodedSnapshot.DecodeFailed);
+        GC.KeepAlive(source);
     }
 
     private static byte[] Oriented(ImageOrientation orientation) => [.. OrientedMagic, (byte)orientation];

@@ -110,7 +110,9 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             }
             else
             {
-                _pendingReleases.Add(new PendingRelease(resource, safeAfter));
+                long bytes = EstimateResourceBytes(resource);
+                _pendingReleases.Add(new PendingRelease(resource, safeAfter, bytes));
+                RenderMemoryLedger.PendingReleaseAdded(bytes);
             }
         }
     }
@@ -312,6 +314,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
             foreach (var pending in _pendingReleases)
             {
+                RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
                 pending.Resource.Dispose();
                 pending.Operation.Dispose();
             }
@@ -324,7 +327,8 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     {
         if (entry.SafeToDisposeAfter is { } operation && !operation.IsCompleted)
         {
-            _pendingReleases.Add(new PendingRelease(entry, operation));
+            _pendingReleases.Add(new PendingRelease(entry, operation, entry.AccountedBytes));
+            RenderMemoryLedger.PendingReleaseAdded(entry.AccountedBytes);
             return;
         }
 
@@ -342,6 +346,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             }
 
             _pendingReleases.RemoveAt(i);
+            RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
             pending.Resource.Dispose();
             pending.Operation.Dispose();
         }
@@ -351,6 +356,15 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
+
+    private static long EstimateResourceBytes(IDisposable resource)
+        => resource switch
+        {
+            RenderCacheEntry entry => entry.AccountedBytes,
+            IRenderTarget target => RenderMemoryLedger.ScratchBytes(target.PixelWidth, target.PixelHeight),
+            IImage image => RenderMemoryLedger.ScratchBytes(image.PixelWidth, image.PixelHeight),
+            _ => 0,
+        };
 
     private sealed class RenderCacheEntry : IRenderCacheEntry
     {
@@ -362,6 +376,8 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             Surface = surface;
             Image = image;
             SafeToDisposeAfter = safeToDisposeAfter;
+            AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+            RenderMemoryLedger.PersistentResourceAdded(AccountedBytes);
         }
 
         public RenderCacheKey Key { get; }
@@ -372,17 +388,20 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
         public IRenderOperation? SafeToDisposeAfter { get; }
 
+        public long AccountedBytes { get; }
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+            RenderMemoryLedger.PersistentResourceRemoved(AccountedBytes);
             Image.Dispose();
             Surface.Dispose();
             SafeToDisposeAfter?.Dispose();
         }
     }
 
-    private readonly record struct PendingRelease(IDisposable Resource, IRenderOperation Operation);
+    private readonly record struct PendingRelease(IDisposable Resource, IRenderOperation Operation, long Bytes);
 
     private readonly record struct PooledScratchSurface(IRenderSurface Surface, long Bytes, long LastUse);
 }
