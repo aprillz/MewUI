@@ -228,14 +228,15 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
         return font;
     }
 
-    private static List<int> GetTextElementBoundaries(string text, int start, int end)
+    /// <summary>Writes the text element starts of the range into <paramref name="destination"/> and returns how many there were.</summary>
+    private static int GetTextElementBoundaries(string text, int start, int end, int[] destination)
     {
         if (start == end)
         {
-            return [];
+            return 0;
         }
 
-        var result = new List<int>();
+        int count = 0;
         var enumerator = StringInfo.GetTextElementEnumerator(text, start);
         while (enumerator.MoveNext())
         {
@@ -245,15 +246,16 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
                 break;
             }
 
+            // A CR LF pair is one break, so the LF does not start an element of its own.
             if (index > start && text[index - 1] == '\r' && text[index] == '\n')
             {
                 continue;
             }
 
-            result.Add(index);
+            destination[count++] = index;
         }
 
-        return result;
+        return count;
     }
 
     private static double NormalizeMaxWidth(double width)

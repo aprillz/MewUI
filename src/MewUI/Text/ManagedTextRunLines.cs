@@ -1,5 +1,7 @@
 using Aprillz.MewUI.Rendering;
 
+using System.Buffers;
+
 namespace Aprillz.MewUI.Text;
 
 internal sealed partial class ManagedTextEngine
@@ -31,15 +33,15 @@ internal sealed partial class ManagedTextEngine
                (Kind == ManagedTextRunKind.Text && Length > 0 && char.IsWhiteSpace(text, Start));
     }
 
-    private static List<LayoutCell> BuildCells(ManagedTextFragments fragments)
+    private static int BuildCells(ManagedTextFragments fragments, LayoutCell[] cells)
     {
-        var cells = new List<LayoutCell>(Math.Max(4, fragments.BoundaryCount + fragments.Count));
+        int count = 0;
         for (int index = 0; index < fragments.Count; index++)
         {
             ref readonly var fragment = ref fragments.Items[index];
             if (fragment.Kind != ManagedTextRunKind.Text)
             {
-                cells.Add(new LayoutCell(fragments, index, fragment.TextStart, fragment.TextEnd));
+                cells[count++] = new LayoutCell(fragments, index, fragment.TextStart, fragment.TextEnd);
                 continue;
             }
 
@@ -48,11 +50,11 @@ internal sealed partial class ManagedTextEngine
             {
                 int start = boundaries[boundary];
                 int end = boundary + 1 < boundaries.Length ? boundaries[boundary + 1] : fragment.TextEnd;
-                cells.Add(new LayoutCell(fragments, index, start, end));
+                cells[count++] = new LayoutCell(fragments, index, start, end);
             }
         }
 
-        return cells;
+        return count;
     }
 
     /// <summary>
@@ -66,23 +68,46 @@ internal sealed partial class ManagedTextEngine
         ManagedTextFragments fragments,
         List<ManagedTextRun> runs)
     {
-        var cells = BuildCells(fragments);
+        // Scratch for the run of this method only: the lines that come out of it carry runs, not cells.
+        int cellCapacity = fragments.BoundaryCount + fragments.Count;
+        var cellBuffer = ArrayPool<LayoutCell>.Shared.Rent(Math.Max(1, cellCapacity));
+        var widthBuffer = ArrayPool<double>.Shared.Rent(Math.Max(1, cellCapacity));
+        try
+        {
+            return AssembleRunLinesCore(context, snapshot, fragments, runs, cellBuffer, widthBuffer);
+        }
+        finally
+        {
+            ArrayPool<LayoutCell>.Shared.Return(cellBuffer, clearArray: true);
+            ArrayPool<double>.Shared.Return(widthBuffer);
+        }
+    }
+
+    private List<ManagedTextLine> AssembleRunLinesCore(
+        ITextBackendMeasurementContext context,
+        TextLayoutRequestSnapshot snapshot,
+        ManagedTextFragments fragments,
+        List<ManagedTextRun> runs,
+        LayoutCell[] cells,
+        double[] cellWidths)
+    {
+        int cellCount = BuildCells(fragments, cells);
+        Array.Clear(cellWidths, 0, cellCount);
         var lines = new List<ManagedTextLine>();
-        var cellWidths = new double[cells.Count];
         double y = 0;
         int lineStart = 0;
         int index = 0;
         double maxWidth = NormalizeMaxWidth(snapshot.Paragraph.MaxWidth);
         Dictionary<IFont, double>? spaceWidths = null;
 
-        while (index < cells.Count)
+        while (index < cellCount)
         {
             int scan = index;
             int lastBreak = -1;
             double width = 0;
             bool explicitBreak = false;
 
-            while (scan < cells.Count)
+            while (scan < cellCount)
             {
                 var cell = cells[scan];
                 if (cell.Kind == ManagedTextRunKind.NewLine)
@@ -122,7 +147,7 @@ internal sealed partial class ManagedTextEngine
             }
 
             int contentEnd = scan;
-            if (contentEnd == index && !explicitBreak && scan < cells.Count)
+            if (contentEnd == index && !explicitBreak && scan < cellCount)
             {
                 contentEnd = ++scan;
             }
@@ -149,12 +174,12 @@ internal sealed partial class ManagedTextEngine
             }
             else
             {
-                lineStart = contentEnd < cells.Count ? cells[contentEnd].Start : snapshot.Text.Length;
+                lineStart = contentEnd < cellCount ? cells[contentEnd].Start : snapshot.Text.Length;
                 index = contentEnd;
             }
         }
 
-        if (cells.Count == 0 || cells[^1].Kind == ManagedTextRunKind.NewLine)
+        if (cellCount == 0 || cells[cellCount - 1].Kind == ManagedTextRunKind.NewLine)
         {
             var font = GetFont(snapshot.DefaultStyle, snapshot.Dpi);
             double fontHeight = GetFontLineHeight(context, font);
@@ -384,7 +409,7 @@ internal sealed partial class ManagedTextEngine
         ITextBackendMeasurementContext context,
         TextLayoutRequestSnapshot snapshot,
         ManagedTextFragments fragments,
-        List<LayoutCell> cells,
+        LayoutCell[] cells,
         double[] cellWidths,
         List<ManagedTextRun> runs,
         int start,
@@ -467,7 +492,7 @@ internal sealed partial class ManagedTextEngine
 
     private static ManagedTextRun CreateRun(
         ManagedTextFragments fragments,
-        List<LayoutCell> cells,
+        LayoutCell[] cells,
         double[] cellWidths,
         int start,
         int last,
@@ -510,7 +535,7 @@ internal sealed partial class ManagedTextEngine
 
     private static (double Width, int Length) GetTrailingWhitespace(
         TextLayoutRequestSnapshot snapshot,
-        List<LayoutCell> cells,
+        LayoutCell[] cells,
         double[] cellWidths,
         int start,
         int end)
