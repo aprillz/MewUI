@@ -11,7 +11,9 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     // size the pool has never seen (measured on a 600-step sweep: 129 hits against 383 misses,
     // identical step times at 320 MB and at 16 MB, 344 MB less retained).
     private const long SCRATCH_BUDGET_BYTES = 16L * 1024 * 1024;
-    private const int SCRATCH_MAX_COUNT = 2560;
+    private const int SCRATCH_MAX_COUNT = 512;
+    private const long SCRATCH_MAX_EXTRA_BYTES = 8L * 1024 * 1024;
+    private const int SCRATCH_MAX_OVERSIZE_CANDIDATES = 32;
 
     // Per-surface floor for the budget accounting. A pooled surface is a GPU texture plus a
     // stencil attachment, and drivers commit at least a page-granular allocation for each, so
@@ -22,7 +24,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     // A pooled surface untouched this long is dead weight (the view that used it is gone), so a
     // periodic sweep disposes it. This is what returns memory after scrolling stops, without
     // ever evicting the surfaces an active grid is cycling through.
-    private const long SCRATCH_IDLE_EVICT_MS = 1_500;
+    private const long SCRATCH_IDLE_EVICT_MS = 5_000;
     private const long SCRATCH_SWEEP_INTERVAL_MS = 1_000;
     private long _scratchLastSweepTicks;
 
@@ -33,6 +35,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     // Scratch buckets are lists: several surfaces can share one key. Rent pops the warm end.
     private readonly Dictionary<ScratchSurfaceKey, List<PooledScratchSurface>> _scratchBuckets = new();
     private long _scratchBytes;
+    private long _scratchReturnSequence;
     private bool _disposed;
 
     public bool TryGet(RenderCacheKey key, out IRenderCacheEntry entry)
@@ -134,18 +137,81 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     }
 
     public IRenderSurface? RentScratchSurface(ScratchSurfaceKey key)
+        => RentScratchSurface(key, exactSizeOnly: false);
+
+    public IRenderSurface? RentScratchSurface(ScratchSurfaceKey key, bool exactSizeOnly)
     {
         lock (_gate)
         {
             ThrowIfDisposed();
             SweepIdleScratchNoLock();
-            if (!_scratchBuckets.TryGetValue(key, out var bucket) || bucket.Count == 0)
+            if (TryRentFromBucketNoLock(key, out var exact))
+            {
+                return exact;
+            }
+            if (exactSizeOnly)
             {
                 return null;
             }
 
-            // Most recently returned first; a surface the calling thread cannot render into stays
-            // in the bucket for the thread that owns it.
+            long requestedArea = (long)key.PixelWidth * key.PixelHeight;
+            long requestedBytes = RenderMemoryLedger.ScratchBytes(key.PixelWidth, key.PixelHeight);
+            ScratchSurfaceKey selectedKey = default;
+            int selectedIndex = -1;
+            long newestUse = long.MinValue;
+            int candidates = 0;
+            foreach (var pair in _scratchBuckets)
+            {
+                var candidateKey = pair.Key;
+                if (candidateKey.DpiScale != key.DpiScale
+                    || candidateKey.HasAlpha != key.HasAlpha
+                    || candidateKey.ResourceClass != key.ResourceClass
+                    || candidateKey.PixelWidth < key.PixelWidth
+                    || candidateKey.PixelHeight < key.PixelHeight)
+                {
+                    continue;
+                }
+
+                long area = (long)candidateKey.PixelWidth * candidateKey.PixelHeight;
+                long bytes = RenderMemoryLedger.ScratchBytes(candidateKey.PixelWidth, candidateKey.PixelHeight);
+                if ((area > requestedArea && area - requestedArea > requestedArea)
+                    || bytes - requestedBytes > SCRATCH_MAX_EXTRA_BYTES)
+                {
+                    continue;
+                }
+
+                var bucket = pair.Value;
+                for (int i = bucket.Count - 1; i >= 0 && candidates < SCRATCH_MAX_OVERSIZE_CANDIDATES; i--)
+                {
+                    var pooled = bucket[i];
+                    if (pooled.Surface is IReusableScratchSurface reusable && !reusable.CanRenderFromCurrentThread)
+                    {
+                        continue;
+                    }
+                    candidates++;
+                    if (pooled.Sequence > newestUse)
+                    {
+                        newestUse = pooled.Sequence;
+                        selectedKey = candidateKey;
+                        selectedIndex = i;
+                    }
+                }
+                if (candidates >= SCRATCH_MAX_OVERSIZE_CANDIDATES)
+                {
+                    break;
+                }
+            }
+
+            return selectedIndex >= 0
+                ? RemoveScratchAtNoLock(selectedKey, selectedIndex)
+                : null;
+        }
+    }
+
+    private bool TryRentFromBucketNoLock(ScratchSurfaceKey key, out IRenderSurface surface)
+    {
+        if (_scratchBuckets.TryGetValue(key, out var bucket))
+        {
             for (int i = bucket.Count - 1; i >= 0; i--)
             {
                 var pooled = bucket[i];
@@ -153,19 +219,26 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 {
                     continue;
                 }
-
-                bucket.RemoveAt(i);
-                _scratchBytes -= pooled.Bytes;
-                if (bucket.Count == 0)
-                {
-                    _scratchBuckets.Remove(key);
-                }
-
-                return pooled.Surface;
+                surface = RemoveScratchAtNoLock(key, i);
+                return true;
             }
-
-            return null;
         }
+        surface = null!;
+        return false;
+    }
+
+    private IRenderSurface RemoveScratchAtNoLock(ScratchSurfaceKey key, int index)
+    {
+        var bucket = _scratchBuckets[key];
+        var pooled = bucket[index];
+        bucket.RemoveAt(index);
+        _scratchBytes -= pooled.Bytes;
+        RenderMemoryLedger.ScratchUnpooled(pooled.Bytes, disposed: false);
+        if (bucket.Count == 0)
+        {
+            _scratchBuckets.Remove(key);
+        }
+        return pooled.Surface;
     }
 
     public void ReturnScratchSurface(ScratchSurfaceKey key, IRenderSurface surface)
@@ -186,8 +259,14 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 _scratchBuckets[key] = bucket;
             }
 
-            long bytes = Math.Max(SCRATCH_MIN_ACCOUNTED_BYTES, (long)Math.Max(1, key.PixelWidth) * Math.Max(1, key.PixelHeight) * 4);
-            bucket.Add(new PooledScratchSurface(surface, bytes, Environment.TickCount64));
+            long bytes = Math.Max(
+                SCRATCH_MIN_ACCOUNTED_BYTES,
+                RenderMemoryLedger.ScratchBytes(key.PixelWidth, key.PixelHeight));
+            bucket.Add(new PooledScratchSurface(
+                surface,
+                bytes,
+                Environment.TickCount64,
+                ++_scratchReturnSequence));
             _scratchBytes += bytes;
 
             SweepIdleScratchNoLock();
@@ -211,7 +290,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             var bucket = pair.Value;
             for (int i = bucket.Count - 1; i >= 0; i--)
             {
-                if (now - bucket[i].LastUse < SCRATCH_IDLE_EVICT_MS)
+                if (now - bucket[i].ReturnedAt < SCRATCH_IDLE_EVICT_MS)
                 {
                     continue;
                 }
@@ -247,9 +326,9 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 var bucket = pair.Value;
                 for (int i = 0; i < bucket.Count; i++)
                 {
-                    if (bucket[i].LastUse < oldestTimestamp)
+                    if (bucket[i].Sequence < oldestTimestamp)
                     {
-                        oldestTimestamp = bucket[i].LastUse;
+                        oldestTimestamp = bucket[i].Sequence;
                         oldestKey = pair.Key;
                         oldestIndex = i;
                     }
@@ -403,5 +482,9 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
     private readonly record struct PendingRelease(IDisposable Resource, IRenderOperation Operation, long Bytes);
 
-    private readonly record struct PooledScratchSurface(IRenderSurface Surface, long Bytes, long LastUse);
+    private readonly record struct PooledScratchSurface(
+        IRenderSurface Surface,
+        long Bytes,
+        long ReturnedAt,
+        long Sequence);
 }

@@ -66,4 +66,125 @@ public sealed class ScratchSurfaceSizeTests
         Assert.AreEqual(before.ScratchDisposed + 1, disposed.ScratchDisposed);
         Assert.IsTrue(disposed.IsBalanced);
     }
+
+    [TestMethod]
+    public void DevicePool_ReusesOversizeWithoutExposingAllocationSize()
+    {
+        using var factory = new GdiGraphicsFactory();
+
+        var first = factory.AcquireScratchSurface(200, 100);
+        var allocation = ((IBackendSurfaceProvider)first).BackendSurface;
+        factory.ReleaseScratchSurface(first);
+
+        var reused = factory.AcquireScratchSurface(150, 80);
+        using var image = factory.CreateImageView(reused);
+
+        Assert.AreSame(allocation, ((IBackendSurfaceProvider)reused).BackendSurface);
+        Assert.AreEqual(150, reused.PixelWidth);
+        Assert.AreEqual(80, reused.PixelHeight);
+        Assert.AreEqual(150, image.PixelWidth);
+        Assert.AreEqual(80, image.PixelHeight);
+        factory.ReleaseScratchSurface(reused);
+    }
+
+    [TestMethod]
+    public void DevicePool_PrefersExactSizeOverNewerOversize()
+    {
+        using var factory = new GdiGraphicsFactory();
+
+        var exact = factory.AcquireScratchSurface(150, 100);
+        var exactAllocation = ((IBackendSurfaceProvider)exact).BackendSurface;
+        factory.ReleaseScratchSurface(exact);
+        var larger = factory.AcquireScratchSurface(200, 100);
+        factory.ReleaseScratchSurface(larger);
+
+        var selected = factory.AcquireScratchSurface(150, 100);
+
+        Assert.AreSame(exactAllocation, ((IBackendSurfaceProvider)selected).BackendSurface);
+        factory.ReleaseScratchSurface(selected);
+    }
+
+    [TestMethod]
+    public void DevicePool_SelectsMostRecentlyReturnedCompatibleOversize()
+    {
+        using var factory = new GdiGraphicsFactory();
+
+        var older = factory.AcquireScratchSurface(180, 100);
+        var olderAllocation = ((IBackendSurfaceProvider)older).BackendSurface;
+        factory.ReleaseScratchSurface(older);
+        var newer = factory.AcquireScratchSurface(190, 100);
+        var newerAllocation = ((IBackendSurfaceProvider)newer).BackendSurface;
+        factory.ReleaseScratchSurface(newer);
+
+        var selected = factory.AcquireScratchSurface(150, 100);
+
+        Assert.AreNotSame(olderAllocation, newerAllocation);
+        Assert.AreSame(newerAllocation, ((IBackendSurfaceProvider)selected).BackendSurface);
+        factory.ReleaseScratchSurface(selected);
+    }
+
+    [TestMethod]
+    public void DevicePool_RejectsOversizeBeyondAreaLimit()
+    {
+        using var factory = new GdiGraphicsFactory();
+
+        var larger = factory.AcquireScratchSurface(301, 100);
+        var largerAllocation = ((IBackendSurfaceProvider)larger).BackendSurface;
+        factory.ReleaseScratchSurface(larger);
+
+        var selected = factory.AcquireScratchSurface(150, 100);
+
+        Assert.AreNotSame(largerAllocation, ((IBackendSurfaceProvider)selected).BackendSurface);
+        factory.ReleaseScratchSurface(selected);
+    }
+
+    [TestMethod]
+    public void DevicePool_ExactOnlyRejectsCompatibleOversize()
+    {
+        using var factory = new GdiGraphicsFactory();
+        var larger = factory.AcquireScratchSurface(200, 100);
+        factory.ReleaseScratchSurface(larger);
+
+        var selected = factory.ResourceCache!.RentScratchSurface(
+            new ScratchSurfaceKey(150, 100, 1, HasAlpha: true),
+            exactSizeOnly: true);
+
+        Assert.IsNull(selected);
+    }
+
+    [TestMethod]
+    public void DevicePool_ReturnIsExactOnceAndBackendUseAfterReturnFails()
+    {
+        using var factory = new GdiGraphicsFactory();
+        var before = RenderMemoryLedger.Snapshot();
+        var surface = factory.AcquireScratchSurface(32, 16);
+
+        factory.ReleaseScratchSurface(surface);
+        var returned = RenderMemoryLedger.Snapshot();
+        factory.ReleaseScratchSurface(surface);
+        var returnedAgain = RenderMemoryLedger.Snapshot();
+
+        Assert.IsTrue(surface.IsDisposed);
+        Assert.ThrowsExactly<ObjectDisposedException>(
+            () => RenderSurfaceResource.ResolveBackendSurface(surface));
+        Assert.AreEqual(returned.ScratchActiveCount, returnedAgain.ScratchActiveCount);
+        Assert.AreEqual(returned.ScratchPooledCount, returnedAgain.ScratchPooledCount);
+        Assert.AreEqual(before.ScratchActiveCount, returnedAgain.ScratchActiveCount);
+    }
+
+    [TestMethod]
+    public void FilterPools_ShareExactSurfacesThroughDeviceCache()
+    {
+        using var factory = new GdiGraphicsFactory();
+        using var firstPool = new ScratchSurfacePool(factory, 1);
+        using var secondPool = new ScratchSurfacePool(factory, 1);
+
+        var first = firstPool.RentLease(64, 32);
+        var allocation = first.Surface;
+        firstPool.Return(first);
+        var second = secondPool.RentLease(64, 32);
+
+        Assert.AreSame(allocation, second.Surface);
+        second.Dispose();
+    }
 }

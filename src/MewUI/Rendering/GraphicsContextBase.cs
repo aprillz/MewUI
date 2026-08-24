@@ -43,6 +43,10 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// <summary>Whether a frame is currently active (between BeginFrame and EndFrame).</summary>
     protected bool IsActive { get; private set; }
 
+    /// <summary>Logical frame extent retained when the backend receives a larger pooled target.</summary>
+    protected int FramePixelWidth { get; private set; }
+    protected int FramePixelHeight { get; private set; }
+
     /// <summary>Whether this context has been permanently disposed.</summary>
     private bool _disposed;
 
@@ -75,7 +79,10 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     /// </summary>
     public void BeginFrame(IRenderTarget target)
     {
+        ArgumentNullException.ThrowIfNull(target);
         if (IsActive) EndFrame();
+        FramePixelWidth = target.PixelWidth;
+        FramePixelHeight = target.PixelHeight;
         _cullRect = InfiniteCullRect;
         _cullStack.Clear();
         _drawCalls = 0;
@@ -95,7 +102,9 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
         _drawTextCount = 0;
         _drawImageCount = 0;
         IsActive = true;
-        OnBeginFrame(target);
+        OnBeginFrame(target is IRenderSurface surface
+            ? RenderSurfaceResource.ResolveBackendSurface(surface)
+            : target);
     }
 
     /// <summary>

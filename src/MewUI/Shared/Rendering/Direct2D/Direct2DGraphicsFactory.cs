@@ -478,6 +478,11 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     {
         ArgumentNullException.ThrowIfNull(target);
 
+        if (target is IRenderSurface surface)
+        {
+            target = RenderSurfaceResource.ResolveBackendSurface(surface);
+        }
+
         if (target is WindowRenderTarget windowTarget)
         {
             if (windowTarget.Surface is not IWin32WindowSurface win32Surface || win32Surface.Hwnd == 0)
@@ -647,13 +652,19 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     }
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
-        => surface.Capabilities.HasFlag(SurfaceCapabilities.Renderable)
+    {
+        surface = RenderSurfaceResource.ResolveBackendSurface(surface);
+        return surface.Capabilities.HasFlag(SurfaceCapabilities.Renderable)
             ? CreateContext((IRenderTarget)surface)
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create contexts for renderable surfaces.");
+    }
 
     public IImage CreateImageView(IRenderSurface surface)
     {
+        int logicalWidth = surface.PixelWidth;
+        int logicalHeight = surface.PixelHeight;
+        surface = RenderSurfaceResource.ResolveBackendSurface(surface);
         // GPU-resident surfaces that also implement IExternalRasterSource go through the
         // DXGI bridge so any D2D DC can sample them zero-copy. Prefer this path over the
         // IPixelBufferSource fallback - otherwise Direct2DGpuPixelRenderSurface (created
@@ -661,10 +672,13 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
         // surface.DpiScale is forwarded so the bridge bitmap reports the correct logical
         // size when sampled from an RT with a different dpi.
         if (surface is IExternalRasterSource externalSource)
-            return CreateImageView(externalSource, surface.DpiScale);
+            return ImageResource.WrapLogical(
+                CreateImageView(externalSource, surface.DpiScale),
+                logicalWidth,
+                logicalHeight);
 
         if (surface is IPixelBufferSource pixelSource)
-            return CreateImageView(pixelSource);
+            return ImageResource.WrapLogical(CreateImageView(pixelSource), logicalWidth, logicalHeight);
 
         throw new NotSupportedException(
             $"{GetType().Name} can only create image views for pixel-backed or externally-rastered surfaces.");

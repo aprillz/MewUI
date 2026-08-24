@@ -55,4 +55,26 @@ internal static class ImageResource
         }
         return image;
     }
+
+    public static IImage WrapLogical(IImage image, int pixelWidth, int pixelHeight)
+        => image.PixelWidth == pixelWidth && image.PixelHeight == pixelHeight
+            ? image
+            : new LogicalBackendImageView(image, pixelWidth, pixelHeight);
+
+    private sealed class LogicalBackendImageView(IImage backendImage, int pixelWidth, int pixelHeight)
+        : IImage, IBackendImageProvider
+    {
+        private IImage? _backendImage = backendImage;
+
+        public int PixelWidth { get; } = pixelWidth;
+        public int PixelHeight { get; } = pixelHeight;
+
+        IImage IBackendImageProvider.BackendImage => Volatile.Read(ref _backendImage)
+            ?? throw new ObjectDisposedException(nameof(LogicalBackendImageView));
+
+        public bool TrySetPostReleaseCallback(Action callback)
+            => Volatile.Read(ref _backendImage)?.TrySetPostReleaseCallback(callback) == true;
+
+        public void Dispose() => Interlocked.Exchange(ref _backendImage, null)?.Dispose();
+    }
 }
