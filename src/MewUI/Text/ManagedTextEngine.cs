@@ -416,18 +416,22 @@ internal sealed class ManagedTextEngine : ITextEngine, IDisposable
                                scan > index;
                 if (exceeds)
                 {
-                    if (snapshot.Paragraph.Wrapping == TextWrapping.Wrap && lastBreak >= index)
+                    if (lastBreak >= index)
                     {
+                        // Both wrapping modes break after the last opportunity; they differ only in
+                        // what they do while the line offers none.
                         scan = lastBreak + 1;
-                    }
-                    else if (snapshot.Paragraph.Wrapping == TextWrapping.WrapWithOverflow && lastBreak < index)
-                    {
-                        width += clusterWidth;
-                        scan++;
-                        continue;
+                        break;
                     }
 
-                    break;
+                    if (snapshot.Paragraph.Wrapping != TextWrapping.WrapWithOverflow)
+                    {
+                        break;
+                    }
+
+                    // WrapWithOverflow keeps a word that cannot break whole and lets it overflow,
+                    // so the cluster is taken like any other and the line still breaks at the first
+                    // opportunity after it.
                 }
 
                 cluster.Width = clusterWidth;
