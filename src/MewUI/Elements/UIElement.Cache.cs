@@ -307,6 +307,7 @@ public abstract partial class UIElement
                     DpiScale = effectiveDpiScale,
                     DeviceGeneration = deviceGeneration,
                     OpaqueFill = opaqueFill,
+                    AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight),
                 };
                 if (factory.ResourceCache is { } resourceCache)
                 {
@@ -315,6 +316,7 @@ public abstract partial class UIElement
                     entry.Image = entry.PersistentLease.Image;
                 }
                 _cache = entry;
+                RenderMemoryLedger.BitmapCacheEntryAdded(entry.AccountedBytes);
             }
             catch
             {
@@ -357,6 +359,7 @@ public abstract partial class UIElement
             return;
         }
         _cache = null;
+        RenderMemoryLedger.BitmapCacheEntryRemoved(entry.AccountedBytes);
 
         if (entry.PersistentLease != null)
         {
@@ -389,6 +392,7 @@ public abstract partial class UIElement
         public required double DpiScale { get; init; }
         public required int DeviceGeneration { get; init; }
         public required Color? OpaqueFill { get; init; }
+        public required long AccountedBytes { get; init; }
         public long Version { get; set; }
         public Color InvalidationOverlayColor { get; set; }
     }

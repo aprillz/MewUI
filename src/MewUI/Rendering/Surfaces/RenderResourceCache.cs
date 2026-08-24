@@ -19,12 +19,6 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     private const long SCRATCH_MAX_EXTRA_BYTES = 8L * 1024 * 1024;
     private const int SCRATCH_MAX_OVERSIZE_CANDIDATES = 32;
 
-    // Per-surface floor for the budget accounting. A pooled surface is a GPU texture plus a
-    // stencil attachment, and drivers commit at least a page-granular allocation for each, so
-    // thousands of tiny tiles cost far more device memory than width x height x 4 suggests
-    // (measured: 3,312 pooled 32-64px tiles = 27 MB by pixel math, ~500 MB GPU committed).
-    private const long SCRATCH_MIN_ACCOUNTED_BYTES = 128L * 1024;
-
     // A pooled surface untouched this long is dead weight (the view that used it is gone), so a
     // periodic sweep disposes it. This is what returns memory after scrolling stops, without
     // ever evicting the surfaces an active grid is cycling through.
@@ -386,6 +380,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             if (_disposed)
             {
                 surface.Dispose();
+                RenderMemoryLedger.ScratchDisposedOutsidePool();
                 return;
             }
 
@@ -395,15 +390,14 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 _scratchBuckets[key] = bucket;
             }
 
-            long bytes = Math.Max(
-                SCRATCH_MIN_ACCOUNTED_BYTES,
-                RenderMemoryLedger.ScratchBytes(key.PixelWidth, key.PixelHeight));
+            long bytes = RenderMemoryLedger.ScratchBytes(key.PixelWidth, key.PixelHeight);
             bucket.Add(new PooledScratchSurface(
                 surface,
                 bytes,
                 Environment.TickCount64,
                 ++_scratchReturnSequence));
             _scratchBytes += bytes;
+            RenderMemoryLedger.ScratchPooled(bytes);
 
             SweepIdleScratchNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT);
             EvictScratchToBudgetNoLock();
@@ -437,6 +431,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                     continue;
                 }
                 _scratchBytes -= bucket[i].Bytes;
+                RenderMemoryLedger.ScratchUnpooled(bucket[i].Bytes, disposed: true);
                 bucket[i].Surface.Dispose();
                 bucket.RemoveAt(i);
                 evicted++;
@@ -488,6 +483,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             var victim = victimBucket[oldestIndex];
             victimBucket.RemoveAt(oldestIndex);
             _scratchBytes -= victim.Bytes;
+            RenderMemoryLedger.ScratchUnpooled(victim.Bytes, disposed: true);
             if (victimBucket.Count == 0)
             {
                 _scratchBuckets.Remove(oldestKey);
@@ -514,6 +510,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             foreach (var pooled in bucket)
             {
                 pooled.Surface.Dispose();
+                RenderMemoryLedger.ScratchUnpooled(pooled.Bytes, disposed: true);
             }
         }
         _scratchBuckets.Clear();
