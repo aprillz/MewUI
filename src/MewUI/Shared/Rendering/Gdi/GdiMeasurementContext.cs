@@ -23,6 +23,17 @@ internal sealed class GdiMeasurementContext : MeasureGraphicsContextBase, ITextA
             ? GetUtf16PrefixAdvances(text, gdiFont)
             : throw new ArgumentException("Font must be a GdiFont.", nameof(font));
 
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    {
+        if (font is not GdiFont gdiFont || destination.Length < text.Length)
+        {
+            return false;
+        }
+
+        GdiTextAdvances.GetUtf16PrefixAdvances(_hdc, gdiFont, text, DpiScale, destination);
+        return true;
+    }
+
     public GdiMeasurementContext(nint hdc, uint dpi)
     {
         _hdc = hdc;
