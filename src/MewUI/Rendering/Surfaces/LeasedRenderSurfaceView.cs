@@ -3,16 +3,19 @@ namespace Aprillz.MewUI.Rendering;
 internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceProvider
 {
     private readonly IRenderDevice _device;
+    private readonly ScratchResourceClass _resourceClass;
     private IRenderSurface? _allocation;
 
     public LeasedRenderSurfaceView(
         IRenderDevice device,
         IRenderSurface allocation,
         int logicalPixelWidth,
-        int logicalPixelHeight)
+        int logicalPixelHeight,
+        ScratchResourceClass resourceClass = ScratchResourceClass.General)
     {
         _device = device;
         _allocation = allocation;
+        _resourceClass = resourceClass;
         PixelWidth = logicalPixelWidth;
         PixelHeight = logicalPixelHeight;
     }
@@ -51,6 +54,7 @@ internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceP
             allocation.PixelHeight,
             allocation.DpiScale,
             allocation.Capabilities.HasFlag(SurfaceCapabilities.Alpha));
+        key = key with { ResourceClass = _resourceClass };
         cache.ReturnScratchSurface(key, allocation);
     }
 

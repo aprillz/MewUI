@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Resources;
+using Aprillz.MewUI.Text;
 
 namespace MewUI.Test.Resources;
 
@@ -60,6 +62,20 @@ public sealed class ImageSourceLeaseTests
         Assert.AreEqual(before.NativeImageRealizationCount + 1, afterOldLease.NativeImageRealizationCount);
     }
 
+    [TestMethod]
+    public void DeviceGenerationChange_DoesNotReusePreviousRealization()
+    {
+        var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);
+        using var factory = new GenerationGraphicsFactory(Application.DefaultGraphicsFactory);
+        using var first = source.CreateImage(factory);
+        var firstBackend = ImageResource.ResolveBackendImage(first);
+
+        factory.Generation++;
+        using var second = source.CreateImage(factory);
+
+        Assert.AreNotSame(firstBackend, ImageResource.ResolveBackendImage(second));
+    }
+
     private static byte[] CreateBgraBmp(int width, int height)
     {
         int pixelBytes = checked(width * height * 4);
@@ -75,5 +91,28 @@ public sealed class ImageSourceLeaseTests
         BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(28, 2), 32);
         BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(34, 4), pixelBytes);
         return data;
+    }
+
+    private sealed class GenerationGraphicsFactory(IGraphicsFactory inner) : IGraphicsFactory
+    {
+        public uint Generation { get; set; }
+        public string Backend => inner.Backend;
+        public RenderDeviceIdentity RenderIdentity => inner.RenderIdentity with { Generation = Generation };
+        public IRenderResourceCache? ResourceCache => inner.ResourceCache;
+        public IRenderEffectDevice? Effects => inner.Effects;
+        public IFont CreateFont(string family, double size, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false) => inner.CreateFont(family, size, weight, italic, underline, strikethrough);
+        public IFont CreateFont(string family, double size, uint dpi, FontWeight weight = FontWeight.Normal, bool italic = false, bool underline = false, bool strikethrough = false) => inner.CreateFont(family, size, dpi, weight, italic, underline, strikethrough);
+        public IImage CreateImageFromFile(string path) => inner.CreateImageFromFile(path);
+        public IImage CreateImageFromBytes(byte[] data) => inner.CreateImageFromBytes(data);
+        public IGraphicsContext CreateContext(IRenderTarget target) => inner.CreateContext(target);
+        public IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor) => inner.CreateSurface(descriptor);
+        public IGraphicsContext CreateContext(IRenderSurface surface) => inner.CreateContext(surface);
+        public IImage CreateImageView(IRenderSurface surface) => inner.CreateImageView(surface);
+        public IImage CreateImageView(IPixelBufferSource source) => inner.CreateImageView(source);
+        public IImage CreateImageView(IExternalRasterSource source) => inner.CreateImageView(source);
+        public bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes) => inner.TryReadPixels(source, destination, destinationStrideBytes);
+        public IRenderOperation RequestReadback(IRenderSurface source) => inner.RequestReadback(source);
+        public IRenderOperation FlushAsyncWork() => inner.FlushAsyncWork();
+        public void Dispose() { }
     }
 }

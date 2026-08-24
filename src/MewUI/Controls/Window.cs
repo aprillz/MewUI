@@ -2452,6 +2452,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         {
             releaser.ReleaseWindowResources(windowHandle);
         }
+        GraphicsFactory.ResourceCache?.Maintain(RenderCacheMaintenanceMode.WindowClosed);
     }
 
     internal void SetDpi(uint dpi) => Dpi = dpi;
@@ -2603,6 +2604,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     {
         // A new device generation invalidates every render cache built on the old device.
         DeviceGeneration++;
+        GraphicsFactory.ResourceCache?.Maintain(RenderCacheMaintenanceMode.DeviceLost);
         InvalidateVisual();
     }
 
@@ -2834,6 +2836,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
                 }
             }
             finally { if (oneShot) context.Dispose(); }
+            GraphicsFactory.ResourceCache?.Maintain(RenderCacheMaintenanceMode.Frame);
             if (profiling)
             {
                 frameTiming.EndFrameTicks += Stopwatch.GetTimestamp() - phaseStart;

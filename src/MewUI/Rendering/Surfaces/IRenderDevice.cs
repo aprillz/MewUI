@@ -4,6 +4,8 @@ namespace Aprillz.MewUI.Rendering;
 
 public interface IRenderDevice
 {
+    RenderDeviceIdentity RenderIdentity => default;
+
     IRenderSurface CreateSurface(RenderSurfaceDescriptor descriptor);
 
     IGraphicsContext CreateContext(IRenderSurface surface);
@@ -23,4 +25,11 @@ public interface IRenderDevice
     IRenderResourceCache? ResourceCache { get; }
 
     IRenderEffectDevice? Effects { get; }
+}
+
+public readonly record struct RenderDeviceIdentity(ulong DeviceId, uint Generation, ulong ContextId = 0)
+{
+    private static long _nextDeviceId;
+
+    internal static ulong AllocateDeviceId() => (ulong)Interlocked.Increment(ref _nextDeviceId);
 }

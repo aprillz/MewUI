@@ -15,6 +15,10 @@ public sealed partial class Image
 {
     private IRenderSurface? _vectorSurface;
     private IImage? _vectorImage;
+    private IRenderCacheEntry? _vectorPersistentLease;
+    private static long s_nextVectorCacheOwnerId;
+    private readonly string _vectorCacheScope =
+        $"ImageVectorCache:{Interlocked.Increment(ref s_nextVectorCacheOwnerId)}";
     // Allocated surface size. Approx-fitted, so it is usually larger than the painted content.
     private (int Width, int Height) _vectorSize;
     // Pixels actually painted into the surface's top-left corner; the blit's source rect.
@@ -72,6 +76,13 @@ public sealed partial class Image
 
             _vectorWantedSize = (contentWidth, contentHeight);
 
+            if (_vectorSurface == null
+                && TryAcquireVectorCache(factory, contentWidth, contentHeight, effectiveScale))
+            {
+                context.DrawImage(_vectorImage!, visible, ContentSourceRect());
+                return;
+            }
+
             // Approx-fitted surface: reallocate only when the content outgrows it.
             bool surfaceFits = _vectorSurface != null
                 && contentWidth <= _vectorSize.Width
@@ -101,7 +112,7 @@ public sealed partial class Image
             {
                 if (!surfaceFits)
                 {
-                    ClearVectorCache();
+                    ClearVectorCache(invalidateInFlight: false);
                     // Pool-sized allocation, at least content-sized; shared across controls.
                     _vectorSurface = factory.AcquireScratchSurface(contentWidth, contentHeight, debugName: "ImageVectorCache");
                     AccountVectorCache(_vectorSurface);
@@ -114,9 +125,20 @@ public sealed partial class Image
             // otherwise an unrelated repaint just blits the cached bitmap.
             if (!_vectorContentValid)
             {
+                if (_vectorPersistentLease != null)
+                {
+                    // Persistent content is immutable under its owner/version key. Keep the old
+                    // lease for deferred rebuilds, but synchronous fallback needs a fresh target.
+                    ClearVectorCache(invalidateInFlight: false);
+                    _vectorSurface = factory.AcquireScratchSurface(
+                        contentWidth, contentHeight, debugName: "ImageVectorCache");
+                    AccountVectorCache(_vectorSurface);
+                    _vectorSize = (_vectorSurface.PixelWidth, _vectorSurface.PixelHeight);
+                }
                 RenderIntoVectorSurface(factory, vector, dest, visible, effectiveScale);
                 _vectorContentSize = (contentWidth, contentHeight);
                 _vectorContentValid = true;
+                PromoteVectorCache(factory, contentWidth, contentHeight, effectiveScale);
             }
 
             if (_vectorImage != null)
@@ -198,11 +220,19 @@ public sealed partial class Image
             (dest.Y - visible.Y) * effectiveScale,
             dest.Width * effectiveScale,
             dest.Height * effectiveScale);
-        _ = RebuildVectorAsync(factory, vector, destInSurface, pixelWidth, pixelHeight, _vectorContentVersion);
+        _ = RebuildVectorAsync(
+            factory, vector, destInSurface, pixelWidth, pixelHeight, effectiveScale, _vectorContentVersion);
     }
 
     /// <summary>Rasterizes the vector into the rented surface on a worker thread, then commits on the UI thread.</summary>
-    private async Task RebuildVectorAsync(IGraphicsFactory factory, IVectorImageSource vector, Rect destInSurface, int pixelWidth, int pixelHeight, int contentVersion)
+    private async Task RebuildVectorAsync(
+        IGraphicsFactory factory,
+        IVectorImageSource vector,
+        Rect destInSurface,
+        int pixelWidth,
+        int pixelHeight,
+        double effectiveScale,
+        int contentVersion)
     {
         IRenderSurface? rentedSurface = null;
         IRenderSurface? newSurface = null;
@@ -254,7 +284,8 @@ public sealed partial class Image
         }
 
         var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
-        Action commit = () => CommitVectorRebuild(factory, rentedSurface, newSurface, newImage, pixelWidth, pixelHeight, contentVersion, unsupported);
+        Action commit = () => CommitVectorRebuild(
+            factory, rentedSurface, newSurface, newImage, pixelWidth, pixelHeight, effectiveScale, contentVersion, unsupported);
         if (dispatcher != null && !dispatcher.IsOnUIThread)
         {
             dispatcher.BeginInvoke(commit);
@@ -266,7 +297,16 @@ public sealed partial class Image
     }
 
     /// <summary>UI-thread commit: installs the worker-built bitmap unless the control detached or its content changed.</summary>
-    private void CommitVectorRebuild(IGraphicsFactory factory, IRenderSurface? rentedSurface, IRenderSurface? newSurface, IImage? newImage, int pixelWidth, int pixelHeight, int contentVersion, bool unsupported)
+    private void CommitVectorRebuild(
+        IGraphicsFactory factory,
+        IRenderSurface? rentedSurface,
+        IRenderSurface? newSurface,
+        IImage? newImage,
+        int pixelWidth,
+        int pixelHeight,
+        double effectiveScale,
+        int contentVersion,
+        bool unsupported)
     {
         try
         {
@@ -296,13 +336,14 @@ public sealed partial class Image
                 return;
             }
 
-            ClearVectorCache();
+            ClearVectorCache(invalidateInFlight: false);
             _vectorSurface = newSurface;
             AccountVectorCache(newSurface);
             _vectorImage = newImage;
             _vectorSize = (newSurface.PixelWidth, newSurface.PixelHeight);
             _vectorContentSize = (pixelWidth, pixelHeight);
             _vectorContentValid = true;
+            PromoteVectorCache(factory, pixelWidth, pixelHeight, effectiveScale);
         }
         finally
         {
@@ -321,7 +362,7 @@ public sealed partial class Image
     }
 
     /// <summary>Drops the cache on detach; the surface returns to the device scratch pool.</summary>
-    internal void ParkVectorCache(Window? window) => ClearVectorCache();
+    internal void ParkVectorCache(Window? window) => ClearVectorCache(invalidateInFlight: false);
 
     /// <summary>Releases the cached surface back to the device scratch pool.</summary>
     // Ledger bytes of the surface behind _vectorSurface, subtracted again when it is released.
@@ -333,30 +374,103 @@ public sealed partial class Image
         RenderMemoryLedger.VectorCacheEntryAdded(_vectorAccountedBytes);
     }
 
-    private void ClearVectorCache()
+    private void ClearVectorCache(bool invalidateInFlight = true)
     {
-        _vectorImage?.Dispose();
+        if (_vectorPersistentLease != null)
+        {
+            _vectorPersistentLease.Dispose();
+        }
+        else
+        {
+            _vectorImage?.Dispose();
+            if (_vectorSurface != null)
+            {
+                var device = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
+                if (device != null)
+                {
+                    device.ReleaseScratchSurface(_vectorSurface);
+                }
+                else
+                {
+                    _vectorSurface.Dispose();
+                }
+            }
+        }
         if (_vectorSurface != null)
         {
             RenderMemoryLedger.VectorCacheEntryRemoved(_vectorAccountedBytes);
             _vectorAccountedBytes = 0;
-            var device = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
-            if (device != null)
-            {
-                device.ReleaseScratchSurface(_vectorSurface);
-            }
-            else
-            {
-                _vectorSurface.Dispose();
-            }
         }
+        _vectorPersistentLease = null;
         _vectorImage = null;
         _vectorSurface = null;
         _vectorSize = default;
         _vectorContentSize = default;
         _vectorContentValid = false;
-        _vectorContentVersion++;
+        if (invalidateInFlight)
+        {
+            _vectorContentVersion++;
+        }
     }
+
+    private bool TryAcquireVectorCache(
+        IGraphicsFactory factory,
+        int contentWidth,
+        int contentHeight,
+        double effectiveScale)
+    {
+        var key = CreateVectorCacheKey(factory, contentWidth, contentHeight, effectiveScale);
+        if (factory.ResourceCache?.TryGet(key, out var lease) != true)
+        {
+            return false;
+        }
+
+        _vectorPersistentLease = lease;
+        _vectorSurface = lease.Surface;
+        _vectorImage = lease.Image;
+        _vectorSize = (lease.Surface.PixelWidth, lease.Surface.PixelHeight);
+        _vectorContentSize = (contentWidth, contentHeight);
+        _vectorContentValid = true;
+        AccountVectorCache(lease.Surface);
+        return true;
+    }
+
+    private void PromoteVectorCache(
+        IGraphicsFactory factory,
+        int contentWidth,
+        int contentHeight,
+        double effectiveScale)
+    {
+        if (_vectorPersistentLease != null
+            || _vectorSurface == null
+            || _vectorImage == null
+            || factory.ResourceCache is not { } cache)
+        {
+            return;
+        }
+
+        _vectorPersistentLease = cache.Add(
+            CreateVectorCacheKey(factory, contentWidth, contentHeight, effectiveScale),
+            _vectorSurface,
+            _vectorImage);
+        _vectorSurface = _vectorPersistentLease.Surface;
+        _vectorImage = _vectorPersistentLease.Image;
+    }
+
+    private RenderCacheKey CreateVectorCacheKey(
+        IGraphicsFactory factory,
+        int contentWidth,
+        int contentHeight,
+        double effectiveScale) =>
+        new RenderCacheKey(
+            RenderCacheEntryKind.ImageSource,
+            contentWidth,
+            contentHeight,
+            effectiveScale,
+            RenderPixelFormat.Bgra8888Premultiplied,
+            unchecked((ulong)_vectorContentVersion),
+            DeviceId: 0,
+            Scope: _vectorCacheScope).ForDevice(factory);
 
     // Destination rect for a vector source. Unlike the raster path (which crops the source rect for
     // UniformToFill), vectors are scaled into the returned rect and clipped to Bounds by the caller.

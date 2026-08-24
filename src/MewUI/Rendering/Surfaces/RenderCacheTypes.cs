@@ -20,6 +20,17 @@ public enum RenderCacheTrimReason
     CapacityExceeded,
 }
 
+public enum RenderCacheMaintenanceMode
+{
+    Return = 0,
+    Frame,
+    Idle,
+    MemoryPressure,
+    WindowClosed,
+    DeviceLost,
+    Shutdown,
+}
+
 public readonly record struct RenderCacheKey(
     RenderCacheEntryKind Kind,
     int PixelWidth,
@@ -28,8 +39,28 @@ public readonly record struct RenderCacheKey(
     RenderPixelFormat Format,
     ulong SourceVersion,
     ulong DeviceId,
-    string? Scope = null);
+    string? Scope = null,
+    uint DeviceGeneration = 0,
+    ulong ContextId = 0)
+{
+    /// <summary>Returns this content key partitioned for the supplied render device generation.</summary>
+    public RenderCacheKey ForDevice(IRenderDevice device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var identity = device.RenderIdentity;
+        return this with
+        {
+            DeviceId = identity.DeviceId,
+            DeviceGeneration = identity.Generation,
+            ContextId = identity.ContextId,
+        };
+    }
+}
 
+/// <summary>
+/// An active view of a cache entry. Disposing the view releases its pin; it does not dispose
+/// the underlying resource while that resource remains resident or another view is active.
+/// </summary>
 public interface IRenderCacheEntry : IDisposable
 {
     RenderCacheKey Key { get; }
@@ -43,19 +74,32 @@ public interface IRenderCacheEntry : IDisposable
 
 public interface IRenderResourceCache
 {
+    /// <summary>Acquires a lease for a completed resident entry.</summary>
     bool TryGet(RenderCacheKey key, out IRenderCacheEntry entry);
 
+    /// <summary>Adds a resident resource and returns its first active lease.</summary>
     IRenderCacheEntry Add(
         RenderCacheKey key,
         IRenderSurface surface,
         IImage image,
         IRenderOperation? safeToDisposeAfter = null);
 
+    /// <summary>Removes cache residency; active leases keep the resource alive until returned.</summary>
     void Release(RenderCacheKey key);
 
     void ReleaseLater(IDisposable resource, IRenderOperation safeAfter);
 
     void Trim(RenderCacheTrimReason reason);
+
+    /// <summary>Drains completed retirements and performs bounded cache maintenance.</summary>
+    void Maintain(RenderCacheMaintenanceMode mode = RenderCacheMaintenanceMode.Frame)
+        => Trim(mode switch
+        {
+            RenderCacheMaintenanceMode.MemoryPressure => RenderCacheTrimReason.MemoryPressure,
+            RenderCacheMaintenanceMode.DeviceLost => RenderCacheTrimReason.DeviceLost,
+            RenderCacheMaintenanceMode.Shutdown => RenderCacheTrimReason.Manual,
+            _ => RenderCacheTrimReason.CapacityExceeded,
+        });
 
     /// <summary>
     /// Takes an exact or bounded larger scratch surface compatible with <paramref name="key"/>,

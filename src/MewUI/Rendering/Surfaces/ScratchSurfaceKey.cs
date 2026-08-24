@@ -42,14 +42,33 @@ public static class ScratchSurfaceExtensions
         double dpiScale = 1.0,
         bool hasAlpha = true,
         string? debugName = null)
+        => AcquireScratchSurfaceCore(
+            device,
+            pixelWidth,
+            pixelHeight,
+            dpiScale,
+            hasAlpha,
+            debugName,
+            ScratchResourceClass.General,
+            exactSizeOnly: false);
+
+    internal static IRenderSurface AcquireScratchSurfaceCore(
+        IRenderDevice device,
+        int pixelWidth,
+        int pixelHeight,
+        double dpiScale,
+        bool hasAlpha,
+        string? debugName,
+        ScratchResourceClass resourceClass,
+        bool exactSizeOnly)
     {
         pixelWidth = Math.Max(1, pixelWidth);
         pixelHeight = Math.Max(1, pixelHeight);
-        var key = new ScratchSurfaceKey(pixelWidth, pixelHeight, dpiScale, hasAlpha);
+        var key = new ScratchSurfaceKey(pixelWidth, pixelHeight, dpiScale, hasAlpha, resourceClass);
 
         IRenderSurface allocation;
         long bytes;
-        var pooled = device.ResourceCache?.RentScratchSurface(key);
+        var pooled = device.ResourceCache?.RentScratchSurface(key, exactSizeOnly);
         if (pooled != null)
         {
             allocation = pooled;
@@ -63,7 +82,7 @@ public static class ScratchSurfaceExtensions
             bytes = RenderMemoryLedger.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
             RenderMemoryLedger.ScratchAcquired(bytes, created: true);
         }
-        return new LeasedRenderSurfaceView(device, allocation, pixelWidth, pixelHeight);
+        return new LeasedRenderSurfaceView(device, allocation, pixelWidth, pixelHeight, resourceClass);
     }
 
     /// <summary>

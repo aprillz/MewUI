@@ -47,6 +47,9 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     private readonly Dictionary<nint, long> _lastExternalMismatchNotificationTicks = new();
     private readonly Dictionary<StrokeStyle, nint> _strokeStyles = new();
     private readonly RenderResourceCache _renderResourceCache = new();
+    private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
+
+    public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, unchecked((uint)_gpuDeviceGeneration));
     // Opaque windows use ID2D1HwndRenderTarget by default. Windows that render external
     // DXGI images are promoted to a device-context swap-chain target because those
     // images need ID2D1DeviceContext bitmap creation and same-device resource binding.
@@ -778,7 +781,10 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
     }
 
     private void OnGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
-        => GpuInteropInvalidated?.Invoke(this, e);
+    {
+        _renderResourceCache.Maintain(RenderCacheMaintenanceMode.DeviceLost);
+        GpuInteropInvalidated?.Invoke(this, e);
+    }
 
     private void QueueGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
     {

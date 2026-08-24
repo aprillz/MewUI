@@ -22,8 +22,10 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 /// </remarks>
 internal sealed class PboFenceUploaderPool : IDisposable
 {
+    private const long MAX_RETAINED_STAGING_BYTES = 32L * 1024 * 1024;
     private readonly Dictionary<(int Width, int Height), Stack<PboFenceUploader>> _buckets = new();
     private readonly object _lock = new();
+    private long _retainedStagingBytes;
     private bool _disposed;
 
     /// <summary>Maximum retained uploaders per (width, height) bucket.</summary>
@@ -44,6 +46,7 @@ internal sealed class PboFenceUploaderPool : IDisposable
             if (_buckets.TryGetValue(key, out var stack) && stack.Count > 0)
             {
                 var uploader = stack.Pop();
+                _retainedStagingBytes -= uploader.StagingBytes;
                 uploader.Rebind(source);
                 return uploader;
             }
@@ -81,7 +84,15 @@ internal sealed class PboFenceUploaderPool : IDisposable
                 return;
             }
 
+            long stagingBytes = uploader.StagingBytes;
+            if (_retainedStagingBytes + stagingBytes > MAX_RETAINED_STAGING_BYTES)
+            {
+                uploader.Dispose();
+                return;
+            }
+
             stack.Push(uploader);
+            _retainedStagingBytes += stagingBytes;
         }
     }
 
@@ -100,6 +111,7 @@ internal sealed class PboFenceUploaderPool : IDisposable
                 }
             }
             _buckets.Clear();
+            _retainedStagingBytes = 0;
         }
     }
 }

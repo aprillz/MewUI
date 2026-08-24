@@ -21,6 +21,7 @@ internal sealed class CountingGraphicsFactory(IGraphicsFactory inner) : IGraphic
     }
 
     public string Backend => inner.Backend;
+    public RenderDeviceIdentity RenderIdentity => inner.RenderIdentity;
 
     ITextBackendMeasurementContext ITextBackendFactory.CreateTextMeasurementContext(uint dpi)
     {
