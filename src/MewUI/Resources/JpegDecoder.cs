@@ -5,7 +5,7 @@ using BitMiracle.LibJpeg.Classic;
 
 namespace Aprillz.MewUI.Resources;
 
-internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder, IImageMetadataDecoder
+internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder, IImageMetadataDecoder, ITargetSizeImageDecoder
 {
     public string Id => "jpeg";
 
@@ -91,6 +91,12 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder, IImag
     }
 
     public bool TryDecode(byte[] encoded, out Bgra32PixelBuffer bitmap)
+        => TryDecodeCore(encoded, targetPixelWidth: 0, targetPixelHeight: 0, out bitmap);
+
+    public bool TryDecode(byte[] encoded, int targetPixelWidth, int targetPixelHeight, out Bgra32PixelBuffer bitmap)
+        => TryDecodeCore(encoded, targetPixelWidth, targetPixelHeight, out bitmap);
+
+    private bool TryDecodeCore(byte[] encoded, int targetPixelWidth, int targetPixelHeight, out Bgra32PixelBuffer bitmap)
     {
         bitmap = default;
 
@@ -106,6 +112,14 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder, IImag
             using var ms = new MemoryStream(encoded, 0, encoded.Length, writable: false, publiclyVisible: true);
             cinfo.jpeg_stdio_src(ms);
             cinfo.jpeg_read_header(true);
+
+            int scaleDenominator = SelectScaleDenominator(
+                cinfo.Image_width,
+                cinfo.Image_height,
+                targetPixelWidth,
+                targetPixelHeight);
+            cinfo.Scale_num = 1;
+            cinfo.Scale_denom = scaleDenominator;
 
             // Always request RGB output. This avoids having to support CMYK/YCbCr/etc here.
             cinfo.Out_color_space = J_COLOR_SPACE.JCS_RGB;
@@ -186,6 +200,29 @@ internal sealed class JpegDecoder : IImageDecoder, IByteArrayImageDecoder, IImag
 
             try { cinfo.jpeg_destroy(); } catch { }
         }
+    }
+
+    internal static int SelectScaleDenominator(int width, int height, int targetWidth, int targetHeight)
+    {
+        if (targetWidth <= 0 || targetHeight <= 0)
+        {
+            return 1;
+        }
+
+        int[] denominators = [8, 4, 2];
+        double targetScale = Math.Min((double)targetWidth / width, (double)targetHeight / height);
+        foreach (int denominator in denominators)
+        {
+            int scaledWidth = (width + denominator - 1) / denominator;
+            int scaledHeight = (height + denominator - 1) / denominator;
+            double nativeScale = Math.Min((double)scaledWidth / width, (double)scaledHeight / height);
+            if (nativeScale + 1e-9 >= targetScale)
+            {
+                return denominator;
+            }
+        }
+
+        return 1;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

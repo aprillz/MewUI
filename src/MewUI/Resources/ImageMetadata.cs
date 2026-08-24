@@ -16,6 +16,11 @@ internal interface IImageMetadataSource
     bool TryGetMetadata(out ImageMetadata metadata);
 }
 
+internal interface ITargetSizeImageDecoder
+{
+    bool TryDecode(byte[] encoded, int targetPixelWidth, int targetPixelHeight, out Bgra32PixelBuffer bitmap);
+}
+
 internal static class ImageMetadataValidation
 {
     public static bool IsValidSize(int width, int height)

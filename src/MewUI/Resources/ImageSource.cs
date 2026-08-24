@@ -11,7 +11,8 @@ namespace Aprillz.MewUI;
 ///
 /// For built-in backends, decoded pixels are shared and cached so rendering and pixel
 /// sampling (e.g. <c>Image.TryPeekColor</c>) reuse a single buffer. After a successful
-/// decode the encoded bytes are released - see <see cref="EncodedBytes"/>.
+/// decode the encoded bytes are released when the full intrinsic variant is resident. Target-sized
+/// variants retain their backing so a later, larger request can replace them.
 ///
 /// Sources created from raw pixels skip the decoder path entirely.
 /// </summary>
@@ -73,9 +74,9 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
     }
 
     /// <summary>
-    /// Gets the encoded image payload. Empty once the source has been successfully
-    /// decoded - the encoded buffer is released to reclaim memory. Raw-pixel sources
-    /// never carry encoded data.
+    /// Gets the encoded image payload. Empty once the full intrinsic variant has been decoded;
+    /// target-sized variants retain the payload for a later upgrade. Raw-pixel sources never carry
+    /// encoded data.
     /// </summary>
     internal ReadOnlyMemory<byte> EncodedBytes => _encoded ?? ReadOnlyMemory<byte>.Empty;
 
@@ -236,10 +237,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
     /// <param name="strideBytes">Destination stride in bytes per row. Must be at least <c>PixelWidth*4</c>.</param>
     public void CopyPixels(Span<byte> destination, int strideBytes)
     {
-        if (!_decodedValid)
-        {
-            TryEnsureDecoded(out _);
-        }
+        TryEnsureDecoded(PixelWidth, PixelHeight, out _);
         if (!_decodedValid)
         {
             throw new InvalidOperationException("No decoded pixel data available.");
@@ -328,20 +326,38 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
 
     public void EnsureDecode()
     {
-        TryEnsureDecoded(out _);
+        TryEnsureDecoded(PixelWidth, PixelHeight, out _);
     }
 
-    private bool TryEnsureDecoded(out StaticPixelBufferSource pixelSource)
+    private bool TryEnsureDecoded(out StaticPixelBufferSource pixelSource) =>
+        TryEnsureDecoded(PixelWidth, PixelHeight, out pixelSource);
+
+    private bool TryEnsureDecoded(int targetPixelWidth, int targetPixelHeight, out StaticPixelBufferSource pixelSource)
     {
         lock (_decodeLock)
         {
-            if (_decodedValid && _decodedPixelSource != null)
+            bool hasMetadata = TryGetMetadata(out var metadata);
+            int intrinsicWidth = hasMetadata ? metadata.PixelWidth : Math.Max(1, targetPixelWidth);
+            int intrinsicHeight = hasMetadata ? metadata.PixelHeight : Math.Max(1, targetPixelHeight);
+            targetPixelWidth = Math.Clamp(targetPixelWidth, 1, intrinsicWidth);
+            targetPixelHeight = Math.Clamp(targetPixelHeight, 1, intrinsicHeight);
+
+            double targetScale = Math.Min(
+                (double)targetPixelWidth / intrinsicWidth,
+                (double)targetPixelHeight / intrinsicHeight);
+            double decodedScale = _decodedValid
+                ? Math.Min(
+                    (double)_decodedBitmap.WidthPx / intrinsicWidth,
+                    (double)_decodedBitmap.HeightPx / intrinsicHeight)
+                : 0;
+            bool decodedCoversTarget = _decodedValid && decodedScale + 1e-9 >= targetScale;
+            if (decodedCoversTarget && _decodedPixelSource != null)
             {
                 pixelSource = _decodedPixelSource;
                 return true;
             }
 
-            if (_decodedValid)
+            if (_decodedValid && (_encoded is null || _decoder is null))
             {
                 // Raw-pixel source - wrap the existing buffer without invoking the decoder.
                 _decodedPixelSource = new StaticPixelBufferSource(
@@ -357,33 +373,69 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
             }
 
             RenderMemoryLedger.DecodeStarted();
-            if (!_decoder(_encoded, out _decodedBitmap, out _orientation))
+            long estimatedTemporaryBytes = hasMetadata
+                ? Math.Max(1, (long)intrinsicWidth * intrinsicHeight * 4)
+                : ImageDecodeCoordinator.TemporaryByteBudget;
+            using var decodeReservation = ImageDecodeCoordinator.Acquire(estimatedTemporaryBytes);
+            bool targetIsIntrinsic = targetPixelWidth >= intrinsicWidth && targetPixelHeight >= intrinsicHeight;
+            bool decoded = targetIsIntrinsic
+                ? _decoder(_encoded, out var decodedBitmap, out var decodedOrientation)
+                : ImageDecoders.TryDecode(
+                    _encoded,
+                    targetPixelWidth,
+                    targetPixelHeight,
+                    out decodedBitmap,
+                    out decodedOrientation);
+            if (!decoded)
             {
                 RenderMemoryLedger.DecodeCompleted(succeeded: false);
+                if (_decodedValid)
+                {
+                    _decodedPixelSource ??= new StaticPixelBufferSource(
+                        _decodedBitmap.WidthPx,
+                        _decodedBitmap.HeightPx,
+                        _decodedBitmap.Data,
+                        _decodedBitmap.HasAlpha);
+                    pixelSource = _decodedPixelSource;
+                    return true;
+                }
                 pixelSource = null!;
                 return false;
             }
 
+            _decodedBitmap = decodedBitmap;
+            _orientation = decodedOrientation;
             _decodedValid = true;
             _decodedPixelSource = new StaticPixelBufferSource(
                 _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
-            _metadata = new ImageMetadata(
-                _decodedBitmap.WidthPx,
-                _decodedBitmap.HeightPx,
-                _orientation,
-                _decodedBitmap.HasAlpha);
-            _metadataComputed = true;
-            _metadataValid = true;
-            _memoryAccounting.ReplaceEncodedWithDecoded(_decodedBitmap.Data.LongLength);
+            if (!_metadataValid)
+            {
+                _metadata = new ImageMetadata(
+                    _decodedBitmap.WidthPx,
+                    _decodedBitmap.HeightPx,
+                    _orientation,
+                    _decodedBitmap.HasAlpha);
+                _metadataComputed = true;
+                _metadataValid = true;
+                intrinsicWidth = _decodedBitmap.WidthPx;
+                intrinsicHeight = _decodedBitmap.HeightPx;
+            }
+
+            bool decodedIntrinsicVariant = _decodedBitmap.WidthPx >= intrinsicWidth
+                && _decodedBitmap.HeightPx >= intrinsicHeight;
+            _memoryAccounting.SetDecoded(_decodedBitmap.Data.LongLength, releaseEncoded: decodedIntrinsicVariant);
             RenderMemoryLedger.DecodeCompleted(succeeded: true);
             pixelSource = _decodedPixelSource;
-            // Cache FormatId before releasing encoded bytes so it remains available.
-            if (!_formatIdComputed)
+            if (decodedIntrinsicVariant)
             {
-                _cachedFormatId = _formatDetector?.Invoke(_encoded);
-                _formatIdComputed = true;
+                // Cache FormatId before releasing encoded bytes so it remains available.
+                if (!_formatIdComputed)
+                {
+                    _cachedFormatId = _formatDetector?.Invoke(_encoded);
+                    _formatIdComputed = true;
+                }
+                _encoded = null;
             }
-            _encoded = null;
             return true;
         }
     }
@@ -393,12 +445,15 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
     /// </summary>
     /// <param name="factory">The graphics factory used to create backend resources.</param>
     public IImage CreateImage(IGraphicsFactory factory)
+        => CreateImage(factory, PixelWidth, PixelHeight);
+
+    internal IImage CreateImage(IGraphicsFactory factory, int targetPixelWidth, int targetPixelHeight)
     {
         ArgumentNullException.ThrowIfNull(factory);
         RenderMemoryLedger.ImageRealizationRequested();
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
-        if (TryEnsureDecoded(out var pixels))
+        if (TryEnsureDecoded(targetPixelWidth, targetPixelHeight, out var pixels))
         {
             try
             {
@@ -460,12 +515,15 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
             }
         }
 
-        public void ReplaceEncodedWithDecoded(long decodedBytes)
+        public void SetDecoded(long decodedBytes, bool releaseEncoded)
         {
-            long encodedBytes = Interlocked.Exchange(ref _encodedBytes, 0);
-            if (encodedBytes != 0)
+            if (releaseEncoded)
             {
-                RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
+                long encodedBytes = Interlocked.Exchange(ref _encodedBytes, 0);
+                if (encodedBytes != 0)
+                {
+                    RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
+                }
             }
 
             long previousDecodedBytes = Interlocked.Exchange(ref _decodedBytes, decodedBytes);

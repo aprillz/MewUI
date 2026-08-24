@@ -151,6 +151,12 @@ internal sealed class DebugPerformanceOverlay : Control
         text.Append((int)memory.DecodedPixelCount);
         text.Append(" / ");
         text.AppendBytes(memory.DecodedPixelBytes);
+        text.Append(" | Decode temp ");
+        text.Append((int)memory.DecodeTemporaryCount);
+        text.Append('/');
+        text.AppendBytes(memory.DecodeTemporaryBytes);
+        text.Append(" peak ");
+        text.AppendBytes(memory.DecodeTemporaryPeakBytes);
         text.Append("\nImage decode ");
         text.Append((int)memory.DecodeSucceeded);
         text.Append("/");
