@@ -36,6 +36,9 @@ public static class RenderMemoryLedger
     private static long _decodeTemporaryPeakBytes;
     private static long _imageRealizationRequests;
     private static long _imageRealizationSucceeded;
+    private static long _nativeImageRealizationCount;
+    private static long _nativeImageRealizationBytes;
+    private static long _nativeImageRealizationCreated;
     private static long _pendingReleaseCount;
     private static long _pendingReleaseBytes;
     private static long _persistentResourceCount;
@@ -85,6 +88,9 @@ public static class RenderMemoryLedger
             DecodeTemporaryPeakBytes = Volatile.Read(ref _decodeTemporaryPeakBytes),
             ImageRealizationRequests = Volatile.Read(ref _imageRealizationRequests),
             ImageRealizationSucceeded = Volatile.Read(ref _imageRealizationSucceeded),
+            NativeImageRealizationCount = Volatile.Read(ref _nativeImageRealizationCount),
+            NativeImageRealizationBytes = Volatile.Read(ref _nativeImageRealizationBytes),
+            NativeImageRealizationCreated = Volatile.Read(ref _nativeImageRealizationCreated),
             PendingReleaseCount = Volatile.Read(ref _pendingReleaseCount),
             PendingReleaseBytes = Volatile.Read(ref _pendingReleaseBytes),
             PersistentResourceCount = Volatile.Read(ref _persistentResourceCount),
@@ -239,6 +245,19 @@ public static class RenderMemoryLedger
 
     internal static void ImageRealizationCompleted() => Interlocked.Increment(ref _imageRealizationSucceeded);
 
+    internal static void NativeImageRealizationAdded(long bytes)
+    {
+        Interlocked.Increment(ref _nativeImageRealizationCount);
+        Interlocked.Add(ref _nativeImageRealizationBytes, bytes);
+        Interlocked.Increment(ref _nativeImageRealizationCreated);
+    }
+
+    internal static void NativeImageRealizationRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _nativeImageRealizationCount);
+        Interlocked.Add(ref _nativeImageRealizationBytes, -bytes);
+    }
+
     internal static void PendingReleaseAdded(long bytes)
     {
         Interlocked.Increment(ref _pendingReleaseCount);
@@ -340,6 +359,15 @@ public readonly record struct RenderMemorySnapshot(
 
     /// <summary>Backend image realization requests completed successfully since process start.</summary>
     public long ImageRealizationSucceeded { get; init; }
+
+    /// <summary>Shared backend image realizations currently alive.</summary>
+    public long NativeImageRealizationCount { get; init; }
+
+    /// <summary>Estimated resident pixel bytes of shared backend image realizations.</summary>
+    public long NativeImageRealizationBytes { get; init; }
+
+    /// <summary>Shared backend image realizations created since process start.</summary>
+    public long NativeImageRealizationCreated { get; init; }
 
     /// <summary>Resources waiting for a backend operation before disposal.</summary>
     public long PendingReleaseCount { get; init; }

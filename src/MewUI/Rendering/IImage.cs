@@ -39,3 +39,20 @@ public interface IImage : IDisposable
     /// </summary>
     bool TrySetPostReleaseCallback(Action callback) => false;
 }
+
+internal interface IBackendImageProvider
+{
+    IImage BackendImage { get; }
+}
+
+internal static class ImageResource
+{
+    public static IImage ResolveBackendImage(IImage image)
+    {
+        while (image is IBackendImageProvider provider)
+        {
+            image = provider.BackendImage;
+        }
+        return image;
+    }
+}

@@ -464,14 +464,14 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     {
         _drawImageCount++;
         if (IsCulled(destRect)) return;
-        DrawImageCore(image, destRect);
+        DrawImageCore(ImageResource.ResolveBackendImage(image), destRect);
     }
 
     public void DrawImage(IImage image, Rect destRect, Rect sourceRect)
     {
         _drawImageCount++;
         if (IsCulled(destRect)) return;
-        DrawImageCore(image, destRect, sourceRect);
+        DrawImageCore(ImageResource.ResolveBackendImage(image), destRect, sourceRect);
     }
 
     protected abstract void DrawImageCore(IImage image, Rect destRect);

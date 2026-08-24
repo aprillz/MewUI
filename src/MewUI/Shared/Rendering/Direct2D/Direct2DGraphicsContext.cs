@@ -1128,8 +1128,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     public override Size MeasureText(ReadOnlySpan<char> text, IFont font, double maxWidth)
         => MeasureTextDirect(text, font, maxWidth);
 
-    public override void DrawImage(IImage image, Point location) =>
+    public override void DrawImage(IImage image, Point location)
+    {
+        image = ImageResource.ResolveBackendImage(image);
         DrawImageCore(image, new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight));
+    }
 
     protected override void SaveCore()
         => _states.Push((_transform, _globalAlpha, _clipStack.Count, _clipBoundsWorld, _textPixelSnap));

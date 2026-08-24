@@ -358,6 +358,7 @@ internal sealed partial class MewVGWin32GraphicsContext
     public override void DrawImage(IImage image, Point location)
     {
         ArgumentNullException.ThrowIfNull(image);
+        image = ImageResource.ResolveBackendImage(image);
 
         var dest = new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight);
         DrawImageCore(image, dest);

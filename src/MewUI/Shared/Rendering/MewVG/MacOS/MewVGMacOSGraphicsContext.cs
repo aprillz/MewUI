@@ -647,7 +647,10 @@ internal sealed partial class MewVGMacOSGraphicsContext
     #region Image Rendering
 
     public override void DrawImage(IImage image, Point location)
-        => DrawImageCore(image, new Rect(location.X, location.Y, image.PixelWidth / DpiScale, image.PixelHeight / DpiScale));
+    {
+        image = ImageResource.ResolveBackendImage(image);
+        DrawImageCore(image, new Rect(location.X, location.Y, image.PixelWidth / DpiScale, image.PixelHeight / DpiScale));
+    }
 
     protected override void DrawImageCore(IImage image, Rect destRect)
         => DrawImageCore(image, destRect, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
