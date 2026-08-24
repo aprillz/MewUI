@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 
 using Aprillz.MewUI.Rendering;
@@ -148,13 +149,36 @@ internal sealed partial class ManagedTextEngine
     {
         var fragments = new ManagedTextFragments();
         string text = snapshot.Text;
-        var boundaries = GetTextElementBoundaries(text, 0, text.Length);
+        // One element per code unit is the most there can be, and the array goes back to the pool
+        // once the fragments have copied the boundaries they keep.
+        int[] boundaryBuffer = ArrayPool<int>.Shared.Rent(Math.Max(1, text.Length));
+        try
+        {
+            MeasureFragmentsCore(context, snapshot, fragments, boundaryBuffer);
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(boundaryBuffer);
+        }
+
+        return fragments;
+    }
+
+    private void MeasureFragmentsCore(
+        ITextBackendMeasurementContext context,
+        TextLayoutRequestSnapshot snapshot,
+        ManagedTextFragments fragments,
+        int[] boundaryBuffer)
+    {
+        string text = snapshot.Text;
+        int boundaryCount = GetTextElementBoundaries(text, 0, text.Length, boundaryBuffer);
+        var boundaries = boundaryBuffer.AsSpan(0, boundaryCount);
         int index = 0;
 
-        while (index < boundaries.Count)
+        while (index < boundaries.Length)
         {
             int start = boundaries[index];
-            int end = index + 1 < boundaries.Count ? boundaries[index + 1] : text.Length;
+            int end = index + 1 < boundaries.Length ? boundaries[index + 1] : text.Length;
             int styleIndex = snapshot.GetStyleIndex(start);
             var style = snapshot.GetStyle(start);
             var font = GetFont(style, snapshot.Dpi);
@@ -163,7 +187,7 @@ internal sealed partial class ManagedTextEngine
             {
                 AddInlineFragment(fragments, snapshot, in inline, start, end - start, styleIndex, font);
                 int inlineEnd = checked(inline.Position + inline.Length);
-                while (index + 1 < boundaries.Count && boundaries[index + 1] < inlineEnd)
+                while (index + 1 < boundaries.Length && boundaries[index + 1] < inlineEnd)
                 {
                     index++;
                 }
@@ -194,7 +218,7 @@ internal sealed partial class ManagedTextEngine
             // The piece runs while the style holds and nothing interrupts it, which is exactly the
             // stretch a backend can measure in one call.
             int last = index;
-            while (last + 1 < boundaries.Count)
+            while (last + 1 < boundaries.Length)
             {
                 int nextStart = boundaries[last + 1];
                 if (snapshot.GetStyleIndex(nextStart) != styleIndex ||
@@ -203,7 +227,7 @@ internal sealed partial class ManagedTextEngine
                     break;
                 }
 
-                int nextEnd = last + 2 < boundaries.Count ? boundaries[last + 2] : text.Length;
+                int nextEnd = last + 2 < boundaries.Length ? boundaries[last + 2] : text.Length;
                 var nextSpan = text.AsSpan(nextStart, nextEnd - nextStart);
                 if (nextSpan is ['\r'] or ['\n'] or ['\r', '\n'] or ['\t'])
                 {
@@ -213,12 +237,10 @@ internal sealed partial class ManagedTextEngine
                 last++;
             }
 
-            int pieceEnd = last + 1 < boundaries.Count ? boundaries[last + 1] : text.Length;
+            int pieceEnd = last + 1 < boundaries.Length ? boundaries[last + 1] : text.Length;
             AddTextFragment(fragments, context, snapshot, boundaries, index, last, start, pieceEnd, styleIndex, font);
             index = last + 1;
         }
-
-        return fragments;
     }
 
     private static void AddInlineFragment(
@@ -254,7 +276,7 @@ internal sealed partial class ManagedTextEngine
         ManagedTextFragments fragments,
         ITextBackendMeasurementContext context,
         TextLayoutRequestSnapshot snapshot,
-        List<int> boundaries,
+        ReadOnlySpan<int> boundaries,
         int firstBoundary,
         int lastBoundary,
         int start,
