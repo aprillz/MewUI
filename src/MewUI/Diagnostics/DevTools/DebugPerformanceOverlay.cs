@@ -121,7 +121,7 @@ internal sealed class DebugPerformanceOverlay : Control
     {
         var memory = RenderMemoryLedger.Snapshot();
 
-        Span<char> buffer = stackalloc char[512];
+        Span<char> buffer = stackalloc char[768];
         var text = new StackTextFormatter(buffer);
         text.Append("Scratch active ");
         text.Append((int)memory.ScratchActiveCount);
@@ -143,6 +143,30 @@ internal sealed class DebugPerformanceOverlay : Control
         text.AppendBytes(memory.TextCacheBytes);
         text.Append("  Geometry ");
         text.AppendBytes(memory.GeometryCacheBytes);
+        text.Append("\nImages encoded ");
+        text.Append((int)memory.EncodedBackingCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.EncodedBackingBytes);
+        text.Append("  decoded ");
+        text.Append((int)memory.DecodedPixelCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.DecodedPixelBytes);
+        text.Append("\nImage decode ");
+        text.Append((int)memory.DecodeSucceeded);
+        text.Append("/");
+        text.Append((int)memory.DecodeAttempts);
+        text.Append("  realize ");
+        text.Append((int)memory.ImageRealizationSucceeded);
+        text.Append("/");
+        text.Append((int)memory.ImageRealizationRequests);
+        text.Append("\nPersistent ");
+        text.Append((int)memory.PersistentResourceCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.PersistentResourceBytes);
+        text.Append("  pending ");
+        text.Append((int)memory.PendingReleaseCount);
+        text.Append(" / ");
+        text.AppendBytes(memory.PendingReleaseBytes);
         text.Append("\nPrivate ");
         text.AppendBytes(memory.PrivateUsage);
         text.Append(" \nWS ");

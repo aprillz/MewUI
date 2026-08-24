@@ -69,10 +69,13 @@ public sealed class ScratchSurfacePool : IDisposable
                 var lease = stack.Pop();
                 if (lease.Surface is IReusableScratchSurface reusable && !reusable.CanReturnToPool)
                 {
-                    DisposeLease(lease);
+                    DisposePooledLease(lease);
                     continue;
                 }
 
+                RenderMemoryLedger.ScratchUnpooled(lease.AccountedBytes, disposed: false);
+                RenderMemoryLedger.ScratchAcquired(lease.AccountedBytes, created: false);
+                lease.State = ScratchSurfaceLeaseState.Active;
                 return lease;
             }
         }
@@ -88,8 +91,9 @@ public sealed class ScratchSurfacePool : IDisposable
 
         if (surface is ICpuPixelSurface pixels)
         {
-            var lease = new ScratchSurfaceLease(surface, pixels);
+            var lease = new ScratchSurfaceLease(this, surface, pixels);
             _leases[lease.Surface] = lease;
+            RenderMemoryLedger.ScratchAcquired(lease.AccountedBytes, created: true);
             return lease;
         }
 
@@ -112,16 +116,16 @@ public sealed class ScratchSurfacePool : IDisposable
 
     public void Return(ScratchSurfaceLease lease)
     {
-        if (lease is null) return;
+        if (lease is null || lease.State != ScratchSurfaceLeaseState.Active) return;
         if (_disposed)
         {
-            DisposeLease(lease);
+            DisposeActiveLease(lease);
             return;
         }
 
         if (lease.Surface is IReusableScratchSurface reusable && !reusable.CanReturnToPool)
         {
-            DisposeLease(lease);
+            DisposeActiveLease(lease);
             return;
         }
 
@@ -134,10 +138,13 @@ public sealed class ScratchSurfacePool : IDisposable
 
         if (stack.Count >= MaxPerBucket)
         {
-            DisposeLease(lease);
+            DisposeActiveLease(lease);
             return;
         }
 
+        RenderMemoryLedger.ScratchReleased(lease.AccountedBytes);
+        RenderMemoryLedger.ScratchPooled(lease.AccountedBytes);
+        lease.State = ScratchSurfaceLeaseState.Pooled;
         stack.Push(lease);
     }
 
@@ -150,37 +157,107 @@ public sealed class ScratchSurfacePool : IDisposable
         {
             while (stack.Count > 0)
             {
-                DisposeLease(stack.Pop());
+                DisposePooledLease(stack.Pop());
             }
         }
         _buckets.Clear();
     }
 
-    private void DisposeLease(ScratchSurfaceLease lease)
+    internal void DisposeLease(ScratchSurfaceLease lease)
+    {
+        if (lease.State == ScratchSurfaceLeaseState.Active)
+        {
+            DisposeActiveLease(lease);
+        }
+        else if (lease.State == ScratchSurfaceLeaseState.Pooled)
+        {
+            RemoveFromBucket(lease);
+            DisposePooledLease(lease);
+        }
+    }
+
+    private void DisposeActiveLease(ScratchSurfaceLease lease)
+    {
+        RenderMemoryLedger.ScratchReleased(lease.AccountedBytes);
+        RenderMemoryLedger.ScratchDisposedOutsidePool();
+        DisposeSurface(lease);
+    }
+
+    private void DisposePooledLease(ScratchSurfaceLease lease)
+    {
+        RenderMemoryLedger.ScratchUnpooled(lease.AccountedBytes, disposed: true);
+        DisposeSurface(lease);
+    }
+
+    private void DisposeSurface(ScratchSurfaceLease lease)
     {
         _leases.Remove(lease.Surface);
-        lease.Dispose();
+        lease.State = ScratchSurfaceLeaseState.Disposed;
+        lease.DisposeSurface();
+    }
+
+    private void RemoveFromBucket(ScratchSurfaceLease lease)
+    {
+        var key = (lease.Surface.PixelWidth, lease.Surface.PixelHeight);
+        if (!_buckets.TryGetValue(key, out var stack) || stack.Count == 0)
+        {
+            return;
+        }
+
+        var retained = new Stack<ScratchSurfaceLease>(stack.Count);
+        while (stack.Count > 0)
+        {
+            var candidate = stack.Pop();
+            if (!ReferenceEquals(candidate, lease))
+            {
+                retained.Push(candidate);
+            }
+        }
+        while (retained.Count > 0)
+        {
+            stack.Push(retained.Pop());
+        }
+        if (stack.Count == 0)
+        {
+            _buckets.Remove(key);
+        }
     }
 }
 
 public sealed class ScratchSurfaceLease : IDisposable
 {
+    private readonly ScratchSurfacePool _owner;
     private bool _disposed;
 
-    internal ScratchSurfaceLease(IRenderSurface surface, ICpuPixelSurface pixels)
+    internal ScratchSurfaceLease(ScratchSurfacePool owner, IRenderSurface surface, ICpuPixelSurface pixels)
     {
+        _owner = owner;
         Surface = surface ?? throw new ArgumentNullException(nameof(surface));
         Pixels = pixels ?? throw new ArgumentNullException(nameof(pixels));
+        AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
     }
 
     public IRenderSurface Surface { get; }
 
     public ICpuPixelSurface Pixels { get; }
 
-    public void Dispose()
+    internal long AccountedBytes { get; }
+
+    internal ScratchSurfaceLeaseState State { get; set; } = ScratchSurfaceLeaseState.Active;
+
+    public void Dispose() => _owner.DisposeLease(this);
+
+    internal void DisposeSurface()
     {
         if (_disposed) return;
         _disposed = true;
         Surface.Dispose();
     }
+}
+
+internal enum ScratchSurfaceLeaseState
+{
+    Active,
+    Pooled,
+    Disposed,
 }

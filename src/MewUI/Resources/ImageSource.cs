@@ -23,6 +23,7 @@ public sealed class ImageSource : IOrientedImageSource
     private readonly object _decodeLock = new();
     private readonly EncodedImageDecoder? _decoder;
     private readonly EncodedFormatDetector? _formatDetector;
+    private readonly SourceMemoryAccounting _memoryAccounting;
     private byte[]? _encoded;
     private string? _cachedFormatId;
     private bool _formatIdComputed;
@@ -39,6 +40,7 @@ public sealed class ImageSource : IOrientedImageSource
     {
         ArgumentNullException.ThrowIfNull(encoded);
         _encoded = encoded;
+        _memoryAccounting = new SourceMemoryAccounting(encoded.LongLength, 0);
         _decoder = decoder;
         _formatDetector = formatDetector;
         if (knownFormatId != null)
@@ -61,6 +63,7 @@ public sealed class ImageSource : IOrientedImageSource
 
         _decodedBitmap = pixels;
         _decodedValid = true;
+        _memoryAccounting = new SourceMemoryAccounting(0, pixels.Data.LongLength);
     }
 
     /// <summary>
@@ -316,8 +319,16 @@ public sealed class ImageSource : IOrientedImageSource
                 return true;
             }
 
-            if (_encoded is null || _decoder == null || !_decoder(_encoded, out _decodedBitmap, out _orientation))
+            if (_encoded is null || _decoder == null)
             {
+                pixelSource = null!;
+                return false;
+            }
+
+            RenderMemoryLedger.DecodeStarted();
+            if (!_decoder(_encoded, out _decodedBitmap, out _orientation))
+            {
+                RenderMemoryLedger.DecodeCompleted(succeeded: false);
                 pixelSource = null!;
                 return false;
             }
@@ -325,6 +336,8 @@ public sealed class ImageSource : IOrientedImageSource
             _decodedValid = true;
             _decodedPixelSource = new StaticPixelBufferSource(
                 _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
+            _memoryAccounting.ReplaceEncodedWithDecoded(_decodedBitmap.Data.LongLength);
+            RenderMemoryLedger.DecodeCompleted(succeeded: true);
             pixelSource = _decodedPixelSource;
             // Cache FormatId before releasing encoded bytes so it remains available.
             if (!_formatIdComputed)
@@ -344,13 +357,16 @@ public sealed class ImageSource : IOrientedImageSource
     public IImage CreateImage(IGraphicsFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
+        RenderMemoryLedger.ImageRealizationRequested();
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
         if (TryEnsureDecoded(out var pixels))
         {
             try
             {
-                return factory.CreateImageView(pixels);
+                var image = factory.CreateImageView(pixels);
+                RenderMemoryLedger.ImageRealizationCompleted();
+                return image;
             }
             catch (NotSupportedException)
             {
@@ -365,7 +381,9 @@ public sealed class ImageSource : IOrientedImageSource
 
         if (factory is IEncodedImageFactory encodedFactory)
         {
-            return encodedFactory.CreateImageFromBytes(_encoded);
+            var image = encodedFactory.CreateImageFromBytes(_encoded);
+            RenderMemoryLedger.ImageRealizationCompleted();
+            return image;
         }
 
         throw new NotSupportedException(
@@ -383,5 +401,59 @@ public sealed class ImageSource : IOrientedImageSource
     {
         orientation = ImageOrientation.Identity;
         return new BmpDecoder().TryDecode(encoded, out bitmap);
+    }
+
+    private sealed class SourceMemoryAccounting
+    {
+        private long _encodedBytes;
+        private long _decodedBytes;
+
+        public SourceMemoryAccounting(long encodedBytes, long decodedBytes)
+        {
+            _encodedBytes = encodedBytes;
+            _decodedBytes = decodedBytes;
+            if (encodedBytes != 0)
+            {
+                RenderMemoryLedger.EncodedBackingAdded(encodedBytes);
+            }
+            if (decodedBytes != 0)
+            {
+                RenderMemoryLedger.DecodedPixelsAdded(decodedBytes);
+            }
+        }
+
+        public void ReplaceEncodedWithDecoded(long decodedBytes)
+        {
+            long encodedBytes = Interlocked.Exchange(ref _encodedBytes, 0);
+            if (encodedBytes != 0)
+            {
+                RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
+            }
+
+            long previousDecodedBytes = Interlocked.Exchange(ref _decodedBytes, decodedBytes);
+            if (previousDecodedBytes != 0)
+            {
+                RenderMemoryLedger.DecodedPixelsRemoved(previousDecodedBytes);
+            }
+            if (decodedBytes != 0)
+            {
+                RenderMemoryLedger.DecodedPixelsAdded(decodedBytes);
+            }
+        }
+
+        ~SourceMemoryAccounting()
+        {
+            long encodedBytes = Interlocked.Exchange(ref _encodedBytes, 0);
+            if (encodedBytes != 0)
+            {
+                RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
+            }
+
+            long decodedBytes = Interlocked.Exchange(ref _decodedBytes, 0);
+            if (decodedBytes != 0)
+            {
+                RenderMemoryLedger.DecodedPixelsRemoved(decodedBytes);
+            }
+        }
     }
 }

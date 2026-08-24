@@ -24,6 +24,19 @@ public static class RenderMemoryLedger
     private static long _vectorCacheBytes;
     private static long _textCacheBytes;
     private static long _geometryCacheBytes;
+    private static long _encodedBackingCount;
+    private static long _encodedBackingBytes;
+    private static long _decodedPixelCount;
+    private static long _decodedPixelBytes;
+    private static long _decodeAttempts;
+    private static long _decodeSucceeded;
+    private static long _decodeFailed;
+    private static long _imageRealizationRequests;
+    private static long _imageRealizationSucceeded;
+    private static long _pendingReleaseCount;
+    private static long _pendingReleaseBytes;
+    private static long _persistentResourceCount;
+    private static long _persistentResourceBytes;
     private static Process? _process;
 
     /// <summary>
@@ -53,7 +66,22 @@ public static class RenderMemoryLedger
             process.PrivateUsage,
             process.WorkingSetSize,
             process.PrivateWorkingSetSize,
-            GC.GetTotalMemory(false));
+            GC.GetTotalMemory(false))
+        {
+            EncodedBackingCount = Volatile.Read(ref _encodedBackingCount),
+            EncodedBackingBytes = Volatile.Read(ref _encodedBackingBytes),
+            DecodedPixelCount = Volatile.Read(ref _decodedPixelCount),
+            DecodedPixelBytes = Volatile.Read(ref _decodedPixelBytes),
+            DecodeAttempts = Volatile.Read(ref _decodeAttempts),
+            DecodeSucceeded = Volatile.Read(ref _decodeSucceeded),
+            DecodeFailed = Volatile.Read(ref _decodeFailed),
+            ImageRealizationRequests = Volatile.Read(ref _imageRealizationRequests),
+            ImageRealizationSucceeded = Volatile.Read(ref _imageRealizationSucceeded),
+            PendingReleaseCount = Volatile.Read(ref _pendingReleaseCount),
+            PendingReleaseBytes = Volatile.Read(ref _pendingReleaseBytes),
+            PersistentResourceCount = Volatile.Read(ref _persistentResourceCount),
+            PersistentResourceBytes = Volatile.Read(ref _persistentResourceBytes),
+        };
     }
 
     private static ProcessMemory ReadProcessMemory()
@@ -134,6 +162,65 @@ public static class RenderMemoryLedger
     internal static void TextCacheBytesChanged(long delta) => Interlocked.Add(ref _textCacheBytes, delta);
 
     internal static void GeometryCacheBytesChanged(long delta) => Interlocked.Add(ref _geometryCacheBytes, delta);
+
+    internal static void EncodedBackingAdded(long bytes)
+    {
+        Interlocked.Increment(ref _encodedBackingCount);
+        Interlocked.Add(ref _encodedBackingBytes, bytes);
+    }
+
+    internal static void EncodedBackingRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _encodedBackingCount);
+        Interlocked.Add(ref _encodedBackingBytes, -bytes);
+    }
+
+    internal static void DecodedPixelsAdded(long bytes)
+    {
+        Interlocked.Increment(ref _decodedPixelCount);
+        Interlocked.Add(ref _decodedPixelBytes, bytes);
+    }
+
+    internal static void DecodedPixelsRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _decodedPixelCount);
+        Interlocked.Add(ref _decodedPixelBytes, -bytes);
+    }
+
+    internal static void DecodeStarted() => Interlocked.Increment(ref _decodeAttempts);
+
+    internal static void DecodeCompleted(bool succeeded)
+    {
+        Interlocked.Increment(ref succeeded ? ref _decodeSucceeded : ref _decodeFailed);
+    }
+
+    internal static void ImageRealizationRequested() => Interlocked.Increment(ref _imageRealizationRequests);
+
+    internal static void ImageRealizationCompleted() => Interlocked.Increment(ref _imageRealizationSucceeded);
+
+    internal static void PendingReleaseAdded(long bytes)
+    {
+        Interlocked.Increment(ref _pendingReleaseCount);
+        Interlocked.Add(ref _pendingReleaseBytes, bytes);
+    }
+
+    internal static void PendingReleaseRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _pendingReleaseCount);
+        Interlocked.Add(ref _pendingReleaseBytes, -bytes);
+    }
+
+    internal static void PersistentResourceAdded(long bytes)
+    {
+        Interlocked.Increment(ref _persistentResourceCount);
+        Interlocked.Add(ref _persistentResourceBytes, bytes);
+    }
+
+    internal static void PersistentResourceRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _persistentResourceCount);
+        Interlocked.Add(ref _persistentResourceBytes, -bytes);
+    }
 }
 
 /// <summary>Process memory counters as the operating system reports them.</summary>
@@ -177,6 +264,45 @@ public readonly record struct RenderMemorySnapshot(
     long PrivateWorkingSetSize,
     long GcHeapBytes)
 {
+    /// <summary>Encoded image payloads currently retained by <c>ImageSource</c> instances.</summary>
+    public long EncodedBackingCount { get; init; }
+
+    /// <summary>Bytes in encoded image payloads currently retained by <c>ImageSource</c> instances.</summary>
+    public long EncodedBackingBytes { get; init; }
+
+    /// <summary>Decoded BGRA image variants currently retained by <c>ImageSource</c> instances.</summary>
+    public long DecodedPixelCount { get; init; }
+
+    /// <summary>Bytes in decoded BGRA image variants currently retained by <c>ImageSource</c> instances.</summary>
+    public long DecodedPixelBytes { get; init; }
+
+    /// <summary>Built-in image decode attempts since process start.</summary>
+    public long DecodeAttempts { get; init; }
+
+    /// <summary>Successful built-in image decodes since process start.</summary>
+    public long DecodeSucceeded { get; init; }
+
+    /// <summary>Failed built-in image decodes since process start.</summary>
+    public long DecodeFailed { get; init; }
+
+    /// <summary>Backend image realization requests since process start.</summary>
+    public long ImageRealizationRequests { get; init; }
+
+    /// <summary>Backend image realization requests completed successfully since process start.</summary>
+    public long ImageRealizationSucceeded { get; init; }
+
+    /// <summary>Resources waiting for a backend operation before disposal.</summary>
+    public long PendingReleaseCount { get; init; }
+
+    /// <summary>Estimated bytes waiting for a backend operation before disposal.</summary>
+    public long PendingReleaseBytes { get; init; }
+
+    /// <summary>Persistent render-cache entries currently owned by device resource caches.</summary>
+    public long PersistentResourceCount { get; init; }
+
+    /// <summary>Estimated surface bytes owned by persistent render-cache entries.</summary>
+    public long PersistentResourceBytes { get; init; }
+
     /// <summary>Every scratch surface ever created is either still rented, pooled, or disposed.</summary>
     public bool IsBalanced => ScratchCreated - ScratchDisposed == ScratchActiveCount + ScratchPooledCount;
 }
