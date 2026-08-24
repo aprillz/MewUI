@@ -10,6 +10,11 @@ internal sealed class ManagedTextLayout : ITextLayout
     private readonly List<ManagedTextLine> _lines;
     private readonly IReadOnlyList<TextLayoutLineMetrics> _lineMetrics;
     private int[]? _fastCaretBoundaries;
+    private ManagedTextRun[]? _runs;
+    private int _runCount;
+    private float[]? _advances;
+    private int _advanceCount;
+    private readonly Dictionary<int, int[]> _runBoundaries = [];
     private readonly Dictionary<int, FastSegmentMapEntry> _fastSegmentMaps = [];
     private readonly LinkedList<int> _fastSegmentMapOrder = [];
 
@@ -154,6 +159,294 @@ internal sealed class ManagedTextLayout : ITextLayout
 
     /// <summary>True while every line still answers from measured segments rather than clusters.</summary>
     private bool UsesFastPath => IsFastPath && !HasMaterializedClusters;
+
+    // Run model. Built from the clusters a line already carries, so the queries below can be asked
+    // of either representation and compared while the two exist side by side.
+
+    /// <summary>Builds this line's runs if they are not built yet and returns them.</summary>
+    internal ReadOnlySpan<ManagedTextRun> GetRuns(ManagedTextLine line)
+    {
+        if (line.RunCount < 0)
+        {
+            BuildRuns(line);
+        }
+
+        return _runs.AsSpan(line.RunStart, line.RunCount);
+    }
+
+    internal ReadOnlySpan<ManagedTextRun> GetRuns(int lineIndex) => GetRuns(_lines[lineIndex]);
+
+    private void BuildRuns(ManagedTextLine line)
+    {
+        var clusters = EnsureClusters(line);
+        _runs ??= new ManagedTextRun[Math.Max(4, _lines.Count * 2)];
+        _advances ??= new float[Math.Max(16, Snapshot.Text.Length)];
+        line.RunStart = _runCount;
+
+        int index = 0;
+        while (index < clusters.Count)
+        {
+            var first = clusters[index];
+            int end = index + 1;
+            if (first.Kind == ManagedTextClusterKind.Text)
+            {
+                while (end < clusters.Count &&
+                       clusters[end].Kind == ManagedTextClusterKind.Text &&
+                       clusters[end].Style == first.Style &&
+                       clusters[end].Start == clusters[end - 1].End)
+                {
+                    end++;
+                }
+            }
+
+            AddRun(clusters, index, end);
+            index = end;
+        }
+
+        line.RunCount = _runCount - line.RunStart;
+    }
+
+    private void AddRun(List<ManagedTextCluster> clusters, int start, int end)
+    {
+        var first = clusters[start];
+        var last = clusters[end - 1];
+        int textStart = first.Start;
+        int textLength = last.End - textStart;
+
+        var run = new ManagedTextRun
+        {
+            TextStart = textStart,
+            TextLength = textLength,
+            StyleIndex = FindStyleIndex(textStart),
+            Font = first.Font,
+            X = first.X,
+            Width = last.X + last.Width - first.X,
+            AdvanceStart = -1,
+            AdvanceBase = 0,
+            MeasuredHeight = 0,
+            Baseline = 0,
+            Kind = first.Kind switch
+            {
+                ManagedTextClusterKind.Tab => ManagedTextRunKind.Tab,
+                ManagedTextClusterKind.NewLine => ManagedTextRunKind.NewLine,
+                ManagedTextClusterKind.Inline => ManagedTextRunKind.Inline,
+                _ => ManagedTextRunKind.Text
+            },
+            InlineIndex = -1
+        };
+
+        for (int index = start; index < end; index++)
+        {
+            run.MeasuredHeight = Math.Max(run.MeasuredHeight, clusters[index].Height);
+            run.Baseline = Math.Max(run.Baseline, clusters[index].Baseline);
+        }
+
+        if (run.Kind == ManagedTextRunKind.Text)
+        {
+            run.AdvanceStart = _advanceCount;
+            EnsureAdvanceCapacity(_advanceCount + textLength);
+            // A code unit inside a cluster carries the cluster's far edge, which is the column an
+            // insertion there reads as, and matches what the backends that report per-cluster
+            // advances already produce.
+            double cursor = 0;
+            int written = run.AdvanceStart;
+            for (int index = start; index < end; index++)
+            {
+                cursor += clusters[index].Width;
+                for (int unit = 0; unit < clusters[index].Length; unit++)
+                {
+                    _advances![written++] = (float)cursor;
+                }
+            }
+            _advanceCount = written;
+        }
+
+        if (_runCount == _runs!.Length)
+        {
+            Array.Resize(ref _runs, _runs.Length * 2);
+        }
+        _runs[_runCount++] = run;
+    }
+
+    private void EnsureAdvanceCapacity(int required)
+    {
+        if (_advances!.Length >= required)
+        {
+            return;
+        }
+
+        int capacity = _advances.Length;
+        while (capacity < required)
+        {
+            capacity *= 2;
+        }
+        Array.Resize(ref _advances, capacity);
+    }
+
+    private int FindStyleIndex(int textIndex)
+    {
+        var runs = Snapshot.Runs;
+        for (int index = 0; index < runs.Length; index++)
+        {
+            if (textIndex >= runs[index].Start && textIndex < runs[index].End)
+            {
+                return index;
+            }
+            if (runs[index].Start > textIndex)
+            {
+                break;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>Column of an insertion inside a text run, measured from the layout's advances.</summary>
+    private double GetRunX(in ManagedTextRun run, int insertion)
+    {
+        if (insertion <= run.TextStart)
+        {
+            return run.X;
+        }
+        // A tab or an inline object has no columns inside it, so any insertion within one reads as
+        // its far side, which is what an insertion inside a cluster reads as too.
+        if (insertion >= run.TextEnd || run.Kind != ManagedTextRunKind.Text)
+        {
+            return run.X + run.Width;
+        }
+
+        return run.X + (_advances![run.AdvanceStart + (insertion - run.TextStart) - 1] - run.AdvanceBase);
+    }
+
+    /// <summary>Text element starts inside a run, kept for as long as the run's line is alive.</summary>
+    private int[] GetRunBoundaries(int runIndex)
+    {
+        if (_runBoundaries.TryGetValue(runIndex, out var cached))
+        {
+            return cached;
+        }
+
+        ref var run = ref _runs![runIndex];
+        int[] starts = StringInfo.ParseCombiningCharacters(Snapshot.Text.Substring(run.TextStart, run.TextLength));
+        for (int index = 0; index < starts.Length; index++)
+        {
+            starts[index] += run.TextStart;
+        }
+
+        _runBoundaries[runIndex] = starts;
+        return starts;
+    }
+
+    // The cluster walk stays reachable by index while both representations exist, so the two can be
+    // compared for the same line.
+    internal double GetXForInsertionForTest(int lineIndex, int insertion)
+        => GetXForInsertion(_lines[lineIndex], insertion);
+
+    internal CharacterHit HitTestLineForTest(int lineIndex, double x)
+        => HitTestLine(_lines[lineIndex], x);
+
+    internal bool TryGetLineRangeExtentForTest(int lineIndex, int start, int end, out double left, out double right)
+        => TryGetLineRangeExtent(_lines[lineIndex], start, end, out left, out right);
+
+    internal ReadOnlySpan<ManagedTextRun> GetRunsForTest(int lineIndex) => GetRuns(_lines[lineIndex]);
+
+    internal double GetXForInsertionViaRuns(int lineIndex, int insertion)
+    {
+        var line = _lines[lineIndex];
+        var runs = GetRuns(line);
+        if (runs.Length == 0)
+        {
+            return line.Metrics.Bounds.X;
+        }
+
+        for (int index = 0; index < runs.Length; index++)
+        {
+            if (insertion <= runs[index].TextStart)
+            {
+                return runs[index].X;
+            }
+            if (insertion <= runs[index].TextEnd)
+            {
+                return GetRunX(in runs[index], insertion);
+            }
+        }
+
+        return runs[^1].X + runs[^1].Width;
+    }
+
+    internal CharacterHit HitTestLineViaRuns(int lineIndex, double x)
+    {
+        var line = _lines[lineIndex];
+        var runs = GetRuns(line);
+        if (runs.Length == 0)
+        {
+            return new CharacterHit(line.Metrics.TextStart, 0);
+        }
+
+        if (x <= runs[0].X)
+        {
+            return new CharacterHit(runs[0].TextStart, 0);
+        }
+
+        for (int index = 0; index < runs.Length; index++)
+        {
+            ref readonly var run = ref runs[index];
+            if (x > run.X + run.Width && index != runs.Length - 1)
+            {
+                continue;
+            }
+
+            return HitTestRun(line.RunStart + index, in run, x);
+        }
+
+        ref readonly var lastRun = ref runs[^1];
+        return new CharacterHit(lastRun.TextStart, lastRun.TextLength);
+    }
+
+    private CharacterHit HitTestRun(int runIndex, in ManagedTextRun run, double x)
+    {
+        if (run.Kind != ManagedTextRunKind.Text)
+        {
+            return x < run.X + run.Width * 0.5
+                ? new CharacterHit(run.TextStart, 0)
+                : new CharacterHit(run.TextStart, run.TextLength);
+        }
+
+        int[] boundaries = GetRunBoundaries(runIndex);
+        for (int index = 0; index < boundaries.Length; index++)
+        {
+            int start = boundaries[index];
+            int end = index + 1 < boundaries.Length ? boundaries[index + 1] : run.TextEnd;
+            double right = GetRunX(in run, end);
+            if (x <= right || index == boundaries.Length - 1)
+            {
+                double left = GetRunX(in run, start);
+                return x < left + (right - left) * 0.5
+                    ? new CharacterHit(start, 0)
+                    : new CharacterHit(start, end - start);
+            }
+        }
+
+        return new CharacterHit(run.TextStart, run.TextLength);
+    }
+
+    internal bool TryGetLineRangeExtentViaRuns(int lineIndex, int start, int end, out double left, out double right)
+    {
+        var runs = GetRuns(_lines[lineIndex]);
+        left = double.PositiveInfinity;
+        right = double.NegativeInfinity;
+        foreach (ref readonly var run in runs)
+        {
+            if (run.TextEnd <= start || run.TextStart >= end)
+            {
+                continue;
+            }
+
+            left = Math.Min(left, GetRunX(in run, Math.Max(start, run.TextStart)));
+            right = Math.Max(right, GetRunX(in run, Math.Min(end, run.TextEnd)));
+        }
+
+        return !double.IsPositiveInfinity(left);
+    }
 
     // The three queries below are the whole cluster-facing surface: everything above asks a line
     // where an insertion sits, what a point hits, and how far a range reaches, and nothing else
