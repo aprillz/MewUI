@@ -32,6 +32,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
     private bool _metadataComputed;
     private bool _metadataValid;
     private Bgra32PixelBuffer _decodedBitmap;
+    private DecodedPixelOwner? _decodedOwner;
     private bool _decodedValid;
     private ImageOrientation _orientation = ImageOrientation.Identity;
     private StaticPixelBufferSource? _decodedPixelSource;
@@ -44,7 +45,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
     {
         ArgumentNullException.ThrowIfNull(encoded);
         _encoded = encoded;
-        _memoryAccounting = new SourceMemoryAccounting(encoded.LongLength, 0);
+        _memoryAccounting = new SourceMemoryAccounting(encoded.LongLength);
         _decoder = decoder;
         _formatDetector = formatDetector;
         if (knownFormatId != null)
@@ -66,8 +67,9 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
         }
 
         _decodedBitmap = pixels;
+        _decodedOwner = new DecodedPixelOwner(pixels);
         _decodedValid = true;
-        _memoryAccounting = new SourceMemoryAccounting(0, pixels.Data.LongLength);
+        _memoryAccounting = new SourceMemoryAccounting(0);
         _metadata = new ImageMetadata(pixels.WidthPx, pixels.HeightPx, ImageOrientation.Identity, pixels.HasAlpha);
         _metadataComputed = true;
         _metadataValid = true;
@@ -403,7 +405,9 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
                 return false;
             }
 
+            var previousOwner = _decodedOwner;
             _decodedBitmap = decodedBitmap;
+            _decodedOwner = new DecodedPixelOwner(decodedBitmap);
             _orientation = decodedOrientation;
             _decodedValid = true;
             _decodedPixelSource = new StaticPixelBufferSource(
@@ -423,7 +427,8 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
 
             bool decodedIntrinsicVariant = _decodedBitmap.WidthPx >= intrinsicWidth
                 && _decodedBitmap.HeightPx >= intrinsicHeight;
-            _memoryAccounting.SetDecoded(_decodedBitmap.Data.LongLength, releaseEncoded: decodedIntrinsicVariant);
+            _memoryAccounting.ReleaseEncoded(releaseEncoded: decodedIntrinsicVariant);
+            previousOwner?.Release();
             RenderMemoryLedger.DecodeCompleted(succeeded: true);
             pixelSource = _decodedPixelSource;
             if (decodedIntrinsicVariant)
@@ -453,18 +458,10 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
         RenderMemoryLedger.ImageRealizationRequested();
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
-        if (TryEnsureDecoded(targetPixelWidth, targetPixelHeight, out var pixels))
+        if (TryCreateSharedDecodedImage(factory, targetPixelWidth, targetPixelHeight, out var sharedImage))
         {
-            try
-            {
-                var image = factory.CreateImageView(pixels);
-                RenderMemoryLedger.ImageRealizationCompleted();
-                return image;
-            }
-            catch (NotSupportedException)
-            {
-                // Fall through to byte-based creation.
-            }
+            RenderMemoryLedger.ImageRealizationCompleted();
+            return sharedImage;
         }
 
         if (_encoded is null)
@@ -496,26 +493,182 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
         return new BmpDecoder().TryDecode(encoded, out bitmap);
     }
 
+    private readonly Dictionary<IGraphicsFactory, SharedImageRealization> _realizations =
+        new(ReferenceEqualityComparer.Instance);
+
+    private bool TryCreateSharedDecodedImage(
+        IGraphicsFactory factory,
+        int targetPixelWidth,
+        int targetPixelHeight,
+        out IImage image)
+    {
+        lock (_decodeLock)
+        {
+            if (!TryEnsureDecoded(targetPixelWidth, targetPixelHeight, out var pixels)
+                || _decodedOwner is not { } owner)
+            {
+                image = null!;
+                return false;
+            }
+
+            double requestedScale = Math.Min(
+                (double)Math.Max(1, targetPixelWidth) / Math.Max(1, PixelWidth),
+                (double)Math.Max(1, targetPixelHeight) / Math.Max(1, PixelHeight));
+            if (_realizations.TryGetValue(factory, out var current)
+                && current.ResidentScale + 1e-9 >= requestedScale)
+            {
+                image = current.Acquire(this);
+                return true;
+            }
+
+            owner.AddReference();
+            try
+            {
+                var backendImage = factory.CreateImageView(pixels);
+                var realization = new SharedImageRealization(
+                    backendImage,
+                    owner,
+                    Math.Min(
+                        (double)backendImage.PixelWidth / Math.Max(1, PixelWidth),
+                        (double)backendImage.PixelHeight / Math.Max(1, PixelHeight)));
+                _realizations[factory] = realization;
+                image = realization.Acquire(this);
+                return true;
+            }
+            catch (NotSupportedException)
+            {
+                owner.Release();
+                image = null!;
+                return false;
+            }
+            catch
+            {
+                owner.Release();
+                throw;
+            }
+        }
+    }
+
+    private void ReleaseRealization(SharedImageRealization realization)
+    {
+        bool dispose;
+        lock (_decodeLock)
+        {
+            dispose = realization.ReleaseReference();
+            if (dispose)
+            {
+                IGraphicsFactory? removeFactory = null;
+                foreach (var pair in _realizations)
+                {
+                    if (ReferenceEquals(pair.Value, realization))
+                    {
+                        removeFactory = pair.Key;
+                        break;
+                    }
+                }
+                if (removeFactory != null)
+                {
+                    _realizations.Remove(removeFactory);
+                }
+            }
+        }
+
+        if (dispose)
+        {
+            realization.Dispose();
+        }
+    }
+
+    private sealed class SharedImageRealization : IDisposable
+    {
+        private readonly IImage _image;
+        private readonly DecodedPixelOwner _pixels;
+        private int _referenceCount;
+        private int _disposed;
+
+        public SharedImageRealization(IImage image, DecodedPixelOwner pixels, double residentScale)
+        {
+            _image = image;
+            _pixels = pixels;
+            ResidentScale = residentScale;
+            RenderMemoryLedger.NativeImageRealizationAdded(
+                (long)image.PixelWidth * image.PixelHeight * 4);
+        }
+
+        public double ResidentScale { get; }
+
+        public IImage Acquire(ImageSource source)
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            Interlocked.Increment(ref _referenceCount);
+            return new SharedImageLease(source, this, _image.PixelWidth, _image.PixelHeight);
+        }
+
+        public bool ReleaseReference()
+        {
+            int remaining = Interlocked.Decrement(ref _referenceCount);
+            if (remaining < 0)
+            {
+                throw new InvalidOperationException("Image realization was released more than once.");
+            }
+            return remaining == 0;
+        }
+
+        public IImage BackendImage => _image;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+            RenderMemoryLedger.NativeImageRealizationRemoved(
+                (long)_image.PixelWidth * _image.PixelHeight * 4);
+            _image.Dispose();
+            _pixels.Release();
+        }
+    }
+
+    private sealed class SharedImageLease(
+        ImageSource source,
+        SharedImageRealization realization,
+        int pixelWidth,
+        int pixelHeight) : IImage, IBackendImageProvider
+    {
+        private ImageSource? _source = source;
+        private SharedImageRealization? _realization = realization;
+
+        public int PixelWidth { get; } = pixelWidth;
+        public int PixelHeight { get; } = pixelHeight;
+
+        IImage IBackendImageProvider.BackendImage => _realization?.BackendImage
+            ?? throw new ObjectDisposedException(nameof(SharedImageLease));
+
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref _source, null);
+            var entry = Interlocked.Exchange(ref _realization, null);
+            if (owner != null && entry != null)
+            {
+                owner.ReleaseRealization(entry);
+            }
+        }
+    }
+
     private sealed class SourceMemoryAccounting
     {
         private long _encodedBytes;
-        private long _decodedBytes;
 
-        public SourceMemoryAccounting(long encodedBytes, long decodedBytes)
+        public SourceMemoryAccounting(long encodedBytes)
         {
             _encodedBytes = encodedBytes;
-            _decodedBytes = decodedBytes;
             if (encodedBytes != 0)
             {
                 RenderMemoryLedger.EncodedBackingAdded(encodedBytes);
             }
-            if (decodedBytes != 0)
-            {
-                RenderMemoryLedger.DecodedPixelsAdded(decodedBytes);
-            }
         }
 
-        public void SetDecoded(long decodedBytes, bool releaseEncoded)
+        public void ReleaseEncoded(bool releaseEncoded)
         {
             if (releaseEncoded)
             {
@@ -526,15 +679,6 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
                 }
             }
 
-            long previousDecodedBytes = Interlocked.Exchange(ref _decodedBytes, decodedBytes);
-            if (previousDecodedBytes != 0)
-            {
-                RenderMemoryLedger.DecodedPixelsRemoved(previousDecodedBytes);
-            }
-            if (decodedBytes != 0)
-            {
-                RenderMemoryLedger.DecodedPixelsAdded(decodedBytes);
-            }
         }
 
         ~SourceMemoryAccounting()
@@ -543,12 +687,6 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
             if (encodedBytes != 0)
             {
                 RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
-            }
-
-            long decodedBytes = Interlocked.Exchange(ref _decodedBytes, 0);
-            if (decodedBytes != 0)
-            {
-                RenderMemoryLedger.DecodedPixelsRemoved(decodedBytes);
             }
         }
     }

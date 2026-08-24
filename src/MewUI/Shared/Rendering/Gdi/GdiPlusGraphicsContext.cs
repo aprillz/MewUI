@@ -1660,6 +1660,7 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void DrawImage(IImage image, Point location)
     {
+        image = ImageResource.ResolveBackendImage(image);
         if (image is not GdiImage gdiImage)
         {
             throw new ArgumentException("Image must be a GdiImage", nameof(image));
