@@ -428,9 +428,16 @@ internal static unsafe class FreeTypeText
     public static double[] GetUtf16PrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font)
     {
         var prefix = new double[text.Length];
+        FillUtf16PrefixAdvancesPx(text, font, prefix);
+        return prefix;
+    }
+
+    /// <summary>Writes the prefix advances into a caller-owned span of at least one entry per code unit.</summary>
+    public static void FillUtf16PrefixAdvancesPx(ReadOnlySpan<char> text, FreeTypeFont font, Span<double> prefix)
+    {
         if (text.IsEmpty)
         {
-            return prefix;
+            return;
         }
 
         var face = FreeTypeFaceCache.Instance.Get(font.FontPath, font.PixelHeight, font.Weight, font.IsItalic);
@@ -448,7 +455,7 @@ internal static unsafe class FreeTypeText
                     running += clusterAdvances[index];
                     prefix[index] = running / 64.0;
                 }
-                return prefix;
+                return;
             }
         }
 
@@ -499,8 +506,6 @@ internal static unsafe class FreeTypeText
             prevGlyph = glyph;
             prevFace = activeFace;
         }
-
-        return prefix;
     }
 
     /// <summary>

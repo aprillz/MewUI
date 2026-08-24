@@ -5,6 +5,22 @@ namespace Aprillz.MewUI.Rendering.OpenGL;
 
 internal sealed partial class OpenGLMeasurementContext : ITextAdvanceSource
 {
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    {
+        if (text.IsEmpty || font is not FreeTypeFont ftFont || destination.Length < text.Length)
+        {
+            return false;
+        }
+
+        FreeTypeText.FillUtf16PrefixAdvancesPx(text, ftFont, destination);
+        double scale = DpiScale;
+        for (int index = 0; index < text.Length; index++)
+        {
+            destination[index] /= scale;
+        }
+        return true;
+    }
+
     double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
     {
         if (!text.IsEmpty && font is FreeTypeFont ftFont)

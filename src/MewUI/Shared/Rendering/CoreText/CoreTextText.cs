@@ -581,30 +581,40 @@ internal static unsafe partial class CoreTextText
     /// </summary>
     public static double[]? GetUtf16PrefixAdvancesPx(CoreTextFont font, ReadOnlySpan<char> text, uint dpi)
     {
+        var advances = new double[text.Length];
+        return TryGetUtf16PrefixAdvancesPx(font, text, dpi, advances) ? advances : null;
+    }
+
+    /// <summary>Writes the prefix advances into a caller-owned span of at least one entry per code unit.</summary>
+    public static bool TryGetUtf16PrefixAdvancesPx(
+        CoreTextFont font,
+        ReadOnlySpan<char> text,
+        uint dpi,
+        Span<double> destination)
+    {
         var ctFont = font.GetFontRef(dpi);
-        if (text.IsEmpty || ctFont == 0)
+        if (text.IsEmpty || ctFont == 0 || destination.Length < text.Length)
         {
-            return null;
+            return false;
         }
 
         nint cfString = CreateCFString(text);
-        if (cfString == 0) return null;
+        if (cfString == 0) return false;
 
         nint attrStr = CreateFontAttrString(cfString, ctFont);
         CFRelease(cfString);
-        if (attrStr == 0) return null;
+        if (attrStr == 0) return false;
 
         nint line = CTLineCreateWithAttributedString(attrStr);
         CFRelease(attrStr);
-        if (line == 0) return null;
+        if (line == 0) return false;
 
-        var advances = new double[text.Length];
         for (int index = 0; index < text.Length; index++)
         {
-            advances[index] = CTLineGetOffsetForStringIndex(line, index + 1, null);
+            destination[index] = CTLineGetOffsetForStringIndex(line, index + 1, null);
         }
         CFRelease(line);
-        return advances;
+        return true;
     }
 
     private static double MeasureRunWidthWithFallback(nint baseFont, ReadOnlySpan<char> text)
