@@ -1316,6 +1316,33 @@ internal readonly record struct ManagedTextSegment(int Start, int Length, double
     public int End => checked(Start + Length);
 }
 
+internal enum ManagedTextRunKind { Text, Tab, NewLine, Inline }
+
+/// <summary>
+/// One laid-out piece of a line: a stretch of text in a single style, or the single column a tab,
+/// a line break or an inline object occupies. A text run's columns are read from the layout's
+/// advance array between <see cref="AdvanceStart"/> and the run's length.
+/// </summary>
+internal struct ManagedTextRun
+{
+    public int TextStart;
+    public int TextLength;
+    public int StyleIndex;
+    public IFont Font;
+    public double X;
+    public double Width;
+    public int AdvanceStart;
+
+    /// <summary>Advance the run starts at, subtracted from every read so a split fragment still measures from its own left edge.</summary>
+    public float AdvanceBase;
+    public double MeasuredHeight;
+    public double Baseline;
+    public ManagedTextRunKind Kind;
+    public int InlineIndex;
+
+    public readonly int TextEnd => checked(TextStart + TextLength);
+}
+
 internal sealed class ManagedTextLine(
     TextLayoutLineMetrics metrics,
     List<ManagedTextCluster>? clusters,
@@ -1324,6 +1351,10 @@ internal sealed class ManagedTextLine(
     public TextLayoutLineMetrics Metrics { get; set; } = metrics;
     public List<ManagedTextCluster>? Clusters { get; set; } = clusters;
     public IReadOnlyList<ManagedTextSegment>? FastSegments { get; } = fastSegments;
+
+    // Range in the layout's run array. Count is -1 until the runs for this line are built.
+    public int RunStart { get; set; }
+    public int RunCount { get; set; } = -1;
 
     /// <summary>True when trimming dropped trailing content and an ellipsis follows the clusters.</summary>
     public bool IsTrimmed { get; set; }
