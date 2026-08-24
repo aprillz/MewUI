@@ -15,7 +15,7 @@ namespace Aprillz.MewUI;
 ///
 /// Sources created from raw pixels skip the decoder path entirely.
 /// </summary>
-public sealed class ImageSource : IOrientedImageSource
+public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource
 {
     private delegate bool EncodedImageDecoder(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation);
     private delegate string? EncodedFormatDetector(ReadOnlySpan<byte> encoded);
@@ -27,6 +27,9 @@ public sealed class ImageSource : IOrientedImageSource
     private byte[]? _encoded;
     private string? _cachedFormatId;
     private bool _formatIdComputed;
+    private ImageMetadata _metadata;
+    private bool _metadataComputed;
+    private bool _metadataValid;
     private Bgra32PixelBuffer _decodedBitmap;
     private bool _decodedValid;
     private ImageOrientation _orientation = ImageOrientation.Identity;
@@ -64,6 +67,9 @@ public sealed class ImageSource : IOrientedImageSource
         _decodedBitmap = pixels;
         _decodedValid = true;
         _memoryAccounting = new SourceMemoryAccounting(0, pixels.Data.LongLength);
+        _metadata = new ImageMetadata(pixels.WidthPx, pixels.HeightPx, ImageOrientation.Identity, pixels.HasAlpha);
+        _metadataComputed = true;
+        _metadataValid = true;
     }
 
     /// <summary>
@@ -90,20 +96,22 @@ public sealed class ImageSource : IOrientedImageSource
         }
     }
 
-    /// <summary>Pixel width. Returns 0 when neither decoded pixels nor encoded bytes are available.</summary>
-    public int PixelWidth => _decodedValid ? _decodedBitmap.WidthPx : 0;
+    /// <summary>Intrinsic pixel width read from metadata without decoding pixels when supported.</summary>
+    public int PixelWidth => TryGetMetadata(out var metadata) ? metadata.PixelWidth : 0;
 
-    /// <summary>Pixel height. Returns 0 when neither decoded pixels nor encoded bytes are available.</summary>
-    public int PixelHeight => _decodedValid ? _decodedBitmap.HeightPx : 0;
+    /// <summary>Intrinsic pixel height read from metadata without decoding pixels when supported.</summary>
+    public int PixelHeight => TryGetMetadata(out var metadata) ? metadata.PixelHeight : 0;
 
     /// <summary>Whether the source carries a meaningful alpha channel.</summary>
-    public bool HasAlpha => !_decodedValid || _decodedBitmap.HasAlpha;
+    public bool HasAlpha => !TryGetMetadata(out var metadata) || metadata.HasAlpha;
 
     /// <summary>
-    /// Orientation parsed from the source metadata. <see cref="ImageOrientation.Identity"/> until the source
-    /// has been decoded, for raw-pixel sources, and for formats without orientation metadata.
+    /// Orientation parsed from the source metadata without decoding pixels. Raw-pixel sources and formats
+    /// without orientation metadata return <see cref="ImageOrientation.Identity"/>.
     /// </summary>
-    public ImageOrientation Orientation => _orientation;
+    public ImageOrientation Orientation => TryGetMetadata(out var metadata)
+        ? metadata.Orientation
+        : ImageOrientation.Identity;
 
     /// <summary>
     /// Creates an <see cref="ImageSource"/> from encoded image bytes.
@@ -295,6 +303,29 @@ public sealed class ImageSource : IOrientedImageSource
         return false;
     }
 
+    bool IImageMetadataSource.TryGetMetadata(out ImageMetadata metadata) => TryGetMetadata(out metadata);
+
+    internal bool TryGetMetadata(out ImageMetadata metadata)
+    {
+        lock (_decodeLock)
+        {
+            if (!_metadataComputed)
+            {
+                _metadataComputed = true;
+                bool succeeded = _encoded != null && ImageDecoders.TryReadMetadata(_encoded, out _metadata);
+                RenderMemoryLedger.MetadataProbeCompleted(succeeded);
+                if (succeeded)
+                {
+                    _metadataValid = true;
+                    _orientation = _metadata.Orientation;
+                }
+            }
+
+            metadata = _metadata;
+            return _metadataValid;
+        }
+    }
+
     public void EnsureDecode()
     {
         TryEnsureDecoded(out _);
@@ -336,6 +367,13 @@ public sealed class ImageSource : IOrientedImageSource
             _decodedValid = true;
             _decodedPixelSource = new StaticPixelBufferSource(
                 _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
+            _metadata = new ImageMetadata(
+                _decodedBitmap.WidthPx,
+                _decodedBitmap.HeightPx,
+                _orientation,
+                _decodedBitmap.HasAlpha);
+            _metadataComputed = true;
+            _metadataValid = true;
             _memoryAccounting.ReplaceEncodedWithDecoded(_decodedBitmap.Data.LongLength);
             RenderMemoryLedger.DecodeCompleted(succeeded: true);
             pixelSource = _decodedPixelSource;

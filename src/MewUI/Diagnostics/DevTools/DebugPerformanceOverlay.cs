@@ -159,6 +159,10 @@ internal sealed class DebugPerformanceOverlay : Control
         text.Append((int)memory.ImageRealizationSucceeded);
         text.Append("/");
         text.Append((int)memory.ImageRealizationRequests);
+        text.Append("  metadata ");
+        text.Append((int)memory.MetadataProbeSucceeded);
+        text.Append("/");
+        text.Append((int)memory.MetadataProbeAttempts);
         text.Append("\nPersistent ");
         text.Append((int)memory.PersistentResourceCount);
         text.Append(" / ");

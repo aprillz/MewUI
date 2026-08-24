@@ -246,6 +246,20 @@ public sealed partial class Image : FrameworkElement
             return MeasureStretchedSize(intrinsic, availableSize, StretchMode);
         }
 
+        if (Source is IImageMetadataSource metadataSource
+            && metadataSource.TryGetMetadata(out var metadata))
+        {
+            var metadataOrientation = OrientationMode == ImageOrientationMode.Ignore
+                ? ImageOrientation.Identity
+                : metadata.Orientation;
+            var metadataOrientedSize = OrientationTransform.GetOrientedSize(
+                metadataOrientation,
+                metadata.PixelWidth,
+                metadata.PixelHeight);
+            var sourceRect = GetViewBoxPixels((int)metadataOrientedSize.Width, (int)metadataOrientedSize.Height);
+            return MeasureStretchedSize(sourceRect.Size, availableSize, StretchMode);
+        }
+
         var img = GetImage();
         if (img == null)
         {

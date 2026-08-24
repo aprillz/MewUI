@@ -37,6 +37,8 @@ public static class RenderMemoryLedger
     private static long _pendingReleaseBytes;
     private static long _persistentResourceCount;
     private static long _persistentResourceBytes;
+    private static long _metadataProbeAttempts;
+    private static long _metadataProbeSucceeded;
     private static Process? _process;
 
     /// <summary>
@@ -81,6 +83,8 @@ public static class RenderMemoryLedger
             PendingReleaseBytes = Volatile.Read(ref _pendingReleaseBytes),
             PersistentResourceCount = Volatile.Read(ref _persistentResourceCount),
             PersistentResourceBytes = Volatile.Read(ref _persistentResourceBytes),
+            MetadataProbeAttempts = Volatile.Read(ref _metadataProbeAttempts),
+            MetadataProbeSucceeded = Volatile.Read(ref _metadataProbeSucceeded),
         };
     }
 
@@ -188,6 +192,15 @@ public static class RenderMemoryLedger
     }
 
     internal static void DecodeStarted() => Interlocked.Increment(ref _decodeAttempts);
+
+    internal static void MetadataProbeCompleted(bool succeeded)
+    {
+        Interlocked.Increment(ref _metadataProbeAttempts);
+        if (succeeded)
+        {
+            Interlocked.Increment(ref _metadataProbeSucceeded);
+        }
+    }
 
     internal static void DecodeCompleted(bool succeeded)
     {
@@ -302,6 +315,12 @@ public readonly record struct RenderMemorySnapshot(
 
     /// <summary>Estimated surface bytes owned by persistent render-cache entries.</summary>
     public long PersistentResourceBytes { get; init; }
+
+    /// <summary>Image metadata probe attempts since process start.</summary>
+    public long MetadataProbeAttempts { get; init; }
+
+    /// <summary>Image metadata probes completed successfully since process start.</summary>
+    public long MetadataProbeSucceeded { get; init; }
 
     /// <summary>Every scratch surface ever created is either still rented, pooled, or disposed.</summary>
     public bool IsBalanced => ScratchCreated - ScratchDisposed == ScratchActiveCount + ScratchPooledCount;

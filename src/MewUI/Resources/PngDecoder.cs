@@ -3,7 +3,7 @@ using System.IO.Compression;
 
 namespace Aprillz.MewUI.Resources;
 
-internal sealed class PngDecoder : IImageDecoder
+internal sealed class PngDecoder : IImageDecoder, IImageMetadataDecoder
 {
     public string Id => "png";
 
@@ -38,6 +38,27 @@ internal sealed class PngDecoder : IImageDecoder
             bitmap = default;
             return false;
         }
+    }
+
+    public bool TryReadMetadata(ReadOnlySpan<byte> encoded, out ImageMetadata metadata)
+    {
+        metadata = default;
+        if (!CanDecode(encoded) || encoded.Length < 29 || !encoded.Slice(12, 4).SequenceEqual("IHDR"u8))
+        {
+            return false;
+        }
+
+        int width = BinaryPrimitives.ReadInt32BigEndian(encoded.Slice(16, 4));
+        int height = BinaryPrimitives.ReadInt32BigEndian(encoded.Slice(20, 4));
+        if (!ImageMetadataValidation.IsValidSize(width, height))
+        {
+            return false;
+        }
+
+        byte colorType = encoded[25];
+        bool hasAlpha = colorType is 4 or 6;
+        metadata = new ImageMetadata(width, height, ImageOrientation.Identity, hasAlpha);
+        return true;
     }
 
     private static bool TryDecodeCore(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
