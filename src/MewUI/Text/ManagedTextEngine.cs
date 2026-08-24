@@ -5,7 +5,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Text;
 
-internal sealed class ManagedTextEngine : ITextEngine, IDisposable
+internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
 {
     // GDI DrawText stops reporting reliable extents above its 16-bit-era text limit.
     private const int FastPathSegmentLength = 32 * 1024;
@@ -1054,6 +1054,23 @@ internal sealed class TextLayoutRequestSnapshot
             request.Fidelity,
             request.Revision,
             request.Transient);
+    }
+
+    /// <summary>Index of the run that styles this position in <see cref="Runs"/>, or -1 for the default style.</summary>
+    public int GetStyleIndex(int textIndex)
+    {
+        for (int index = 0; index < Runs.Length; index++)
+        {
+            if (textIndex >= Runs[index].Start && textIndex < Runs[index].End)
+            {
+                return index;
+            }
+            if (Runs[index].Start > textIndex)
+            {
+                break;
+            }
+        }
+        return -1;
     }
 
     public TextRunStyle GetStyle(int textIndex)

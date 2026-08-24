@@ -217,7 +217,7 @@ internal sealed class ManagedTextLayout : ITextLayout
         {
             TextStart = textStart,
             TextLength = textLength,
-            StyleIndex = FindStyleIndex(textStart),
+            StyleIndex = Snapshot.GetStyleIndex(textStart),
             Font = first.Font,
             X = first.X,
             Width = last.X + last.Width - first.X,
@@ -281,23 +281,6 @@ internal sealed class ManagedTextLayout : ITextLayout
             capacity *= 2;
         }
         Array.Resize(ref _advances, capacity);
-    }
-
-    private int FindStyleIndex(int textIndex)
-    {
-        var runs = Snapshot.Runs;
-        for (int index = 0; index < runs.Length; index++)
-        {
-            if (textIndex >= runs[index].Start && textIndex < runs[index].End)
-            {
-                return index;
-            }
-            if (runs[index].Start > textIndex)
-            {
-                break;
-            }
-        }
-        return -1;
     }
 
     /// <summary>Column of an insertion inside a text run, measured from the layout's advances.</summary>
