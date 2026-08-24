@@ -44,9 +44,37 @@ public sealed class TextAreaDefaultInputHandler : TextAreaInputHandler
         // these claim the keys ahead of it and drive the rectangle instead. With no rectangle the
         // CanExecute declines and the surface behaves as always.
         bool RectangleHasText() => textArea.Selection is RectangleSelection rectangle && rectangle.Length > 0;
+        bool HasRectangle() => textArea.Selection is RectangleSelection;
         void DeleteRectangle() => ((RectangleSelection)textArea.Selection).ReplaceSelectionWithText(string.Empty);
-        Editing.AddBinding(new TextAreaKeyBinding(new KeyGesture(Key.Backspace), DeleteRectangle, RectangleHasText));
-        Editing.AddBinding(new TextAreaKeyBinding(new KeyGesture(Key.Delete), DeleteRectangle, RectangleHasText));
+        void DeleteRectangleColumn(CaretMovementType direction)
+        {
+            // A rectangle with no width is a column of carets, and a delete key has to take a
+            // character from each of them: the rectangle grows by one step in the key's direction
+            // first, exactly as walking it with Alt+Shift would, and then it is cleared. A line too
+            // short to give up that character has nothing in the widened rectangle and stays as it is.
+            if (textArea.Selection.Length == 0)
+            {
+                var before = textArea.Selection;
+                int line = textArea.Caret.Position.Line;
+                CaretNavigationCommandHandler.MoveCaretBoxSelection(textArea, direction);
+                if (textArea.Caret.Position.Line != line)
+                {
+                    // The step left the line, which a rectangle cannot follow: it owns columns, and
+                    // widening it across a line boundary would pull the next line up into this one.
+                    textArea.Selection = before;
+                    return;
+                }
+            }
+
+            if (textArea.Selection is RectangleSelection widened && widened.Length > 0)
+            {
+                widened.ReplaceSelectionWithText(string.Empty);
+            }
+        }
+        Editing.AddBinding(new TextAreaKeyBinding(
+            new KeyGesture(Key.Backspace), () => DeleteRectangleColumn(CaretMovementType.Backspace), HasRectangle));
+        Editing.AddBinding(new TextAreaKeyBinding(
+            new KeyGesture(Key.Delete), () => DeleteRectangleColumn(CaretMovementType.CharRight), HasRectangle));
         Editing.AddBinding(new TextAreaKeyBinding(
             new KeyGesture(Key.C, ModifierKeys.Primary),
             () => textArea.CopyRectangleSelection(),
