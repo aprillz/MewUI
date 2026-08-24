@@ -3,13 +3,7 @@ using Aprillz.MewUI.Rendering;
 
 namespace Aprillz.MewUI.Text;
 
-internal interface IManagedTextLayoutData
-{
-    TextLayoutRequestSnapshot Snapshot { get; }
-    IReadOnlyList<ManagedTextLine> ManagedLines { get; }
-}
-
-internal sealed class ManagedTextLayout : ITextLayout, IManagedTextLayoutData
+internal sealed class ManagedTextLayout : ITextLayout
 {
     private const int FastSegmentMapCapacity = 4;
     private readonly ManagedTextEngine _engine;
@@ -59,68 +53,15 @@ internal sealed class ManagedTextLayout : ITextLayout, IManagedTextLayoutData
             return default;
         }
 
-        int lineIndex = FindLineByY(point.Y);
-        var line = _lines[lineIndex];
-        if (IsFastPath && line.Clusters is null)
-        {
-            return HitTestFastPath(line, point.X);
-        }
-        var clusters = EnsureClusters(line);
-        if (clusters.Count == 0)
-        {
-            return new CharacterHit(line.Metrics.TextStart, 0);
-        }
-
-        if (point.X <= clusters[0].X)
-        {
-            return new CharacterHit(clusters[0].Start, 0);
-        }
-
-        foreach (var cluster in clusters)
-        {
-            if (point.X <= cluster.X + cluster.Width)
-            {
-                return point.X < cluster.X + cluster.Width * 0.5
-                    ? new CharacterHit(cluster.Start, 0)
-                    : new CharacterHit(cluster.Start, cluster.Length);
-            }
-        }
-
-        var last = clusters[^1];
-        return new CharacterHit(last.Start, last.Length);
+        return HitTestLine(_lines[FindLineByY(point.Y)], point.X);
     }
 
     public Rect GetCaretBounds(CharacterHit hit)
     {
         int insertion = Math.Clamp(hit.InsertionIndex, 0, Snapshot.Text.Length);
         var line = FindLineByInsertion(insertion);
-        if (IsFastPath && line.Clusters is null)
-        {
-            return new Rect(
-                GetFastPathX(line, insertion),
-                line.Metrics.Bounds.Y,
-                1,
-                line.Metrics.Bounds.Height);
-        }
-        var clusters = EnsureClusters(line);
-        double x = line.Metrics.Bounds.X;
-
-        foreach (var cluster in clusters)
-        {
-            if (insertion <= cluster.Start)
-            {
-                x = cluster.X;
-                break;
-            }
-            if (insertion <= cluster.End)
-            {
-                x = insertion == cluster.Start ? cluster.X : cluster.X + cluster.Width;
-                break;
-            }
-            x = cluster.X + cluster.Width;
-        }
-
-        return new Rect(x, line.Metrics.Bounds.Y, 1, line.Metrics.Bounds.Height);
+        var bounds = line.Metrics.Bounds;
+        return new Rect(GetXForInsertion(line, insertion), bounds.Y, 1, bounds.Height);
     }
 
     public CharacterHit GetNextLogicalCaret(CharacterHit from, LogicalDirection direction, CaretMode mode)
@@ -134,7 +75,7 @@ internal sealed class ManagedTextLayout : ITextLayout, IManagedTextLayoutData
             return new CharacterHit(next, 0);
         }
 
-        IReadOnlyList<int> boundaries = IsFastPath && !_lines.Any(static line => line.Clusters is not null)
+        IReadOnlyList<int> boundaries = UsesFastPath
             ? GetFastCaretBoundaries()
             : GetCaretBoundaries();
         if (direction == LogicalDirection.Forward)
@@ -194,39 +135,112 @@ internal sealed class ManagedTextLayout : ITextLayout, IManagedTextLayoutData
             return;
         }
 
-        if (IsFastPath && !_lines.Any(static line => line.Clusters is not null))
-        {
-            var line = _lines[0];
-            double left = GetFastPathX(line, start);
-            double right = GetFastPathX(line, start + length);
-            output.Add(new Rect(
-                Math.Min(left, right),
-                line.Metrics.Bounds.Y,
-                Math.Abs(right - left),
-                line.Metrics.Bounds.Height));
-            return;
-        }
-
         int end = start + length;
         foreach (var line in _lines)
         {
-            double left = double.PositiveInfinity;
-            double right = double.NegativeInfinity;
-            foreach (var cluster in EnsureClusters(line))
+            if (!TryGetLineRangeExtent(line, start, end, out double left, out double right))
             {
-                if (cluster.End <= start || cluster.Start >= end)
-                {
-                    continue;
-                }
-                left = Math.Min(left, cluster.X);
-                right = Math.Max(right, cluster.X + cluster.Width);
+                continue;
             }
 
-            if (!double.IsPositiveInfinity(left))
+            var bounds = line.Metrics.Bounds;
+            output.Add(new Rect(
+                Math.Min(left, right),
+                bounds.Y,
+                Math.Abs(right - left),
+                bounds.Height));
+        }
+    }
+
+    /// <summary>True while every line still answers from measured segments rather than clusters.</summary>
+    private bool UsesFastPath => IsFastPath && !HasMaterializedClusters;
+
+    // The three queries below are the whole cluster-facing surface: everything above asks a line
+    // where an insertion sits, what a point hits, and how far a range reaches, and nothing else
+    // touches how a line stores its columns.
+
+    private CharacterHit HitTestLine(ManagedTextLine line, double x)
+    {
+        if (IsFastPath && line.Clusters is null)
+        {
+            return HitTestFastPath(line, x);
+        }
+
+        var clusters = EnsureClusters(line);
+        if (clusters.Count == 0)
+        {
+            return new CharacterHit(line.Metrics.TextStart, 0);
+        }
+
+        if (x <= clusters[0].X)
+        {
+            return new CharacterHit(clusters[0].Start, 0);
+        }
+
+        foreach (var cluster in clusters)
+        {
+            if (x <= cluster.X + cluster.Width)
             {
-                output.Add(new Rect(left, line.Metrics.Bounds.Y, Math.Max(0, right - left), line.Metrics.Bounds.Height));
+                // The half that the point falls in decides whether the caret goes before the cluster
+                // or after it, and the trailing half says so as a length so FirstCharacterIndex still
+                // names the cluster the point is in.
+                return x < cluster.X + cluster.Width * 0.5
+                    ? new CharacterHit(cluster.Start, 0)
+                    : new CharacterHit(cluster.Start, cluster.Length);
             }
         }
+
+        var last = clusters[^1];
+        return new CharacterHit(last.Start, last.Length);
+    }
+
+    private double GetXForInsertion(ManagedTextLine line, int insertion)
+    {
+        if (IsFastPath && line.Clusters is null)
+        {
+            return GetFastPathX(line, insertion);
+        }
+
+        double x = line.Metrics.Bounds.X;
+        foreach (var cluster in EnsureClusters(line))
+        {
+            if (insertion <= cluster.Start)
+            {
+                return cluster.X;
+            }
+            if (insertion <= cluster.End)
+            {
+                // An insertion inside a cluster has no column of its own, so it reads as the far side.
+                return cluster.X + cluster.Width;
+            }
+            x = cluster.X + cluster.Width;
+        }
+
+        return x;
+    }
+
+    private bool TryGetLineRangeExtent(ManagedTextLine line, int start, int end, out double left, out double right)
+    {
+        if (IsFastPath && line.Clusters is null)
+        {
+            left = GetFastPathX(line, start);
+            right = GetFastPathX(line, end);
+            return true;
+        }
+
+        left = double.PositiveInfinity;
+        right = double.NegativeInfinity;
+        foreach (var cluster in EnsureClusters(line))
+        {
+            if (cluster.End <= start || cluster.Start >= end)
+            {
+                continue;
+            }
+            left = Math.Min(left, cluster.X);
+            right = Math.Max(right, cluster.X + cluster.Width);
+        }
+
+        return !double.IsPositiveInfinity(left);
     }
 
     internal List<ManagedTextCluster> EnsureClusters(ManagedTextLine line)
