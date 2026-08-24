@@ -192,4 +192,17 @@ public static class ImageDecoders
 
         return null;
     }
+
+    internal static bool TryReadMetadata(ReadOnlySpan<byte> encoded, out ImageMetadata metadata)
+    {
+        var decoder = FindDecoder(encoded);
+        if (decoder is IImageMetadataDecoder metadataDecoder
+            && metadataDecoder.TryReadMetadata(encoded, out metadata))
+        {
+            return true;
+        }
+
+        metadata = default;
+        return false;
+    }
 }

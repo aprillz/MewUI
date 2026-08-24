@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace Aprillz.MewUI.Resources;
 
-internal sealed class BmpDecoder : IImageDecoder
+internal sealed class BmpDecoder : IImageDecoder, IImageMetadataDecoder
 {
     public string Id => "bmp";
 
@@ -28,6 +28,40 @@ internal sealed class BmpDecoder : IImageDecoder
             bitmap = default;
             return false;
         }
+    }
+
+    public bool TryReadMetadata(ReadOnlySpan<byte> encoded, out ImageMetadata metadata)
+    {
+        metadata = default;
+        if (!CanDecode(encoded) || encoded.Length < 54)
+        {
+            return false;
+        }
+
+        int dibSize = BinaryPrimitives.ReadInt32LittleEndian(encoded.Slice(14, 4));
+        int width = BinaryPrimitives.ReadInt32LittleEndian(encoded.Slice(18, 4));
+        int signedHeight = BinaryPrimitives.ReadInt32LittleEndian(encoded.Slice(22, 4));
+        if (dibSize < 40 || signedHeight == int.MinValue)
+        {
+            return false;
+        }
+
+        int height = Math.Abs(signedHeight);
+        if (!ImageMetadataValidation.IsValidSize(width, height))
+        {
+            return false;
+        }
+
+        ushort planes = BinaryPrimitives.ReadUInt16LittleEndian(encoded.Slice(26, 2));
+        ushort bitsPerPixel = BinaryPrimitives.ReadUInt16LittleEndian(encoded.Slice(28, 2));
+        int compression = BinaryPrimitives.ReadInt32LittleEndian(encoded.Slice(30, 4));
+        if (planes != 1 || bitsPerPixel is not (1 or 4 or 8 or 24 or 32) || compression != 0)
+        {
+            return false;
+        }
+
+        metadata = new ImageMetadata(width, height, ImageOrientation.Identity, bitsPerPixel == 32);
+        return true;
     }
 
     private static bool TryDecodeCore(ReadOnlySpan<byte> encoded, out Bgra32PixelBuffer bitmap)
