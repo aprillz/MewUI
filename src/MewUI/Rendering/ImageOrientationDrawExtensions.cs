@@ -13,6 +13,42 @@ namespace Aprillz.MewUI.Rendering;
 /// </summary>
 public static class ImageOrientationDrawExtensions
 {
+    internal static void DrawImageOrientedScaled(
+        this IGraphicsContext context,
+        IImage image,
+        ImageOrientation orientation,
+        int intrinsicRawWidth,
+        int intrinsicRawHeight,
+        int residentRawWidth,
+        int residentRawHeight,
+        Rect intrinsicOrientedSrc,
+        Rect dest)
+    {
+        var intrinsicRawSrc = OrientationTransform.OrientedToRaw(
+            orientation,
+            intrinsicRawWidth,
+            intrinsicRawHeight,
+            intrinsicOrientedSrc);
+        var residentRawSrc = new Rect(
+            intrinsicRawSrc.X * residentRawWidth / intrinsicRawWidth,
+            intrinsicRawSrc.Y * residentRawHeight / intrinsicRawHeight,
+            intrinsicRawSrc.Width * residentRawWidth / intrinsicRawWidth,
+            intrinsicRawSrc.Height * residentRawHeight / intrinsicRawHeight);
+        var residentOrientedSrc = OrientationTransform.RawToOriented(
+            orientation,
+            residentRawWidth,
+            residentRawHeight,
+            residentRawSrc);
+
+        context.DrawImageOriented(
+            image,
+            orientation,
+            residentRawWidth,
+            residentRawHeight,
+            residentOrientedSrc,
+            dest);
+    }
+
     /// <summary>
     /// Draws <paramref name="orientedSrc"/> (a region in the image's oriented pixel space) into
     /// <paramref name="dest"/>, applying <paramref name="orientation"/>. Composes raw->oriented (the

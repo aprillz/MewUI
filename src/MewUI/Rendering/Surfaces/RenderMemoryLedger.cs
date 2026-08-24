@@ -31,6 +31,9 @@ public static class RenderMemoryLedger
     private static long _decodeAttempts;
     private static long _decodeSucceeded;
     private static long _decodeFailed;
+    private static long _decodeTemporaryCount;
+    private static long _decodeTemporaryBytes;
+    private static long _decodeTemporaryPeakBytes;
     private static long _imageRealizationRequests;
     private static long _imageRealizationSucceeded;
     private static long _pendingReleaseCount;
@@ -77,6 +80,9 @@ public static class RenderMemoryLedger
             DecodeAttempts = Volatile.Read(ref _decodeAttempts),
             DecodeSucceeded = Volatile.Read(ref _decodeSucceeded),
             DecodeFailed = Volatile.Read(ref _decodeFailed),
+            DecodeTemporaryCount = Volatile.Read(ref _decodeTemporaryCount),
+            DecodeTemporaryBytes = Volatile.Read(ref _decodeTemporaryBytes),
+            DecodeTemporaryPeakBytes = Volatile.Read(ref _decodeTemporaryPeakBytes),
             ImageRealizationRequests = Volatile.Read(ref _imageRealizationRequests),
             ImageRealizationSucceeded = Volatile.Read(ref _imageRealizationSucceeded),
             PendingReleaseCount = Volatile.Read(ref _pendingReleaseCount),
@@ -207,6 +213,28 @@ public static class RenderMemoryLedger
         Interlocked.Increment(ref succeeded ? ref _decodeSucceeded : ref _decodeFailed);
     }
 
+    internal static void DecodeTemporaryAdded(long bytes)
+    {
+        Interlocked.Increment(ref _decodeTemporaryCount);
+        long current = Interlocked.Add(ref _decodeTemporaryBytes, bytes);
+        long peak = Volatile.Read(ref _decodeTemporaryPeakBytes);
+        while (current > peak)
+        {
+            long observed = Interlocked.CompareExchange(ref _decodeTemporaryPeakBytes, current, peak);
+            if (observed == peak)
+            {
+                break;
+            }
+            peak = observed;
+        }
+    }
+
+    internal static void DecodeTemporaryRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _decodeTemporaryCount);
+        Interlocked.Add(ref _decodeTemporaryBytes, -bytes);
+    }
+
     internal static void ImageRealizationRequested() => Interlocked.Increment(ref _imageRealizationRequests);
 
     internal static void ImageRealizationCompleted() => Interlocked.Increment(ref _imageRealizationSucceeded);
@@ -297,6 +325,15 @@ public readonly record struct RenderMemorySnapshot(
 
     /// <summary>Failed built-in image decodes since process start.</summary>
     public long DecodeFailed { get; init; }
+
+    /// <summary>Image decodes currently holding a temporary-memory reservation.</summary>
+    public long DecodeTemporaryCount { get; init; }
+
+    /// <summary>Estimated bytes reserved by image decodes currently in progress.</summary>
+    public long DecodeTemporaryBytes { get; init; }
+
+    /// <summary>Highest simultaneous decode temporary reservation since process start.</summary>
+    public long DecodeTemporaryPeakBytes { get; init; }
 
     /// <summary>Backend image realization requests since process start.</summary>
     public long ImageRealizationRequests { get; init; }
