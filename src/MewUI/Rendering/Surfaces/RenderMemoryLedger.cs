@@ -43,6 +43,10 @@ public static class RenderMemoryLedger
     private static long _pendingReleaseBytes;
     private static long _persistentResourceCount;
     private static long _persistentResourceBytes;
+    private static long _atlasPageCount;
+    private static long _atlasPageBytes;
+    private static long _uploadStagingCount;
+    private static long _uploadStagingBytes;
     private static long _metadataProbeAttempts;
     private static long _metadataProbeSucceeded;
     private static Process? _process;
@@ -95,6 +99,10 @@ public static class RenderMemoryLedger
             PendingReleaseBytes = Volatile.Read(ref _pendingReleaseBytes),
             PersistentResourceCount = Volatile.Read(ref _persistentResourceCount),
             PersistentResourceBytes = Volatile.Read(ref _persistentResourceBytes),
+            AtlasPageCount = Volatile.Read(ref _atlasPageCount),
+            AtlasPageBytes = Volatile.Read(ref _atlasPageBytes),
+            UploadStagingCount = Volatile.Read(ref _uploadStagingCount),
+            UploadStagingBytes = Volatile.Read(ref _uploadStagingBytes),
             MetadataProbeAttempts = Volatile.Read(ref _metadataProbeAttempts),
             MetadataProbeSucceeded = Volatile.Read(ref _metadataProbeSucceeded),
         };
@@ -281,6 +289,30 @@ public static class RenderMemoryLedger
         Interlocked.Decrement(ref _persistentResourceCount);
         Interlocked.Add(ref _persistentResourceBytes, -bytes);
     }
+
+    internal static void AtlasPageAdded(long bytes)
+    {
+        Interlocked.Increment(ref _atlasPageCount);
+        Interlocked.Add(ref _atlasPageBytes, bytes);
+    }
+
+    internal static void AtlasPageRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _atlasPageCount);
+        Interlocked.Add(ref _atlasPageBytes, -bytes);
+    }
+
+    internal static void UploadStagingAdded(long bytes)
+    {
+        Interlocked.Increment(ref _uploadStagingCount);
+        Interlocked.Add(ref _uploadStagingBytes, bytes);
+    }
+
+    internal static void UploadStagingRemoved(long bytes)
+    {
+        Interlocked.Decrement(ref _uploadStagingCount);
+        Interlocked.Add(ref _uploadStagingBytes, -bytes);
+    }
 }
 
 /// <summary>Process memory counters as the operating system reports them.</summary>
@@ -380,6 +412,18 @@ public readonly record struct RenderMemorySnapshot(
 
     /// <summary>Estimated surface bytes owned by persistent render-cache entries.</summary>
     public long PersistentResourceBytes { get; init; }
+
+    /// <summary>Active atlas page leases; a classified subset of native resources.</summary>
+    public long AtlasPageCount { get; init; }
+
+    /// <summary>Estimated bytes reserved by active atlas page leases.</summary>
+    public long AtlasPageBytes { get; init; }
+
+    /// <summary>Upload staging allocations currently reserved by backends.</summary>
+    public long UploadStagingCount { get; init; }
+
+    /// <summary>Estimated bytes of current upload staging allocations.</summary>
+    public long UploadStagingBytes { get; init; }
 
     /// <summary>Image metadata probe attempts since process start.</summary>
     public long MetadataProbeAttempts { get; init; }

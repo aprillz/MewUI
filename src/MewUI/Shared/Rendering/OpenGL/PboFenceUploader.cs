@@ -40,6 +40,10 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
     private bool _initialized;
     private bool _disposed;
 
+    public long StagingBytes => _initialized
+        ? checked((long)_pixelWidth * _pixelHeight * 4 * 2)
+        : 0;
+
     public int PixelWidth => _pixelWidth;
     public int PixelHeight => _pixelHeight;
     public int Version => _lastUploadedVersion;
@@ -149,6 +153,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         _pbo0 = pbo0;
         _pbo1 = pbo1;
         _initialized = true;
+        RenderMemoryLedger.UploadStagingAdded(StagingBytes);
     }
 
     public IExternalRasterLease Acquire()
@@ -270,6 +275,8 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         if (_disposed) return;
         _disposed = true;
 
+        long stagingBytes = StagingBytes;
+
         if (_pendingFence != 0)
         {
             OpenGLPboExt.DeleteSync(_pendingFence);
@@ -293,6 +300,10 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
             uint id = _textureId;
             OpenGLPboExt.DeleteTextures(1, &id);
             _textureId = 0;
+        }
+        if (stagingBytes != 0)
+        {
+            RenderMemoryLedger.UploadStagingRemoved(stagingBytes);
         }
     }
 }

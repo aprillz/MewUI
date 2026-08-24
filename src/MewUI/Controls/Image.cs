@@ -621,12 +621,14 @@ public sealed partial class Image : FrameworkElement
 
         // First use, or the graphics factory changed (rare - a runtime backend swap).
         _cachedImage?.Dispose();
-        if (Source is ImageSource imageSource && targetRawWidth > 0 && targetRawHeight > 0)
+        if (targetRawWidth > 0 && targetRawHeight > 0)
         {
-            _cachedImage = imageSource.CreateImage(factory, targetRawWidth, targetRawHeight);
-            _cachedRasterScale = Math.Min(
-                (double)_cachedImage.PixelWidth / Math.Max(1, imageSource.PixelWidth),
-                (double)_cachedImage.PixelHeight / Math.Max(1, imageSource.PixelHeight));
+            _cachedImage = Source.CreateImage(factory, targetRawWidth, targetRawHeight);
+            _cachedRasterScale = Source is ImageSource imageSource
+                ? Math.Min(
+                    (double)_cachedImage.PixelWidth / Math.Max(1, imageSource.PixelWidth),
+                    (double)_cachedImage.PixelHeight / Math.Max(1, imageSource.PixelHeight))
+                : 1;
         }
         else
         {

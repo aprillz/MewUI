@@ -38,6 +38,9 @@ public abstract partial class UIElement
     private long _contentVersion;
 
     private CacheEntry? _cache;
+    private static long s_nextBitmapCacheOwnerId;
+    private readonly string _bitmapCacheScope =
+        $"BitmapCache:{Interlocked.Increment(ref s_nextBitmapCacheOwnerId)}";
 
     // What the last render pass observed: true while this element sat outside the cull viewport, and
     // false again once it is actually drawn. A repaint asked for from here reaches no pixels, so it
@@ -246,7 +249,8 @@ public abstract partial class UIElement
             && entry.PixelHeight == pixelHeight
             && entry.DpiScale == effectiveDpiScale
             && entry.DeviceGeneration == deviceGeneration
-            && entry.OpaqueFill == opaqueFill;
+            && entry.OpaqueFill == opaqueFill
+            && (entry.PersistentLease == null || entry.Version == version);
 
         if (canReuse && entry!.Version == version)
         {
@@ -256,6 +260,36 @@ public abstract partial class UIElement
         if (!canReuse)
         {
             DisposeCacheEntry();
+
+            var cacheKey = new RenderCacheKey(
+                RenderCacheEntryKind.ViewportSnapshot,
+                pixelWidth,
+                pixelHeight,
+                effectiveDpiScale,
+                opaqueFill is null ? RenderPixelFormat.Bgra8888Premultiplied : RenderPixelFormat.Bgra8888,
+                unchecked((ulong)version),
+                DeviceId: 0,
+                Scope: _bitmapCacheScope).ForDevice(factory);
+            if (factory.ResourceCache?.TryGet(cacheKey, out var cached) == true)
+            {
+                entry = new CacheEntry
+                {
+                    Surface = cached.Surface,
+                    Image = cached.Image,
+                    PersistentLease = cached,
+                    PersistentKey = cacheKey,
+                    PixelWidth = pixelWidth,
+                    PixelHeight = pixelHeight,
+                    DpiScale = effectiveDpiScale,
+                    DeviceGeneration = deviceGeneration,
+                    OpaqueFill = opaqueFill,
+                    AccountedBytes = RenderMemoryLedger.ScratchBytes(cached.Surface.PixelWidth, cached.Surface.PixelHeight),
+                    Version = version,
+                };
+                _cache = entry;
+                RenderMemoryLedger.BitmapCacheEntryAdded(entry.AccountedBytes);
+                return false;
+            }
 
             // Pool-sized (approx-fitted) surface; PixelWidth/Height keep the painted content size
             // and the blit reads just that region.
@@ -267,12 +301,19 @@ public abstract partial class UIElement
                 {
                     Surface = surface,
                     Image = factory.CreateImageView(surface),
+                    PersistentKey = cacheKey,
                     PixelWidth = pixelWidth,
                     PixelHeight = pixelHeight,
                     DpiScale = effectiveDpiScale,
                     DeviceGeneration = deviceGeneration,
                     OpaqueFill = opaqueFill,
                 };
+                if (factory.ResourceCache is { } resourceCache)
+                {
+                    entry.PersistentLease = resourceCache.Add(cacheKey, entry.Surface, entry.Image);
+                    entry.Surface = entry.PersistentLease.Surface;
+                    entry.Image = entry.PersistentLease.Image;
+                }
                 _cache = entry;
             }
             catch
@@ -317,6 +358,12 @@ public abstract partial class UIElement
         }
         _cache = null;
 
+        if (entry.PersistentLease != null)
+        {
+            entry.PersistentLease.Dispose();
+            return;
+        }
+
         entry.Image.Dispose();
         // The surface itself goes back to the device scratch pool so the next cache (any element,
         // any window) can repaint into it instead of allocating.
@@ -333,8 +380,10 @@ public abstract partial class UIElement
 
     private sealed class CacheEntry
     {
-        public required IRenderSurface Surface { get; init; }
-        public required IImage Image { get; init; }
+        public required IRenderSurface Surface { get; set; }
+        public required IImage Image { get; set; }
+        public IRenderCacheEntry? PersistentLease { get; set; }
+        public required RenderCacheKey PersistentKey { get; init; }
         public required int PixelWidth { get; init; }
         public required int PixelHeight { get; init; }
         public required double DpiScale { get; init; }

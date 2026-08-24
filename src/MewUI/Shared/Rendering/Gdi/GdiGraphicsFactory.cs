@@ -24,6 +24,9 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
     internal GdiGraphicsFactory() { }
 
     private readonly RenderResourceCache _renderResourceCache = new();
+    private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
+
+    public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, 0);
 
     public bool IsDoubleBuffered { get; set; } = true;
 

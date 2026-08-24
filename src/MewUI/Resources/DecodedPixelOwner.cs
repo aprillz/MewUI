@@ -16,6 +16,8 @@ internal sealed class DecodedPixelOwner
 
     public Bgra32PixelBuffer Buffer { get; }
 
+    public long AccountedBytes => Volatile.Read(ref _accountedBytes);
+
     public void AddReference()
     {
         int count = Interlocked.Increment(ref _referenceCount);

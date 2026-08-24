@@ -2,6 +2,10 @@ namespace Aprillz.MewUI.Rendering;
 
 public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 {
+    private const long DEFAULT_PERSISTENT_BUDGET_BYTES = 256L * 1024 * 1024;
+    private const int DEFAULT_PERSISTENT_MAX_COUNT = 512;
+    private const int NORMAL_MAINTENANCE_EVICTION_LIMIT = 32;
+    private const long PERSISTENT_IDLE_EVICT_MS = 5_000;
     // Scratch pool ceilings. The count ceiling is sized ABOVE the working set of a maximized
     // icon grid (a QHD window shows ~2,300 tiles): evicting below the active working set makes
     // every presenter rebind destroy and recreate GPU surfaces in bulk, which costs far more
@@ -29,14 +33,32 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     private long _scratchLastSweepTicks;
 
     private readonly object _gate = new();
-    private readonly Dictionary<RenderCacheKey, RenderCacheEntry> _entries = new();
+    private readonly Dictionary<RenderCacheKey, CachedRenderResource> _entries = new();
     private readonly List<PendingRelease> _pendingReleases = new();
+    private readonly long _persistentBudgetBytes;
+    private readonly long _persistentLowWatermarkBytes;
+    private readonly int _persistentMaxCount;
+    private long _persistentBytes;
+    private long _persistentUseSequence;
+    private long _atlasActiveBytes;
 
     // Scratch buckets are lists: several surfaces can share one key. Rent pops the warm end.
     private readonly Dictionary<ScratchSurfaceKey, List<PooledScratchSurface>> _scratchBuckets = new();
     private long _scratchBytes;
     private long _scratchReturnSequence;
     private bool _disposed;
+
+    public RenderResourceCache()
+        : this(DEFAULT_PERSISTENT_BUDGET_BYTES, DEFAULT_PERSISTENT_MAX_COUNT)
+    {
+    }
+
+    internal RenderResourceCache(long persistentBudgetBytes, int persistentMaxCount)
+    {
+        _persistentBudgetBytes = Math.Max(1, persistentBudgetBytes);
+        _persistentLowWatermarkBytes = Math.Max(1, _persistentBudgetBytes * 4 / 5);
+        _persistentMaxCount = Math.Max(1, persistentMaxCount);
+    }
 
     public bool TryGet(RenderCacheKey key, out IRenderCacheEntry entry)
     {
@@ -46,8 +68,12 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             DrainCompletedReleases_NoLock();
             if (_entries.TryGetValue(key, out var cached))
             {
-                entry = cached;
-                return true;
+                if (cached.SafeToDisposeAfter is null || cached.SafeToDisposeAfter.IsCompleted)
+                {
+                    cached.LastUseSequence = ++_persistentUseSequence;
+                    entry = cached.Acquire(this);
+                    return true;
+                }
             }
         }
 
@@ -71,12 +97,19 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
             if (_entries.Remove(key, out var existing))
             {
-                ReleaseEntry_NoLock(existing);
+                RetireEntry_NoLock(existing);
             }
 
-            var entry = new RenderCacheEntry(key, surface, image, safeToDisposeAfter);
-            _entries.Add(key, entry);
-            return entry;
+            var resource = new CachedRenderResource(
+                key,
+                surface,
+                image,
+                safeToDisposeAfter,
+                ++_persistentUseSequence);
+            _entries.Add(key, resource);
+            _persistentBytes += resource.AccountedBytes;
+            EvictPersistentToBudgetNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT, resource);
+            return resource.Acquire(this);
         }
     }
 
@@ -87,7 +120,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             if (_disposed) return;
             if (_entries.Remove(key, out var existing))
             {
-                ReleaseEntry_NoLock(existing);
+                RetireEntry_NoLock(existing);
             }
         }
     }
@@ -101,8 +134,15 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         {
             if (_disposed)
             {
-                resource.Dispose();
-                safeAfter.Dispose();
+                try
+                {
+                    safeAfter.Wait();
+                }
+                finally
+                {
+                    resource.Dispose();
+                    safeAfter.Dispose();
+                }
                 return;
             }
 
@@ -125,14 +165,110 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         lock (_gate)
         {
             if (_disposed) return;
+            int limit = reason is RenderCacheTrimReason.MemoryPressure or RenderCacheTrimReason.DeviceLost or RenderCacheTrimReason.Manual
+                ? int.MaxValue
+                : NORMAL_MAINTENANCE_EVICTION_LIMIT;
+            int evicted = 0;
+            foreach (var entry in _entries.Values.OrderBy(static entry => entry.LastUseSequence).ToArray())
+            {
+                if (evicted >= limit || (reason == RenderCacheTrimReason.CapacityExceeded && IsPersistentWithinBudgetNoLock()))
+                {
+                    break;
+                }
+                if (entry.LeaseCount != 0
+                    && reason is not RenderCacheTrimReason.DeviceLost and not RenderCacheTrimReason.Manual)
+                {
+                    continue;
+                }
+                _entries.Remove(entry.Key);
+                RetireEntry_NoLock(entry);
+                evicted++;
+            }
+            if (reason is RenderCacheTrimReason.MemoryPressure or RenderCacheTrimReason.DeviceLost or RenderCacheTrimReason.Manual)
+            {
+                ClearScratchPoolNoLock();
+            }
+            DrainCompletedReleases_NoLock();
+        }
+    }
+
+    public void Maintain(RenderCacheMaintenanceMode mode = RenderCacheMaintenanceMode.Frame)
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            DrainCompletedReleases_NoLock();
+            int limit = mode is RenderCacheMaintenanceMode.MemoryPressure
+                or RenderCacheMaintenanceMode.DeviceLost
+                or RenderCacheMaintenanceMode.Shutdown
+                ? int.MaxValue
+                : NORMAL_MAINTENANCE_EVICTION_LIMIT;
+            int remaining = limit;
+            remaining -= SweepIdleScratchNoLock(remaining);
+            if (mode is RenderCacheMaintenanceMode.DeviceLost or RenderCacheMaintenanceMode.Shutdown)
+            {
+                foreach (var entry in _entries.Values.ToArray())
+                {
+                    _entries.Remove(entry.Key);
+                    RetireEntry_NoLock(entry);
+                }
+            }
+            else
+            {
+                remaining -= EvictIdlePersistentNoLock(Environment.TickCount64, remaining);
+                EvictPersistentToBudgetNoLock(remaining);
+            }
+            if (mode is RenderCacheMaintenanceMode.MemoryPressure or RenderCacheMaintenanceMode.DeviceLost or RenderCacheMaintenanceMode.Shutdown)
+            {
+                ClearScratchPoolNoLock();
+            }
+        }
+    }
+
+    internal bool TryReserveAtlasPage(long bytes)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            bytes = Math.Max(0, bytes);
+            EvictPersistentForAdmissionNoLock(bytes);
+            if (_persistentBytes + _scratchBytes + _atlasActiveBytes + bytes > _persistentBudgetBytes)
+            {
+                return false;
+            }
+            _atlasActiveBytes += bytes;
+            return true;
+        }
+    }
+
+    internal void ReleaseAtlasPageReservation(long bytes)
+    {
+        lock (_gate)
+        {
+            _atlasActiveBytes = Math.Max(0, _atlasActiveBytes - Math.Max(0, bytes));
+        }
+    }
+
+    internal RenderResourceCacheStatistics GetStatistics()
+    {
+        lock (_gate)
+        {
+            int activePersistent = 0;
             foreach (var entry in _entries.Values)
             {
-                ReleaseEntry_NoLock(entry);
+                if (entry.LeaseCount != 0)
+                {
+                    activePersistent++;
+                }
             }
-
-            _entries.Clear();
-            ClearScratchPoolNoLock();
-            DrainCompletedReleases_NoLock();
+            return new RenderResourceCacheStatistics(
+                _entries.Count,
+                activePersistent,
+                _persistentBytes,
+                CountScratchNoLock(),
+                _scratchBytes,
+                _pendingReleases.Count,
+                _atlasActiveBytes);
         }
     }
 
@@ -144,7 +280,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            SweepIdleScratchNoLock();
+            SweepIdleScratchNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT);
             if (TryRentFromBucketNoLock(key, out var exact))
             {
                 return exact;
@@ -269,20 +405,22 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 ++_scratchReturnSequence));
             _scratchBytes += bytes;
 
-            SweepIdleScratchNoLock();
+            SweepIdleScratchNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT);
             EvictScratchToBudgetNoLock();
+            EvictPersistentToBudgetNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT);
         }
     }
 
     /// <summary>Disposes pooled surfaces that have sat unused past the idle window, at most once per sweep interval.</summary>
-    private void SweepIdleScratchNoLock()
+    private int SweepIdleScratchNoLock(int limit)
     {
         long now = Environment.TickCount64;
-        if (now - _scratchLastSweepTicks < SCRATCH_SWEEP_INTERVAL_MS)
+        if (limit <= 0 || now - _scratchLastSweepTicks < SCRATCH_SWEEP_INTERVAL_MS)
         {
-            return;
+            return 0;
         }
         _scratchLastSweepTicks = now;
+        int evicted = 0;
 
         List<ScratchSurfaceKey>? emptied = null;
         foreach (var pair in _scratchBuckets)
@@ -290,6 +428,10 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             var bucket = pair.Value;
             for (int i = bucket.Count - 1; i >= 0; i--)
             {
+                if (evicted >= limit)
+                {
+                    break;
+                }
                 if (now - bucket[i].ReturnedAt < SCRATCH_IDLE_EVICT_MS)
                 {
                     continue;
@@ -297,6 +439,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 _scratchBytes -= bucket[i].Bytes;
                 bucket[i].Surface.Dispose();
                 bucket.RemoveAt(i);
+                evicted++;
             }
             if (bucket.Count == 0)
             {
@@ -311,6 +454,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 _scratchBuckets.Remove(key);
             }
         }
+        return evicted;
     }
 
     /// <summary>Evicts least-recently-used pooled surfaces until within budget, keeping at least one.</summary>
@@ -385,33 +529,191 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
             foreach (var entry in _entries.Values)
             {
-                entry.Dispose();
+                entry.Retire();
+                if (entry.LeaseCount == 0)
+                {
+                    WaitAndDisposeEntry(entry);
+                }
             }
 
             _entries.Clear();
+            _persistentBytes = 0;
             ClearScratchPoolNoLock();
 
             foreach (var pending in _pendingReleases)
             {
-                RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
-                pending.Resource.Dispose();
-                pending.Operation.Dispose();
+                try
+                {
+                    pending.Operation.Wait();
+                }
+                finally
+                {
+                    RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
+                    pending.Resource.Dispose();
+                    if (pending.DisposeOperationSeparately)
+                    {
+                        pending.Operation.Dispose();
+                    }
+                }
             }
 
             _pendingReleases.Clear();
         }
     }
 
-    private void ReleaseEntry_NoLock(RenderCacheEntry entry)
+    private void RetireEntry_NoLock(CachedRenderResource entry)
+    {
+        _persistentBytes -= entry.AccountedBytes;
+        entry.Retire();
+        if (entry.LeaseCount != 0)
+        {
+            return;
+        }
+        QueueOrDisposeEntryNoLock(entry);
+    }
+
+    private void ReturnLease(CachedRenderResource entry)
+    {
+        lock (_gate)
+        {
+            if (!entry.ReleaseLease())
+            {
+                return;
+            }
+            entry.IdleSince = Environment.TickCount64;
+            if (entry.IsRetired)
+            {
+                if (_disposed)
+                {
+                    WaitAndDisposeEntry(entry);
+                }
+                else
+                {
+                    QueueOrDisposeEntryNoLock(entry);
+                }
+            }
+        }
+    }
+
+    private static void WaitAndDisposeEntry(CachedRenderResource entry)
+    {
+        try
+        {
+            entry.SafeToDisposeAfter?.Wait();
+        }
+        finally
+        {
+            entry.Dispose();
+        }
+    }
+
+    private void QueueOrDisposeEntryNoLock(CachedRenderResource entry)
     {
         if (entry.SafeToDisposeAfter is { } operation && !operation.IsCompleted)
         {
-            _pendingReleases.Add(new PendingRelease(entry, operation, entry.AccountedBytes));
+            _pendingReleases.Add(new PendingRelease(entry, operation, entry.AccountedBytes, DisposeOperationSeparately: false));
             RenderMemoryLedger.PendingReleaseAdded(entry.AccountedBytes);
             return;
         }
 
         entry.Dispose();
+    }
+
+    private bool IsPersistentWithinBudgetNoLock()
+        => _persistentBytes + _scratchBytes + _atlasActiveBytes <= _persistentBudgetBytes
+            && _entries.Count <= _persistentMaxCount;
+
+    private long BudgetedNativeBytesNoLock() => _persistentBytes + _scratchBytes + _atlasActiveBytes;
+
+    private void EvictPersistentForAdmissionNoLock(long incomingBytes)
+    {
+        while (BudgetedNativeBytesNoLock() + incomingBytes > _persistentBudgetBytes)
+        {
+            var victim = FindOldestReusablePersistentNoLock();
+            if (victim == null)
+            {
+                return;
+            }
+            _entries.Remove(victim.Key);
+            RetireEntry_NoLock(victim);
+        }
+    }
+
+    private int EvictIdlePersistentNoLock(long now, int limit)
+    {
+        int evicted = 0;
+        while (evicted < limit && BudgetedNativeBytesNoLock() > _persistentLowWatermarkBytes)
+        {
+            CachedRenderResource? victim = null;
+            foreach (var candidate in _entries.Values)
+            {
+                if (candidate.LeaseCount != 0
+                    || candidate.IdleSince == 0
+                    || now - candidate.IdleSince < PERSISTENT_IDLE_EVICT_MS)
+                {
+                    continue;
+                }
+                if (victim == null || candidate.LastUseSequence < victim.LastUseSequence)
+                {
+                    victim = candidate;
+                }
+            }
+            if (victim == null)
+            {
+                return evicted;
+            }
+            _entries.Remove(victim.Key);
+            RetireEntry_NoLock(victim);
+            evicted++;
+        }
+        return evicted;
+    }
+
+    private CachedRenderResource? FindOldestReusablePersistentNoLock()
+    {
+        CachedRenderResource? victim = null;
+        foreach (var candidate in _entries.Values)
+        {
+            if (candidate.LeaseCount != 0)
+            {
+                continue;
+            }
+            if (victim == null || candidate.LastUseSequence < victim.LastUseSequence)
+            {
+                victim = candidate;
+            }
+        }
+        return victim;
+    }
+
+    private int EvictPersistentToBudgetNoLock(int limit, CachedRenderResource? protectedEntry = null)
+    {
+        if (IsPersistentWithinBudgetNoLock())
+        {
+            return 0;
+        }
+
+        int evicted = 0;
+        while (evicted < limit
+            && (_persistentBytes + _scratchBytes + _atlasActiveBytes > _persistentLowWatermarkBytes
+                || _entries.Count > _persistentMaxCount))
+        {
+            var victim = FindOldestReusablePersistentNoLock();
+            if (ReferenceEquals(victim, protectedEntry))
+            {
+                victim = _entries.Values
+                    .Where(candidate => !ReferenceEquals(candidate, protectedEntry) && candidate.LeaseCount == 0)
+                    .MinBy(static candidate => candidate.LastUseSequence);
+            }
+            if (victim == null)
+            {
+                break;
+            }
+            _entries.Remove(victim.Key);
+            RetireEntry_NoLock(victim);
+            evicted++;
+        }
+        return evicted;
     }
 
     private void DrainCompletedReleases_NoLock()
@@ -427,7 +729,10 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             _pendingReleases.RemoveAt(i);
             RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
             pending.Resource.Dispose();
-            pending.Operation.Dispose();
+            if (pending.DisposeOperationSeparately)
+            {
+                pending.Operation.Dispose();
+            }
         }
     }
 
@@ -439,22 +744,29 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     private static long EstimateResourceBytes(IDisposable resource)
         => resource switch
         {
-            RenderCacheEntry entry => entry.AccountedBytes,
+            CachedRenderResource entry => entry.AccountedBytes,
             IRenderTarget target => RenderMemoryLedger.ScratchBytes(target.PixelWidth, target.PixelHeight),
             IImage image => RenderMemoryLedger.ScratchBytes(image.PixelWidth, image.PixelHeight),
             _ => 0,
         };
 
-    private sealed class RenderCacheEntry : IRenderCacheEntry
+    private sealed class CachedRenderResource : IDisposable
     {
         private bool _disposed;
+        private int _leaseCount;
 
-        public RenderCacheEntry(RenderCacheKey key, IRenderSurface surface, IImage image, IRenderOperation? safeToDisposeAfter)
+        public CachedRenderResource(
+            RenderCacheKey key,
+            IRenderSurface surface,
+            IImage image,
+            IRenderOperation? safeToDisposeAfter,
+            long lastUseSequence)
         {
             Key = key;
             Surface = surface;
             Image = image;
             SafeToDisposeAfter = safeToDisposeAfter;
+            LastUseSequence = lastUseSequence;
             AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
             RenderMemoryLedger.PersistentResourceAdded(AccountedBytes);
         }
@@ -469,6 +781,34 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
         public long AccountedBytes { get; }
 
+        public int LeaseCount => _leaseCount;
+
+        public bool IsRetired { get; private set; }
+
+        public long LastUseSequence { get; set; }
+
+        public long IdleSince { get; set; }
+
+        public IRenderCacheEntry Acquire(RenderResourceCache owner)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _leaseCount++;
+            IdleSince = 0;
+            return new RenderCacheLease(owner, this);
+        }
+
+        public bool ReleaseLease()
+        {
+            if (_leaseCount == 0)
+            {
+                return false;
+            }
+            _leaseCount--;
+            return _leaseCount == 0;
+        }
+
+        public void Retire() => IsRetired = true;
+
         public void Dispose()
         {
             if (_disposed) return;
@@ -480,7 +820,41 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
-    private readonly record struct PendingRelease(IDisposable Resource, IRenderOperation Operation, long Bytes);
+    private sealed class RenderCacheLease : IRenderCacheEntry
+    {
+        private RenderResourceCache? _owner;
+        private CachedRenderResource? _resource;
+
+        public RenderCacheLease(RenderResourceCache owner, CachedRenderResource resource)
+        {
+            _owner = owner;
+            _resource = resource;
+        }
+
+        public RenderCacheKey Key => GetResource().Key;
+        public IRenderSurface Surface => GetResource().Surface;
+        public IImage Image => GetResource().Image;
+        public IRenderOperation? SafeToDisposeAfter => GetResource().SafeToDisposeAfter;
+
+        public void Dispose()
+        {
+            var resource = Interlocked.Exchange(ref _resource, null);
+            var owner = Interlocked.Exchange(ref _owner, null);
+            if (resource != null && owner != null)
+            {
+                owner.ReturnLease(resource);
+            }
+        }
+
+        private CachedRenderResource GetResource() => Volatile.Read(ref _resource)
+            ?? throw new ObjectDisposedException(nameof(RenderCacheLease));
+    }
+
+    private readonly record struct PendingRelease(
+        IDisposable Resource,
+        IRenderOperation Operation,
+        long Bytes,
+        bool DisposeOperationSeparately = true);
 
     private readonly record struct PooledScratchSurface(
         IRenderSurface Surface,
@@ -488,3 +862,12 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         long ReturnedAt,
         long Sequence);
 }
+
+internal readonly record struct RenderResourceCacheStatistics(
+    int PersistentCount,
+    int ActivePersistentCount,
+    long PersistentBytes,
+    int PooledScratchCount,
+    long PooledScratchBytes,
+    int PendingReleaseCount,
+    long AtlasActiveBytes);

@@ -23,7 +23,11 @@ public sealed partial class MewVGWin32GraphicsFactory
     public ITextEngine TextEngine => TextServices.GetEngine(this);
 
     internal void RaiseGpuInteropInvalidated(GpuInteropInvalidatedEventArgs e)
-        => GpuInteropInvalidated?.Invoke(this, e);
+    {
+        unchecked { _renderDeviceGeneration++; }
+        _renderResourceCache.Maintain(RenderCacheMaintenanceMode.DeviceLost);
+        GpuInteropInvalidated?.Invoke(this, e);
+    }
 
 
 #if MEWUI_MEWVG_MACOS
@@ -36,6 +40,10 @@ public sealed partial class MewVGWin32GraphicsFactory
 
     private readonly ConcurrentDictionary<nint, IDisposable> _windows = new();
     private readonly RenderResourceCache _renderResourceCache = new();
+    private readonly ulong _renderDeviceId = RenderDeviceIdentity.AllocateDeviceId();
+    private uint _renderDeviceGeneration;
+
+    public RenderDeviceIdentity RenderIdentity => new(_renderDeviceId, _renderDeviceGeneration);
 
 
     /// <summary>

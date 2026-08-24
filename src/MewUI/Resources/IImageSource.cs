@@ -13,6 +13,13 @@ public interface IImageSource
     /// </summary>
     /// <param name="factory">The graphics factory used to create backend resources.</param>
     IImage CreateImage(IGraphicsFactory factory);
+
+    /// <summary>
+    /// Creates a backend image for a known device-pixel footprint. Implementations may use the
+    /// hint to bound decode/upload work; ignoring it must preserve the same visual result.
+    /// </summary>
+    IImage CreateImage(IGraphicsFactory factory, int targetPixelWidth, int targetPixelHeight)
+        => CreateImage(factory);
 }
 
 /// <summary>
@@ -40,8 +47,8 @@ public interface INotifyImageChanged
 /// <summary>
 /// An image source that draws itself directly into a graphics context, staying crisp at any
 /// size (vector). The owning <see cref="Controls.Image"/> renders it at the laid-out size via
-/// <see cref="Render"/> instead of rasterizing once through <see cref="IImageSource.CreateImage"/>,
-/// so it re-renders when the control resizes. <see cref="IImageSource.CreateImage"/> remains the
+/// <see cref="Render"/> instead of rasterizing once through <see cref="IImageSource.CreateImage(IGraphicsFactory)"/>,
+/// so it re-renders when the control resizes. <see cref="IImageSource.CreateImage(IGraphicsFactory)"/> remains the
 /// raster fallback for consumers that need pixels.
 /// </summary>
 public interface IVectorImageSource : IImageSource
