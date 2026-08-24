@@ -22,6 +22,10 @@ internal abstract class MeasureGraphicsContextBase : ITextBackendMeasurementCont
     double[]? ITextBackendMeasurementContext.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
         => this is ITextAdvanceSource source ? source.GetUtf16PrefixAdvances(text, font) : null;
 
+    bool ITextBackendMeasurementContext.TryGetUtf16PrefixAdvances(
+        ReadOnlySpan<char> text, IFont font, Span<double> destination)
+        => this is ITextAdvanceSource source && source.TryGetUtf16PrefixAdvances(text, font, destination);
+
     public virtual void Dispose()
     {
     }

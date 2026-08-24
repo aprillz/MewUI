@@ -173,6 +173,10 @@ internal sealed partial class ManagedTextEngine
         string text = snapshot.Text;
         int boundaryCount = GetTextElementBoundaries(text, 0, text.Length, boundaryBuffer);
         var boundaries = boundaryBuffer.AsSpan(0, boundaryCount);
+        // Sized once from what the text can need: one advance per code unit and one boundary per
+        // text element. Growing into them instead would copy the whole run of a long line each time.
+        fragments.Advances = new float[text.Length];
+        fragments.Boundaries = new int[boundaryCount];
         int index = 0;
 
         while (index < boundaries.Length)
@@ -309,14 +313,33 @@ internal sealed partial class ManagedTextEngine
         var span = snapshot.Text.AsSpan(start, length);
         double letterSpacing = snapshot.Paragraph.LetterSpacing;
 
-        double[]? cumulative = context.SupportsUtf16PrefixAdvances
-            ? context.GetUtf16PrefixAdvances(span, font)
-            : null;
-        if (cumulative is not null)
+        double[]? cumulativeArray = null;
+        double[]? rented = null;
+        Span<double> cumulative = default;
+        if (context.SupportsUtf16PrefixAdvances)
         {
-            var measured = context.Measure(span, font);
-            fragment.MeasuredHeight = Math.Max(fragment.MeasuredHeight, measured.Height);
+            rented = ArrayPool<double>.Shared.Rent(length);
+            if (context.TryGetUtf16PrefixAdvances(span, font, rented.AsSpan(0, length)))
+            {
+                cumulative = rented.AsSpan(0, length);
+            }
+            else
+            {
+                ArrayPool<double>.Shared.Return(rented);
+                rented = null;
+                cumulativeArray = context.GetUtf16PrefixAdvances(span, font);
+                cumulative = cumulativeArray;
+            }
+
+            if (!cumulative.IsEmpty)
+            {
+                var measured = context.Measure(span, font);
+                fragment.MeasuredHeight = Math.Max(fragment.MeasuredHeight, measured.Height);
+            }
         }
+
+        try
+        {
 
         double cursor = 0;
         double previous = 0;
@@ -326,7 +349,7 @@ internal sealed partial class ManagedTextEngine
             int graphemeStart = boundaries[index];
             int graphemeEnd = index < lastBoundary ? boundaries[index + 1] : end;
             double width;
-            if (cumulative is not null)
+            if (!cumulative.IsEmpty)
             {
                 double current = cumulative[graphemeEnd - start - 1];
                 width = Math.Max(0, current - previous + letterSpacing);
@@ -354,5 +377,13 @@ internal sealed partial class ManagedTextEngine
         fragments.AdvanceCount = written;
         fragment.Width = cursor;
         fragments.AddFragment(in fragment);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<double>.Shared.Return(rented);
+            }
+        }
     }
 }
