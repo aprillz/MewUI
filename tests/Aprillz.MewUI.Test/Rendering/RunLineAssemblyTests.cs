@@ -35,6 +35,25 @@ public sealed class RunLineAssemblyTests
     [DataRow("", double.PositiveInfinity, TextWrapping.NoWrap, TextAlignment.Left)]
     public void LinesMatchTheClusterAssembler(
         string text, double maxWidth, TextWrapping wrapping, TextAlignment alignment)
+        => AssertLinesMatch(text, maxWidth, wrapping, alignment, TextTrimming.None, double.PositiveInfinity);
+
+    [TestMethod]
+    [DataRow(ASCII, 140.0, TextWrapping.NoWrap, double.PositiveInfinity)]
+    [DataRow(MIXED, 90.0, TextWrapping.NoWrap, double.PositiveInfinity)]
+    [DataRow(TABS, 120.0, TextWrapping.NoWrap, double.PositiveInfinity)]
+    [DataRow(ASCII, 140.0, TextWrapping.Wrap, 40.0)]
+    [DataRow(MIXED, 90.0, TextWrapping.Wrap, 40.0)]
+    public void TrimmedLinesMatchTheClusterAssembler(
+        string text, double maxWidth, TextWrapping wrapping, double maxHeight)
+        => AssertLinesMatch(text, maxWidth, wrapping, TextAlignment.Left, TextTrimming.CharacterEllipsis, maxHeight);
+
+    private static void AssertLinesMatch(
+        string text,
+        double maxWidth,
+        TextWrapping wrapping,
+        TextAlignment alignment,
+        TextTrimming trimming,
+        double maxHeight)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -44,7 +63,7 @@ public sealed class RunLineAssemblyTests
 
         using var factory = new GdiGraphicsFactory();
         var engine = (ManagedTextEngine)factory.TextEngine;
-        var snapshot = Snapshot(text, maxWidth, wrapping, alignment);
+        var snapshot = Snapshot(text, maxWidth, wrapping, alignment, trimming, maxHeight);
 
         var expected = engine.CreateLayoutCore(snapshot);
         var actual = engine.CreateLayoutViaRuns(snapshot);
@@ -88,7 +107,7 @@ public sealed class RunLineAssemblyTests
 
         using var factory = new GdiGraphicsFactory();
         var engine = (ManagedTextEngine)factory.TextEngine;
-        var snapshot = Snapshot(text, maxWidth, wrapping, TextAlignment.Left);
+        var snapshot = Snapshot(text, maxWidth, wrapping, TextAlignment.Left, TextTrimming.None, double.PositiveInfinity);
 
         var expected = engine.CreateLayoutCore(snapshot);
         var actual = engine.CreateLayoutViaRuns(snapshot);
@@ -118,7 +137,12 @@ public sealed class RunLineAssemblyTests
     }
 
     private static TextLayoutRequestSnapshot Snapshot(
-        string text, double maxWidth, TextWrapping wrapping, TextAlignment alignment)
+        string text,
+        double maxWidth,
+        TextWrapping wrapping,
+        TextAlignment alignment,
+        TextTrimming trimming,
+        double maxHeight)
         => TextLayoutRequestSnapshot.Create(new TextLayoutRequest
         {
             Text = text.AsMemory(),
@@ -127,8 +151,10 @@ public sealed class RunLineAssemblyTests
             Paragraph = new TextParagraphStyle
             {
                 MaxWidth = maxWidth,
+                MaxHeight = maxHeight,
                 Wrapping = wrapping,
-                Alignment = alignment
+                Alignment = alignment,
+                Trimming = trimming
             }
         });
 }

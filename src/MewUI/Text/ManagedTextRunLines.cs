@@ -173,6 +173,182 @@ internal sealed partial class ManagedTextEngine
         return lines;
     }
 
+    /// <summary>
+    /// Character-ellipsis trimming over runs: the same rules as the cluster path, without wrapping
+    /// every line that overflows the width is trimmed, and with wrapping the lines past the height
+    /// are dropped and the last visible line always takes an ellipsis.
+    /// </summary>
+    private void ApplyRunTrimming(
+        ITextBackendMeasurementContext context,
+        TextLayoutRequestSnapshot snapshot,
+        List<ManagedTextLine> lines,
+        ManagedTextFragments fragments,
+        List<ManagedTextRun> runs)
+    {
+        var paragraph = snapshot.Paragraph;
+        if (paragraph.Trimming != TextTrimming.CharacterEllipsis || lines.Count == 0)
+        {
+            return;
+        }
+
+        double maxWidth = NormalizeMaxWidth(paragraph.MaxWidth);
+        if (double.IsPositiveInfinity(maxWidth) || maxWidth <= 0)
+        {
+            return;
+        }
+
+        double ellipsisWidth = context.Measure(ELLIPSIS, GetFont(snapshot.DefaultStyle, snapshot.Dpi)).Width;
+        if (paragraph.Wrapping == TextWrapping.NoWrap)
+        {
+            foreach (var line in lines)
+            {
+                if (line.Metrics.Bounds.Width > maxWidth)
+                {
+                    TrimRunLine(snapshot, line, fragments, runs, maxWidth, ellipsisWidth, force: false);
+                }
+            }
+            return;
+        }
+
+        double maxHeight = paragraph.MaxHeight;
+        if (double.IsNaN(maxHeight) || double.IsPositiveInfinity(maxHeight) || maxHeight <= 0)
+        {
+            return;
+        }
+
+        int visibleCount = 0;
+        while (visibleCount < lines.Count && lines[visibleCount].Metrics.Bounds.Bottom <= maxHeight)
+        {
+            visibleCount++;
+        }
+        visibleCount = Math.Max(1, visibleCount);
+        if (visibleCount >= lines.Count)
+        {
+            return;
+        }
+
+        lines.RemoveRange(visibleCount, lines.Count - visibleCount);
+        TrimRunLine(snapshot, lines[^1], fragments, runs, maxWidth, ellipsisWidth, force: true);
+    }
+
+    private static void TrimRunLine(
+        TextLayoutRequestSnapshot snapshot,
+        ManagedTextLine line,
+        ManagedTextFragments fragments,
+        List<ManagedTextRun> runs,
+        double maxWidth,
+        double ellipsisWidth,
+        bool force)
+    {
+        if (line.RunCount <= 0)
+        {
+            return;
+        }
+
+        double target = maxWidth - ellipsisWidth;
+        double width = 0;
+        for (int index = 0; index < line.RunCount; index++)
+        {
+            width += runs[line.RunStart + index].Width;
+        }
+
+        int keep = line.RunCount;
+        while (keep > 0 && width > target)
+        {
+            keep--;
+            width -= runs[line.RunStart + keep].Width;
+        }
+
+        // The run that straddles the limit keeps the text elements that still fit.
+        int partial = 0;
+        double partialWidth = 0;
+        if (keep < line.RunCount)
+        {
+            ref var run = ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(runs)[line.RunStart + keep];
+            if (run.Kind == ManagedTextRunKind.Text)
+            {
+                (partial, partialWidth) = TrimRunText(fragments, in run, target - width);
+            }
+        }
+
+        if (keep == line.RunCount && !force)
+        {
+            return;
+        }
+
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(runs);
+        if (partial > 0)
+        {
+            ref var run = ref span[line.RunStart + keep];
+            run.TextLength = partial;
+            run.Width = partialWidth;
+            width += partialWidth;
+            keep++;
+        }
+
+        line.IsTrimmed = true;
+        line.RunCount = keep;
+        var bounds = line.Metrics.Bounds;
+        double x = ResolveLineX(snapshot.Paragraph, width + ellipsisWidth);
+        double cursor = x;
+        for (int index = 0; index < keep; index++)
+        {
+            ref var run = ref span[line.RunStart + index];
+            run.X = cursor;
+            cursor += run.Width;
+        }
+
+        int textStart = keep == 0 ? line.Metrics.TextStart : span[line.RunStart].TextStart;
+        int textLength = keep == 0 ? 0 : span[line.RunStart + keep - 1].TextEnd - textStart;
+        line.Metrics = new TextLayoutLineMetrics(
+            textStart,
+            textLength,
+            line.Metrics.NewLineLength,
+            new Rect(x, bounds.Y, width + ellipsisWidth, bounds.Height),
+            line.Metrics.Baseline);
+    }
+
+    /// <summary>Text elements of the run that fit in <paramref name="available"/>, and what they measure.</summary>
+    private static (int Length, double Width) TrimRunText(
+        ManagedTextFragments fragments,
+        in ManagedTextRun run,
+        double available)
+    {
+        if (available <= 0)
+        {
+            return (0, 0);
+        }
+
+        ref readonly var fragment = ref fragments.Items[fragments.IndexOfFragment(run.TextStart)];
+        var boundaries = fragments.BoundariesOf(in fragment);
+        int length = 0;
+        double width = 0;
+        for (int index = 0; index < boundaries.Length; index++)
+        {
+            int start = boundaries[index];
+            if (start < run.TextStart)
+            {
+                continue;
+            }
+            int end = index + 1 < boundaries.Length ? boundaries[index + 1] : fragment.TextEnd;
+            if (end > run.TextEnd)
+            {
+                break;
+            }
+
+            double candidate = fragments.AdvanceBetween(in fragment, run.TextStart, end);
+            if (candidate > available)
+            {
+                break;
+            }
+
+            length = end - run.TextStart;
+            width = candidate;
+        }
+
+        return (length, width);
+    }
+
     /// <summary>Lays the text out as runs over measured fragments, the way the cluster path does with clusters.</summary>
     internal ManagedTextLayout CreateLayoutViaRuns(TextLayoutRequestSnapshot snapshot)
     {
@@ -180,6 +356,7 @@ internal sealed partial class ManagedTextEngine
         var fragments = MeasureFragments(context, snapshot);
         var runs = new List<ManagedTextRun>();
         var lines = AssembleRunLines(context, snapshot, fragments, runs);
+        ApplyRunTrimming(context, snapshot, lines, fragments, runs);
         ApplyLineBoxTrim(snapshot, lines);
 
         double measuredWidth = 0;

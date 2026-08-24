@@ -75,6 +75,26 @@ internal sealed class ManagedTextFragments
     public ReadOnlySpan<int> BoundariesOf(in ManagedTextFragment fragment)
         => Boundaries.AsSpan(fragment.BoundaryStart, fragment.BoundaryCount);
 
+    /// <summary>Index of the fragment covering this position.</summary>
+    public int IndexOfFragment(int textStart)
+    {
+        int low = 0;
+        int high = Count - 1;
+        while (low < high)
+        {
+            int middle = low + ((high - low + 1) / 2);
+            if (Items[middle].TextStart <= textStart)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+        return low;
+    }
+
     public void AddFragment(in ManagedTextFragment fragment)
     {
         if (Count == Items.Length)
