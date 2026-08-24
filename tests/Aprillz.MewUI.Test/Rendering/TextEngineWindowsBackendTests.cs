@@ -338,8 +338,8 @@ public sealed class TextEngineWindowsBackendTests
         context.Text.Draw(layout, Point.Zero, new TextDrawOptions(Color.White, Owner: owner));
         context.EndFrame();
 
-        Assert.IsFalse(layout.HasMaterializedClusters,
-            $"{factory.Backend}: 10MB fast draw materialized per-grapheme objects.");
+        Assert.IsFalse(layout.HasMaterializedColumns,
+            $"{factory.Backend}: 10MB fast draw built columns for the whole line.");
         var pixels = ((ICpuPixelSurface)surface).GetReadOnlyPixelSpan();
         int covered = 0;
         for (int index = 3; index < pixels.Length; index += 4)

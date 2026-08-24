@@ -135,6 +135,13 @@ internal sealed partial class ManagedTextEngine
     /// Measures the text into fragments: the same pieces the cluster list described, with each
     /// piece's columns written into one advance array instead of an object per grapheme.
     /// </summary>
+    /// <summary>Measures the text into fragments through a context of its own.</summary>
+    internal ManagedTextFragments MeasureFragments(TextLayoutRequestSnapshot snapshot)
+    {
+        using var context = CreateMeasurementContext(snapshot.Dpi);
+        return MeasureFragments(context, snapshot);
+    }
+
     internal ManagedTextFragments MeasureFragments(
         ITextBackendMeasurementContext context,
         TextLayoutRequestSnapshot snapshot)

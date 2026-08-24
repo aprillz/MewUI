@@ -162,8 +162,7 @@ internal sealed partial class ManagedTextEngine
             double baseline = ApplyHalfLeading(font.Ascent, height, font.Ascent + font.Descent);
             lines.Add(new ManagedTextLine(
                 new TextLayoutLineMetrics(
-                    snapshot.Text.Length, 0, 0, new Rect(ResolveLineX(snapshot.Paragraph, 0), y, 0, height), baseline),
-                clusters: null)
+                    snapshot.Text.Length, 0, 0, new Rect(ResolveLineX(snapshot.Paragraph, 0), y, 0, height), baseline))
             {
                 RunStart = runs.Count,
                 RunCount = 0
@@ -353,11 +352,18 @@ internal sealed partial class ManagedTextEngine
     internal ManagedTextLayout CreateLayoutViaRuns(TextLayoutRequestSnapshot snapshot)
     {
         using var context = CreateMeasurementContext(snapshot.Dpi);
+        return CreateRunLayout(context, snapshot);
+    }
+
+    private ManagedTextLayout CreateRunLayout(
+        ITextBackendMeasurementContext context,
+        TextLayoutRequestSnapshot snapshot)
+    {
         var fragments = MeasureFragments(context, snapshot);
         var runs = new List<ManagedTextRun>();
         var lines = AssembleRunLines(context, snapshot, fragments, runs);
         ApplyRunTrimming(context, snapshot, lines, fragments, runs);
-        ApplyLineBoxTrim(snapshot, lines);
+        ApplyLineBoxTrim(snapshot, lines, runs);
 
         double measuredWidth = 0;
         for (int index = 0; index < lines.Count; index++)
@@ -452,8 +458,7 @@ internal sealed partial class ManagedTextEngine
                 new Rect(x, y, width, height),
                 baseline,
                 trailingWhitespace,
-                trailingWhitespaceLength),
-            clusters: null)
+                trailingWhitespaceLength))
         {
             RunStart = runStart,
             RunCount = runs.Count - runStart

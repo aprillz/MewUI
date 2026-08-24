@@ -84,7 +84,7 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 
     internal static bool CanDrawFastPath(ManagedTextLayout layout, in TextDrawOptions options)
         => layout.IsFastPath &&
-           !layout.HasMaterializedClusters &&
+           !layout.HasMaterializedColumns &&
            options.PaintSpans.IsEmpty &&
            options.Overlays.IsEmpty;
 
@@ -103,53 +103,29 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
             double inkY = origin.Y + line.Metrics.Bounds.Y - line.TrimTop;
             double inkHeight = line.Metrics.Bounds.Height + line.TrimTop + line.TrimBottom;
             double inkBaseline = line.Metrics.Baseline + line.TrimTop;
-            var clusters = managed.EnsureClusters(line);
-            int index = 0;
-            while (index < clusters.Count)
+            var runs = managed.GetRuns(line);
+            for (int index = 0; index < runs.Length; index++)
             {
-                var cluster = clusters[index];
-                if (cluster.Kind == ManagedTextClusterKind.Inline)
+                ref readonly var run = ref runs[index];
+                if (run.Kind == ManagedTextRunKind.Inline)
                 {
-                    cluster.Inline!.Draw(this, new Point(origin.X + cluster.X, inkY));
-                    index++;
+                    managed.GetInline(in run)?.Draw(this, new Point(origin.X + run.X, inkY));
                     continue;
                 }
-                if (cluster.Kind is ManagedTextClusterKind.Tab or ManagedTextClusterKind.NewLine)
+                if (run.Kind is ManagedTextRunKind.Tab or ManagedTextRunKind.NewLine)
                 {
-                    index++;
                     continue;
                 }
 
-                int runEnd = index + 1;
-                while (runEnd < clusters.Count)
-                {
-                    var next = clusters[runEnd];
-                    if (next.Kind != ManagedTextClusterKind.Text ||
-                        next.Style != cluster.Style ||
-                        next.Start != clusters[runEnd - 1].End)
-                    {
-                        break;
-                    }
-                    runEnd++;
-                }
-
-                var last = clusters[runEnd - 1];
-                int textStart = cluster.Start;
-                int textLength = last.End - textStart;
-                double runWidth = last.X + last.Width - cluster.X;
-                var bounds = new Rect(
-                    origin.X + cluster.X,
-                    inkY,
-                    Math.Max(1, runWidth),
-                    inkHeight);
+                var bounds = new Rect(origin.X + run.X, inkY, Math.Max(1, run.Width), inkHeight);
                 var realized = GetOrCreateRun(
-                    managed, textStart, textLength, cluster.Font, runWidth, inkHeight, options.Transient);
+                    managed, run.TextStart, run.TextLength, run.Font, run.Width, inkHeight, options.Transient);
                 if (realized is not null)
                 {
                     try
                     {
                         DrawRunColorSegments(
-                            clusters, index, runEnd, origin, bounds, inkBaseline, realized, in options);
+                            managed, line.RunStart + index, origin, bounds, inkBaseline, realized, in options);
                     }
                     finally
                     {
@@ -159,12 +135,11 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                         }
                     }
                 }
-                index = runEnd;
             }
 
             if (line.IsTrimmed)
             {
-                DrawEllipsis(managed, line, clusters, origin, options.Foreground, EffectiveOwner(in options));
+                DrawEllipsis(managed, line, runs, origin, options.Foreground, EffectiveOwner(in options));
             }
         }
 
@@ -240,18 +215,18 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         }
     }
 
-    /// <summary>Draws the trimming ellipsis after the last surviving cluster of a trimmed line.</summary>
+    /// <summary>Draws the trimming ellipsis after the last surviving run of a trimmed line.</summary>
     private void DrawEllipsis(
         ManagedTextLayout managed,
         ManagedTextLine line,
-        List<ManagedTextCluster> clusters,
+        ReadOnlySpan<ManagedTextRun> runs,
         Point origin,
         Color color,
         object? owner)
     {
         var lineBounds = line.Metrics.Bounds;
-        var font = clusters.Count > 0 ? clusters[^1].Font : managed.GetDefaultFont();
-        double x = clusters.Count > 0 ? clusters[^1].X + clusters[^1].Width : lineBounds.X;
+        var font = runs.Length > 0 ? runs[^1].Font : managed.GetDefaultFont();
+        double x = runs.Length > 0 ? runs[^1].X + runs[^1].Width : lineBounds.X;
         double width = Math.Max(1, lineBounds.Right - x);
         double inkHeight = lineBounds.Height + line.TrimTop + line.TrimBottom;
         using var run = _backend.CreateRun(ELLIPSIS, font, width, inkHeight);
@@ -380,9 +355,8 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
     /// against the clean background instead of an overdrawn base pass.
     /// </summary>
     private void DrawRunColorSegments(
-        List<ManagedTextCluster> clusters,
-        int firstCluster,
-        int endCluster,
+        ManagedTextLayout managed,
+        int runIndex,
         Point origin,
         Rect runBounds,
         double baseline,
@@ -390,26 +364,31 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
         in TextDrawOptions options)
     {
         var spans = options.PaintSpans.Span;
-        int segmentStart = firstCluster;
-        var segmentColor = GetSpanForeground(spans, clusters[firstCluster].Start) ?? options.Foreground;
+        ref readonly var run = ref managed.GetRun(runIndex);
+        // Colour is resolved at each text element's first code unit, so a span that starts inside one
+        // colours the whole element rather than cutting the glyph in half.
+        var boundaries = managed.GetRunBoundaries(runIndex);
+        int segmentStart = 0;
+        var segmentColor = GetSpanForeground(spans, boundaries.Length > 0 ? boundaries[0] : run.TextStart)
+            ?? options.Foreground;
 
-        for (int clusterIndex = firstCluster + 1; clusterIndex <= endCluster; clusterIndex++)
+        for (int index = 1; index <= boundaries.Length; index++)
         {
             Color nextColor = default;
-            if (clusterIndex < endCluster)
+            if (index < boundaries.Length)
             {
-                nextColor = GetSpanForeground(spans, clusters[clusterIndex].Start) ?? options.Foreground;
+                nextColor = GetSpanForeground(spans, boundaries[index]) ?? options.Foreground;
                 if (nextColor == segmentColor)
                 {
                     continue;
                 }
             }
 
-            var startCluster = clusters[segmentStart];
-            var lastCluster = clusters[clusterIndex - 1];
-            double left = origin.X + startCluster.X;
-            double right = origin.X + lastCluster.X + lastCluster.Width;
-            if (segmentStart == firstCluster && clusterIndex == endCluster)
+            int startOffset = boundaries.Length > 0 ? boundaries[segmentStart] : run.TextStart;
+            int endOffset = index < boundaries.Length ? boundaries[index] : run.TextEnd;
+            double left = origin.X + managed.GetColumnX(in run, startOffset);
+            double right = origin.X + managed.GetColumnX(in run, endOffset);
+            if (segmentStart == 0 && index == boundaries.Length)
             {
                 DrawRun(realized, runBounds.Position, segmentColor, EffectiveOwner(in options));
             }
@@ -419,8 +398,8 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                 // on pixel ownership; backend clip rounding otherwise shifts the boundary column
                 // into the neighbor color depending on the fractional scroll offset.
                 double dpiScale = _context.DpiScale;
-                double clipLeft = segmentStart == firstCluster ? runBounds.X : Math.Floor(left * dpiScale) / dpiScale;
-                double clipRight = clusterIndex == endCluster ? runBounds.Right : Math.Floor(right * dpiScale) / dpiScale;
+                double clipLeft = segmentStart == 0 ? runBounds.X : Math.Floor(left * dpiScale) / dpiScale;
+                double clipRight = index == boundaries.Length ? runBounds.Right : Math.Floor(right * dpiScale) / dpiScale;
                 var clip = new Rect(clipLeft, runBounds.Y, Math.Max(0, clipRight - clipLeft), runBounds.Height).Intersect(runBounds);
                 if (!clip.IsEmpty)
                 {
@@ -436,9 +415,9 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
                     }
                 }
             }
-            DrawRunDecoration(startCluster.Style, left, right, runBounds, baseline, segmentColor);
+            DrawRunDecoration(managed.Snapshot.GetStyle(startOffset), left, right, runBounds, baseline, segmentColor);
 
-            segmentStart = clusterIndex;
+            segmentStart = index;
             segmentColor = nextColor;
         }
     }
