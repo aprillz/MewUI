@@ -266,7 +266,17 @@ public static class LayoutRounding
             return value;
         }
 
+        if (dpiScale <= 0)
+        {
+            return Math.Round(value, MidpointRounding.AwayFromZero);
+        }
+
+        // Quantized before rounding for the reason RoundToPixelInt gives, and to the same digit, so
+        // both answer the same pixel for the same input: a coordinate assembled from terms that went
+        // through 1/dpiScale reaches a half-pixel boundary a couple of ulps short of it, and rounding
+        // that directly drops it to the pixel below.
         // WPF-style: avoid banker's rounding to reduce jitter at .5 boundaries (e.g. 150% DPI).
-        return Math.Round(value * dpiScale, MidpointRounding.AwayFromZero) / dpiScale;
+        double scaled = Math.Round(value * dpiScale, MIDPOINT_NOISE_DIGITS);
+        return Math.Round(scaled, MidpointRounding.AwayFromZero) / dpiScale;
     }
 }
