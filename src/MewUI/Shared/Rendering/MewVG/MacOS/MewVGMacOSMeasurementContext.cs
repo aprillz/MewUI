@@ -14,6 +14,22 @@ internal sealed class MewVGMetalMeasurementContext : MeasureGraphicsContextBase,
 
     public override double DpiScale => _dpi / 96.0;
 
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    {
+        if (text.IsEmpty || font is not CoreTextFont ct || destination.Length < text.Length ||
+            !CoreTextText.TryGetUtf16PrefixAdvancesPx(ct, text, _dpi, destination))
+        {
+            return false;
+        }
+
+        double scale = DpiScale;
+        for (int index = 0; index < text.Length; index++)
+        {
+            destination[index] /= scale;
+        }
+        return true;
+    }
+
     double[] ITextAdvanceSource.GetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font)
     {
         if (!text.IsEmpty && font is CoreTextFont ct &&

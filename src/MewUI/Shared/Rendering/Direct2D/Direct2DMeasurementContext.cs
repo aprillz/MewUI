@@ -128,6 +128,25 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
         {
             return [];
         }
+
+        var advances = new double[text.Length];
+        FillUtf16PrefixAdvances(text, font, advances);
+        return advances;
+    }
+
+    bool ITextAdvanceSource.TryGetUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> destination)
+    {
+        if (text.IsEmpty || destination.Length < text.Length)
+        {
+            return text.IsEmpty;
+        }
+
+        FillUtf16PrefixAdvances(text, font, destination);
+        return true;
+    }
+
+    private void FillUtf16PrefixAdvances(ReadOnlySpan<char> text, IFont font, Span<double> result)
+    {
         if (font is not DirectWriteFont dwFont)
         {
             throw new ArgumentException("Font must be a DirectWriteFont.", nameof(font));
@@ -181,7 +200,6 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
 
             ApplyCustomFontFallback(textLayout);
             var runs = DWriteGlyphRunExtractor.Capture(textLayout);
-            var result = new double[text.Length];
             foreach (var run in runs)
             {
                 var glyphPrefix = new double[run.Advances.Length + 1];
@@ -230,7 +248,6 @@ internal sealed unsafe class Direct2DMeasurementContext : MeasureGraphicsContext
                 previous = Math.Max(previous, result[i]);
                 result[i] = previous;
             }
-            return result;
         }
         finally
         {
