@@ -6,18 +6,21 @@ internal static class RenderDeviceFactoryHelpers
 {
     public static bool TryReadPixels(IRenderSurface source, Span<byte> destination, int destinationStrideBytes)
     {
+        int logicalWidth = source.PixelWidth;
+        int logicalHeight = source.PixelHeight;
+        source = RenderSurfaceResource.ResolveBackendSurface(source);
         if (source is not ICpuPixelSurface cpuSurface)
         {
             return false;
         }
 
-        int rowBytes = checked(cpuSurface.PixelWidth * 4);
+        int rowBytes = checked(logicalWidth * 4);
         if (destinationStrideBytes < rowBytes)
         {
             return false;
         }
 
-        int requiredBytes = checked(destinationStrideBytes * Math.Max(0, cpuSurface.PixelHeight - 1) + rowBytes);
+        int requiredBytes = checked(destinationStrideBytes * Math.Max(0, logicalHeight - 1) + rowBytes);
         if (destination.Length < requiredBytes)
         {
             return false;
@@ -29,7 +32,7 @@ internal static class RenderDeviceFactoryHelpers
             return false;
         }
 
-        for (int y = 0; y < cpuSurface.PixelHeight; y++)
+        for (int y = 0; y < logicalHeight; y++)
         {
             var sourceRow = sourcePixels.Slice(y * cpuSurface.StrideBytes, rowBytes);
             var destRow = destination.Slice(y * destinationStrideBytes, rowBytes);
@@ -41,6 +44,7 @@ internal static class RenderDeviceFactoryHelpers
 
     public static IRenderOperation RequestReadback(IRenderSurface source)
     {
+        source = RenderSurfaceResource.ResolveBackendSurface(source);
         return source is IDeferredCpuReadableSurface deferred
             ? deferred.RequestReadback()
             : RenderOperation.Completed;

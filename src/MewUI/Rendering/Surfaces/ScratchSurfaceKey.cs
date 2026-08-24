@@ -8,17 +8,25 @@ namespace Aprillz.MewUI.Rendering;
 /// <param name="PixelHeight">Allocated surface height in pixels.</param>
 /// <param name="DpiScale">DPI scale the surface was created with.</param>
 /// <param name="HasAlpha">Whether the surface carries a per-pixel alpha channel.</param>
+/// <param name="ResourceClass">Opaque compatibility class used to prevent cross-purpose reuse.</param>
 public readonly record struct ScratchSurfaceKey(
     int PixelWidth,
     int PixelHeight,
     double DpiScale,
-    bool HasAlpha);
+    bool HasAlpha,
+    ScratchResourceClass ResourceClass = ScratchResourceClass.General);
+
+public enum ScratchResourceClass
+{
+    General = 0,
+    FilterIntermediate,
+    AtlasPage,
+}
 
 /// <summary>
 /// Scratch-surface acquisition for offscreen caches. Callers ask for the size they actually paint;
-/// the pool behind <see cref="IRenderDevice.ResourceCache"/> rounds the allocation up so a resize
-/// sweep reuses a handful of surfaces instead of creating one per frame. The returned surface is
-/// therefore usually larger than requested - paint the top-left region and blit with a source rect.
+/// the pool behind <see cref="IRenderDevice.ResourceCache"/> may reuse a larger allocation. The returned
+/// logical view always reports the requested dimensions; the allocation size remains internal.
 /// </summary>
 public static class ScratchSurfaceExtensions
 {
@@ -35,22 +43,27 @@ public static class ScratchSurfaceExtensions
         bool hasAlpha = true,
         string? debugName = null)
     {
-        int allocWidth = ScratchSurfaceSize.Approximate(pixelWidth);
-        int allocHeight = ScratchSurfaceSize.Approximate(pixelHeight);
-        var key = new ScratchSurfaceKey(allocWidth, allocHeight, dpiScale, hasAlpha);
+        pixelWidth = Math.Max(1, pixelWidth);
+        pixelHeight = Math.Max(1, pixelHeight);
+        var key = new ScratchSurfaceKey(pixelWidth, pixelHeight, dpiScale, hasAlpha);
 
-        long bytes = RenderMemoryLedger.ScratchBytes(allocWidth, allocHeight);
+        IRenderSurface allocation;
+        long bytes;
         var pooled = device.ResourceCache?.RentScratchSurface(key);
         if (pooled != null)
         {
+            allocation = pooled;
+            bytes = RenderMemoryLedger.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
             RenderMemoryLedger.ScratchAcquired(bytes, created: false);
-            return pooled;
         }
-
-        var created = device.CreateSurface(
-            RenderSurfaceDescriptor.CachedImage(allocWidth, allocHeight, dpiScale, debugName, hasAlpha));
-        RenderMemoryLedger.ScratchAcquired(bytes, created: true);
-        return created;
+        else
+        {
+            allocation = device.CreateSurface(
+                RenderSurfaceDescriptor.CachedImage(pixelWidth, pixelHeight, dpiScale, debugName, hasAlpha));
+            bytes = RenderMemoryLedger.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
+            RenderMemoryLedger.ScratchAcquired(bytes, created: true);
+        }
+        return new LeasedRenderSurfaceView(device, allocation, pixelWidth, pixelHeight);
     }
 
     /// <summary>
@@ -59,6 +72,12 @@ public static class ScratchSurfaceExtensions
     /// </summary>
     public static void ReleaseScratchSurface(this IRenderDevice device, IRenderSurface surface)
     {
+        if (surface is LeasedRenderSurfaceView lease)
+        {
+            lease.Dispose();
+            return;
+        }
+
         var cache = device.ResourceCache;
         RenderMemoryLedger.ScratchReleased(RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight));
         if (cache == null || surface.IsDisposed)

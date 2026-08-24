@@ -136,6 +136,11 @@ public sealed partial class MewVGWin32GraphicsFactory
     {
         ArgumentNullException.ThrowIfNull(target);
 
+        if (target is IRenderSurface surface)
+        {
+            target = RenderSurfaceResource.ResolveBackendSurface(surface);
+        }
+
         if (target is WindowRenderTarget windowTarget)
         {
             return CreateContextCore(windowTarget);
@@ -200,16 +205,25 @@ public sealed partial class MewVGWin32GraphicsFactory
             descriptor.RequiredCapabilities.HasFlag(SurfaceCapabilities.Alpha));
 
     public IGraphicsContext CreateContext(IRenderSurface surface)
-        => surface.Capabilities.HasFlag(SurfaceCapabilities.Renderable)
+    {
+        surface = RenderSurfaceResource.ResolveBackendSurface(surface);
+        return surface.Capabilities.HasFlag(SurfaceCapabilities.Renderable)
             ? CreateContext((IRenderTarget)surface)
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create contexts for renderable surfaces.");
+    }
 
     public IImage CreateImageView(IRenderSurface surface)
-        => surface is IPixelBufferSource pixelSource
+    {
+        int logicalWidth = surface.PixelWidth;
+        int logicalHeight = surface.PixelHeight;
+        surface = RenderSurfaceResource.ResolveBackendSurface(surface);
+        var image = surface is IPixelBufferSource pixelSource
             ? CreateImageView(pixelSource)
             : throw new NotSupportedException(
                 $"{GetType().Name} can only create image views for pixel-backed surfaces.");
+        return ImageResource.WrapLogical(image, logicalWidth, logicalHeight);
+    }
 
     public IImage CreateImageView(IExternalRasterSource source)
         => CreateExternalRasterImage(source);

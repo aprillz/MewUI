@@ -54,8 +54,8 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     protected override void OnBeginFrame(IRenderTarget target)
     {
         _dpiScale = target.DpiScale <= 0 ? 1.0 : target.DpiScale;
-        _viewportWidthPx = Math.Max(1, target.PixelWidth);
-        _viewportHeightPx = Math.Max(1, target.PixelHeight);
+        _viewportWidthPx = Math.Max(1, FramePixelWidth);
+        _viewportHeightPx = Math.Max(1, FramePixelHeight);
         _viewportWidthDip = _viewportWidthPx / DpiScale;
         _viewportHeightDip = _viewportHeightPx / DpiScale;
 

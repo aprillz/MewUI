@@ -12,3 +12,20 @@ public interface IRenderSurface : IRenderTarget, IDisposable
 
     bool IsDisposed { get; }
 }
+
+internal interface IBackendSurfaceProvider
+{
+    IRenderSurface BackendSurface { get; }
+}
+
+internal static class RenderSurfaceResource
+{
+    public static IRenderSurface ResolveBackendSurface(IRenderSurface surface)
+    {
+        while (surface is IBackendSurfaceProvider provider)
+        {
+            surface = provider.BackendSurface;
+        }
+        return surface;
+    }
+}

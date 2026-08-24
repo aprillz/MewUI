@@ -58,11 +58,15 @@ public interface IRenderResourceCache
     void Trim(RenderCacheTrimReason reason);
 
     /// <summary>
-    /// Takes a pooled scratch surface matching <paramref name="key"/> exactly, or
-    /// <see langword="null"/> when the pool holds none. The caller owns the surface until it is
-    /// handed back via <see cref="ReturnScratchSurface"/>; the previous content is undefined.
+    /// Takes an exact or bounded larger scratch surface compatible with <paramref name="key"/>,
+    /// or <see langword="null"/> when the pool holds none. The caller owns the allocation until it
+    /// is handed back via <see cref="ReturnScratchSurface"/>; the previous content is undefined.
     /// </summary>
     IRenderSurface? RentScratchSurface(ScratchSurfaceKey key);
+
+    /// <summary>Rents a scratch surface, optionally rejecting larger compatible allocations.</summary>
+    IRenderSurface? RentScratchSurface(ScratchSurfaceKey key, bool exactSizeOnly)
+        => RentScratchSurface(key);
 
     /// <summary>
     /// Hands a surface (back) to the scratch pool for later reuse under <paramref name="key"/>.
