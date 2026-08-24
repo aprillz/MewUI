@@ -29,7 +29,12 @@ internal sealed class ManagedTextLayout : ITextLayout
         _engine = engine;
         Snapshot = snapshot;
         _lines = lines;
-        _lineMetrics = lines.Select(static line => line.Metrics).ToArray();
+        var metrics = new TextLayoutLineMetrics[lines.Count];
+        for (int index = 0; index < lines.Count; index++)
+        {
+            metrics[index] = lines[index].Metrics;
+        }
+        _lineMetrics = metrics;
         MeasuredSize = measuredSize;
         ContentHeight = lines.Count == 0 ? 0 : lines[^1].Metrics.Bounds.Bottom;
         IsFastPath = isFastPath;
@@ -53,7 +58,7 @@ internal sealed class ManagedTextLayout : ITextLayout
 
     public TextLayoutRequestSnapshot Snapshot { get; }
 
-    public IReadOnlyList<ManagedTextLine> ManagedLines => _lines;
+    internal List<ManagedTextLine> ManagedLines => _lines;
 
     public Size MeasuredSize { get; }
 
@@ -66,7 +71,20 @@ internal sealed class ManagedTextLayout : ITextLayout
     internal IFont GetDefaultFont() => _engine.GetFont(Snapshot.DefaultStyle, Snapshot.Dpi);
 
     /// <summary>True once any line has built the runs its columns are read from.</summary>
-    internal bool HasMaterializedColumns => _lines.Any(static line => line.RunCount > 0);
+    internal bool HasMaterializedColumns
+    {
+        get
+        {
+            foreach (var line in _lines)
+            {
+                if (line.RunCount > 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
 
     public CharacterHit HitTestPoint(Point point)
     {
