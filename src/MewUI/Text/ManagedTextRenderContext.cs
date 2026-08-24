@@ -91,8 +91,10 @@ internal sealed class ManagedTextRenderContext : ITextRenderContext, IDisposable
 
     private void DrawForegroundCore(ManagedTextLayout managed, Point origin, in TextDrawOptions options)
     {
-        foreach (var line in managed.ManagedLines)
+        var lines = managed.ManagedLines;
+        for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
+            var line = lines[lineIndex];
             // Ink renders in the untrimmed box: a cap-trimmed line reports a smaller layout box,
             // but the glyphs keep their font-metric position and may overflow it.
             double inkY = origin.Y + line.Metrics.Bounds.Y - line.TrimTop;

@@ -429,11 +429,12 @@ internal sealed partial class ManagedTextEngine : ITextEngine, IDisposable
     /// </summary>
     private static double GetTabWidth(TextParagraphStyle paragraph, double x, double spaceWidth)
     {
-        foreach (double stop in paragraph.TabStops)
+        var stops = paragraph.TabStops;
+        for (int index = 0; index < stops.Count; index++)
         {
-            if (stop > x)
+            if (stops[index] > x)
             {
-                return stop - x;
+                return stops[index] - x;
             }
         }
 
