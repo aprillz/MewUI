@@ -43,6 +43,7 @@ public sealed class SelectionGeometryScaleTests
     [DataRow(1.0)]
     [DataRow(1.25)]
     [DataRow(1.5)]
+    [DataRow(1.75)]
     public void OneSelectionIsOneOutline(double dpiScale)
     {
         if (!OperatingSystem.IsWindows())
@@ -67,6 +68,7 @@ public sealed class SelectionGeometryScaleTests
     [DataRow(1.0)]
     [DataRow(1.25)]
     [DataRow(1.5)]
+    [DataRow(1.75)]
     public void TheOutlineStaysInsideTheTextViewport(double dpiScale)
     {
         if (!OperatingSystem.IsWindows())
@@ -79,8 +81,12 @@ public sealed class SelectionGeometryScaleTests
         var viewport = view.Surface.TextViewportBounds;
         var bounds = geometry!.GetBounds();
 
-        Assert.IsGreaterThanOrEqualTo(viewport.Y, bounds.Y - (borderThickness / 2),
-            $"At {dpiScale:P0} the top of the outline is {viewport.Y - bounds.Y:F2} above the viewport.");
+        // Compared in device pixels: the two edges reach this point through different arithmetic, so
+        // in DIP an edge that sits exactly on the viewport can read one ulp below it.
+        double outerPx = (bounds.Y - (borderThickness / 2)) * dpiScale;
+        double viewportPx = viewport.Y * dpiScale;
+        Assert.IsGreaterThanOrEqualTo(viewportPx - 1e-6, outerPx,
+            $"At {dpiScale:P0} the top of the outline is {viewportPx - outerPx:F2}px above the viewport.");
     }
 
     private static PathGeometry? BuildSelectionGeometry(

@@ -61,14 +61,28 @@ public sealed class BackgroundGeometryBuilder
         }
 
         // Rounded on the outer edge and offset back by half the border, so a stroke of that width
-        // sits centred on a device pixel instead of straddling two.
+        // sits centred on a device pixel instead of straddling two. The edge is resolved in device
+        // pixels rather than by rounding a DIP: an outer edge that falls on a whole pixel reaches
+        // the rounding a couple of ulps below it once it has been through 1/scale, and lands on the
+        // pixel before the intended one.
         double dpiScale = textView.DpiScale;
         double halfBorder = 0.5 * BorderThickness;
         AddRectangle(
-            LayoutRounding.RoundToPixel(rectangle.Left - halfBorder, dpiScale) + halfBorder,
-            LayoutRounding.RoundToPixel(rectangle.Top - halfBorder, dpiScale) + halfBorder,
-            LayoutRounding.RoundToPixel(rectangle.Right + halfBorder, dpiScale) - halfBorder,
-            LayoutRounding.RoundToPixel(rectangle.Bottom + halfBorder, dpiScale) - halfBorder);
+            SnapOuterEdge(rectangle.Left, -halfBorder, dpiScale),
+            SnapOuterEdge(rectangle.Top, -halfBorder, dpiScale),
+            SnapOuterEdge(rectangle.Right, halfBorder, dpiScale),
+            SnapOuterEdge(rectangle.Bottom, halfBorder, dpiScale));
+    }
+
+    // Pushes an edge out by the offset, snaps that outer edge to a whole device pixel, and returns
+    // the stroke centre in DIP. Each term is converted to pixels before they are added: adding them
+    // in DIP first leaves a sum that is a couple of ulps off, and at 150% or 175% that is enough to
+    // round an edge onto the pixel before the one it sits on.
+    private static double SnapOuterEdge(double edgeDip, double offsetDip, double dpiScale)
+    {
+        double offsetPx = offsetDip * dpiScale;
+        double outerPx = Math.Round((edgeDip * dpiScale) + offsetPx, MidpointRounding.AwayFromZero);
+        return (outerPx - offsetPx) / dpiScale;
     }
 
     /// <summary>
