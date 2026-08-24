@@ -10,6 +10,7 @@ internal sealed class ManagedTextLayout : ITextLayout
     private readonly List<ManagedTextLine> _lines;
     private readonly IReadOnlyList<TextLayoutLineMetrics> _lineMetrics;
     private int[]? _fastCaretBoundaries;
+    private ManagedTextFragments? _fragments;
     private ManagedTextRun[]? _runs;
     private int _runCount;
     private float[]? _advances;
@@ -32,6 +33,22 @@ internal sealed class ManagedTextLayout : ITextLayout
         MeasuredSize = measuredSize;
         ContentHeight = lines.Count == 0 ? 0 : lines[^1].Metrics.Bounds.Bottom;
         IsFastPath = isFastPath;
+    }
+
+    /// <summary>Layout whose lines were assembled as runs over measured fragments, with no clusters behind them.</summary>
+    public ManagedTextLayout(
+        ManagedTextEngine engine,
+        TextLayoutRequestSnapshot snapshot,
+        List<ManagedTextLine> lines,
+        Size measuredSize,
+        ManagedTextFragments fragments,
+        List<ManagedTextRun> runs)
+        : this(engine, snapshot, lines, measuredSize, isFastPath: false)
+    {
+        _fragments = fragments;
+        _runs = [.. runs];
+        _runCount = runs.Count;
+        _advances = fragments.Advances;
     }
 
     public TextLayoutRequestSnapshot Snapshot { get; }
@@ -333,8 +350,10 @@ internal sealed class ManagedTextLayout : ITextLayout
     internal ReadOnlySpan<ManagedTextRun> GetRunsForTest(int lineIndex) => GetRuns(_lines[lineIndex]);
 
     internal double GetXForInsertionViaRuns(int lineIndex, int insertion)
+        => GetXForInsertionViaRuns(_lines[lineIndex], insertion);
+
+    private double GetXForInsertionViaRuns(ManagedTextLine line, int insertion)
     {
-        var line = _lines[lineIndex];
         var runs = GetRuns(line);
         if (runs.Length == 0)
         {
@@ -357,8 +376,10 @@ internal sealed class ManagedTextLayout : ITextLayout
     }
 
     internal CharacterHit HitTestLineViaRuns(int lineIndex, double x)
+        => HitTestLineViaRuns(_lines[lineIndex], x);
+
+    private CharacterHit HitTestLineViaRuns(ManagedTextLine line, double x)
     {
-        var line = _lines[lineIndex];
         var runs = GetRuns(line);
         if (runs.Length == 0)
         {
@@ -413,8 +434,11 @@ internal sealed class ManagedTextLayout : ITextLayout
     }
 
     internal bool TryGetLineRangeExtentViaRuns(int lineIndex, int start, int end, out double left, out double right)
+        => TryGetLineRangeExtentViaRuns(_lines[lineIndex], start, end, out left, out right);
+
+    private bool TryGetLineRangeExtentViaRuns(ManagedTextLine line, int start, int end, out double left, out double right)
     {
-        var runs = GetRuns(_lines[lineIndex]);
+        var runs = GetRuns(line);
         left = double.PositiveInfinity;
         right = double.NegativeInfinity;
         foreach (ref readonly var run in runs)
@@ -440,6 +464,10 @@ internal sealed class ManagedTextLayout : ITextLayout
         if (IsFastPath && line.Clusters is null)
         {
             return HitTestFastPath(line, x);
+        }
+        if (_fragments is not null)
+        {
+            return HitTestLineViaRuns(line, x);
         }
 
         var clusters = EnsureClusters(line);
@@ -476,6 +504,10 @@ internal sealed class ManagedTextLayout : ITextLayout
         {
             return GetFastPathX(line, insertion);
         }
+        if (_fragments is not null)
+        {
+            return GetXForInsertionViaRuns(line, insertion);
+        }
 
         double x = line.Metrics.Bounds.X;
         foreach (var cluster in EnsureClusters(line))
@@ -502,6 +534,10 @@ internal sealed class ManagedTextLayout : ITextLayout
             left = GetFastPathX(line, start);
             right = GetFastPathX(line, end);
             return true;
+        }
+        if (_fragments is not null)
+        {
+            return TryGetLineRangeExtentViaRuns(line, start, end, out left, out right);
         }
 
         left = double.PositiveInfinity;
