@@ -207,8 +207,8 @@ public sealed class TextEngineTier0Tests
         Assert.IsTrue(layout.IsFastPath);
         Assert.IsFalse(layout.Snapshot.HasMaterializedContentKey,
             "Owner caching hashed/copied the entire 10MB line into a content key.");
-        Assert.IsFalse(layout.HasMaterializedClusters,
-            "Fast-path layout eagerly materialized every grapheme in the 10MB line.");
+        Assert.IsFalse(layout.HasMaterializedColumns,
+            "Fast-path layout eagerly built columns for the whole 10MB line.");
 
         using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(320, 48, 1));
         using var context = factory.CreateContext(surface);
@@ -225,8 +225,8 @@ public sealed class TextEngineTier0Tests
         Assert.IsLessThan(250L, drawMilliseconds,
             $"A clipped 10MB Fast Path draw regressed to {drawMilliseconds}ms.");
 
-        Assert.IsFalse(layout.HasMaterializedClusters,
-            "Drawing an undecorated fast-path line materialized all grapheme clusters.");
+        Assert.IsFalse(layout.HasMaterializedColumns,
+            "Drawing an undecorated fast-path line built columns for the whole line.");
 
         Rect endCaret = layout.GetCaretBounds(new CharacterHit(text.Length, 0));
         Assert.AreEqual(layout.MeasuredSize.Width, endCaret.X, 0.01);
@@ -235,8 +235,8 @@ public sealed class TextEngineTier0Tests
         int nearStart = layout.HitTestPoint(new Point(12, endCaret.Height * 0.5)).InsertionIndex;
         Assert.IsGreaterThan(0, nearStart);
         Assert.IsLessThan(text.Length, nearStart);
-        Assert.IsFalse(layout.HasMaterializedClusters,
-            "Fast-path end caret/hit-test materialized all grapheme clusters.");
+        Assert.IsFalse(layout.HasMaterializedColumns,
+            "Fast-path end caret and hit-test built columns for the whole line.");
     }
 
     [TestMethod]
