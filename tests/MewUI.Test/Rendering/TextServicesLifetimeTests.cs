@@ -26,4 +26,14 @@ public sealed class TextServicesLifetimeTests
 
         Assert.ThrowsExactly<ObjectDisposedException>(() => TextServices.GetEngine(factory));
     }
+
+    [TestMethod]
+    public void TrimWithoutLookup_DoesNotMaterializeOrDisposeEngine()
+    {
+        using var factory = new GdiGraphicsFactory();
+
+        TextServices.TrimIfCreated(factory);
+
+        Assert.IsNotNull(TextServices.GetEngine(factory));
+    }
 }

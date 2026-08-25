@@ -47,6 +47,33 @@ public sealed class DecodedPixelCacheTests
         victimOwner.Release();
     }
 
+    [TestMethod]
+    public void Trim_EvictsAllUnpinnedVariantsAndKeepsPinnedVariantsRegistered()
+    {
+        var cache = new DecodedPixelCache(1024, scheduleMaintenance: false);
+        var firstOwner = CreateOwner(8);
+        var pinnedOwner = CreateOwner(8);
+        var lastOwner = CreateOwner(8);
+        var first = new FakeSource();
+        var pinned = new FakeSource { IsPinned = true };
+        var last = new FakeSource();
+
+        cache.Register(first, firstOwner);
+        cache.Register(pinned, pinnedOwner);
+        cache.Register(last, lastOwner);
+
+        cache.Trim();
+
+        Assert.AreEqual(1, first.EvictionCount);
+        Assert.AreEqual(0, pinned.EvictionCount);
+        Assert.AreEqual(1, last.EvictionCount);
+        Assert.AreEqual((1, 8L), cache.GetStatistics());
+
+        firstOwner.Release();
+        pinnedOwner.Release();
+        lastOwner.Release();
+    }
+
     private static DecodedPixelOwner CreateOwner(int bytes) =>
         new(new Bgra32PixelBuffer(bytes / 4, 1, new byte[bytes], true));
 
