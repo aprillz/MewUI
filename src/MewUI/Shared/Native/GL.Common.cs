@@ -15,7 +15,6 @@ internal static class GL
 
     internal const uint GL_BLEND = 0x0BE2;
     internal const uint GL_SCISSOR_TEST = 0x0C11;
-    internal const uint GL_STENCIL_TEST = 0x0B90;
     internal const uint GL_TEXTURE_2D = 0x0DE1;
     internal const uint GL_LINE_SMOOTH = 0x0B20;
     internal const uint GL_MULTISAMPLE = 0x809D;
