@@ -125,7 +125,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 RetireEntry_NoLock(existing);
             }
 
-            long incomingBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+            long incomingBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
             if (incomingBytes > _persistentBudgetBytes)
             {
                 entry = null!;
@@ -188,7 +188,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             {
                 long bytes = EstimateResourceBytes(resource);
                 _pendingReleases.Add(new PendingRelease(resource, safeAfter, bytes));
-                RenderMemoryLedger.PendingReleaseAdded(bytes);
+                RenderResourceMetrics.PendingReleaseAdded(bytes);
             }
         }
     }
@@ -332,7 +332,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             }
 
             long requestedArea = (long)key.PixelWidth * key.PixelHeight;
-            long requestedBytes = RenderMemoryLedger.ScratchBytes(key.PixelWidth, key.PixelHeight);
+            long requestedBytes = RenderResourceMetrics.ScratchBytes(key.PixelWidth, key.PixelHeight);
             ScratchSurfaceKey selectedKey = default;
             int selectedIndex = -1;
             long newestUse = long.MinValue;
@@ -350,7 +350,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 }
 
                 long area = (long)candidateKey.PixelWidth * candidateKey.PixelHeight;
-                long bytes = RenderMemoryLedger.ScratchBytes(candidateKey.PixelWidth, candidateKey.PixelHeight);
+                long bytes = RenderResourceMetrics.ScratchBytes(candidateKey.PixelWidth, candidateKey.PixelHeight);
                 if ((area > requestedArea && area - requestedArea > requestedArea)
                     || bytes - requestedBytes > SCRATCH_MAX_EXTRA_BYTES)
                 {
@@ -410,7 +410,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         var pooled = bucket[index];
         bucket.RemoveAt(index);
         _scratchBytes -= pooled.Bytes;
-        RenderMemoryLedger.ScratchUnpooled(pooled.Bytes, disposed: false);
+        RenderResourceMetrics.ScratchUnpooled(pooled.Bytes, disposed: false);
         if (bucket.Count == 0)
         {
             _scratchBuckets.Remove(key);
@@ -427,7 +427,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             if (_disposed)
             {
                 surface.Dispose();
-                RenderMemoryLedger.ScratchDisposedOutsidePool();
+                RenderResourceMetrics.ScratchDisposedOutsidePool();
                 return;
             }
 
@@ -437,14 +437,14 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 _scratchBuckets[key] = bucket;
             }
 
-            long bytes = RenderMemoryLedger.ScratchBytes(key.PixelWidth, key.PixelHeight);
+            long bytes = RenderResourceMetrics.ScratchBytes(key.PixelWidth, key.PixelHeight);
             bucket.Add(new PooledScratchSurface(
                 surface,
                 bytes,
                 _tickProvider(),
                 ++_scratchReturnSequence));
             _scratchBytes += bytes;
-            RenderMemoryLedger.ScratchPooled(bytes);
+            RenderResourceMetrics.ScratchPooled(bytes);
 
             SweepIdleScratchNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT);
             EvictScratchToBudgetNoLock();
@@ -478,7 +478,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                     continue;
                 }
                 _scratchBytes -= bucket[i].Bytes;
-                RenderMemoryLedger.ScratchUnpooled(bucket[i].Bytes, disposed: true);
+                RenderResourceMetrics.ScratchUnpooled(bucket[i].Bytes, disposed: true);
                 bucket[i].Surface.Dispose();
                 bucket.RemoveAt(i);
                 evicted++;
@@ -530,7 +530,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             var victim = victimBucket[oldestIndex];
             victimBucket.RemoveAt(oldestIndex);
             _scratchBytes -= victim.Bytes;
-            RenderMemoryLedger.ScratchUnpooled(victim.Bytes, disposed: true);
+            RenderResourceMetrics.ScratchUnpooled(victim.Bytes, disposed: true);
             if (victimBucket.Count == 0)
             {
                 _scratchBuckets.Remove(oldestKey);
@@ -557,7 +557,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             foreach (var pooled in bucket)
             {
                 pooled.Surface.Dispose();
-                RenderMemoryLedger.ScratchUnpooled(pooled.Bytes, disposed: true);
+                RenderResourceMetrics.ScratchUnpooled(pooled.Bytes, disposed: true);
             }
         }
         _scratchBuckets.Clear();
@@ -592,7 +592,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 }
                 finally
                 {
-                    RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
+                    RenderResourceMetrics.PendingReleaseRemoved(pending.Bytes);
                     pending.Resource.Dispose();
                     if (pending.DisposeOperationSeparately)
                     {
@@ -656,7 +656,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         if (entry.SafeToDisposeAfter is { } operation && !operation.IsCompleted)
         {
             _pendingReleases.Add(new PendingRelease(entry, operation, entry.AccountedBytes, DisposeOperationSeparately: false));
-            RenderMemoryLedger.PendingReleaseAdded(entry.AccountedBytes);
+            RenderResourceMetrics.PendingReleaseAdded(entry.AccountedBytes);
             return;
         }
 
@@ -788,7 +788,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             }
 
             _pendingReleases.RemoveAt(i);
-            RenderMemoryLedger.PendingReleaseRemoved(pending.Bytes);
+            RenderResourceMetrics.PendingReleaseRemoved(pending.Bytes);
             pending.Resource.Dispose();
             if (pending.DisposeOperationSeparately)
             {
@@ -806,8 +806,8 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         => resource switch
         {
             CachedRenderResource entry => entry.AccountedBytes,
-            IRenderTarget target => RenderMemoryLedger.ScratchBytes(target.PixelWidth, target.PixelHeight),
-            IImage image => RenderMemoryLedger.ScratchBytes(image.PixelWidth, image.PixelHeight),
+            IRenderTarget target => RenderResourceMetrics.ScratchBytes(target.PixelWidth, target.PixelHeight),
+            IImage image => RenderResourceMetrics.ScratchBytes(image.PixelWidth, image.PixelHeight),
             _ => 0,
         };
 
@@ -828,8 +828,8 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             Image = image;
             SafeToDisposeAfter = safeToDisposeAfter;
             LastUseSequence = lastUseSequence;
-            AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
-            RenderMemoryLedger.PersistentResourceAdded(AccountedBytes);
+            AccountedBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+            RenderResourceMetrics.PersistentResourceAdded(AccountedBytes);
         }
 
         public RenderCacheKey Key { get; }
@@ -874,7 +874,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            RenderMemoryLedger.PersistentResourceRemoved(AccountedBytes);
+            RenderResourceMetrics.PersistentResourceRemoved(AccountedBytes);
             Image.Dispose();
             Surface.Dispose();
             SafeToDisposeAfter?.Dispose();

@@ -15,7 +15,7 @@ public static class MacOSPlatform
         Application.RegisterPlatformHost(CreateHost, Platform.PlatformSurfaceKind.MacOS, "MacOS",
             MacOSPlatformHost.SystemFontFamily);
         PlatformConventions.Current = new MacOSConventions();
-        Rendering.RenderMemoryLedger.ProcessMemoryReader = MacOSProcessMemory.Read;
+        Rendering.RenderResourceMetrics.ProcessMemoryReader = MacOSProcessMemory.Read;
     }
 
     private static MacOSPlatformHost CreateHost()

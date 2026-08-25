@@ -315,7 +315,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             {
                 _metadataComputed = true;
                 bool succeeded = _encoded != null && ImageDecoders.TryReadMetadata(_encoded, out _metadata);
-                RenderMemoryLedger.MetadataProbeCompleted(succeeded);
+                RenderResourceMetrics.MetadataProbeCompleted(succeeded);
                 if (succeeded)
                 {
                     _metadataValid = true;
@@ -387,7 +387,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
                 return false;
             }
 
-            RenderMemoryLedger.DecodeStarted();
+            RenderResourceMetrics.DecodeStarted();
             long estimatedTemporaryBytes = hasMetadata
                 ? Math.Max(1, (long)intrinsicWidth * intrinsicHeight * 4)
                 : ImageDecodeCoordinator.TemporaryByteBudget;
@@ -403,7 +403,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
                     out decodedOrientation);
             if (!decoded)
             {
-                RenderMemoryLedger.DecodeCompleted(succeeded: false);
+                RenderResourceMetrics.DecodeCompleted(succeeded: false);
                 if (_decodedValid)
                 {
                     _decodedPixelSource ??= new StaticPixelBufferSource(
@@ -447,7 +447,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             {
                 DecodedPixelCache.Shared.Register(this, _decodedOwner);
             }
-            RenderMemoryLedger.DecodeCompleted(succeeded: true);
+            RenderResourceMetrics.DecodeCompleted(succeeded: true);
             pixelSource = _decodedPixelSource;
             if (decodedIntrinsicVariant)
             {
@@ -474,12 +474,12 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     {
         ArgumentNullException.ThrowIfNull(factory);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        RenderMemoryLedger.ImageRealizationRequested();
+        RenderResourceMetrics.ImageRealizationRequested();
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
         if (TryCreateSharedDecodedImage(factory, targetPixelWidth, targetPixelHeight, out var sharedImage))
         {
-            RenderMemoryLedger.ImageRealizationCompleted();
+            RenderResourceMetrics.ImageRealizationCompleted();
             return sharedImage;
         }
 
@@ -491,7 +491,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         if (factory is IEncodedImageFactory encodedFactory)
         {
             var image = encodedFactory.CreateImageFromBytes(_encoded);
-            RenderMemoryLedger.ImageRealizationCompleted();
+            RenderResourceMetrics.ImageRealizationCompleted();
             return image;
         }
 
@@ -797,7 +797,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             _pixels = pixels;
             RenderIdentity = renderIdentity;
             ResidentScale = residentScale;
-            RenderMemoryLedger.NativeImageRealizationAdded(
+            RenderResourceMetrics.NativeImageRealizationAdded(
                 (long)image.PixelWidth * image.PixelHeight * 4);
         }
 
@@ -832,7 +832,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             {
                 return;
             }
-            RenderMemoryLedger.NativeImageRealizationRemoved(
+            RenderResourceMetrics.NativeImageRealizationRemoved(
                 (long)_image.PixelWidth * _image.PixelHeight * 4);
             _image.Dispose();
             _pixels.Release();
@@ -941,7 +941,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             _encodedBytes = encodedBytes;
             if (encodedBytes != 0)
             {
-                RenderMemoryLedger.EncodedBackingAdded(encodedBytes);
+                RenderResourceMetrics.EncodedBackingAdded(encodedBytes);
             }
         }
 
@@ -952,7 +952,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
                 long encodedBytes = Interlocked.Exchange(ref _encodedBytes, 0);
                 if (encodedBytes != 0)
                 {
-                    RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
+                    RenderResourceMetrics.EncodedBackingRemoved(encodedBytes);
                 }
             }
 
@@ -963,7 +963,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             long encodedBytes = Interlocked.Exchange(ref _encodedBytes, 0);
             if (encodedBytes != 0)
             {
-                RenderMemoryLedger.EncodedBackingRemoved(encodedBytes);
+                RenderResourceMetrics.EncodedBackingRemoved(encodedBytes);
             }
         }
     }

@@ -283,11 +283,11 @@ public abstract partial class UIElement
                     DpiScale = effectiveDpiScale,
                     DeviceGeneration = deviceGeneration,
                     OpaqueFill = opaqueFill,
-                    AccountedBytes = RenderMemoryLedger.ScratchBytes(cached.Surface.PixelWidth, cached.Surface.PixelHeight),
+                    AccountedBytes = RenderResourceMetrics.ScratchBytes(cached.Surface.PixelWidth, cached.Surface.PixelHeight),
                     Version = version,
                 };
                 _cache = entry;
-                RenderMemoryLedger.BitmapCacheEntryAdded(entry.AccountedBytes);
+                RenderResourceMetrics.BitmapCacheEntryAdded(entry.AccountedBytes);
                 return false;
             }
 
@@ -307,7 +307,7 @@ public abstract partial class UIElement
                     DpiScale = effectiveDpiScale,
                     DeviceGeneration = deviceGeneration,
                     OpaqueFill = opaqueFill,
-                    AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight),
+                    AccountedBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight),
                 };
                 if (factory.ResourceCache is { } resourceCache)
                 {
@@ -316,7 +316,7 @@ public abstract partial class UIElement
                     entry.Image = entry.PersistentLease.Image;
                 }
                 _cache = entry;
-                RenderMemoryLedger.BitmapCacheEntryAdded(entry.AccountedBytes);
+                RenderResourceMetrics.BitmapCacheEntryAdded(entry.AccountedBytes);
             }
             catch
             {
@@ -359,7 +359,7 @@ public abstract partial class UIElement
             return;
         }
         _cache = null;
-        RenderMemoryLedger.BitmapCacheEntryRemoved(entry.AccountedBytes);
+        RenderResourceMetrics.BitmapCacheEntryRemoved(entry.AccountedBytes);
 
         if (entry.PersistentLease != null)
         {

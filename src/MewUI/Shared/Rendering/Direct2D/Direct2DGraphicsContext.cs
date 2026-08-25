@@ -1557,7 +1557,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             long bytes = Interlocked.Exchange(ref AccountedBytes, 0);
             if (bytes != 0)
             {
-                RenderMemoryLedger.GeometryCacheBytesChanged(-bytes);
+                RenderResourceMetrics.GeometryCacheBytesChanged(-bytes);
             }
         }
     }
@@ -1583,7 +1583,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             long bytes = Interlocked.Exchange(ref entry.AccountedBytes, 0);
             if (bytes != 0)
             {
-                RenderMemoryLedger.GeometryCacheBytesChanged(-bytes);
+                RenderResourceMetrics.GeometryCacheBytesChanged(-bytes);
             }
         }
         _geometryCache.Clear();
@@ -1621,7 +1621,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             if (entry.NonZeroHandle != 0) { ComHelpers.Release(entry.NonZeroHandle); entry.NonZeroHandle = 0; }
             if (entry.EvenOddHandle != 0) { ComHelpers.Release(entry.EvenOddHandle); entry.EvenOddHandle = 0; }
             _geometryCacheBytes -= entry.AccountedBytes;
-            RenderMemoryLedger.GeometryCacheBytesChanged(-entry.AccountedBytes);
+            RenderResourceMetrics.GeometryCacheBytesChanged(-entry.AccountedBytes);
             entry.AccountedBytes = 0;
             _geometryCache.Remove(victim.Key);
         }
@@ -1672,7 +1672,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         long bytes = Math.Max(1, path.Commands.Length) * GEOMETRY_BYTES_PER_COMMAND;
         entry.AccountedBytes += bytes;
         _geometryCacheBytes += bytes;
-        RenderMemoryLedger.GeometryCacheBytesChanged(bytes);
+        RenderResourceMetrics.GeometryCacheBytesChanged(bytes);
         EvictGeometryCacheOverBudget(entry);
     }
 

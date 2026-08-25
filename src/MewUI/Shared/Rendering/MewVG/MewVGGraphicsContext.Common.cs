@@ -71,7 +71,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
             lock (_fillCacheGate)
             {
                 _fillCacheBytes -= bytes;
-                RenderMemoryLedger.GeometryCacheBytesChanged(-bytes);
+                RenderResourceMetrics.GeometryCacheBytesChanged(-bytes);
             }
         }
     }
@@ -86,7 +86,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
         lock (_fillCacheGate)
         {
             _fillCacheBytes += entry.CurrentBytes - entry.AccountedBytes;
-            RenderMemoryLedger.GeometryCacheBytesChanged(entry.CurrentBytes - entry.AccountedBytes);
+            RenderResourceMetrics.GeometryCacheBytesChanged(entry.CurrentBytes - entry.AccountedBytes);
             entry.AccountedBytes = entry.CurrentBytes;
             entry.LastUse = ++_fillCacheStamp;
 
@@ -114,7 +114,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
                     break;
                 }
                 _fillCacheBytes -= victim.Value.AccountedBytes;
-                RenderMemoryLedger.GeometryCacheBytesChanged(-victim.Value.AccountedBytes);
+                RenderResourceMetrics.GeometryCacheBytesChanged(-victim.Value.AccountedBytes);
                 victim.Value.AccountedBytes = 0;
                 _fillCache.Remove(victim.Key);
             }
@@ -134,7 +134,7 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
                 if (entry.AccountedBytes != 0)
                 {
                     _fillCacheBytes -= entry.AccountedBytes;
-                    RenderMemoryLedger.GeometryCacheBytesChanged(-entry.AccountedBytes);
+                    RenderResourceMetrics.GeometryCacheBytesChanged(-entry.AccountedBytes);
                     entry.AccountedBytes = 0;
                 }
 

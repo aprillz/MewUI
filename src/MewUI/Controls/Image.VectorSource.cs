@@ -368,8 +368,8 @@ public sealed partial class Image
 
     private void AccountVectorCache(IRenderSurface surface)
     {
-        _vectorAccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
-        RenderMemoryLedger.VectorCacheEntryAdded(_vectorAccountedBytes);
+        _vectorAccountedBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+        RenderResourceMetrics.VectorCacheEntryAdded(_vectorAccountedBytes);
     }
 
     private void ClearVectorCache(bool invalidateInFlight = true)
@@ -396,7 +396,7 @@ public sealed partial class Image
         }
         if (_vectorSurface != null)
         {
-            RenderMemoryLedger.VectorCacheEntryRemoved(_vectorAccountedBytes);
+            RenderResourceMetrics.VectorCacheEntryRemoved(_vectorAccountedBytes);
             _vectorAccountedBytes = 0;
         }
         _vectorPersistentLease = null;

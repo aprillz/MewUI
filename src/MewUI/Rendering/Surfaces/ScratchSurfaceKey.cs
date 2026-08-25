@@ -72,15 +72,15 @@ public static class ScratchSurfaceExtensions
         if (pooled != null)
         {
             allocation = pooled;
-            bytes = RenderMemoryLedger.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
-            RenderMemoryLedger.ScratchAcquired(bytes, created: false);
+            bytes = RenderResourceMetrics.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
+            RenderResourceMetrics.ScratchAcquired(bytes, created: false);
         }
         else
         {
             allocation = device.CreateSurface(
                 RenderSurfaceDescriptor.CachedImage(pixelWidth, pixelHeight, dpiScale, debugName, hasAlpha));
-            bytes = RenderMemoryLedger.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
-            RenderMemoryLedger.ScratchAcquired(bytes, created: true);
+            bytes = RenderResourceMetrics.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
+            RenderResourceMetrics.ScratchAcquired(bytes, created: true);
         }
         return new LeasedRenderSurfaceView(device, allocation, pixelWidth, pixelHeight, resourceClass);
     }

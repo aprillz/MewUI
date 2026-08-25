@@ -11,7 +11,7 @@ internal sealed class DecodedPixelOwner
     {
         Buffer = buffer;
         _accountedBytes = buffer.Data.LongLength;
-        RenderMemoryLedger.DecodedPixelsAdded(_accountedBytes);
+        RenderResourceMetrics.DecodedPixelsAdded(_accountedBytes);
     }
 
     public Bgra32PixelBuffer Buffer { get; }
@@ -46,7 +46,7 @@ internal sealed class DecodedPixelOwner
         long bytes = Interlocked.Exchange(ref _accountedBytes, 0);
         if (bytes != 0)
         {
-            RenderMemoryLedger.DecodedPixelsRemoved(bytes);
+            RenderResourceMetrics.DecodedPixelsRemoved(bytes);
         }
     }
 

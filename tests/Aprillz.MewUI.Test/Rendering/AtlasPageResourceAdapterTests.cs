@@ -11,9 +11,9 @@ public sealed class AtlasPageResourceAdapterTests
     {
         using var device = new FakeDevice();
         var adapter = new AtlasPageResourceAdapter(device);
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
         Assert.IsTrue(adapter.TryAcquire("Vector", out var first));
-        Assert.AreEqual(before.AtlasPageCount + 1, RenderMemoryLedger.Snapshot().AtlasPageCount);
+        Assert.AreEqual(before.AtlasPageCount + 1, RenderResourceMetrics.Snapshot().AtlasPageCount);
         var allocation = ((IBackendSurfaceProvider)first!.Surface).BackendSurface;
         first.Dispose();
 
@@ -23,7 +23,7 @@ public sealed class AtlasPageResourceAdapterTests
         Assert.AreEqual(AtlasPageResourceAdapter.DefaultPageExtent, second.Surface.PixelHeight);
         Assert.AreSame(allocation, ((IBackendSurfaceProvider)second.Surface).BackendSurface);
         second.Dispose();
-        Assert.AreEqual(before.AtlasPageCount, RenderMemoryLedger.Snapshot().AtlasPageCount);
+        Assert.AreEqual(before.AtlasPageCount, RenderResourceMetrics.Snapshot().AtlasPageCount);
     }
 
     [TestMethod]

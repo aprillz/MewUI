@@ -27,7 +27,7 @@ internal static class ImageDecodeCoordinator
                 }
 
                 s_reservedBytes += estimatedTemporaryBytes;
-                RenderMemoryLedger.DecodeTemporaryAdded(estimatedTemporaryBytes);
+                RenderResourceMetrics.DecodeTemporaryAdded(estimatedTemporaryBytes);
             }
             return new Reservation(estimatedTemporaryBytes);
         }
@@ -53,7 +53,7 @@ internal static class ImageDecodeCoordinator
             lock (s_budgetLock)
             {
                 s_reservedBytes -= released;
-                RenderMemoryLedger.DecodeTemporaryRemoved(released);
+                RenderResourceMetrics.DecodeTemporaryRemoved(released);
                 Monitor.PulseAll(s_budgetLock);
             }
             s_slots.Release();

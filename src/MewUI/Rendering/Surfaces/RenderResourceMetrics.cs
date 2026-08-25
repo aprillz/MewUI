@@ -7,7 +7,7 @@ namespace Aprillz.MewUI.Rendering;
 /// now and whether every scratch surface that was acquired has come back. Bytes are the caches' own
 /// estimates (allocated pixel bytes, tessellation sizes), not a measurement of GPU memory.
 /// </summary>
-public static class RenderMemoryLedger
+public static class RenderResourceMetrics
 {
     // A pooled surface is a GPU texture plus driver bookkeeping; tiny surfaces still cost this much.
     private const long SCRATCH_MIN_ACCOUNTED_BYTES = 128L * 1024;
@@ -59,10 +59,10 @@ public static class RenderMemoryLedger
     internal static Func<ProcessMemory>? ProcessMemoryReader { get; set; }
 
     /// <summary>Reads the current totals.</summary>
-    public static RenderMemorySnapshot Snapshot()
+    public static RenderResourceSnapshot Snapshot()
     {
         var process = ReadProcessMemory();
-        return new RenderMemorySnapshot(
+        return new RenderResourceSnapshot(
             Volatile.Read(ref _scratchActiveCount),
             Volatile.Read(ref _scratchActiveBytes),
             Volatile.Read(ref _scratchPooledCount),
@@ -321,7 +321,7 @@ public static class RenderMemoryLedger
 /// <param name="PrivateWorkingSetSize">Resident memory not shared with any other process; 0 when the platform cannot report it.</param>
 public readonly record struct ProcessMemory(long PrivateUsage, long WorkingSetSize, long PrivateWorkingSetSize);
 
-/// <summary>One reading of <see cref="RenderMemoryLedger"/>.</summary>
+/// <summary>One reading of <see cref="RenderResourceMetrics"/>.</summary>
 /// <param name="ScratchActiveCount">Scratch surfaces currently rented by a cache (bitmap caches, vector caches).</param>
 /// <param name="ScratchActiveBytes">Allocated pixel bytes of the rented scratch surfaces.</param>
 /// <param name="ScratchPooledCount">Scratch surfaces sitting in the pool, ready to be rented.</param>
@@ -338,7 +338,7 @@ public readonly record struct ProcessMemory(long PrivateUsage, long WorkingSetSi
 /// <param name="WorkingSetSize">See <see cref="ProcessMemory.WorkingSetSize"/>.</param>
 /// <param name="PrivateWorkingSetSize">See <see cref="ProcessMemory.PrivateWorkingSetSize"/>.</param>
 /// <param name="GcHeapBytes">Managed heap at the time of the reading.</param>
-public readonly record struct RenderMemorySnapshot(
+public readonly record struct RenderResourceSnapshot(
     long ScratchActiveCount,
     long ScratchActiveBytes,
     long ScratchPooledCount,
