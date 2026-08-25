@@ -1,6 +1,7 @@
 <Project Sdk="MSTest.Sdk/4.0.1">
 
   <PropertyGroup>
+    <AssemblyName>Aprillz.MewUI.Test</AssemblyName>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
