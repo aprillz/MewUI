@@ -94,6 +94,7 @@ internal sealed class MewVGTextCache : IDisposable
         {
             _lru.Remove(replaced);
             _currentBytes -= replaced.Value.Bytes;
+            RenderMemoryLedger.TextCacheBytesChanged(-replaced.Value.Bytes);
             if (replaced.Value.Entry.ImageId != 0)
             {
                 _pendingDeletes.Enqueue(replaced.Value.Entry.ImageId);
@@ -104,6 +105,7 @@ internal sealed class MewVGTextCache : IDisposable
         _lru.AddFirst(newNode);
         _map[key] = newNode;
         _currentBytes += bytes;
+        RenderMemoryLedger.TextCacheBytesChanged(bytes);
 
         EvictIfNeeded();
         return entry;
@@ -160,6 +162,7 @@ internal sealed class MewVGTextCache : IDisposable
             slot.HeightPx = heightPx;
             slot.Linear = linear;
             slot.Bytes = EstimateBytes(widthPx, heightPx);
+            RenderMemoryLedger.TextCacheBytesChanged(slot.Bytes);
         }
 
         return new MewVGTextEntry(slot.ImageId, widthPx, heightPx, 0, 0, widthPx, heightPx);
@@ -170,6 +173,7 @@ internal sealed class MewVGTextCache : IDisposable
         if (slot.ImageId != 0)
         {
             _pendingDeletes.Enqueue(slot.ImageId);
+            RenderMemoryLedger.TextCacheBytesChanged(-slot.Bytes);
             slot.ImageId = 0;
             slot.Bytes = 0;
         }
@@ -216,6 +220,7 @@ internal sealed class MewVGTextCache : IDisposable
             }
 
             _currentBytes -= last.Value.Bytes;
+            RenderMemoryLedger.TextCacheBytesChanged(-last.Value.Bytes);
         }
     }
 
@@ -263,6 +268,7 @@ internal sealed class MewVGTextCache : IDisposable
 
         _lru.Clear();
         _map.Clear();
+        RenderMemoryLedger.TextCacheBytesChanged(-_currentBytes);
         _currentBytes = 0;
 
         foreach (var slot in _transientSlots)
