@@ -17,7 +17,7 @@
                       Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
     <!-- The core suite's headless backend, so a window here runs the same pipeline rather than a
          second copy of it that drifts as IWindowBackend grows. -->
-    <Compile Include="..\Aprillz.MewUI.Test\Infrastructure\HeadlessWindowBackend.cs"
+    <Compile Include="..\MewUI.Test\Infrastructure\HeadlessWindowBackend.cs"
              Link="Infrastructure\HeadlessWindowBackend.cs" />
   </ItemGroup>
 
