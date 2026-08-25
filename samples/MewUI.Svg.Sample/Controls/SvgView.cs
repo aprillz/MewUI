@@ -29,6 +29,7 @@ public sealed class SvgView : FrameworkElement
     // Background-rebuild state. _rebuildInProgress is read/written from both UI and
     // worker threads - volatile is sufficient (no compound state, just gate the kickoff).
     private volatile bool _rebuildInProgress;
+    private CancellationTokenSource? _rebuildCancellation;
     // Snapshot of the request that triggered the in-progress rebuild. UI thread compares
     // current view params against this on subsequent OnRender calls so it doesn't queue
     // duplicate rebuilds while one is already running.
@@ -46,6 +47,8 @@ public sealed class SvgView : FrameworkElement
     public static readonly MewProperty<TimeSpan> LastDrawTimeProperty = LastDrawTimePropertyKey.Property;
 
     private SvgDocument? _document;
+    private long _viewGeneration;
+    private readonly HashSet<SvgDocument> _documentsPendingCacheRelease = new();
 
     /// <summary>
     /// SVG source. Assigning a different document drops the bitmap cache so the next
@@ -61,8 +64,13 @@ public sealed class SvgView : FrameworkElement
             {
                 return;
             }
+            var previous = _document;
             _document = value;
-            InvalidateCache();
+            _viewGeneration++;
+            CancelRebuild();
+            ReleaseCache();
+            ScheduleDocumentCacheRelease(previous);
+            InvalidateVisual();
         }
     }
 
@@ -77,7 +85,10 @@ public sealed class SvgView : FrameworkElement
     /// </summary>
     public void InvalidateCache()
     {
+        _viewGeneration++;
+        CancelRebuild();
         ReleaseCache();
+        ScheduleDocumentCacheRelease(_document);
         InvalidateVisual();
     }
 
@@ -199,7 +210,8 @@ public sealed class SvgView : FrameworkElement
         Rect RenderBounds,
         double EffectiveScale,
         int PixelWidth,
-        int PixelHeight);
+        int PixelHeight,
+        long ViewGeneration);
 
     /// <summary>UI-thread entry point: decide whether the cache satisfies the current
     /// view, and if not, start a background rebuild. Compares the requested params to
@@ -221,14 +233,20 @@ public sealed class SvgView : FrameworkElement
             return; // Same rebuild already in flight; let it finish.
         }
 
-        // Different request OR no rebuild active - queue one. (If a stale rebuild is
-        // still running for an outdated zoom, we let it complete and discard its result
-        // on commit - see CommitRebuild below.)
-        if (_rebuildInProgress) return;
+        // A newer zoom/pan request supersedes the active rebuild. Cooperative cancellation
+        // stops the stale SVG traversal; completion invalidates the view so the latest
+        // request starts on the next render pass.
+        if (_rebuildInProgress)
+        {
+            CancelRebuild();
+            return;
+        }
         _rebuildInProgress = true;
         _pendingDpiScale = request.EffectiveScale;
         _pendingLocalRect = request.VisibleLocalRect;
-        _ = RebuildAsync(request);
+        var cancellation = new CancellationTokenSource();
+        _rebuildCancellation = cancellation;
+        _ = RebuildAsync(request, cancellation);
     }
 
     /// <summary>Reproduces EnsureCachedBitmap's UI-thread phase: compute effectiveScale,
@@ -314,15 +332,25 @@ public sealed class SvgView : FrameworkElement
             return false; // Cache hit on exact match.
         }
 
-        request = new RebuildRequest(doc, visibleLocalRect, renderBounds, effectiveScale, pixelWidth, pixelHeight);
+        request = new RebuildRequest(
+            doc,
+            visibleLocalRect,
+            renderBounds,
+            effectiveScale,
+            pixelWidth,
+            pixelHeight,
+            _viewGeneration);
         return true;
     }
 
     /// <summary>Worker-thread entry: builds the offscreen bitmap, then marshals back to
     /// the UI thread to swap fields and InvalidateVisual. Exceptions during build are
     /// swallowed (existing cache stays in place).</summary>
-    private async Task RebuildAsync(RebuildRequest request)
+    private async Task RebuildAsync(
+        RebuildRequest request,
+        CancellationTokenSource cancellation)
     {
+        var cancellationToken = cancellation.Token;
         IRenderSurface? newSurface = null;
         IImage? newImage = null;
         TimeSpan elapsed = TimeSpan.Zero;
@@ -330,6 +358,7 @@ public sealed class SvgView : FrameworkElement
         {
             await Task.Run(() =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var factory = Application.IsRunning
                     ? Application.Current.GraphicsFactory
                     : Application.DefaultGraphicsFactory;
@@ -339,6 +368,7 @@ public sealed class SvgView : FrameworkElement
                 // window worker HGLRC whose namespace is share-listed with all window
                 // contexts. D2D MULTI_THREADED / Metal / GDI return a no-op disposable.
                 using var workerScope = factory.AcquireBackgroundRenderScope();
+                cancellationToken.ThrowIfCancellationRequested();
 
                 var sw = Stopwatch.StartNew();
                 // GPU-preferring offscreen target so SvgView's render pass lives on the
@@ -358,6 +388,7 @@ public sealed class SvgView : FrameworkElement
                 }
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     pixels.Clear(Color.Transparent);
                     using (var bmpContext = renderDevice.CreateContext(surface))
                     {
@@ -366,13 +397,17 @@ public sealed class SvgView : FrameworkElement
                         {
                             bmpContext.Translate(-request.VisibleLocalRect.X, -request.VisibleLocalRect.Y);
                             bmpContext.IntersectClip(request.VisibleLocalRect);
-                            request.Document.Render(bmpContext, request.RenderBounds);
+                            request.Document.Render(
+                                bmpContext,
+                                request.RenderBounds,
+                                cancellationToken);
                         }
                         finally
                         {
                             bmpContext.EndFrame();
                         }
                     }
+                    cancellationToken.ThrowIfCancellationRequested();
                     newImage = renderDevice.CreateImageView(surface);
                     newSurface = surface;
                     surface = null!;
@@ -382,7 +417,14 @@ public sealed class SvgView : FrameworkElement
                     surface?.Dispose();
                 }
                 elapsed = sw.Elapsed;
-            }).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            newImage?.Dispose();
+            newSurface?.Dispose();
+            newImage = null;
+            newSurface = null;
         }
         catch (Exception ex)
         {
@@ -397,7 +439,12 @@ public sealed class SvgView : FrameworkElement
         // Marshal to UI thread for the field swap. BeginInvoke (async) is fine -
         // OnRender will pick up the new fields on its next pass after InvalidateVisual.
         var dispatcher = Application.IsRunning ? Application.Current.Dispatcher : null;
-        Action commit = () => CommitRebuild(request, newSurface, newImage, elapsed);
+        Action commit = () => CommitRebuild(
+            request,
+            newSurface,
+            newImage,
+            elapsed,
+            cancellation);
         if (dispatcher != null && !dispatcher.IsOnUIThread)
         {
             dispatcher.BeginInvoke(commit);
@@ -411,12 +458,26 @@ public sealed class SvgView : FrameworkElement
     /// <summary>UI-thread commit: replaces cache fields with the worker-built bitmap.
     /// Disposes the previous bitmap. If the build was cancelled / failed (newSurface=null)
     /// just clears the in-progress flag without touching the cache.</summary>
-    private void CommitRebuild(RebuildRequest request, IRenderSurface? newSurface, IImage? newImage, TimeSpan elapsed)
+    private void CommitRebuild(
+        RebuildRequest request,
+        IRenderSurface? newSurface,
+        IImage? newImage,
+        TimeSpan elapsed,
+        CancellationTokenSource cancellation)
     {
         try
         {
             if (newSurface is null || newImage is null)
             {
+                return;
+            }
+
+            if (cancellation.IsCancellationRequested
+                || request.ViewGeneration != _viewGeneration
+                || !ReferenceEquals(request.Document, _document))
+            {
+                newImage.Dispose();
+                newSurface.Dispose();
                 return;
             }
 
@@ -433,7 +494,13 @@ public sealed class SvgView : FrameworkElement
         }
         finally
         {
-            _rebuildInProgress = false;
+            if (ReferenceEquals(_rebuildCancellation, cancellation))
+            {
+                _rebuildCancellation = null;
+                _rebuildInProgress = false;
+            }
+            cancellation.Dispose();
+            ReleasePendingDocumentCaches();
             // Re-paint with the new cache. If the user has zoomed/panned during the
             // background build, the next OnRender will see params don't match and queue
             // another rebuild - that's the natural way to handle stale rebuilds.
@@ -454,12 +521,46 @@ public sealed class SvgView : FrameworkElement
         _cachedDpiScale = 0;
     }
 
+    private void ScheduleDocumentCacheRelease(SvgDocument? document)
+    {
+        if (document is null)
+        {
+            return;
+        }
+        if (_rebuildInProgress)
+        {
+            _documentsPendingCacheRelease.Add(document);
+            return;
+        }
+        document.InvalidateRenderCaches();
+    }
+
+    private void CancelRebuild()
+    {
+        _rebuildCancellation?.Cancel();
+    }
+
+    private void ReleasePendingDocumentCaches()
+    {
+        if (_documentsPendingCacheRelease.Count == 0)
+        {
+            return;
+        }
+        foreach (var document in _documentsPendingCacheRelease)
+        {
+            document.InvalidateRenderCaches();
+        }
+        _documentsPendingCacheRelease.Clear();
+    }
+
     protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
     {
         base.OnVisualRootChanged(oldRoot, newRoot);
         if (newRoot is null)
         {
+            CancelRebuild();
             ReleaseCache();
+            ScheduleDocumentCacheRelease(_document);
         }
     }
 

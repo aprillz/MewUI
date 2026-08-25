@@ -8,8 +8,8 @@ namespace Svg.FilterEffects;
 
 public partial class SvgFilter
 {
-    // Per-(filter, visual-element) result cache. Each entry owns a backend RT + IImage
-    // that survive across frames; on hit we skip the entire pipeline and just DrawImage.
+    // Per-(filter, visual-element) metadata cache. Pixel ownership lives in the device
+    // RenderResourceCache; on hit we lease its opaque image and skip the filter pipeline.
     //
     // The earlier "ReadPixels + CPU memcpy into DIB cache RT" version blew memory under
     // zoom because every cache miss allocated a fresh managed byte[] for GPU readback,
@@ -20,12 +20,12 @@ public partial class SvgFilter
 
     // Toggle for the [SvgFilter*] / [SvgFilterCache] / [SvgFilterTime] diagnostic spam.
     private readonly Dictionary<SvgVisualElement, FilterCacheEntry> _resultCache = new();
-    // Guards _resultCache and _pendingDisposal - same SvgFilter instance is shared by the
+    // Guards _resultCache and _pendingLeaseRelease - same SvgFilter instance is shared by the
     // SVG document and accessed concurrently from UI and worker render threads (SvgView
     // background cache build). Without a lock, Dictionary mutation races with TryGetValue,
     // and entry disposal can race with another thread's DrawFilterResult recording.
     private readonly object _cacheLock = new();
-    // Deferred-disposal queue for cache entries replaced or evicted mid-render. Modeled on
+    // Deferred-release queue for device-cache leases acquired during a render. Modeled on
     // the MewVG per-NVG image disposal queue: D2D's DrawImage records a reference to the
     // IImage that the device context retains internally until EndDraw. Disposing the entry
     // mid-frame (cache cap flush, replacement on miss) frees its underlying ID2D1Bitmap
@@ -33,8 +33,14 @@ public partial class SvgFilter
     // specific filtered elements going invisible at certain zooms (the missing element is
     // whichever's cache entry happened to be evicted between its DrawFilterResult and the
     // outer EndDraw). Drain at the start of the next ApplyFilter call: by that point the
-    // previous render's EndDraw has flushed and the entries are safe to release.
-    private readonly List<FilterCacheEntry> _pendingDisposal = new();
+    // previous render's EndDraw has flushed and the leases are safe to release.
+    private readonly List<IRenderCacheEntry> _pendingLeaseRelease = new();
+    private static long _nextFilterCacheIdentity;
+    private static long _nextElementCacheIdentity;
+    private static long _nextCacheRevision;
+    private readonly ulong _filterCacheIdentity =
+        unchecked((ulong)Interlocked.Increment(ref _nextFilterCacheIdentity));
+    private readonly Dictionary<SvgVisualElement, ulong> _elementCacheIdentities = new();
 
     private sealed class FilterCacheEntry : IDisposable
     {
@@ -44,8 +50,8 @@ public partial class SvgFilter
         // the same cache entry.
         public double EffectiveScaleX, EffectiveScaleY;
         public double FilterRegionWidth, FilterRegionHeight;
-        public IRenderSurface? Surface;
-        public IImage? OutputImage;
+        public required IRenderResourceCache Cache;
+        public required RenderCacheKey Key;
         public int OutputPixelWidth, OutputPixelHeight;
         public int SourcePixelWidth, SourcePixelHeight;
         public Rect ResultBounds;
@@ -56,17 +62,13 @@ public partial class SvgFilter
             return Math.Abs(EffectiveScaleX - effectiveScaleX) < 0.01
                 && Math.Abs(EffectiveScaleY - effectiveScaleY) < 0.01
                 && Math.Abs(FilterRegionWidth - regionWidth) < eps
-                && Math.Abs(FilterRegionHeight - regionHeight) < eps
-                && OutputImage is not null
-                && Surface is not null;
+                && Math.Abs(FilterRegionHeight - regionHeight) < eps;
         }
 
         public void Dispose()
         {
-            OutputImage?.Dispose();
-            Surface?.Dispose();
-            OutputImage = null;
-            Surface = null;
+            var cache = Interlocked.Exchange(ref Cache, null!);
+            cache?.Release(Key);
         }
     }
 
@@ -92,7 +94,10 @@ public partial class SvgFilter
         // Anything queued during a previous render has had its renderer's EndDraw flushed
         // by now, so its underlying D2D bitmap is no longer held by any command list and
         // can safely be released. This is the MewVG-equivalent "drain on safe boundary".
-        DrainPendingCacheDisposal();
+        DrainPendingCacheLeaseRelease();
+        long renderGeneration = renderer is MewSvgRenderer mewRenderer
+            ? mewRenderer.RenderCacheGeneration
+            : OwnerDocument?.RenderCacheGeneration ?? 0;
 
         var bounds = GetElementBounds(element, renderer);
         if (bounds.IsEmpty || bounds.Width <= 0d || bounds.Height <= 0d)
@@ -253,17 +258,27 @@ public partial class SvgFilter
                     hit = cached;
                 }
             }
-            if (hit is not null)
+            if (hit is not null && hit.Cache.TryGet(hit.Key, out var hitLease))
             {
                 // Draw outside the lock - DrawFilterResult records into the renderer's
                 // device context; doing it under _cacheLock would serialize all SvgFilter
                 // ApplyFilter calls across threads. The local 'hit' reference keeps the
-                // entry observable until DrawFilterResult returns; eviction by another
-                // thread between the read and the draw would queue the entry into
-                // _pendingDisposal but not dispose it until next ApplyFilter call.
-                DrawFilterResult(renderer, hit.OutputImage!,
-                    GetResultDestination(filterRegion, hit.ResultBounds, hit.SourcePixelWidth, hit.SourcePixelHeight),
-                    new Rect(0, 0, hit.OutputPixelWidth, hit.OutputPixelHeight));
+                // entry observable until DrawFilterResult returns. Releasing the local
+                // metadata concurrently is safe because this device-cache lease pins the
+                // image until a later render boundary.
+                try
+                {
+                    DrawFilterResult(renderer, hitLease.Image,
+                        GetResultDestination(filterRegion, hit.ResultBounds, hit.SourcePixelWidth, hit.SourcePixelHeight),
+                        new Rect(0, 0, hit.OutputPixelWidth, hit.OutputPixelHeight));
+                }
+                finally
+                {
+                    lock (_cacheLock)
+                    {
+                        _pendingLeaseRelease.Add(hitLease);
+                    }
+                }
                 return;
             }
         }
@@ -289,7 +304,13 @@ public partial class SvgFilter
             context.BeginFrame(sourceSurface);
             try
             {
-                using var offscreenRenderer = new MewSvgRenderer(offscreenFactory, context);
+                using var offscreenRenderer = new MewSvgRenderer(
+                    offscreenFactory,
+                    context,
+                    MewSvgRenderer.GetCancellationToken(renderer))
+                {
+                    RenderCacheGeneration = renderGeneration,
+                };
                 offscreenRenderer.SetBoundable(renderer.GetBoundable());
                 // SetTransform's scale × context.DpiScale = total logical-to-pixel ratio.
                 // We want that to equal effectiveLogicalToPixel, so divide by the bitmap's
@@ -309,6 +330,7 @@ public partial class SvgFilter
         // 2. Build the filter DAG from this filter element's primitive children, then evaluate.
         // The graph builder honors SVG `in` / `result` chaining (so feMerge, feComposite, etc.
         // produce correct output where the legacy per-primitive ApplyInPlace path could not).
+        MewSvgRenderer.ThrowIfCancellationRequested(renderer);
         var primitives = Children.OfType<SvgFilterPrimitive>().ToList();
         ImageFilter? graph = SvgFilterGraphBuilder.Build(primitives, renderer);
 
@@ -349,7 +371,9 @@ public partial class SvgFilter
             logicalToPixelScaleX: effectiveLogicalToPixelX * selfScaleX,
             logicalToPixelScaleY: effectiveLogicalToPixelY * selfScaleY);
 
+        MewSvgRenderer.ThrowIfCancellationRequested(renderer);
         using var result = executor.Execute(graph, ctx);
+        MewSvgRenderer.ThrowIfCancellationRequested(renderer);
 
         DrawFilterResult(renderer, result.AsImage(),
             GetResultDestination(filterRegion, result.Bounds, sourceSurface.PixelWidth, sourceSurface.PixelHeight),
@@ -365,7 +389,8 @@ public partial class SvgFilter
             TrySnapshotIntoCache(element, offscreenFactory, result,
                 effectiveLogicalToPixelX, effectiveLogicalToPixelY,
                 filterRegion.Width, filterRegion.Height,
-                sourceSurface.PixelWidth, sourceSurface.PixelHeight);
+                sourceSurface.PixelWidth, sourceSurface.PixelHeight,
+                renderGeneration);
         }
     }
 
@@ -400,62 +425,93 @@ public partial class SvgFilter
             resultBounds.Height * logicalPerPixelY);
     }
 
-    // Hard caps so the cache can't grow unbounded under bad workloads. Earlier values
-    // (256 × 1M = 1GB ceiling) blew working set on GDI/CPU paths where the cache holds
-    // pinned DIB sections. Tightened: 64 × 256K = 64MB ceiling, comfortable for typical
-    // 70-element SVGs and bounds the worst case.
-    private const int MaxCacheEntries = 16;
-    private const int MaxCacheEntryPixelArea = 32 * 1024 * 1024; // 256K pixels = ~1 MB per entry
-
     private void TrySnapshotIntoCache(
         SvgVisualElement element, IGraphicsFactory factory, FilterResult result,
         double effectiveScaleX, double effectiveScaleY,
         double regionWidth, double regionHeight,
-        int sourcePixelWidth, int sourcePixelHeight)
+        int sourcePixelWidth, int sourcePixelHeight,
+        long renderGeneration)
     {
         int pw = result.PixelWidth;
         int ph = result.PixelHeight;
-        if (pw <= 0 || ph <= 0) return;
+        if (pw <= 0 || ph <= 0 || factory.ResourceCache is not { } cache) return;
+        if (OwnerDocument?.RenderCacheGeneration != renderGeneration) return;
 
-        // Skip cache for huge outputs - caching a 4096×4096 result costs 64 MB; under
-        // continuous-zoom miss patterns that turns into hundreds of MB across elements.
-        // Big filters re-render full-pipeline; the cache helps small/medium elements
-        // where the win is largest (per-call setup overhead dominates).
-        if ((long)pw * ph > MaxCacheEntryPixelArea) return;
+        // Snapshot into a cache-owned surface. Admission, byte/count budgets, expiry, and
+        // oversize rejection are centralized in the device cache; local SVG state retains
+        // only the opaque key and geometry metadata.
+        IRenderSurface? surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(
+            pw, ph, 1, debugName: "SvgFilterResult"));
+        IImage? image = null;
+        IRenderCacheEntry? admittedLease = null;
+        bool cacheOwnsResources = false;
+        try
+        {
+            using (var cacheContext = factory.CreateContext(surface))
+            {
+                cacheContext.BeginFrame(surface);
+                try
+                {
+                    cacheContext.Clear(Aprillz.MewUI.Color.Transparent);
+                    cacheContext.DrawImage(
+                        result.AsImage(),
+                        new Rect(0, 0, pw, ph),
+                        new Rect(0, 0, pw, ph));
 
-        // Zero-copy: detach the result's underlying scratch surface (and matching IImage) and
-        // hand them to the cache. The pool release is suppressed inside Detach so the RT
-        // stays alive across frames; cache eviction disposes the RT explicitly. Pixels are
-        // not copied - cache hits re-use the exact buffer the filter wrote into. Only
-        // ScratchFilterResult supports detach (it's the only shape that owns a fresh RT).
-        if (result is not ScratchFilterResult scratch)
-        {
-            return;
-        }
-        var detached = scratch.Detach();
-        if (detached is null)
-        {
-            return;
-        }
-        var (surface, image) = detached.Value;
+                    // Request release while this temporary context still has an EndFrame
+                    // ahead of it. MewVG defers each NVG image-id deletion to its owning
+                    // context's next EndFrame; disposing only after this context ended left
+                    // its entry (and the scratch lease callback) permanently pending.
+                    result.Dispose();
+                }
+                finally
+                {
+                    cacheContext.EndFrame();
+                }
+            }
 
-        var entry = new FilterCacheEntry
-        {
-            EffectiveScaleX = effectiveScaleX,
-            EffectiveScaleY = effectiveScaleY,
-            FilterRegionWidth = regionWidth,
-            FilterRegionHeight = regionHeight,
-            Surface = surface,
-            OutputImage = image,
-            OutputPixelWidth = pw,
-            OutputPixelHeight = ph,
-            SourcePixelWidth = sourcePixelWidth,
-            SourcePixelHeight = sourcePixelHeight,
-            ResultBounds = result.Bounds,
-        };
+            image = factory.CreateImageView(surface);
+            var (scope, contentVersion) = CreateCacheIdentity(
+                element,
+                renderGeneration,
+                effectiveScaleX,
+                effectiveScaleY,
+                regionWidth,
+                regionHeight);
+            var key = new RenderCacheKey(
+                RenderCacheEntryKind.FilterResult,
+                pw,
+                ph,
+                Math.Max(effectiveScaleX, effectiveScaleY),
+                RenderPixelFormat.Bgra8888Premultiplied,
+                contentVersion,
+                DeviceId: 0,
+                Scope: scope).ForDevice(factory);
+            if (!cache.TryAdd(key, surface, image, out admittedLease))
+            {
+                return;
+            }
+            cacheOwnsResources = true;
 
-        lock (_cacheLock)
-        {
+            var entry = new FilterCacheEntry
+            {
+                EffectiveScaleX = effectiveScaleX,
+                EffectiveScaleY = effectiveScaleY,
+                FilterRegionWidth = regionWidth,
+                FilterRegionHeight = regionHeight,
+                Cache = cache,
+                Key = key,
+                OutputPixelWidth = pw,
+                OutputPixelHeight = ph,
+                SourcePixelWidth = sourcePixelWidth,
+                SourcePixelHeight = sourcePixelHeight,
+                ResultBounds = result.Bounds,
+            };
+
+            FilterCacheEntry? previous = null;
+            bool stale;
+            lock (_cacheLock)
+            {
             // If the dict is at cap, queue everything for deferred disposal - DO NOT
             // dispose mid-render because the current renderer's BeginDraw...EndDraw
             // bracket may still hold recorded DrawImage references to the entries that
@@ -463,47 +519,116 @@ public partial class SvgFilter
             // wrappers must survive until that EndDraw flushes. Drain at the next
             // ApplyFilter call (DrainPendingCacheDisposal) - by then the prior render's
             // EndDraw has fired.
-            if (_resultCache.Count >= MaxCacheEntries)
-            {
-                foreach (var existing in _resultCache.Values)
-                {
-                    _pendingDisposal.Add(existing);
-                }
-                _resultCache.Clear();
-            }
-
             // Same rationale for replacement: queue the previous entry for the same
             // element rather than disposing immediately. The previous entry may have been
             // returned by a cache HIT earlier in this same frame, with its DrawImage
             // pending in the renderer's command list.
-            if (_resultCache.TryGetValue(element, out var prev))
-            {
-                _pendingDisposal.Add(prev);
+                stale = OwnerDocument?.RenderCacheGeneration != renderGeneration;
+                if (!stale)
+                {
+                    _resultCache.TryGetValue(element, out previous);
+                    _resultCache[element] = entry;
+                }
             }
 
-            _resultCache[element] = entry;
+            if (stale)
+            {
+                entry.Dispose();
+                return;
+            }
+            previous?.Dispose();
+        }
+        finally
+        {
+            admittedLease?.Dispose();
+            if (!cacheOwnsResources)
+            {
+                image?.Dispose();
+                surface?.Dispose();
+            }
+        }
+    }
+
+    private (string Scope, ulong ContentVersion) CreateCacheIdentity(
+        SvgVisualElement element,
+        long renderGeneration,
+        double effectiveScaleX,
+        double effectiveScaleY,
+        double regionWidth,
+        double regionHeight)
+    {
+        ulong elementIdentity;
+        lock (_cacheLock)
+        {
+            if (!_elementCacheIdentities.TryGetValue(element, out elementIdentity))
+            {
+                elementIdentity = unchecked((ulong)Interlocked.Increment(ref _nextElementCacheIdentity));
+                _elementCacheIdentities.Add(element, elementIdentity);
+            }
+        }
+
+        ulong documentIdentity = OwnerDocument?.RenderCacheIdentity ?? 0;
+        ulong revision = unchecked((ulong)Interlocked.Increment(ref _nextCacheRevision));
+        string scope = $"SvgFilter:{documentIdentity:X16}:{_filterCacheIdentity:X16}:{elementIdentity:X16}:{revision:X16}";
+
+        // The revision makes replacement keys unique while this signature preserves the logical
+        // content dimensions required by diagnostics and device-cache partitioning.
+        ulong contentVersion = 14695981039346656037UL;
+        Add(unchecked((ulong)renderGeneration));
+        Add(unchecked((ulong)BitConverter.DoubleToInt64Bits(effectiveScaleX)));
+        Add(unchecked((ulong)BitConverter.DoubleToInt64Bits(effectiveScaleY)));
+        Add(unchecked((ulong)BitConverter.DoubleToInt64Bits(regionWidth)));
+        Add(unchecked((ulong)BitConverter.DoubleToInt64Bits(regionHeight)));
+        return (scope, contentVersion);
+
+        void Add(ulong value)
+        {
+            contentVersion ^= value;
+            contentVersion *= 1099511628211UL;
         }
     }
 
     /// <summary>
-    /// Releases cache entries queued during a previous render. Called at the start of
+    /// Releases cache leases queued during a previous render. Called at the start of
     /// every <see cref="ApplyFilter"/> - by that point any prior renderer's EndDraw has
-    /// flushed, so the entries' ID2D1Bitmap wrappers are no longer held by any D2D
+    /// flushed, so the leased backend image is no longer held by any D2D
     /// command list and can safely be released.
     /// </summary>
-    private void DrainPendingCacheDisposal()
+    private void DrainPendingCacheLeaseRelease()
     {
-        FilterCacheEntry[]? toDispose = null;
+        IRenderCacheEntry[]? toDispose = null;
         lock (_cacheLock)
         {
-            if (_pendingDisposal.Count > 0)
+            if (_pendingLeaseRelease.Count > 0)
             {
-                toDispose = _pendingDisposal.ToArray();
-                _pendingDisposal.Clear();
+                toDispose = _pendingLeaseRelease.ToArray();
+                _pendingLeaseRelease.Clear();
             }
         }
         if (toDispose is null) return;
         foreach (var entry in toDispose)
+        {
+            entry.Dispose();
+        }
+    }
+
+    internal void ReleaseRenderCacheAtSafeBoundary()
+    {
+        FilterCacheEntry[] entries;
+        IRenderCacheEntry[] pendingLeases;
+        lock (_cacheLock)
+        {
+            entries = _resultCache.Values.ToArray();
+            _resultCache.Clear();
+            pendingLeases = _pendingLeaseRelease.ToArray();
+            _pendingLeaseRelease.Clear();
+        }
+
+        foreach (var lease in pendingLeases)
+        {
+            lease.Dispose();
+        }
+        foreach (var entry in entries)
         {
             entry.Dispose();
         }

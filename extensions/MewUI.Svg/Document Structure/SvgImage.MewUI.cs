@@ -24,6 +24,7 @@ public partial class SvgImage
     private string? _cachedHref;
 
     private LoadedImage? _cachedImage;
+    private readonly object _imageCacheLock = new();
 
     public override Rect Bounds
     {
@@ -159,18 +160,33 @@ public partial class SvgImage
     /// across frames keyed by Href; invalidates on Href change.</summary>
     private LoadedImage? GetImageCached(string uriString)
     {
-        if (_cachedImage is not null && string.Equals(_cachedHref, uriString, StringComparison.Ordinal))
+        lock (_imageCacheLock)
         {
+            if (_cachedImage is not null && string.Equals(_cachedHref, uriString, StringComparison.Ordinal))
+            {
+                return _cachedImage;
+            }
+
+            // Href changed - drop previous decode.
+            _cachedImage?.Dispose();
+            _cachedImage = null;
+
+            _cachedImage = GetImage(uriString);
+            _cachedHref = uriString;
             return _cachedImage;
         }
+    }
 
-        // Href changed - drop previous decode.
-        _cachedImage?.Dispose();
-        _cachedImage = null;
-
-        _cachedImage = GetImage(uriString);
-        _cachedHref = uriString;
-        return _cachedImage;
+    internal void ReleaseRenderCacheAtSafeBoundary()
+    {
+        LoadedImage? cached;
+        lock (_imageCacheLock)
+        {
+            cached = _cachedImage;
+            _cachedImage = null;
+            _cachedHref = null;
+        }
+        cached?.Dispose();
     }
 
     public object? GetImage()
@@ -186,8 +202,10 @@ public partial class SvgImage
 
     private LoadedImage? GetImage(string uriString)
     {
+        var cancellationToken = MewSvgRenderer.CurrentCancellationToken;
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var safeUriString = uriString.Length > 65519 ? uriString[..65519] : uriString;
             var uri = new Uri(safeUriString, UriKind.RelativeOrAbsolute);
 
@@ -217,16 +235,24 @@ public partial class SvgImage
 
             if (uri.IsFile)
             {
-                return LoadFromBytes(File.ReadAllBytes(uri.LocalPath), uri);
+                var data = File.ReadAllBytesAsync(uri.LocalPath, cancellationToken)
+                    .GetAwaiter().GetResult();
+                cancellationToken.ThrowIfCancellationRequested();
+                return LoadFromBytes(data, uri);
             }
 
             if (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
             {
-                var data = ImageHttpClient.GetByteArrayAsync(uri).GetAwaiter().GetResult();
+                var data = ImageHttpClient.GetByteArrayAsync(uri, cancellationToken).GetAwaiter().GetResult();
+                cancellationToken.ThrowIfCancellationRequested();
                 return LoadFromBytes(data, uri);
             }
 
             throw new NotSupportedException();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -380,8 +406,6 @@ public partial class SvgImage
 
     private sealed record LoadedSvg(SvgDocument Document) : LoadedImage
     {
-        public override void Dispose()
-        {
-        }
+        public override void Dispose() => Document.InvalidateRenderCaches();
     }
 }

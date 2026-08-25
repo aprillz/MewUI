@@ -7,14 +7,23 @@ namespace Svg;
 
 internal sealed class MewSvgRenderer : ISvgRenderer
 {
+    private static readonly AsyncLocal<CancellationToken> CurrentCancellation = new();
     private readonly Stack<ISvgBoundable> _boundables = new();
+    private readonly CancellationToken _previousCancellationToken;
 
     private int _saveDepth;
+    private bool _disposed;
 
-    public MewSvgRenderer(IGraphicsFactory graphicsFactory, IGraphicsContext graphicsContext)
+    public MewSvgRenderer(
+        IGraphicsFactory graphicsFactory,
+        IGraphicsContext graphicsContext,
+        CancellationToken cancellationToken = default)
     {
         GraphicsFactory = graphicsFactory;
         GraphicsContext = graphicsContext;
+        CancellationToken = cancellationToken;
+        _previousCancellationToken = CurrentCancellation.Value;
+        CurrentCancellation.Value = cancellationToken;
     }
 
     public float DpiY => (float)(GraphicsContext.DpiScale * 96.0);
@@ -22,6 +31,12 @@ internal sealed class MewSvgRenderer : ISvgRenderer
     public IGraphicsContext GraphicsContext { get; }
 
     public IGraphicsFactory GraphicsFactory { get; }
+
+    internal CancellationToken CancellationToken { get; }
+
+    internal static CancellationToken CurrentCancellationToken => CurrentCancellation.Value;
+
+    internal long RenderCacheGeneration { get; set; }
 
     public Matrix3x2 Transform
     {
@@ -37,6 +52,7 @@ internal sealed class MewSvgRenderer : ISvgRenderer
 
     public void DrawImage(IImage image, Rect destRect, Rect srcRect, float opacity = 1f)
     {
+        CancellationToken.ThrowIfCancellationRequested();
         Save();
         try
         {
@@ -51,6 +67,7 @@ internal sealed class MewSvgRenderer : ISvgRenderer
 
     public void DrawImageUnscaled(IImage image, Point location, float opacity = 1f)
     {
+        CancellationToken.ThrowIfCancellationRequested();
         Save();
         try
         {
@@ -65,13 +82,23 @@ internal sealed class MewSvgRenderer : ISvgRenderer
 
     public void DrawPath(Pen pen, PathGeometry path)
     {
+        CancellationToken.ThrowIfCancellationRequested();
         GraphicsContext.DrawPath(path, pen);
     }
 
     public void FillPath(Brush brush, PathGeometry path)
     {
+        CancellationToken.ThrowIfCancellationRequested();
         GraphicsContext.FillPath(path, brush, path.FillRule);
     }
+
+    internal static CancellationToken GetCancellationToken(ISvgRenderer renderer)
+        => renderer is MewSvgRenderer mewRenderer
+            ? mewRenderer.CancellationToken
+            : CancellationToken.None;
+
+    internal static void ThrowIfCancellationRequested(ISvgRenderer renderer)
+        => GetCancellationToken(renderer).ThrowIfCancellationRequested();
 
     public ISvgBoundable GetBoundable()
     {
@@ -131,5 +158,12 @@ internal sealed class MewSvgRenderer : ISvgRenderer
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        CurrentCancellation.Value = _previousCancellationToken;
     }
 }

@@ -63,6 +63,7 @@ public abstract partial class SvgElement
 
     protected virtual void Render(ISvgRenderer renderer)
     {
+        MewSvgRenderer.ThrowIfCancellationRequested(renderer);
         try
         {
             if (PushTransforms(renderer))
@@ -80,6 +81,7 @@ public abstract partial class SvgElement
     {
         foreach (var element in Children)
         {
+            MewSvgRenderer.ThrowIfCancellationRequested(renderer);
             element.Render(renderer);
         }
     }
@@ -87,9 +89,11 @@ public abstract partial class SvgElement
 
     protected PathGeometry GetPaths(SvgElement element, ISvgRenderer renderer)
     {
+        MewSvgRenderer.ThrowIfCancellationRequested(renderer);
         var result = new PathGeometry();
         foreach (var child in element.Children)
         {
+            MewSvgRenderer.ThrowIfCancellationRequested(renderer);
             if (child is SvgSymbol)
             {
                 continue;

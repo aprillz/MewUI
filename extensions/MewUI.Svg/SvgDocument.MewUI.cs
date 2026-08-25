@@ -9,7 +9,13 @@ namespace Svg;
 
 public partial class SvgDocument
 {
+    private static long _nextRenderCacheIdentity;
     internal SvgFontManager? FontManager { get; private set; }
+    private readonly ulong _renderCacheIdentity = unchecked((ulong)Interlocked.Increment(ref _nextRenderCacheIdentity));
+    private long _renderCacheGeneration;
+
+    internal ulong RenderCacheIdentity => _renderCacheIdentity;
+    internal long RenderCacheGeneration => Interlocked.Read(ref _renderCacheGeneration);
 
     private static int GetWin32SystemDpi() => 96;
 
@@ -90,12 +96,26 @@ public partial class SvgDocument
     }
 
     public void Render(IGraphicsContext context, Rect destRect)
+        => Render(context, destRect, CancellationToken.None);
+
+    /// <summary>
+    /// Renders the document and cooperatively stops at SVG element and drawing-operation
+    /// boundaries when <paramref name="cancellationToken"/> is cancelled.
+    /// </summary>
+    public void Render(
+        IGraphicsContext context,
+        Rect destRect,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var factory = Application.IsRunning
             ? Application.Current.GraphicsFactory
             : Application.DefaultGraphicsFactory;
 
-        using var renderer = new MewSvgRenderer(factory, context);
+        using var renderer = new MewSvgRenderer(factory, context, cancellationToken)
+        {
+            RenderCacheGeneration = RenderCacheGeneration,
+        };
         var docSize = GetDimensions();
         var sourceWidth = Math.Max(1, docSize.Width);
         var sourceHeight = Math.Max(1, docSize.Height);
@@ -105,6 +125,7 @@ public partial class SvgDocument
         renderer.Save();
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             renderer.Transform =
                 Matrix3x2.CreateScale((float)scaleX, (float)scaleY) *
                 Matrix3x2.CreateTranslation((float)destRect.X, (float)destRect.Y) *
@@ -153,5 +174,23 @@ public partial class SvgDocument
     {
         ArgumentNullException.ThrowIfNull(renderer);
         Draw(renderer, this);
+    }
+
+    /// <summary>
+    /// Invalidates backend filter results after document content changes or after the last render
+    /// owner releases this document. Call only at a render-safe boundary; the document itself is
+    /// not disposed and may be rendered again immediately.
+    /// </summary>
+    public void InvalidateRenderCaches()
+    {
+        Interlocked.Increment(ref _renderCacheGeneration);
+        foreach (var filter in Descendants().OfType<FilterEffects.SvgFilter>())
+        {
+            filter.ReleaseRenderCacheAtSafeBoundary();
+        }
+        foreach (var image in Descendants().OfType<SvgImage>())
+        {
+            image.ReleaseRenderCacheAtSafeBoundary();
+        }
     }
 }
