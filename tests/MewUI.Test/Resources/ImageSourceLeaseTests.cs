@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 
 using Aprillz.MewUI;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Rendering.Gdi;
 using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Text;
 
@@ -74,6 +75,103 @@ public sealed class ImageSourceLeaseTests
         using var second = source.CreateImage(factory);
 
         Assert.AreNotSame(firstBackend, ImageResource.ResolveBackendImage(second));
+    }
+
+    [TestMethod]
+    public void FactoryRetirement_RemovesRegistryOwnershipButWaitsForTheActiveView()
+    {
+        var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);
+        using var factory = new GenerationGraphicsFactory(Application.DefaultGraphicsFactory);
+        var before = RenderResourceMetrics.Snapshot();
+        var image = source.CreateImage(factory);
+
+        Assert.AreEqual(1, source.ActiveRealizationCount);
+        Assert.AreEqual(
+            before.NativeImageRealizationCount + 1,
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
+
+        ImageSource.RetireRealizationsForFactory(factory);
+
+        Assert.AreEqual(0, source.ActiveRealizationCount);
+        Assert.AreEqual(
+            before.NativeImageRealizationCount + 1,
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
+        Assert.Throws<ObjectDisposedException>(() => source.CreateImage(factory));
+
+        image.Dispose();
+        Assert.AreEqual(
+            before.NativeImageRealizationCount,
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
+    }
+
+    [TestMethod]
+    public void GdiFactoryDispose_RetiresRealizationButKeepsActiveLeaseAlive()
+    {
+        var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);
+        var factory = new GdiGraphicsFactory();
+        var before = RenderResourceMetrics.Snapshot();
+        var image = source.CreateImage(factory);
+
+        factory.Dispose();
+
+        Assert.AreEqual(0, source.ActiveRealizationCount);
+        Assert.AreEqual(
+            before.NativeImageRealizationCount + 1,
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
+        Assert.Throws<ObjectDisposedException>(() => source.CreateImage(factory));
+
+        image.Dispose();
+        Assert.AreEqual(
+            before.NativeImageRealizationCount,
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
+    }
+
+    [TestMethod]
+    public void SourceDispose_ReleasesOwnershipButKeepsActiveImageLeaseAlive()
+    {
+        var before = RenderResourceMetrics.Snapshot();
+        var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);
+        var image = source.CreateImage(Application.DefaultGraphicsFactory);
+
+        source.Dispose();
+
+        var retired = RenderResourceMetrics.Snapshot();
+        Assert.AreEqual(before.DecodedPixelCount + 1, retired.DecodedPixelCount);
+        Assert.AreEqual(before.NativeImageRealizationCount + 1, retired.NativeImageRealizationCount);
+        Assert.ThrowsExactly<ObjectDisposedException>(
+            () => source.CreateImage(Application.DefaultGraphicsFactory));
+
+        image.Dispose();
+
+        var released = RenderResourceMetrics.Snapshot();
+        Assert.AreEqual(before.DecodedPixelCount, released.DecodedPixelCount);
+        Assert.AreEqual(before.NativeImageRealizationCount, released.NativeImageRealizationCount);
+    }
+
+    [TestMethod]
+    public void SourceDispose_WithoutActiveLeaseReleasesDecodedPixelsImmediately()
+    {
+        var before = RenderResourceMetrics.Snapshot();
+        var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);
+
+        source.Dispose();
+
+        Assert.AreEqual(before.DecodedPixelCount, RenderResourceMetrics.Snapshot().DecodedPixelCount);
+    }
+
+    [TestMethod]
+    public void EncodedFactoryHelper_ReleasesTemporarySourceAfterReturnedImageLeaseEnds()
+    {
+        var before = RenderResourceMetrics.Snapshot();
+        var image = Application.DefaultGraphicsFactory.CreateImageFromBytes(CreateBgraBmp(2, 2));
+
+        Assert.AreEqual(
+            before.DecodedPixelCount + 1,
+            RenderResourceMetrics.Snapshot().DecodedPixelCount);
+
+        image.Dispose();
+
+        Assert.AreEqual(before.DecodedPixelCount, RenderResourceMetrics.Snapshot().DecodedPixelCount);
     }
 
     private static byte[] CreateBgraBmp(int width, int height)

@@ -98,6 +98,34 @@ public sealed class RenderResourceCacheTests
         Assert.AreEqual(0, cache.GetStatistics().PersistentCount);
     }
 
+    [TestMethod]
+    public void IdleMaintenance_ExpiresResidentEntriesBelowTheBudget()
+    {
+        long now = 100;
+        using var cache = new RenderResourceCache(400 * 1024, 100, () => now);
+        Add(cache, Key(1), out var surface).Dispose();
+
+        now += 5_001;
+        cache.Maintain(RenderCacheMaintenanceMode.Idle);
+
+        Assert.IsTrue(surface.IsDisposed);
+        Assert.AreEqual(0, cache.GetStatistics().PersistentCount);
+    }
+
+    [TestMethod]
+    public void ManualTrim_RetiresButDoesNotDisposeAnActiveLease()
+    {
+        using var cache = new RenderResourceCache();
+        var lease = Add(cache, Key(1), out var surface);
+
+        cache.Trim(RenderCacheTrimReason.Manual);
+
+        Assert.IsFalse(surface.IsDisposed);
+        Assert.AreEqual(0, cache.GetStatistics().PersistentCount);
+        lease.Dispose();
+        Assert.IsTrue(surface.IsDisposed);
+    }
+
     private static IRenderCacheEntry Add(
         RenderResourceCache cache,
         RenderCacheKey key,
