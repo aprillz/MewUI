@@ -98,6 +98,9 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         WindowRenderResources.ReleaseAll();
     }
 
+    internal static void TrimWindowResourceCaches()
+        => WindowRenderResources.TrimAll();
+
     internal GdiPlusGraphicsContext(
         nint hwnd,
         nint hdc,
@@ -2744,6 +2747,14 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             Cache.Clear();
         }
 
+        public static void TrimAll()
+        {
+            foreach (var resources in Cache.Values)
+            {
+                resources.Trim();
+            }
+        }
+
         public AaSurfacePool SurfacePool { get; } = new();
 
         public GdiPlusResourceCache PenBrushCache { get; } = new();
@@ -2753,6 +2764,13 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         private WindowRenderResources()
         {
             TextCache = new GdiTextCache(SurfacePool);
+        }
+
+        public void Trim()
+        {
+            TextCache.Clear();
+            PenBrushCache.Clear();
+            SurfacePool.Clear();
         }
 
         public void Dispose()

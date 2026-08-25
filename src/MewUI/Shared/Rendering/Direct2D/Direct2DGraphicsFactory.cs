@@ -9,7 +9,8 @@ using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI.Rendering.Direct2D;
 
-public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IWindowSurfacePresenter, IDisposable
+public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWin32TransparencyCapabilities, IWindowSurfacePresenter,
+    IBackendRenderCacheMaintenance, IDisposable
 {
     public const string BackendIdentifier = "Direct2D";
 
@@ -64,8 +65,36 @@ public sealed unsafe partial class Direct2DGraphicsFactory : IGraphicsFactory, I
 
     internal Direct2DGraphicsFactory() { }
 
+    void IBackendRenderCacheMaintenance.TrimBackendCaches(RenderCacheTrimReason reason)
+        => TrimBackendCachesCore();
+
+    void IBackendRenderCacheMaintenance.MaintainBackendCaches(RenderCacheMaintenanceMode mode)
+    {
+        if (mode is RenderCacheMaintenanceMode.MemoryPressure
+            or RenderCacheMaintenanceMode.WindowClosed
+            or RenderCacheMaintenanceMode.DeviceLost
+            or RenderCacheMaintenanceMode.Shutdown)
+        {
+            TrimBackendCachesCore();
+        }
+    }
+
+    private void TrimBackendCachesCore()
+    {
+        TextFormatCache.ReleaseAll();
+        lock (_rtLock)
+        {
+            foreach (var strokeStyle in _strokeStyles.Values)
+            {
+                ComHelpers.Release(strokeStyle);
+            }
+            _strokeStyles.Clear();
+        }
+    }
+
     public void Dispose()
     {
+        ImageSource.RetireRealizationsForFactory(this);
         TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
         DisposeLayeredTargets();

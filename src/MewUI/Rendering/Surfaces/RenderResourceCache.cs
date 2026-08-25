@@ -32,6 +32,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     private readonly long _persistentBudgetBytes;
     private readonly long _persistentLowWatermarkBytes;
     private readonly int _persistentMaxCount;
+    private readonly Func<long> _tickProvider;
     private long _persistentBytes;
     private long _persistentUseSequence;
     private long _atlasActiveBytes;
@@ -47,11 +48,15 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     {
     }
 
-    internal RenderResourceCache(long persistentBudgetBytes, int persistentMaxCount)
+    internal RenderResourceCache(
+        long persistentBudgetBytes,
+        int persistentMaxCount,
+        Func<long>? tickProvider = null)
     {
         _persistentBudgetBytes = Math.Max(1, persistentBudgetBytes);
         _persistentLowWatermarkBytes = Math.Max(1, _persistentBudgetBytes * 4 / 5);
         _persistentMaxCount = Math.Max(1, persistentMaxCount);
+        _tickProvider = tickProvider ?? (() => Environment.TickCount64);
     }
 
     public bool TryGet(RenderCacheKey key, out IRenderCacheEntry entry)
@@ -94,16 +99,50 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 RetireEntry_NoLock(existing);
             }
 
-            var resource = new CachedRenderResource(
-                key,
-                surface,
-                image,
-                safeToDisposeAfter,
-                ++_persistentUseSequence);
-            _entries.Add(key, resource);
-            _persistentBytes += resource.AccountedBytes;
+            var resource = AddNoLock(key, surface, image, safeToDisposeAfter);
             EvictPersistentToBudgetNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT, resource);
             return resource.Acquire(this);
+        }
+    }
+
+    public bool TryAdd(
+        RenderCacheKey key,
+        IRenderSurface surface,
+        IImage image,
+        out IRenderCacheEntry entry,
+        IRenderOperation? safeToDisposeAfter = null)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        ArgumentNullException.ThrowIfNull(image);
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            DrainCompletedReleases_NoLock();
+
+            if (_entries.Remove(key, out var existing))
+            {
+                RetireEntry_NoLock(existing);
+            }
+
+            long incomingBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+            if (incomingBytes > _persistentBudgetBytes)
+            {
+                entry = null!;
+                return false;
+            }
+
+            EvictPersistentForAdmissionNoLock(incomingBytes, incomingCount: 1);
+            if (BudgetedNativeBytesNoLock() + incomingBytes > _persistentBudgetBytes
+                || _entries.Count >= _persistentMaxCount)
+            {
+                entry = null!;
+                return false;
+            }
+
+            var resource = AddNoLock(key, surface, image, safeToDisposeAfter);
+            entry = resource.Acquire(this);
+            return true;
         }
     }
 
@@ -209,7 +248,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             }
             else
             {
-                remaining -= EvictIdlePersistentNoLock(Environment.TickCount64, remaining);
+                remaining -= EvictIdlePersistentNoLock(_tickProvider(), remaining);
                 EvictPersistentToBudgetNoLock(remaining);
             }
             if (mode is RenderCacheMaintenanceMode.MemoryPressure or RenderCacheMaintenanceMode.DeviceLost or RenderCacheMaintenanceMode.Shutdown)
@@ -263,6 +302,14 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
                 _scratchBytes,
                 _pendingReleases.Count,
                 _atlasActiveBytes);
+        }
+    }
+
+    internal RenderCacheKey[] SnapshotPersistentKeys()
+    {
+        lock (_gate)
+        {
+            return _entries.Keys.ToArray();
         }
     }
 
@@ -394,7 +441,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             bucket.Add(new PooledScratchSurface(
                 surface,
                 bytes,
-                Environment.TickCount64,
+                _tickProvider(),
                 ++_scratchReturnSequence));
             _scratchBytes += bytes;
             RenderMemoryLedger.ScratchPooled(bytes);
@@ -408,7 +455,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
     /// <summary>Disposes pooled surfaces that have sat unused past the idle window, at most once per sweep interval.</summary>
     private int SweepIdleScratchNoLock(int limit)
     {
-        long now = Environment.TickCount64;
+        long now = _tickProvider();
         if (limit <= 0 || now - _scratchLastSweepTicks < SCRATCH_SWEEP_INTERVAL_MS)
         {
             return 0;
@@ -577,7 +624,7 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             {
                 return;
             }
-            entry.IdleSince = Environment.TickCount64;
+            entry.IdleSince = _tickProvider();
             if (entry.IsRetired)
             {
                 if (_disposed)
@@ -622,9 +669,10 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
 
     private long BudgetedNativeBytesNoLock() => _persistentBytes + _scratchBytes + _atlasActiveBytes;
 
-    private void EvictPersistentForAdmissionNoLock(long incomingBytes)
+    private void EvictPersistentForAdmissionNoLock(long incomingBytes, int incomingCount = 0)
     {
-        while (BudgetedNativeBytesNoLock() + incomingBytes > _persistentBudgetBytes)
+        while (BudgetedNativeBytesNoLock() + incomingBytes > _persistentBudgetBytes
+            || _entries.Count + incomingCount > _persistentMaxCount)
         {
             var victim = FindOldestReusablePersistentNoLock();
             if (victim == null)
@@ -636,16 +684,32 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
         }
     }
 
+    private CachedRenderResource AddNoLock(
+        RenderCacheKey key,
+        IRenderSurface surface,
+        IImage image,
+        IRenderOperation? safeToDisposeAfter)
+    {
+        var resource = new CachedRenderResource(
+            key,
+            surface,
+            image,
+            safeToDisposeAfter,
+            ++_persistentUseSequence);
+        _entries.Add(key, resource);
+        _persistentBytes += resource.AccountedBytes;
+        return resource;
+    }
+
     private int EvictIdlePersistentNoLock(long now, int limit)
     {
         int evicted = 0;
-        while (evicted < limit && BudgetedNativeBytesNoLock() > _persistentLowWatermarkBytes)
+        while (evicted < limit)
         {
             CachedRenderResource? victim = null;
             foreach (var candidate in _entries.Values)
             {
                 if (candidate.LeaseCount != 0
-                    || candidate.IdleSince == 0
                     || now - candidate.IdleSince < PERSISTENT_IDLE_EVICT_MS)
                 {
                     continue;

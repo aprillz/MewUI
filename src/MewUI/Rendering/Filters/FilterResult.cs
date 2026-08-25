@@ -118,7 +118,7 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
     private readonly IImage _image;
     private readonly ScratchSurfaceLease _lease;
     private readonly Action<ScratchSurfaceLease>? _releaseLease;
-    private bool _disposed;
+    private int _ownershipTransferredOrDisposed;
 
     public ScratchFilterResult(ScratchSurfaceLease lease, IImage image, Rect bounds,
         Action<ScratchSurfaceLease>? release)
@@ -147,19 +147,79 @@ public sealed class ScratchFilterResult : FilterResult, IPixelTargetAccess
 
     public override void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
-        _releaseLease?.Invoke(_lease);
+        if (Interlocked.Exchange(ref _ownershipTransferredOrDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        Release(_lease, _image, _releaseLease);
     }
 
-    /// <summary>Transfers ownership of the underlying target + image to the caller. After
-    /// Detach, <see cref="Dispose"/> is a no-op (the pool release is suppressed). Caller
-    /// must dispose the returned surface/image when done. Used by result-caching paths that
-    /// want to keep the scratch surface alive across frames without copying its pixels.</summary>
-    public (IRenderSurface Surface, IImage Image)? Detach()
+    /// <summary>
+    /// Transfers the scratch allocation and its exact-once return authority to an opaque owner.
+    /// Disposing this result after a successful detach is a no-op; the detached owner must be
+    /// disposed to release the image and return the original lease.
+    /// </summary>
+    public DetachedScratchSurface? Detach()
     {
-        if (_disposed) return null;
-        _disposed = true;
-        return (_lease.Surface, _image);
+        if (Interlocked.CompareExchange(ref _ownershipTransferredOrDisposed, 1, 0) != 0)
+        {
+            return null;
+        }
+
+        return new DetachedScratchSurface(_lease, _image, _releaseLease);
+    }
+
+    internal static void Release(
+        ScratchSurfaceLease lease,
+        IImage image,
+        Action<ScratchSurfaceLease>? releaseLease)
+    {
+        if (releaseLease is not null)
+        {
+            releaseLease(lease);
+            return;
+        }
+
+        image.Dispose();
+        lease.Dispose();
+    }
+}
+
+/// <summary>
+/// Opaque ownership transfer for a detached filter scratch result. Consumers may draw the logical
+/// image while this handle is alive, but cannot observe the pooled allocation or return it directly.
+/// Disposing the handle preserves the originating pool's deferred-release callback.
+/// </summary>
+public sealed class DetachedScratchSurface : IDisposable
+{
+    private ScratchSurfaceLease? _lease;
+    private IImage? _image;
+    private Action<ScratchSurfaceLease>? _releaseLease;
+
+    internal DetachedScratchSurface(
+        ScratchSurfaceLease lease,
+        IImage image,
+        Action<ScratchSurfaceLease>? releaseLease)
+    {
+        _lease = lease;
+        _image = image;
+        _releaseLease = releaseLease;
+    }
+
+    public IImage Image => Volatile.Read(ref _image)
+        ?? throw new ObjectDisposedException(nameof(DetachedScratchSurface));
+
+    public void Dispose()
+    {
+        var lease = Interlocked.Exchange(ref _lease, null);
+        var image = Interlocked.Exchange(ref _image, null);
+        var releaseLease = Interlocked.Exchange(ref _releaseLease, null);
+        if (lease is null || image is null)
+        {
+            return;
+        }
+
+        ScratchFilterResult.Release(lease, image, releaseLease);
     }
 }

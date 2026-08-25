@@ -1,5 +1,7 @@
 using Aprillz.MewUI.Platform;
 using Aprillz.MewUI.Rendering;
+using Aprillz.MewUI.Resources;
+using Aprillz.MewUI.Text;
 
 namespace Aprillz.MewUI;
 
@@ -321,6 +323,60 @@ public sealed class Application
     public IGraphicsFactory GraphicsFactory => _graphicsFactory ??= DefaultGraphicsFactory;
 
     /// <summary>
+    /// Releases purgeable render-cache entries while keeping the active graphics factory and
+    /// windows alive. Active/in-flight leases are retired and released only after their owners
+    /// reach a backend-safe boundary.
+    /// </summary>
+    internal void TrimRenderCaches(RenderCacheTrimReason reason = RenderCacheTrimReason.Manual)
+    {
+        var dispatcher = Dispatcher;
+        if (dispatcher != null && !dispatcher.IsOnUIThread)
+        {
+            dispatcher.Invoke(() => TrimRenderCaches(reason));
+            return;
+        }
+
+        var factory = _graphicsFactory ?? Volatile.Read(ref _defaultGraphicsFactory);
+        if (factory == null)
+        {
+            return;
+        }
+
+        factory.ResourceCache?.Trim(reason);
+        if (factory is IBackendRenderCacheMaintenance backend)
+        {
+            backend.TrimBackendCaches(reason);
+        }
+        TextServices.TrimIfCreated(factory);
+        DecodedPixelCache.Shared.Trim();
+    }
+
+    private void MaintainRenderCaches(RenderCacheMaintenanceMode mode)
+    {
+        var factory = _graphicsFactory ?? Volatile.Read(ref _defaultGraphicsFactory);
+        if (factory == null)
+        {
+            return;
+        }
+
+        factory.ResourceCache?.Maintain(mode);
+        if (factory is IBackendRenderCacheMaintenance backend)
+        {
+            backend.MaintainBackendCaches(mode);
+        }
+
+        if (mode is RenderCacheMaintenanceMode.MemoryPressure or RenderCacheMaintenanceMode.Shutdown)
+        {
+            TextServices.TrimIfCreated(factory);
+            DecodedPixelCache.Shared.Trim();
+        }
+        else if (mode == RenderCacheMaintenanceMode.Idle)
+        {
+            DecodedPixelCache.Shared.Maintain();
+        }
+    }
+
+    /// <summary>
     /// Runs the application with the specified main window. One UI runtime per process: a second
     /// concurrent call is rejected. Running again after a previous run returns (normally or by
     /// exception) is supported - the finally block below restores process state for it.
@@ -397,7 +453,7 @@ public sealed class Application
                 var host = DefaultPlatformHost;
                 app = new Application(host);
                 _current = app;
-                app._runtime = new ApplicationRuntime();
+                app._runtime = new ApplicationRuntime(app.MaintainRenderCaches);
                 app._startup = startup;
                 if (shutdownMode != null)
                 {
@@ -518,6 +574,7 @@ public sealed class Application
 
     internal void OnHostLoopStarting(Window? mainWindow)
     {
+        _runtime?.StartRenderCacheMaintenance(Dispatcher);
         var startup = Interlocked.Exchange(ref _startup, null);
         startup?.Invoke(GetCommandLineArguments());
         mainWindow?.Show();
