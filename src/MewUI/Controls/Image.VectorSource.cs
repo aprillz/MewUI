@@ -115,6 +115,7 @@ public sealed partial class Image
                     ClearVectorCache(invalidateInFlight: false);
                     // Pool-sized allocation, at least content-sized; shared across controls.
                     _vectorSurface = factory.AcquireScratchSurface(contentWidth, contentHeight, debugName: "ImageVectorCache");
+                    AccountVectorCache(_vectorSurface);
                     _vectorSize = (_vectorSurface.PixelWidth, _vectorSurface.PixelHeight);
                 }
                 _vectorContentValid = false;
@@ -337,6 +338,7 @@ public sealed partial class Image
 
             ClearVectorCache(invalidateInFlight: false);
             _vectorSurface = newSurface;
+            AccountVectorCache(newSurface);
             _vectorImage = newImage;
             _vectorSize = (newSurface.PixelWidth, newSurface.PixelHeight);
             _vectorContentSize = (pixelWidth, pixelHeight);
