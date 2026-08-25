@@ -190,8 +190,20 @@ internal sealed class MewVGMetalTextCache : IDisposable
         return true;
     }
 
+    // Texture bytes this cache has reported to RenderMemoryLedger, given back in full on Dispose.
+    private long _accountedBytes;
+
+    private void Account(long delta)
+    {
+        _accountedBytes += delta;
+        RenderMemoryLedger.TextCacheBytesChanged(delta);
+    }
+
+    private static long TextureBytes(int widthPx, int heightPx) => (long)widthPx * heightPx * 4;
+
     private void Add(TextCacheKey key, CacheEntry entry)
     {
+        Account(TextureBytes(entry.WidthPx, entry.HeightPx));
         _cache[key] = entry;
         var node = _lru.AddLast(key);
         _lruNodes[key] = node;
@@ -253,6 +265,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
         if (_cache.Remove(key, out var entry))
         {
+            Account(-TextureBytes(entry.WidthPx, entry.HeightPx));
             if (entry.ImageId != 0)
             {
                 // Defer deletion: removal happens during mid-frame text creation, but the main
@@ -498,6 +511,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             {
                 _pendingDeletes.Enqueue(entry.ImageId);
                 entry.ImageId = 0;
+                Account(-TextureBytes(entry.TextureWidthPx, entry.TextureHeightPx));
             }
 
             int newId = _vg.CreateImageBGRA(actualW, actualH, NVGimageFlags.Premultiplied, pixels);
@@ -509,6 +523,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             entry.ImageId = newId;
             entry.TextureWidthPx = actualW;
             entry.TextureHeightPx = actualH;
+            Account(TextureBytes(actualW, actualH));
         }
 
         return true;
