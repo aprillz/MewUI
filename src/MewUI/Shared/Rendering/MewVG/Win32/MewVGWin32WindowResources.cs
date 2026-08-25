@@ -4,7 +4,7 @@ using Aprillz.MewVG;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed class MewVGWin32WindowResources : IDisposable
+internal sealed class MewVGWin32WindowResources : IDisposable, IMewVGWindowCacheMaintenance
 {
     private readonly nint _hwnd;
     private readonly WglOpenGLWindowResources _gl;
@@ -87,6 +87,35 @@ internal sealed class MewVGWin32WindowResources : IDisposable
     public void SwapBuffers(nint hdc, nint hwnd) => _gl.SwapBuffers(hdc, hwnd);
 
     public void SetSwapInterval(int interval) => _gl.SetSwapInterval(interval);
+
+    public void TrimCaches()
+    {
+        if (_disposed || _hwnd == 0)
+        {
+            return;
+        }
+
+        nint hdc = User32.GetDC(_hwnd);
+        try
+        {
+            if (hdc == 0)
+            {
+                return;
+            }
+
+            _gl.MakeCurrent(hdc);
+            TextCache.Clear();
+            TextCache.ReleasePendingDeletes();
+        }
+        finally
+        {
+            _gl.ReleaseCurrent();
+            if (hdc != 0)
+            {
+                User32.ReleaseDC(_hwnd, hdc);
+            }
+        }
+    }
 
     public void Dispose()
     {

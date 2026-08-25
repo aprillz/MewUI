@@ -13,7 +13,8 @@ namespace Aprillz.MewUI.Rendering.Gdi;
 /// <summary>
 /// GDI+ graphics factory implementation.
 /// </summary>
-public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter, IDisposable
+public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IWindowResourceReleaser, IWindowSurfacePresenter,
+    IBackendRenderCacheMaintenance, IDisposable
 {
     public const string BackendIdentifier = "Gdi";
 
@@ -221,8 +222,23 @@ public sealed class GdiGraphicsFactory : IGraphicsFactory, ITextBackendFactory, 
 
     public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
+    void IBackendRenderCacheMaintenance.TrimBackendCaches(RenderCacheTrimReason reason)
+        => GdiPlusGraphicsContext.TrimWindowResourceCaches();
+
+    void IBackendRenderCacheMaintenance.MaintainBackendCaches(RenderCacheMaintenanceMode mode)
+    {
+        if (mode is RenderCacheMaintenanceMode.MemoryPressure
+            or RenderCacheMaintenanceMode.WindowClosed
+            or RenderCacheMaintenanceMode.DeviceLost
+            or RenderCacheMaintenanceMode.Shutdown)
+        {
+            GdiPlusGraphicsContext.TrimWindowResourceCaches();
+        }
+    }
+
     public void Dispose()
     {
+        ImageSource.RetireRealizationsForFactory(this);
         TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
 

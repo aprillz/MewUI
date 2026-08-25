@@ -19,6 +19,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
     // image-id is then leaked until the NVG context itself disposes - acceptable since
     // it's bounded by "ever-created TextBlock instances", not by render rate.
     private readonly ConditionalWeakTable<object, OwnerEntry> _ownerCache = new();
+    private readonly List<OwnerRegistration> _ownerEntries = new();
     // Scratch entries for transient text, one per transient draw in a frame. A slot is only
     // repainted in place the frame after its last use, once ReleasePendingDeletes has reset the
     // index past the flush that consumed it.
@@ -28,6 +29,13 @@ internal sealed class MewVGMetalTextCache : IDisposable
 
     // Keep it conservative; text is the hottest path and Metal textures can accumulate quickly.
     private const int MaxEntries = 512;
+    private const long DefaultMaxBytes = 16L * 1024 * 1024;
+
+    public long MaxBytes
+    {
+        get;
+        set => field = Math.Max(0, value);
+    } = DefaultMaxBytes;
 
     // Text is kept so a hit can be confirmed: the key only carries the text's hash.
     private sealed record CacheEntry(int ImageId, int WidthPx, int HeightPx, string Text);
@@ -59,9 +67,17 @@ internal sealed class MewVGMetalTextCache : IDisposable
         public TextAlignment LastVerticalAlignment;
         public TextWrapping LastWrapping;
         public TextTrimming LastTrimming;
+        public long LastUse;
+    }
+
+    private sealed class OwnerRegistration(object owner, OwnerEntry entry)
+    {
+        public WeakReference<object> Owner { get; } = new(owner);
+        public OwnerEntry Entry { get; } = entry;
     }
 
     private long _frameGeneration;
+    private long _useStamp;
 
     internal readonly record struct TextCacheKey(
         int TextHash,
@@ -203,11 +219,40 @@ internal sealed class MewVGMetalTextCache : IDisposable
         }
     }
 
-    private void EvictIfNeeded()
+    private void EvictIfNeeded(OwnerEntry? keep = null)
     {
-        while (_cache.Count > MaxEntries && _lru.First != null)
+        while ((_cache.Count > MaxEntries || _accountedBytes > MaxBytes) && _lru.First != null)
         {
             Remove(_lru.First.Value);
+        }
+
+        if (_accountedBytes <= MaxBytes)
+        {
+            return;
+        }
+
+        var candidates = new List<OwnerRegistration>();
+        for (int i = _ownerEntries.Count - 1; i >= 0; i--)
+        {
+            var registration = _ownerEntries[i];
+            if (!registration.Owner.TryGetTarget(out _))
+            {
+                ReleaseOwnerRegistration(registration, removeOwnerKey: false);
+            }
+            else if (!ReferenceEquals(registration.Entry, keep))
+            {
+                candidates.Add(registration);
+            }
+        }
+
+        candidates.Sort(static (left, right) => left.Entry.LastUse.CompareTo(right.Entry.LastUse));
+        foreach (var candidate in candidates)
+        {
+            if (_accountedBytes <= MaxBytes)
+            {
+                break;
+            }
+            ReleaseOwnerRegistration(candidate, removeOwnerKey: true);
         }
     }
 
@@ -240,6 +285,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
         if (_disposed) return;
         _frameGeneration++;
         _transientIndex = 0;
+        SweepDeadOwners();
         while (_pendingDeletes.Count > 0)
         {
             int imageId = _pendingDeletes.Dequeue();
@@ -293,7 +339,12 @@ internal sealed class MewVGMetalTextCache : IDisposable
         widthPx = Math.Max(1, widthPx);
         heightPx = Math.Max(1, heightPx);
 
-        var entry = _ownerCache.GetValue(owner, static _ => new OwnerEntry());
+        if (!_ownerCache.TryGetValue(owner, out var entry))
+        {
+            entry = new OwnerEntry();
+            _ownerCache.Add(owner, entry);
+            _ownerEntries.Add(new OwnerRegistration(owner, entry));
+        }
 
         uint ownedArgb = ((uint)color.A << 24) | ((uint)color.R << 16) | ((uint)color.G << 8) | color.B;
         bool sameInputs = entry.ImageId != 0 &&
@@ -348,10 +399,14 @@ internal sealed class MewVGMetalTextCache : IDisposable
         entry.LastWrapping = wrapping;
         entry.LastTrimming = trimming;
         entry.LastText = text.ToString();
+        entry.LastUse = ++_useStamp;
+
+        EvictIfNeeded(entry);
 
         imageId = entry.ImageId;
         bitmapWidthPx = actualW;
         bitmapHeightPx = actualH;
+        EvictIfNeeded();
         return true;
     }
 
@@ -428,7 +483,9 @@ internal sealed class MewVGMetalTextCache : IDisposable
         // reallocation on every subsequent small one.
         if (entry.Buffer == null || entry.Buffer.Length < requiredBytes)
         {
+            int previousBytes = entry.Buffer?.Length ?? 0;
             entry.Buffer = new byte[requiredBytes];
+            Account(requiredBytes - previousBytes);
         }
 
         if (!CoreTextText.RasterizeInto(
@@ -482,15 +539,97 @@ internal sealed class MewVGMetalTextCache : IDisposable
         if (_disposed || owner == null) return;
         if (_ownerCache.TryGetValue(owner, out var entry))
         {
+            var registration = _ownerEntries.FirstOrDefault(value => ReferenceEquals(value.Entry, entry));
+            if (registration != null)
+            {
+                ReleaseOwnerRegistration(registration, removeOwnerKey: true);
+            }
+        }
+    }
+
+    private void SweepDeadOwners()
+    {
+        for (int i = _ownerEntries.Count - 1; i >= 0; i--)
+        {
+            var registration = _ownerEntries[i];
+            if (!registration.Owner.TryGetTarget(out _))
+            {
+                ReleaseOwnerRegistration(registration, removeOwnerKey: false);
+            }
+        }
+    }
+
+    private void ReleaseOwnerRegistration(OwnerRegistration registration, bool removeOwnerKey)
+    {
+        var entry = registration.Entry;
+        long bytes = entry.Buffer?.LongLength ?? 0;
+        if (entry.ImageId != 0)
+        {
+            _pendingDeletes.Enqueue(entry.ImageId);
+            bytes += TextureBytes(entry.TextureWidthPx, entry.TextureHeightPx);
+            entry.ImageId = 0;
+        }
+
+        entry.Buffer = null;
+        entry.TextureWidthPx = 0;
+        entry.TextureHeightPx = 0;
+        if (bytes != 0)
+        {
+            Account(-bytes);
+        }
+
+        if (removeOwnerKey && registration.Owner.TryGetTarget(out var owner))
+        {
+            _ownerCache.Remove(owner);
+        }
+        _ownerEntries.Remove(registration);
+    }
+
+    public void Trim()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        foreach (var entry in _cache.Values)
+        {
+            if (entry.ImageId != 0)
+            {
+                _pendingDeletes.Enqueue(entry.ImageId);
+            }
+        }
+        _cache.Clear();
+        _lru.Clear();
+        _lruNodes.Clear();
+
+        foreach (var registration in _ownerEntries)
+        {
+            var entry = registration.Entry;
             if (entry.ImageId != 0)
             {
                 _pendingDeletes.Enqueue(entry.ImageId);
                 entry.ImageId = 0;
-                Account(-TextureBytes(entry.TextureWidthPx, entry.TextureHeightPx));
             }
             entry.Buffer = null;
-            _ownerCache.Remove(owner);
         }
+        _ownerEntries.Clear();
+        _ownerCache.Clear();
+
+        foreach (var entry in _transientSlots)
+        {
+            if (entry.ImageId != 0)
+            {
+                _pendingDeletes.Enqueue(entry.ImageId);
+                entry.ImageId = 0;
+            }
+            entry.Buffer = null;
+        }
+        _transientSlots.Clear();
+        _transientIndex = 0;
+
+        Account(-_accountedBytes);
+        ReleasePendingDeletes();
     }
 
     public void Dispose()
@@ -500,33 +639,7 @@ internal sealed class MewVGMetalTextCache : IDisposable
             return;
         }
 
+        Trim();
         _disposed = true;
-        Account(-_accountedBytes);
-
-        foreach (var entry in _cache.Values)
-        {
-            if (entry.ImageId != 0)
-            {
-                _vg.DeleteImage(entry.ImageId);
-            }
-        }
-
-        _cache.Clear();
-        _lru.Clear();
-        _lruNodes.Clear();
-
-        // Owner-cache entries' MTLTextures are released by the NanoVG context's own dispose
-        // (which happens immediately after this in MewVGMetalWindowResources.Dispose). We
-        // just drop our refs so the entries become eligible for GC.
-        _ownerCache.Clear();
-        _transientSlots.Clear();
-
-        // Drain any deferred deletes that haven't been flushed yet so their imageIds don't
-        // leak past the cache lifetime.
-        while (_pendingDeletes.Count > 0)
-        {
-            int imageId = _pendingDeletes.Dequeue();
-            if (imageId != 0) _vg.DeleteImage(imageId);
-        }
     }
 }

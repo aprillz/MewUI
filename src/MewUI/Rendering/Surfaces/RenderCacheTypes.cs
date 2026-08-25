@@ -31,6 +31,18 @@ public enum RenderCacheMaintenanceMode
     Shutdown,
 }
 
+/// <summary>
+/// Backend-owned cache maintenance that cannot be expressed through
+/// <see cref="IRenderResourceCache"/> (for example, rasterized text or tessellation caches).
+/// Kept internal so consumers never observe backend allocation sizes or native handles.
+/// </summary>
+internal interface IBackendRenderCacheMaintenance
+{
+    void TrimBackendCaches(RenderCacheTrimReason reason);
+
+    void MaintainBackendCaches(RenderCacheMaintenanceMode mode);
+}
+
 public readonly record struct RenderCacheKey(
     RenderCacheEntryKind Kind,
     int PixelWidth,
@@ -82,6 +94,18 @@ public interface IRenderResourceCache
         RenderCacheKey key,
         IRenderSurface surface,
         IImage image,
+        IRenderOperation? safeToDisposeAfter = null);
+
+    /// <summary>
+    /// Attempts to admit a completed resource without exceeding the device byte or count budget.
+    /// On failure the caller retains ownership of <paramref name="surface"/> and
+    /// <paramref name="image"/>.
+    /// </summary>
+    bool TryAdd(
+        RenderCacheKey key,
+        IRenderSurface surface,
+        IImage image,
+        out IRenderCacheEntry entry,
         IRenderOperation? safeToDisposeAfter = null);
 
     /// <summary>Removes cache residency; active leases keep the resource alive until returned.</summary>

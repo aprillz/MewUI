@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using Aprillz.MewUI.Resources;
 using Aprillz.MewUI.Rendering;
@@ -16,7 +17,7 @@ namespace Aprillz.MewUI;
 ///
 /// Sources created from raw pixels skip the decoder path entirely.
 /// </summary>
-public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, IDecodedPixelCacheOwner
+public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, IDecodedPixelCacheOwner, IDisposable
 {
     private delegate bool EncodedImageDecoder(byte[] encoded, out Bgra32PixelBuffer bitmap, out ImageOrientation orientation);
     private delegate string? EncodedFormatDetector(ReadOnlySpan<byte> encoded);
@@ -36,6 +37,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     private bool _decodedValid;
     private ImageOrientation _orientation = ImageOrientation.Identity;
     private StaticPixelBufferSource? _decodedPixelSource;
+    private int _disposed;
 
     private ImageSource(
         byte[] encoded,
@@ -344,6 +346,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     {
         lock (_decodeLock)
         {
+            ObjectDisposedException.ThrowIf(_disposed != 0, this);
             bool hasMetadata = TryGetMetadata(out var metadata);
             int intrinsicWidth = hasMetadata ? metadata.PixelWidth : Math.Max(1, targetPixelWidth);
             int intrinsicHeight = hasMetadata ? metadata.PixelHeight : Math.Max(1, targetPixelHeight);
@@ -470,6 +473,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     public IImage CreateImage(IGraphicsFactory factory, int targetPixelWidth, int targetPixelHeight)
     {
         ArgumentNullException.ThrowIfNull(factory);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         RenderMemoryLedger.ImageRealizationRequested();
 
         // Prefer the decoded pixel path so rendering and sampling share the same decode work and buffer.
@@ -508,8 +512,35 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         return new BmpDecoder().TryDecode(encoded, out bitmap);
     }
 
-    private readonly Dictionary<IGraphicsFactory, SharedImageRealization> _realizations =
-        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<RenderDeviceIdentity, SharedImageRealization> _realizations = new();
+    private static readonly ConditionalWeakTable<IGraphicsFactory, FactoryLifetimeRegistrations>
+        _factoryLifetimeRegistrations = new();
+
+    internal int ActiveRealizationCount
+    {
+        get
+        {
+            lock (_decodeLock)
+            {
+                return _realizations.Count;
+            }
+        }
+    }
+
+    internal static void RetireRealizationsForFactory(IGraphicsFactory factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        if (!_factoryLifetimeRegistrations.TryGetValue(factory, out var registrations))
+        {
+            return;
+        }
+
+        ulong deviceId = factory.RenderIdentity.DeviceId;
+        foreach (var source in registrations.RetireAndSnapshot())
+        {
+            source.RetireRealizations(deviceId);
+        }
+    }
 
     private bool TryCreateSharedDecodedImage(
         IGraphicsFactory factory,
@@ -519,6 +550,18 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     {
         lock (_decodeLock)
         {
+            var lifetimeRegistrations = _factoryLifetimeRegistrations.GetValue(
+                factory,
+                static _ => new FactoryLifetimeRegistrations());
+            if (lifetimeRegistrations.IsRetired)
+            {
+                throw new ObjectDisposedException(factory.GetType().Name);
+            }
+            if (!lifetimeRegistrations.Register(this))
+            {
+                throw new ObjectDisposedException(factory.GetType().Name);
+            }
+
             if (!TryEnsureDecoded(targetPixelWidth, targetPixelHeight, out var pixels)
                 || _decodedOwner is not { } owner)
             {
@@ -530,8 +573,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
                 (double)Math.Max(1, targetPixelWidth) / Math.Max(1, PixelWidth),
                 (double)Math.Max(1, targetPixelHeight) / Math.Max(1, PixelHeight));
             var renderIdentity = factory.RenderIdentity;
-            if (_realizations.TryGetValue(factory, out var current)
-                && current.RenderIdentity == renderIdentity
+            if (_realizations.TryGetValue(renderIdentity, out var current)
                 && current.ResidentScale + 1e-9 >= requestedScale)
             {
                 image = current.Acquire(this);
@@ -539,32 +581,74 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             }
 
             owner.AddReference();
+            IImage? backendImage = null;
+            IImage? acquiredLease = null;
+            SharedImageRealization? createdRealization = null;
+            SharedImageRealization? replacedRealization = null;
             try
             {
-                var backendImage = factory.CreateImageView(pixels);
-                var realization = new SharedImageRealization(
+                backendImage = factory.CreateImageView(pixels);
+                var realization = createdRealization = new SharedImageRealization(
                     backendImage,
                     owner,
                     renderIdentity,
                     Math.Min(
                         (double)backendImage.PixelWidth / Math.Max(1, PixelWidth),
                         (double)backendImage.PixelHeight / Math.Max(1, PixelHeight)));
-                _realizations[factory] = realization;
-                image = realization.Acquire(this);
+                backendImage = null; // The realization owns the backend image from this point.
+                acquiredLease = realization.Acquire(this);
+                _realizations.TryGetValue(renderIdentity, out replacedRealization);
+                _realizations[renderIdentity] = realization;
+                if (replacedRealization is { ReferenceCount: 0 })
+                {
+                    replacedRealization.Dispose();
+                }
+                image = acquiredLease;
+                acquiredLease = null;
                 return true;
             }
             catch (NotSupportedException)
             {
-                owner.Release();
+                CleanupFailedRealizationCreation(
+                    owner,
+                    backendImage,
+                    acquiredLease,
+                    createdRealization);
                 image = null!;
                 return false;
             }
             catch
             {
-                owner.Release();
+                CleanupFailedRealizationCreation(
+                    owner,
+                    backendImage,
+                    acquiredLease,
+                    createdRealization);
                 throw;
             }
         }
+    }
+
+    private void CleanupFailedRealizationCreation(
+        DecodedPixelOwner owner,
+        IImage? backendImage,
+        IImage? acquiredLease,
+        SharedImageRealization? realization)
+    {
+        if (acquiredLease is not null)
+        {
+            acquiredLease.Dispose();
+            return;
+        }
+
+        if (realization is not null)
+        {
+            realization.Dispose();
+            return;
+        }
+
+        backendImage?.Dispose();
+        owner.Release();
     }
 
     private void ReleaseRealization(SharedImageRealization realization)
@@ -575,18 +659,18 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             dispose = realization.ReleaseReference();
             if (dispose)
             {
-                IGraphicsFactory? removeFactory = null;
+                RenderDeviceIdentity? removeIdentity = null;
                 foreach (var pair in _realizations)
                 {
                     if (ReferenceEquals(pair.Value, realization))
                     {
-                        removeFactory = pair.Key;
+                        removeIdentity = pair.Key;
                         break;
                     }
                 }
-                if (removeFactory != null)
+                if (removeIdentity is { } identity)
                 {
-                    _realizations.Remove(removeFactory);
+                    _realizations.Remove(identity);
                 }
             }
         }
@@ -595,6 +679,82 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         {
             realization.Dispose();
             DecodedPixelCache.Shared.Maintain();
+        }
+    }
+
+    private void RetireRealizations(ulong deviceId)
+    {
+        List<SharedImageRealization>? dispose = null;
+        lock (_decodeLock)
+        {
+            foreach (var pair in _realizations.ToArray())
+            {
+                if (pair.Key.DeviceId != deviceId)
+                {
+                    continue;
+                }
+
+                _realizations.Remove(pair.Key);
+                if (pair.Value.ReferenceCount == 0)
+                {
+                    (dispose ??= []).Add(pair.Value);
+                }
+            }
+        }
+
+        if (dispose is not null)
+        {
+            foreach (var realization in dispose)
+            {
+                realization.Dispose();
+            }
+            DecodedPixelCache.Shared.Maintain();
+        }
+    }
+
+    /// <summary>
+    /// Releases decoded pixels and retires cached backend realizations owned by this source.
+    /// Active image leases remain valid until their own disposal; no in-flight backend image is
+    /// destroyed early.
+    /// </summary>
+    public void Dispose()
+    {
+        List<SharedImageRealization>? dispose = null;
+        DecodedPixelOwner? decodedOwner;
+
+        lock (_decodeLock)
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            foreach (var realization in _realizations.Values)
+            {
+                if (realization.ReferenceCount == 0)
+                {
+                    (dispose ??= []).Add(realization);
+                }
+            }
+            _realizations.Clear();
+
+            decodedOwner = _decodedOwner;
+            _decodedOwner = null;
+            _decodedBitmap = default;
+            _decodedPixelSource = null;
+            _decodedValid = false;
+            _encoded = null;
+            _memoryAccounting.ReleaseEncoded(releaseEncoded: true);
+        }
+
+        DecodedPixelCache.Shared.Unregister(decodedOwner);
+        decodedOwner?.Release();
+        if (dispose is not null)
+        {
+            foreach (var realization in dispose)
+            {
+                realization.Dispose();
+            }
         }
     }
 
@@ -645,6 +805,8 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
 
         public RenderDeviceIdentity RenderIdentity { get; }
 
+        public int ReferenceCount => Volatile.Read(ref _referenceCount);
+
         public IImage Acquire(ImageSource source)
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
@@ -674,6 +836,73 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
                 (long)_image.PixelWidth * _image.PixelHeight * 4);
             _image.Dispose();
             _pixels.Release();
+        }
+    }
+
+    private sealed class FactoryLifetimeRegistrations
+    {
+        private readonly object _gate = new();
+        private readonly List<WeakReference<ImageSource>> _sources = new();
+        private bool _retired;
+
+        public bool IsRetired
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _retired;
+                }
+            }
+        }
+
+        public bool Register(ImageSource source)
+        {
+            lock (_gate)
+            {
+                if (_retired)
+                {
+                    return false;
+                }
+
+                for (int i = _sources.Count - 1; i >= 0; i--)
+                {
+                    if (!_sources[i].TryGetTarget(out var existing))
+                    {
+                        _sources.RemoveAt(i);
+                    }
+                    else if (ReferenceEquals(existing, source))
+                    {
+                        return true;
+                    }
+                }
+
+                _sources.Add(new WeakReference<ImageSource>(source));
+                return true;
+            }
+        }
+
+        public ImageSource[] RetireAndSnapshot()
+        {
+            lock (_gate)
+            {
+                if (_retired)
+                {
+                    return [];
+                }
+
+                _retired = true;
+                var result = new List<ImageSource>(_sources.Count);
+                foreach (var weak in _sources)
+                {
+                    if (weak.TryGetTarget(out var source))
+                    {
+                        result.Add(source);
+                    }
+                }
+                _sources.Clear();
+                return result.ToArray();
+            }
         }
     }
 

@@ -137,6 +137,48 @@ internal sealed class DecodedPixelCache
         }
     }
 
+    /// <summary>
+    /// Attempts to release every rehydratable decoded variant without disturbing variants that
+    /// are pinned by a native realization. Pinned entries remain registered and can be retried at
+    /// the next safe trim boundary.
+    /// </summary>
+    public void Trim()
+    {
+        Entry[] candidates;
+        lock (_gate)
+        {
+            CleanupDeadNoLock();
+            candidates = _entries.OrderBy(static entry => entry.LastUseSequence).ToArray();
+        }
+
+        foreach (var candidate in candidates)
+        {
+            lock (_gate)
+            {
+                int index = _entries.IndexOf(candidate);
+                if (index < 0)
+                {
+                    continue;
+                }
+                RemoveAtNoLock(index);
+            }
+
+            if (!candidate.Source.TryGetTarget(out var source)
+                || !candidate.Owner.TryGetTarget(out var owner)
+                || source.TryEvictDecodedPixels(owner))
+            {
+                continue;
+            }
+
+            lock (_gate)
+            {
+                candidate.LastUseSequence = ++_sequence;
+                _entries.Add(candidate);
+                _residentBytes += candidate.Bytes;
+            }
+        }
+    }
+
     internal (int Count, long Bytes) GetStatistics()
     {
         lock (_gate)

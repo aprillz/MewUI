@@ -40,10 +40,111 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
     // semantics auto-collect entries when PathGeometry key is GC'd)
     private static readonly ConditionalWeakTable<PathGeometry, FrozenFillCacheEntry> _fillCache = new();
 
+    // Budget for the tessellation cache. Keys live as long as their PathGeometry, so a document
+    // holding thousands of frozen paths (an icon list) would otherwise pin an unbounded amount of
+    // tessellation data (measured: 3,445 icons kept ~150 MB live through a forced gen2).
+    private const long FILL_CACHE_BUDGET_BYTES = 48L * 1024 * 1024;
+
+
+    // Guards the byte accounting and eviction sweep; entries themselves stay CWT-managed.
+    private static readonly object _fillCacheGate = new();
+    private static long _fillCacheBytes;
+    private static long _fillCacheStamp;
+
     private sealed class FrozenFillCacheEntry
     {
         public FrozenFillCache? NonZero;
         public FrozenFillCache? EvenOdd;
+        public long AccountedBytes;
+        public long LastUse;
+
+        public long CurrentBytes => (NonZero?.EstimatedBytes ?? 0) + (EvenOdd?.EstimatedBytes ?? 0);
+
+        ~FrozenFillCacheEntry()
+        {
+            var bytes = Interlocked.Exchange(ref AccountedBytes, 0);
+            if (bytes == 0)
+            {
+                return;
+            }
+
+            lock (_fillCacheGate)
+            {
+                _fillCacheBytes -= bytes;
+                RenderMemoryLedger.GeometryCacheBytesChanged(-bytes);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-accounts <paramref name="entry"/> after a (re)build and evicts least-recently-used cache
+    /// entries until the total is back under budget. An evicted path re-tessellates on its next
+    /// draw, so eviction trades reuse for a bounded live-heap footprint.
+    /// </summary>
+    private static void AccountFillCacheAndEvict(FrozenFillCacheEntry entry)
+    {
+        lock (_fillCacheGate)
+        {
+            _fillCacheBytes += entry.CurrentBytes - entry.AccountedBytes;
+            RenderMemoryLedger.GeometryCacheBytesChanged(entry.CurrentBytes - entry.AccountedBytes);
+            entry.AccountedBytes = entry.CurrentBytes;
+            entry.LastUse = ++_fillCacheStamp;
+
+            if (_fillCacheBytes <= FILL_CACHE_BUDGET_BYTES)
+            {
+                return;
+            }
+
+            // Collect and sort the live entries by last use; oldest evicted first. The sweep is
+            // O(n log n) but runs only when the budget trips, which a steady scene never does.
+            var candidates = new List<KeyValuePair<PathGeometry, FrozenFillCacheEntry>>();
+            foreach (var pair in _fillCache)
+            {
+                if (!ReferenceEquals(pair.Value, entry))
+                {
+                    candidates.Add(pair);
+                }
+            }
+            candidates.Sort(static (a, b) => a.Value.LastUse.CompareTo(b.Value.LastUse));
+
+            foreach (var victim in candidates)
+            {
+                if (_fillCacheBytes <= FILL_CACHE_BUDGET_BYTES)
+                {
+                    break;
+                }
+                _fillCacheBytes -= victim.Value.AccountedBytes;
+                RenderMemoryLedger.GeometryCacheBytesChanged(-victim.Value.AccountedBytes);
+                victim.Value.AccountedBytes = 0;
+                _fillCache.Remove(victim.Key);
+            }
+        }
+    }
+
+    private static void TouchFillCache(FrozenFillCacheEntry entry)
+        => entry.LastUse = Interlocked.Increment(ref _fillCacheStamp);
+
+    internal static void TrimSharedGeometryCache()
+    {
+        lock (_fillCacheGate)
+        {
+            foreach (var pair in _fillCache)
+            {
+                var entry = pair.Value;
+                if (entry.AccountedBytes != 0)
+                {
+                    _fillCacheBytes -= entry.AccountedBytes;
+                    RenderMemoryLedger.GeometryCacheBytesChanged(-entry.AccountedBytes);
+                    entry.AccountedBytes = 0;
+                }
+
+                entry.NonZero = null;
+                entry.EvenOdd = null;
+            }
+
+            _fillCache.Clear();
+            _fillCacheBytes = 0;
+        }
     }
 
     private double _dpiScale;
@@ -427,6 +528,11 @@ internal sealed partial class MewVGWin32GraphicsContext : GraphicsContextBase
                 entry.NonZero = existing;
 
             _fillCache.AddOrUpdate(path, entry);
+            AccountFillCacheAndEvict(entry);
+        }
+        else
+        {
+            TouchFillCache(entry);
         }
 
         cached = existing;

@@ -3,7 +3,7 @@ using Aprillz.MewVG.Interop;
 
 namespace Aprillz.MewUI.Rendering.MewVG;
 
-internal sealed class MewVGMetalWindowResources : IDisposable
+internal sealed class MewVGMetalWindowResources : IDisposable, IMewVGWindowCacheMaintenance
 {
     private static readonly nint ClsNSAutoreleasePool = ObjCRuntime.GetClass("NSAutoreleasePool");
     private static readonly nint SelAlloc = ObjCRuntime.Selectors.alloc;
@@ -117,6 +117,14 @@ internal sealed class MewVGMetalWindowResources : IDisposable
         }
 
         return new MewVGMetalWindowResources(hwnd, metalLayer, device, commandQueue, vg);
+    }
+
+    public void TrimCaches()
+    {
+        if (!_disposed)
+        {
+            TextCache.Trim();
+        }
     }
 
     public void Dispose()

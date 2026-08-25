@@ -947,6 +947,8 @@ internal sealed class ManagedTextLayoutCache : ITextLayoutCache, IDisposable
     {
         _content.Clear();
         _contentOrder.Clear();
+        _owners.Clear();
+        _ownerCount = 0;
     }
 
     public void Dispose() => Trim();

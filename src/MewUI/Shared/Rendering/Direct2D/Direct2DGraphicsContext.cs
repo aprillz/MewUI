@@ -475,13 +475,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         // Release cached geometries eagerly rather than waiting on GC to run each entry's
         // finalizer - this context (and the table) may not be collected for a while after
         // Dispose.
-        foreach (var pair in _geometryCache)
-        {
-            var entry = pair.Value;
-            if (entry.NonZeroHandle != 0) { ComHelpers.Release(entry.NonZeroHandle); entry.NonZeroHandle = 0; }
-            if (entry.EvenOddHandle != 0) { ComHelpers.Release(entry.EvenOddHandle); entry.EvenOddHandle = 0; }
-        }
-        _geometryCache.Clear();
+        ClearGeometryCache();
 
         if (_deviceContext != 0)
         {
@@ -1553,15 +1547,85 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     {
         public nint NonZeroHandle;
         public nint EvenOddHandle;
+        public long AccountedBytes;
+        public long LastUse;
 
         ~GeometryCacheEntry()
         {
             if (NonZeroHandle != 0) ComHelpers.Release(NonZeroHandle);
             if (EvenOddHandle != 0) ComHelpers.Release(EvenOddHandle);
+            long bytes = Interlocked.Exchange(ref AccountedBytes, 0);
+            if (bytes != 0)
+            {
+                RenderMemoryLedger.GeometryCacheBytesChanged(-bytes);
+            }
         }
     }
 
     private readonly ConditionalWeakTable<PathGeometry, GeometryCacheEntry> _geometryCache = new();
+
+    // Budget for cached ID2D1PathGeometry objects. Keys live as long as their PathGeometry, so a
+    // document holding thousands of frozen paths (an icon list) would otherwise pin an unbounded
+    // number of native geometry objects. COM object sizes are opaque; the accounting approximates
+    // them from the command count, which tracks the segment data D2D stores.
+    private const long GEOMETRY_CACHE_BUDGET_BYTES = 32L * 1024 * 1024;
+    private const long GEOMETRY_BYTES_PER_COMMAND = 64;
+    private long _geometryCacheBytes;
+    private long _geometryCacheStamp;
+
+    private void ClearGeometryCache()
+    {
+        foreach (var pair in _geometryCache)
+        {
+            var entry = pair.Value;
+            if (entry.NonZeroHandle != 0) { ComHelpers.Release(entry.NonZeroHandle); entry.NonZeroHandle = 0; }
+            if (entry.EvenOddHandle != 0) { ComHelpers.Release(entry.EvenOddHandle); entry.EvenOddHandle = 0; }
+            long bytes = Interlocked.Exchange(ref entry.AccountedBytes, 0);
+            if (bytes != 0)
+            {
+                RenderMemoryLedger.GeometryCacheBytesChanged(-bytes);
+            }
+        }
+        _geometryCache.Clear();
+        _geometryCacheBytes = 0;
+    }
+
+    // Evicts least-recently-used cached geometries until the estimate is back under budget. An
+    // evicted path rebuilds its ID2D1PathGeometry on the next draw. Handles are released here and
+    // zeroed so the entry's finalizer stays a no-op.
+    private void EvictGeometryCacheOverBudget(GeometryCacheEntry keep)
+    {
+        if (_geometryCacheBytes <= GEOMETRY_CACHE_BUDGET_BYTES)
+        {
+            return;
+        }
+
+        var candidates = new List<KeyValuePair<PathGeometry, GeometryCacheEntry>>();
+        foreach (var pair in _geometryCache)
+        {
+            if (!ReferenceEquals(pair.Value, keep))
+            {
+                candidates.Add(pair);
+            }
+        }
+        candidates.Sort(static (a, b) => a.Value.LastUse.CompareTo(b.Value.LastUse));
+
+        foreach (var victim in candidates)
+        {
+            if (_geometryCacheBytes <= GEOMETRY_CACHE_BUDGET_BYTES)
+            {
+                break;
+            }
+
+            var entry = victim.Value;
+            if (entry.NonZeroHandle != 0) { ComHelpers.Release(entry.NonZeroHandle); entry.NonZeroHandle = 0; }
+            if (entry.EvenOddHandle != 0) { ComHelpers.Release(entry.EvenOddHandle); entry.EvenOddHandle = 0; }
+            _geometryCacheBytes -= entry.AccountedBytes;
+            RenderMemoryLedger.GeometryCacheBytesChanged(-entry.AccountedBytes);
+            entry.AccountedBytes = 0;
+            _geometryCache.Remove(victim.Key);
+        }
+    }
 
     /// <summary>Builds (or reuses, for frozen paths) the native geometry for <paramref name="path"/>.
     /// <paramref name="ownsGeometry"/> is <see langword="true"/> when the caller is responsible
@@ -1583,12 +1647,14 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private nint GetOrBuildCachedGeometry(PathGeometry path, FillRule fillRule)
     {
         var entry = _geometryCache.GetValue(path, static _ => new GeometryCacheEntry());
+        entry.LastUse = ++_geometryCacheStamp;
 
         if (fillRule == FillRule.EvenOdd)
         {
             if (entry.EvenOddHandle == 0)
             {
                 entry.EvenOddHandle = BuildD2DPathGeometryCore(path, fillRule);
+                AccountBuiltGeometry(entry, path);
             }
             return entry.EvenOddHandle;
         }
@@ -1596,8 +1662,18 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
         if (entry.NonZeroHandle == 0)
         {
             entry.NonZeroHandle = BuildD2DPathGeometryCore(path, fillRule);
+            AccountBuiltGeometry(entry, path);
         }
         return entry.NonZeroHandle;
+    }
+
+    private void AccountBuiltGeometry(GeometryCacheEntry entry, PathGeometry path)
+    {
+        long bytes = Math.Max(1, path.Commands.Length) * GEOMETRY_BYTES_PER_COMMAND;
+        entry.AccountedBytes += bytes;
+        _geometryCacheBytes += bytes;
+        RenderMemoryLedger.GeometryCacheBytesChanged(bytes);
+        EvictGeometryCacheOverBudget(entry);
     }
 
     private nint BuildD2DPathGeometryCore(PathGeometry path, FillRule fillRule = FillRule.NonZero)

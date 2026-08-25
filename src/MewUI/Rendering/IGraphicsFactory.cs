@@ -94,14 +94,16 @@ public static class GraphicsFactoryImageExtensions
     public static IImage CreateImageFromFile(this IGraphicsFactory factory, string path)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        return ImageSource.FromFile(path).CreateImage(factory);
+        using var source = ImageSource.FromFile(path);
+        return source.CreateImage(factory);
     }
 
     /// <summary>Creates an image from encoded bytes.</summary>
     public static IImage CreateImageFromBytes(this IGraphicsFactory factory, byte[] data)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        return ImageSource.FromBytes(data).CreateImage(factory);
+        using var source = ImageSource.FromBytes(data);
+        return source.CreateImage(factory);
     }
 }
 

@@ -20,6 +20,14 @@ internal static class TextServices
     public static void ReleaseIfCreated(IGraphicsFactory factory)
         => Engines.GetValue(factory, static value => new EngineEntry(value)).DisposeIfCreated();
 
+    public static void TrimIfCreated(IGraphicsFactory factory)
+    {
+        if (Engines.TryGetValue(factory, out var entry))
+        {
+            entry.TrimIfCreated();
+        }
+    }
+
     private sealed class EngineEntry(IGraphicsFactory owner)
     {
         private readonly object _sync = new();
@@ -42,6 +50,14 @@ internal static class TextServices
                 _value?.Dispose();
                 _value = null;
                 _disposed = true;
+            }
+        }
+
+        internal void TrimIfCreated()
+        {
+            lock (_sync)
+            {
+                _value?.ManagedCache.Trim();
             }
         }
     }

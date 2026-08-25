@@ -16,7 +16,8 @@ public sealed partial class MewVGX11GraphicsFactory
 #else
 public sealed partial class MewVGWin32GraphicsFactory 
 #endif
-    : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWindowSurfacePresenter
+    : IGraphicsFactory, ITextBackendFactory, IRenderDevice, IGpuInteropInvalidationSource, IWindowResourceReleaser, IWindowSurfacePresenter,
+      IBackendRenderCacheMaintenance
 {
     public event EventHandler<GpuInteropInvalidatedEventArgs>? GpuInteropInvalidated;
 
@@ -244,8 +245,44 @@ public sealed partial class MewVGWin32GraphicsFactory
 
     public IRenderOperation FlushAsyncWork() => RenderOperation.Completed;
 
+    void IBackendRenderCacheMaintenance.TrimBackendCaches(RenderCacheTrimReason reason)
+    {
+#if MEWUI_MEWVG_MACOS
+        MewVGMacOSGraphicsContext.TrimSharedGeometryCache();
+#elif MEWUI_MEWVG_X11
+        MewVGX11GraphicsContext.TrimSharedGeometryCache();
+#else
+        MewVGWin32GraphicsContext.TrimSharedGeometryCache();
+#endif
+
+        foreach (var resources in _windows.Values)
+        {
+            if (resources is IMewVGWindowCacheMaintenance maintenance)
+            {
+                maintenance.TrimCaches();
+            }
+        }
+    }
+
+    void IBackendRenderCacheMaintenance.MaintainBackendCaches(RenderCacheMaintenanceMode mode)
+    {
+        if (mode is RenderCacheMaintenanceMode.MemoryPressure
+            or RenderCacheMaintenanceMode.WindowClosed
+            or RenderCacheMaintenanceMode.DeviceLost
+            or RenderCacheMaintenanceMode.Shutdown)
+        {
+            ((IBackendRenderCacheMaintenance)this).TrimBackendCaches(
+                mode == RenderCacheMaintenanceMode.DeviceLost
+                    ? RenderCacheTrimReason.DeviceLost
+                    : mode == RenderCacheMaintenanceMode.MemoryPressure
+                        ? RenderCacheTrimReason.MemoryPressure
+                        : RenderCacheTrimReason.Manual);
+        }
+    }
+
     public void Dispose()
     {
+        ImageSource.RetireRealizationsForFactory(this);
         TextServices.ReleaseIfCreated(this);
         _renderResourceCache.Dispose();
 
@@ -312,4 +349,9 @@ internal sealed class MewVGNoOpRenderScope : IDisposable
 {
     public static readonly MewVGNoOpRenderScope Instance = new();
     public void Dispose() { }
+}
+
+internal interface IMewVGWindowCacheMaintenance
+{
+    void TrimCaches();
 }
