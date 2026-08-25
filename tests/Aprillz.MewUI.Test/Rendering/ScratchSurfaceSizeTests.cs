@@ -148,6 +148,16 @@ public sealed class ScratchSurfaceSizeTests
     }
 
     [TestMethod]
+    public void DevicePool_RejectsSurfaceThatWasNotAcquiredFromPool()
+    {
+        using var factory = new GdiGraphicsFactory();
+        using var surface = factory.CreateSurface(RenderSurfaceDescriptor.CachedImage(32, 16, 1));
+
+        Assert.ThrowsExactly<ArgumentException>(() => factory.ReleaseScratchSurface(surface));
+        Assert.IsFalse(surface.IsDisposed);
+    }
+
+    [TestMethod]
     public void FilterPools_ShareExactSurfacesThroughDeviceCache()
     {
         using var factory = new GdiGraphicsFactory();

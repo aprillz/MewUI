@@ -91,28 +91,14 @@ public static class ScratchSurfaceExtensions
     /// </summary>
     public static void ReleaseScratchSurface(this IRenderDevice device, IRenderSurface surface)
     {
-        if (surface is LeasedRenderSurfaceView lease)
+        ArgumentNullException.ThrowIfNull(surface);
+        if (surface is not LeasedRenderSurfaceView lease)
         {
-            lease.Dispose();
-            return;
+            throw new ArgumentException(
+                "The surface was not acquired from the scratch surface pool.",
+                nameof(surface));
         }
 
-        var cache = device.ResourceCache;
-        RenderMemoryLedger.ScratchReleased(RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight));
-        if (cache == null || surface.IsDisposed)
-        {
-            surface.Dispose();
-            RenderMemoryLedger.ScratchDisposedOutsidePool();
-            return;
-        }
-
-        var key = new ScratchSurfaceKey(
-            surface.PixelWidth,
-            surface.PixelHeight,
-            surface.DpiScale,
-            surface is Aprillz.MewUI.Resources.IPixelBufferSource pixels
-                ? pixels.HasAlpha
-                : surface.Capabilities.HasFlag(SurfaceCapabilities.Alpha));
-        cache.ReturnScratchSurface(key, surface);
+        lease.Dispose();
     }
 }
