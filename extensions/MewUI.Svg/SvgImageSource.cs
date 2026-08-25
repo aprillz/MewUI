@@ -194,7 +194,11 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
     // A Tint/Raster* property changed: drop the cached raster and notify the host control to repaint.
     private void OnVisualChanged()
     {
-        InvalidateRaster();
+        lock (_renderLock)
+        {
+            _document.InvalidateRenderCaches();
+            InvalidateRaster();
+        }
         Changed?.Invoke();
     }
 
@@ -216,6 +220,10 @@ public sealed class SvgImageSource : MewObject, IVectorImageSource, INotifyImage
         }
         _disposed = true;
         DisposePropertyBindings();
-        InvalidateRaster();
+        lock (_renderLock)
+        {
+            _document.InvalidateRenderCaches();
+            InvalidateRaster();
+        }
     }
 }

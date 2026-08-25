@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -12,7 +13,7 @@ namespace Svg
     /// </summary>
     public class SvgElementIdManager
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient ElementHttpClient = new HttpClient();
 
         private SvgDocument _document;
         private Dictionary<string, SvgElement> _idValueMap;
@@ -68,18 +69,39 @@ namespace Svg
 
                 if (uri.IsAbsoluteUri)
                 {
+                    var cancellationToken = MewSvgRenderer.CurrentCancellationToken;
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     if (uri.IsFile)
                     {
-                        var doc = SvgDocument.Open<SvgDocument>(uri.LocalPath);
+                        var data = File.ReadAllBytesAsync(uri.LocalPath, cancellationToken)
+                            .GetAwaiter().GetResult();
+                        cancellationToken.ThrowIfCancellationRequested();
+                        using var stream = new MemoryStream(data, writable: false);
+                        var doc = SvgDocument.Open<SvgDocument>(stream);
+                        doc.BaseUri = uri;
                         return doc.IdManager.GetElementById(fragment);
                     }
                     else if (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-                        using (var httpResponseMessage = _httpClient.GetAsync(uri).Result)
-                        using (var stream = httpResponseMessage.Content.ReadAsStreamAsync().Result)
+                    {
+                        using (var httpResponseMessage = ElementHttpClient.GetAsync(
+                            uri,
+                            HttpCompletionOption.ResponseHeadersRead,
+                            cancellationToken).GetAwaiter().GetResult())
                         {
+                            httpResponseMessage.EnsureSuccessStatusCode();
+                            // Buffer with the token before parsing. Parsing directly from the
+                            // response stream could block synchronously if the server sent
+                            // headers and then stalled part-way through the SVG body.
+                            var data = httpResponseMessage.Content
+                                .ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult();
+                            cancellationToken.ThrowIfCancellationRequested();
+                            using var stream = new MemoryStream(data, writable: false);
                             var doc = SvgDocument.Open<SvgDocument>(stream);
+                            doc.BaseUri = uri;
                             return doc.IdManager.GetElementById(fragment);
                         }
+                    }
                     else
                         throw new NotSupportedException();
                 }
