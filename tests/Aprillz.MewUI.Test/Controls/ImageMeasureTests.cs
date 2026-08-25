@@ -60,11 +60,11 @@ public sealed class ImageMeasureTests
             Source = source,
             StretchMode = Stretch.None,
         };
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
 
         image.Measure(new Size(200, 200));
 
-        var after = RenderMemoryLedger.Snapshot();
+        var after = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(new Size(100, 50), image.DesiredSize);
         Assert.AreEqual(before.DecodeAttempts, after.DecodeAttempts);
         Assert.AreEqual(before.ImageRealizationRequests, after.ImageRealizationRequests);

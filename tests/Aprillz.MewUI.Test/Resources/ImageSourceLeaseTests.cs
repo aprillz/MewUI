@@ -15,11 +15,11 @@ public sealed class ImageSourceLeaseTests
     {
         var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);
         var factory = Application.DefaultGraphicsFactory;
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
 
         using var first = source.CreateImage(factory);
         using var second = source.CreateImage(factory);
-        var active = RenderMemoryLedger.Snapshot();
+        var active = RenderResourceMetrics.Snapshot();
 
         Assert.AreSame(
             ImageResource.ResolveBackendImage(first),
@@ -30,12 +30,12 @@ public sealed class ImageSourceLeaseTests
         first.Dispose();
         Assert.AreEqual(
             before.NativeImageRealizationCount + 1,
-            RenderMemoryLedger.Snapshot().NativeImageRealizationCount);
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
 
         second.Dispose();
         Assert.AreEqual(
             before.NativeImageRealizationCount,
-            RenderMemoryLedger.Snapshot().NativeImageRealizationCount);
+            RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
     }
 
     [TestMethod]
@@ -43,21 +43,21 @@ public sealed class ImageSourceLeaseTests
     {
         var source = ImageSource.FromBytes(CreateBgraBmp(4, 2));
         var factory = Application.DefaultGraphicsFactory;
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
 
         using var small = source.CreateImage(factory, 2, 1);
-        var afterSmall = RenderMemoryLedger.Snapshot();
+        var afterSmall = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.DecodedPixelCount + 1, afterSmall.DecodedPixelCount);
         Assert.AreEqual(2, small.PixelWidth);
         Assert.AreEqual(1, small.PixelHeight);
 
         using var full = source.CreateImage(factory, 4, 2);
-        var afterUpgrade = RenderMemoryLedger.Snapshot();
+        var afterUpgrade = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.DecodedPixelCount + 2, afterUpgrade.DecodedPixelCount);
         Assert.AreEqual(before.NativeImageRealizationCount + 2, afterUpgrade.NativeImageRealizationCount);
 
         small.Dispose();
-        var afterOldLease = RenderMemoryLedger.Snapshot();
+        var afterOldLease = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.DecodedPixelCount + 1, afterOldLease.DecodedPixelCount);
         Assert.AreEqual(before.NativeImageRealizationCount + 1, afterOldLease.NativeImageRealizationCount);
     }

@@ -61,15 +61,15 @@ public sealed class ImageSourceOrientationTests
     public void EnsureDecode_TransfersLedgerBytesFromEncodedToDecoded()
     {
         byte[] encoded = Oriented(ImageOrientation.Normal);
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
         var source = ImageSource.FromBytes(encoded);
-        var encodedSnapshot = RenderMemoryLedger.Snapshot();
+        var encodedSnapshot = RenderResourceMetrics.Snapshot();
 
         Assert.AreEqual(before.EncodedBackingCount + 1, encodedSnapshot.EncodedBackingCount);
         Assert.AreEqual(before.EncodedBackingBytes + encoded.LongLength, encodedSnapshot.EncodedBackingBytes);
 
         source.EnsureDecode();
-        var decodedSnapshot = RenderMemoryLedger.Snapshot();
+        var decodedSnapshot = RenderResourceMetrics.Snapshot();
 
         Assert.AreEqual(before.EncodedBackingCount, decodedSnapshot.EncodedBackingCount);
         Assert.AreEqual(before.EncodedBackingBytes, decodedSnapshot.EncodedBackingBytes);

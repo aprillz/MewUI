@@ -12,30 +12,30 @@ public sealed class ScratchSurfaceSizeTests
     {
         using var factory = new GdiGraphicsFactory();
         using var pool = new ScratchSurfacePool(factory, 1);
-        var before = RenderMemoryLedger.Snapshot();
-        long bytes = RenderMemoryLedger.ScratchBytes(32, 16);
+        var before = RenderResourceMetrics.Snapshot();
+        long bytes = RenderResourceMetrics.ScratchBytes(32, 16);
 
         var first = pool.RentLease(32, 16);
-        var active = RenderMemoryLedger.Snapshot();
+        var active = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.ScratchCreated + 1, active.ScratchCreated);
         Assert.AreEqual(before.ScratchActiveCount + 1, active.ScratchActiveCount);
         Assert.AreEqual(before.ScratchActiveBytes + bytes, active.ScratchActiveBytes);
 
         pool.Return(first);
-        var pooled = RenderMemoryLedger.Snapshot();
+        var pooled = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.ScratchActiveCount, pooled.ScratchActiveCount);
         Assert.AreEqual(before.ScratchPooledCount + 1, pooled.ScratchPooledCount);
         Assert.AreEqual(before.ScratchPooledBytes + bytes, pooled.ScratchPooledBytes);
 
         var reused = pool.RentLease(32, 16);
         Assert.AreSame(first, reused);
-        var activeAgain = RenderMemoryLedger.Snapshot();
+        var activeAgain = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.ScratchCreated + 1, activeAgain.ScratchCreated);
         Assert.AreEqual(before.ScratchActiveCount + 1, activeAgain.ScratchActiveCount);
         Assert.AreEqual(before.ScratchPooledCount, activeAgain.ScratchPooledCount);
 
         reused.Dispose();
-        var disposed = RenderMemoryLedger.Snapshot();
+        var disposed = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.ScratchActiveCount, disposed.ScratchActiveCount);
         Assert.AreEqual(before.ScratchPooledCount, disposed.ScratchPooledCount);
         Assert.AreEqual(before.ScratchDisposed + 1, disposed.ScratchDisposed);
@@ -131,13 +131,13 @@ public sealed class ScratchSurfaceSizeTests
     public void DevicePool_ReturnIsExactOnceAndBackendUseAfterReturnFails()
     {
         using var factory = new GdiGraphicsFactory();
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
         var surface = factory.AcquireScratchSurface(32, 16);
 
         factory.ReleaseScratchSurface(surface);
-        var returned = RenderMemoryLedger.Snapshot();
+        var returned = RenderResourceMetrics.Snapshot();
         factory.ReleaseScratchSurface(surface);
-        var returnedAgain = RenderMemoryLedger.Snapshot();
+        var returnedAgain = RenderResourceMetrics.Snapshot();
 
         Assert.IsTrue(surface.IsDisposed);
         Assert.ThrowsExactly<ObjectDisposedException>(

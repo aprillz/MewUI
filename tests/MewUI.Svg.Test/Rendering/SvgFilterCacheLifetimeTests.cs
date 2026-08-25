@@ -234,7 +234,7 @@ public sealed class SvgFilterCacheLifetimeTests
         var factory = GetFactory();
         var cache = (RenderResourceCache)factory.ResourceCache!;
         var baselineCache = cache.GetStatistics();
-        var baselineLedger = RenderMemoryLedger.Snapshot();
+        var baselineLedger = RenderResourceMetrics.Snapshot();
         var document = SvgDocument.Parse(FilteredSvg);
 
         Render(document, factory);
@@ -248,12 +248,12 @@ public sealed class SvgFilterCacheLifetimeTests
         Assert.IsGreaterThan(0, activeRenderLease.Image.PixelWidth);
         Assert.AreEqual(
             baselineLedger.PersistentResourceCount + 1,
-            RenderMemoryLedger.Snapshot().PersistentResourceCount);
+            RenderResourceMetrics.Snapshot().PersistentResourceCount);
 
         activeRenderLease.Dispose();
         Assert.AreEqual(
             baselineLedger.PersistentResourceCount,
-            RenderMemoryLedger.Snapshot().PersistentResourceCount);
+            RenderResourceMetrics.Snapshot().PersistentResourceCount);
     }
 
     [TestMethod]
@@ -275,18 +275,18 @@ public sealed class SvgFilterCacheLifetimeTests
         var previousFactory = factory;
         try
         {
-            var baseline = RenderMemoryLedger.Snapshot();
+            var baseline = RenderResourceMetrics.Snapshot();
             var document = SvgDocument.Parse(svg);
 
             Render(document, factory);
             Assert.AreEqual(
                 baseline.NativeImageRealizationCount + 1,
-                RenderMemoryLedger.Snapshot().NativeImageRealizationCount);
+                RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
 
             document.InvalidateRenderCaches();
             Assert.AreEqual(
                 baseline.NativeImageRealizationCount,
-                RenderMemoryLedger.Snapshot().NativeImageRealizationCount);
+                RenderResourceMetrics.Snapshot().NativeImageRealizationCount);
         }
         finally
         {

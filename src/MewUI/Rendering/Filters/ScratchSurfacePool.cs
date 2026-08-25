@@ -68,17 +68,17 @@ public sealed class ScratchSurfacePool : IDisposable
             if (surface is IReusableScratchSurface reusable && !reusable.CanReturnToPool)
             {
                 surface.Dispose();
-                RenderMemoryLedger.ScratchDisposedOutsidePool();
+                RenderResourceMetrics.ScratchDisposedOutsidePool();
                 surface = null;
             }
             else
             {
-                long bytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
-                RenderMemoryLedger.ScratchAcquired(bytes, created: false);
+                long bytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+                RenderResourceMetrics.ScratchAcquired(bytes, created: false);
                 if (surface is not ICpuPixelSurface cpuSurface)
                 {
                     surface.Dispose();
-                    RenderMemoryLedger.ScratchDisposedOutsidePool();
+                    RenderResourceMetrics.ScratchDisposedOutsidePool();
                     throw new NotSupportedException(
                         $"{nameof(ScratchSurfacePool)} requires CPU-readable render surfaces.");
                 }
@@ -105,7 +105,7 @@ public sealed class ScratchSurfacePool : IDisposable
         {
             var lease = new ScratchSurfaceLease(this, surface, pixels);
             _leases[lease.Surface] = lease;
-            RenderMemoryLedger.ScratchAcquired(lease.AccountedBytes, created: true);
+            RenderResourceMetrics.ScratchAcquired(lease.AccountedBytes, created: true);
             return lease;
         }
 
@@ -141,11 +141,11 @@ public sealed class ScratchSurfacePool : IDisposable
             return;
         }
 
-        RenderMemoryLedger.ScratchReleased(lease.AccountedBytes);
+        RenderResourceMetrics.ScratchReleased(lease.AccountedBytes);
         var cache = _device.ResourceCache;
         if (cache == null)
         {
-            RenderMemoryLedger.ScratchDisposedOutsidePool();
+            RenderResourceMetrics.ScratchDisposedOutsidePool();
             DisposeSurface(lease);
             return;
         }
@@ -183,8 +183,8 @@ public sealed class ScratchSurfacePool : IDisposable
 
     private void DisposeActiveLease(ScratchSurfaceLease lease)
     {
-        RenderMemoryLedger.ScratchReleased(lease.AccountedBytes);
-        RenderMemoryLedger.ScratchDisposedOutsidePool();
+        RenderResourceMetrics.ScratchReleased(lease.AccountedBytes);
+        RenderResourceMetrics.ScratchDisposedOutsidePool();
         DisposeSurface(lease);
     }
 
@@ -207,7 +207,7 @@ public sealed class ScratchSurfaceLease : IDisposable
         _owner = owner;
         Surface = surface ?? throw new ArgumentNullException(nameof(surface));
         Pixels = pixels ?? throw new ArgumentNullException(nameof(pixels));
-        AccountedBytes = RenderMemoryLedger.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
+        AccountedBytes = RenderResourceMetrics.ScratchBytes(surface.PixelWidth, surface.PixelHeight);
     }
 
     public IRenderSurface Surface { get; }

@@ -116,10 +116,10 @@ internal sealed class DebugPerformanceOverlay : Control
     }
 
     // A second box under the frame panel: what the render caches hold and what the process
-    // occupies, from RenderMemoryLedger.
+    // occupies, from RenderResourceMetrics.
     private void DrawResourcePanel(IGraphicsContext context, Rect framePanel, double maxWidth, double pad)
     {
-        var memory = RenderMemoryLedger.Snapshot();
+        var memory = RenderResourceMetrics.Snapshot();
 
         Span<char> buffer = stackalloc char[768];
         var text = new StackTextFormatter(buffer);

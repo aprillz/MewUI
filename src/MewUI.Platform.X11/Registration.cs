@@ -13,7 +13,7 @@ public static class X11Platform
     {
         Application.RegisterPlatformHost(static () => new X11PlatformHost(), Platform.PlatformSurfaceKind.X11, "X11",
             X11PlatformHost.SystemFontFamily);
-        Rendering.RenderMemoryLedger.ProcessMemoryReader = Platform.Linux.LinuxProcessMemory.Read;
+        Rendering.RenderResourceMetrics.ProcessMemoryReader = Platform.Linux.LinuxProcessMemory.Read;
     }
 
     public static ApplicationBuilder UseX11(this ApplicationBuilder builder)

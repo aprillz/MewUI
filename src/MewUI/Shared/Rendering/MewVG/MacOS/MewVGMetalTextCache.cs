@@ -190,13 +190,13 @@ internal sealed class MewVGMetalTextCache : IDisposable
         return true;
     }
 
-    // Texture bytes this cache has reported to RenderMemoryLedger, given back in full on Dispose.
+    // Texture bytes this cache has reported to RenderResourceMetrics, given back in full on Dispose.
     private long _accountedBytes;
 
     private void Account(long delta)
     {
         _accountedBytes += delta;
-        RenderMemoryLedger.TextCacheBytesChanged(delta);
+        RenderResourceMetrics.TextCacheBytesChanged(delta);
     }
 
     private static long TextureBytes(int widthPx, int heightPx) => (long)widthPx * heightPx * 4;

@@ -39,13 +39,13 @@ internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceP
             return;
         }
 
-        long bytes = RenderMemoryLedger.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
-        RenderMemoryLedger.ScratchReleased(bytes);
+        long bytes = RenderResourceMetrics.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
+        RenderResourceMetrics.ScratchReleased(bytes);
         var cache = _device.ResourceCache;
         if (cache == null || allocation.IsDisposed)
         {
             allocation.Dispose();
-            RenderMemoryLedger.ScratchDisposedOutsidePool();
+            RenderResourceMetrics.ScratchDisposedOutsidePool();
             return;
         }
 

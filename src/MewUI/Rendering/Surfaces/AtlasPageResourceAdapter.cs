@@ -26,7 +26,7 @@ internal sealed class AtlasPageResourceAdapter
             return false;
         }
 
-        long bytes = RenderMemoryLedger.ScratchBytes(DefaultPageExtent, DefaultPageExtent);
+        long bytes = RenderResourceMetrics.ScratchBytes(DefaultPageExtent, DefaultPageExtent);
         if (!cache.TryReserveAtlasPage(bytes))
         {
             return false;
@@ -44,7 +44,7 @@ internal sealed class AtlasPageResourceAdapter
                 ScratchResourceClass.AtlasPage,
                 exactSizeOnly: true);
             lease = new AtlasPageLease(_device, cache, surface, contentClass, bytes, _identity);
-            RenderMemoryLedger.AtlasPageAdded(bytes);
+            RenderResourceMetrics.AtlasPageAdded(bytes);
             return true;
         }
         catch
@@ -93,7 +93,7 @@ internal sealed class AtlasPageLease : IDisposable
             return;
         }
         cache.ReleaseAtlasPageReservation(_bytes);
-        RenderMemoryLedger.AtlasPageRemoved(_bytes);
+        RenderResourceMetrics.AtlasPageRemoved(_bytes);
         device.ReleaseScratchSurface(surface);
     }
 }

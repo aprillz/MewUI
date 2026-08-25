@@ -13,7 +13,7 @@ public static class Win32Platform
     {
         Application.RegisterPlatformHost(static () => new Win32PlatformHost(), Platform.PlatformSurfaceKind.Win32, "Win32",
             Win32PlatformHost.SystemFontFamily);
-        Rendering.RenderMemoryLedger.ProcessMemoryReader = Win32ProcessMemory.Read;
+        Rendering.RenderResourceMetrics.ProcessMemoryReader = Win32ProcessMemory.Read;
     }
 
     public static ApplicationBuilder UseWin32(this ApplicationBuilder builder)

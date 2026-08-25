@@ -153,7 +153,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         _pbo0 = pbo0;
         _pbo1 = pbo1;
         _initialized = true;
-        RenderMemoryLedger.UploadStagingAdded(StagingBytes);
+        RenderResourceMetrics.UploadStagingAdded(StagingBytes);
     }
 
     public IExternalRasterLease Acquire()
@@ -303,7 +303,7 @@ internal sealed unsafe class PboFenceUploader : IExternalRasterSource
         }
         if (stagingBytes != 0)
         {
-            RenderMemoryLedger.UploadStagingRemoved(stagingBytes);
+            RenderResourceMetrics.UploadStagingRemoved(stagingBytes);
         }
     }
 }

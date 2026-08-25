@@ -110,16 +110,16 @@ public sealed class TargetSizeDecodeTests
     [TestMethod]
     public void DecodeReservation_IsVisibleOnlyWhileHeld()
     {
-        var before = RenderMemoryLedger.Snapshot();
+        var before = RenderResourceMetrics.Snapshot();
 
         using (ImageDecodeCoordinator.Acquire(4096))
         {
-            var during = RenderMemoryLedger.Snapshot();
+            var during = RenderResourceMetrics.Snapshot();
             Assert.AreEqual(before.DecodeTemporaryCount + 1, during.DecodeTemporaryCount);
             Assert.AreEqual(before.DecodeTemporaryBytes + 4096, during.DecodeTemporaryBytes);
         }
 
-        var after = RenderMemoryLedger.Snapshot();
+        var after = RenderResourceMetrics.Snapshot();
         Assert.AreEqual(before.DecodeTemporaryCount, after.DecodeTemporaryCount);
         Assert.AreEqual(before.DecodeTemporaryBytes, after.DecodeTemporaryBytes);
         Assert.IsGreaterThanOrEqualTo(4096, after.DecodeTemporaryPeakBytes);
