@@ -116,35 +116,3 @@ public static class ScratchSurfaceExtensions
         cache.ReturnScratchSurface(key, surface);
     }
 }
-
-/// <summary>
-/// Rounds requested surface dimensions up so that a resize sweep asks for a handful of distinct
-/// sizes instead of a new one every frame, which is what makes the scratch pool hit.
-/// </summary>
-public static class ScratchSurfaceSize
-{
-    // Below this, a surface is not worth sizing precisely.
-    private const int MIN_EXTENT = 16;
-
-    /// <summary>Rounds one axis up to the nearest allocation step.</summary>
-    public static int Approximate(int extent)
-    {
-        if (extent <= MIN_EXTENT)
-        {
-            return MIN_EXTENT;
-        }
-
-        // Fixed quanta keep nearby resize requests reusable without the 40-100% area waste of
-        // independently rounding both axes to powers of two. Larger surfaces use a wider quantum,
-        // keeping the number of pool keys bounded while capping per-axis slack at roughly 6%.
-        int quantum = extent switch
-        {
-            <= 256 => 16,
-            <= 1024 => 32,
-            <= 4096 => 64,
-            _ => 128,
-        };
-        long rounded = ((long)extent + quantum - 1) / quantum * quantum;
-        return rounded > int.MaxValue ? int.MaxValue : (int)rounded;
-    }
-}
