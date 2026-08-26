@@ -375,6 +375,14 @@ public abstract partial class UIElement
         if (entry.PersistentLease != null)
         {
             entry.PersistentLease.Dispose();
+            if (entry.Version != _contentVersion)
+            {
+                // The key embeds the version, so a stale snapshot can never be looked up again;
+                // retiring it now hands its surface back to the scratch pool instead of parking it
+                // until idle eviction, which would starve the reacquisition that follows.
+                var cacheDevice = Application.IsRunning ? Application.Current.GraphicsFactory : Application.DefaultGraphicsFactory;
+                cacheDevice?.ResourceCache?.Release(entry.PersistentKey);
+            }
             return;
         }
 
