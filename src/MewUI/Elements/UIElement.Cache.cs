@@ -208,24 +208,35 @@ public abstract partial class UIElement
         return null;
     }
 
+    // Scratch for the sibling-overlap visitor; the visual tree is walked only on the UI thread.
+    private static Element? _overlapChild;
+    private static Rect _overlapBounds;
+    private static bool _overlapFound;
+
+    // Single static delegate - no per-call closure allocation on the render path.
+    private static readonly Func<Element, bool> _overlapVisitor = static sibling =>
+    {
+        if (ReferenceEquals(sibling, _overlapChild)
+            || sibling is not UIElement uiElement
+            || !uiElement.Bounds.IntersectsWith(_overlapBounds))
+        {
+            return true;
+        }
+
+        _overlapFound = true;
+        return false;
+    };
+
     private static bool HasOverlappingSibling(IVisualTreeHost parent, Element child, Rect bounds)
     {
-        bool overlaps = false;
+        _overlapChild = child;
+        _overlapBounds = bounds;
+        _overlapFound = false;
 
-        parent.VisitChildren(sibling =>
-        {
-            if (ReferenceEquals(sibling, child)
-                || sibling is not UIElement uiElement
-                || !uiElement.Bounds.IntersectsWith(bounds))
-            {
-                return true;
-            }
+        parent.VisitChildren(_overlapVisitor);
 
-            overlaps = true;
-            return false;
-        });
-
-        return overlaps;
+        _overlapChild = null;
+        return _overlapFound;
     }
 
     private bool EnsureCache(IGraphicsFactory factory, double dpiScale, int deviceGeneration, BitmapCache bitmapCache)
