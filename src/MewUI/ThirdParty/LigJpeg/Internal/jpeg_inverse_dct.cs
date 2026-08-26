@@ -1490,8 +1490,10 @@ internal sealed class jpeg_inverse_dct
                 m_workspace[workspaceIndex + 6] == 0 &&
                 m_workspace[workspaceIndex + 7] == 0)
             {
-                /* AC terms all zero */
-                byte dcval = limit[limitOffset + JpegUtils.DESCALE(m_workspace[workspaceIndex + 0], REDUCED_PASS1_BITS + 3) & RANGE_MASK];
+                /* AC terms all zero. The range-limit scheme is (limit - SUBSET)[(x + CENTER) & MASK]
+                 * (see prepare_range_limit_table); the reduced IDCTs receive uncentered samples, so
+                 * the center bias must be added here before masking. */
+                byte dcval = limit[limitOffset + ((JpegUtils.DESCALE(m_workspace[workspaceIndex + 0], REDUCED_PASS1_BITS + 3) + RANGE_CENTER) & RANGE_MASK)];
 
                 currentOutBuffer[output_col + 0] = dcval;
                 currentOutBuffer[output_col + 1] = dcval;
@@ -1530,10 +1532,10 @@ internal sealed class jpeg_inverse_dct
 
             /* Final output stage */
 
-            currentOutBuffer[output_col + 0] = limit[limitOffset + JpegUtils.DESCALE(tmp10 + tmp2, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) & RANGE_MASK];
-            currentOutBuffer[output_col + 3] = limit[limitOffset + JpegUtils.DESCALE(tmp10 - tmp2, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) & RANGE_MASK];
-            currentOutBuffer[output_col + 1] = limit[limitOffset + JpegUtils.DESCALE(tmp12 + tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) & RANGE_MASK];
-            currentOutBuffer[output_col + 2] = limit[limitOffset + JpegUtils.DESCALE(tmp12 - tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) & RANGE_MASK];
+            currentOutBuffer[output_col + 0] = limit[limitOffset + ((JpegUtils.DESCALE(tmp10 + tmp2, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) + RANGE_CENTER) & RANGE_MASK)];
+            currentOutBuffer[output_col + 3] = limit[limitOffset + ((JpegUtils.DESCALE(tmp10 - tmp2, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) + RANGE_CENTER) & RANGE_MASK)];
+            currentOutBuffer[output_col + 1] = limit[limitOffset + ((JpegUtils.DESCALE(tmp12 + tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) + RANGE_CENTER) & RANGE_MASK)];
+            currentOutBuffer[output_col + 2] = limit[limitOffset + ((JpegUtils.DESCALE(tmp12 - tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 1) + RANGE_CENTER) & RANGE_MASK)];
 
             workspaceIndex += JpegConstants.DCTSIZE;       /* advance pointer to next row */
         }
@@ -1617,8 +1619,10 @@ internal sealed class jpeg_inverse_dct
                 m_workspace[workspaceIndex + 5] == 0 &&
                 m_workspace[workspaceIndex + 7] == 0)
             {
-                /* AC terms all zero */
-                byte dcval = limit[limitOffset + JpegUtils.DESCALE(m_workspace[workspaceIndex + 0], REDUCED_PASS1_BITS + 3) & RANGE_MASK];
+                /* AC terms all zero. The range-limit scheme is (limit - SUBSET)[(x + CENTER) & MASK]
+                 * (see prepare_range_limit_table); the reduced IDCTs receive uncentered samples, so
+                 * the center bias must be added here before masking. */
+                byte dcval = limit[limitOffset + ((JpegUtils.DESCALE(m_workspace[workspaceIndex + 0], REDUCED_PASS1_BITS + 3) + RANGE_CENTER) & RANGE_MASK)];
 
                 currentOutBuffer[output_col + 0] = dcval;
                 currentOutBuffer[output_col + 1] = dcval;
@@ -1640,8 +1644,8 @@ internal sealed class jpeg_inverse_dct
 
             /* Final output stage */
 
-            currentOutBuffer[output_col + 0] = limit[limitOffset + JpegUtils.DESCALE(tmp10 + tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 2) & RANGE_MASK];
-            currentOutBuffer[output_col + 1] = limit[limitOffset + JpegUtils.DESCALE(tmp10 - tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 2) & RANGE_MASK];
+            currentOutBuffer[output_col + 0] = limit[limitOffset + ((JpegUtils.DESCALE(tmp10 + tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 2) + RANGE_CENTER) & RANGE_MASK)];
+            currentOutBuffer[output_col + 1] = limit[limitOffset + ((JpegUtils.DESCALE(tmp10 - tmp0, REDUCED_CONST_BITS + REDUCED_PASS1_BITS + 3 + 2) + RANGE_CENTER) & RANGE_MASK)];
 
             workspaceIndex += JpegConstants.DCTSIZE;       /* advance pointer to next row */
         }
@@ -1663,7 +1667,8 @@ internal sealed class jpeg_inverse_dct
         byte[] limit = m_cinfo.m_sample_range_limit;
         int limitOffset = m_cinfo.m_sampleRangeLimitOffset - RANGE_SUBSET;
 
-        m_componentBuffer[output_row + 0][output_col] = limit[limitOffset + dcval & RANGE_MASK];
+        /* The range-limit scheme is (limit - SUBSET)[(x + CENTER) & MASK]; add the center bias. */
+        m_componentBuffer[output_row + 0][output_col] = limit[limitOffset + ((dcval + RANGE_CENTER) & RANGE_MASK)];
     }
 
     /// <summary>
