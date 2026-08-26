@@ -1663,13 +1663,15 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
 
     public override void DrawImage(IImage image, Point location)
     {
-        image = ImageResource.ResolveBackendImage(image);
-        if (image is not GdiImage gdiImage)
+        // Size from the logical image: a pooled surface behind it can be larger than the
+        // content, and the backend image reports that whole allocation.
+        var dest = new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight);
+        if (ImageResource.ResolveBackendImage(image) is not GdiImage gdiImage)
         {
             throw new ArgumentException("Image must be a GdiImage", nameof(image));
         }
 
-        DrawImage(gdiImage, new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight));
+        DrawImageCore(gdiImage, dest, new Rect(0, 0, dest.Width, dest.Height));
     }
 
     protected override void DrawImageCore(IImage image, Rect destRect)
