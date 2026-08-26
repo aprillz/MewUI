@@ -182,6 +182,10 @@ public readonly record struct TextPaintSpan(
 
 public readonly record struct TextOverlay(TextRange Range, Color Color);
 
+/// <param name="Foreground">Base glyph color for ranges no paint span overrides.</param>
+/// <param name="PaintSpans">Per-range foreground/background/decoration overrides.</param>
+/// <param name="Overlays">Range highlight fills painted with the backgrounds, behind the glyphs.</param>
+/// <param name="Owner">Cache owner the drawn runs are keyed to, so its entries release together.</param>
 /// <param name="Transient">
 /// The text changes every frame: nothing drawn for it is kept in the run or backend text caches,
 /// and the backend reuses per-frame scratch textures instead of filling its cache with one-off entries.
