@@ -96,7 +96,7 @@ public sealed partial class Slider : RangeBase
 
         var thumbFill = ThumbBrush;
 
-        context.FillEllipse(thumbRect, thumbFill);
+        context.FillEllipse(thumbRect.Inflate(BorderThickness / 2.0), thumbFill);
         var thumbBorder = ThumbBorderBrush;
 
         if (BorderThickness > 0)
