@@ -100,8 +100,12 @@ public sealed class RenderResourceCache : IRenderResourceCache, IDisposable
             }
 
             var resource = AddNoLock(key, surface, image, safeToDisposeAfter);
+            // Lease before evicting: releasing an evicted entry's surface re-enters this cache through
+            // ReturnScratchSurface, and that nested eviction only skips entries that already hold a
+            // lease, so an unleased new entry could be disposed before it was ever handed out.
+            var lease = resource.Acquire(this);
             EvictPersistentToBudgetNoLock(NORMAL_MAINTENANCE_EVICTION_LIMIT, resource);
-            return resource.Acquire(this);
+            return lease;
         }
     }
 

@@ -126,6 +126,48 @@ public sealed class RenderResourceCacheTests
         Assert.IsTrue(surface.IsDisposed);
     }
 
+    [TestMethod]
+    public void Admission_SurvivesEvictionThatReentersThroughASurfaceRelease()
+    {
+        // Releasing an evicted entry's surface re-enters the cache (in production through
+        // ReturnScratchSurface, here through Maintain) and evicts the persistent budget again from
+        // inside the first eviction. That nested pass skipped only leased entries, so the entry
+        // being admitted was disposed before it was handed out.
+        using var cache = new RenderResourceCache(200 * 1024, 100);
+        var evictable = new ReenteringSurface(cache, 64, 64);
+        cache.Add(Key(1), evictable, new FakeImage(64, 64)).Dispose();
+
+        var admitted = cache.Add(Key(2), new FakeSurface(64, 64), new FakeImage(64, 64));
+
+        Assert.IsTrue(evictable.IsDisposed, "the older entry should still be the eviction victim");
+        Assert.IsTrue(cache.TryGet(Key(2), out var reacquired), "the admitted entry must stay resident");
+        reacquired.Dispose();
+        admitted.Dispose();
+    }
+
+    /// <summary>Mirrors LeasedRenderSurfaceView: releasing it re-enters the cache that owns it.</summary>
+    private sealed class ReenteringSurface(RenderResourceCache cache, int width, int height) : IRenderSurface
+    {
+        public int PixelWidth => width;
+        public int PixelHeight => height;
+        public double DpiScale => 1;
+        public RenderPixelFormat Format => RenderPixelFormat.Bgra8888Premultiplied;
+        public SurfaceUsage Usage => SurfaceUsage.Offscreen;
+        public SurfaceCapabilities Capabilities => SurfaceCapabilities.Renderable;
+        public ulong Version => 0;
+        public bool IsDisposed { get; private set; }
+
+        public void Dispose()
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+            IsDisposed = true;
+            cache.Maintain(RenderCacheMaintenanceMode.Frame);
+        }
+    }
+
     private static IRenderCacheEntry Add(
         RenderResourceCache cache,
         RenderCacheKey key,
