@@ -1774,9 +1774,16 @@ internal sealed class Win32WindowBackend : IWindowBackend
         }
 
         var monitor = User32.MonitorFromWindow(Handle, MonitorDefaultToNearest);
-        var surface = new Win32LayeredPresentSurface(Handle, monitor, pixelWidth, pixelHeight, Window.DpiScale);
+        var surface = _cachedLayeredSurface;
+        if (surface == null || !surface.Matches(Handle, monitor, pixelWidth, pixelHeight, Window.DpiScale))
+        {
+            surface = new Win32LayeredPresentSurface(Handle, monitor, pixelWidth, pixelHeight, Window.DpiScale);
+            _cachedLayeredSurface = surface;
+        }
         _ = presenter.Present(Window, surface, _opacity);
     }
+
+    private Win32LayeredPresentSurface? _cachedLayeredSurface;
 
     private Win32HdcSurface? _cachedHdcSurface;
 
@@ -1920,6 +1927,9 @@ internal sealed class Win32WindowBackend : IWindowBackend
             PixelHeight = pixelHeight;
             DpiScale = dpiScale;
         }
+
+        public bool Matches(nint hwnd, nint monitor, int pixelWidth, int pixelHeight, double dpiScale) =>
+            Hwnd == hwnd && Monitor == monitor && PixelWidth == pixelWidth && PixelHeight == pixelHeight && DpiScale == dpiScale;
     }
 
     // All-zero monochrome caret bitmap: the system renders a bitmap caret by XOR-ing it,
