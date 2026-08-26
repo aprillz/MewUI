@@ -82,7 +82,7 @@ public static class ScratchSurfaceExtensions
             bytes = RenderResourceMetrics.ScratchBytes(allocation.PixelWidth, allocation.PixelHeight);
             RenderResourceMetrics.ScratchAcquired(bytes, created: true);
         }
-        return new LeasedRenderSurfaceView(device, allocation, pixelWidth, pixelHeight, resourceClass);
+        return new LeasedRenderSurfaceView(device, allocation, pixelWidth, pixelHeight, resourceClass, hasAlpha);
     }
 
     /// <summary>

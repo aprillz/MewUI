@@ -4,6 +4,10 @@ internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceP
 {
     private readonly IRenderDevice _device;
     private readonly ScratchResourceClass _resourceClass;
+    // Pool key attribute of the acquire request; surface capabilities always report Alpha for
+    // BGRA formats, so deriving it from the allocation would return under a key no opaque
+    // acquire ever asks for.
+    private readonly bool _hasAlphaKey;
     private IRenderSurface? _allocation;
 
     public LeasedRenderSurfaceView(
@@ -11,11 +15,13 @@ internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceP
         IRenderSurface allocation,
         int logicalPixelWidth,
         int logicalPixelHeight,
-        ScratchResourceClass resourceClass = ScratchResourceClass.General)
+        ScratchResourceClass resourceClass = ScratchResourceClass.General,
+        bool hasAlphaKey = true)
     {
         _device = device;
         _allocation = allocation;
         _resourceClass = resourceClass;
+        _hasAlphaKey = hasAlphaKey;
         PixelWidth = logicalPixelWidth;
         PixelHeight = logicalPixelHeight;
     }
@@ -53,7 +59,7 @@ internal sealed class LeasedRenderSurfaceView : IRenderSurface, IBackendSurfaceP
             allocation.PixelWidth,
             allocation.PixelHeight,
             allocation.DpiScale,
-            allocation.Capabilities.HasFlag(SurfaceCapabilities.Alpha));
+            _hasAlphaKey);
         key = key with { ResourceClass = _resourceClass };
         cache.ReturnScratchSurface(key, allocation);
     }
