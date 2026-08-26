@@ -47,6 +47,11 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     private byte[]? _uploadBuffer;
     private Action? _releaseAction;
 
+    // Pixel extent of the last rendered content; a pooled allocation can be larger than what
+    // the last pass drew, and GL samplers need the content extent to crop correctly.
+    private int _contentWidthPx;
+    private int _contentHeightPx;
+
     // External retain count for the FBO color texture, used by zero-copy scratch-surface paths
     // (via IGpuTextureSource.RetainGpuHandle). MewVGImage takes a retain when it wraps our
     // texture zero-copy with NVG's NoDelete flag, so the texture stays alive through the
@@ -88,6 +93,19 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
     public int StrideBytes => PixelWidth * 4;
 
     public int Version => Volatile.Read(ref _version);
+
+    /// <summary>Content width of the last render pass, or the full width when never set.</summary>
+    internal int ContentWidthPx => _contentWidthPx > 0 ? Math.Min(_contentWidthPx, PixelWidth) : PixelWidth;
+
+    /// <summary>Content height of the last render pass, or the full height when never set.</summary>
+    internal int ContentHeightPx => _contentHeightPx > 0 ? Math.Min(_contentHeightPx, PixelHeight) : PixelHeight;
+
+    /// <summary>Records the pixel extent an offscreen pass is about to render into this surface.</summary>
+    internal void SetContentSize(int widthPx, int heightPx)
+    {
+        _contentWidthPx = widthPx;
+        _contentHeightPx = heightPx;
+    }
 
     /// <summary>
     /// Gets the FBO ID. Returns 0 if not initialized or disposed.
@@ -403,6 +421,10 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
             throw new InvalidOperationException("OpenGL external write target could not initialize its FBO.");
         }
 
+        // External writers render the full allocation, so a smaller content extent recorded by a
+        // previous NVG pass on this pooled surface must not crop their result.
+        SetContentSize(PixelWidth, PixelHeight);
+
         if (_creationContext == 0 && _currentContextProvider is not null)
         {
             RecordCreationContext(_currentContextProvider());
@@ -654,6 +676,9 @@ internal sealed class OpenGLPixelRenderSurface : IPixelBufferSource, ICpuPixelSu
                 GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, (nint)p);
         }
         GL.BindTexture(GL.GL_TEXTURE_2D, 0);
+
+        // The CPU mirror covers the full allocation.
+        SetContentSize(PixelWidth, PixelHeight);
     }
 
     private void FlipVertical(byte[] pixels)
