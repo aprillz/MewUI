@@ -473,7 +473,13 @@ internal abstract class GraphicsContextBase : IGraphicsContext, ITextBackendRend
     {
         _drawImageCount++;
         if (IsCulled(destRect)) return;
-        DrawImageCore(ImageResource.ResolveBackendImage(image), destRect);
+        // Take the source extent from the logical image, which hides how large the pooled
+        // allocation behind it actually is. Letting the backend default to the resolved image's
+        // size samples the unused band of an oversized surface and squashes the content.
+        DrawImageCore(
+            ImageResource.ResolveBackendImage(image),
+            destRect,
+            new Rect(0, 0, image.PixelWidth, image.PixelHeight));
     }
 
     public void DrawImage(IImage image, Rect destRect, Rect sourceRect)

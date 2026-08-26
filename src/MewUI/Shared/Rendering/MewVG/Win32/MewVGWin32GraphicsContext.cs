@@ -359,10 +359,10 @@ internal sealed partial class MewVGWin32GraphicsContext
     public override void DrawImage(IImage image, Point location)
     {
         ArgumentNullException.ThrowIfNull(image);
-        image = ImageResource.ResolveBackendImage(image);
-
+        // Size from the logical image: a pooled surface behind it can be larger than the
+        // content, and the backend image reports that whole allocation.
         var dest = new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight);
-        DrawImageCore(image, dest);
+        DrawImageCore(ImageResource.ResolveBackendImage(image), dest, new Rect(0, 0, dest.Width, dest.Height));
     }
 
     protected override void DrawImageCore(IImage image, Rect destRect)

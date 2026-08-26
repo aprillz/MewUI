@@ -1124,8 +1124,10 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
 
     public override void DrawImage(IImage image, Point location)
     {
-        image = ImageResource.ResolveBackendImage(image);
-        DrawImageCore(image, new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight));
+        // Size from the logical image: a pooled surface behind it can be larger than the
+        // content, and the backend image reports that whole allocation.
+        var bounds = new Rect(location.X, location.Y, image.PixelWidth, image.PixelHeight);
+        DrawImageCore(ImageResource.ResolveBackendImage(image), bounds, new Rect(0, 0, bounds.Width, bounds.Height));
     }
 
     protected override void SaveCore()
