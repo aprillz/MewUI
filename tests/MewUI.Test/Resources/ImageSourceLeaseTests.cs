@@ -64,6 +64,30 @@ public sealed class ImageSourceLeaseTests
     }
 
     [TestMethod]
+    public void RoundedTargetVariant_IsReusedForSameRequest()
+    {
+        using var source = ImageSource.FromBytes(CreateBgraBmp(480, 135));
+        var factory = Application.DefaultGraphicsFactory;
+        var before = RenderResourceMetrics.Snapshot();
+
+        using var first = source.CreateImage(factory, 480, 128);
+        var afterFirst = RenderResourceMetrics.Snapshot();
+        using var second = source.CreateImage(factory, 480, 128);
+        var afterSecond = RenderResourceMetrics.Snapshot();
+
+        Assert.AreEqual(455, first.PixelWidth);
+        Assert.AreEqual(128, first.PixelHeight);
+        Assert.AreSame(
+            ImageResource.ResolveBackendImage(first),
+            ImageResource.ResolveBackendImage(second));
+        Assert.AreEqual(before.DecodeAttempts + 1, afterFirst.DecodeAttempts);
+        Assert.AreEqual(afterFirst.DecodeAttempts, afterSecond.DecodeAttempts);
+        Assert.AreEqual(
+            afterFirst.NativeImageRealizationCreated,
+            afterSecond.NativeImageRealizationCreated);
+    }
+
+    [TestMethod]
     public void DeviceGenerationChange_DoesNotReusePreviousRealization()
     {
         var source = ImageSource.FromBgraPixels(2, 2, new byte[16]);

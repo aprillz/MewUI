@@ -35,6 +35,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
     private Bgra32PixelBuffer _decodedBitmap;
     private DecodedPixelOwner? _decodedOwner;
     private bool _decodedValid;
+    private double _decodedCoverageScale;
     private ImageOrientation _orientation = ImageOrientation.Identity;
     private StaticPixelBufferSource? _decodedPixelSource;
     private int _disposed;
@@ -71,6 +72,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         _decodedBitmap = pixels;
         _decodedOwner = new DecodedPixelOwner(pixels);
         _decodedValid = true;
+        _decodedCoverageScale = 1;
         _memoryAccounting = new SourceMemoryAccounting(0);
         _metadata = new ImageMetadata(pixels.WidthPx, pixels.HeightPx, ImageOrientation.Identity, pixels.HasAlpha);
         _metadataComputed = true;
@@ -356,12 +358,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             double targetScale = Math.Min(
                 (double)targetPixelWidth / intrinsicWidth,
                 (double)targetPixelHeight / intrinsicHeight);
-            double decodedScale = _decodedValid
-                ? Math.Min(
-                    (double)_decodedBitmap.WidthPx / intrinsicWidth,
-                    (double)_decodedBitmap.HeightPx / intrinsicHeight)
-                : 0;
-            bool decodedCoversTarget = _decodedValid && decodedScale + 1e-9 >= targetScale;
+            bool decodedCoversTarget = _decodedValid && _decodedCoverageScale + 1e-9 >= targetScale;
             if (decodedCoversTarget && _decodedPixelSource != null)
             {
                 if (_decodedOwner is { } cachedOwner)
@@ -423,6 +420,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             _decodedOwner = new DecodedPixelOwner(decodedBitmap);
             _orientation = decodedOrientation;
             _decodedValid = true;
+            _decodedCoverageScale = targetScale;
             _decodedPixelSource = new StaticPixelBufferSource(
                 _decodedBitmap.WidthPx, _decodedBitmap.HeightPx, _decodedBitmap.Data, _decodedBitmap.HasAlpha);
             if (!_metadataValid)
@@ -527,6 +525,17 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
         }
     }
 
+    internal double DecodedCoverageScale
+    {
+        get
+        {
+            lock (_decodeLock)
+            {
+                return _decodedCoverageScale;
+            }
+        }
+    }
+
     internal static void RetireRealizationsForFactory(IGraphicsFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -570,8 +579,10 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             }
 
             double requestedScale = Math.Min(
-                (double)Math.Max(1, targetPixelWidth) / Math.Max(1, PixelWidth),
-                (double)Math.Max(1, targetPixelHeight) / Math.Max(1, PixelHeight));
+                1,
+                Math.Min(
+                    (double)Math.Max(1, targetPixelWidth) / Math.Max(1, PixelWidth),
+                    (double)Math.Max(1, targetPixelHeight) / Math.Max(1, PixelHeight)));
             var renderIdentity = factory.RenderIdentity;
             if (_realizations.TryGetValue(renderIdentity, out var current)
                 && current.ResidentScale + 1e-9 >= requestedScale)
@@ -592,9 +603,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
                     backendImage,
                     owner,
                     renderIdentity,
-                    Math.Min(
-                        (double)backendImage.PixelWidth / Math.Max(1, PixelWidth),
-                        (double)backendImage.PixelHeight / Math.Max(1, PixelHeight)));
+                    _decodedCoverageScale);
                 backendImage = null; // The realization owns the backend image from this point.
                 acquiredLease = realization.Acquire(this);
                 _realizations.TryGetValue(renderIdentity, out replacedRealization);
@@ -743,6 +752,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             _decodedBitmap = default;
             _decodedPixelSource = null;
             _decodedValid = false;
+            _decodedCoverageScale = 0;
             _encoded = null;
             _memoryAccounting.ReleaseEncoded(releaseEncoded: true);
         }
@@ -775,6 +785,7 @@ public sealed class ImageSource : IOrientedImageSource, IImageMetadataSource, ID
             _decodedBitmap = default;
             _decodedPixelSource = null;
             _decodedValid = false;
+            _decodedCoverageScale = 0;
             owner.Release();
             return true;
         }
