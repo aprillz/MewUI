@@ -142,7 +142,7 @@ public sealed class Palette
     {
         var isDark = IsDarkBackground(baseColor);
         var baseBorder = baseColor.Lerp(windowText, isDark ? 0.23 : 0.21);
-        return baseBorder.Lerp(accent, isDark ? 0.04 : 0.05);
+        return baseBorder.Lerp(accent, isDark ? 0.035 : 0.05);
     }
 
     private static Color ComputeContainerBackground(Color baseColor, Color buttonFace, Color accent)
@@ -150,11 +150,11 @@ public sealed class Palette
         var isDark = IsDarkBackground(baseColor);
         if (UseAlphaPalette)
         {
-            return buttonFace.WithAlpha((byte)((isDark ? 0.25 : 0.15) * 255)).Lerp(accent, isDark ? 0.01 : 0.014);
+            return buttonFace.WithAlpha((byte)((isDark ? 0.55 : 0.15) * 255)).Lerp(accent, isDark ? 0.01 : 0.014);
         }
         else
         {
-            return baseColor.Lerp(buttonFace, isDark ? 0.25 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
+            return baseColor.Lerp(buttonFace, isDark ? 0.55 : 0.15).Lerp(accent, isDark ? 0.01 : 0.014);
         }
     }
 
