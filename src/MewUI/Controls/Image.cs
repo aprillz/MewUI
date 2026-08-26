@@ -624,11 +624,10 @@ public sealed partial class Image : FrameworkElement
         if (targetRawWidth > 0 && targetRawHeight > 0)
         {
             _cachedImage = Source.CreateImage(factory, targetRawWidth, targetRawHeight);
-            _cachedRasterScale = Source is ImageSource imageSource
-                ? Math.Min(
-                    (double)_cachedImage.PixelWidth / Math.Max(1, imageSource.PixelWidth),
-                    (double)_cachedImage.PixelHeight / Math.Max(1, imageSource.PixelHeight))
-                : 1;
+            // The scale that was asked for, not one derived from the produced pixel size: a variant
+            // whose width rounds down reports a smaller scale than the request, so deriving it here
+            // missed this cache on every frame and rebuilt the backend texture each time.
+            _cachedRasterScale = targetScale;
         }
         else
         {
