@@ -14,7 +14,6 @@ internal sealed class ManagedTextLayout : ITextLayout
     private ManagedTextRun[]? _runs;
     private int _runCount;
     private float[]? _advances;
-    private int _advanceCount;
     private readonly Dictionary<int, int[]> _runBoundaries = [];
     private readonly Dictionary<int, FastSegmentMapEntry> _fastSegmentMaps = [];
     private readonly LinkedList<int> _fastSegmentMapOrder = [];
