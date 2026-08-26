@@ -33,6 +33,7 @@ var fpsFrames = 0;
 var maxFpsEnabled = new ObservableValue<bool>(false);
 
 SvgDocument? currentDocument = null;
+ImageSource? currentPngSource = null;
 string[] svgFiles = LoadSvgFiles();
 string? currentFilePath = null;
 string? loadedFilePath = null;
@@ -65,7 +66,7 @@ var root = new Window()
             // Bind here (not at StatusBar() construction) - vectorPreview's `out` slot is
             // populated only after Body() runs, which happens after StatusBar() in arg order.
             drawTimeLabel.Bind(Label.TextProperty, vectorPreview, SvgView.LastDrawTimeProperty,
-                ts => ts == TimeSpan.Zero ? string.Empty : $"Draw: {ts.GetText()}");
+                ts => ts == TimeSpan.Zero ? " |" : $" | Draw: {ts.GetText()}");
 
             // Refresh the FPS readout once a second even if frames stop (so it falls back to 0 when idle).
             renderRateTimer = new DispatcherTimer()
@@ -206,11 +207,12 @@ Element IconsView(string iconSet)
             {
                 var img = new Image()
                     .Register(ctx, "Img")
+                    .Bind(Image.WidthProperty, iconSize).Bind(Image.HeightProperty, iconSize)
                     .StretchMode(Stretch.Uniform);
                 return img;
             },
             bind: (view, item, index, ctx) =>
-                ctx.Get<Image>("Img").Bind(Image.WidthProperty, iconSize).Bind(Image.HeightProperty, iconSize).Source(item)));
+                ctx.Get<Image>("Img").Source(item)));
 
     // S/M/L radio buttons resize the virtualized tiles by re-applying the WrapPresenter
     // (SetPresenter keeps ItemsSource/ItemTemplate + scroll offset).
@@ -551,6 +553,8 @@ void ReleaseCurrentPreview()
 {
     vectorPreview.Document = null;
     pngPreview.Source = null;
+    currentPngSource?.Dispose();
+    currentPngSource = null;
     currentDocument = null;
 
     vectorPreview.InvalidateMeasure();
@@ -560,7 +564,11 @@ void ReleaseCurrentPreview()
 void UpdatePngPreview()
 {
     string? pngPath = GetMatchingPngPath(currentFilePath);
-    pngPreview.Source = pngPath is null ? null : ImageSource.FromFile(pngPath);
+    var next = pngPath is null ? null : ImageSource.FromFile(pngPath);
+    pngPreview.Source = null;
+    currentPngSource?.Dispose();
+    currentPngSource = next;
+    pngPreview.Source = next;
 }
 
 static void FitPreview(ZoomPanCanvas zoomHost, ScrollViewer scrollViewer)
