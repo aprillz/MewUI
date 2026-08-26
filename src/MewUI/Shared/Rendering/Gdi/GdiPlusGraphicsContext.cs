@@ -1741,8 +1741,18 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
             ? (_imageScaleQuality == ImageScaleQuality.Default ? ImageScaleQuality.Normal : _imageScaleQuality)
             : ImageScaleQuality;
 
-        var memDc = Gdi32.CreateCompatibleDC(Hdc);
-        var oldBitmap = Gdi32.SelectObject(memDc, gdiImage.Handle);
+        nint borrowedDc = gdiImage.BorrowedDc;
+        nint memDc;
+        nint oldBitmap = 0;
+        if (borrowedDc != 0)
+        {
+            memDc = borrowedDc;
+        }
+        else
+        {
+            memDc = Gdi32.CreateCompatibleDC(Hdc);
+            oldBitmap = Gdi32.SelectObject(memDc, gdiImage.Handle);
+        }
 
         try
         {
@@ -1889,8 +1899,11 @@ internal sealed class GdiPlusGraphicsContext : GraphicsContextBase
         }
         finally
         {
-            Gdi32.SelectObject(memDc, oldBitmap);
-            Gdi32.DeleteDC(memDc);
+            if (borrowedDc == 0)
+            {
+                Gdi32.SelectObject(memDc, oldBitmap);
+                Gdi32.DeleteDC(memDc);
+            }
         }
     }
 
