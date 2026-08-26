@@ -1907,7 +1907,11 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             return;
         }
 
-        DrawImageBitmapCore(image.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration, _deviceContext), destRect, sourceRect);
+        DrawImageBitmapCore(
+            image.GetOrCreateBitmap(_renderTarget, _renderTargetGeneration, _deviceContext),
+            destRect,
+            sourceRect,
+            image.DpiScale);
     }
 
     // One entry per open scope so End undoes exactly what its Begin did; 0 means the scope pushed
@@ -2073,7 +2077,7 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
     private bool IsUnscaledAxisAligned()
         => _transform.M12 == 0f && _transform.M21 == 0f && _transform.M11 == 1f && _transform.M22 == 1f;
 
-    private void DrawImageBitmapCore(nint bmp, Rect destRect, Rect sourceRect)
+    private void DrawImageBitmapCore(nint bmp, Rect destRect, Rect sourceRect, double sourceScale = 1.0)
     {
         if (_renderTarget == 0)
         {
@@ -2113,11 +2117,15 @@ internal sealed unsafe class Direct2DGraphicsContext : GraphicsContextBase
             snappedWorldDest.Height);
 
         var dst = ToRectF(snappedLocalDest);
+        // DrawBitmap takes the source rectangle in the bitmap's own DIPs. Callers pass pixels, which
+        // only coincide for 96-DPI bitmaps; a DXGI bridge bitmap carries its surface's DPI, and on a
+        // scaled monitor an unconverted rectangle sampled past the content into a pooled surface's
+        // stale band, squashing cached elements vertically after a shrink.
         var src = new D2D1_RECT_F(
-            left: (float)sourceRect.X,
-            top: (float)sourceRect.Y,
-            right: (float)sourceRect.Right,
-            bottom: (float)sourceRect.Bottom);
+            left: (float)(sourceRect.X / sourceScale),
+            top: (float)(sourceRect.Y / sourceScale),
+            right: (float)(sourceRect.Right / sourceScale),
+            bottom: (float)(sourceRect.Bottom / sourceScale));
 
         // When the active target is a DeviceContext, use the DrawBitmap overload
         // that supports the full D2D1_INTERPOLATION_MODE enum.
