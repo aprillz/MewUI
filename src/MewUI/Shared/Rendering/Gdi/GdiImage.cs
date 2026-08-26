@@ -14,6 +14,8 @@ internal sealed class GdiImage : IImage
     private nint _bits;
     private bool _disposed;
     private readonly bool _ownsDib = true;
+    // Non-zero when this view aliases a render surface's DIB: blit from this DC, never reselect.
+    private readonly nint _borrowedDc;
 
     /// <summary>Producer hint: all pixels alpha == 255. GDI context picks SRCCOPY over AlphaBlend.</summary>
     public bool IsOpaque { get; set; }
@@ -34,6 +36,7 @@ internal sealed class GdiImage : IImage
 
     internal nint Handle { get; private set; }
     internal nint Bits => _bits;
+    internal nint BorrowedDc => _borrowedDc;
 
     /// <summary>
     /// Creates a 32-bit ARGB bitmap.
@@ -42,7 +45,11 @@ internal sealed class GdiImage : IImage
     {
         PixelWidth = width;
         PixelHeight = height;
+        CreateOwnedDib(width, height);
+    }
 
+    private void CreateOwnedDib(int width, int height)
+    {
         var bmi = BITMAPINFO.Create32bpp(width, height);
 
         nint screenDc = User32.GetDC(0);
@@ -83,13 +90,28 @@ internal sealed class GdiImage : IImage
         _sourceVersion++;
     }
 
-    public GdiImage(IPixelBufferSource source) : this(
-        source?.PixelWidth ?? throw new ArgumentNullException(nameof(source)),
-        source.PixelHeight)
+    public GdiImage(IPixelBufferSource source)
     {
-
+        ArgumentNullException.ThrowIfNull(source);
+        PixelWidth = source.PixelWidth;
+        PixelHeight = source.PixelHeight;
         _source = source;
         _sourceVersion = -1;
+
+        if (source is GdiPixelRenderSurface surface)
+        {
+            // The surface DIB is already premultiplied BGRA, so the view aliases it instead of
+            // snapshotting a copy; the owner keeps surface and view alive together. That DIB stays
+            // selected in the surface DC, so draws must blit from BorrowedDc instead of reselecting.
+            Handle = surface.DibSection;
+            _bits = surface.DibBits;
+            _ownsDib = false;
+            _borrowedDc = surface.Hdc;
+            _sourceVersion = source.Version;
+            return;
+        }
+
+        CreateOwnedDib(PixelWidth, PixelHeight);
         EnsureUpToDate();
     }
 
@@ -124,6 +146,14 @@ internal sealed class GdiImage : IImage
             return;
         }
 
+        if (_borrowedDc != 0)
+        {
+            // Aliased pixels are always current; only the derived caches hold stale content.
+            _sourceVersion = v;
+            EvictDerivedCaches();
+            return;
+        }
+
         using (var l = _source.Lock())
         {
             v = l.Version;
@@ -139,25 +169,29 @@ internal sealed class GdiImage : IImage
 
             CopyToDibPremultiplied(l.Buffer, sourceIsPremultiplied: _source.IsPremultiplied);
             _sourceVersion = v;
+            EvictDerivedCaches();
+        }
+    }
 
-            if (_gpBitmap != 0)
-            {
-                GdiPlusInterop.GdipDisposeImage(_gpBitmap);
-                _gpBitmap = 0;
-            }
+    private void EvictDerivedCaches()
+    {
+        if (_gpBitmap != 0)
+        {
+            GdiPlusInterop.GdipDisposeImage(_gpBitmap);
+            _gpBitmap = 0;
+        }
 
-            if (_txBitmap != 0)
-            {
-                Gdi32.DeleteObject(_txBitmap);
-                _txBitmap = 0;
-                _txBits = 0;
-            }
+        if (_txBitmap != 0)
+        {
+            Gdi32.DeleteObject(_txBitmap);
+            _txBitmap = 0;
+            _txBits = 0;
+        }
 
-            if (_scaled != default)
-            {
-                Gdi32.DeleteObject(_scaled.handle);
-                _scaled = default;
-            }
+        if (_scaled != default)
+        {
+            Gdi32.DeleteObject(_scaled.handle);
+            _scaled = default;
         }
     }
 

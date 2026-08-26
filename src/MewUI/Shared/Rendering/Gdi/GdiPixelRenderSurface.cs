@@ -104,6 +104,9 @@ internal sealed class GdiPixelRenderSurface : IPixelBufferSource, ICpuPixelSurfa
     // GDI+ writes alpha when Graphics is built from GpBitmap-on-Scan0; CreateFromHDC ignores alpha.
     internal nint DibBits => _dibBits;
 
+    // Stays selected in Hdc for the surface's lifetime; a view that aliases it must blit from Hdc.
+    internal nint DibSection => _dibSection;
+
     internal GdiPresentationMode PresentationMode { get; }
 
     public byte[] CopyPixels()
