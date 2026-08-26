@@ -83,6 +83,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         {
             _frameSession.BeginFrame();
 
+            _frameSession.PixelSurfaceTarget?.SetContentSize(_viewportWidthPx, _viewportHeightPx);
             GL.Viewport(0, 0, _viewportWidthPx, _viewportHeightPx);
 
             _vg.BeginFrame((float)_viewportWidthDip, (float)_viewportHeightDip, (float)DpiScale);
@@ -394,7 +395,7 @@ internal sealed partial class MewVGWin32GraphicsContext
             return;
         }
 
-        DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: null, vgImage.PixelWidth, vgImage.PixelHeight);
+        DrawImagePattern(imageId, destRect, alpha: 1f, AdjustSourceRectForContent(vgImage, null), vgImage.PixelWidth, vgImage.PixelHeight);
     }
 
     protected override void DrawImageCore(IImage image, Rect destRect, Rect sourceRect)
@@ -427,7 +428,32 @@ internal sealed partial class MewVGWin32GraphicsContext
             return;
         }
 
-        DrawImagePattern(imageId, destRect, alpha: 1f, sourceRect: sourceRect, vgImage.PixelWidth, vgImage.PixelHeight);
+        DrawImagePattern(imageId, destRect, alpha: 1f, AdjustSourceRectForContent(vgImage, sourceRect), vgImage.PixelWidth, vgImage.PixelHeight);
+    }
+
+    /// <summary>
+    /// Maps a content-space source rect to the sampled image space of a pooled FBO surface.
+    /// </summary>
+    private static Rect? AdjustSourceRectForContent(MewVGImage vgImage, Rect? sourceRect)
+    {
+        if (vgImage.Source is not OpenGLPixelRenderSurface surface || !surface.IsFboInitialized)
+        {
+            return sourceRect;
+        }
+
+        int contentWidth = surface.ContentWidthPx;
+        int contentHeight = surface.ContentHeightPx;
+        int offsetY = surface.PixelHeight - contentHeight;
+        if (offsetY == 0 && contentWidth == surface.PixelWidth)
+        {
+            return sourceRect;
+        }
+
+        // FlipY sampling anchors the FBO's rendered content at the bottom of the image space,
+        // so on a pooled allocation taller than the content the crop must shift down by the
+        // unrendered band or it samples cleared texels above the content.
+        var src = sourceRect ?? new Rect(0, 0, contentWidth, contentHeight);
+        return new Rect(src.X, src.Y + offsetY, src.Width, src.Height);
     }
 
     private bool IsExternalRasterLeaseCompatible(IExternalRasterLease lease)
@@ -507,6 +533,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         MewVGTextCache TextCache { get; }
         nint Hdc { get; }
         nint OpenGLShareGroup { get; }
+        OpenGLPixelRenderSurface? PixelSurfaceTarget { get; }
         void BeginFrame();
         void BindFrameTarget();
         void EndFrame();
@@ -533,6 +560,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public MewVGTextCache TextCache => _resources.TextCache;
         public nint Hdc => _hdc;
         public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
+        public OpenGLPixelRenderSurface? PixelSurfaceTarget => null;
 
         public void SetTarget(nint hwnd, nint hdc)
         {
@@ -588,6 +616,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public MewVGTextCache TextCache => _resources.TextCache;
         public nint Hdc => _hdc;
         public nint OpenGLShareGroup => _resources.OpenGLShareGroup;
+        public OpenGLPixelRenderSurface? PixelSurfaceTarget => _pixelSurface;
 
         public void BeginFrame()
         {
@@ -655,6 +684,7 @@ internal sealed partial class MewVGWin32GraphicsContext
         public MewVGTextCache TextCache => _offscreen.TextCache;
         public nint Hdc { get; }
         public nint OpenGLShareGroup => _pixelSurface.CreationContext;
+        public OpenGLPixelRenderSurface? PixelSurfaceTarget => _pixelSurface;
 
         public void BeginFrame()
         {

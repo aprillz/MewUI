@@ -35,6 +35,10 @@ internal sealed class MewVGImage : IImage
     public int PixelWidth { get; }
     public int PixelHeight { get; }
 
+    // Platform draw paths inspect the source to apply backend-specific content cropping
+    // (a pooled render surface can be larger than the content it holds).
+    internal IPixelBufferSource? Source => _source;
+
     /// <inheritdoc cref="IImage.TrySetPostReleaseCallback"/>
     public bool TrySetPostReleaseCallback(Action callback)
     {
