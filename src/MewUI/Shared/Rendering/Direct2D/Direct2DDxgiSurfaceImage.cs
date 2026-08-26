@@ -28,6 +28,9 @@ internal sealed unsafe class Direct2DDxgiSurfaceImage : IImage, IGpuResourceAffi
     public int PixelHeight { get; }
     public GpuResourceAffinity? Affinity { get; }
 
+    /// <summary>Pixels per DIP of the materialized bitmap; source rectangles given in pixels must be divided by this.</summary>
+    public double DpiScale => _bitmapDpi / 96.0;
+
     public Direct2DDxgiSurfaceImage(
         nint dxgiSurface,
         int pixelWidth,
