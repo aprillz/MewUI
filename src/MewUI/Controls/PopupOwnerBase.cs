@@ -260,26 +260,6 @@ public abstract class PopupOwnerBase : Control, IPopupOwner
         }
     }
 
-    protected override void OnVisualRootChanged(Element? oldRoot, Element? newRoot)
-    {
-        base.OnVisualRootChanged(oldRoot, newRoot);
-
-        // If this control is detached from its Window (common with virtualization/recycling),
-        // ensure an open dropdown popup is closed. The popup is owned by the old Window's overlay layer,
-        // so ClosePopupCore() cannot be used after detaching (FindVisualRoot() would no longer be the window).
-        if (!IsDropDownOpen || _popup == null)
-        {
-            return;
-        }
-
-        if (oldRoot is Window oldWindow && newRoot is not Window)
-        {
-            // Closing the popup detaches it, and that detach releases any focus inside it (the framework
-            // clears focus on detach), so lifecycle-close does not strand focus on this leaving control.
-            oldWindow.ClosePopup(_popup, PopupCloseKind.Lifecycle);
-        }
-    }
-
     private UIElement EnsurePopupContent()
     {
         if (_popup == null)

@@ -920,6 +920,13 @@ public abstract partial class UIElement : Element
 
             // Release any cached GPU surface/image; re-attaching rebuilds it on next render.
             DisposeCacheEntry();
+
+            // A popup lives in the window's popup layer, not under this element, so nothing else detaches
+            // it when the element it is anchored to leaves (virtualization recycling, tab switch).
+            if (oldRoot is Window oldWindow)
+            {
+                oldWindow.ClosePopupsOwnedBy(this);
+            }
         }
     }
 
