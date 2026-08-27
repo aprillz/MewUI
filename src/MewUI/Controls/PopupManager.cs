@@ -297,9 +297,11 @@ internal sealed class PopupManager
             case PopupCloseRequest.Trigger.Scroll:
             {
                 var src = request.Source;
+                // The popup itself lives in the popup layer and is never inside the scrolled subtree;
+                // what moved is its owner. A popup anchored elsewhere has no reason to close.
                 CloseTransientPopups(src == null
                     ? null
-                    : entry => IsAncestor(entry.Element, src));
+                    : entry => !ReferenceEquals(entry.Owner, src) && !IsAncestor(src, entry.Owner));
                 break;
             }
         }
@@ -344,6 +346,44 @@ internal sealed class PopupManager
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Closes every popup opened by <paramref name="owner"/>, including popups that stay open by policy.
+    /// </summary>
+    internal void ClosePopupsOwnedBy(UIElement owner)
+    {
+        if (_popups.Count == 0 || _isClosingPopups)
+        {
+            return;
+        }
+
+        // The owner is leaving this window, so its popups can no longer be placed or dismissed through it.
+        // StaysOpen is a policy about user input, not about the owner still existing.
+        _isClosingPopups = true;
+        try
+        {
+            bool removedAny = false;
+            for (int i = _popups.Count - 1; i >= 0; i--)
+            {
+                if (!ReferenceEquals(_popups[i].Owner, owner))
+                {
+                    continue;
+                }
+
+                CloseAndDetachEntry(i, PopupCloseKind.Lifecycle);
+                removedAny = true;
+            }
+
+            if (removedAny)
+            {
+                _window.Invalidate();
+            }
+        }
+        finally
+        {
+            _isClosingPopups = false;
+        }
     }
 
     private void CloseTransientPopups(Func<PopupEntry, bool>? shouldKeep)

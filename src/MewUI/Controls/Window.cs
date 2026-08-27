@@ -3193,6 +3193,13 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         => _popupManager.CloseAllPopups();
 
     /// <summary>
+    /// Closes every popup this window holds on behalf of <paramref name="owner"/>. Called when the owner
+    /// leaves the visual tree, so a popup cannot outlive the element it is anchored to.
+    /// </summary>
+    internal void ClosePopupsOwnedBy(UIElement owner)
+        => _popupManager.ClosePopupsOwnedBy(owner);
+
+    /// <summary>
     /// Opens a popup whose placement is measured only after it is rooted and style-resolved in this
     /// window. Placement is always a callback: measuring a popup before it is rooted reads registered
     /// defaults rather than this window's styles, fonts, theme and DPI.

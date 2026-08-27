@@ -725,23 +725,24 @@ public sealed class ScrollViewer : ContentControl
             return;
         }
 
-        // Reveal auto-hidden bars only on actual scrolling (offset moved between two real values), not on
+        // Both of these react to actual scrolling (offset moved between two real values), not to
         // layout/extent changes or the initial offset being established from its NaN sentinel.
         if (!double.IsNaN(_lastNotifiedOffset.X) && _lastNotifiedOffset != offset)
         {
             OnScrolled();
+
+            // Popups anchored to content inside this viewer would be left pointing at the wrong place
+            // (standard desktop UX closes them).
+            if (FindVisualRoot() is Window window)
+            {
+                window.RequestClosePopups(PopupCloseRequest.Scroll(source: this));
+            }
         }
 
         _lastNotifiedExtent = _extent;
         _lastNotifiedViewport = _viewport;
         _lastNotifiedOffset = offset;
         ScrollChanged?.Invoke();
-
-        // Close context menus when content scrolls (standard desktop UX).
-        if (FindVisualRoot() is Window window)
-        {
-            window.RequestClosePopups(PopupCloseRequest.Scroll(source: this));
-        }
     }
 
     // Called when the offset actually moves; reveals the auto-hidden bars for the idle window.
