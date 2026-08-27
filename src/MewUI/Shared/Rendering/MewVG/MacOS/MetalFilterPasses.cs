@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 
 using Aprillz.MewVG.Interop;
 
+using Aprillz.MewUI.Native;
+
 namespace Aprillz.MewUI.Rendering.MewVG;
 
 /// <summary>
@@ -20,14 +22,6 @@ internal static unsafe partial class MetalFilterPasses
     [LibraryImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static partial void SendSetTexture(nint receiver, nint selector, nint texture, nuint index);
 
-    private const ulong MTL_PIXEL_FORMAT_BGRA8_UNORM = 80;
-    private const ulong MTL_LOAD_ACTION_CLEAR = 2;
-    private const ulong MTL_STORE_ACTION_STORE = 1;
-    // MTLPrimitiveType: triangle = 3, triangleStrip = 4. The strip constant carried the
-    // list value, so the 4-vertex composite quad drew as one triangle and lost the other.
-    private const ulong MTL_PRIMITIVE_TYPE_TRIANGLE_STRIP = 4;
-    private const ulong MTL_BLEND_FACTOR_ONE = 1;
-    private const ulong MTL_BLEND_FACTOR_ONE_MINUS_SOURCE_ALPHA = 5;
 
     // A texture's row 0 is its top row here (MewVGMetalPixelRenderSurface reports YFlipped =
     // false), so image-space offsets map straight onto sample coordinates and only the NDC
@@ -191,8 +185,8 @@ fragment float4 mewui_filter_fragment(VertexOut in [[stage_in]],
         if (attachment == 0) return false;
 
         ObjCRuntime.SendMessage(attachment, _selSetTexture, dest.ColorTexture);
-        ObjCRuntime.SendMessageNoReturn(attachment, _selSetLoadAction, MTL_LOAD_ACTION_CLEAR);
-        ObjCRuntime.SendMessageNoReturn(attachment, _selSetStoreAction, MTL_STORE_ACTION_STORE);
+        ObjCRuntime.SendMessageNoReturn(attachment, _selSetLoadAction, MetalExt.MTLLoadActionClear);
+        ObjCRuntime.SendMessageNoReturn(attachment, _selSetStoreAction, MetalExt.MTLStoreActionStore);
         ObjCRuntime.SendMessageNoReturn(attachment, _selSetClearColor, new MTLClearColor(0, 0, 0, 0));
 
         nint encoder = ObjCRuntime.SendMessage(commandBuffer, _selRenderCommandEncoder, passDescriptor);
@@ -208,7 +202,7 @@ fragment float4 mewui_filter_fragment(VertexOut in [[stage_in]],
             var rect = BuildRect(layer, dest.PixelWidth, dest.PixelHeight);
             SendSetBytes(encoder, _selSetVertexBytes, &rect, (nuint)sizeof(QuadRect), 0);
             SendSetTexture(encoder, _selSetFragmentTexture, layer.Surface.ColorTexture, 0);
-            SendDrawPrimitives(encoder, _selDrawPrimitives, (nuint)MTL_PRIMITIVE_TYPE_TRIANGLE_STRIP, 0, 4);
+            SendDrawPrimitives(encoder, _selDrawPrimitives, (nuint)MetalExt.MTLPrimitiveTypeTriangleStrip, 0, 4);
         }
 
         ObjCRuntime.SendMessageNoReturn(encoder, _selEndEncoding);
@@ -340,15 +334,15 @@ fragment float4 mewui_filter_fragment(VertexOut in [[stage_in]],
                 ObjCRuntime.SendMessage(descriptor, _selColorAttachments), _selObjectAtIndexedSubscript, 0UL);
             if (attachment == 0) return 0;
 
-            ObjCRuntime.SendMessageNoReturn(attachment, _selSetPixelFormat, MTL_PIXEL_FORMAT_BGRA8_UNORM);
+            ObjCRuntime.SendMessageNoReturn(attachment, _selSetPixelFormat, MetalExt.MTLPixelFormatBGRA8Unorm);
             if (blend)
             {
                 // Inputs are premultiplied, so source-over is ONE / ONE_MINUS_SOURCE_ALPHA.
                 ObjCRuntime.SendMessage(attachment, _selSetBlendingEnabled, true);
-                ObjCRuntime.SendMessageNoReturn(attachment, _selSetSourceRgbBlendFactor, MTL_BLEND_FACTOR_ONE);
-                ObjCRuntime.SendMessageNoReturn(attachment, _selSetDestinationRgbBlendFactor, MTL_BLEND_FACTOR_ONE_MINUS_SOURCE_ALPHA);
-                ObjCRuntime.SendMessageNoReturn(attachment, _selSetSourceAlphaBlendFactor, MTL_BLEND_FACTOR_ONE);
-                ObjCRuntime.SendMessageNoReturn(attachment, _selSetDestinationAlphaBlendFactor, MTL_BLEND_FACTOR_ONE_MINUS_SOURCE_ALPHA);
+                ObjCRuntime.SendMessageNoReturn(attachment, _selSetSourceRgbBlendFactor, MetalExt.MTLBlendFactorOne);
+                ObjCRuntime.SendMessageNoReturn(attachment, _selSetDestinationRgbBlendFactor, MetalExt.MTLBlendFactorOneMinusSourceAlpha);
+                ObjCRuntime.SendMessageNoReturn(attachment, _selSetSourceAlphaBlendFactor, MetalExt.MTLBlendFactorOne);
+                ObjCRuntime.SendMessageNoReturn(attachment, _selSetDestinationAlphaBlendFactor, MetalExt.MTLBlendFactorOneMinusSourceAlpha);
             }
 
             nint error = 0;
