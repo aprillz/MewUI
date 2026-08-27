@@ -23,7 +23,9 @@ internal static unsafe partial class MetalFilterPasses
     private const ulong MTL_PIXEL_FORMAT_BGRA8_UNORM = 80;
     private const ulong MTL_LOAD_ACTION_CLEAR = 2;
     private const ulong MTL_STORE_ACTION_STORE = 1;
-    private const ulong MTL_PRIMITIVE_TYPE_TRIANGLE_STRIP = 3;
+    // MTLPrimitiveType: triangle = 3, triangleStrip = 4. The strip constant carried the
+    // list value, so the 4-vertex composite quad drew as one triangle and lost the other.
+    private const ulong MTL_PRIMITIVE_TYPE_TRIANGLE_STRIP = 4;
     private const ulong MTL_BLEND_FACTOR_ONE = 1;
     private const ulong MTL_BLEND_FACTOR_ONE_MINUS_SOURCE_ALPHA = 5;
 
