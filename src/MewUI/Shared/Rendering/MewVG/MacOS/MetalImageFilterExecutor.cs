@@ -32,7 +32,6 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
 
     private static readonly nint _selCommandBuffer = ObjCRuntime.RegisterSelector("commandBuffer");
     private static readonly nint _selCommit = ObjCRuntime.RegisterSelector("commit");
-    private static readonly nint _selWaitUntilCompleted = ObjCRuntime.RegisterSelector("waitUntilCompleted");
 
     private readonly IImageFilterExecutor _fallback;
     private readonly MewVGMetalOffscreenSurfaceProvider _offscreenProvider;
@@ -248,8 +247,10 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
         return true;
     }
 
-    /// <summary>Runs <paramref name="encode"/> on a one-shot command buffer and blocks until the
-    /// GPU finished, for the cross-queue reason spelled out in <see cref="TryGpuBlur"/>.</summary>
+    /// <summary>Runs <paramref name="encode"/> on a one-shot command buffer and commits it without
+    /// waiting: the passes that consume this result - later filter nodes and the offscreen NVG frame
+    /// that draws the graph's output - submit to the same queue, which executes in commit order. A
+    /// CPU consumer still gets correct pixels through the deferred readback recorded here.</summary>
     private static bool Submit(nint queue, MewVGMetalPixelRenderSurface dest, Func<nint, bool> encode)
     {
         nint commandBuffer = SendMsg(queue, _selCommandBuffer);
@@ -263,7 +264,6 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
             }
 
             ObjCRuntime.SendMessageNoReturn(commandBuffer, _selCommit);
-            ObjCRuntime.SendMessageNoReturn(commandBuffer, _selWaitUntilCompleted);
             dest.RequestDeferredReadback(commandBuffer);
             return true;
         }
@@ -324,17 +324,11 @@ public sealed unsafe partial class MetalImageFilterExecutor : IImageFilterExecut
 
                 ObjCRuntime.SendMessageNoReturn(commandBuffer, _selCommit);
 
-                // waitUntilCompleted is required here for correctness: MPS runs on the filter
-                // command queue (offscreenProvider.TryGetFilterCommandQueue), but NVG's
-                // offscreen pass that consumes metalDest.ColorTexture as a sample input
-                // runs on the offscreen-surface queue - different queue. Metal only
-                // guarantees ordering within a single queue; cross-queue access to the same
-                // MTLTexture without explicit sync (waitUntilCompleted, MTLSharedEvent, etc.)
-                // races. Without this wait, NVG samples the texture before MPS has finished
-                // writing it → blank / partial / stale filter results. A future optimisation
-                // could submit MPS on NVG's queue (or use MTLSharedEvent) to drop the CPU
-                // stall while keeping correctness.
-                ObjCRuntime.SendMessageNoReturn(commandBuffer, _selWaitUntilCompleted);
+                // No completion wait: MPS and the offscreen NVG pass that samples
+                // metalDest.ColorTexture now submit to the same queue (the provider's shared
+                // offscreen/filter queue), and Metal executes a queue's command buffers in
+                // commit order. Sampling before the write lands is what a separate filter
+                // queue used to allow.
 
                 // Defer the MTLTexture → CPU readback (the much heavier 32 MB getBytes).
                 // CPU consumers (FilterResult.ReadPixels, CPU MergeFilter) trigger it

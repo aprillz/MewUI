@@ -47,7 +47,10 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     // (or while the NVG is mid-frame elsewhere) corrupts the image table.
     private readonly Dictionary<NanoVG, Queue<(MewVGImage Image, NVGimageFlags Flags)>> _pendingImageDisposal = new();
     private nint _defaultDevice;
-    private nint _filterCommandQueue;
+    // One queue per device, shared by every offscreen NVG instance and by the filter passes.
+    // Same-queue command buffers execute in commit order, so a pass that samples what the
+    // previous pass rendered needs no completion wait.
+    private readonly Dictionary<nint, nint> _sharedQueuesByDevice = new();
     private bool _disposed;
 
     public MewVGMetalOffscreenSurfaceProvider() { }
@@ -91,7 +94,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
         // race only causes a tiny amount of over-allocation: two callers may
         // both find the pool empty and each create a fresh instance, with the
         // second one returned to the pool on first Return.
-        nint queue = ObjCRuntime.SendMessage(key, ObjCRuntime.RegisterSelector("newCommandQueue"));
+        nint queue = TryGetSharedCommandQueue(key);
         if (queue == 0)
         {
             throw new InvalidOperationException("Failed to create offscreen MTLCommandQueue.");
@@ -182,20 +185,23 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     /// cost per blur. Returns 0 if the device isn't available. Owned by the provider - do not
     /// release.
     /// </summary>
-    internal nint TryGetFilterCommandQueue()
+    internal nint TryGetFilterCommandQueue() => TryGetSharedCommandQueue(0);
+
+    /// <summary>The device's shared offscreen/filter queue, created on first use. Owned by the
+    /// provider - do not release.</summary>
+    internal nint TryGetSharedCommandQueue(nint device)
     {
         if (_disposed) return 0;
-        if (_filterCommandQueue != 0) return _filterCommandQueue;
 
-        nint device = TryGetDefaultDevice();
-        if (device == 0) return 0;
+        nint key = device != 0 ? device : TryGetDefaultDevice();
+        if (key == 0) return 0;
 
         lock (_lock)
         {
-            if (_filterCommandQueue != 0) return _filterCommandQueue;
-            nint queue = ObjCRuntime.SendMessage(device, ObjCRuntime.RegisterSelector("newCommandQueue"));
+            if (_sharedQueuesByDevice.TryGetValue(key, out nint existing)) return existing;
+            nint queue = ObjCRuntime.SendMessage(key, ObjCRuntime.RegisterSelector("newCommandQueue"));
             if (queue == 0) return 0;
-            _filterCommandQueue = queue;
+            _sharedQueuesByDevice[key] = queue;
             return queue;
         }
     }
@@ -294,6 +300,7 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
     {
         List<MewVGMetalOffscreenSurface> surfaces = new();
         List<(MewVGImage Image, NanoVG Vg, NVGimageFlags Flags)> imageEntries = new();
+        List<nint> sharedQueues = new();
         nint defaultDevice;
 
         lock (_lock)
@@ -316,6 +323,9 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             }
             _poolsByDevice.Clear();
 
+            sharedQueues.AddRange(_sharedQueuesByDevice.Values);
+            _sharedQueuesByDevice.Clear();
+
             foreach (var (vg, queue) in _pendingImageDisposal)
             {
                 while (queue.Count > 0)
@@ -337,10 +347,9 @@ internal sealed class MewVGMetalOffscreenSurfaceProvider : IDisposable
             DisposeSurface(item);
         }
 
-        if (_filterCommandQueue != 0)
+        foreach (nint queue in sharedQueues)
         {
-            ObjCRuntime.Release(_filterCommandQueue);
-            _filterCommandQueue = 0;
+            ObjCRuntime.Release(queue);
         }
 
         if (defaultDevice != 0)
