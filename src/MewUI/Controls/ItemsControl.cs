@@ -26,16 +26,6 @@ public sealed partial class ItemsControl : ScrollableItemsBase
     // Presenter mode is determined by the IItemsPresenter instance set via SetPresenter().
 
     /// <summary>
-    /// Gets the current vertical scroll offset in DIPs.
-    /// </summary>
-    public double VerticalOffset => _scrollViewer.VerticalOffset;
-
-    /// <summary>
-    /// Gets the current horizontal scroll offset in DIPs.
-    /// </summary>
-    public double HorizontalOffset => _scrollViewer.HorizontalOffset;
-
-    /// <summary>
     /// Gets or sets the items data source.
     /// </summary>
     public IItemsView ItemsSource

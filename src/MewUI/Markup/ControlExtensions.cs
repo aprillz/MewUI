@@ -3282,6 +3282,21 @@ public static class ControlExtensions
     #region ItemsControl
 
     /// <summary>
+    /// Adds a scroll state change handler. The scroll offsets settle during layout, so this is what
+    /// to use instead of reading them right after mutating the items.
+    /// </summary>
+    /// <typeparam name="T">Scrollable items control type.</typeparam>
+    /// <param name="control">Target items control.</param>
+    /// <param name="handler">Event handler.</param>
+    /// <returns>The control for chaining.</returns>
+    public static T OnScrollChanged<T>(this T control, Action handler) where T : ScrollableItemsBase
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.ScrollChanged += handler;
+        return control;
+    }
+
+    /// <summary>
     /// Sets the items source.
     /// </summary>
     /// <param name="itemsControl">Target items control.</param>

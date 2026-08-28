@@ -10,6 +10,14 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
     private static readonly bool _defaultStyleRegistered =
         DefaultStyles.Register<ScrollableItemsBase>(DefaultStyles.CreateScrollableItemsBaseStyle);
 
+    private static readonly MewPropertyKey<double> VerticalOffsetPropertyKey =
+        MewProperty<double>.RegisterReadOnly<ScrollableItemsBase>(nameof(VerticalOffset), 0);
+    public static readonly MewProperty<double> VerticalOffsetProperty = VerticalOffsetPropertyKey.Property;
+
+    private static readonly MewPropertyKey<double> HorizontalOffsetPropertyKey =
+        MewProperty<double>.RegisterReadOnly<ScrollableItemsBase>(nameof(HorizontalOffset), 0);
+    public static readonly MewProperty<double> HorizontalOffsetProperty = HorizontalOffsetPropertyKey.Property;
+
     protected readonly ScrollViewer _scrollViewer;
 
     /// <summary>
@@ -35,6 +43,36 @@ public abstract partial class ScrollableItemsBase : Control, ISubtreeInvalidatio
             HorizontalScroll = ScrollMode.Auto,
         };
         _scrollViewer.Parent = this;
+        _scrollViewer.ScrollChanged += OnInnerScrollChanged;
+    }
+
+    /// <summary>Raised when the scroll offset, extent, or viewport changes.</summary>
+    public event Action? ScrollChanged;
+
+    /// <summary>
+    /// Gets the current vertical scroll offset in DIPs. Observable: it settles during layout, so a
+    /// value read straight after mutating the items still reports the previous position.
+    /// </summary>
+    public double VerticalOffset => GetValue(VerticalOffsetProperty);
+
+    /// <summary>
+    /// Gets the current horizontal scroll offset in DIPs. Observable: it settles during layout, so a
+    /// value read straight after mutating the items still reports the previous position.
+    /// </summary>
+    public double HorizontalOffset => GetValue(HorizontalOffsetProperty);
+
+    private void OnInnerScrollChanged()
+    {
+        SetValue(VerticalOffsetPropertyKey, _scrollViewer.VerticalOffset);
+        SetValue(HorizontalOffsetPropertyKey, _scrollViewer.HorizontalOffset);
+        ScrollChanged?.Invoke();
+    }
+
+    protected override void OnDispose()
+    {
+        _scrollViewer.ScrollChanged -= OnInnerScrollChanged;
+        ScrollChanged = null;
+        base.OnDispose();
     }
 
     protected override void OnEnabledChanged()
