@@ -759,6 +759,7 @@ FrameworkElement CommandingSamples()
 FrameworkElement BindSamples()
 {
     var selectionItems = new List<string> { "Alpha", "Beta", "Gamma", "Delta" };
+    var selectionView = ItemsView.Create(selectionItems);
 
     return new StackPanel()
         .Vertical()
@@ -834,7 +835,7 @@ FrameworkElement BindSamples()
                         new ListBox()
                             .Ref(out var selectionListBox)
                             .Height(120)
-                            .ItemsSource(ItemsSource.Create(selectionItems))
+                            .ItemsSource(selectionView)
                             .BindSelectedIndex(vm.SelectedIndex),
 
                         new StackPanel()
@@ -859,7 +860,7 @@ FrameworkElement BindSamples()
                                             selectionItems.Add("Delta");
                                         }
 
-                                        selectionListBox.InvalidateMeasure();
+                                        selectionView.Invalidate();
                                         vm.SelectionItemCount.Value = selectionItems.Count;
                                     }),
 
