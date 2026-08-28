@@ -79,8 +79,8 @@ as scroll viewer padding when that matters.
 ## Limitations
 
 - Not trim-safe and not NativeAOT-compatible, because Windows Forms is neither.
-- MewUI content cannot be drawn over a hosted control, including popups and
-  menus that overlap it.
+- MewUI content drawn into the window surface cannot appear over a hosted control.
+  Popups, menus and tooltips are unaffected, because they get their own OS windows.
 
 ## License
 
