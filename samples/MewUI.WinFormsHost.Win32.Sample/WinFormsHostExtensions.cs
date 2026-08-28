@@ -1,10 +1,10 @@
-using WF = System.Windows.Forms;
+using WinForms = System.Windows.Forms;
 
 namespace Aprillz.MewUI.Controls;
 
 public static class WinFormsHostExtensions
 {
-    public static WinFormsHost Child(this WinFormsHost host, WF.Control? child)
+    public static WinFormsHost Child(this WinFormsHost host, WinForms.Control? child)
     {
         host.Child = child;
         return host;

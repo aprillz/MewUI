@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-using WF = System.Windows.Forms;
+using WinForms = System.Windows.Forms;
 
 namespace Aprillz.MewUI.Controls;
 
@@ -59,8 +59,8 @@ public sealed class WinFormsHost : FrameworkElement
     private delegate nint HookProcDelegate(int code, nint wParam, nint lParam);
 
     /// <summary>The Windows Forms control shown in this element's layout slot.</summary>
-    public static readonly MewProperty<WF.Control?> ChildProperty =
-        MewProperty<WF.Control?>.Register<WinFormsHost>(
+    public static readonly MewProperty<WinForms.Control?> ChildProperty =
+        MewProperty<WinForms.Control?>.Register<WinFormsHost>(
             nameof(Child),
             null,
             MewPropertyOptions.AffectsLayout,
@@ -77,7 +77,7 @@ public sealed class WinFormsHost : FrameworkElement
             MewPropertyOptions.AffectsLayout,
             static (self, _, _) => self.UpdateHostBounds());
 
-    private WF.ContainerControl? _container;
+    private WinForms.ContainerControl? _container;
     private nint _hostHandle;
     private nint _ownerWindowHandle;
     private nint _prevWndProc;
@@ -89,7 +89,7 @@ public sealed class WinFormsHost : FrameworkElement
         FocusableProperty.OverrideDefaultValue<WinFormsHost>(true);
     }
 
-    public WF.Control? Child
+    public WinForms.Control? Child
     {
         get => GetValue(ChildProperty);
         set => SetValue(ChildProperty, value);
@@ -200,7 +200,7 @@ public sealed class WinFormsHost : FrameworkElement
         return candidate != null && candidate.IsHandleCreated ? candidate.Handle : 0;
     }
 
-    private static bool IsUsableTabStop(WF.Control control)
+    private static bool IsUsableTabStop(WinForms.Control control)
         => control.TabStop && control.Enabled && control.Visible;
 
     protected override void OnLostFocus()
@@ -239,7 +239,7 @@ public sealed class WinFormsHost : FrameworkElement
         DestroyHost();
     }
 
-    private void OnChildChanged(WF.Control? oldChild, WF.Control? newChild)
+    private void OnChildChanged(WinForms.Control? oldChild, WinForms.Control? newChild)
     {
         if (oldChild != null && _container != null)
         {
@@ -254,14 +254,14 @@ public sealed class WinFormsHost : FrameworkElement
         UpdateHostBounds();
     }
 
-    private void AttachChild(WF.Control child)
+    private void AttachChild(WinForms.Control child)
     {
         if (_container == null)
         {
             return;
         }
 
-        child.Dock = WF.DockStyle.Fill;
+        child.Dock = WinForms.DockStyle.Fill;
         _container.Controls.Add(child);
     }
 
@@ -419,7 +419,7 @@ public sealed class WinFormsHost : FrameworkElement
 
         // Windows Forms owns its control tree, so the guest lives in a container whose handle is
         // reparented into the host. Reparenting the guest directly makes Windows Forms recreate it.
-        _container = new WF.ContainerControl();
+        _container = new WinForms.ContainerControl();
         var child = Child;
         if (child != null)
         {
@@ -501,7 +501,7 @@ public sealed class WinFormsHost : FrameworkElement
         }
 
         bool backward = (Interop.GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        var focused = WF.Control.FromHandle(Interop.GetFocus());
+        var focused = WinForms.Control.FromHandle(Interop.GetFocus());
         if (focused == null)
         {
             return false;
