@@ -7,7 +7,18 @@ Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
 try
 {
     Win32Platform.Register();
-    GdiBackend.Register();
+    if (args?.Contains("--gdi") == true)
+    {
+        GdiBackend.Register();
+    }
+    else if (args?.Contains("--vg") == true)
+    {
+        MewVGWin32Backend.Register();
+    }
+    else
+    {
+        Direct2DBackend.Register();
+    }
 
     AppDomain.CurrentDomain.UnhandledException += (_, e) => HandleDomainException(e);
     Application.DispatcherUnhandledException += e => HandleUIException(e);
