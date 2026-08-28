@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 
+using WF = System.Windows.Forms;
+
 namespace Aprillz.MewUI.Controls;
 
 /// <summary>
