@@ -7,6 +7,12 @@ internal static partial class Interop
     [LibraryImport(LibraryName)]
     public static partial nint SetFocus(nint hWnd);
 
+    [LibraryImport(LibraryName)]
+    public static partial nint GetFocus();
+
+    [LibraryImport(LibraryName)]
+    public static partial int IsChild(nint hWndParent, nint hWnd);
+
 
     // NOTE: this repo disables runtime marshalling (NativeAOT-friendly), so we must use LibraryImport
     // for string parameters, and avoid marshalled return types like bool.

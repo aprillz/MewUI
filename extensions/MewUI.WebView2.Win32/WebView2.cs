@@ -204,6 +204,29 @@ public sealed partial class WebView2 : FrameworkElement
         }
     }
 
+    protected override void OnLostFocus()
+    {
+        base.OnLostFocus();
+
+        if (_hostHandle == 0)
+        {
+            return;
+        }
+
+        // Without returning Win32 focus, keystrokes keep reaching the browser after MewUI moves focus away.
+        nint focused = Interop.GetFocus();
+        bool focusInsideHost = focused == _hostHandle || Interop.IsChild(_hostHandle, focused) != 0;
+        if (!focusInsideHost)
+        {
+            return;
+        }
+
+        if (FindVisualRoot() is Window window && window.Handle != 0)
+        {
+            Interop.SetFocus(window.Handle);
+        }
+    }
+
     public bool UseSharedEnvironment
     {
         get;
