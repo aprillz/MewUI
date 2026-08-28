@@ -47,7 +47,7 @@ internal static class NumericUpDownTemplate
             IsTabStop = false,
             ImeMode = ImeMode.Disabled,
             // The display text governs the control's width; the edit text must not
-            // resize it (clearing shrank it, longer input grew it - issue #232).
+            // resize it: clearing it shrank the control, longer input grew it.
             MeasuresOwnTextWidth = false,
         };
         ctx.Register(NumericUpDown.PART_TEXT_BOX, editBox);

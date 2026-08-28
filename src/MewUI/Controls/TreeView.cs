@@ -706,7 +706,7 @@ public sealed partial class TreeView : Control, ISubtreeInvalidationHost, IFocus
         extentWidth = Math.Max(extentWidth, _observedExtentWidth);
 
         // Desired width is the natural item width regardless of alignment: stretch is an arrange
-        // concern (issue #199).
+        // concern.
         double desiredWidth = double.IsPositiveInfinity(widthLimit)
             ? extentWidth
             : Math.Min(extentWidth, widthLimit);
