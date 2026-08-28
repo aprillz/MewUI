@@ -21,6 +21,12 @@ internal interface IItemsPresenter : IScrollContent, IVisualTreeHost
     uint ItemBindingGeneration { get; set; }
 
     /// <summary>
+    /// The viewport edge the item content anchors to. Only affects content shorter than the
+    /// viewport (which edge it rests against) and whether scrolling follows the growing end.
+    /// </summary>
+    ItemsAnchor Anchor { get; set; }
+
+    /// <summary>
     /// In fixed mode this is the actual item height; in variable mode this is an estimated height hint.
     /// </summary>
     double ItemHeightHint { get; set; }

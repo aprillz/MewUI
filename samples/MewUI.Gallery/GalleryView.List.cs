@@ -551,20 +551,24 @@ partial class GalleryView
                         .Spacing(8)
                         .Children(
                             new Button()
-                                .Content("Prepend 20")
-                                .OnClick(() =>
-                                {
-                                    Prepend(20);
-                                    UpdateStatus();
-                                }),
+                                .Content("_Prepend 20")
+                                .OnClick(() => Prepend(20)),
+
+                            // Appends without scrolling, so the bottom anchor's end-following is
+                            // what keeps the newest message visible.
+                            new Button()
+                                .Content("_Receive")
+                                .OnClick(() => Add(false, "Bot", SampleChatText((int)nextId))),
 
                             new Button()
-                                .Content("To bottom")
-                                .OnClick(() =>
-                                {
-                                    ScrollToBottom();
-                                    UpdateStatus();
-                                }),
+                                .Content("_Clear")
+                                .OnClick(messages.Clear),
+
+                            new CheckBox()
+                                .Content("_Anchor bottom")
+                                .IsChecked(true)
+                                .OnCheckedChanged(bottom =>
+                                    list.VariableHeightPresenter(bottom ? ItemsAnchor.Bottom : ItemsAnchor.Top)),
 
                             new TextBlock()
                                 .BindText(status)
@@ -578,13 +582,9 @@ partial class GalleryView
                         .Children(
                             new Button()
                                 .DockRight()
-                                .Content("Send")
+                                .Content("_Send")
                                 .DockRight()
-                                .OnClick(() =>
-                                {
-                                    Send();
-                                    UpdateStatus();
-                                }),
+                                .OnClick(Send),
 
                             new TextBox()
                                 .Placeholder("Type a message...")
@@ -595,15 +595,17 @@ partial class GalleryView
                                     {
                                         e.Handled = true;
                                         Send();
-                                        //UpdateStatus();
                                     }
                                 })
                         ),
 
                     new ItemsControl()
                         .Ref(out list)
+                        // The offset settles during layout, so a click handler reading it right
+                        // after mutating the list would report the previous position.
+                        .OnScrollChanged(UpdateStatus)
                         .HorizontalAlignment(HorizontalAlignment.Stretch)
-                        .VariableHeightPresenter()
+                        .VariableHeightPresenter(ItemsAnchor.Bottom)
                         .WithTheme((t, _) => list
                             .BorderBrush(t.Palette.ControlBorder)
                             .BorderThickness(t.Metrics.ControlBorderThickness))

@@ -47,6 +47,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
     private bool _isRequestingOffsetCorrection;
     private int _pendingScrollIntoViewIndex = -1;
+    private ItemsAnchor _anchor;
+    private bool _followEndRequest;
+    private bool _pendingAnchorShiftArrange;
 
     // Tracks the DPI scale from the last layout pass so we can detect DPI changes
     // and invalidate prefix sums (which are DPI-dependent due to per-item pixel rounding).
@@ -87,6 +90,51 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     private IItemsView _itemsSource = ItemsView.Empty;
 
     public bool UseHorizontalExtentForLayout { get; set; }
+
+    public ItemsAnchor Anchor
+    {
+        get => _anchor;
+        set
+        {
+            if (_anchor == value)
+            {
+                return;
+            }
+
+            _anchor = value;
+            InvalidateArrange();
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// How far the content block is pushed down so it rests against the anchored edge.
+    /// Non-zero only for a bottom anchor whose content is shorter than the viewport, which is
+    /// exactly when scrolling is impossible, so scroll math is unaffected.
+    /// </summary>
+    private double GetAnchorShift()
+    {
+        if (_anchor != ItemsAnchor.Bottom)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, _viewport.Height - _extent.Height);
+    }
+
+    /// <summary>Whether the view currently rests at the end, so a growing extent should follow it.</summary>
+    private bool IsPinnedToEnd()
+    {
+        if (_anchor != ItemsAnchor.Bottom)
+        {
+            return false;
+        }
+
+        double dpiScale = GetDpi() / 96.0;
+        double onePixelDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+        double maxOffsetY = Math.Max(0, _extent.Height - _viewport.Height);
+        return _offset.Y >= maxOffsetY - onePixelDip;
+    }
 
     public IDataTemplate ItemTemplate
     {
@@ -208,8 +256,29 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             return;
         }
 
+        CancelEndFollowIfMovedAway(clamped.Y);
         _offset = clamped;
         InvalidateArrange();
+    }
+
+    /// <summary>
+    /// Drops the end-following request once the offset lands short of the end: that is the scroll
+    /// owner reporting a move the presenter did not ask for, so the reader is browsing history.
+    /// </summary>
+    private void CancelEndFollowIfMovedAway(double offsetY)
+    {
+        if (!_followEndRequest)
+        {
+            return;
+        }
+
+        double dpiScale = GetDpi() / 96.0;
+        double onePixelDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+        if (offsetY < Math.Max(0, _extent.Height - _viewport.Height) - onePixelDip)
+        {
+            _followEndRequest = false;
+            _pendingScrollIntoViewIndex = -1;
+        }
     }
 
     bool IVisualTreeHost.VisitChildren(Func<Element, bool> visitor)
@@ -227,6 +296,13 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
     protected override Size MeasureContent(Size availableSize)
     {
         RecomputeExtent();
+
+        if (_pendingAnchorShiftArrange)
+        {
+            _pendingAnchorShiftArrange = false;
+            InvalidateArrange();
+        }
+
         return new Size(
             Math.Max(0, availableSize.Width),
             Math.Max(0, availableSize.Height));
@@ -362,7 +438,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         double x = contentBounds.X - alignedOffsetX;
 
         double yContent = _prefix![first];
-        double y = contentBounds.Y + (yContent - alignedOffsetY);
+        double y = contentBounds.Y + (yContent - alignedOffsetY) + GetAnchorShift();
 
         for (int i = first; i < lastExclusive; i++)
         {
@@ -593,7 +669,14 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         EnsureHeightsCapacity(count);
         EnsurePrefix();
 
-        index = FindIndexByY(yContent);
+        double shift = GetAnchorShift();
+        if (yContent < shift)
+        {
+            index = -1;
+            return false;
+        }
+
+        index = FindIndexByY(yContent - shift);
         return index >= 0 && index < count;
     }
 
@@ -650,7 +733,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
             h = Math.Max(0, GetEstimatedHeightDip(index));
         }
 
-        top = _prefix![index];
+        top = _prefix![index] + GetAnchorShift();
         bottom = top + h;
         return true;
     }
@@ -664,6 +747,7 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         }
 
         _pendingScrollIntoViewIndex = index;
+        _followEndRequest = false;
         InvalidateArrange();
     }
 
@@ -872,6 +956,9 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
 
     private void RecomputeExtent()
     {
+        bool wasPinnedToEnd = IsPinnedToEnd();
+        double previousShift = GetAnchorShift();
+
         int count = ItemsSource.Count;
         double width = double.IsNaN(_extentWidth) ? _viewport.Width : _extentWidth;
 
@@ -905,6 +992,30 @@ internal sealed class VariableHeightItemsPresenter : Control, IItemsPresenter
         }
 
         _extent = new Size(Math.Max(0, width), Math.Max(0, height));
+
+        // Following the end is expressed as "bring the last item into view" rather than as offset
+        // arithmetic: with estimated heights the computed end is short of the real one, and the
+        // scroll-into-view request is the machinery that keeps refining until the target is reached.
+        // The target is refreshed while following so a batch of inserts lands on the newest item,
+        // and an explicit request clears the flag so it still wins.
+        if ((wasPinnedToEnd || (_followEndRequest && _pendingScrollIntoViewIndex >= 0)) && ItemsSource.Count > 0)
+        {
+            RequestScrollIntoView(ItemsSource.Count - 1);
+            _followEndRequest = true;
+        }
+
+        // Heights are refined during arrange, after the layout loop already placed items using the
+        // previous shift. A changed shift therefore needs another arrange pass; the offset-correction
+        // path cannot cover it, because a bottom-anchored short list keeps its offset pinned at zero.
+        double dpiScale = GetDpi() / 96.0;
+        double onePixelDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+        if (Math.Abs(GetAnchorShift() - previousShift) >= onePixelDip * 0.99)
+        {
+            // Raising the arrange invalidation here would not survive: this also runs inside the
+            // arrange pass, which clears that flag when it ends. MeasureContent raises it instead.
+            _pendingAnchorShiftArrange = true;
+            InvalidateMeasure();
+        }
     }
 
     private FrameworkElement CreateItemContainer()

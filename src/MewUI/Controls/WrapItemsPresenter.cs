@@ -69,6 +69,10 @@ internal sealed class WrapItemsPresenter : Control, IItemsPresenter
     public uint ItemBindingGeneration { get; set; }
     public double ItemHeightHint { get => ItemHeight; set { /* Wrap uses its own ItemHeight; ignore hint */ } }
     public bool UseHorizontalExtentForLayout { get; set; }
+
+    // Multi-column wrap layout has no bottom-anchor support, and no public overload sets it,
+    // so this stays at Top.
+    public ItemsAnchor Anchor { get; set; }
     public bool FillsAvailableWidth => true;
 
     public double PreferredViewportHeight

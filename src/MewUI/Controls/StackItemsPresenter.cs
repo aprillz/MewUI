@@ -25,6 +25,8 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
     private Size _extent;
     private Point _offset;
     private int _pendingScrollIntoViewIndex = -1;
+    private ItemsAnchor _anchor;
+    private bool _followEndRequest;
 
     public IItemsView ItemsSource
     {
@@ -108,6 +110,22 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     public bool UseHorizontalExtentForLayout { get; set; }
 
+    public ItemsAnchor Anchor
+    {
+        get => _anchor;
+        set
+        {
+            if (_anchor == value)
+            {
+                return;
+            }
+
+            _anchor = value;
+            InvalidateArrange();
+            InvalidateVisual();
+        }
+    }
+
     public event Action<Point>? OffsetCorrectionRequested;
 
     public double PreferredViewportHeight => _totalHeight;
@@ -151,8 +169,29 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
             return;
         }
 
+        CancelEndFollowIfMovedAway(clamped.Y);
         _offset = clamped;
         InvalidateArrange();
+    }
+
+    /// <summary>
+    /// Drops the end-following request once the offset lands short of the end: that is the scroll
+    /// owner reporting a move the presenter did not ask for, so the reader is browsing history.
+    /// </summary>
+    private void CancelEndFollowIfMovedAway(double offsetY)
+    {
+        if (!_followEndRequest)
+        {
+            return;
+        }
+
+        double dpiScale = GetDpi() / 96.0;
+        double onePixelDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+        if (offsetY < Math.Max(0, _extent.Height - _viewport.Height) - onePixelDip)
+        {
+            _followEndRequest = false;
+            _pendingScrollIntoViewIndex = -1;
+        }
     }
 
     // IItemsPresenter
@@ -209,14 +248,14 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
             return false;
         }
 
-        double y = 0;
+        double y = GetAnchorShift();
         for (int i = 0; i < _measuredHeights.Count; i++)
         {
             double h = _measuredHeights[i];
             if (yContent < y + h)
             {
-                index = i;
-                return true;
+                index = yContent < y ? -1 : i;
+                return index >= 0;
             }
 
             y += h;
@@ -235,7 +274,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
             return false;
         }
 
-        double y = 0;
+        double y = GetAnchorShift();
         for (int i = 0; i < index; i++)
         {
             y += _measuredHeights[i];
@@ -255,6 +294,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         }
 
         _pendingScrollIntoViewIndex = index;
+        _followEndRequest = false;
         InvalidateArrange();
     }
 
@@ -360,7 +400,7 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
         var pad = ItemPadding;
         var userGetContainerRect = GetContainerRect;
 
-        double y = contentBounds.Y - alignedOffsetY;
+        double y = contentBounds.Y - alignedOffsetY + GetAnchorShift();
         for (int i = 0; i < count; i++)
         {
             double h = i < _measuredHeights.Count ? _measuredHeights[i] : ItemHeightHint;
@@ -493,8 +533,48 @@ internal sealed class StackItemsPresenter : Control, IItemsPresenter
 
     private void RecomputeExtent()
     {
+        bool wasPinnedToEnd = IsPinnedToEnd();
+
         double width = double.IsNaN(_extentWidth) ? _viewport.Width : _extentWidth;
         _extent = new Size(Math.Max(0, width), Math.Max(0, _totalHeight));
+
+        // Following the end is expressed as "bring the last item into view" so it reuses the request
+        // the owner already uses. The target is refreshed while following so a batch of inserts lands
+        // on the newest item, and an explicit request clears the flag so it still wins.
+        if ((wasPinnedToEnd || (_followEndRequest && _pendingScrollIntoViewIndex >= 0)) && ItemsSource.Count > 0)
+        {
+            RequestScrollIntoView(ItemsSource.Count - 1);
+            _followEndRequest = true;
+        }
+    }
+
+    /// <summary>Whether the view currently rests at the end, so a growing extent should follow it.</summary>
+    private bool IsPinnedToEnd()
+    {
+        if (Anchor != ItemsAnchor.Bottom)
+        {
+            return false;
+        }
+
+        double dpiScale = GetDpi() / 96.0;
+        double onePixel = dpiScale > 0 ? 1.0 / dpiScale : 1.0;
+        double maxOffsetY = Math.Max(0, _extent.Height - _viewport.Height);
+        return _offset.Y >= maxOffsetY - onePixel;
+    }
+
+    /// <summary>
+    /// How far the content block is pushed down so it rests against the anchored edge.
+    /// Non-zero only for a bottom anchor whose content is shorter than the viewport, which is
+    /// exactly when scrolling is impossible, so scroll math is unaffected.
+    /// </summary>
+    private double GetAnchorShift()
+    {
+        if (Anchor != ItemsAnchor.Bottom)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, _viewport.Height - _extent.Height);
     }
 
     private void OnItemsChanged(ItemsChange _)
