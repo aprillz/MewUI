@@ -22,6 +22,7 @@
     <Project Path="samples/MewUI.TaskManager.Sample/MewUI.TaskManager.Sample.csproj" />
     <Project Path="samples/MewUI.Video.Sample/MewUI.Video.Sample.csproj" />
     <Project Path="samples/MewUI.WebView2.Win32.Sample/MewUI.WebView2.Win32.Sample.csproj" />
+    <Project Path="samples/MewUI.WinFormsHost.Win32.Sample/MewUI.WinFormsHost.Win32.Sample.csproj" />
     <Project Path="samples/MewUI.Windowless.Sample/MewUI.Windowless.Sample.csproj" />
     <Project Path="samples/MewUI.WriteableBitmapSample/MewUI.WriteableBitmapSample.csproj" />
   </Folder>
@@ -51,6 +52,7 @@
     <Project Path="extensions/MewUI.Skia/MewUI.Skia.csproj" />
     <Project Path="extensions/MewUI.Svg/MewUI.Svg.csproj" />
     <Project Path="extensions/MewUI.WebView2.Win32/MewUI.WebView2.Win32.csproj" />
+    <Project Path="extensions/MewUI.WinFormsHost.Win32/MewUI.WinFormsHost.Win32.csproj" />
   </Folder>
   <Folder Name="/extensions/tools/">
     <Project Path="extensions/MewUI.MewCharts/ThirdParty/LiveCharts2/generators/LiveChartsGenerators/LiveChartsGenerators.csproj" />
