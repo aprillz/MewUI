@@ -1,7 +1,7 @@
 using Aprillz.MewUI;
 using Aprillz.MewUI.Controls;
 
-using WF = System.Windows.Forms;
+using WinForms = System.Windows.Forms;
 
 Thread.CurrentThread.SetApartmentState(ApartmentState.Unknown);
 Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
@@ -24,12 +24,12 @@ try
             break;
     }
 
-    WF.Application.EnableVisualStyles();
+    WinForms.Application.EnableVisualStyles();
 
     // Must run before any Windows Forms control exists. Without it Windows Forms creates its handles
     // DPI-unaware, so Windows bitmap-stretches the hosted controls and they never pick up the
     // monitor scale.
-    WF.Application.SetHighDpiMode(WF.HighDpiMode.PerMonitorV2);
+    WinForms.Application.SetHighDpiMode(WinForms.HighDpiMode.PerMonitorV2);
 
     AppDomain.CurrentDomain.UnhandledException += (_, e) => ShowFatal(e.ExceptionObject);
     Application.DispatcherUnhandledException += e =>
@@ -38,16 +38,16 @@ try
         e.Handled = true;
     };
 
-    var calendar = new WF.MonthCalendar();
-    var trackBar = new WF.TrackBar { Minimum = 0, Maximum = 100, Value = 40, TickFrequency = 10 };
-    var propertyGrid = new WF.PropertyGrid { SelectedObject = new SampleSettings() };
+    var calendar = new WinForms.MonthCalendar();
+    var trackBar = new WinForms.TrackBar { Minimum = 0, Maximum = 100, Value = 40, TickFrequency = 10 };
+    var propertyGrid = new WinForms.PropertyGrid { SelectedObject = new SampleSettings() };
 
     // Several tab stops in one host: Tab cycles through them without leaving the host.
-    var formPanel = new WF.Panel();
-    formPanel.Controls.Add(new WF.TextBox { Text = "first", Location = new System.Drawing.Point(8, 8), Width = 160 });
-    formPanel.Controls.Add(new WF.TextBox { Text = "second", Location = new System.Drawing.Point(180, 8), Width = 160 });
-    formPanel.Controls.Add(new WF.CheckBox { Text = "third", Location = new System.Drawing.Point(352, 8) });
-    formPanel.Controls.Add(new WF.Button { Text = "fourth", Location = new System.Drawing.Point(440, 6) });
+    var formPanel = new WinForms.Panel();
+    formPanel.Controls.Add(new WinForms.TextBox { Text = "first", Location = new System.Drawing.Point(8, 8), Width = 160 });
+    formPanel.Controls.Add(new WinForms.TextBox { Text = "second", Location = new System.Drawing.Point(180, 8), Width = 160 });
+    formPanel.Controls.Add(new WinForms.CheckBox { Text = "third", Location = new System.Drawing.Point(352, 8) });
+    formPanel.Controls.Add(new WinForms.Button { Text = "fourth", Location = new System.Drawing.Point(460, 6) });
 
     Window window = null!;
     WinFormsHost calendarHost = null!;
@@ -151,9 +151,9 @@ try
                         .Children(
                             SectionLabel("The host must disappear while another tab is selected"),
                             new WinFormsHost()
-                                .Child(new WF.ListView
+                                .Child(new WinForms.ListView
                                 {
-                                    View = WF.View.List,
+                                    View = WinForms.View.List,
                                     Items =
                                     {
                                         "hosted item 1",
