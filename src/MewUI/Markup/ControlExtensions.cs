@@ -2562,6 +2562,8 @@ public static class ControlExtensions
     /// <param name="listBox">Target list box.</param>
     /// <param name="itemsSource">Legacy items source.</param>
     /// <returns>The list box for chaining.</returns>
+    [Obsolete("Use the ItemsView.Create overload instead. A legacy ItemsSource reports a snapshot "
+        + "only, so items added or removed after this call are not reflected.")]
     public static ListBox ItemsSource(this ListBox listBox, ItemsSource itemsSource)
     {
         ArgumentNullException.ThrowIfNull(listBox);
@@ -3315,6 +3317,8 @@ public static class ControlExtensions
     /// <param name="itemsControl">Target items control.</param>
     /// <param name="itemsSource">Legacy items source.</param>
     /// <returns>The items control for chaining.</returns>
+    [Obsolete("Use the ItemsView.Create overload instead. A legacy ItemsSource reports a snapshot "
+        + "only, so items added or removed after this call are not reflected.")]
     public static ItemsControl ItemsSource(this ItemsControl itemsControl, ItemsSource itemsSource)
     {
         ArgumentNullException.ThrowIfNull(itemsControl);
@@ -3982,6 +3986,8 @@ public static class ControlExtensions
     /// <param name="comboBox">Target combo box.</param>
     /// <param name="itemsSource">Legacy items source.</param>
     /// <returns>The combo box for chaining.</returns>
+    [Obsolete("Use the ItemsView.Create overload instead. A legacy ItemsSource reports a snapshot "
+        + "only, so items added or removed after this call are not reflected.")]
     public static ComboBox ItemsSource(this ComboBox comboBox, ItemsSource itemsSource)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
