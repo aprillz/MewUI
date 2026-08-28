@@ -56,8 +56,8 @@ public sealed class GpuInteropInvalidatedEventArgs : EventArgs
 
     /// <summary>
     /// Optional backend/platform render target handle associated with this invalidation.
-    /// On Win32 window targets this is the HWND. A value of 0 means the invalidation is
-    /// factory-wide or not tied to a single render target.
+    /// For window targets this is the platform's native window handle. A value of 0 means the
+    /// invalidation is factory-wide or not tied to a single render target.
     /// </summary>
     public nint RenderTargetHandle { get; }
 }

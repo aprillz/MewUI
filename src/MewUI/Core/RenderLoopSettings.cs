@@ -88,6 +88,6 @@ public sealed class RenderLoopSettings
     }
 
     // Used when the platform cannot report a refresh rate; 60 is the rate a backend without presentation
-    // pacing (GDI) is expected to hold.
+    // pacing is expected to hold.
     internal const int VSyncFallbackFps = 60;
 }

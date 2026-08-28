@@ -6,7 +6,7 @@ namespace Aprillz.MewUI.Rendering.Filters;
 /// <see cref="IImageFilterExecutor"/> which walks the graph and produces a <see cref="FilterResult"/>.
 /// </summary>
 /// <remarks>
-/// Modeled after Skia's <c>SkImageFilter</c>: each node has zero or more <see cref="Inputs"/>
+/// A node has zero or more <see cref="Inputs"/>
 /// (a <see langword="null"/> entry means "use the source layer"), and the executor recursively
 /// evaluates inputs before processing the node itself. SVG <c>&lt;filter&gt;</c> primitives map
 /// to these nodes 1:1 (e.g. <c>feGaussianBlur</c> → <see cref="BlurFilter"/>, <c>feMerge</c> →

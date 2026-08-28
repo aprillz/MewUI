@@ -2,7 +2,7 @@ namespace Aprillz.MewUI.Rendering;
 
 /// <summary>
 /// Represents a target surface for rendering operations.
-/// Abstracts away platform-specific details like HWND/HDC on Windows.
+/// Abstracts away the platform's native surface and device handles.
 /// </summary>
 public interface IRenderTarget
 {

@@ -969,7 +969,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         if (!_windowStateFromBackend)
             _backend?.SetWindowState(newState);
 
-        // Force WM_NCCALCSIZE recalculation when using extended client area,
+        // Force the platform to recompute the non-client area when the client area is extended,
         // so the maximized frame compensation is applied/removed.
         if (ExtendClientAreaTitleBarHeight > 0)
             _backend?.SetExtendClientAreaToTitleBar(ExtendClientAreaTitleBarHeight);
@@ -1215,7 +1215,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
     public event Action<TextCompositionEventArgs>? PreviewTextCompositionEnd;
 
     /// <summary>
-    /// Raised before the framework processes a native platform message (Win32 WM_, X11 XEvent, macOS NSEvent).
+    /// Raised before the framework processes a native platform message.
     /// Set <see cref="NativeMessageEventArgs.Handled"/> to suppress default processing.
     /// Cast the argument to the platform-specific subclass to access raw message data.
     /// </summary>
@@ -1776,8 +1776,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
         child?.Activate();
     }
 
-    // Internal so platform services (e.g. the X11 portal file dialog) can make a native dialog modal by
-    // disabling the owner window for the dialog's duration, mirroring what Win32 does via the owner HWND.
+    // Internal so platform services showing a native dialog can make it modal by disabling the owner
+    // window for the dialog's duration, which is what an owned native dialog does.
     internal void AcquireModalDisable()
     {
         if (_lifetimeState == WindowLifetimeState.Closed)
@@ -1888,8 +1888,8 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         if (_updatePassDepth > 0)
         {
-            // Synchronous re-entry: Win32 delivers WM_SIZE inside SetWindowPos while a pass is
-            // running, and its handler calls back into PerformLayout. The applied client size is
+            // Synchronous re-entry: a platform can report the applied size from inside the resize call
+            // while a pass is running, and its handler calls back into PerformLayout. The size is
             // already recorded; signal the outer pass to re-converge instead of nesting a layout.
             _updateGeneration++;
             return;
@@ -2032,7 +2032,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
         for (int pass = 0; pass < maxPasses; pass++)
         {
-            // Re-read per round: a synchronous WM_SIZE in the previous round may have recorded a
+            // Re-read per round: a synchronous size report in the previous round may have recorded a
             // new applied client size, and a mid-round style change may have altered Padding.
             clientSize = _clientSizeDip;
             padding = Padding;
@@ -2612,7 +2612,7 @@ public partial class Window : ContentControl, ILayoutRoundingHost
 
     internal void RenderFrame(IWindowSurface surface)
     {
-        // Reentrant paint (e.g. a cross-thread sent WM_PAINT dispatched while this frame is
+        // Reentrant paint (e.g. a cross-thread paint request dispatched while this frame is
         // still open, as with a window hosted in another process's tree) would nest
         // BeginFrame on the cached context and corrupt the backend's begin/end pairing.
         // Skip and repaint on the next dispatcher cycle instead.

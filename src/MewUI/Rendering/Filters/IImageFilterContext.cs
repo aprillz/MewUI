@@ -35,7 +35,7 @@ public interface IImageFilterContext
     /// rasterized into <see cref="Source"/> (= user transform x DPI for image filters).
     /// Executors multiply per-axis filter parameters specified in input units (Blur sigma,
     /// Offset dx) by this factor before applying GPU/CPU passes so that filter radii track
-    /// the current transform like Skia/WPF effects.
+    /// the current transform.
     /// </summary>
     double LogicalToPixelScaleX { get; }
 

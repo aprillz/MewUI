@@ -27,8 +27,8 @@ public interface IExternalRasterSource : IRasterSource, IDisposable
 
 /// <summary>
 /// A lease over an externally-managed GPU/CPU raster resource. Native handle semantics
-/// are defined by the producer/consumer pairing - typically a GPU texture handle for the
-/// active rendering backend (GL texture id, MTLTexture*, ID3D11Texture2D*).
+/// are defined by the producer/consumer pairing - typically a GPU texture handle belonging to
+/// the active rendering backend.
 /// </summary>
 public interface IExternalRasterLease : IDisposable
 {
