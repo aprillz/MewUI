@@ -15,9 +15,8 @@
 
   <ItemGroup>
     <!-- UseWindowsForms adds a global System.Windows.Forms using that collides with the MewUI
-         controls of the same name; Program.cs aliases the namespace as WF instead. -->
+         controls of the same name; each file aliases the namespace itself instead. -->
     <Using Remove="System.Windows.Forms" />
-    <Using Include="System.Windows.Forms" Alias="WF" />
     <Using Include="System.Runtime.InteropServices" />
   </ItemGroup>
 

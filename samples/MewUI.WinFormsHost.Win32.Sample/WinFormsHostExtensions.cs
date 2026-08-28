@@ -1,3 +1,5 @@
+using WF = System.Windows.Forms;
+
 namespace Aprillz.MewUI.Controls;
 
 public static class WinFormsHostExtensions
