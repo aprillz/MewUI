@@ -45,7 +45,7 @@ internal class NativeCustomWindowSample : NativeCustomWindow
         // Title bar left: MenuBar
         TitleBarLeft.Add(
             GalleryView.CreateMenu(this, _ => { })
-                .Apply(x => x.DrawBottomSeparator = false)
+                .DrawBottomSeparator(false)
                 .Background(Color.Transparent));
 
         // Title bar right: Theme toggle
