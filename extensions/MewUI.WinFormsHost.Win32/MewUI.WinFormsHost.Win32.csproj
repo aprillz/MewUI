@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\..\build\MewUI.Common.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <AssemblyName>$(MewUITitle).WinFormsHost.Win32</AssemblyName>
+    <PackageId>$(MewUITitle).WinFormsHost.Win32</PackageId>
+    <Description>Hosts Windows Forms controls inside $(MewUITitle) layouts on Win32.</Description>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <!-- Windows Forms is neither trim- nor AOT-safe, so this package opts out of both. -->
+    <IsTrimmable>false</IsTrimmable>
+    <IsAotCompatible>false</IsAotCompatible>
+
+    <PackageTags>winforms;interop;win32;hwnd;gui</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MewUI\MewUI.csproj" />
+    <ProjectReference Include="..\..\src\MewUI.Platform.Win32\MewUI.Platform.Win32.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms adds a global System.Windows.Forms using whose Button/Label/TextBox
+         collide with the MewUI controls of the same name. The WF alias replaces it. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Include="System.Runtime.InteropServices" />
+    <Using Include="System.Runtime.Versioning" />
+    <Using Include="System.Windows.Forms" Alias="WF" />
+  </ItemGroup>
+
+</Project>
