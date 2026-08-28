@@ -122,7 +122,7 @@ try
                             new StackPanel()
                                 .Spacing(12)
                                 .Children(
-                                    SectionLabel("Tab cycles the four controls inside this host"),
+                                    SectionLabel("Tab runs through these four controls, then leaves for the next MewUI element"),
                                     new WinFormsHost()
                                         .Child(formPanel)
                                         .Height(48),
